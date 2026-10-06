@@ -5,12 +5,12 @@ from uuid import uuid4
 
 from sqlalchemy import select
 
-from quirebase.access.documents import require_revision
-from quirebase.access.workspaces import (
+from quirebase.access import (
     ResourceAction,
     require_project_context,
     require_workspace_action,
 )
+from quirebase.access.documents import require_revision
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store, object_key
 from quirebase.core.workflows import DOCUMENTS_QUEUE, durable_operations

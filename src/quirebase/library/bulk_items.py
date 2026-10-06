@@ -8,12 +8,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import (
     can_edit_item,
     require_accessible_items,
     require_editable_item,
 )
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,

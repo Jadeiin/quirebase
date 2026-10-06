@@ -2,8 +2,11 @@ from datetime import UTC, datetime
 from itertools import product
 
 import pytest
+from sqlalchemy import delete, select
 
 from quirebase.access import (
+    ResourceAction,
+    require_project_context,
     require_project_visibility,
     resolve_workspace_context,
     visible_project_ids_query,
@@ -20,6 +23,7 @@ from quirebase.models import (
     WorkspaceRole,
     WorkspaceState,
 )
+from quirebase.projects import update_project_settings
 
 
 async def _assert_visibility_matrix(db, role, lifecycle):
@@ -163,3 +167,80 @@ async def test_participation_discovery_is_independent_of_governance_grants(async
     monkeypatch.setattr(project_scope, "action_allowed", lambda _ctx, _action: True)
     assert secret.id in set((await async_db.scalars(visible_project_ids_query(context))).all())
     await require_project_visibility(async_db, context, secret)
+
+
+@pytest.mark.anyio
+@pytest.mark.shared_postgres
+@pytest.mark.concurrency_case("participation-recheck")
+@pytest.mark.parametrize("loader", ["command", "shared", "update"])
+@pytest.mark.parametrize("initially_visible", [False, True])
+async def test_locked_project_loaders_filter_then_recheck_participation(
+    postgres_sessions, postgres_race, loader, initially_visible
+):
+    async with postgres_sessions() as db:
+        owner = User(username="visibility-lock-owner", password_hash="unused")
+        actor = User(username="visibility-lock-actor", password_hash="unused")
+        db.add_all([owner, actor])
+        await db.flush()
+        workspace = Workspace(name="Locked visibility", created_by=owner.id)
+        db.add(workspace)
+        await db.flush()
+        db.add_all([
+            WorkspaceMember(workspace_id=workspace.id, user_id=owner.id, role=WorkspaceRole.owner),
+            WorkspaceMember(workspace_id=workspace.id, user_id=actor.id, role=WorkspaceRole.editor),
+        ])
+        project = Project(
+            workspace_id=workspace.id,
+            name="Original",
+            created_by=owner.id,
+            participation=ProjectParticipation.managed,
+        )
+        db.add(project)
+        await db.flush()
+        if initially_visible:
+            db.add(
+                ProjectMember(workspace_id=workspace.id, project_id=project.id, user_id=actor.id)
+            )
+        await db.commit()
+        workspace_id, project_id, actor_id = workspace.id, project.id, actor.id
+
+    async def load():
+        async with postgres_race.session("caller") as db:
+            actor = await db.get(User, actor_id)
+            try:
+                if loader == "command":
+                    await update_project_settings(
+                        db, actor, workspace_id, project_id, name="Rejected"
+                    )
+                else:
+                    await require_project_context(
+                        db,
+                        actor,
+                        workspace_id,
+                        project_id,
+                        ResourceAction.project_update,
+                        lock=loader,
+                    )
+            except ResourceUnavailable:
+                await db.rollback()
+                return "not found"
+            return "unexpectedly visible"
+
+    async with postgres_race.session("governor") as db:
+        await db.scalar(select(Project).where(Project.id == project_id).with_for_update())
+        if initially_visible:
+            await db.execute(
+                delete(ProjectMember).where(
+                    ProjectMember.project_id == project_id, ProjectMember.user_id == actor_id
+                )
+            )
+        postgres_race.start("load", load())
+        if initially_visible:
+            await postgres_race.wait_blocked("caller", "governor")
+            await db.commit()
+        assert await postgres_race.join("load") == "not found"
+        # An invisible caller finishes even while governance still holds the root lock.
+        await db.rollback()
+
+    async with postgres_sessions() as db:
+        assert (await db.get(Project, project_id)).name == "Original"

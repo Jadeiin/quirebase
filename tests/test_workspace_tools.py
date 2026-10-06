@@ -359,12 +359,12 @@ async def test_account_and_admin_workspace_apis(
             "viewer",
         }
         assert "project.create" not in current_workspace["authorization"]["allowed"]
-        assert set(current_workspace["authorization"]["variants"]["project.create"]) == {
+        assert set(current_workspace["allowed_project_participations"]) == {
             "workspace",
             "open",
             "managed",
         }
-        assert "workspace_invitation.create" not in current_workspace["authorization"]["variants"]
+        assert set(current_workspace["authorization"]) == {"allowed"}
 
         user = await db.get(User, item.created_by)
         assert user is not None

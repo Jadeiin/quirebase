@@ -127,6 +127,7 @@ test('an archived Workspace selected as default opens again from the root', asyn
 		state: 'archived',
 		current_role: 'owner',
 		governance_suspended: false,
+		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace.export', 'workspace.restore'] }
 	};
 	await page.route('**/api/v1/workspaces', (route) =>
@@ -161,6 +162,7 @@ test('workspace creation submits an explicit owner and opens the Workspace when 
 		state: 'active',
 		current_role: 'owner',
 		governance_suspended: false,
+		allowed_project_participations: [],
 		authorization: {
 			allowed: ['workspace.read', 'workspace.update', 'item.create']
 		}
@@ -212,6 +214,7 @@ test('an instance administrator who assigns another owner is not added to Worksp
 					state: 'active',
 					current_role: 'owner',
 					governance_suspended: false,
+					allowed_project_participations: [],
 					authorization: { allowed: ['workspace.read'] }
 				}
 			]
@@ -273,6 +276,7 @@ test('the root route surfaces Workspace list failures and retries', async ({ pag
 					state: 'active',
 					current_role: 'owner',
 					governance_suspended: false,
+					allowed_project_participations: [],
 					authorization: { allowed: ['workspace.read'] }
 				}
 			]
@@ -331,6 +335,7 @@ test('availability recovery releases its guard for a later membership revocation
 		state: 'active',
 		current_role: 'owner',
 		governance_suspended: false,
+		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read'] }
 	};
 	let detailRequests = 0;
@@ -392,6 +397,7 @@ test('membership revoked while a page is open returns the user to the Workspace 
 							state: 'active',
 							current_role: 'owner',
 							governance_suspended: false,
+							allowed_project_participations: [],
 							authorization: { allowed: ['workspace.read'] }
 						}
 					]
@@ -541,6 +547,7 @@ test('Workspace admins do not get governance controls for other admin members', 
 		state: 'active',
 		current_role: 'admin',
 		governance_suspended: false,
+		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace_member.read'] }
 	};
 	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
@@ -602,6 +609,7 @@ test('Workspace members see the active directory without governance data', async
 		state: 'active',
 		current_role: 'editor',
 		governance_suspended: false,
+		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace.export', 'item.update'] }
 	};
 	await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
@@ -646,6 +654,7 @@ for (const roles of [['reviewer'], []]) {
 			state: 'active',
 			current_role: 'owner',
 			governance_suspended: false,
+			allowed_project_participations: [],
 			allowed_invitation_roles: roles,
 			authorization: { allowed: ['workspace.read', 'workspace_invitation.read'] }
 		};
@@ -754,6 +763,7 @@ test('an inaccessible default Workspace is cleared before root navigation recove
 						state: 'active',
 						current_role: 'owner',
 						governance_suspended: false,
+						allowed_project_participations: [],
 						authorization: { allowed: ['workspace.read', 'item.create'] }
 					}
 				}
@@ -891,6 +901,7 @@ for (const maintenance of [false, true]) {
 					state: 'active',
 					current_role: 'admin',
 					governance_suspended: false,
+					allowed_project_participations: [],
 					authorization: {
 						allowed: [
 							'workspace.read',

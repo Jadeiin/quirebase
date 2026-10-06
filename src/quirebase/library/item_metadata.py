@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from inquiro.canonical import normalize_reference_type
 from sqlalchemy import select, update
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
 from quirebase.library.authors import set_item_authors

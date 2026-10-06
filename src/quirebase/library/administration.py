@@ -4,9 +4,13 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, select
 
-from quirebase.access import SystemAction, require_system_action
+from quirebase.access import (
+    ResourceAction,
+    SystemAction,
+    require_system_action,
+    require_workspace_action,
+)
 from quirebase.access.items import require_editable_item
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
 from quirebase.documents import enqueue_object_cleanup

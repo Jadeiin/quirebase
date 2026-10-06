@@ -34,8 +34,8 @@ from inquiro.bibliography import (
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_readable_item
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.models import CitationStyle
 

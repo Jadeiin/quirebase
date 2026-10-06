@@ -43,13 +43,13 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 	await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 });
 
-for (const [role, variants] of [
+for (const [role, choices] of [
 	['owner', ['managed']],
 	['admin', ['workspace']],
 	['editor', ['open']],
 	['owner', []]
 ] as const) {
-	test(`Dashboard New Project shortcut follows ${role}'s projected variants: ${variants.join(',') || 'none'}`, async ({
+	test(`Dashboard New Project shortcut follows ${role}'s projected participation choices: ${choices.join(',') || 'none'}`, async ({
 		page
 	}) => {
 		await mockSession(page);
@@ -60,7 +60,8 @@ for (const [role, variants] of [
 			state: 'active',
 			current_role: role,
 			governance_suspended: false,
-			authorization: { allowed: ['workspace.read'], variants: { 'project.create': variants } }
+			allowed_project_participations: choices,
+			authorization: { allowed: ['workspace.read'] }
 		};
 		await page.route('**/api/v1/workspaces', (route) => route.fulfill({ json: [workspace] }));
 		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
@@ -75,7 +76,7 @@ for (const [role, variants] of [
 		await page.goto('/workspace/workspace-1');
 		await expect(page.getByRole('heading', { name: 'Quick actions' })).toBeVisible();
 		const shortcut = page.getByRole('link', { name: /New Project/ });
-		if (variants.length > 0) {
+		if (choices.length > 0) {
 			await expect(shortcut).toBeVisible();
 			await shortcut.click();
 			await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);

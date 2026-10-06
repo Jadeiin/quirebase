@@ -125,6 +125,8 @@ async def item_organize(workspace_id: str, item_id: str, context: WorkspaceAcces
                 "id": project_option.project.id,
                 "name": project_option.project.name,
                 "assigned": project_option.project.id in view.assigned_project_ids,
+                "participation": project_option.project.participation,
+                "is_member": project_option.is_member,
             }
             for project_option in view.projects
         ],

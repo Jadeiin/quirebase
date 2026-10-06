@@ -40,6 +40,7 @@ from quirebase.access.items import (
     workspace_items_query,
 )
 from quirebase.access.project_scope import (
+    project_visibility_predicate,
     require_project_context,
     require_project_visibility,
     visible_project_ids_query,
@@ -51,6 +52,7 @@ from quirebase.access.projections import (
     item_decisions,
     project_decisions,
     project_participation_change_allowed,
+    project_participation_changes,
     require_project_participation_change,
     system_decisions,
     tag_decisions,
@@ -59,13 +61,13 @@ from quirebase.access.projections import (
     workspace_member_decisions,
     workspace_member_role_action,
     workspace_member_roles,
+    workspace_project_participations,
 )
 from quirebase.access.scope import workspace_id_predicate, workspace_select
 from quirebase.access.tags import visible_tags_query
 from quirebase.access.workspace_policy import (
     ResourceAction,
     action_allowed,
-    effective_resource_action_relations,
     effective_resource_actions,
     workspace_member_relation,
 )
@@ -85,7 +87,6 @@ __all__ = [
     "can_read_item",
     "copy_target_decisions",
     "discussion_message_decisions",
-    "effective_resource_action_relations",
     "effective_resource_actions",
     "effective_system_actions",
     "get_item",
@@ -95,6 +96,8 @@ __all__ = [
     "lock_workspace_context",
     "project_decisions",
     "project_participation_change_allowed",
+    "project_participation_changes",
+    "project_visibility_predicate",
     "require_accessible_items",
     "require_action",
     "require_attachment",
@@ -127,5 +130,6 @@ __all__ = [
     "workspace_member_relation",
     "workspace_member_role_action",
     "workspace_member_roles",
+    "workspace_project_participations",
     "workspace_select",
 ]

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from quirebase.access.authorization import (
-    ResourceActionKey,
     SystemAction,
     effective_system_actions,
 )
@@ -12,8 +11,6 @@ from quirebase.access.context import WorkspaceContext, require_action
 from quirebase.access.workspace_policy import (
     ResourceAction,
     action_allowed,
-    action_spec,
-    effective_resource_action_relations,
     effective_resource_actions,
     workspace_member_relation,
     workspace_resource_action_allowed,
@@ -32,14 +29,9 @@ from quirebase.models import (
 
 @dataclass(frozen=True, slots=True)
 class AuthorizationProjection:
-    """Resolved action grants and independent grants for concrete request variants.
-
-    A relation-only grant does not imply a base action grant. A resource may expose both:
-    Project metadata updates, for example, coexist with constrained participation changes.
-    """
+    """Resolved resource-action capabilities for a loaded resource."""
 
     allowed: tuple[ResourceAction | SystemAction, ...]
-    variants: dict[ResourceActionKey, tuple[str, ...]]
 
 
 class DiscussionDecisionSource(Protocol):
@@ -58,29 +50,32 @@ def workspace_decisions(
         state,
         governance_suspended=governance_suspended,
     )
-    relations = {
-        action: tuple(
-            sorted(
-                effective_resource_action_relations(
-                    role,
-                    state,
-                    action,
-                    governance_suspended=governance_suspended,
-                )
-            )
+    return AuthorizationProjection(allowed=tuple(sorted(allowed, key=lambda action: action.value)))
+
+
+def workspace_project_participations(
+    role: WorkspaceRole,
+    state: WorkspaceState,
+    *,
+    governance_suspended: bool = False,
+) -> tuple[ProjectParticipation, ...]:
+    """Project concrete creation choices without exposing Casbin relations."""
+    return tuple(
+        participation
+        for participation in ProjectParticipation
+        if workspace_resource_action_allowed(
+            role,
+            state,
+            ResourceAction.project_create,
+            governance_suspended=governance_suspended,
+            relation=participation.value,
         )
-        for action in ResourceAction
-    }
-    return AuthorizationProjection(
-        allowed=tuple(sorted(allowed, key=lambda action: action.value)),
-        variants={action: values for action, values in relations.items() if values},
     )
 
 
 def system_decisions(role: str) -> AuthorizationProjection:
     return AuthorizationProjection(
         allowed=tuple(sorted(effective_system_actions(role), key=lambda action: action.value)),
-        variants={},
     )
 
 
@@ -118,14 +113,12 @@ def item_decisions(context: WorkspaceContext) -> AuthorizationProjection:
     })
     return AuthorizationProjection(
         allowed=tuple(sorted(actions, key=lambda action: action.value)),
-        variants={},
     )
 
 
 def copy_target_decisions(*, can_copy_into: bool) -> AuthorizationProjection:
     return AuthorizationProjection(
         allowed=(ResourceAction.item_copy,) if can_copy_into else (),
-        variants={},
     )
 
 
@@ -133,7 +126,7 @@ def tag_decisions(context: WorkspaceContext) -> AuthorizationProjection:
     allowed = (
         (ResourceAction.tag_manage,) if action_allowed(context, ResourceAction.tag_manage) else ()
     )
-    return AuthorizationProjection(allowed=allowed, variants={})
+    return AuthorizationProjection(allowed=allowed)
 
 
 def project_participation_change_allowed(
@@ -152,6 +145,18 @@ def project_participation_change_allowed(
             relation="managed",
         )
     return True
+
+
+def project_participation_changes(
+    context: WorkspaceContext, project: Project
+) -> tuple[ProjectParticipation, ...]:
+    if project.state is not ProjectState.active:
+        return ()
+    return tuple(
+        target
+        for target in ProjectParticipation
+        if project_participation_change_allowed(context, project.participation, target)
+    )
 
 
 def require_project_participation_change(
@@ -177,18 +182,10 @@ def project_decisions(
     is_member: bool,
 ) -> AuthorizationProjection:
     allowed: set[ResourceAction] = set()
-    relations: dict[ResourceActionKey, tuple[str, ...]] = {}
     actions = context.allowed_actions
 
     if ResourceAction.project_update in actions and project.state is ProjectState.active:
         allowed.add(ResourceAction.project_update)
-        relations[ResourceAction.project_update] = tuple(
-            relation
-            for relation in action_spec(ResourceAction.project_update).projected_relations
-            if project_participation_change_allowed(
-                context, project.participation, ProjectParticipation(relation)
-            )
-        )
     if ResourceAction.project_item_manage in actions and project.state is ProjectState.active:
         allowed.add(ResourceAction.project_item_manage)
     if project.state is ProjectState.active and ResourceAction.project_archive in actions:
@@ -226,7 +223,6 @@ def project_decisions(
         allowed.add(ResourceAction.project_discussion_delete)
     return AuthorizationProjection(
         allowed=tuple(sorted(allowed, key=lambda action: action.value)),
-        variants=relations,
     )
 
 
@@ -247,7 +243,6 @@ def workspace_member_decisions(
         allowed=tuple(
             action for action in candidates if action_allowed(context, action, relation=relation)
         ),
-        variants={},
     )
 
 
@@ -288,8 +283,8 @@ def discussion_message_decisions(
     project_id = message.project_id
     relation = "own" if author_id == context.actor_id else "other"
     if not writable:
-        return AuthorizationProjection(allowed=(), variants={})
+        return AuthorizationProjection(allowed=())
     resource = "project_discussion" if project_id is not None else "item_discussion"
     action = ResourceAction(f"{resource}.delete")
     allowed = (action,) if action_allowed(context, action, relation=relation) else ()
-    return AuthorizationProjection(allowed=allowed, variants={})
+    return AuthorizationProjection(allowed=allowed)

@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from quirebase.models import (
+    ProjectParticipation,
     WorkspaceInvitationRole,
     WorkspaceMemberState,
     WorkspaceRole,
@@ -35,6 +36,7 @@ class WorkspaceView(BaseModel):
     state: WorkspaceState
     current_role: WorkspaceRole
     governance_suspended: bool
+    allowed_project_participations: list[ProjectParticipation]
     allowed_invitation_roles: list[WorkspaceInvitationRole] = Field(default_factory=list)
     authorization: WorkspaceAuthorizationView
 

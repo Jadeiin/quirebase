@@ -9,6 +9,7 @@ const project = {
 	state: 'active',
 	participation: 'managed',
 	is_member: false,
+	allowed_participation_changes: ['workspace', 'open', 'managed'],
 	authorization: {
 		allowed: [
 			'project.update',
@@ -16,8 +17,7 @@ const project = {
 			'project_item.manage',
 			'project_membership.manage',
 			'project_discussion.create'
-		],
-		variants: { 'project.update': ['workspace', 'open', 'managed'] }
+		]
 	},
 	items: [],
 	members: [{ user_id: 'member-1', username: 'researcher' }]
@@ -27,7 +27,7 @@ async function mockWorkspaceRole(
 	page: Parameters<typeof mockSession>[0],
 	role: 'owner' | 'admin' | 'editor' | 'viewer',
 	allowedActions: string[],
-	variants: Record<string, string[]> = {}
+	allowedProjectParticipations: string[] = []
 ) {
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({
@@ -38,7 +38,8 @@ async function mockWorkspaceRole(
 				state: 'active',
 				current_role: role,
 				governance_suspended: false,
-				authorization: { allowed: allowedActions, variants }
+				allowed_project_participations: allowedProjectParticipations,
+				authorization: { allowed: allowedActions }
 			}
 		})
 	);
@@ -291,7 +292,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 		page,
 		'editor',
 		['workspace.read', 'project_item.manage', 'project_discussion.create'],
-		{ 'project.create': ['open', 'workspace'] }
+		['open', 'workspace']
 	);
 	let creation: Record<string, unknown> | null = null;
 	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) => {
@@ -351,7 +352,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 		page,
 		'owner',
 		['workspace.read', 'project_item.manage', 'project_membership.manage'],
-		{ 'project.create': ['managed', 'open', 'workspace'] }
+		['managed', 'open', 'workspace']
 	);
 	let creation: Record<string, unknown> | null = null;
 	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) => {
@@ -401,9 +402,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 test('Project creation defaults and submits only the projected participation variant', async ({
 	page
 }) => {
-	await mockWorkspaceRole(page, 'owner', ['workspace.read'], {
-		'project.create': ['open']
-	});
+	await mockWorkspaceRole(page, 'owner', ['workspace.read'], ['open']);
 	let participation = '';
 	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) => {
 		if (route.request().method() === 'POST') {
@@ -448,7 +447,13 @@ test('Project metadata can change independently of participation variants', asyn
 			submitted = route.request().postDataJSON();
 			return route.fulfill({ json: { id: project.id } });
 		}
-		return route.fulfill({ json: { ...project, authorization: { allowed: ['project.update'] } } });
+		return route.fulfill({
+			json: {
+				...project,
+				allowed_participation_changes: [],
+				authorization: { allowed: ['project.update'] }
+			}
+		});
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
 		route.fulfill({ json: [] })
@@ -463,9 +468,7 @@ test('Project metadata can change independently of participation variants', asyn
 	await expect
 		.poll(() => submitted)
 		.toEqual({
-			name: 'Updated metadata',
-			description: project.description,
-			participation: 'managed'
+			name: 'Updated metadata'
 		});
 	await expect(page.getByText('Project settings saved')).toBeVisible();
 });
@@ -529,7 +532,7 @@ test('Workspace resource actions govern Project settings and managed participati
 			'project.delete',
 			'project_discussion.create'
 		],
-		{ 'project.create': ['managed', 'open', 'workspace'] }
+		['managed', 'open', 'workspace']
 	);
 	const mutations: Array<{ method: string; path: string; body: unknown }> = [];
 	let currentParticipation: 'workspace' | 'managed' = 'workspace';
@@ -555,8 +558,7 @@ test('Workspace resource actions govern Project settings and managed participati
 							...(currentParticipation === 'managed' ? ['project_membership.manage'] : []),
 							'project.delete',
 							'project_discussion.create'
-						],
-						variants: { 'project.update': ['workspace', 'open', 'managed'] }
+						]
 					},
 					members: participants
 				}
@@ -658,4 +660,127 @@ test('managed participant selection filters existing participants and requires a
 	await expect(page.getByRole('button', { name: 'Add participant' })).toBeEnabled();
 	await selection.fill('researcher');
 	await expect(page.getByRole('button', { name: 'Add participant' })).toBeDisabled();
+});
+
+for (const mode of ['open', 'managed']) {
+	test(`switching ${mode} to Workspace participation confirms permanent selection loss even with no visible participants`, async ({
+		page
+	}) => {
+		let writes = 0;
+		let submitted: unknown;
+		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) => {
+			if (route.request().method() === 'PATCH') {
+				writes++;
+				submitted = route.request().postDataJSON();
+				return route.fulfill({ json: { id: project.id } });
+			}
+			// Suspended participants are retained in storage but omitted from this read model.
+			return route.fulfill({ json: { ...project, participation: mode, members: [] } });
+		});
+		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+			route.fulfill({ json: [] })
+		);
+		await page.goto('/workspace/workspace-1/projects/project-1');
+		await page.getByLabel('Participation').selectOption('workspace');
+		await page.getByRole('button', { name: 'Save Project settings' }).click();
+		const confirmation = page.getByRole('dialog');
+		await expect(confirmation).toContainText('including suspended members');
+		expect(writes).toBe(0);
+		await confirmation.getByRole('button', { name: 'Cancel' }).click();
+		await expect(confirmation).toHaveCount(0);
+		expect(writes).toBe(0);
+		await page.getByRole('button', { name: 'Save Project settings' }).click();
+		await page.getByRole('button', { name: 'Clear selection and save' }).click();
+		await expect.poll(() => submitted).toEqual({ participation: 'workspace' });
+		expect(writes).toBe(1);
+	});
+}
+
+test('Project history navigation discards pending participant-clear changes', async ({ page }) => {
+	const patches: Array<{ projectId: string; body: unknown }> = [];
+	for (const id of ['project-a', 'project-b']) {
+		await page.route(`**/api/v1/workspaces/workspace-1/projects/${id}`, (route) => {
+			if (route.request().method() === 'PATCH') {
+				patches.push({ projectId: id, body: route.request().postDataJSON() });
+				return route.fulfill({ json: { id } });
+			}
+			return route.fulfill({ json: { ...project, id, name: id } });
+		});
+		await page.route(`**/api/v1/workspaces/workspace-1/projects/${id}/discussions`, (route) =>
+			route.fulfill({ json: [] })
+		);
+	}
+	await page.goto('/workspace/workspace-1/projects/project-b');
+	await expect(page.getByRole('heading', { name: 'project-b', exact: true })).toBeVisible();
+	// Use the client router to create adjacent detail entries that reuse the component.
+	await page.evaluate(() => {
+		const link = document.createElement('a');
+		link.href = '/workspace/workspace-1/projects/project-a';
+		link.textContent = 'Open Project A';
+		document.body.append(link);
+	});
+	await page.getByRole('link', { name: 'Open Project A', exact: true }).click();
+	await expect(page.getByRole('heading', { name: 'project-a', exact: true })).toBeVisible();
+	await page.getByLabel('Name', { exact: true }).fill('Unconfirmed Project A rename');
+	await page.getByLabel('Participation').selectOption('workspace');
+	await page.getByRole('button', { name: 'Save Project settings' }).click();
+	const confirmation = page.getByRole('dialog', { name: 'Clear Project participant selection?' });
+	await expect(confirmation).toBeVisible();
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/projects\/project-b$/);
+	await expect(confirmation).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: 'project-b', exact: true })).toBeVisible();
+	await expect(page.getByLabel('Name', { exact: true })).toHaveValue('project-b');
+	await expect(page.getByText('researcher', { exact: true })).toBeVisible();
+	expect(patches).toEqual([]);
+	await page.getByLabel('Name', { exact: true }).fill('Unconfirmed Project B rename');
+	await page.getByLabel('Participation').selectOption('workspace');
+	await page.getByRole('button', { name: 'Save Project settings' }).click();
+	await expect(confirmation).toBeVisible();
+
+	await page.goForward();
+	await expect(page).toHaveURL(/\/projects\/project-a$/);
+	await expect(confirmation).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: 'project-a', exact: true })).toBeVisible();
+	await expect(page.getByLabel('Name', { exact: true })).toHaveValue('project-a');
+	expect(patches).toEqual([]);
+	await page.getByLabel('Participation').selectOption('workspace');
+	await page.getByRole('button', { name: 'Save Project settings' }).click();
+	await confirmation.getByRole('button', { name: 'Clear selection and save' }).click();
+	await expect
+		.poll(() => patches)
+		.toEqual([{ projectId: 'project-a', body: { participation: 'workspace' } }]);
+});
+
+test('Project groups come from one collection while Join follows the server capability', async ({
+	page
+}) => {
+	const requests: string[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) => {
+		requests.push(new URL(route.request().url()).searchParams.get('view') ?? 'all');
+		return route.fulfill({
+			json: [
+				{
+					...project,
+					id: 'joinable',
+					name: 'Joinable direction',
+					participation: 'open',
+					authorization: { allowed: ['project_membership.join'] }
+				},
+				{
+					...project,
+					id: 'visible',
+					name: 'Visible direction',
+					participation: 'open',
+					authorization: { allowed: [] }
+				}
+			]
+		});
+	});
+	await page.goto('/workspace/workspace-1/projects');
+	const open = page.getByRole('heading', { name: 'Open Projects', exact: true }).locator('..');
+	await expect(open.getByText('Visible direction')).toBeVisible();
+	await expect(open.getByRole('button', { name: 'Join', exact: true })).toHaveCount(1);
+	expect(requests).toEqual(['all']);
 });

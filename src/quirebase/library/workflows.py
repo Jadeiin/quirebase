@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from dbos import DBOS
 from sqlalchemy import select
 
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.workflows import (
     DOCUMENT_CLEANUP_QUEUE,

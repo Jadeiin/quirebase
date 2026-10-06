@@ -168,7 +168,8 @@ enforce(
 	{
 		// Member selection and invitation account switching add shared localized copy.
 		// Measured growth is about 1.2 KiB raw / 0.2 KiB gzip; other route budgets still fit.
-		raw: 585000,
+		// Project grouping and participant-clear confirmation add about 1 KiB of localized copy.
+		raw: 586000,
 		gzip: 186500
 	}
 );

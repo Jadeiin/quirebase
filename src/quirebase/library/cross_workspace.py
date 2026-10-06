@@ -9,8 +9,8 @@ from uuid import uuid4
 
 from sqlalchemy import select
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_readable_item
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.core.storage import ObjectSuffix, get_object_store

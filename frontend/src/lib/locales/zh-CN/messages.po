@@ -334,6 +334,11 @@ msgid "All active Workspace members will participate in this Project."
 msgstr "所有活跃的工作区成员都将参与此项目。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
+msgstr "所有活跃的工作区成员都将参与。现有参与者选择（包括已暂停成员）将永久清除，切回原模式也不会恢复。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "All members"
 msgstr "所有成员"
@@ -492,6 +497,11 @@ msgstr "箭头"
 #: src/lib/features/auth/Invitation.svelte
 msgid "as"
 msgstr "作为"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Assigned, Workspace and Your Projects"
+msgstr "已分配、工作区及已加入的项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -808,9 +818,19 @@ msgid "Clear filters"
 msgstr "清除筛选"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Clear Project participant selection?"
+msgstr "清除项目参与者选择？"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Clear selection"
 msgstr "清除选择"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Clear selection and save"
+msgstr "清除选择并保存"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2107,6 +2127,11 @@ msgid "Managed participation"
 msgstr "管理制项目"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Managed Projects"
+msgstr "管理制项目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Managed Projects are visible only to their participants and Workspace owners/admins."
@@ -2408,6 +2433,11 @@ msgstr "没有匹配的成员。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "No matching Projects."
+msgstr "没有匹配的项目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "No new Tag suggestions."
 msgstr "暂无新的标签建议。"
 
@@ -2619,6 +2649,11 @@ msgstr "整理"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Organize a collection"
 msgstr "整理研究集合"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Other open Projects"
+msgstr "其他开放项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -3377,6 +3412,11 @@ msgstr "搜索文献库"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Search members"
 msgstr "搜索成员"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Search Projects"
+msgstr "搜索项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -4454,6 +4494,11 @@ msgstr "你已无法访问此工作区。"
 #: src/routes/(app)/workspace/+page.svelte
 msgid "You will become its owner and can invite other members later."
 msgstr "你将成为此工作区的所有者，之后可以邀请其他成员。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "You will join automatically when you create an open Project."
+msgstr "创建开放项目时，你会自动加入。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte

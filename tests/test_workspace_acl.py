@@ -15,14 +15,15 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 from quirebase.access import (
     ResourceAction,
     action_allowed,
-    effective_resource_action_relations,
     effective_resource_actions,
     get_item,
     project_decisions,
+    project_participation_changes,
     require_action,
     require_project_context,
     require_workspace_action,
     resolve_workspace_context,
+    workspace_project_participations,
     workspace_select,
 )
 from quirebase.access.annotations import (
@@ -190,26 +191,17 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     assert ResourceAction.file_delete not in effective_resource_actions(
         WorkspaceRole.reviewer, WorkspaceState.active
     )
-    assert effective_resource_action_relations(
-        WorkspaceRole.editor,
-        WorkspaceState.active,
-        ResourceAction.project_create,
-    ) == frozenset({"open", "workspace"})
-    assert effective_resource_action_relations(
-        WorkspaceRole.admin,
-        WorkspaceState.active,
-        ResourceAction.project_create,
-    ) == frozenset({"managed", "open", "workspace"})
-    assert not effective_resource_action_relations(
-        WorkspaceRole.reviewer,
-        WorkspaceState.active,
-        ResourceAction.project_create,
-    )
-    assert not effective_resource_action_relations(
-        WorkspaceRole.viewer,
-        WorkspaceState.active,
-        ResourceAction.project_create,
-    )
+    assert set(workspace_project_participations(WorkspaceRole.editor, WorkspaceState.active)) == {
+        "open",
+        "workspace",
+    }
+    assert set(workspace_project_participations(WorkspaceRole.admin, WorkspaceState.active)) == {
+        "managed",
+        "open",
+        "workspace",
+    }
+    assert not workspace_project_participations(WorkspaceRole.reviewer, WorkspaceState.active)
+    assert not workspace_project_participations(WorkspaceRole.viewer, WorkspaceState.active)
     assert governance_suspended == frozenset({
         ResourceAction.project_governance_read,
         ResourceAction.workspace_read,
@@ -228,28 +220,6 @@ def test_effective_resource_action_projections_reuse_role_and_lifecycle_results(
             WorkspaceRole.owner, WorkspaceState.active, governance_suspended=True
         )
         is not active
-    )
-
-    relations = effective_resource_action_relations(
-        WorkspaceRole.owner, WorkspaceState.active, ResourceAction.project_create
-    )
-    assert (
-        effective_resource_action_relations(
-            WorkspaceRole.owner, WorkspaceState.active, ResourceAction.project_create
-        )
-        is relations
-    )
-    assert relations != effective_resource_action_relations(
-        WorkspaceRole.editor, WorkspaceState.active, ResourceAction.project_create
-    )
-    assert not effective_resource_action_relations(
-        WorkspaceRole.owner, WorkspaceState.archived, ResourceAction.project_create
-    )
-    assert not effective_resource_action_relations(
-        WorkspaceRole.owner,
-        WorkspaceState.active,
-        ResourceAction.project_create,
-        governance_suspended=True,
     )
 
 
@@ -1313,10 +1283,8 @@ async def test_managed_project_is_visible_only_to_members_and_workspace_governor
     await async_db.commit()
     editor_actions = effective_resource_actions(WorkspaceRole.editor, WorkspaceState.active)
     assert ResourceAction.project_create not in editor_actions
-    assert "managed" not in effective_resource_action_relations(
-        WorkspaceRole.editor,
-        WorkspaceState.active,
-        ResourceAction.project_create,
+    assert "managed" not in workspace_project_participations(
+        WorkspaceRole.editor, WorkspaceState.active
     )
     with pytest.raises(PermissionDenied):
         await create_project(
@@ -1480,11 +1448,14 @@ async def test_project_settings_projection_lists_allowed_participation_targets(a
     editor_context = await resolve_workspace_context(async_db, editor, workspace_id)
     editor_decisions = project_decisions(editor_context, project, is_member=False)
     assert ResourceAction.project_update in editor_decisions.allowed
-    assert set(editor_decisions.variants[ResourceAction.project_update]) == {"workspace", "open"}
+    assert set(project_participation_changes(editor_context, project)) == {"workspace", "open"}
 
     owner_context = await resolve_workspace_context(async_db, owner, workspace_id)
-    owner_decisions = project_decisions(owner_context, project, is_member=True)
-    assert set(owner_decisions.variants[ResourceAction.project_update]) == {
+    assert (
+        ResourceAction.project_update
+        in project_decisions(owner_context, project, is_member=True).allowed
+    )
+    assert set(project_participation_changes(owner_context, project)) == {
         "workspace",
         "open",
         "managed",

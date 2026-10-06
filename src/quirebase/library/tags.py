@@ -8,18 +8,18 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import (
+    ResourceAction,
+    WorkspaceContext,
+    require_action,
+    require_workspace_action,
+)
 from quirebase.access.items import (
     require_editable_item,
     require_item_action,
     visible_items_query,
 )
 from quirebase.access.tags import visible_tags_query
-from quirebase.access.workspaces import (
-    ResourceAction,
-    WorkspaceContext,
-    require_action,
-    require_workspace_action,
-)
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,

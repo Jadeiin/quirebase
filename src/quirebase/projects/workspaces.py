@@ -13,7 +13,6 @@ from quirebase.access import (
     WorkspaceContext,
     lock_workspace_context,
     require_action,
-    require_project_visibility,
     require_workspace_action,
     visible_project_ids_query,
     workspace_select,
@@ -33,7 +32,7 @@ from quirebase.models import (
     WorkspaceMemberState,
 )
 
-from ._locking import guard_project
+from ._locking import lock_project_root
 from .loaders import require_project
 
 if TYPE_CHECKING:
@@ -218,8 +217,7 @@ async def add_item_to_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
 ) -> None:
     workspace = await lock_workspace_context(db, user, workspace_id)
-    project = await guard_project(db, project_id, workspace_id)
-    context = await require_project_visibility(db, workspace, project)
+    project = await lock_project_root(db, workspace, project_id, lock="shared")
     require_action(workspace, ResourceAction.project_item_manage)
     if project.state is not ProjectState.active:
         raise ProjectLifecycleError("Project is read-only")
@@ -252,7 +250,7 @@ async def add_item_to_project(
             detail={"project_id": project_id},
             workspace_id=workspace_id,
             project_id=project_id,
-            authorization_role=context.workspace.role.value,
+            authorization_role=workspace.role.value,
             authorization_resource_action=ResourceAction.project_item_manage.value,
         )
     await db.commit()
@@ -262,8 +260,7 @@ async def remove_item_from_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_id: str
 ) -> None:
     workspace = await lock_workspace_context(db, user, workspace_id)
-    project = await guard_project(db, project_id, workspace_id)
-    context = await require_project_visibility(db, workspace, project)
+    project = await lock_project_root(db, workspace, project_id, lock="shared")
     require_action(workspace, ResourceAction.project_item_manage)
     if project.state is not ProjectState.active:
         raise ProjectLifecycleError("Project is read-only")
@@ -288,7 +285,7 @@ async def remove_item_from_project(
             detail={"project_id": project_id},
             workspace_id=workspace_id,
             project_id=project_id,
-            authorization_role=context.workspace.role.value,
+            authorization_role=workspace.role.value,
             authorization_resource_action=ResourceAction.project_item_manage.value,
         )
     await db.commit()
@@ -298,8 +295,7 @@ async def add_items_to_project(
     db: AsyncSession, user: User, workspace_id: str, project_id: str, item_ids: list[str]
 ) -> int:
     workspace = await lock_workspace_context(db, user, workspace_id)
-    project = await guard_project(db, project_id, workspace_id)
-    await require_project_visibility(db, workspace, project)
+    project = await lock_project_root(db, workspace, project_id, lock="shared")
     require_action(workspace, ResourceAction.project_item_manage)
     if project.state is not ProjectState.active:
         raise ProjectLifecycleError("Project is read-only")

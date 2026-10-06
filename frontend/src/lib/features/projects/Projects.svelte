@@ -4,6 +4,7 @@
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
+	import { can } from '#lib/authorization/can.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Badge from '#lib/design/Badge.svelte';
 	import Button from '#lib/design/Button.svelte';
@@ -25,7 +26,12 @@
 	const workspaceId = workspace.workspaceId;
 	const queryClient = useQueryClient();
 	const projects = createQuery(() => projectListQuery(workspaceId));
-	const joinable = createQuery(() => projectListQuery(workspaceId, 'joinable'));
+	const joinable = $derived(
+		(projects.data ?? []).filter(
+			(project) =>
+				project.participation === 'open' && project.state === 'active' && !project.is_member
+		)
+	);
 	const workspaceProjects = $derived(
 		(projects.data ?? []).filter((project) => project.participation === 'workspace')
 	);
@@ -50,11 +56,7 @@
 	let name = $state('');
 	let description = $state('');
 	let participation = $state<'workspace' | 'open' | 'managed'>('workspace');
-	const allowedParticipation = $derived(
-		(['workspace', 'open', 'managed'] as const).filter((value) =>
-			workspace.canVariant('project.create', value)
-		)
-	);
+	const allowedParticipation = $derived(workspace.view?.allowed_project_participations ?? []);
 	$effect(() => {
 		if (!allowedParticipation.includes(participation) && allowedParticipation[0]) {
 			participation = allowedParticipation[0];
@@ -68,7 +70,7 @@
 	}
 
 	async function createProject() {
-		if (!workspace.canVariant('project.create', participation)) return;
+		if (!allowedParticipation.includes(participation)) return;
 		busy = true;
 		error = '';
 		try {
@@ -165,6 +167,7 @@
 										{$t('All active Workspace members participate in this Project.')}
 									{:else if participation === 'open'}
 										{$t('Active Workspace members can choose to join or leave this Project.')}
+										{$t('You will join automatically when you create an open Project.')}
 									{:else}
 										{$t(
 											'Only Workspace owners and admins can create managed Projects and curate participation.'
@@ -239,9 +242,9 @@
 		<p class="text-sm text-surface-600-400">
 			{$t('Join an open research direction to add it to Your Projects.')}
 		</p>
-		{#if joinable.isPending}<p class="text-surface-600-400">{$t('Loading Projects…')}</p>
-		{:else if joinable.isError}<p class="text-error-700-300">{$t('Unable to load Projects.')}</p>
-		{:else}{#each joinable.data ?? [] as project (project.id)}
+		{#if projects.isPending}<p class="text-surface-600-400">{$t('Loading Projects…')}</p>
+		{:else if projects.isError}<p class="text-error-700-300">{$t('Unable to load Projects.')}</p>
+		{:else}{#each joinable as project (project.id)}
 				<ItemRow>
 					<strong>{project.name}</strong>
 					{#if project.description}<span class="text-sm text-surface-700-300"
@@ -249,7 +252,10 @@
 						>{/if}
 					<div class="flex items-center justify-between gap-2">
 						<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
-						<Button disabled={busy} onclick={() => join(project.id)}>{$t('Join')}</Button>
+						{#if can(project.authorization, 'project_membership.join')}<Button
+								disabled={busy}
+								onclick={() => join(project.id)}>{$t('Join')}</Button
+							>{/if}
 					</div>
 				</ItemRow>
 			{:else}<p class="text-surface-600-400">

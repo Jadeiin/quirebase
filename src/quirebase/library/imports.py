@@ -13,8 +13,8 @@ from inquiro.bibliography import (
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_accessible_items, visible_items_query
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (

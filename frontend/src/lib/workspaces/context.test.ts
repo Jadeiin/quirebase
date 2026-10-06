@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceView } from '#lib/api/client.js';
 import type { AuthorizationAction } from '#lib/authorization/can.js';
-import {
-	workspaceCan,
-	workspaceCanVariant,
-	workspaceRole
-} from '#lib/workspaces/context.svelte.js';
+import { workspaceCan, workspaceRole } from '#lib/workspaces/context.svelte.js';
 
 const view = (
 	role: WorkspaceView['current_role'],
@@ -17,6 +13,7 @@ const view = (
 	state: 'active',
 	current_role: role,
 	governance_suspended: false,
+	allowed_project_participations: [],
 	authorization: { allowed }
 });
 
@@ -35,14 +32,6 @@ describe('workspaceCan', () => {
 		expect(workspaceCan(archived, 'workspace.archive')).toBe(true);
 		expect(workspaceCan(archived, 'item.update')).toBe(false);
 		expect(workspaceCan(suspended, 'workspace.archive')).toBe(false);
-	});
-	it('requires server-authored variants even for an owner', () => {
-		const owner = view('owner', []);
-		expect(workspaceCanVariant(owner, 'project.create', 'managed')).toBe(false);
-		owner.authorization.variants = { 'project.create': ['open'] };
-		expect(workspaceCan(owner, 'project.create')).toBe(false);
-		expect(workspaceCanVariant(owner, 'project.create', 'open')).toBe(true);
-		expect(workspaceCanVariant(owner, 'project.create', 'workspace')).toBe(false);
 	});
 	it('exposes the projected role for display without granting authority through it', () => {
 		expect(workspaceRole(view('owner', ['workspace.read']))).toBe('owner');

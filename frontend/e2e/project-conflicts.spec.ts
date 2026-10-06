@@ -16,6 +16,105 @@ function trackWorkspaceReads(page: Page) {
 	return reads;
 }
 
+test('Organize prioritizes working contexts without restricting other Project assignments', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-1', title_html: 'Reading Item', version: 1 },
+				latest_revision: null,
+				authorization: { allowed: [] },
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: [],
+				identifiers: [],
+				copy_targets: []
+			}
+		})
+	);
+	const projects = [
+		{
+			id: 'workspace',
+			name: 'Shared Workspace',
+			assigned: false,
+			is_member: true,
+			participation: 'workspace'
+		},
+		{
+			id: 'joined',
+			name: 'Joined direction',
+			assigned: false,
+			is_member: true,
+			participation: 'open'
+		},
+		{
+			id: 'assigned',
+			name: 'Already assigned',
+			assigned: true,
+			is_member: false,
+			participation: 'open'
+		},
+		{
+			id: 'other',
+			name: 'Other open direction',
+			assigned: false,
+			is_member: false,
+			participation: 'open'
+		},
+		{
+			id: 'managed',
+			name: 'Governed direction',
+			assigned: false,
+			is_member: false,
+			participation: 'managed'
+		}
+	];
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/organize', (route) =>
+		route.fulfill({
+			json: {
+				authorization: { allowed: ['project_item.manage'] },
+				projects,
+				tags: [],
+				tag_matrix: {
+					groups: [],
+					assigned_ids: [],
+					recommended_ids: [],
+					suggested_names: [],
+					recommendation_error: null,
+					recommendation_state: 'pending'
+				}
+			}
+		})
+	);
+	const writes: string[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects/*/items/item-1', (route) => {
+		writes.push(new URL(route.request().url()).pathname);
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/item/item-1/organize');
+	await expect(page.getByText('Shared Workspace', { exact: true })).toBeVisible();
+	await expect(page.getByText('Joined direction', { exact: true })).toBeVisible();
+	await expect(page.getByText('Already assigned', { exact: true })).toBeVisible();
+	await expect(page.getByText('Other open direction', { exact: true })).toBeHidden();
+	await expect(page.getByText('Governed direction', { exact: true })).toBeHidden();
+	const other = page.locator('details').filter({ hasText: 'Other open Projects' });
+	await other.locator('summary').click();
+	await other.getByRole('textbox', { name: 'Search Projects' }).fill('absent');
+	await expect(other.getByText('No matching Projects.')).toBeVisible();
+	await other.getByRole('textbox', { name: 'Search Projects' }).fill('open');
+	await other.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect
+		.poll(() => writes)
+		.toContain('/api/v1/workspaces/workspace-1/projects/other/items/item-1');
+	const managed = page.locator('details').filter({ hasText: 'Managed Projects' });
+	await managed.locator('summary').click();
+	await managed.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect
+		.poll(() => writes)
+		.toContain('/api/v1/workspaces/workspace-1/projects/managed/items/item-1');
+});
+
 for (const assigned of [false, true]) {
 	test(`Organize refreshes after a Project is archived during ${assigned ? 'Remove' : 'Add'}`, async ({
 		page
@@ -41,7 +140,17 @@ for (const assigned of [false, true]) {
 			route.fulfill({
 				json: {
 					authorization: { allowed: ['project_item.manage'] },
-					projects: archived ? [] : [{ id: 'project-1', name: 'Reading Project', assigned }],
+					projects: archived
+						? []
+						: [
+								{
+									id: 'project-1',
+									name: 'Reading Project',
+									assigned,
+									participation: 'workspace',
+									is_member: true
+								}
+							],
 					tags: [],
 					tag_matrix: {
 						groups: [],
@@ -177,7 +286,7 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 });
 
 for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
-	test(`Projects refreshes both lists after Join returns ${code}`, async ({ page }) => {
+	test(`Projects refreshes its collection after Join returns ${code}`, async ({ page }) => {
 		await mockSession(page);
 		const workspaceReads = trackWorkspaceReads(page);
 		let changed = false;
@@ -193,7 +302,7 @@ for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
 				is_member: false,
 				item_count: 0,
 				description: '',
-				authorization: { allowed: [] }
+				authorization: { allowed: changed ? [] : ['project_membership.join'] }
 			};
 			return route.fulfill({ json: view === 'joinable' && changed ? [] : [project] });
 		});
@@ -215,7 +324,7 @@ for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
 				exact: true
 			})
 		).toBeVisible();
-		expect(listReads).toEqual({ all: 2, joinable: 2 });
+		expect(listReads).toEqual({ all: 2, joinable: 0 });
 		expect(workspaceReads).toEqual(initialWorkspaceReads);
 	});
 }

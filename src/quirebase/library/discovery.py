@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from inquiro import SearchClause, SearchQuery
 
-from quirebase.access.workspaces import require_workspace_membership
+from quirebase.access import require_workspace_membership
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.library.activity import (
     get_matching_accessible_item_identifiers,

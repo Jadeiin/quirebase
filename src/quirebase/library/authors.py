@@ -7,8 +7,8 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
-from quirebase.access.workspaces import ResourceAction, require_workspace_action
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import Author, Item, ItemAuthor, User, normalize_author_identity
 

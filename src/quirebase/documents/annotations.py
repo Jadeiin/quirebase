@@ -8,6 +8,14 @@ from typing import TYPE_CHECKING, Any, Literal
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import (
+    ResourceAction,
+    action_allowed,
+    require_project_context,
+    require_workspace_action,
+    resolve_workspace_context,
+    visible_project_ids_query,
+)
 from quirebase.access.annotations import (
     annotation_decisions,
     annotation_moderation_action,
@@ -21,14 +29,6 @@ from quirebase.access.annotations import (
 )
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_readable_item
-from quirebase.access.workspaces import (
-    ResourceAction,
-    action_allowed,
-    require_project_context,
-    require_workspace_action,
-    resolve_workspace_context,
-    visible_project_ids_query,
-)
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,

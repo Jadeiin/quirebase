@@ -14,6 +14,7 @@ async function projectActions(
 		state: 'active',
 		current_role: role,
 		governance_suspended: suspended,
+		allowed_project_participations: [],
 		authorization: { allowed: allowedActions }
 	};
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>

@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from quirebase.access.items import can_read_item
-from quirebase.access.workspaces import (
+from quirebase.access import (
     ProjectContext,
     ResourceAction,
     action_allowed,
@@ -14,6 +13,7 @@ from quirebase.access.workspaces import (
     require_project_context,
     require_workspace_action,
 )
+from quirebase.access.items import can_read_item
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,

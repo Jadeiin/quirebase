@@ -11,7 +11,6 @@ from quirebase.access import (
     ResourceAction,
     WorkspaceContext,
     authorization,
-    effective_resource_action_relations,
     effective_resource_actions,
     item_decisions,
     require_action,
@@ -31,6 +30,7 @@ from quirebase.models import (
     Attachment,
     FileRevision,
     Project,
+    ProjectParticipation,
     Tag,
     User,
     Workspace,
@@ -40,6 +40,7 @@ from quirebase.models import (
     WorkspaceState,
 )
 from quirebase.operations import dispatch_workspace_reindex
+from quirebase.projects import create_project
 from quirebase.workspaces import set_workspace_member_role
 
 
@@ -55,7 +56,6 @@ def policy_bundle(tmp_path, monkeypatch):
             authorization._validate_policy_bundle,
             authorization._enforce_canonical,
             effective_resource_actions,
-            effective_resource_action_relations,
         ):
             cached.cache_clear()
 
@@ -313,6 +313,53 @@ async def test_maintenance_authority_is_independent_of_workspace_rename(
     else:
         with pytest.raises(PermissionDenied):
             await dispatch_workspace_reindex(async_db, actor, workspace.id)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("metadata_allowed", [False, True])
+async def test_project_choices_and_commands_do_not_infer_independent_grants(
+    async_db, async_session_factory, tmp_path, monkeypatch, policy_bundle, metadata_allowed
+):
+    removed = (
+        ResourceAction.project_membership_manage
+        if metadata_allowed
+        else ResourceAction.project_update
+    )
+    policy_bundle((removed, "admin" if metadata_allowed else "editor", "owner"))
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await async_db.get(User, item.created_by)
+    project = await create_project(async_db, owner, item.workspace_id, "Independent choices")
+    actor = User(username="project-admin", password_hash="unused")
+    async_db.add(actor)
+    await async_db.flush()
+    async_db.add(
+        WorkspaceMember(workspace_id=item.workspace_id, user_id=actor.id, role=WorkspaceRole.admin)
+    )
+    await async_db.commit()
+    grant = await create_api_token(async_db, actor, "Project choices", expires_in_days=1)
+    client.headers["Authorization"] = f"Bearer {grant.raw_token}"
+    url = f"/api/v1/workspaces/{item.workspace_id}/projects/{project.id}"
+    try:
+        response = await client.get(url)
+        assert response.status_code == 200
+        view = response.json()
+        assert view["allowed_participation_changes"] == (
+            [ProjectParticipation.workspace.value, ProjectParticipation.open.value]
+            if metadata_allowed
+            else []
+        )
+        assert ("project.update" in view["authorization"]["allowed"]) is metadata_allowed
+        metadata = await client.patch(url, json={"name": "Metadata"})
+        assert metadata.status_code == (200 if metadata_allowed else 403)
+        participation = await client.patch(url, json={"participation": "managed"})
+        assert participation.status_code == 403
+        await async_db.refresh(project)
+        assert project.name == ("Metadata" if metadata_allowed else "Independent choices")
+        assert project.participation is ProjectParticipation.workspace
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio

@@ -1177,23 +1177,6 @@ export interface paths {
 		patch: operations['projects.update_project'];
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/description': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Update Project Description Api */
-		post: operations['projects.update_project_description_api'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/archive': {
 		parameters: {
 			query?: never;
@@ -1222,23 +1205,6 @@ export interface paths {
 		put?: never;
 		/** Restore Project */
 		post: operations['projects.restore_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/participation': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Set Project Participation Api */
-		post: operations['projects.set_project_participation_api'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3431,6 +3397,9 @@ export interface components {
 			name: string;
 			/** Assigned */
 			assigned: boolean;
+			participation: components['schemas']['ProjectParticipation'];
+			/** Is Member */
+			is_member: boolean;
 		};
 		/** ItemOrganizeView */
 		ItemOrganizeView: {
@@ -3713,11 +3682,6 @@ export interface components {
 			/** Confirmation */
 			confirmation: string;
 		};
-		/** ProjectDescriptionRequest */
-		ProjectDescriptionRequest: {
-			/** Description */
-			description: string;
-		};
 		/** ProjectDetailView */
 		ProjectDetailView: {
 			/** Id */
@@ -3735,6 +3699,8 @@ export interface components {
 			 * @default
 			 */
 			description: string;
+			/** Allowed Participation Changes */
+			allowed_participation_changes: components['schemas']['ProjectParticipation'][];
 			authorization: components['schemas']['WorkspaceAuthorizationView'];
 			/** Members */
 			members: components['schemas']['ProjectMemberView'][];
@@ -3758,17 +3724,14 @@ export interface components {
 		 * @enum {string}
 		 */
 		ProjectParticipation: 'workspace' | 'open' | 'managed';
-		/** ProjectParticipationRequest */
-		ProjectParticipationRequest: {
-			participation: components['schemas']['ProjectParticipation'];
-		};
 		/** ProjectSettingsRequest */
 		ProjectSettingsRequest: {
 			/** Name */
-			name: string;
-			participation: components['schemas']['ProjectParticipation'];
+			name?: string;
+			/** Participation */
+			participation?: components['schemas']['ProjectParticipation'];
 			/** Description */
-			description: string;
+			description?: string;
 		};
 		/**
 		 * ProjectState
@@ -3792,6 +3755,8 @@ export interface components {
 			 * @default
 			 */
 			description: string;
+			/** Allowed Participation Changes */
+			allowed_participation_changes: components['schemas']['ProjectParticipation'][];
 			authorization: components['schemas']['WorkspaceAuthorizationView'];
 		};
 		/** Rect */
@@ -4051,10 +4016,6 @@ export interface components {
 		SystemAuthorizationView: {
 			/** Allowed */
 			allowed: components['schemas']['SystemAction'][];
-			/** Variants */
-			variants?: {
-				[key: string]: string[];
-			};
 		};
 		/**
 		 * SystemRole
@@ -4180,7 +4141,7 @@ export interface components {
 		};
 		/**
 		 * WorkspaceAuthorizationView
-		 * @description Resolved Workspace action grants and independent concrete variant grants.
+		 * @description Resolved Workspace resource-action capabilities.
 		 */
 		WorkspaceAuthorizationView: {
 			/**
@@ -4188,13 +4149,6 @@ export interface components {
 			 * @description Resolved action grants; excludes actions granted only for a request variant.
 			 */
 			allowed: components['schemas']['ResourceAction'][];
-			/**
-			 * Variants
-			 * @description Concrete variant grants, independent of the base action grants in allowed.
-			 */
-			variants?: {
-				[key: string]: components['schemas']['ProjectParticipation'][];
-			};
 		};
 		/** WorkspaceCreateRequest */
 		WorkspaceCreateRequest: {
@@ -4353,6 +4307,8 @@ export interface components {
 			current_role: components['schemas']['WorkspaceRole'];
 			/** Governance Suspended */
 			governance_suspended: boolean;
+			/** Allowed Project Participations */
+			allowed_project_participations: components['schemas']['ProjectParticipation'][];
 			/** Allowed Invitation Roles */
 			allowed_invitation_roles?: components['schemas']['WorkspaceInvitationRole'][];
 			authorization: components['schemas']['WorkspaceAuthorizationView'];
@@ -7913,51 +7869,6 @@ export interface operations {
 			};
 		};
 	};
-	'projects.update_project_description_api': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				workspace_id: string;
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectDescriptionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
 	'projects.archive_project': {
 		parameters: {
 			query?: never;
@@ -8010,51 +7921,6 @@ export interface operations {
 			cookie?: never;
 		};
 		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.set_project_participation_api': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				workspace_id: string;
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectParticipationRequest'];
-			};
-		};
 		responses: {
 			/** @description Successful Response */
 			200: {

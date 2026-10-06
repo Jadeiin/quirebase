@@ -334,6 +334,11 @@ msgid "All active Workspace members will participate in this Project."
 msgstr "All active Workspace members will participate in this Project."
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
+msgstr "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "All members"
 msgstr "All members"
@@ -492,6 +497,11 @@ msgstr "Arrow"
 #: src/lib/features/auth/Invitation.svelte
 msgid "as"
 msgstr "as"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Assigned, Workspace and Your Projects"
+msgstr "Assigned, Workspace and Your Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -808,9 +818,19 @@ msgid "Clear filters"
 msgstr "Clear filters"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Clear Project participant selection?"
+msgstr "Clear Project participant selection?"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Clear selection"
 msgstr "Clear selection"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Clear selection and save"
+msgstr "Clear selection and save"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2107,6 +2127,11 @@ msgid "Managed participation"
 msgstr "Managed participation"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Managed Projects"
+msgstr "Managed Projects"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Managed Projects are visible only to their participants and Workspace owners/admins."
@@ -2408,6 +2433,11 @@ msgstr "No matching members."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "No matching Projects."
+msgstr "No matching Projects."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "No new Tag suggestions."
 msgstr "No new Tag suggestions."
 
@@ -2619,6 +2649,11 @@ msgstr "Organize"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Organize a collection"
 msgstr "Organize a collection"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Other open Projects"
+msgstr "Other open Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -3377,6 +3412,11 @@ msgstr "Search Library"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Search members"
 msgstr "Search members"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Search Projects"
+msgstr "Search Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -4454,6 +4494,11 @@ msgstr "You no longer have access to this Workspace."
 #: src/routes/(app)/workspace/+page.svelte
 msgid "You will become its owner and can invite other members later."
 msgstr "You will become its owner and can invite other members later."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "You will join automatically when you create an open Project."
+msgstr "You will join automatically when you create an open Project."
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from quirebase.models import ProjectParticipation
 from quirebase.web.api.common import WorkspaceAuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView
 
@@ -75,6 +76,8 @@ class ItemOrganizeProjectView(BaseModel):
     id: str
     name: str
     assigned: bool
+    participation: ProjectParticipation
+    is_member: bool
 
 
 class TagMatrixGroupView(BaseModel):

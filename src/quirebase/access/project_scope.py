@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 
 from quirebase.access.context import (
     ProjectContext,
@@ -21,31 +21,37 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
 
 
-def visible_project_ids_query(ctx: WorkspaceContext):
-    """Select Projects discoverable to this active Workspace member.
+def project_visibility_predicate(ctx: WorkspaceContext) -> ColumnElement[bool]:
+    """One domain scope predicate for collection, direct and locked Project reads.
 
-    Participation defines ordinary discovery. Policy grants only the additional ability to
-    inspect managed Projects for Workspace governance.
+    Participation defines ordinary discovery; policy grants only the additional
+    capability to inspect managed Projects for Workspace governance.
     """
-    query = select(Project.id).where(
-        Project.workspace_id == ctx.workspace_id,
-        Project.state != ProjectState.deleted,
-    )
-    relation_predicates: list[ColumnElement[bool]] = [
-        Project.participation.in_((ProjectParticipation.workspace, ProjectParticipation.open))
-    ]
+    discoverable: ColumnElement[bool] = Project.participation.in_((
+        ProjectParticipation.workspace,
+        ProjectParticipation.open,
+    ))
     if action_allowed(ctx, ResourceAction.project_governance_read):
-        relation_predicates.append(Project.participation == ProjectParticipation.managed)
+        discoverable = or_(discoverable, Project.participation == ProjectParticipation.managed)
     else:
         member_project_ids = select(ProjectMember.project_id).where(
             ProjectMember.workspace_id == ctx.workspace_id,
             ProjectMember.user_id == ctx.actor_id,
         )
-        relation_predicates.append(
+        discoverable = or_(
+            discoverable,
             (Project.participation == ProjectParticipation.managed)
-            & Project.id.in_(member_project_ids)
+            & Project.id.in_(member_project_ids),
         )
-    return query.where(or_(*relation_predicates))
+    return and_(
+        Project.workspace_id == ctx.workspace_id,
+        Project.state != ProjectState.deleted,
+        discoverable,
+    )
+
+
+def visible_project_ids_query(ctx: WorkspaceContext):
+    return select(Project.id).where(project_visibility_predicate(ctx))
 
 
 async def require_project_visibility(
@@ -53,22 +59,15 @@ async def require_project_visibility(
     ctx: WorkspaceContext,
     project: Project,
 ) -> ProjectContext:
-    """Check target lineage, lifecycle and discoverability without a second action gate."""
-    if project.workspace_id != ctx.workspace.id or project.state is ProjectState.deleted:
-        raise ResourceUnavailable("Project not found")
-    discoverable = project.participation is not ProjectParticipation.managed or action_allowed(
-        ctx, ResourceAction.project_governance_read
+    """Recheck discovery in a fresh statement after a root lock is acquired.
+
+    A statement waiting for a Project lock can have a membership snapshot from
+    before the prior transaction removed that participant.
+    """
+    visible = await db.scalar(
+        select(Project.id).where(Project.id == project.id, project_visibility_predicate(ctx))
     )
-    if not discoverable and project.participation is ProjectParticipation.managed:
-        member_id = await db.scalar(
-            select(ProjectMember.id).where(
-                ProjectMember.workspace_id == ctx.workspace_id,
-                ProjectMember.project_id == project.id,
-                ProjectMember.user_id == ctx.actor_id,
-            )
-        )
-        discoverable = member_id is not None
-    if not discoverable:
+    if visible is None:
         raise ResourceUnavailable("Project not found")
     return ProjectContext(ctx, project)
 
@@ -95,7 +94,7 @@ async def require_project_context(
         workspace_select(Project, workspace)
         .where(
             Project.id == project_id,
-            Project.state != ProjectState.deleted,
+            project_visibility_predicate(workspace),
         )
         .execution_options(populate_existing=True)
     )
@@ -104,10 +103,10 @@ async def require_project_context(
     project = await db.scalar(project_query)
     if project is None:
         raise ResourceUnavailable("Project not found")
-    project_context = await require_project_visibility(
-        db,
-        workspace,
-        project,
+    project_context = (
+        await require_project_visibility(db, workspace, project)
+        if lock is not None
+        else ProjectContext(workspace, project)
     )
     require_action(workspace, operation, relation=relation)
     if mutating and project.state is not ProjectState.active:

@@ -1,6 +1,11 @@
 import pytest
 
-from quirebase.access import ResourceAction, workspace_decisions, workspace_invitation_roles
+from quirebase.access import (
+    ResourceAction,
+    workspace_decisions,
+    workspace_invitation_roles,
+    workspace_project_participations,
+)
 from quirebase.models import WorkspaceRole, WorkspaceState
 
 
@@ -11,13 +16,13 @@ def test_workspace_projection_separates_base_grants_and_concrete_choices(role, l
     suspended = lifecycle == "suspended"
     decisions = workspace_decisions(role, state, governance_suspended=suspended)
     invitations = workspace_invitation_roles(role, state, governance_suspended=suspended)
+    projects = workspace_project_participations(role, state, governance_suspended=suspended)
 
     assert ResourceAction.project_create not in decisions.allowed
     assert ResourceAction.workspace_invitation_create not in decisions.allowed
-    assert ResourceAction.workspace_invitation_create not in decisions.variants
     if lifecycle != "active":
         assert not invitations
-        assert ResourceAction.project_create not in decisions.variants
+        assert not projects
         return
 
     expected_invitations = {
@@ -30,4 +35,4 @@ def test_workspace_projection_separates_base_grants_and_concrete_choices(role, l
         WorkspaceRole.admin: {"workspace", "open", "managed"},
         WorkspaceRole.editor: {"workspace", "open"},
     }.get(role, set())
-    assert set(decisions.variants.get(ResourceAction.project_create, ())) == expected_projects
+    assert set(projects) == expected_projects

@@ -7,8 +7,8 @@ from fastapi import APIRouter, status
 from quirebase.access import (
     ResourceAction,
     project_decisions,
+    project_participation_changes,
     require_workspace_action,
-    resolve_workspace_context,
 )
 from quirebase.library import (
     add_project_discussion_message,
@@ -28,9 +28,7 @@ from quirebase.projects import (
     open_project_workspace,
     remove_item_from_project,
     require_project,
-    set_project_participation,
     set_project_state,
-    update_project_description,
     update_project_settings,
 )
 from quirebase.projects import (
@@ -47,11 +45,9 @@ from quirebase.web.api.library_schemas import (
 from quirebase.web.api.project_schemas import (
     ProjectCreateRequest,
     ProjectDeleteRequest,
-    ProjectDescriptionRequest,
     ProjectDetailView,
     ProjectMemberRequest,
     ProjectMemberView,
-    ProjectParticipationRequest,
     ProjectSettingsRequest,
     ProjectSummaryView,
     project_detail_view,
@@ -76,6 +72,7 @@ async def list_projects(
             participation=project.participation,
             description=project.description,
             is_member=is_member,
+            allowed_participation_changes=list(project_participation_changes(context, project)),
             authorization=authorization_view(
                 project_decisions(context, project, is_member=is_member)
             ),
@@ -101,6 +98,9 @@ async def get_project(
     workspace = await open_project_workspace(db, context, project_id)
     return project_detail_view(
         workspace,
+        allowed_participation_changes=list(
+            project_participation_changes(context, workspace.project)
+        ),
         authorization=authorization_view(
             project_decisions(
                 context,
@@ -131,18 +131,6 @@ async def update_project(
     return WriteResult(id=project.id)
 
 
-@router.post("/{project_id}/description", response_model=WriteResult)
-async def update_project_description_api(
-    workspace_id: str,
-    project_id: str,
-    data: ProjectDescriptionRequest,
-    user: ApiUser,
-    db: Database,
-) -> WriteResult:
-    project = await update_project_description(db, user, workspace_id, project_id, data.description)
-    return WriteResult(id=project.id)
-
-
 @router.delete("/{project_id}", response_model=OkView)
 async def delete_user_project(
     workspace_id: str,
@@ -168,18 +156,6 @@ async def restore_project(
     workspace_id: str, project_id: str, user: ApiUser, db: Database
 ) -> OkView:
     await set_project_state(db, user, workspace_id, project_id, ProjectState.active)
-    return OkView()
-
-
-@router.post("/{project_id}/participation", response_model=OkView)
-async def set_project_participation_api(
-    workspace_id: str,
-    project_id: str,
-    data: ProjectParticipationRequest,
-    user: ApiUser,
-    db: Database,
-) -> OkView:
-    await set_project_participation(db, user, workspace_id, project_id, data.participation)
     return OkView()
 
 
@@ -224,10 +200,7 @@ async def set_project_member(
     db: Database,
 ) -> ProjectMemberView:
     member = await add_project_member(db, user, workspace_id, project_id, data.username)
-    context = await resolve_workspace_context(db, user, workspace_id)
-    workspace = await open_project_workspace(db, context, project_id)
-    matched = next(row for row in workspace.members if row.user.id == member.user_id)
-    return ProjectMemberView(user_id=matched.user.id, username=matched.user.username)
+    return ProjectMemberView(user_id=member.user_id, username=member.username)
 
 
 @router.delete("/{project_id}/members/{user_id}", response_model=OkView)

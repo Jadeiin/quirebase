@@ -100,7 +100,6 @@ async def test_http_api_includes_the_public_capability_set(
         ("PATCH", "/api/v1/workspaces/{workspace_id}/projects/{project_id}"),
         ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/archive"),
         ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/restore"),
-        ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/participation"),
         ("PUT", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}"),
         ("DELETE", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}"),
         ("PUT", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/members"),
@@ -754,7 +753,7 @@ async def test_http_api_tags_use_effective_management_action(
             "id": tag.id,
             "name": "Read only",
             "accessible_item_count": 0,
-            "authorization": {"allowed": [], "variants": {}},
+            "authorization": {"allowed": []},
         }
     ]
 

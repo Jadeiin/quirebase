@@ -118,7 +118,6 @@ async def test_session_bootstrap_returns_the_browser_identity(
         assert payload["user"]["role"] == "member"
         assert payload["user"]["authorization"] == {
             "allowed": [],
-            "variants": {},
         }
     finally:
         await client.aclose()

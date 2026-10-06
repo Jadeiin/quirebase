@@ -64,8 +64,9 @@ rules.
 
 Workspace is the only persistent resource role axis. The roles are `owner`, `admin`, `editor`,
 `reviewer` and `viewer`; business code asks the Access Module for one decision and never branches
-directly on a role string. Casbin is the sole policy evaluator for both Workspace and System
-authorization; domain participation, lineage and lifecycle invariants remain explicit domain rules.
+directly on a role string. Casbin is the sole resource-action capability policy evaluator for
+Workspace and System authority. Domain scope, participation, lineage and lifecycle invariants
+remain explicit domain rules.
 Every authorization decision has the same shape:
 
 ```text
@@ -84,12 +85,13 @@ database, retain the locks and constraints required for concurrent correctness, 
 single Access decision. They must not add a coarse Workspace-wide gate before a more specific
 resource decision. The canonical dotted form such as `item.update` is used only to serialize a
 `resource=item`, `action=update` pair in API projections and Audit Events. Frontend code receives
-server-authored decision sets and asks `can(action)` or `canVariant(action, variant)`; a variant
-requires an explicit concrete variant in the projection. `allowed` contains resolved base-action
-grants, while `variants` independently grants concrete request variants. A variant-only action
-such as `project.create` is absent from `allowed`; it cannot be treated as an unconditional grant.
-A resource may expose both a base grant and constrained variants: `project.update` permits metadata
-updates while its variant set limits participation changes. Frontend code never maps roles to actions.
+server-authored capability sets and asks `can(action)`. The `allowed` set contains resolved
+resource-action grants. Choices are projected on their domain read models rather than through a
+public policy language: `WorkspaceView.allowed_project_participations` lists Project creation
+modes, and `ProjectView.allowed_participation_changes` lists permitted target modes for that
+Project. A choice-constrained action such as `project.create` is absent from `allowed`; creation
+uses the concrete choice list. Metadata-update capability and participation choices remain
+independent. Frontend code never maps roles to actions.
 
 Actions use one controlled vocabulary. Ordinary persistence operations use `create`, `read`,
 `update` and `delete`; `read` covers both collection and individual retrieval at the policy layer.
@@ -99,10 +101,8 @@ family of subordinate mutations. Authorship or moderation does not create action
 `delete` or `restore` action is evaluated with `relation=own` or `relation=other`.
 Command variants also remain relations rather than action suffixes: Project participation constrains
 `project.create`, and the configured creation mode constrains `workspace.create`. When a client
-must choose among such variants, `AuthorizationView.variants` carries the server-evaluated
-concrete variant set for the same resource-action key; it is not a second policy namespace.
-When a domain value requires internal relation classification, the server projects the concrete
-choices instead. `WorkspaceView.allowed_invitation_roles` lists the roles the caller may invite;
+must choose among such variants, the server projects concrete choices on the domain read model.
+Casbin relations remain internal to the Access Module. `WorkspaceView.allowed_invitation_roles` lists the roles the caller may invite;
 the frontend does not translate invitation roles into Casbin's `admin` or `member` classes.
 `WorkspaceGovernanceMemberView.allowed_roles` similarly lists concrete role transitions for that
 target, including promotion, while its decision set contains lifecycle and ownership actions.
@@ -208,7 +208,8 @@ access to canonical Workspace Items:
   implicitly. The Project has no ProjectMember associations and offers no join, leave or
   member-management operations. Users with `project.create` may create one.
 - `participation=open`: every active Workspace member can discover the Project and may choose to join
-  or leave. Creating or switching to this mode enrolls the actor as a participant. Users with
+  or leave. Creating an open Project, or switching from `workspace` to `open`, enrolls the actor
+  as a participant. Switching from `managed` preserves the selected participants. Users with
   `project.create` may create one.
 - `participation=managed`: only ProjectMembers and Workspace owners/admins can discover the Project and
   its Project-scoped content. Members cannot self-join or leave; Workspace owners/admins curate
@@ -219,9 +220,17 @@ Ordinary discovery is fixed domain behavior: active Workspace members discover `
 `open` Projects, and explicit participants discover `managed` Projects. Casbin cannot redefine
 those modes. The narrow `project_governance.read` decision adds discovery of managed Projects
 for governance; the initial policy grants it to owners/admins, including read-only lifecycle states.
-The SQL collection filter and direct-link checker implement the same domain scope.
+Collection, direct-link and locked reads share one SQL visibility predicate. Mutation loaders
+filter invisible roots before locking and recheck visibility in a fresh statement after acquiring
+the Project lock, including after waiting behind participant removal.
 
-Switching to `workspace` removes ProjectMember associations in the same transaction. Switching
+Project settings use one partial `PATCH /projects/{id}` command and one transaction. Omitted
+fields stay unchanged; metadata-only updates do not alter participation or ProjectMember rows.
+Participation changes are an explicit submitted field with their own capability check.
+
+Switching to `workspace` removes all ProjectMember associations in the same transaction, including
+those belonging to suspended Workspace members. The UI confirms this permanent loss of participant
+selection before submitting; switching back does not restore it. Switching
 between `open` and `managed` preserves selected participants; transitioning from `workspace` to
 `open` enrolls the actor, while transitioning to `managed` does not. Managed-Project participant
 selection uses the active Workspace member directory and omits existing participants. An empty
@@ -229,6 +238,11 @@ participant list is valid for `open` and `managed`. No Project has an owner, own
 minimum-member invariant. Workspace membership and resource-action policy remain the authorization boundary for
 canonical Workspace data and Project mutations; ProjectMember affects only managed Project
 discoverability.
+
+Item organization shows already assigned Projects, Workspace Projects and joined Projects by
+default. Other open Projects and managed Projects visible through governance are expandable
+choices. This is a working-context filter, not an authority restriction: a permitted caller can
+still assign an Item to an open Project without joining it.
 
 Project membership never grants `item.read`, `item.update`, `file.manage`, `item.delete`, Tag
 governance or any other Workspace authority. ProjectItem means only “this Item is in this Project
@@ -245,7 +259,10 @@ Project role.
 No Project creator or participant must transfer ownership before leaving, suspension, termination
 or account deactivation. Those lifecycle operations remain governed by Workspace membership and
 the independent Workspace-owner invariant; ProjectMember associations are removed or become
-inactive as appropriate without preserving a minimum participant count.
+inactive as appropriate without preserving a minimum participant count. Suspending a Workspace
+member retains their ProjectMember rows but makes participation ineffective because Workspace
+access is denied. Reactivation restores their prior participation. Termination deletes those
+rows; later Workspace admission does not restore old open or managed participation.
 
 ### Project-scoped content
 

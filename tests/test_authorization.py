@@ -44,12 +44,12 @@ def test_workspace_action_metadata_is_complete_and_classifies_reads():
         ResourceAction.project_governance_read,
     ):
         assert not action_spec(action).mutating
-    assert action_spec(ResourceAction.project_create).projected_relations == (
+    assert action_spec(ResourceAction.project_create).policy_relations == (
         "workspace",
         "open",
         "managed",
     )
-    assert action_spec(ResourceAction.project_update).relation_projection == "resource"
+    assert action_spec(ResourceAction.project_update).policy_relations == ("any",)
 
 
 def test_every_declared_workspace_and_system_action_has_policy_coverage():

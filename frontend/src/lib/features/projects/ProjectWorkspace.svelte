@@ -5,12 +5,9 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
-	import {
-		can as isAllowed,
-		canVariant as isVariantAllowed,
-		type AuthorizationAction,
-		type AuthorizationVariant
-	} from '#lib/authorization/can.js';
+	import { can as isAllowed, type AuthorizationAction } from '#lib/authorization/can.js';
+	import type { components } from '#lib/api/schema.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import Notice from '#lib/design/Notice.svelte';
@@ -77,16 +74,27 @@
 	let body = $state('');
 	let settingsName = $state('');
 	let settingsDescription = $state('');
-	let settingsParticipation = $state<'workspace' | 'open' | 'managed'>('workspace');
+	let settingsParticipation = $state<components['schemas']['ProjectParticipation']>('workspace');
+	let participationDialogOpen = $state(false);
+	let pendingSettings = $state<
+		{ projectId: string; changes: components['schemas']['ProjectSettingsRequest'] } | undefined
+	>();
 	let deleteDialogOpen = $state(false);
 	let moderationMessageId = $state<string | null>(null);
 	let moderationDialogOpen = $state(false);
 
 	$effect(() => {
+		if (pendingSettings && pendingSettings.projectId !== projectId) {
+			participationDialogOpen = false;
+			pendingSettings = undefined;
+		}
+	});
+
+	$effect(() => {
 		if (!project) return;
 		settingsName = project.name;
 		settingsDescription = project.description;
-		settingsParticipation = project.participation as 'workspace' | 'open' | 'managed';
+		settingsParticipation = project.participation;
 	});
 
 	async function mutate(
@@ -126,30 +134,47 @@
 		return isAllowed(project?.authorization, action);
 	}
 
-	function canVariant(action: AuthorizationAction, variant: AuthorizationVariant) {
-		return isVariantAllowed(project?.authorization, action, variant);
+	async function applySettings(
+		targetProjectId: string,
+		changes: components['schemas']['ProjectSettingsRequest']
+	) {
+		if (
+			targetProjectId !== projectId ||
+			project?.id !== targetProjectId ||
+			!can('project.update') ||
+			(changes.participation &&
+				!project?.allowed_participation_changes.includes(changes.participation))
+		)
+			return;
+		participationDialogOpen = false;
+		pendingSettings = undefined;
+		await mutate(
+			() =>
+				workspace.api.request('PATCH', '/workspaces/{workspace_id}/projects/{project_id}', {
+					params: { path: { project_id: targetProjectId } },
+					body: changes
+				}),
+			$t('Project settings saved')
+		);
 	}
 
 	async function saveSettings(event: SubmitEvent) {
 		event.preventDefault();
-		if (
-			!can('project.update') ||
-			(settingsParticipation !== project?.participation &&
-				!canVariant('project.update', settingsParticipation))
-		)
+		if (!project || project.id !== projectId || !can('project.update')) return;
+		const changes: components['schemas']['ProjectSettingsRequest'] = {};
+		if (settingsName.trim() !== project.name) changes.name = settingsName.trim();
+		if (settingsDescription !== project.description) changes.description = settingsDescription;
+		if (settingsParticipation !== project.participation) {
+			if (!project.allowed_participation_changes.includes(settingsParticipation)) return;
+			changes.participation = settingsParticipation;
+		}
+		if (!Object.keys(changes).length) return;
+		if (changes.participation === 'workspace') {
+			pendingSettings = { projectId, changes };
+			participationDialogOpen = true;
 			return;
-		await mutate(
-			() =>
-				workspace.api.request('PATCH', '/workspaces/{workspace_id}/projects/{project_id}', {
-					params: { path: { project_id: projectId } },
-					body: {
-						name: settingsName.trim(),
-						description: settingsDescription,
-						participation: settingsParticipation
-					}
-				}),
-			$t('Project settings saved')
-		);
+		}
+		await applySettings(projectId, changes);
 	}
 
 	async function joinProject() {
@@ -359,11 +384,11 @@
 					>
 					<label class="grid grid-cols-1 gap-1"
 						>{$t('Participation')}<select class="select" bind:value={settingsParticipation}
-							>{#if project.participation === 'workspace' || canVariant('project.update', 'workspace')}<option
+							>{#if project.participation === 'workspace' || project.allowed_participation_changes.includes('workspace')}<option
 									value="workspace">{$t(domainLabel('workspace'))}</option
-								>{/if}{#if project.participation === 'open' || canVariant('project.update', 'open')}<option
+								>{/if}{#if project.participation === 'open' || project.allowed_participation_changes.includes('open')}<option
 									value="open">{$t(domainLabel('open'))}</option
-								>{/if}{#if project.participation === 'managed' || canVariant('project.update', 'managed')}<option
+								>{/if}{#if project.participation === 'managed' || project.allowed_participation_changes.includes('managed')}<option
 									value="managed">{$t(domainLabel('managed'))}</option
 								>{/if}</select
 						></label
@@ -396,7 +421,7 @@
 							disabled={busy ||
 								!settingsName.trim() ||
 								(settingsParticipation !== project.participation &&
-									!canVariant('project.update', settingsParticipation))}
+									!project.allowed_participation_changes.includes(settingsParticipation))}
 							>{$t('Save Project settings')}</Button
 						>
 					</div>
@@ -569,6 +594,18 @@
 			{/if}
 		</Panel>
 	{/if}
+	<ConfirmDialog
+		bind:open={participationDialogOpen}
+		title={$t('Clear Project participant selection?')}
+		body={$t(
+			'All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them.'
+		)}
+		confirmLabel={$t('Clear selection and save')}
+		{busy}
+		onConfirm={() => {
+			if (pendingSettings) void applySettings(pendingSettings.projectId, pendingSettings.changes);
+		}}
+	/>
 	<PromptDialog
 		bind:open={deleteDialogOpen}
 		title={$t('Permanently delete this Project?')}

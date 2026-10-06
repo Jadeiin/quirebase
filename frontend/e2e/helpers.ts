@@ -11,6 +11,7 @@ function workspaceView(id: string, name: string) {
 		state: 'active',
 		current_role: 'owner',
 		governance_suspended: false,
+		allowed_project_participations: ['managed', 'open', 'workspace'],
 		allowed_invitation_roles: ['viewer', 'reviewer', 'editor', 'admin'],
 		authorization: {
 			allowed: [
@@ -40,10 +41,7 @@ function workspaceView(id: string, name: string) {
 				'private_annotation.create',
 				'project_annotation.create',
 				'project_annotation.review'
-			],
-			variants: {
-				'project.create': ['managed', 'open', 'workspace']
-			}
+			]
 		}
 	};
 }

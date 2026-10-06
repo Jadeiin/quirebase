@@ -111,7 +111,7 @@ statements retain their Workspace and CAS predicates at the linearization point.
 Repository or implicit ORM tenant filter is part of this seam.
 
 The Access Module owns one immutable Casbin model and policy bundle packaged with the application.
-Casbin is the sole Workspace/System authorization policy evaluator. System and Workspace requests
+Casbin is the sole Workspace/System resource-action capability policy evaluator. System and Workspace requests
 both use `subject + resource + action + lifecycle + relation`; there is no separate capability
 namespace or preliminary coarse-grained gate. Relations such as author/other, Workspace-member class and
 command participation variants are inputs to that decision. Ordinary Project discovery remains
@@ -119,8 +119,9 @@ fixed domain behavior; only the additional `project_governance.read` privilege i
 Business Modules still load canonical User, membership, lifecycle, lineage, authorship and
 participation facts, retain their transaction locks and database constraints, and re-evaluate after
 the relevant lock when authority can change. The frontend receives only server-authored allowed
-resource-action sets, calls `can(action)` or strict `canVariant(action, variant)` and never
-reconstructs policy from roles.
+resource-action sets and calls `can(action)`. Domain choices are projected through concrete fields:
+`allowed_project_participations`, `allowed_participation_changes`, `allowed_invitation_roles` and
+`allowed_roles`. The frontend renders those values and never reconstructs policy from roles.
 Dotted keys in the wire contract and Audit Events serialize a resource/action pair; they do not
 define a second policy vocabulary. MCP continues through the generated HTTP API and the same
 business enforcement points; durable workflows re-read facts and authorize each attempt rather
@@ -130,9 +131,8 @@ The policy bundle is organized as inherited role deltas and then by resource/act
 operations use `create`, `read`, `update` and `delete`; relation facts distinguish own-author and
 moderation decisions instead of introducing action aliases. Domain transitions keep their
 specific verbs, and `manage` is used only when the policy deliberately grants a whole subordinate
-mutation family. Relation-constrained variants keep the same resource-action key; API projections
-include concrete `variants` so adapters can gate a command choice without reconstructing
-role policy.
+mutation family. Relation-constrained decisions keep the same resource-action key; policy relations
+remain internal to Access, while API projections expose the domain choices needed by each surface.
 
 Citation Style lookup and access control cross the Library Interface. Library delegates CSL
 formatting to `inquiro`, but translates its declared engine-unavailable error into a typed domain
@@ -225,9 +225,11 @@ operation; `created_by` is provenance only. Only the Web adapter
 maps the typed view to an API projection.
 
 The Project settings form crosses the Projects interface through `update_project_settings`.
-Name, description and participation are validated before mutation and committed with their Audit
-Event in one transaction; the Web adapter sends the form as one request and does not coordinate
-partial Project updates.
+The Web adapter sends only changed name, description and participation fields in one partial PATCH;
+omitted fields retain their values from the locked Project. Choices are validated before mutation
+and committed with their Audit Event in one transaction. A transition to Workspace participation
+requires UI confirmation because it permanently clears explicit participant selections, including
+suspended members. Metadata changes do not rewrite participation or its associations.
 
 Projects owns exclusive root locks for aggregate mutations and shared guards for subordinate
 associations. Other Project-scoped mutation callers explicitly select their root lock through Access
@@ -236,7 +238,9 @@ mutation authority comes from Workspace resource-action policy; ProjectMember ha
 grants authority. `workspace` participation is implicit with no ProjectMember rows; `open` Projects
 are discoverable to all active Workspace
 members and permit self-join/leave; `managed` Projects are discoverable only to participants and
-Workspace governors, who curate participation. Only Workspace governors may create managed
+Workspace governors, who curate participation. Collection reads, direct loaders and root locks use
+one SQL visibility predicate; mutations also recheck visibility in a fresh statement after acquiring
+the lock. Only Workspace governors may create managed
 Projects. Moving to `workspace` clears explicit associations in the same transaction; switching
 between `open` and `managed` preserves them. There is no last-participant or Project ownership
 invariant, and Workspace-member lifecycle only removes terminated participants rather than

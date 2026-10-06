@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -9,7 +10,6 @@ from quirebase.access import (
     ResourceAction,
     lock_workspace_context,
     require_action,
-    require_project_visibility,
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import DomainError, ResourceNotFound
@@ -30,6 +30,12 @@ if TYPE_CHECKING:
 
 class ProjectMemberConflict(DomainError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectParticipant:
+    user_id: str
+    username: str
 
 
 async def _add_participant(
@@ -83,8 +89,7 @@ async def join_project(
 ) -> ProjectMember:
     """Record an active Workspace member's opt-in to an open Project."""
     context = await lock_workspace_context(db, user, workspace_id)
-    project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    await require_project_visibility(db, context, project)
+    project = await lock_project_root(db, context, project_id, state=ProjectState.active)
     if project.participation is not ProjectParticipation.open:
         raise ProjectMemberConflict("Only open Projects allow self-service participation")
     require_action(context, ResourceAction.project_membership_join, relation="open")
@@ -103,8 +108,7 @@ async def join_project(
 async def leave_project(db: AsyncSession, user: User, workspace_id: str, project_id: str) -> None:
     """Remove the current User's opt-in from an open Project."""
     context = await lock_workspace_context(db, user, workspace_id)
-    project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    await require_project_visibility(db, context, project)
+    project = await lock_project_root(db, context, project_id, state=ProjectState.active)
     if project.participation is not ProjectParticipation.open:
         raise ProjectMemberConflict("Only open Projects allow self-service participation")
     require_action(context, ResourceAction.project_membership_leave, relation="open")
@@ -138,11 +142,10 @@ async def add_project_member(
     workspace_id: str,
     project_id: str,
     username: str,
-) -> ProjectMember:
+) -> ProjectParticipant:
     """Add an active Workspace member to a managed Project's working context."""
     context = await lock_workspace_context(db, user, workspace_id)
-    project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    await require_project_visibility(db, context, project)
+    project = await lock_project_root(db, context, project_id, state=ProjectState.active)
     if project.participation is not ProjectParticipation.managed:
         raise ProjectMemberConflict("Only managed Projects have curated participation")
     require_action(context, ResourceAction.project_membership_manage, relation="managed")
@@ -159,7 +162,8 @@ async def add_project_member(
     )
     if target is None:
         raise ResourceNotFound("active Workspace member not found")
-    return await _add_participant(
+    participant = ProjectParticipant(user_id=target.id, username=target.username)
+    await _add_participant(
         db,
         context.actor,
         workspace_id,
@@ -169,6 +173,7 @@ async def add_project_member(
         resource_action=ResourceAction.project_membership_manage,
         authorization_role=context.role.value,
     )
+    return participant
 
 
 async def remove_project_member(
@@ -180,8 +185,7 @@ async def remove_project_member(
 ) -> None:
     """Remove a participant from a managed Project without a minimum-count invariant."""
     context = await lock_workspace_context(db, user, workspace_id)
-    project = await lock_project_root(db, project_id, workspace_id, state=ProjectState.active)
-    await require_project_visibility(db, context, project)
+    project = await lock_project_root(db, context, project_id, state=ProjectState.active)
     if project.participation is not ProjectParticipation.managed:
         raise ProjectMemberConflict("Only managed Projects have curated participation")
     require_action(context, ResourceAction.project_membership_manage, relation="managed")

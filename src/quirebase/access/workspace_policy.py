@@ -84,8 +84,6 @@ class ResourceAction(ResourceActionKey):
 class ActionSpec:
     mutating: bool
     policy_relations: tuple[str, ...] = ("any",)
-    projected_relations: tuple[str, ...] = ()
-    relation_projection: Literal["workspace", "resource"] = "resource"
 
 
 _READ = ActionSpec(mutating=False)
@@ -117,10 +115,8 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.project_create: ActionSpec(
         mutating=True,
         policy_relations=_PARTICIPATION_RELATIONS,
-        projected_relations=_PARTICIPATION_RELATIONS,
-        relation_projection="workspace",
     ),
-    ResourceAction.project_update: ActionSpec(True, projected_relations=_PARTICIPATION_RELATIONS),
+    ResourceAction.project_update: _WRITE,
     ResourceAction.project_archive: _WRITE,
     ResourceAction.project_restore: _WRITE,
     ResourceAction.project_delete: _WRITE,
@@ -224,33 +220,6 @@ def effective_resource_actions(
             state,
             resource_action,
             governance_suspended=governance_suspended,
-        )
-    )
-
-
-@lru_cache(maxsize=128)
-def effective_resource_action_relations(
-    role: WorkspaceRole,
-    state: WorkspaceState,
-    resource_action: ResourceAction,
-    *,
-    governance_suspended: bool = False,
-) -> frozenset[str]:
-    """Return allowed canonical relations for a relation-constrained action."""
-
-    return frozenset(
-        relation
-        for relation in (
-            action_spec(resource_action).projected_relations
-            if action_spec(resource_action).relation_projection == "workspace"
-            else ()
-        )
-        if workspace_resource_action_allowed(
-            role,
-            state,
-            resource_action,
-            governance_suspended=governance_suspended,
-            relation=relation,
         )
     )
 
