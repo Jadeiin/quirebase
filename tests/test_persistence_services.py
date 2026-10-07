@@ -31,35 +31,37 @@ from quirebase.models import (
 )
 from quirebase.operations.settings import RuntimeSettingsService, update_runtime_settings
 
+pytestmark = pytest.mark.shared_postgres
+
 
 @pytest.fixture
-async def persistence_actor(async_db):
+async def persistence_actor(persistence_db):
     actor = User(username="persistence-owner", password_hash="unused", role="administrator")
-    async_db.add(actor)
-    await async_db.flush()
-    await provision_initial_workspace(async_db, actor)
-    await async_db.commit()
+    persistence_db.add(actor)
+    await persistence_db.flush()
+    await provision_initial_workspace(persistence_db, actor)
+    await persistence_db.commit()
     return actor
 
 
 @pytest.mark.anyio
 async def test_setting_bulk_writes_refresh_loaded_values_and_share_caller_rollback(
-    async_db, async_session_factory, persistence_actor
+    persistence_db, persistence_sessions, persistence_actor
 ):
     actor_id = persistence_actor.id
-    await update_runtime_settings(async_db, persistence_actor, {"session_days": 30})
-    loaded = await async_db.get(SystemSetting, "session_days")
-    service = RuntimeSettingsService(async_db)
+    await update_runtime_settings(persistence_db, persistence_actor, {"session_days": 30})
+    loaded = await persistence_db.get(SystemSetting, "session_days")
+    service = RuntimeSettingsService(persistence_db)
     await service.store(
         actor_id, {"session_days": 45, "metadata_contact_email": " new@example.org "}
     )
     assert loaded.value == "45"
     assert loaded.updated_by == actor_id
     assert inspect(loaded).persistent and not inspect(loaded).expired
-    record_event(async_db, actor_id, "test.settings", "system_settings")
-    await async_db.flush()
+    record_event(persistence_db, actor_id, "test.settings", "system_settings")
+    await persistence_db.flush()
 
-    async with async_session_factory() as observer:
+    async with persistence_sessions() as observer:
         assert (await observer.get(SystemSetting, "session_days")).value == "30"
         assert await observer.get(SystemSetting, "metadata_contact_email") is None
         assert (
@@ -67,8 +69,8 @@ async def test_setting_bulk_writes_refresh_loaded_values_and_share_caller_rollba
             is None
         )
 
-    await async_db.rollback()
-    async with async_session_factory() as observer:
+    await persistence_db.rollback()
+    async with persistence_sessions() as observer:
         assert (await observer.get(SystemSetting, "session_days")).value == "30"
         assert await observer.get(SystemSetting, "metadata_contact_email") is None
         assert (
@@ -79,48 +81,48 @@ async def test_setting_bulk_writes_refresh_loaded_values_and_share_caller_rollba
 
 @pytest.mark.anyio
 async def test_invalid_setting_batch_changes_neither_existing_keys_nor_audit(
-    async_db, persistence_actor
+    persistence_db, persistence_actor
 ):
-    await update_runtime_settings(async_db, persistence_actor, {"session_days": 30})
-    event_count = await async_db.scalar(select(func.count()).select_from(AuditEvent))
+    await update_runtime_settings(persistence_db, persistence_actor, {"session_days": 30})
+    event_count = await persistence_db.scalar(select(func.count()).select_from(AuditEvent))
     with pytest.raises(ValidationFailure, match="positive"):
         await update_runtime_settings(
-            async_db,
+            persistence_db,
             persistence_actor,
             {"session_days": 45, "metadata_contact_email": "new@example.org", "max_pdf_bytes": -1},
         )
-    assert (await async_db.get(SystemSetting, "session_days")).value == "30"
-    assert await async_db.get(SystemSetting, "metadata_contact_email") is None
-    assert await async_db.scalar(select(func.count()).select_from(AuditEvent)) == event_count
+    assert (await persistence_db.get(SystemSetting, "session_days")).value == "30"
+    assert await persistence_db.get(SystemSetting, "metadata_contact_email") is None
+    assert await persistence_db.scalar(select(func.count()).select_from(AuditEvent)) == event_count
 
 
 @pytest.mark.anyio
 async def test_setting_savepoint_propagates_unrelated_constraint_errors(
-    async_db, persistence_actor
+    persistence_db, persistence_actor
 ):
-    await update_runtime_settings(async_db, persistence_actor, {"session_days": 30})
+    await update_runtime_settings(persistence_db, persistence_actor, {"session_days": 30})
     with pytest.raises(IntegrityError):
-        await RuntimeSettingsService(async_db).store(
+        await RuntimeSettingsService(persistence_db).store(
             uuid4(), {"session_days": 45, "metadata_contact_email": "new@example.org"}
         )
-    assert (await async_db.get(SystemSetting, "session_days")).value == "30"
-    assert await async_db.get(SystemSetting, "metadata_contact_email") is None
+    assert (await persistence_db.get(SystemSetting, "session_days")).value == "30"
+    assert await persistence_db.get(SystemSetting, "metadata_contact_email") is None
 
 
 @pytest.mark.anyio
 async def test_item_service_creation_rolls_back_search_and_audit_when_enqueue_fails(
-    async_db, async_session_factory, persistence_actor, monkeypatch
+    persistence_db, persistence_sessions, persistence_actor, monkeypatch
 ):
     from quirebase.library import item_metadata
 
     async def unavailable(*_args, **_kwargs):
-        await async_db.flush()
+        await persistence_db.flush()
         raise RuntimeError("durable queue unavailable")
 
     monkeypatch.setattr(item_metadata, "request_item_tag_recommendation", unavailable)
     with pytest.raises(RuntimeError, match="durable queue unavailable"):
         await create_item(
-            async_db,
+            persistence_db,
             persistence_actor,
             fixture_workspace_id(persistence_actor),
             ItemMetadata(
@@ -129,7 +131,7 @@ async def test_item_service_creation_rolls_back_search_and_audit_when_enqueue_fa
                 identifiers=(ExternalIdentifier("pmid", "uncommitted"),),
             ),
         )
-    async with async_session_factory() as observer:
+    async with persistence_sessions() as observer:
         for model in (Item, Author, ItemAuthor, ItemIdentifier):
             assert await observer.scalar(select(func.count()).select_from(model)) == 0
         assert await observer.scalar(text("SELECT count(*) FROM item_search")) == 0
@@ -142,13 +144,13 @@ async def test_item_service_creation_rolls_back_search_and_audit_when_enqueue_fa
 @pytest.mark.anyio
 @pytest.mark.parametrize("operation", ["rename", "delete"])
 async def test_tag_service_mutation_and_audit_rollback_together(
-    async_db, async_session_factory, persistence_actor, monkeypatch, operation
+    persistence_db, persistence_sessions, persistence_actor, monkeypatch, operation
 ):
     from quirebase.library import tags
 
     workspace_id = fixture_workspace_id(persistence_actor)
-    tag = await get_or_create_tag(async_db, persistence_actor, workspace_id, "Original")
-    await async_db.commit()
+    tag = await get_or_create_tag(persistence_db, persistence_actor, workspace_id, "Original")
+    await persistence_db.commit()
     tag_id = tag.id
 
     def unavailable(*args, **kwargs):
@@ -157,14 +159,14 @@ async def test_tag_service_mutation_and_audit_rollback_together(
 
     monkeypatch.setattr(tags, "record_event", unavailable)
     mutation = (
-        rename_tag(async_db, persistence_actor, workspace_id, tag_id, "  New   Tag  ")
+        rename_tag(persistence_db, persistence_actor, workspace_id, tag_id, "  New   Tag  ")
         if operation == "rename"
-        else delete_tag(async_db, persistence_actor, workspace_id, tag_id)
+        else delete_tag(persistence_db, persistence_actor, workspace_id, tag_id)
     )
     with pytest.raises(RuntimeError, match="audit projection failed"):
         await mutation
-    await async_db.rollback()
-    async with async_session_factory() as observer:
+    await persistence_db.rollback()
+    async with persistence_sessions() as observer:
         unchanged = await observer.get(Tag, tag_id)
         assert unchanged.name == "Original" and unchanged.normalized_name == "original"
         assert (
@@ -175,10 +177,10 @@ async def test_tag_service_mutation_and_audit_rollback_together(
 
 @pytest.mark.anyio
 async def test_citation_service_validates_and_installs_inside_caller_transaction(
-    async_db, async_session_factory, persistence_actor
+    persistence_db, persistence_sessions, persistence_actor
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
-    service = CitationStyleService(async_db)
+    service = CitationStyleService(persistence_db)
     with pytest.raises(ValidationFailure, match="not a valid citation style"):
         await service.install(workspace_id, persistence_actor.id, "Invalid", "<invalid/>")
     xml = builtin_style_xml("apa")
@@ -186,66 +188,70 @@ async def test_citation_service_validates_and_installs_inside_caller_transaction
     style = await service.install(workspace_id, persistence_actor.id, "  Local Style  ", xml)
     style_id = style.id
     assert style.name == "Local Style" and inspect(style).persistent
-    async with async_session_factory() as observer:
+    async with persistence_sessions() as observer:
         assert await observer.get(CitationStyle, style_id) is None
-    await async_db.rollback()
-    async with async_session_factory() as observer:
+    await persistence_db.rollback()
+    async with persistence_sessions() as observer:
         assert await observer.get(CitationStyle, style_id) is None
 
 
 @pytest.mark.anyio
 async def test_citation_service_delete_rejects_foreign_workspace_identity(
-    async_db, persistence_actor
+    persistence_db, persistence_actor
 ):
     other = User(username="other-persistence-owner", password_hash="unused")
-    async_db.add(other)
-    await async_db.flush()
-    await provision_initial_workspace(async_db, other)
-    await async_db.commit()
+    persistence_db.add(other)
+    await persistence_db.flush()
+    await provision_initial_workspace(persistence_db, other)
+    await persistence_db.commit()
     xml = builtin_style_xml("apa")
     assert xml is not None
     style = await create_custom_citation_style(
-        async_db, persistence_actor, fixture_workspace_id(persistence_actor), "Local", xml
+        persistence_db, persistence_actor, fixture_workspace_id(persistence_actor), "Local", xml
     )
     with pytest.raises(ResourceNotFound):
-        await delete_custom_citation_style(async_db, other, fixture_workspace_id(other), style.id)
-    assert await async_db.get(CitationStyle, style.id) is not None
+        await delete_custom_citation_style(
+            persistence_db, other, fixture_workspace_id(other), style.id
+        )
+    assert await persistence_db.get(CitationStyle, style.id) is not None
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("operation", ["tag_rename", "tag_delete", "citation_delete"])
-async def test_service_mutations_translate_a_root_deleted_after_initial_loading(
-    async_db, async_session_factory, persistence_actor, monkeypatch, operation
+async def test_service_mutations_translate_a_missing_root_on_repository_reread(
+    persistence_db, persistence_actor, monkeypatch, operation
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
     if operation == "citation_delete":
         xml = builtin_style_xml("apa")
         assert xml is not None
         root = await create_custom_citation_style(
-            async_db, persistence_actor, workspace_id, "Vanishing", xml
+            persistence_db, persistence_actor, workspace_id, "Vanishing", xml
         )
         repository_type, model, domain_error = (
             CitationStyleRepository,
             CitationStyle,
             ResourceNotFound,
         )
-        mutation = delete_custom_citation_style(async_db, persistence_actor, workspace_id, root.id)
+        mutation = delete_custom_citation_style(
+            persistence_db, persistence_actor, workspace_id, root.id
+        )
     else:
-        root = await get_or_create_tag(async_db, persistence_actor, workspace_id, "Vanishing")
-        await async_db.commit()
+        root = await get_or_create_tag(persistence_db, persistence_actor, workspace_id, "Vanishing")
+        await persistence_db.commit()
         repository_type, model, domain_error = TagRepository, Tag, ResourceUnavailable
         mutation = (
-            rename_tag(async_db, persistence_actor, workspace_id, root.id, "New Name")
+            rename_tag(persistence_db, persistence_actor, workspace_id, root.id, "New Name")
             if operation == "tag_rename"
-            else delete_tag(async_db, persistence_actor, workspace_id, root.id)
+            else delete_tag(persistence_db, persistence_actor, workspace_id, root.id)
         )
     root_id = root.id
     original_get = repository_type.get
 
     async def delete_before_get(self, *args, **kwargs):
-        async with async_session_factory() as concurrent:
-            await concurrent.execute(delete(model).where(model.id == root_id))
-            await concurrent.commit()
+        # Inject a missing row at the reread boundary. This tests error translation;
+        # concurrent root deletion/locking is covered by controlled PostgreSQL schedules.
+        await persistence_db.execute(delete(model).where(model.id == root_id))
         return await original_get(self, *args, **kwargs)
 
     monkeypatch.setattr(repository_type, "get", delete_before_get)
@@ -256,7 +262,7 @@ async def test_service_mutations_translate_a_root_deleted_after_initial_loading(
 @pytest.mark.anyio
 @pytest.mark.parametrize("size", [2, 50])
 async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
-    async_db, persistence_actor, size
+    persistence_db, persistence_actor, size
 ):
     from sqlalchemy import event
 
@@ -270,7 +276,7 @@ async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
         for index in range(size)
     ).encode()
     batch, records, errors = await stage_import_batch(
-        async_db, persistence_actor, workspace_id, contents, "bibtex"
+        persistence_db, persistence_actor, workspace_id, contents, "bibtex"
     )
     assert len(records) == size and errors == []
     batch_id = batch.id
@@ -280,30 +286,35 @@ async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
         if statement.lstrip().upper().startswith("SELECT") and "FROM authors" in statement:
             author_reads.append(statement)
 
-    engine = async_db.bind.sync_engine
+    engine = persistence_db.bind.sync_engine
     event.listen(engine, "before_cursor_execute", track_author_reads)
     try:
-        item_ids = await commit_import_batch(async_db, persistence_actor, workspace_id, batch_id)
+        item_ids = await commit_import_batch(
+            persistence_db, persistence_actor, workspace_id, batch_id
+        )
     finally:
         event.remove(engine, "before_cursor_execute", track_author_reads)
     assert len(author_reads) == 1
-    items = [await async_db.get(Item, item_id) for item_id in item_ids]
+    items = [await persistence_db.get(Item, item_id) for item_id in item_ids]
     assert [item.title for item in items] == [f"Batch item {index}" for index in range(size)]
     assert [item.doi for item in items] == [f"10.1000/{index}" for index in range(size)]
-    assert await async_db.scalar(select(func.count()).select_from(Author)) == size + 1
-    assert await async_db.scalar(select(func.count()).select_from(ItemAuthor)) == size * 3
-    shared = await async_db.scalar(select(Author).where(Author.identity_key == "shared\x1fauthor"))
+    assert await persistence_db.scalar(select(func.count()).select_from(Author)) == size + 1
+    assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == size * 3
+    shared = await persistence_db.scalar(
+        select(Author).where(Author.identity_key == "shared\x1fauthor")
+    )
     assert (
-        await async_db.scalar(
+        await persistence_db.scalar(
             select(func.count()).select_from(ItemAuthor).where(ItemAuthor.author_id == shared.id)
         )
         == size * 2
     )
     assert (
-        await commit_import_batch(async_db, persistence_actor, workspace_id, batch_id) == item_ids
+        await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
+        == item_ids
     )
     assert (
-        await async_db.scalar(
+        await persistence_db.scalar(
             select(func.count())
             .select_from(AuditEvent)
             .where(AuditEvent.action == "bibliography.import")
@@ -314,11 +325,11 @@ async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
 
 @pytest.mark.anyio
 async def test_item_service_merge_preserves_omissions_and_replacement_clears_links(
-    async_db, persistence_actor
+    persistence_db, persistence_actor
 ):
     from quirebase.library._item_service import ItemService
 
-    service = ItemService(async_db)
+    service = ItemService(persistence_db)
     item = await service.create_from_metadata(
         fixture_workspace_id(persistence_actor),
         persistence_actor.id,
@@ -338,28 +349,28 @@ async def test_item_service_merge_preserves_omissions_and_replacement_clears_lin
     assert item.authors == "Shared, Author" and item.editors == "Shared, Author"
     assert item.doi == "10.1000/original" and item.bibtex_id == "UserSelectedKey"
     assert item.urls == "https://example.com/original" and item.keywords == "original; new"
-    assert await async_db.scalar(select(func.count()).select_from(ItemAuthor)) == 2
-    assert await async_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 1
+    assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == 2
+    assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 1
 
     assert (
         await service.replace_metadata(item, persistence_actor.id, 1, ItemMetadata("Replaced")) == 2
     )
-    await async_db.refresh(item)
+    await persistence_db.refresh(item)
     assert item.title == "Replaced" and item.version == 2
     assert item.authors is None and item.editors is None
     assert item.doi is None and item.identifiers is None
     assert item.urls is None and item.keywords is None and item.bibtex_id is None
-    assert await async_db.scalar(select(func.count()).select_from(ItemAuthor)) == 0
-    assert await async_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 0
+    assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == 0
+    assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 0
 
 
 @pytest.mark.anyio
 async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
-    async_db, async_session_factory, persistence_actor
+    persistence_db, persistence_sessions, persistence_actor
 ):
     from quirebase.library._item_service import ItemService
 
-    items = await ItemService(async_db).create_many_from_candidates(
+    items = await ItemService(persistence_db).create_many_from_candidates(
         fixture_workspace_id(persistence_actor),
         persistence_actor.id,
         [
@@ -370,10 +381,10 @@ async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
     assert len(items) == 2
     for item in items:
         assert inspect(item).persistent and not inspect(item).expired
-    record_event(async_db, persistence_actor.id, "test.bulk", "item")
-    await async_db.flush()
-    await async_db.rollback()
-    async with async_session_factory() as observer:
+    record_event(persistence_db, persistence_actor.id, "test.bulk", "item")
+    await persistence_db.flush()
+    await persistence_db.rollback()
+    async with persistence_sessions() as observer:
         for model in (Item, Author, ItemAuthor, ItemIdentifier):
             assert await observer.scalar(select(func.count()).select_from(model)) == 0
         assert (

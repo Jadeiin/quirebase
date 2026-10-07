@@ -9,11 +9,35 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from test_domain_states import assert_closed_state_constraints
 from workspace_helpers import provision_initial_workspace
 
-from quirebase.core.database import Base, make_async_engine
+from quirebase.core.database import Base, async_database_url, make_async_engine
 from quirebase.models import Item, User
 from quirebase.search import search_index
 
 pytestmark = pytest.mark.shared_postgres
+
+
+@pytest.mark.skipif(
+    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
+)
+@pytest.mark.anyio
+async def test_postgresql_connections_return_utc_despite_server_timezone_options():
+    from datetime import timedelta
+
+    from sqlalchemy.engine import make_url
+
+    url = make_url(async_database_url(os.environ["QUIREBASE_TEST_POSTGRES_URL"]))
+    url = url.set(drivername="postgresql").update_query_dict({"options": "-c timezone=Asia/Tokyo"})
+    engine = make_async_engine(url.render_as_string(hide_password=False))
+    try:
+        async with engine.connect() as connection:
+            assert await connection.scalar(text("SHOW TIME ZONE")) == "UTC"
+            timestamp = await connection.scalar(text("SELECT CURRENT_TIMESTAMP"))
+            assert timestamp.utcoffset() == timedelta(0)
+        # Connection initialization must not leave an unrelated open transaction.
+        async with engine.begin() as connection:
+            assert await connection.scalar(text("SELECT 1")) == 1
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.skipif(

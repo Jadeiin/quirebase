@@ -51,7 +51,7 @@ from quirebase.models import (
     User,
 )
 
-from ._persistence import AnnotationReplyService, AnnotationService
+from ._persistence import AnnotationReplyRepository, AnnotationRepository
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -620,7 +620,7 @@ async def list_document_annotations(
     ]
     if revision_id is not None:
         filters.append(PdfAnnotation.file_revision_id == revision_id)
-    total = await AnnotationService(db).count(*filters)
+    total = await AnnotationRepository(session=db).count(*filters)
     # Read names with their annotations: a later statement under READ COMMITTED
     # could see the revision's cascade deletion after these ORM objects are loaded.
     query = (
@@ -696,7 +696,7 @@ async def create_document_annotation(
             relation="own",
         )
     validate_payload(data.page_index, data.payload, revision)
-    object_id = str(data.id)
+    object_id = data.id
     record = PdfAnnotation(
         id=object_id,
         workspace_id=workspace_id,
@@ -713,7 +713,7 @@ async def create_document_annotation(
     )
     try:
         async with db.begin_nested():
-            record = await AnnotationService(db).create(record)
+            record = await AnnotationRepository(session=db).add(record)
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
     record_event(
@@ -1079,7 +1079,7 @@ async def create_annotation_reply(
         resource_action,
         relation=relation,
     )
-    object_id = str(data.id)
+    object_id = data.id
     record = PdfAnnotationReply(
         id=object_id,
         workspace_id=workspace_id,
@@ -1089,7 +1089,7 @@ async def create_annotation_reply(
     )
     try:
         async with db.begin_nested():
-            record = await AnnotationReplyService(db).create(record)
+            record = await AnnotationReplyRepository(session=db).add(record)
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
     record_event(

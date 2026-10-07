@@ -70,7 +70,7 @@ from quirebase.models import (
 )
 from quirebase.search import search_index
 
-from ._persistence import FileRevisionService
+from ._persistence import FileRevisionRepository
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -223,7 +223,7 @@ async def attach_staged_pdf(
             metadata={"original_name": original_name},
         ),
     )
-    revision = await FileRevisionService(db).create(revision)
+    revision = await FileRevisionRepository(session=db).add(revision)
     thumbnail_object_id = uuid4()
     thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
     await durable_operations().enqueue_in_transaction(

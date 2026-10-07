@@ -115,6 +115,8 @@ jobs:
           tests/test_workspace_commands.py
           tests/test_workspace_integrity.py
           tests/test_persistence_dependencies.py tests/test_persistence_boundaries.py
+          tests/test_persistence_services.py tests/test_persistence_values.py
+          tests/test_durable_recovery.py
           tests/test_concurrency_harness.py tests/test_concurrency_reporting.py tests/test_schema_parity.py
           --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
       - name: Preserve concurrency coverage and failure evidence

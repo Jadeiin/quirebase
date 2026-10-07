@@ -34,6 +34,15 @@ evidence automatically. In particular, the existing upload-finalizer test exerci
 authorization helper, not a real DBOS restart; neither it nor the in-memory durable client proves
 crash recovery.
 
+`test_durable_recovery.py` separately exercises real process death with DBOS. It stops the PDF
+Import executor after completed extraction/database checkpoints, changes live descriptor metadata
+and runs production recovery in a fresh process. It then stops a confirmation process after its
+canonical commit, before returning a response, and retries confirmation from another process.
+The test checks original durable input semantics, checkpoint reuse, stable Item identity, one
+successful Audit/side-effect set, file ownership transfer and rejected-object cleanup. Both database
+variants use fresh migrations and isolated databases; PostgreSQL requires database-creation rights.
+This covers these selected boundaries, rather than every finalizer or cleanup crash schedule.
+
 ## Run and reproduce
 
 Use a **dedicated disposable PostgreSQL database**. These fixtures create and drop application tables.
@@ -51,6 +60,9 @@ uv run pytest -q tests/test_postgres_concurrency.py tests/test_concurrency_harne
 uv run pytest -q \
   'tests/test_postgres_concurrency.py::test_concurrent_metadata_replacements_reject_stale_version[alpha-first]' \
   --concurrency-report-dir=concurrency-results
+
+# Real process death, checkpoint recovery and lost confirmation responses.
+uv run pytest -q tests/test_durable_recovery.py
 ```
 
 Without the PostgreSQL URL, database cases skip. A skipped case is never counted as passing coverage.
@@ -102,8 +114,9 @@ Expand coverage in this order:
 
 1. Move remaining legacy synchronization to the harness and add inverse commit orders where the
    invariant differs. Keep the operation pair, order and expected outcome visible in each node ID.
-2. Exercise actual DBOS workers across process death, checkpoint replay and response loss at the
-   canonical commit/outbox/object-cleanup boundaries. Observe through business interfaces and storage.
+2. Extend real DBOS process-death coverage beyond PDF preparation checkpoints and post-confirmation
+   response loss to upload finalizers and failures during outbox delivery/object cleanup. Observe
+   through business interfaces and storage.
 3. Add Hypothesis state machines for generated lifecycle/role/version histories, retaining a seed
    and minimized sequence. Sequential state machines need an explicit scheduler to explore races.
 4. Model a narrowly scoped difficult protocol in TLA+/TLC when its possible states outgrow executable

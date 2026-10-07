@@ -87,7 +87,22 @@ def _make_database_config(url: str | None = None) -> SQLAlchemyAsyncConfig:
         enable_touch_updated_timestamp_listener=False,
     )
     engine = config.get_engine()
-    if database_url.startswith("sqlite"):
+    if database_url.startswith("postgresql"):
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def configure_postgres(dbapi_connection, _connection_record):
+            # DateTimeUTC preserves timezone-aware driver results. PostgreSQL must
+            # return UTC independently of the server's configured timezone.
+            previous_autocommit = dbapi_connection.autocommit
+            dbapi_connection.autocommit = True
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("SET TIME ZONE 'UTC'")
+            finally:
+                cursor.close()
+                dbapi_connection.autocommit = previous_autocommit
+
+    elif database_url.startswith("sqlite"):
 
         @event.listens_for(engine.sync_engine, "connect")
         def configure_sqlite(dbapi_connection, _connection_record):

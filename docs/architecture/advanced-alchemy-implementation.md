@@ -21,6 +21,10 @@ Ordinary reads retain their statement-level behavior; eagerly beginning read sna
 concurrent CAS conflicts into snapshot upgrade errors. Libpq URL validation, foreign-key enforcement
 and WAL remain part of Core database configuration.
 
+PostgreSQL application connections explicitly select UTC. AA's `DateTimeUTC` normalizes bound
+values but preserves timezone-aware driver results, so server timezone defaults alone are not
+sufficient to guarantee UTC Python values.
+
 Entities use `UUIDv7AuditBase`; immutable identities use `UUIDv7Base`; natural/composite keys use
 `DefaultBase`. PostgreSQL stores native UUIDs. SQLite compiles AA GUID to BLOB so stored UUID bytes
 and reflected schema agree. Object keys retain UUID4 for distributed prefixes, and client-authored
@@ -60,6 +64,11 @@ remaining set with bounded progress. The locked Import Batch preserves result or
 identity. File ownership transfer, Search, Audit and enqueue remain in the confirmation command.
 Import Batch creation adds prepared ORM roots through its Repository without an extra Service.
 Bibliography export uses an explicit Contributor relationship-loading profile.
+
+Documents persists prepared File Revision, Attachment, Export Artifact, Annotation and Reply
+instances directly through private Repositories. These paths need no intermediate Service.
+Client-authored Annotation/Reply UUID4 values remain native UUIDs through insertion and rereads,
+including their shared Annotation Object identity; the request protocol remains UUID4.
 
 Web uses native result conversion for attribute-only administrative and API Token DTO fields.
 Computed status, identity, authorization and domain-choice projections remain explicitly authored.
@@ -128,3 +137,16 @@ safety guarantees. Disposable prototype drivers and captured evidence are not re
 `tests/test_persistence_boundaries.py` verifies rejected metadata writes, metadata-only copy races,
 cleanup and replayable PDF input snapshots on SQLite and PostgreSQL. Architecture checks reject
 command-owned side effects in persistence collaborators and flag unreviewed generic bulk calls.
+
+`tests/test_persistence_services.py` and `tests/test_persistence_values.py` exercise caller rollback,
+constraint recovery, batch/replay semantics, native UUID identity maps, JSON values and timestamps
+on both databases. The missing-root Repository reread test injects row disappearance to verify
+domain error translation; controlled PostgreSQL schedules separately establish concurrency safety.
+
+`tests/test_durable_recovery.py` launches actual DBOS executors in separate processes against
+freshly migrated, isolated SQLite/PostgreSQL databases. It kills an executor after completed PDF
+extraction and database checkpoints, changes live descriptor metadata, and invokes the production
+recovery operation in a fresh process. Replay preserves the original diagnostic filename and does
+not repeat checkpointed PDF extraction. It also kills a confirmer after the canonical commit and
+replays confirmation from a fresh process, checking Item identity, single Audit/Search/enqueue
+effects, atomic file ownership transfer and reference-safe rejected-object cleanup.

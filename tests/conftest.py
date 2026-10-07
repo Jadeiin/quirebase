@@ -249,3 +249,9 @@ def persistence_sessions(request):
         request.getfixturevalue("postgres_search_tables")
         return request.getfixturevalue("postgres_sessions")
     return request.getfixturevalue("async_session_factory")
+
+
+@pytest.fixture
+async def persistence_db(persistence_sessions):
+    async with persistence_sessions() as session:
+        yield session
