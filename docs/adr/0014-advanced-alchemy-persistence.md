@@ -100,9 +100,10 @@ WHERE workspace_id = :workspace_id
   AND version = :expected_version
 ```
 
-Mapper versioning may replace application CAS only when the command validates the caller's
-expected version and preserves equivalent concurrency semantics. Authorization and lineage
-guarantees remain independently required.
+Mapper versioning may replace application CAS for root mutations emitted by ORM flush only when
+it is explicitly configured, the command validates the caller's expected version, and equivalent
+concurrency semantics are verified. Authorization and lineage guarantees remain independently
+required. Mapper versioning is not assumed to scope or version-check independent bulk DML.
 
 Generic AA bulk mutations are not treated as Workspace-scoped primitives merely because they are
 called through a scoped Repository. A Workspace-sensitive bulk mutation must instead use an

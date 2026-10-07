@@ -50,7 +50,8 @@ The Item persistence service coordinates manual creation/replacement, Provider m
 Batch creation. Metadata inputs become explicit write plans: replacement clears omitted
 associations; Provider merges preserve missing fields, merge URLs/keywords and retain citation
 keys. Bounded-column validation is shared without accepting Web DTOs. The named Item replacement
-operation retains Workspace, identity and expected-version predicates in its SQL.
+operation retains Workspace, identity and expected-version predicates in its SQL. `Item.version`
+is an application CAS field; the Item mapper does not configure SQLAlchemy `version_id_col`.
 
 Import confirmation batches Item roots and Contributor/Identifier links, resolves shared Authors
 across both roles in bounded chunks and inserts missing identities in stable order. Uniqueness
