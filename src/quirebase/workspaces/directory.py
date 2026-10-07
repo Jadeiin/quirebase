@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from advanced_alchemy.filters import LimitOffset, OrderBy, SearchFilter
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import func, select
 
 from quirebase.access import (
     ResourceAction,
@@ -76,35 +76,31 @@ async def list_workspaces(
 
 
 def _workspace_owners_query():
-    return (
-        select(
-            Workspace.id,
-            case(
-                (
-                    and_(func.count(WorkspaceMember.id) == 1, func.count(User.id) == 1),
-                    func.min(User.id),
-                ),
-                else_=None,
-            ).label("owner_id"),
+    current_owner = (
+        WorkspaceMember.workspace_id == Workspace.id,
+        WorkspaceMember.role == WorkspaceRole.owner,
+        WorkspaceMember.terminated_at.is_(None),
+    )
+    owner_count = (
+        select(func.count(WorkspaceMember.id))
+        .where(*current_owner)
+        .correlate(Workspace)
+        .scalar_subquery()
+    )
+    owner_id = (
+        select(User.id)
+        .join(WorkspaceMember, WorkspaceMember.user_id == User.id)
+        .where(
+            *current_owner,
+            WorkspaceMember.state == WorkspaceMemberState.active,
+            User.active.is_(True),
+            owner_count == 1,
         )
-        .outerjoin(
-            WorkspaceMember,
-            and_(
-                WorkspaceMember.workspace_id == Workspace.id,
-                WorkspaceMember.role == WorkspaceRole.owner,
-                WorkspaceMember.terminated_at.is_(None),
-            ),
-        )
-        .outerjoin(
-            User,
-            and_(
-                User.id == WorkspaceMember.user_id,
-                User.active.is_(True),
-                WorkspaceMember.state == WorkspaceMemberState.active,
-            ),
-        )
-        .where(Workspace.state != WorkspaceState.deleted)
-        .group_by(Workspace.id)
+        .correlate(Workspace)
+        .scalar_subquery()
+    )
+    return select(Workspace.id, owner_id.label("owner_id")).where(
+        Workspace.state != WorkspaceState.deleted
     )
 
 

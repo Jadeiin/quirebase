@@ -4,6 +4,8 @@ import ast
 import tomllib
 from pathlib import Path
 
+from packaging.requirements import Requirement
+
 SRC_ROOT = Path(__file__).parent.parent / "src" / "quirebase"
 REPO_ROOT = Path(__file__).parent.parent
 STANDALONE_WORKSPACE_PACKAGES = ("inquiro", "rubrica")
@@ -449,8 +451,18 @@ def test_persistence_dependencies_use_sqlalchemy_async_optional_groups():
     dependencies = set(metadata["project"]["dependencies"])
     optional_dependencies = metadata["project"]["optional-dependencies"]
 
-    assert "sqlalchemy[asyncio,aiosqlite]>=2.0,<3" in dependencies
-    assert optional_dependencies["postgres"] == ["sqlalchemy[postgresql-psycopgbinary]>=2.0,<3"]
+    runtime = next(
+        requirement
+        for dependency in dependencies
+        if (requirement := Requirement(dependency)).name == "sqlalchemy"
+    )
+    assert runtime.extras == {"asyncio", "aiosqlite"}
+    assert "2.0.52" in runtime.specifier
+    assert "2.1.0" not in runtime.specifier
+    postgres = [Requirement(dependency) for dependency in optional_dependencies["postgres"]]
+    assert len(postgres) == 1 and postgres[0].name == "sqlalchemy"
+    assert postgres[0].extras == {"postgresql-psycopgbinary"}
+    assert postgres[0].specifier == runtime.specifier
     independently_declared = {
         dependency.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0]
         for dependency in dependencies

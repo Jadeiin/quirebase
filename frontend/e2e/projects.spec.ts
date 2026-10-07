@@ -50,17 +50,14 @@ test.beforeEach(async ({ page }) => {
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/members?*', (route) =>
-		route.fulfill({
-			json: directoryPage(
-				[
-					{ user_id: 'member-1', username: 'researcher', role: 'editor' },
-					{ user_id: 'member-2', username: 'collaborator', role: 'reviewer' }
-				],
-				route
-			)
-		})
-	);
+	await page.route('**/api/v1/workspaces/workspace-1/members?*', (route) => {
+		const search = new URL(route.request().url()).searchParams.get('search')?.toLowerCase() ?? '';
+		const members = [
+			{ user_id: 'member-1', username: 'researcher', role: 'editor' },
+			{ user_id: 'member-2', username: 'collaborator', role: 'reviewer' }
+		].filter((member) => member.username.toLowerCase().includes(search));
+		return route.fulfill({ json: directoryPage(members, route) });
+	});
 });
 
 test('Workspace admins can open and govern managed Projects without being participants', async ({
@@ -661,7 +658,15 @@ test('managed participant selection filters existing participants and requires a
 	await selection.click();
 	await expect(page.getByRole('option', { name: 'researcher', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('option', { name: 'collaborator', exact: true })).toBeVisible();
-	await selection.fill('unlisted-user');
+	await Promise.all([
+		page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return (
+				url.pathname.endsWith('/members') && url.searchParams.get('search') === 'unlisted-user'
+			);
+		}),
+		selection.fill('unlisted-user')
+	]);
 	await expect(page.getByText('No matching members.')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Add participant' })).toBeDisabled();
 	await selection.fill('collab');

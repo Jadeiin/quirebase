@@ -27,7 +27,7 @@ async def test_postgresql_search_contract():
         await connection.execute(
             text(
                 "CREATE TABLE item_search ("
-                "item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
+                "item_id uuid PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
                 "document tsvector NOT NULL)"
             )
         )
@@ -37,8 +37,8 @@ async def test_postgresql_search_contract():
         await connection.execute(
             text(
                 "CREATE TABLE revision_search ("
-                "revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
-                "item_id varchar(36) NOT NULL,"
+                "revision_id uuid PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
+                "item_id uuid NOT NULL,"
                 "document tsvector NOT NULL)"
             )
         )

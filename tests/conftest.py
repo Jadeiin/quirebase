@@ -144,10 +144,14 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def postgres_sessions():
+async def postgres_sessions(tmp_path, monkeypatch):
     database_url = os.getenv("QUIREBASE_TEST_POSTGRES_URL")
     if not database_url:
         pytest.skip("PostgreSQL is not configured")
+    monkeypatch.setenv("QUIREBASE_DATA_DIR", str(tmp_path / "postgres-data"))
+    get_settings.cache_clear()
+    get_object_store.cache_clear()
+    get_object_store()
     engine = make_async_engine(database_url)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -158,6 +162,8 @@ async def postgres_sessions():
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all)
         await engine.dispose()
+        get_settings.cache_clear()
+        get_object_store.cache_clear()
 
 
 @pytest.fixture
@@ -167,15 +173,15 @@ async def postgres_search_tables(postgres_sessions):
         await connection.execute(
             text(
                 "CREATE TABLE item_search ("
-                "item_id varchar(36) PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
+                "item_id uuid PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
                 "document tsvector NOT NULL)"
             )
         )
         await connection.execute(
             text(
                 "CREATE TABLE revision_search ("
-                "revision_id varchar(36) PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
-                "item_id varchar(36) NOT NULL, document tsvector NOT NULL)"
+                "revision_id uuid PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
+                "item_id uuid NOT NULL, document tsvector NOT NULL)"
             )
         )
     try:

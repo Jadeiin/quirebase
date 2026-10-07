@@ -8,7 +8,9 @@ Core owns Advanced Alchemy's `SQLAlchemyAsyncConfig` and `EngineConfig`, includi
 serializer, session factory and shared metadata. Each request or durable transaction continues
 using its existing `AsyncSession`. This extends ADR 0006's persistence decision: Module-owned
 repositories and services handle ordinary model reads and writes inside the caller's transaction.
-They neither introduce a Unit of Work nor establish another authorization seam.
+They neither introduce a Unit of Work nor establish another authorization seam. AA 1.11.0 uses
+SQLAlchemy 2.0 internal APIs, so both runtime and PostgreSQL extras constrain SQLAlchemy below
+2.1; installed wheels must resolve the same supported minor series as source checkouts.
 
 Core's `Repository`, `ReadService` and `Service` subclasses configure native AA behavior only:
 no automatic commit, refresh or expunge, raw SQLAlchemy exceptions, and independent pagination
