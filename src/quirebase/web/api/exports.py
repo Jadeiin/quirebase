@@ -3,8 +3,9 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 
+from quirebase.core.storage import SignedDownload
 from quirebase.documents import (
     create_export_job,
     get_export_file,
@@ -47,15 +48,20 @@ async def export_status(workspace_id: UUID, workflow_id: str, user: ApiUser, db:
     "/annotation-exports/{workflow_id}/content",
     response_class=StreamingResponse,
     responses={
+        307: {"description": "Short-lived authorized S3 download; response is not cacheable."},
         200: {
             "content": {
                 "application/pdf": {"schema": {"type": "string", "format": "binary"}},
             }
-        }
+        },
     },
 )
 async def export_content(workspace_id: UUID, workflow_id: str, user: ApiUser, db: Database):
     response = await get_export_file(db, user, workspace_id, workflow_id)
+    if isinstance(response, SignedDownload):
+        return RedirectResponse(
+            response.url, status_code=307, headers={"Cache-Control": "private, no-store"}
+        )
     return StreamingResponse(
         response.body,
         media_type="application/pdf",

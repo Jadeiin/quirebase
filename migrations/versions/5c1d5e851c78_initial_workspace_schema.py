@@ -200,6 +200,7 @@ def upgrade() -> None:
     sa.Column('workspace_id', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
     sa.Column('actor_id', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
     sa.Column('file_format', sa.String(length=16), nullable=False),
+    sa.Column('staged_files', advanced_alchemy.types.file_object.data_type.StoredObject(backend='documents', multiple=True), nullable=False),
     sa.Column('records', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(advanced_alchemy.types.json.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
     sa.Column('errors', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(advanced_alchemy.types.json.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
     sa.Column('status', sa.String(length=16), nullable=False),

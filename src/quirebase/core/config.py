@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     s3_region: str | None = None
     s3_endpoint: str | None = None
     s3_prefix: str | None = None
+    signed_downloads: bool = False
+    signed_download_seconds: int = Field(default=60, ge=1, le=300)
     session_cookie: str = "quirebase_session"
     session_days: int = 30
     secure_cookies: bool = False

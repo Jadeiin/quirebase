@@ -25,7 +25,7 @@ class ApiTokenCreateRequest(BaseModel):
 
 
 class ApiTokenView(BaseModel):
-    id: UUID
+    id: UUID = Field(validation_alias="token_id")
     name: str
     status: Literal["active", "expired", "revoked"]
     expires_at: datetime

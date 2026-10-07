@@ -318,11 +318,6 @@ msgid "Affiliation"
 msgstr "Affiliation"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "All active Workspace members already participate."
-msgstr "All active Workspace members already participate."
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "All active Workspace members participate in this Project."
@@ -337,6 +332,11 @@ msgstr "All active Workspace members will participate in this Project."
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
 msgstr "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "All Items"
+msgstr "All Items"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
@@ -1535,6 +1535,7 @@ msgstr "File format"
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Files"
 msgstr "Files"
 
@@ -1861,6 +1862,11 @@ msgid "Items"
 msgstr "Items"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Items pagination"
+msgstr "Items pagination"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/projects/Projects.svelte
 msgid "Join"
@@ -1989,6 +1995,11 @@ msgid "Line"
 msgstr "Line"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Load more members"
+msgstr "Load more members"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/Library.svelte
 msgid "Load more Projects"
 msgstr "Load more Projects"
@@ -2030,6 +2041,11 @@ msgstr "Loading dashboard…"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Loading discussion…"
 msgstr "Loading discussion…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Loading Items…"
+msgstr "Loading Items…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
@@ -2206,6 +2222,11 @@ msgstr "Member suspended"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Members"
 msgstr "Members"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Members pagination"
+msgstr "Members pagination"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -2437,6 +2458,11 @@ msgstr "No keywords."
 #: src/lib/features/admin/AdminMaintenance.svelte
 msgid "No maintenance workflows."
 msgstr "No maintenance workflows."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No matching Items."
+msgstr "No matching Items."
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3094,8 +3120,14 @@ msgstr "Recent operations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Recently added"
 msgstr "Recently added"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Recently updated"
+msgstr "Recently updated"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -3416,12 +3448,18 @@ msgid "Search field"
 msgstr "Search field"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Search Items"
+msgstr "Search Items"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Search Library"
 msgstr "Search Library"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Search members"
 msgstr "Search members"
 
@@ -3585,6 +3623,7 @@ msgstr "Something went wrong. Try again."
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Sort"
 msgstr "Sort"
 
@@ -3932,6 +3971,7 @@ msgstr "This workspace route does not exist."
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Title"
 msgstr "Title"
 
@@ -4060,6 +4100,11 @@ msgstr "Unable to load annotations."
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import preview"
 msgstr "Unable to load Import preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to load Items."
+msgstr "Unable to load Items."
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4333,6 +4378,16 @@ msgstr "Volume"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Volume / Issue"
 msgstr "Volume / Issue"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "With files"
+msgstr "With files"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Without files"
+msgstr "Without files"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte

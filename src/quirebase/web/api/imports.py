@@ -30,6 +30,17 @@ router = APIRouter(tags=["Imports"])
 def _import_batch_view(
     batch, records: list[dict], errors: list[dict], *, include_workflow: bool = True
 ) -> dict:
+    sources = {file.metadata["source_id"]: file for file in batch.staged_files}
+    projected_records = []
+    for record in records:
+        source = sources.get(record.get("_source_id"))
+        projected = {key: value for key, value in record.items() if key != "_source_id"}
+        if source is not None:
+            projected["source"] = {
+                "original_name": source.metadata["original_name"],
+                "size": source.size,
+            }
+        projected_records.append(projected)
     return {
         "id": batch.id,
         "file_format": batch.file_format,
@@ -38,7 +49,7 @@ def _import_batch_view(
         # durable attributes. Other Workspace members poll this shared Import
         # Batch resource instead of receiving an actor-only workflow identity.
         "workflow_id": batch.workflow_id if include_workflow else None,
-        "records": records,
+        "records": projected_records,
         "errors": errors,
         "created_at": batch.created_at,
     }

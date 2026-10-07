@@ -159,7 +159,8 @@ Lookup or uploaded PDFs awaiting confirmation into the Library. A PDF Import Bat
 while its durable preparation workflow extracts identifiers and retrieves Candidate Records, ready
 for confirmation after successful preparation, and failed after a terminal workflow error. Retrying
 a failed batch preserves its staged PDFs and assigns a new durable workflow. A pending PDF Import Batch
-whose associated workflow is terminal or missing converges to failed before retry. A PDF Candidate Record retains
+whose associated workflow is terminal or missing converges to failed before retry. An Import Batch owns its staged PDFs as file descriptors with stable source UUIDs; Candidate Records
+refer to those sources without embedding storage paths. A PDF Candidate Record retains
 its independently owned UUID object until confirmation creates the Item and associated File
 Revision, or until the Import Batch is discarded. After successful confirmation, the batch becomes
 committed, retains only the recorded committed Item IDs for idempotent confirmation responses, and no

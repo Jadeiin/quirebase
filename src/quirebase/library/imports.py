@@ -5,13 +5,13 @@ import json
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+from advanced_alchemy.types import FileObject
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
     BibliographyRecord,
     parse_bibliography_records,
 )
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import selectinload
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_accessible_items, visible_items_query
@@ -42,7 +42,7 @@ from quirebase.library.providers import candidate_record_values, lookup_candidat
 from quirebase.models import ImportBatch, Item, ItemAuthor, User
 from quirebase.search import search_index
 
-from ._persistence import ImportBatchService
+from ._persistence import ImportBatchService, ItemService
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -74,14 +74,20 @@ async def _finish_cleanup_despite_cancellation(task: asyncio.Task[None]) -> None
             _consume_current_cancellation()
 
 
-def _pdf_object_keys(records: list[dict]) -> set[str]:
-    return {
-        pdf["object_key"]
-        for record in records
-        if isinstance(record, dict)
-        and isinstance((pdf := record.get("_pdf")), dict)
-        and isinstance(pdf.get("object_key"), str)
-    }
+def _pdf_import_inputs(files: list[FileObject]) -> list[dict]:
+    """Snapshot batch-owned file descriptors as serializable durable inputs."""
+    return [
+        {
+            "_row": file.metadata["row"],
+            "_source_id": file.metadata["source_id"],
+            "_pdf": {
+                "object_key": file.path,
+                "size": file.size,
+                "original_name": file.metadata["original_name"],
+            },
+        }
+        for file in files
+    ]
 
 
 def _record_to_item_payload(record: BibliographyRecord) -> dict:
@@ -208,7 +214,7 @@ async def stage_pdf_import_batch(
     user_id = user.id
     await db.rollback()
     staged_pdfs: list[StagedPdf] = []
-    pending_records: list[dict] = []
+    staged_files: list[FileObject] = []
     errors: list[dict] = []
 
     async def cleanup_staged_pdfs() -> None:
@@ -220,14 +226,19 @@ async def stage_pdf_import_batch(
             try:
                 staged = await stage_pdf(db, source, filename, max_bytes)
                 staged_pdfs.append(staged)
-                pending_records.append({
-                    "_row": row,
-                    "_pdf": {
-                        "object_key": staged.object_key,
-                        "size": staged.size,
-                        "original_name": staged.original_name,
-                    },
-                })
+                staged_files.append(
+                    FileObject(
+                        backend="documents",
+                        filename=staged.object_key,
+                        content_type="application/pdf",
+                        size=staged.size,
+                        metadata={
+                            "row": row,
+                            "source_id": str(uuid4()),
+                            "original_name": staged.original_name,
+                        },
+                    )
+                )
             except DomainError as error:
                 errors.append({
                     "row": row,
@@ -248,7 +259,8 @@ async def stage_pdf_import_batch(
             workspace_id=workspace_id,
             actor_id=reloaded_user.id,
             file_format="pdf",
-            records=pending_records,
+            records=[],
+            staged_files=staged_files,
             errors=errors,
             status="pending",
         )
@@ -262,7 +274,7 @@ async def stage_pdf_import_batch(
             workspace_id,
             batch.id,
             workflow_id,
-            pending_records,
+            _pdf_import_inputs(staged_files),
             queue_name=IMPORT_QUEUE,
             workflow_id=workflow_id,
             attributes={
@@ -383,7 +395,7 @@ async def lookup_pdf_import_candidate(
         record = await lookup_candidate(detected_doi, "doi", effective_settings)
         candidate = candidate_record_values(record)
         candidate.setdefault("doi", detected_doi)
-        candidate["_pdf"] = {**pdf, "detected_doi": detected_doi}
+        candidate["_source_id"] = pending["_source_id"]
         return {
             "record": candidate,
             "normalized_doi": normalized_doi,
@@ -454,6 +466,10 @@ async def finalize_pdf_import_batch(
         batch.status = "failed"
         return False
     initial_errors = batch.errors
+    retained_sources = {record["_source_id"] for record in records}
+    batch.staged_files = [
+        file for file in batch.staged_files if file.metadata["source_id"] in retained_sources
+    ]
     batch.records = records
     batch.errors = [*initial_errors, *errors]
     batch.status = "ready"
@@ -556,11 +572,8 @@ async def retry_pdf_import_batch(
         await _converge_pdf_import_batch_status(db, batch, workflow)
     if batch.file_format != "pdf" or batch.status != "failed":
         raise BatchConflict("only a failed PDF import batch can be retried")
-    pending_records = batch.records
-    if not isinstance(pending_records, list) or not any(
-        isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
-        for record in pending_records
-    ):
+    pending_records = _pdf_import_inputs(batch.staged_files)
+    if not pending_records:
         raise BatchConflict("the failed import batch has no staged PDFs to retry")
 
     workflow_id = f"prepare-pdf-import:{batch.id}:{uuid4()}"
@@ -657,10 +670,14 @@ async def commit_import_batch(
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
+    source_files = {file.metadata["source_id"]: file for file in batch.staged_files}
     committed_item_ids: list[UUID] = []
     for record in records:
         candidate = dict(record)
-        pdf = candidate.pop("_pdf", None)
+        source_id = candidate.pop("_source_id", None)
+        pdf = source_files.get(source_id) if source_id is not None else None
+        if source_id is not None and (pdf is None or pdf.size is None):
+            raise BatchConflict("the candidate has no staged source file")
         item = await create_item_from_metadata_record(db, actor, workspace_id, candidate)
         if pdf is not None:
             await attach_staged_pdf(
@@ -668,9 +685,9 @@ async def commit_import_batch(
                 actor,
                 item,
                 (
-                    pdf["object_key"],
-                    pdf["size"],
-                    pdf["original_name"],
+                    pdf.path,
+                    pdf.size if pdf.size is not None else 0,
+                    pdf.metadata["original_name"],
                 ),
             )
         await search_index(db).index_item(db, item.id)
@@ -680,16 +697,19 @@ async def commit_import_batch(
             "pdf.import" if pdf is not None else "bibliography.import",
             "item",
             item.id,
-            detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
+            detail={
+                "format": batch.file_format,
+                "filename": pdf.metadata["original_name"] if pdf else None,
+            },
             workspace_id=workspace_id,
             authorization_resource_action=ResourceAction.item_create.value,
         )
         committed_item_ids.append(item.id)
     batch.committed_item_ids = [str(item_id) for item_id in committed_item_ids]
-    # A committed batch no longer owns staged upload objects.  Drop the PDF
-    # staging payload so cleanup cannot mistake it for a live reservation.
+    # Transfer file ownership to File Revisions in the same confirmation transaction.
+    batch.staged_files = []
     batch.records = [
-        {key: value for key, value in record.items() if key != "_pdf"}
+        {key: value for key, value in record.items() if key != "_source_id"}
         for record in records
         if isinstance(record, dict)
     ]
@@ -707,7 +727,7 @@ async def discard_import_batch(
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":
         raise BatchConflict("a committed import batch cannot be discarded")
-    object_keys = _pdf_object_keys(batch.records)
+    object_keys = {file.path for file in batch.staged_files}
     record_event(
         db,
         user.id,
@@ -739,13 +759,10 @@ async def export_accessible_bibliography(
 ) -> tuple[str, str, str]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     items = list(
-        (
-            await db.scalars(
-                visible_items_query(workspace_id)
-                .options(selectinload(Item.author_links).selectinload(ItemAuthor.author))
-                .order_by(Item.updated_at.desc())
-            )
-        ).all()
+        await ItemService(session=db, statement=visible_items_query(workspace_id)).get_many(
+            load=[[Item.author_links, ItemAuthor.author]],
+            order_by=[("updated_at", True), ("id", False)],
+        )
     )
     if file_format == "csl":
         return await format_csl_export(

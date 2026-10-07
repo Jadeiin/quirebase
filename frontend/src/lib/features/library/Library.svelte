@@ -21,7 +21,7 @@
 		libraryBulkMutationOptions,
 		type LibraryBulkAction
 	} from '#lib/features/library/mutations.js';
-	import { libraryListQuery } from '#lib/features/library/queries.js';
+	import { libraryListQuery, librarySort } from '#lib/features/library/queries.js';
 	import { projectDetailQuery, projectOptionsQuery } from '#lib/features/projects/queries.js';
 	import { tagsQuery } from '#lib/features/tags/queries.js';
 	import { getSession } from '#lib/session.js';
@@ -41,7 +41,11 @@
 		project: page.url.searchParams.get('project') ?? '',
 		year: page.url.searchParams.get('year')?.trim() ?? '',
 		keyword: page.url.searchParams.get('keyword')?.trim() ?? '',
-		author: page.url.searchParams.get('author')?.trim() ?? ''
+		author: page.url.searchParams.get('author')?.trim() ?? '',
+		sort: librarySort(page.url.searchParams.get('sort')),
+		has_files: page.url.searchParams.has('has_files')
+			? page.url.searchParams.get('has_files') === 'true'
+			: undefined
 	});
 	const pageNumber = $derived(Math.max(1, Number(page.url.searchParams.get('page') ?? '1') || 1));
 	let query = $state(page.url.searchParams.get('q') ?? '');
@@ -50,6 +54,8 @@
 	let year = $state(page.url.searchParams.get('year') ?? '');
 	let keyword = $state(page.url.searchParams.get('keyword') ?? '');
 	let author = $state(page.url.searchParams.get('author') ?? '');
+	let sort = $state(librarySort(page.url.searchParams.get('sort')));
+	let fileFilter = $state(page.url.searchParams.get('has_files') ?? '');
 	let filtersOpen = $state(false);
 	let selected = new SvelteSet<string>();
 	let bulkAction = $state('');
@@ -78,6 +84,8 @@
 		year = page.url.searchParams.get('year') ?? '';
 		keyword = page.url.searchParams.get('keyword') ?? '';
 		author = page.url.searchParams.get('author') ?? '';
+		sort = librarySort(page.url.searchParams.get('sort'));
+		fileFilter = page.url.searchParams.get('has_files') ?? '';
 		selected.clear();
 	});
 
@@ -94,7 +102,7 @@
 			: (projects.data ?? [])
 	);
 	const totalPages = $derived(
-		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.per_page ?? 25)))
+		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.limit ?? 25)))
 	);
 	const allPageSelected = $derived(
 		((library.data?.items.length ?? 0) > 0 &&
@@ -118,7 +126,9 @@
 			project,
 			year: year.trim(),
 			keyword: keyword.trim(),
-			author: author.trim()
+			author: author.trim(),
+			sort: sort === 'updated' ? '' : sort,
+			has_files: fileFilter
 		})) {
 			if (value) result.set(key, value);
 		}
@@ -141,6 +151,8 @@
 		year = '';
 		keyword = '';
 		author = '';
+		sort = 'updated';
+		fileFilter = '';
 		updateUrl();
 	}
 
@@ -217,6 +229,8 @@
 	bind:year
 	bind:keyword
 	bind:author
+	bind:sort
+	bind:fileFilter
 	bind:filtersOpen
 	tags={tags.data ?? []}
 	projects={projectChoices}

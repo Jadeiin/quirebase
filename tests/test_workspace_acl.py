@@ -7,6 +7,7 @@ import pymupdf
 import pytest
 from advanced_alchemy.types import FileObject
 from app_helpers import json_payload
+from import_helpers import pdf_import_batch_data
 from sqlalchemy import event, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
@@ -244,12 +245,12 @@ async def test_workspace_member_directory_and_governance_projections(async_db):
     ])
     await async_db.commit()
 
-    directory = await list_workspace_members(
+    directory, _ = await list_workspace_members(
         async_db, await resolve_workspace_context(async_db, active, workspace_id)
     )
     assert {member.user_id for member in directory} == {owner.id, active.id}
 
-    governance = await list_workspace_governance_members(
+    governance, _ = await list_workspace_governance_members(
         async_db, await resolve_workspace_context(async_db, owner, workspace_id)
     )
     assert {member.user_id for member in governance} == {owner.id, active.id, suspended.id}
@@ -1045,7 +1046,7 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
             workspace_id=workspace_id,
             actor_id=owner.id,
             file_format="pdf",
-            records=[{"_pdf": {"object_key": staged_object.key}}],
+            **pdf_import_batch_data([{"_pdf": {"object_key": staged_object.key}}]),
             errors=[],
         ),
         ExportArtifact(

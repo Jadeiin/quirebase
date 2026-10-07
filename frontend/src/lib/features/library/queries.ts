@@ -10,6 +10,8 @@ export type LibraryFilters = {
 	year: string;
 	keyword: string;
 	author: string;
+	sort?: 'updated' | 'created' | 'title';
+	has_files?: boolean;
 };
 
 export const libraryKeys = {
@@ -27,13 +29,16 @@ export function libraryListQuery(workspaceId: string, filters: LibraryFilters, p
 			api.request('GET', '/workspaces/{workspace_id}/items', {
 				params: {
 					query: {
-						page,
+						limit: 25,
+						offset: (page - 1) * 25,
 						query: filters.query,
 						tag: filters.tag,
 						project: filters.project || undefined,
 						year: filters.year,
 						keyword: filters.keyword,
-						author: filters.author
+						author: filters.author,
+						sort: filters.sort,
+						has_files: filters.has_files
 					}
 				},
 				signal
@@ -41,6 +46,10 @@ export function libraryListQuery(workspaceId: string, filters: LibraryFilters, p
 	});
 }
 
-export type LibrarySearch = components['schemas']['LibrarySearchView'];
+export type LibrarySearch = components['schemas']['OffsetPagination_ItemSearchView_'];
 export type LibraryTag = components['schemas']['TagView'];
 export type LibraryProject = components['schemas']['ProjectSummaryView'];
+
+export function librarySort(value: string | null): 'updated' | 'created' | 'title' {
+	return value === 'created' || value === 'title' ? value : 'updated';
+}

@@ -241,8 +241,8 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 					}
 				],
 				total: 1,
-				page: 1,
-				per_page: 25
+				limit: 25,
+				offset: 0
 			}
 		})
 	);
@@ -351,7 +351,6 @@ for (const action of ['Delete', 'Moderate']) {
 					state: archived ? 'archived' : 'active',
 					participation: 'workspace',
 					item_count: 0,
-					items: [],
 					active_participants: [],
 					authorization: { allowed: archived ? [] : ['project_discussion.create'] }
 				}

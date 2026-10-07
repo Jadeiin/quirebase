@@ -49,3 +49,23 @@ export function workspaceQuery(workspaceId: string) {
 		retry: false
 	});
 }
+
+export function memberOptionsQuery(workspaceId: string, search = '') {
+	const api = createWorkspaceApi(workspaceId);
+	return infiniteQueryOptions({
+		queryKey: [...workspaceKeys.members(workspaceId), 'options', search],
+		initialPageParam: 0,
+		queryFn: ({ signal, pageParam }) =>
+			api.request('GET', '/workspaces/{workspace_id}/members', {
+				params: { query: { limit: 25, offset: pageParam, search } },
+				signal
+			}),
+		getNextPageParam: (page) =>
+			page.offset + page.limit < page.total ? page.offset + page.limit : undefined,
+		select: (data) => [
+			...new Map(
+				data.pages.flatMap((page) => page.items).map((item) => [item.user_id, item])
+			).values()
+		]
+	});
+}

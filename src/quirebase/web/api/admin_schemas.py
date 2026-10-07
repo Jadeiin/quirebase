@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, Field
 
 from quirebase.models import WorkspaceState
@@ -75,11 +77,9 @@ class AdminInvitationView(BaseModel):
     accepted_at: datetime | None = None
 
 
-class AdminUsersView(BaseModel):
-    users: list[AdminUserView]
-    total: int
-    page: int
-    per_page: int
+@dataclass
+class AdminUsersView(OffsetPagination[AdminUserView]):
+    items: list[AdminUserView]
     invitations: list[AdminInvitationView]
 
 
@@ -144,13 +144,6 @@ class AdminOverviewView(BaseModel):
     failed_workflows: list[WorkflowSummaryView]
     storage: StorageMetricsView
     recent_events: list[AdminAuditEventView]
-
-
-class AdminAuditView(BaseModel):
-    events: list[AdminAuditEventView]
-    total: int
-    page: int
-    per_page: int
 
 
 class AdminWorkflowsView(BaseModel):

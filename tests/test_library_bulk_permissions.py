@@ -9,6 +9,7 @@ import pymupdf
 import pytest
 from advanced_alchemy.types import FileObject
 from app_helpers import json_payload
+from import_helpers import pdf_import_batch_data
 from sqlalchemy import select
 from storage_helpers import collect_body, local_object_path, put_pdf_object
 from test_http import authenticated_async_client
@@ -356,7 +357,7 @@ async def test_bulk_delete_preserves_object_referenced_by_pending_pdf_import(
             workspace_id=item.workspace_id,
             actor_id=owner.id,
             file_format="pdf",
-            records=[{"_pdf": {"object_key": revision.file.path}}],
+            **pdf_import_batch_data([{"_pdf": {"object_key": revision.file.path}}]),
             errors=[],
         )
     )

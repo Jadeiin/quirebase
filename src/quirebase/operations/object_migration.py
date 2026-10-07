@@ -60,10 +60,6 @@ async def _copy_verified(
     return target_key, True
 
 
-def _pdf_rows(records: list[dict]) -> list[dict]:
-    return records
-
-
 async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationReport:
     """Plan or perform the repeatable, stopped-instance CAS-to-UUID migration."""
     store = get_object_store()
@@ -136,19 +132,15 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
             await db.commit()
 
     for batch in batches:
-        records = _pdf_rows(batch.records)
+        files = list(batch.staged_files)
         changed = False
-        for index, row in enumerate(records):
-            pdf = row.get("_pdf") if isinstance(row, dict) else None
-            if not isinstance(pdf, dict) or not isinstance(pdf.get("object_key"), str):
-                continue
-            old_key = pdf["object_key"]
+        for index, file in enumerate(files):
+            old_key = file.path
             if is_managed_object_key(old_key):
                 continue
             if not is_legacy_cas_key(old_key):
                 raise ValueError(f"unsupported Import Batch object key: {old_key}")
-            import_size = pdf.get("size")
-            if not isinstance(import_size, int) or import_size < 0:
+            if file.size is None or file.size < 0:
                 raise ValueError(f"Import Batch object has no valid size: {old_key}")
             planned += 1
             obsolete_keys.add(old_key)
@@ -156,19 +148,16 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
                 target, did_copy = await _copy_verified(
                     store,
                     old_key,
-                    uuid5(
-                        OBJECT_MIGRATION_NAMESPACE,
-                        f"import:{batch.id}:{index}:{old_key}",
-                    ),
+                    uuid5(OBJECT_MIGRATION_NAMESPACE, f"import:{batch.id}:{index}:{old_key}"),
                     ObjectSuffix.PDF,
-                    import_size,
+                    file.size,
                 )
                 copied += int(did_copy)
-                pdf["object_key"] = target
+                files[index] = FileObject(**(file.to_dict() | {"filename": target}))
                 changed = True
                 updated += 1
         if apply and changed:
-            batch.records = records
+            batch.staged_files = files
             await db.commit()
 
     if apply:
@@ -176,12 +165,8 @@ async def migrate_legacy_objects(db, *, apply: bool = False) -> ObjectMigrationR
             *(await db.scalars(select(FileRevision.file["filename"].as_string()))).all(),
             *(await db.scalars(select(Attachment.file["filename"].as_string()))).all(),
         }
-        for batch in (await db.scalars(select(ImportBatch.records))).all():
-            for row in _pdf_rows(batch):
-                if isinstance(row, dict) and isinstance(row.get("_pdf"), dict):
-                    key = row["_pdf"].get("object_key")
-                    if isinstance(key, str):
-                        referenced.add(key)
+        for files in await db.scalars(select(ImportBatch.staged_files)):
+            referenced.update(file.path for file in files)
         for key in sorted(obsolete_keys - referenced):
             deleted += int(await store.delete(key))
         async for artifact in store.iter_prefix("artifacts/annotation-exports/"):

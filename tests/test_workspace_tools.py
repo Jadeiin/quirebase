@@ -107,16 +107,16 @@ async def test_participant_directory_tracks_account_activation(
     try:
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
-        assert str(target.id) in {row["user_id"] for row in directory.json()}
+        assert str(target.id) in {row["user_id"] for row in directory.json()["items"]}
 
         disabled = await client.put(target_status, json=json_payload({"active": False}))
         assert disabled.status_code == 200
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
-        assert target.id not in {row["user_id"] for row in directory.json()}
+        assert str(target.id) not in {row["user_id"] for row in directory.json()["items"]}
         governance = await client.get(f"{workspace_base}/governance/members")
         assert governance.status_code == 200
-        member = next(row for row in governance.json() if row["user_id"] == str(target.id))
+        member = next(row for row in governance.json()["items"] if row["user_id"] == str(target.id))
         assert member["state"] == "active"
         rejected = await client.post(
             participant_path, json=json_payload({"username": target.username})
@@ -127,7 +127,7 @@ async def test_participant_directory_tracks_account_activation(
         assert reactivated.status_code == 200
         directory = await client.get(f"{workspace_base}/members")
         assert directory.status_code == 200
-        assert str(target.id) in {row["user_id"] for row in directory.json()}
+        assert str(target.id) in {row["user_id"] for row in directory.json()["items"]}
         added = await client.post(
             participant_path, json=json_payload({"username": target.username})
         )
@@ -270,9 +270,9 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
     try:
         members = await client.get(f"{workspace_base}/members")
         assert members.status_code == 200
-        assert set(members.json()[0]) == {"user_id", "username", "role"}
+        assert set(members.json()["items"][0]) == {"user_id", "username", "role"}
         assert (
-            next(row for row in members.json() if row["user_id"] == str(item.created_by))[
+            next(row for row in members.json()["items"] if row["user_id"] == str(item.created_by))[
                 "username"
             ]
             == "reader"
@@ -280,7 +280,7 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
 
         governance_members = await client.get(f"{workspace_base}/governance/members")
         assert governance_members.status_code == 200
-        assert set(governance_members.json()[0]) == {
+        assert set(governance_members.json()["items"][0]) == {
             "membership_id",
             "user_id",
             "username",
@@ -291,7 +291,9 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             "allowed_roles",
         }
         governed_view = next(
-            row for row in governance_members.json() if row["user_id"] == str(governed_member.id)
+            row
+            for row in governance_members.json()["items"]
+            if row["user_id"] == str(governed_member.id)
         )
         assert set(governed_view["allowed_roles"]) == {"admin", "editor", "reviewer", "viewer"}
         assert set(governed_view["authorization"]["allowed"]) == {

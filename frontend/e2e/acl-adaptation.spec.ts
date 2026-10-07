@@ -199,8 +199,8 @@ for (const [role, allowedActions, visible] of [
 						}
 					],
 					total: 1,
-					page: 1,
-					per_page: 25
+					limit: 25,
+					offset: 0
 				}
 			})
 		);
@@ -364,8 +364,8 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 		}
 		return route.fulfill({ json: projection() });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
 		route.fulfill({ json: [] })
@@ -419,8 +419,8 @@ test('a lifecycle conflict refreshes the Workspace action projection', async ({ 
 		}
 		return route.fulfill({ json: projection() });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
 		route.fulfill({ json: [] })
@@ -436,8 +436,8 @@ test('a lifecycle conflict refreshes the Workspace action projection', async ({ 
 test('missing Workspace context opens recovery and emits a diagnostic', async ({ page }) => {
 	await mockSession(page);
 	await projectActions(page, 'owner', ['workspace.read', 'workspace.update']);
-	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) =>
-		route.fulfill({ json: [] })
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
 		route.fulfill({ json: [] })

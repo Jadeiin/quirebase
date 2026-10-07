@@ -6,6 +6,7 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Notice from '#lib/design/Notice.svelte';
 	import Button from '#lib/design/Button.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
 	import { msg, t } from '#lib/i18n.js';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
@@ -16,18 +17,34 @@
 	const api = workspace.api;
 	const client = useQueryClient();
 	const workflows = getWorkflowCenter();
+	let memberPage = $state(1);
+	let memberSearch = $state('');
+	const memberQuery = $derived({ limit: 25, offset: (memberPage - 1) * 25, search: memberSearch });
 	const directoryMembers = createQuery(() => ({
-		queryKey: workspaceKeys.members(workspace.workspaceId),
+		queryKey: [...workspaceKeys.members(workspace.workspaceId), memberQuery],
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
-			api.request('GET', '/workspaces/{workspace_id}/members', { signal }),
+			api.request('GET', '/workspaces/{workspace_id}/members', {
+				params: { query: memberQuery },
+				signal
+			}),
 		enabled: Boolean(workspace.view) && !workspace.can('workspace_member.read')
 	}));
 	const governanceMembers = createQuery(() => ({
-		queryKey: workspaceKeys.governanceMembers(workspace.workspaceId),
+		queryKey: [...workspaceKeys.governanceMembers(workspace.workspaceId), memberQuery],
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
-			api.request('GET', '/workspaces/{workspace_id}/governance/members', { signal }),
+			api.request('GET', '/workspaces/{workspace_id}/governance/members', {
+				params: { query: memberQuery },
+				signal
+			}),
 		enabled: Boolean(workspace.view) && workspace.can('workspace_member.read')
 	}));
+	$effect(() => {
+		const members = workspace.can('workspace_member.read') ? governanceMembers : directoryMembers;
+		if (!members.isFetching && members.data) {
+			const lastPage = Math.max(1, Math.ceil(members.data.total / members.data.limit));
+			if (memberPage > lastPage) memberPage = lastPage;
+		}
+	});
 	const invitations = createQuery(() => ({
 		queryKey: workspaceKeys.invitations(workspace.workspaceId),
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
@@ -268,6 +285,16 @@
 			</div>
 		</section>
 	{/if}
+	<input
+		class="input"
+		aria-label={$t('Search members')}
+		placeholder={$t('Search members')}
+		value={memberSearch}
+		oninput={(event) => {
+			memberSearch = event.currentTarget.value;
+			memberPage = 1;
+		}}
+	/>
 	{#if workspace.can('workspace_member.read')}<section class="grid grid-cols-1 gap-3">
 			<div>
 				<h2 class="text-xl font-semibold">{$t('Members')}</h2>
@@ -293,7 +320,7 @@
 								><th class="p-3">{$t('Actions')}</th></tr
 							></thead
 						><tbody>
-							{#each governanceMembers.data ?? [] as member (member.membership_id)}<tr
+							{#each governanceMembers.data?.items ?? [] as member (member.membership_id)}<tr
 									class="border-t border-surface-300-700"
 									><td class="p-3">{member.username}</td><td class="p-3"
 										>{$t(domainLabel(member.role))}</td
@@ -426,7 +453,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each directoryMembers.data ?? [] as member (member.user_id)}
+							{#each directoryMembers.data?.items ?? [] as member (member.user_id)}
 								<tr class="border-t border-surface-300-700">
 									<td class="p-3">{member.username}</td>
 									<td class="p-3">{$t(domainLabel(member.role))}</td>
@@ -438,6 +465,20 @@
 			{/if}
 		</section>
 	{/if}
+	<Pagination
+		page={memberPage}
+		pageCount={Math.max(
+			1,
+			Math.ceil(
+				((workspace.can('workspace_member.read')
+					? governanceMembers.data?.total
+					: directoryMembers.data?.total) ?? 0) / 25
+			)
+		)}
+		onPage={(page) => (memberPage = page)}
+		label={$t('Members pagination')}
+		busy={directoryMembers.isFetching || governanceMembers.isFetching}
+	/>
 	{#if workspace.can('workspace_invitation.read')}
 		<section
 			class="grid grid-cols-1 gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5"

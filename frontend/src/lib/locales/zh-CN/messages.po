@@ -318,11 +318,6 @@ msgid "Affiliation"
 msgstr "机构单位"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "All active Workspace members already participate."
-msgstr "所有活跃工作区成员都已参与。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "All active Workspace members participate in this Project."
@@ -337,6 +332,11 @@ msgstr "所有活跃的工作区成员都将参与此项目。"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
 msgstr "所有活跃的工作区成员都将参与。现有参与者选择（包括已暂停成员）将永久清除，切回原模式也不会恢复。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "All Items"
+msgstr "所有条目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
@@ -1535,6 +1535,7 @@ msgstr "文件格式"
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Files"
 msgstr "文件"
 
@@ -1861,6 +1862,11 @@ msgid "Items"
 msgstr "条目"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Items pagination"
+msgstr "条目分页"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/projects/Projects.svelte
 msgid "Join"
@@ -1989,6 +1995,11 @@ msgid "Line"
 msgstr "直线"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Load more members"
+msgstr "加载更多成员"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/Library.svelte
 msgid "Load more Projects"
 msgstr "加载更多 Project"
@@ -2030,6 +2041,11 @@ msgstr "正在加载概览…"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Loading discussion…"
 msgstr "正在加载讨论…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Loading Items…"
+msgstr "正在加载条目…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
@@ -2206,6 +2222,11 @@ msgstr "成员已暂停"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Members"
 msgstr "成员"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Members pagination"
+msgstr "成员分页"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -2437,6 +2458,11 @@ msgstr "暂无关键词。"
 #: src/lib/features/admin/AdminMaintenance.svelte
 msgid "No maintenance workflows."
 msgstr "暂无维护工作流。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No matching Items."
+msgstr "没有匹配的条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3094,8 +3120,14 @@ msgstr "最近操作"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Recently added"
 msgstr "最近新增"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Recently updated"
+msgstr "最近更新"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -3416,12 +3448,18 @@ msgid "Search field"
 msgstr "检索字段"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Search Items"
+msgstr "搜索条目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Search Library"
 msgstr "搜索文献库"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Search members"
 msgstr "搜索成员"
 
@@ -3585,6 +3623,7 @@ msgstr "发生错误，请重试。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Sort"
 msgstr "排序"
 
@@ -3932,6 +3971,7 @@ msgstr "此工作区路由不存在。"
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Title"
 msgstr "标题"
 
@@ -4060,6 +4100,11 @@ msgstr "无法加载批注。"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import preview"
 msgstr "无法加载导入预览"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to load Items."
+msgstr "无法加载条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4333,6 +4378,16 @@ msgstr "卷号 (Volume)"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Volume / Issue"
 msgstr "卷 / 期"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "With files"
+msgstr "有文件"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Without files"
+msgstr "无文件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte

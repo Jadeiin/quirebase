@@ -46,5 +46,5 @@ export function invalidateLibrary(queryClient: QueryClient, workspaceId: string)
 	return invalidate(queryClient, [libraryKeys.all(workspaceId), dashboardKeys.all(workspaceId)]);
 }
 export function invalidateProject(queryClient: QueryClient, workspaceId: string) {
-	return invalidate(queryClient, [projectKeys.all(workspaceId)]);
+	return invalidate(queryClient, [projectKeys.all(workspaceId), libraryKeys.all(workspaceId)]);
 }

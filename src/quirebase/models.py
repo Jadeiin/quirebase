@@ -751,6 +751,9 @@ class ImportBatch(EntityBase):
     actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     file_format: Mapped[str] = mapped_column(String(16))
     records: Mapped[list[dict]] = mapped_column(JsonB)
+    staged_files: Mapped[list[FileObject]] = mapped_column(
+        StoredObject(backend="documents", multiple=True), default=list
+    )
     errors: Mapped[list[dict]] = mapped_column(JsonB)
     status: Mapped[str] = mapped_column(String(16), default="ready")
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)

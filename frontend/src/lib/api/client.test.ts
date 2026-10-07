@@ -77,7 +77,7 @@ describe('apiRequest', () => {
 		let received: Request | undefined;
 		const fetcher: typeof fetch = async (input) => {
 			received = input as Request;
-			return new Response(JSON.stringify({ total: 0, page: 1, per_page: 25, items: [] }));
+			return new Response(JSON.stringify({ total: 0, limit: 25, offset: 0, items: [] }));
 		};
 
 		await workspaceApi.request(

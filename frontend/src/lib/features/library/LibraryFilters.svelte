@@ -12,6 +12,8 @@
 		year = $bindable(''),
 		keyword = $bindable(''),
 		author = $bindable(''),
+		sort = $bindable<'updated' | 'created' | 'title'>('updated'),
+		fileFilter = $bindable(''),
 		filtersOpen = $bindable(false),
 		tags = [],
 		projects = [],
@@ -24,6 +26,8 @@
 		year: string;
 		keyword: string;
 		author: string;
+		sort: 'updated' | 'created' | 'title';
+		fileFilter: string;
 		filtersOpen: boolean;
 		tags: LibraryTag[];
 		projects: LibraryProject[];
@@ -83,6 +87,21 @@
 			>
 			<label>{$t('Contributor')}<input class="input" bind:value={author} /></label>
 			<label>{$t('Keyword')}<input class="input" bind:value={keyword} /></label>
+			<label
+				>{$t('Files')}<select class="select" bind:value={fileFilter}>
+					<option value="">{$t('All Items')}</option><option value="true">{$t('With files')}</option
+					>
+					<option value="false">{$t('Without files')}</option>
+				</select></label
+			>
+			<label
+				>{$t('Sort')}<select class="select" bind:value={sort}>
+					<option value="updated">{$t('Recently updated')}</option><option value="created"
+						>{$t('Recently added')}</option
+					>
+					<option value="title">{$t('Title')}</option>
+				</select></label
+			>
 		</div>
 		<div class="flex flex-wrap justify-end gap-2">
 			<Button type="button" onclick={onClear}>{$t('Clear filters')}</Button>

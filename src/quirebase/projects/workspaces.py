@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 class ProjectWorkspace:
     project: Project
     active_participants: tuple[ProjectParticipant, ...]
-    items: tuple[Item, ...]
+    item_count: int
     is_participating: bool
 
 
@@ -219,24 +219,18 @@ async def open_project_workspace(
             )
             is not None
         )
-    items = tuple(
-        (
-            await db.scalars(
-                workspace_select(Item, context.workspace)
-                .join(ProjectItem, ProjectItem.item_id == Item.id)
-                .where(
-                    ProjectItem.project_id == project_id,
-                )
-                .order_by(Item.updated_at.desc())
-            )
-        ).all()
+    item_count = await db.scalar(
+        workspace_select(Item, context.workspace)
+        .join(ProjectItem, ProjectItem.item_id == Item.id)
+        .where(ProjectItem.project_id == project_id)
+        .with_only_columns(func.count(Item.id))
     )
     return ProjectWorkspace(
         project=context.project,
         active_participants=tuple(
             ProjectParticipant(user_id=row.id, username=row.username) for row in participant_users
         ),
-        items=items,
+        item_count=item_count or 0,
         is_participating=is_participating,
     )
 

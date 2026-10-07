@@ -490,4 +490,4 @@ export type ItemSummary = components['schemas']['ItemSearchView'];
 export type ProjectSummary = components['schemas']['ProjectSummaryView'];
 export type WorkspaceView = components['schemas']['WorkspaceView'];
 export type ItemOverviewView = components['schemas']['ItemOverviewView'];
-export type LibraryView = components['schemas']['LibrarySearchView'];
+export type LibraryView = components['schemas']['OffsetPagination_ItemSearchView_'];

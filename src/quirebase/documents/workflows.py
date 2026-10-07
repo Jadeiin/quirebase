@@ -646,6 +646,7 @@ async def build_annotation_export(
             ObjectSuffix.PDF,
             output_path,
             max_bytes=get_settings().max_pdf_bytes,
+            metadata={"Content-Disposition": 'attachment; filename="annotated.pdf"'},
         )
         return {
             "filename": f"{object_id}.pdf",

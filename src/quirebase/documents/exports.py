@@ -13,7 +13,13 @@ from quirebase.access import (
 )
 from quirebase.access.documents import require_revision
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
-from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store, object_key
+from quirebase.core.storage import (
+    ObjectResponse,
+    ObjectSuffix,
+    SignedDownload,
+    get_object_store,
+    object_key,
+)
 from quirebase.core.workflows import DOCUMENTS_QUEUE, durable_operations
 from quirebase.models import ExportArtifact, ProjectItem, User
 
@@ -96,7 +102,7 @@ async def get_export_status(
 
 async def get_export_file(
     db: AsyncSession, user: User, workspace_id: UUID, workflow_id: str
-) -> ObjectResponse:
+) -> ObjectResponse | SignedDownload:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     workflow = await _workspace_export(user, workspace_id, workflow_id)
     if workflow.state != "succeeded" or not isinstance(workflow.output, dict):
@@ -135,4 +141,10 @@ async def get_export_file(
     )
     if artifact is None or not await get_object_store().exists(artifact.file.path):
         raise ResourceNotFound("export artifact expired or deleted")
-    return await get_object_store().get(artifact.file.path)
+    try:
+        signed = await get_object_store().sign_download(
+            artifact.file, expires_at=artifact.expires_at
+        )
+    except FileNotFoundError as error:
+        raise ResourceNotFound("export artifact expired or deleted") from error
+    return signed if signed is not None else await get_object_store().get(artifact.file.path)

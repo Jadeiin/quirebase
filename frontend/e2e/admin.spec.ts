@@ -8,7 +8,7 @@ test('administration URL selects and loads the users section', async ({ page }) 
 		usersRequests += 1;
 		return route.fulfill({
 			json: {
-				users: [
+				items: [
 					{
 						id: 'user-2',
 						username: 'curator',
@@ -18,8 +18,8 @@ test('administration URL selects and loads the users section', async ({ page }) 
 					}
 				],
 				total: 1,
-				page: 1,
-				per_page: 20,
+				limit: 20,
+				offset: 0,
 				invitations: []
 			}
 		});
@@ -36,7 +36,7 @@ test('administrators receive the one-time invitation URL after creation', async 
 	await mockSession(page, 'administrator');
 	await page.route('**/api/v1/admin/users*', (route) =>
 		route.fulfill({
-			json: { users: [], total: 0, page: 1, per_page: 20, invitations: [] }
+			json: { items: [], total: 0, limit: 20, offset: 0, invitations: [] }
 		})
 	);
 	await page.route('**/api/v1/admin/invitations', (route) =>
@@ -87,7 +87,7 @@ test('administrators can respond to compromised user accounts', async ({ page })
 		if (request.method() === 'GET' && path === '/api/v1/admin/users') {
 			return route.fulfill({
 				json: {
-					users: [
+					items: [
 						{
 							id: 'user-2',
 							username: 'curator',
@@ -97,8 +97,8 @@ test('administrators can respond to compromised user accounts', async ({ page })
 						}
 					],
 					total: 1,
-					page: 1,
-					per_page: 20,
+					limit: 20,
+					offset: 0,
 					invitations: []
 				}
 			});

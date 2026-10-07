@@ -6,6 +6,7 @@ import tempfile
 from collections.abc import AsyncIterable, AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -21,8 +22,6 @@ from obstore.store import LocalStore, S3Store
 from quirebase.core.config import Settings, get_settings
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from obstore import GetOptions, ObjectMeta
     from obstore.store import ObjectStore as ObstoreDataPlane
 
@@ -83,6 +82,12 @@ class ObjectResponse:
     metadata: ObjectMetadata
     byte_range: tuple[int, int]
     body: AsyncIterable[bytes]
+
+
+@dataclass(frozen=True)
+class SignedDownload:
+    url: str
+    expires_at: datetime
 
 
 @dataclass(frozen=True)
@@ -157,6 +162,7 @@ class ObjectStore:
         *,
         max_bytes: int,
         required_prefix: bytes | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> StoredObject:
         """Stream bytes directly to a preallocated owned key."""
         key = object_key(object_id, suffix)
@@ -174,7 +180,7 @@ class ObjectStore:
                 yield chunk
 
         try:
-            file = FileObject(backend=self._backend, filename=key)
+            file = FileObject(backend=self._backend, filename=key, metadata=metadata)
             await file.save_async(checked_chunks())
             if required_prefix is not None and bytes(prefix) != required_prefix:
                 raise ValueError("file content does not match the required format")
@@ -183,6 +189,23 @@ class ObjectStore:
             with suppress(Exception):
                 await self._store.delete_async(key)
             raise
+
+    async def sign_download(
+        self, file: FileObject, *, expires_at: datetime | None = None
+    ) -> SignedDownload | None:
+        if self.is_local or not get_settings().signed_downloads:
+            return None
+        self._validate_key(file.path)
+        now = datetime.now(UTC)
+        lifetime = get_settings().signed_download_seconds
+        if expires_at is not None:
+            # Leave a second for native signing; never issue an artifact's last instant.
+            lifetime = min(lifetime, int((expires_at - now).total_seconds()) - 1)
+        if lifetime < 1:
+            raise FileNotFoundError("download has expired")
+        descriptor = FileObject(**(file.to_dict() | {"backend": self._backend}))
+        url = await descriptor.sign_async(expires_in=lifetime, for_upload=False)
+        return SignedDownload(url=url, expires_at=now + timedelta(seconds=lifetime))
 
     async def head(self, key: str) -> ObjectMetadata:
         self._validate_key(key)

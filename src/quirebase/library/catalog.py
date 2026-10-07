@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import re
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import (
+    ExistsFilter,
+    FilterGroup,
+    LimitOffset,
+    NotExistsFilter,
+    OrderBy,
+    SearchFilter,
+)
 from inquiro.richtext import convert_rich_text
 from sqlalchemy import or_, select
 
@@ -18,6 +25,8 @@ from quirebase.access import (
 from quirebase.access.scope import workspace_select
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import (
+    Attachment,
+    FileRevision,
     Item,
     ItemRead,
     ItemTag,
@@ -32,6 +41,7 @@ from quirebase.search import search_index
 from ._persistence import ItemService
 
 if TYPE_CHECKING:
+    from advanced_alchemy.filters import StatementFilter
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
 
@@ -46,10 +56,11 @@ async def search_library(
     year: str = "",
     keyword: str = "",
     author: str = "",
-    page: int = 1,
-    per_page: int = 25,
+    limit: int = 25,
+    offset: int = 0,
+    sort: Literal["updated", "created", "title"] = "updated",
+    has_files: bool | None = None,
 ) -> tuple[list[Item], int]:
-    page = max(page, 1)
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     item_query = workspace_items_query(context)
     matching_ids = await search_index(db).matching_item_ids(db, q) if q.strip() else None
@@ -86,15 +97,27 @@ async def search_library(
         )
     if year:
         item_query = item_query.where(Item.publication_date.startswith(year))
-    if keyword:
-        item_query = item_query.where(Item.keywords.ilike(f"%{keyword}%"))
-    if author:
-        item_query = item_query.where(Item.authors.ilike(f"%{author}%"))
-    records, total = await ItemService(
-        session=db,
-        statement=item_query.order_by(Item.updated_at.desc(), Item.id),
-    ).get_many_and_count(
-        LimitOffset(limit=per_page, offset=(page - 1) * per_page),
+    filters: list[StatementFilter] = [LimitOffset(limit=limit, offset=offset)]
+    for field, value in (("keywords", keyword), ("authors", author)):
+        if value.strip():
+            filters.append(SearchFilter(field_name=field, value=value.strip(), ignore_case=True))
+    if has_files is not None:
+        exists_type = ExistsFilter if has_files else NotExistsFilter
+        file_filters: list[StatementFilter] = [
+            exists_type(values=[model.item_id == Item.id, model.workspace_id == workspace_id])
+            for model in (FileRevision, Attachment)
+        ]
+        if has_files:
+            filters.append(FilterGroup(logical_operator=or_, filters=file_filters))
+        else:
+            filters.extend(file_filters)
+    sort_field = {"updated": "updated_at", "created": "created_at", "title": "title"}[sort]
+    filters.extend([
+        OrderBy(field_name=sort_field, sort_order="asc" if sort == "title" else "desc"),
+        OrderBy(field_name="id"),
+    ])
+    records, total = await ItemService(session=db, statement=item_query).get_many_and_count(
+        *filters
     )
     return list(records), total
 

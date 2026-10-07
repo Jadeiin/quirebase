@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from advanced_alchemy.service import ResultConverter
+from advanced_alchemy.utils.serialization import schema_dump
 from fastapi import APIRouter, Request, Response, status
 
 from quirebase.accounts import (
@@ -107,16 +109,12 @@ async def account_summary(request: Request, user: ApiUser, db: Database):
             )
             for session in sessions
         ],
-        "api_tokens": [
-            ApiTokenView(
-                id=token.token_id,
-                name=token.name,
-                status=token.status,
-                expires_at=token.expires_at,
-                created_at=token.created_at,
-            )
-            for token in tokens
-        ],
+        "api_tokens": ResultConverter()
+        .to_schema(
+            [schema_dump(token) | {"status": token.status} for token in tokens],
+            schema_type=ApiTokenView,
+        )
+        .items,
     }
 
 

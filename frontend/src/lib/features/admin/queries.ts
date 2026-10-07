@@ -32,7 +32,8 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 			apiRequest('GET', '/admin/users', {
 				params: {
 					query: {
-						page: filters.page,
+						limit: 20,
+						offset: (filters.page - 1) * 20,
 						search: filters.search,
 						role: filters.filterA,
 						active: filters.filterB ? filters.filterB === 'true' : undefined
@@ -59,7 +60,8 @@ export function adminAuditQuery(filters: AdminFilters, enabled = true) {
 			apiRequest('GET', '/admin/audit', {
 				params: {
 					query: {
-						page: filters.page,
+						limit: 50,
+						offset: (filters.page - 1) * 50,
 						search: filters.search,
 						action: filters.filterA,
 						target_type: filters.filterB
@@ -101,7 +103,7 @@ export function adminMaintenanceQuery(filters: AdminFilters, enabled = true) {
 export type AdminOverview = components['schemas']['AdminOverviewView'];
 export type AdminUsers = components['schemas']['AdminUsersView'];
 export type AdminWorkspaces = components['schemas']['AdminWorkspaceView'][];
-export type AdminAudit = components['schemas']['AdminAuditView'];
+export type AdminAudit = components['schemas']['OffsetPagination_AdminAuditEventView_'];
 export type AdminWorkflows = components['schemas']['AdminWorkflowsView'];
 export type AdminSettings = components['schemas']['AdminSettingsView'];
 export type AdminMaintenance = components['schemas']['AdminMaintenanceView'];

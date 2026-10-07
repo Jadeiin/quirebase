@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Request, UploadFile, status
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 
 from quirebase.access import ResourceAction, require_item_action
 from quirebase.core.config import get_settings
@@ -19,6 +19,7 @@ from quirebase.documents import (
     get_attachment_file,
     get_item_thumbnail,
     get_pdf_viewer_data,
+    get_revision_download_url,
     get_revision_file,
     get_revision_thumbnail,
     head_attachment_file,
@@ -430,6 +431,7 @@ async def pdf_viewer_configuration(
     "/items/{item_id}/revisions/{revision_id}/content",
     response_class=StreamingResponse,
     responses={
+        307: {"description": "Short-lived authorized S3 download; response is not cacheable."},
         200: {
             "content": {
                 "application/pdf": {"schema": {"type": "string", "format": "binary"}},
@@ -450,6 +452,11 @@ async def pdf_content(
     user: ApiUser,
     db: Database,
 ):
+    signed = await get_revision_download_url(db, user, workspace_id, item_id, revision_id)
+    if signed is not None:
+        return RedirectResponse(
+            signed.url, status_code=307, headers={"Cache-Control": "private, no-store"}
+        )
     metadata, original_name, _media_type = await head_revision_file(
         db, user, workspace_id, item_id, revision_id
     )

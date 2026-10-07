@@ -4,7 +4,7 @@ import contextlib
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import BooleanFilter, LimitOffset
 from sqlalchemy import delete, inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 
@@ -45,8 +45,8 @@ async def list_users_paginated(
     search: str = "",
     role: str = "",
     active: bool | None = None,
-    page: int = 1,
-    page_size: int = 20,
+    limit: int = 20,
+    offset: int = 0,
 ) -> tuple[list[User], int]:
     await require_system_action(db, admin, SystemAction.users_read)
     query = select(User)
@@ -60,14 +60,13 @@ async def list_users_paginated(
     if role.strip() and role in ("administrator", "member"):
         filters.append(User.role == role)
     if active is not None:
-        filters.append(User.active == active)
+        query = BooleanFilter(field_name="active", value=active).append_to_statement(query, User)
     if filters:
         query = query.where(*filters)
-    offset = max(0, (page - 1) * page_size)
     records, total = await UserService(
         session=db, statement=query.order_by(User.username, User.id)
     ).get_many_and_count(
-        LimitOffset(limit=page_size, offset=offset),
+        LimitOffset(limit=limit, offset=offset),
     )
     return list(records), total
 

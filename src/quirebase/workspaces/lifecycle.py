@@ -163,16 +163,10 @@ async def permanently_delete_workspace(
             )
         ).all()
     )
-    for records in (
-        await db.scalars(
-            select(ImportBatch.records).where(ImportBatch.workspace_id == workspace_id)
-        )
-    ).all():
-        for record in records:
-            if isinstance(record, dict) and isinstance((pdf := record.get("_pdf")), dict):
-                key = pdf.get("object_key")
-                if isinstance(key, str):
-                    object_keys.add(key)
+    for files in await db.scalars(
+        select(ImportBatch.staged_files).where(ImportBatch.workspace_id == workspace_id)
+    ):
+        object_keys.update(file.path for file in files)
 
     annotation_ids = list(
         (

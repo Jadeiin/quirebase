@@ -159,3 +159,128 @@ async def test_project_pages_count_authorized_roots_and_separate_governance_from
         hidden = (await client.get(base + "?search=Managed", headers=editor_headers)).json()
         assert hidden["items"] == [] and hidden["total"] == 0
         assert (await client.get(base + "?limit=0", headers=headers)).status_code == 422
+
+
+@pytest.mark.anyio
+async def test_member_pages_preserve_directory_and_governance_boundaries(
+    async_db, async_session_factory
+):
+    owner = User(username="member-owner", password_hash="unused")
+    people = [User(username=f"member-{index:02}", password_hash="unused") for index in range(28)]
+    async_db.add_all([owner, *people])
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, owner)
+    memberships = [
+        WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role=WorkspaceRole.editor)
+        for user in people
+    ]
+    async_db.add_all(memberships)
+    from datetime import UTC, datetime
+
+    memberships[-1].state = WorkspaceMemberState.suspended
+    memberships[-2].terminated_at = datetime.now(UTC)
+    people[-3].active = False
+    await async_db.commit()
+    grant = await create_api_token(async_db, owner, "Members", expires_in_days=1)
+    editor_grant = await create_api_token(async_db, people[0], "Directory", expires_in_days=1)
+    base = f"/api/v1/workspaces/{workspace.id}"
+    async with api_client(async_session_factory) as (client, _):
+        headers = bearer(grant.raw_token)
+        for path, total in (("members", 26), ("governance/members", 28)):
+            first = (await client.get(f"{base}/{path}", headers=headers)).json()
+            last = (await client.get(f"{base}/{path}?offset=25", headers=headers)).json()
+            empty = (await client.get(f"{base}/{path}?offset=100", headers=headers)).json()
+            assert [len(page["items"]) for page in (first, last, empty)] == [25, total - 25, 0]
+            assert {page["total"] for page in (first, last, empty)} == {total}
+            names = [row["username"] for page in (first, last) for row in page["items"]]
+            assert names == sorted(names) and len(set(names)) == total
+            found = (await client.get(f"{base}/{path}?search=MEMBER-03", headers=headers)).json()
+            assert found["total"] == 1 and found["items"][0]["username"] == "member-03"
+            assert (
+                await client.get(f"{base}/{path}?limit=101", headers=headers)
+            ).status_code == 422
+        public = await client.get(f"{base}/members", headers=bearer(editor_grant.raw_token))
+        assert public.status_code == 200
+        assert "authorization" not in public.json()["items"][0]
+        denied = await client.get(
+            f"{base}/governance/members", headers=bearer(editor_grant.raw_token)
+        )
+        assert denied.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_item_file_filters_and_project_pages_count_roots_once(
+    async_db, async_session_factory
+):
+    from uuid import uuid4
+
+    from advanced_alchemy.types import FileObject
+
+    from quirebase.models import Attachment, FileRevision
+
+    owner = User(username="item-page-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, owner)
+    project = Project(
+        workspace_id=workspace.id,
+        name="Archived",
+        created_by=owner.id,
+        state=ProjectState.archived,
+        participation=ProjectParticipation.managed,
+    )
+    items = [
+        Item(workspace_id=workspace.id, title=f"Item {index:02}", created_by=owner.id)
+        for index in range(27)
+    ]
+    async_db.add_all([project, *items])
+    await async_db.flush()
+    async_db.add_all([
+        ProjectItem(
+            workspace_id=workspace.id, project_id=project.id, item_id=item.id, added_by=owner.id
+        )
+        for item in items
+    ])
+    for _ in range(2):
+        async_db.add(
+            FileRevision(
+                workspace_id=workspace.id,
+                item_id=items[0].id,
+                created_by=owner.id,
+                file=FileObject(backend="documents", filename=f"{uuid4()}.pdf", size=10),
+            )
+        )
+    async_db.add(
+        Attachment(
+            workspace_id=workspace.id,
+            item_id=items[1].id,
+            created_by=owner.id,
+            file=FileObject(backend="documents", filename=f"{uuid4()}.bin", size=10),
+        )
+    )
+    await async_db.commit()
+    grant = await create_api_token(async_db, owner, "Items", expires_in_days=1)
+    base = f"/api/v1/workspaces/{workspace.id}"
+    async with api_client(async_session_factory) as (client, _):
+        headers = bearer(grant.raw_token)
+        detail = (await client.get(f"{base}/projects/{project.id}", headers=headers)).json()
+        assert detail["item_count"] == 27 and "items" not in detail
+        assert detail["active_participants"] == [] and detail["is_participating"] is False
+        files = (
+            await client.get(f"{base}/items?has_files=true&sort=title", headers=headers)
+        ).json()
+        assert files["total"] == 2
+        assert [row["title_html"] for row in files["items"]] == ["Item 00", "Item 01"]
+        missing = (await client.get(f"{base}/items?has_files=false", headers=headers)).json()
+        assert missing["total"] == 25
+        empty = (await client.get(f"{base}/items?has_files=true&offset=25", headers=headers)).json()
+        assert empty["items"] == [] and empty["total"] == 2
+        last = (
+            await client.get(
+                f"{base}/items?project={project.id}&sort=title&offset=25", headers=headers
+            )
+        ).json()
+        assert last["total"] == 27 and len(last["items"]) == 2
+        assert (
+            await client.get(f"{base}/items?sort=password_hash", headers=headers)
+        ).status_code == 422

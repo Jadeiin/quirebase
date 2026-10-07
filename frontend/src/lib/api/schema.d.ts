@@ -2143,17 +2143,6 @@ export interface components {
 			 */
 			created_at: string;
 		};
-		/** AdminAuditView */
-		AdminAuditView: {
-			/** Events */
-			events: components['schemas']['AdminAuditEventView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
-		};
 		/** AdminInvitationCreatedView */
 		AdminInvitationCreatedView: {
 			/**
@@ -2281,14 +2270,14 @@ export interface components {
 		};
 		/** AdminUsersView */
 		AdminUsersView: {
-			/** Users */
-			users: components['schemas']['AdminUserView'][];
+			/** Items */
+			items: components['schemas']['AdminUserView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
 			/** Total */
 			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
 			/** Invitations */
 			invitations: components['schemas']['AdminInvitationView'][];
 		};
@@ -3599,17 +3588,6 @@ export interface components {
 					[key: string]: components['schemas']['JsonValue-Output'];
 			  }
 			| null;
-		/** LibrarySearchView */
-		LibrarySearchView: {
-			/** Items */
-			items: components['schemas']['ItemSearchView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
-		};
 		/** LinePayload */
 		LinePayload: {
 			rect: components['schemas']['Rect'];
@@ -3712,9 +3690,65 @@ export interface components {
 		 * OffsetPagination
 		 * @description Container for data returned using limit/offset pagination.
 		 */
+		OffsetPagination_AdminAuditEventView_: {
+			/** Items */
+			items: components['schemas']['AdminAuditEventView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_ItemSearchView_: {
+			/** Items */
+			items: components['schemas']['ItemSearchView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
 		OffsetPagination_ProjectSummaryView_: {
 			/** Items */
 			items: components['schemas']['ProjectSummaryView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkspaceGovernanceMemberView_: {
+			/** Items */
+			items: components['schemas']['WorkspaceGovernanceMemberView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkspaceMemberDirectoryView_: {
+			/** Items */
+			items: components['schemas']['WorkspaceMemberDirectoryView'][];
 			/** Limit */
 			limit: number;
 			/** Offset */
@@ -3855,8 +3889,6 @@ export interface components {
 			 * @description Active explicit participants; Workspace participation is implicit.
 			 */
 			active_participants: components['schemas']['ProjectParticipant'][];
-			/** Items */
-			items: components['schemas']['ItemSearchView'][];
 		};
 		/** ProjectParticipant */
 		ProjectParticipant: {
@@ -5411,7 +5443,8 @@ export interface operations {
 				search?: string;
 				role?: string;
 				active?: boolean | null;
-				page?: number;
+				limit?: number;
+				offset?: number;
 			};
 			header?: never;
 			path?: never;
@@ -5711,7 +5744,8 @@ export interface operations {
 				actor_id?: string | null;
 				action?: string;
 				target_type?: string;
-				page?: number;
+				limit?: number;
+				offset?: number;
 			};
 			header?: never;
 			path?: never;
@@ -5725,7 +5759,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['AdminAuditView'];
+					'application/json': components['schemas']['OffsetPagination_AdminAuditEventView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -6150,7 +6184,11 @@ export interface operations {
 	};
 	'workspaces.get_workspace_members': {
 		parameters: {
-			query?: never;
+			query?: {
+				limit?: number;
+				offset?: number;
+				search?: string;
+			};
 			header?: never;
 			path: {
 				workspace_id: string;
@@ -6165,7 +6203,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['WorkspaceMemberDirectoryView'][];
+					'application/json': components['schemas']['OffsetPagination_WorkspaceMemberDirectoryView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -6190,7 +6228,11 @@ export interface operations {
 	};
 	'workspaces.get_workspace_governance_members': {
 		parameters: {
-			query?: never;
+			query?: {
+				limit?: number;
+				offset?: number;
+				search?: string;
+			};
 			header?: never;
 			path: {
 				workspace_id: string;
@@ -6205,7 +6247,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['WorkspaceGovernanceMemberView'][];
+					'application/json': components['schemas']['OffsetPagination_WorkspaceGovernanceMemberView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -6775,7 +6817,10 @@ export interface operations {
 				year?: string;
 				keyword?: string;
 				author?: string;
-				page?: number;
+				limit?: number;
+				offset?: number;
+				sort?: 'updated' | 'created' | 'title';
+				has_files?: boolean | null;
 			};
 			header?: never;
 			path: {
@@ -6791,7 +6836,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['LibrarySearchView'];
+					'application/json': components['schemas']['OffsetPagination_ItemSearchView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -9795,6 +9840,13 @@ export interface operations {
 					'application/pdf': string;
 				};
 			};
+			/** @description Short-lived authorized S3 download; response is not cacheable. */
+			307: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
 			/** @description Unprocessable Content */
 			422: {
 				headers: {
@@ -10053,6 +10105,13 @@ export interface operations {
 				content: {
 					'application/pdf': string;
 				};
+			};
+			/** @description Short-lived authorized S3 download; response is not cacheable. */
+			307: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 			/** @description Unprocessable Content */
 			422: {

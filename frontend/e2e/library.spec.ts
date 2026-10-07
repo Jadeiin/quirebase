@@ -21,12 +21,12 @@ test('a Project filter outside the first directory page resolves directly and su
 		route.fulfill({ json: directoryPage(projects, route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-26', (route) =>
-		route.fulfill({ json: { ...projects[25], active_participants: [], items: [] } })
+		route.fulfill({ json: { ...projects[25], active_participants: [] } })
 	);
 	const itemFilters: Array<string | null> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
 		itemFilters.push(new URL(route.request().url()).searchParams.get('project'));
-		return route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } });
+		return route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } });
 	});
 
 	await page.goto('/workspace/workspace-1/library?project=project-26');
@@ -53,7 +53,7 @@ test('library renders canonical rich titles and exposes later pages', async ({ p
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) => {
 		const searchParameters = new URL(route.request().url()).searchParams;
-		const requestedPage = Number(searchParameters.get('page') ?? '1');
+		const requestedPage = Number(searchParameters.get('offset') ?? '0') / 25 + 1;
 		requestedPages.push(requestedPage);
 		requestedQueries.push({ query: searchParameters.get('query'), q: searchParameters.get('q') });
 		return route.fulfill({
@@ -70,8 +70,8 @@ test('library renders canonical rich titles and exposes later pages', async ({ p
 					}
 				],
 				total: 26,
-				page: requestedPage,
-				per_page: 25
+				offset: (requestedPage - 1) * 25,
+				limit: 25
 			}
 		});
 	});
@@ -109,7 +109,8 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
-		const currentPage = Number(new URL(route.request().url()).searchParams.get('page') ?? '1');
+		const currentPage =
+			Number(new URL(route.request().url()).searchParams.get('offset') ?? '0') / 25 + 1;
 		requestedPages.push(currentPage);
 		return route.fulfill({
 			json: {
@@ -123,8 +124,8 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 					version: 1
 				})),
 				total: 75,
-				page: currentPage,
-				per_page: 25
+				offset: (currentPage - 1) * 25,
+				limit: 25
 			}
 		});
 	});
@@ -172,8 +173,8 @@ test('Library history navigation restores filter drafts and clears selection', a
 					}
 				],
 				total: 1,
-				page: 1,
-				per_page: 25
+				limit: 25,
+				offset: 0
 			}
 		});
 	});
@@ -228,19 +229,6 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 				participation: 'workspace',
 				is_participating: true,
 				allowed_participation_changes: ['workspace', 'open', 'managed'],
-				items: added
-					? [
-							{
-								id: 'item-1',
-								title_html: 'Newly added Item',
-								authors: 'A. Reader',
-								publication_date: '2026',
-								publication_title: null,
-								doi: null,
-								version: 1
-							}
-						]
-					: [],
 				active_participants: [{ user_id: 'user-1', username: 'reader' }]
 			}
 		});
@@ -288,8 +276,8 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 					}
 				],
 				total: 1,
-				page: 1,
-				per_page: 25
+				limit: 25,
+				offset: 0
 			}
 		})
 	);
@@ -373,8 +361,8 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 						}
 					],
 					total: 1,
-					page: 1,
-					per_page: 25
+					limit: 25,
+					offset: 0
 				}
 			})
 		);
@@ -442,7 +430,7 @@ test('library filters do not overflow narrow viewports', async ({ page }) => {
 		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
-		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
+		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
 	);
 
 	await page.goto('/workspace/workspace-1/library');
@@ -452,4 +440,31 @@ test('library filters do not overflow narrow viewports', async ({ page }) => {
 		innerWidth: window.innerWidth
 	}));
 	expect(scrollWidth).toBeLessThanOrEqual(innerWidth);
+});
+
+test('Library sort and file filters persist in navigation and use typed API filters', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	const requests: Array<{ sort: string | null; files: string | null }> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
+		const params = new URL(route.request().url()).searchParams;
+		requests.push({ sort: params.get('sort'), files: params.get('has_files') });
+		return route.fulfill({ json: directoryPage([], route) });
+	});
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	await page.getByRole('combobox', { name: 'Sort', exact: true }).selectOption('title');
+	await page.getByRole('combobox', { name: 'Files', exact: true }).selectOption('false');
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect.poll(() => requests.at(-1)).toEqual({ sort: 'title', files: 'false' });
+	await expect(page).toHaveURL(/sort=title&has_files=false/);
+	await page.reload();
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Sort', exact: true })).toHaveValue('title');
+	await expect(page.getByRole('combobox', { name: 'Files', exact: true })).toHaveValue('false');
 });

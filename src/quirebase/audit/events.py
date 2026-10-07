@@ -75,8 +75,8 @@ async def query_events(
     action: str | None = None,
     target_type: str | None = None,
     search: str = "",
-    page: int = 1,
-    page_size: int = 50,
+    limit: int = 50,
+    offset: int = 0,
 ) -> tuple[list[AuditEvent], int]:
     await require_system_action(db, admin, SystemAction.audit_read)
     query = select(AuditEvent)
@@ -103,6 +103,6 @@ async def query_events(
         session=db,
         statement=query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()),
     ).get_many_and_count(
-        LimitOffset(limit=page_size, offset=max(0, (page - 1) * page_size)),
+        LimitOffset(limit=limit, offset=offset),
     )
     return list(records), total

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
@@ -80,9 +80,11 @@ async def search_items(
     year: str = "",
     keyword: str = "",
     author: str = "",
-    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Literal["updated", "created", "title"] = "updated",
+    has_files: bool | None = None,
 ) -> LibrarySearchView:
-    per_page = 25
     items, total = await search_library(
         db,
         user,
@@ -93,14 +95,16 @@ async def search_items(
         year=year,
         keyword=keyword,
         author=author,
-        page=page,
-        per_page=per_page,
+        limit=limit,
+        offset=offset,
+        sort=sort,
+        has_files=has_files,
     )
     return LibrarySearchView(
         items=[item_search_view(item) for item in items],
         total=total,
-        page=page,
-        per_page=per_page,
+        limit=limit,
+        offset=offset,
     )
 
 

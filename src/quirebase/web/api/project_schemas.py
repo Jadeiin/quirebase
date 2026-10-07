@@ -9,7 +9,6 @@ from pydantic.json_schema import SkipJsonSchema  # ruff: ignore[typing-only-thir
 from quirebase.models import ProjectParticipation, ProjectState
 from quirebase.projects import ProjectParticipant, ProjectWorkspace
 from quirebase.web.api.common import WorkspaceAuthorizationView
-from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 
 
 class ProjectSummaryView(BaseModel):
@@ -28,7 +27,6 @@ class ProjectDetailView(ProjectSummaryView):
     active_participants: list[ProjectParticipant] = Field(
         description="Active explicit participants; Workspace participation is implicit."
     )
-    items: list[ItemSearchView]
 
 
 def project_detail_view(
@@ -40,7 +38,7 @@ def project_detail_view(
     return ProjectDetailView(
         id=workspace.project.id,
         name=workspace.project.name,
-        item_count=len(workspace.items),
+        item_count=workspace.item_count,
         state=workspace.project.state,
         participation=workspace.project.participation,
         is_participating=workspace.is_participating,
@@ -48,7 +46,6 @@ def project_detail_view(
         authorization=authorization,
         allowed_participation_changes=allowed_participation_changes,
         active_participants=list(workspace.active_participants),
-        items=[item_search_view(item) for item in workspace.items],
     )
 
 

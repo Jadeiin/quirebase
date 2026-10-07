@@ -72,9 +72,11 @@ async def test_query_events_filters_and_paginates(async_db):
     record_event(db, admin.id, "project.only", "project", "project-1")
     await db.commit()
 
-    first_page, total = await query_events(db, admin, target_type="item", page=1, page_size=1)
+    first_page, total = await query_events(
+        db, admin, target_type="item", offset=(1 - 1) * 1, limit=1
+    )
     second_page, second_total = await query_events(
-        db, admin, target_type="item", page=2, page_size=1
+        db, admin, target_type="item", offset=(2 - 1) * 1, limit=1
     )
 
     assert total == second_total == 2

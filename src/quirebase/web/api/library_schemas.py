@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
+from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
@@ -20,11 +21,7 @@ class ItemSearchView(BaseModel):
     version: int
 
 
-class LibrarySearchView(BaseModel):
-    items: list[ItemSearchView]
-    total: int
-    page: int
-    per_page: int
+LibrarySearchView = OffsetPagination[ItemSearchView]
 
 
 class BulkActionRequest(BaseModel):

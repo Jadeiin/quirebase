@@ -82,8 +82,8 @@ test('an explicit Workspace URL wins over the saved default, and switching chang
 					}
 				],
 				total: 1,
-				page: 1,
-				per_page: 25
+				limit: 25,
+				offset: 0
 			}
 		});
 	});
@@ -395,7 +395,7 @@ test('availability recovery releases its guard for a later membership revocation
 				status: 404,
 				json: { code: 'workspace_unavailable', message: 'Workspace not found' }
 			});
-		return route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } });
+		return route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } });
 	});
 
 	await page.goto('/workspace/workspace-1');
@@ -445,7 +445,7 @@ test('membership revoked while a page is open returns the user to the Workspace 
 				json: { code: 'workspace_unavailable', message: 'Workspace not found' }
 			});
 		return route.fulfill({
-			json: { items: [], total: 0, page: 1, per_page: 25 }
+			json: { items: [], total: 0, limit: 25, offset: 0 }
 		});
 	});
 
@@ -540,8 +540,8 @@ test('a pending Workspace A response cannot replace Workspace B after switching'
 					}
 				],
 				total: 1,
-				page: 1,
-				per_page: 25
+				limit: 25,
+				offset: 0
 			}
 		});
 	});
@@ -584,36 +584,39 @@ test('Workspace admins do not get governance controls for other admin members', 
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({ json: workspace })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
 		route.fulfill({
-			json: [
-				{
-					membership_id: 'admin-membership',
-					allowed_roles: [],
-					user_id: 'other-admin-user',
-					username: 'other-admin',
-					role: 'admin',
-					state: 'active',
-					joined_at: '2026-01-01T00:00:00Z',
-					authorization: { allowed: [] }
-				},
-				{
-					membership_id: 'editor-membership',
-					allowed_roles: ['editor', 'reviewer', 'viewer'],
-					user_id: 'editor-user',
-					username: 'editor',
-					role: 'editor',
-					state: 'active',
-					joined_at: '2026-01-02T00:00:00Z',
-					authorization: {
-						allowed: [
-							'workspace_member.change_role',
-							'workspace_member.suspend',
-							'workspace_member.terminate'
-						]
+			json: directoryPage(
+				[
+					{
+						membership_id: 'admin-membership',
+						allowed_roles: [],
+						user_id: 'other-admin-user',
+						username: 'other-admin',
+						role: 'admin',
+						state: 'active',
+						joined_at: '2026-01-01T00:00:00Z',
+						authorization: { allowed: [] }
+					},
+					{
+						membership_id: 'editor-membership',
+						allowed_roles: ['editor', 'reviewer', 'viewer'],
+						user_id: 'editor-user',
+						username: 'editor',
+						role: 'editor',
+						state: 'active',
+						joined_at: '2026-01-02T00:00:00Z',
+						authorization: {
+							allowed: [
+								'workspace_member.change_role',
+								'workspace_member.suspend',
+								'workspace_member.terminate'
+							]
+						}
 					}
-				}
-			]
+				],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
@@ -648,20 +651,23 @@ test('Workspace members see the active directory without governance data', async
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({ json: workspace })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/members?*', (route) =>
 		route.fulfill({
-			json: [
-				{
-					user_id: 'editor-user',
-					username: 'editor',
-					role: 'editor'
-				},
-				{ user_id: 'owner-user', username: 'owner', role: 'owner' }
-			]
+			json: directoryPage(
+				[
+					{
+						user_id: 'editor-user',
+						username: 'editor',
+						role: 'editor'
+					},
+					{ user_id: 'owner-user', username: 'owner', role: 'owner' }
+				],
+				route
+			)
 		})
 	);
 	let governanceRequests = 0;
-	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) => {
 		governanceRequests += 1;
 		return route.fulfill({ status: 403, json: { code: 'forbidden', message: 'forbidden' } });
 	});
@@ -696,8 +702,8 @@ for (const roles of [['reviewer'], []]) {
 		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 			route.fulfill({ json: workspace })
 		);
-		await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
-			route.fulfill({ json: [] })
+		await page.route('**/api/v1/workspaces/workspace-1/members?*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
 		);
 		let invitedRole = '';
 		await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) => {
@@ -747,8 +753,8 @@ test('browser history and two tabs retain their explicit Workspace URLs across r
 						}
 					],
 					total: 1,
-					page: 1,
-					per_page: 25
+					limit: 25,
+					offset: 0
 				}
 			});
 		});
@@ -894,20 +900,23 @@ test('member role choices use the concrete projection even when no generic role 
 }) => {
 	await mockSession(page);
 	let requestedRole = '';
-	await page.route('**/api/v1/workspaces/workspace-1/governance/members', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
 		route.fulfill({
-			json: [
-				{
-					membership_id: 'target-member',
-					user_id: 'target',
-					username: 'collaborator',
-					role: requestedRole || 'viewer',
-					state: 'active',
-					joined_at: '2026-01-01T00:00:00Z',
-					allowed_roles: ['admin'],
-					authorization: { allowed: [] }
-				}
-			]
+			json: directoryPage(
+				[
+					{
+						membership_id: 'target-member',
+						user_id: 'target',
+						username: 'collaborator',
+						role: requestedRole || 'viewer',
+						state: 'active',
+						joined_at: '2026-01-01T00:00:00Z',
+						allowed_roles: ['admin'],
+						authorization: { allowed: [] }
+					}
+				],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
@@ -948,8 +957,8 @@ for (const maintenance of [false, true]) {
 				}
 			})
 		);
-		await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
-			route.fulfill({ json: [] })
+		await page.route('**/api/v1/workspaces/workspace-1/members?*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
 		);
 		await page.goto('/workspace/workspace-1/settings');
 		await expect(page.getByRole('button', { name: 'Reindex Workspace' })).toHaveCount(
@@ -1000,4 +1009,38 @@ test('A preferred Workspace outside the first directory page opens directly and 
 	expect(await page.evaluate(() => localStorage.getItem('quirebase:default-workspace'))).toBe(
 		preferred.id
 	);
+});
+
+test('Workspace member governance supports later pages and username search', async ({ page }) => {
+	await mockSession(page);
+	const members = Array.from({ length: 28 }, (_, index) => ({
+		membership_id: `membership-${index}`,
+		user_id: `person-${index}`,
+		username: `member-${String(index).padStart(2, '0')}`,
+		role: 'viewer',
+		state: 'active',
+		joined_at: '2026-01-01T00:00:00Z',
+		allowed_roles: [],
+		authorization: { allowed: [] }
+	}));
+	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) => {
+		const search = new URL(route.request().url()).searchParams.get('search') ?? '';
+		return route.fulfill({
+			json: directoryPage(
+				members.filter((member) => member.username.includes(search)),
+				route
+			)
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.goto('/workspace/workspace-1/settings');
+	const pager = page.getByRole('navigation', { name: 'Members pagination' });
+	await pager.getByRole('button', { name: 'Next', exact: true }).click();
+	await expect(page.getByRole('cell', { name: 'member-27', exact: true })).toBeVisible();
+	await page.getByRole('textbox', { name: 'Search members' }).fill('member-12');
+	await expect(page.getByRole('cell', { name: 'member-12', exact: true })).toBeVisible();
+	await expect(page.getByRole('cell', { name: 'member-27', exact: true })).toHaveCount(0);
+	await expect(pager.getByText('Page 1 of 1')).toBeVisible();
 });

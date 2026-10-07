@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from advanced_alchemy.filters import LimitOffset, SearchFilter
+from advanced_alchemy.filters import LimitOffset, OrderBy, SearchFilter
 from sqlalchemy import and_, case, func, select
 
 from quirebase.access import (
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from uuid import UUID
 
     from advanced_alchemy.filters import StatementFilter
+    from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -138,41 +139,60 @@ async def get_workspace(
 
 
 async def list_workspace_members(
-    db: AsyncSession, context: WorkspaceContext
-) -> list[WorkspaceMember]:
+    db: AsyncSession,
+    context: WorkspaceContext,
+    *,
+    limit: int = 25,
+    offset: int = 0,
+    search: str = "",
+) -> tuple[list[WorkspaceMember], int]:
     require_action(context, ResourceAction.workspace_read)
-    workspace_id = context.workspace_id
-    return list(
-        (
-            await db.scalars(
-                select(WorkspaceMember)
-                .join(User, User.id == WorkspaceMember.user_id)
-                .where(
-                    WorkspaceMember.workspace_id == workspace_id,
-                    WorkspaceMember.state == WorkspaceMemberState.active,
-                    WorkspaceMember.terminated_at.is_(None),
-                    User.active.is_(True),
-                )
-                .order_by(WorkspaceMember.created_at, WorkspaceMember.id)
-            )
-        ).all()
+    query = (
+        select(WorkspaceMember)
+        .join(User, User.id == WorkspaceMember.user_id)
+        .where(
+            WorkspaceMember.workspace_id == context.workspace_id,
+            WorkspaceMember.state == WorkspaceMemberState.active,
+            WorkspaceMember.terminated_at.is_(None),
+            User.active.is_(True),
+        )
     )
+    return await _member_page(db, query, limit, offset, search)
 
 
 async def list_workspace_governance_members(
-    db: AsyncSession, context: WorkspaceContext
-) -> list[WorkspaceMember]:
+    db: AsyncSession,
+    context: WorkspaceContext,
+    *,
+    limit: int = 25,
+    offset: int = 0,
+    search: str = "",
+) -> tuple[list[WorkspaceMember], int]:
     require_action(context, ResourceAction.workspace_member_read)
-    workspace_id = context.workspace_id
-    return list(
-        (
-            await db.scalars(
-                select(WorkspaceMember)
-                .where(
-                    WorkspaceMember.workspace_id == workspace_id,
-                    WorkspaceMember.terminated_at.is_(None),
-                )
-                .order_by(WorkspaceMember.created_at, WorkspaceMember.id)
-            )
-        ).all()
+    query = (
+        select(WorkspaceMember)
+        .join(User, User.id == WorkspaceMember.user_id)
+        .where(
+            WorkspaceMember.workspace_id == context.workspace_id,
+            WorkspaceMember.terminated_at.is_(None),
+        )
     )
+    return await _member_page(db, query, limit, offset, search)
+
+
+async def _member_page(
+    db: AsyncSession, query: Select[tuple[WorkspaceMember]], limit: int, offset: int, search: str
+) -> tuple[list[WorkspaceMember], int]:
+    if search.strip():
+        matching_users = SearchFilter(field_name="username", value=search.strip(), ignore_case=True)
+        query = query.where(
+            WorkspaceMember.user_id.in_(matching_users.append_to_statement(select(User.id), User))
+        )
+    records, total = await WorkspaceMemberRepository(
+        session=db, statement=query
+    ).get_many_and_count(
+        LimitOffset(limit=limit, offset=offset),
+        OrderBy(field_name=User.username),
+        OrderBy(field_name="id"),
+    )
+    return list(records), total

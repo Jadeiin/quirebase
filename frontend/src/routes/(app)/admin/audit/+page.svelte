@@ -10,14 +10,14 @@
 	const { filters, setPage } = getAdminFilters();
 	const audit = createQuery(() => adminAuditQuery(filters(), true));
 	const pageCount = $derived(
-		audit.data?.total && audit.data.per_page
-			? Math.max(1, Math.ceil(audit.data.total / audit.data.per_page))
+		audit.data?.total && audit.data.limit
+			? Math.max(1, Math.ceil(audit.data.total / audit.data.limit))
 			: 1
 	);
 </script>
 
 <AdminSectionState loading={audit.isPending} failed={audit.isError} label={msg('Audit')}>
-	<AdminAudit events={audit.data!.events} />
+	<AdminAudit events={audit.data!.items} />
 	{#if pageCount > 1}
 		<Pagination
 			page={filters().page}

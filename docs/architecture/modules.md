@@ -338,8 +338,11 @@ Record DOIs against currently accessible Items before writing, and cleanup prese
 still referenced by another pending Import Batch.
 
 The Core Infrastructure Module owns one thin `ObjectStore` facade over obstore's Local and S3
-data planes. Business Modules operate on object keys, metadata and asynchronous byte streams;
-obstore types and backend configuration do not cross that seam. Components that require a local
+data planes. Business Modules persist native AA FileObject descriptors and operate on object keys, metadata,
+short-lived download targets and asynchronous byte streams; obstore types and backend configuration
+do not cross that seam. Web keeps authorization before download signing; Core owns the native AA
+signing operation and its bounded expiry. Import Batches own their staged descriptor list while
+durable preparation receives serializable source receipts. Components that require a local
 `Path`, including PyMuPDF, use the facade's scoped materialization operation. HTTP adapters pass
 the returned obstore-backed byte stream directly to `StreamingResponse`; streaming ZIP assembly
 uses one unbuffered async-generator bridge and selects `ZIP_AUTO` from each member's known size.

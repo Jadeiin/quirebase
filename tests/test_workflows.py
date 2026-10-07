@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
+from import_helpers import pdf_import_batch_data
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -1172,7 +1173,7 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
         workspace_id=fixture_workspace_id(user),
         actor_id=user.id,
         file_format="pdf",
-        records=[pending],
+        **pdf_import_batch_data([pending]),
         errors=[],
         status="pending",
         workflow_id="prepare-pdf-import:failed",
@@ -1220,6 +1221,7 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
     calls = []
     pending = {
         "_row": 1,
+        "_source_id": "checkpointed-source",
         "_pdf": {
             "object_key": "aa/bb/candidate.pdf",
             "size": 10,
@@ -1245,7 +1247,7 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
         await asyncio.sleep(0)
         calls.append(("lookup", batch_id, candidate["_row"], detected_doi))
         return {
-            "record": {"title": "Checkpointed", "_pdf": candidate["_pdf"]},
+            "record": {"title": "Checkpointed", "_source_id": candidate["_source_id"]},
             "normalized_doi": detected_doi,
             "object_key": candidate["_pdf"]["object_key"],
         }

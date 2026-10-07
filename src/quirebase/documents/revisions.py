@@ -35,6 +35,7 @@ from quirebase.core.storage import (
     ObjectSource,
     ObjectStore,
     ObjectSuffix,
+    SignedDownload,
     StoredObject,
     get_object_store,
     object_key,
@@ -259,16 +260,6 @@ async def attach_staged_pdf(
     return revision
 
 
-def _pdf_import_object_keys(records: list[dict]) -> set[str]:
-    return {
-        object_key
-        for record in records
-        if isinstance(record, dict)
-        and isinstance((pdf := record.get("_pdf")), dict)
-        and isinstance((object_key := pdf.get("object_key")), str)
-    }
-
-
 async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...]) -> set[str]:
     referenced = set(
         (
@@ -309,12 +300,12 @@ async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...])
         ).all()
     )
     candidates = set(object_keys)
-    for records in await db.scalars(
-        select(ImportBatch.records).where(
+    for files in await db.scalars(
+        select(ImportBatch.staged_files).where(
             ImportBatch.file_format == "pdf", ImportBatch.status != "committed"
         )
     ):
-        referenced.update(candidates & _pdf_import_object_keys(records))
+        referenced.update(candidates & {file.path for file in files})
     return referenced
 
 
@@ -607,6 +598,19 @@ async def get_revision_file(
         revision.file.metadata["original_name"],
         revision.file.content_type or "application/pdf",
     )
+
+
+async def get_revision_download_url(
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, revision_id: UUID
+) -> SignedDownload | None:
+    store = get_object_store()
+    if store.is_local or not get_settings().signed_downloads:
+        return None
+    revision = await require_revision(db, user, workspace_id, revision_id)
+    if revision.item_id != item_id:
+        raise ResourceNotFound("revision not found for item")
+    await store.head(revision.file.path)
+    return await store.sign_download(revision.file)
 
 
 async def head_revision_file(

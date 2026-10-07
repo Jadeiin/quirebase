@@ -2,7 +2,7 @@
 	import { Combobox, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { can as isAllowed, type AuthorizationAction } from '#lib/authorization/can.js';
@@ -12,6 +12,9 @@
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import Panel from '#lib/design/Panel.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import { libraryListQuery } from '#lib/features/library/queries.js';
+	import { memberOptionsQuery } from '#lib/workspaces/queries.js';
 	import PromptDialog from '#lib/design/PromptDialog.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
@@ -30,6 +33,33 @@
 	const queryClient = useQueryClient();
 	const detail = createQuery(() => projectDetailQuery(workspaceId, projectId));
 	const project = $derived(detail.data);
+	let itemPage = $state(1);
+	let itemSearch = $state('');
+	const items = createQuery(() => ({
+		...libraryListQuery(
+			workspaceId,
+			{ query: itemSearch, project: projectId, tag: '', year: '', keyword: '', author: '' },
+			itemPage
+		),
+		enabled: Boolean(project)
+	}));
+	let activeProjectId = $state('');
+	$effect(() => {
+		if (activeProjectId !== projectId) {
+			activeProjectId = projectId;
+			itemPage = 1;
+			itemSearch = '';
+			memberSearch = '';
+			selectedMemberId = '';
+			selectedMember = undefined;
+		}
+	});
+	$effect(() => {
+		if (!items.isFetching && items.data) {
+			const lastPage = Math.max(1, Math.ceil(items.data.total / items.data.limit));
+			if (itemPage > lastPage) itemPage = lastPage;
+		}
+	});
 	const discussions = createQuery(() => ({
 		queryKey: workspaceKeys.projectDiscussions(workspaceId, projectId),
 		enabled: Boolean(project),
@@ -45,11 +75,9 @@
 	let busy = $state(false);
 	let memberSearch = $state('');
 	let selectedMemberId = $state('');
-	const directory = createQuery(() => ({
-		queryKey: workspaceKeys.members(workspaceId),
-		enabled: can('project_membership.manage'),
-		queryFn: ({ signal }: { signal: AbortSignal }) =>
-			workspace.api.request('GET', '/workspaces/{workspace_id}/members', { signal })
+	const directory = createInfiniteQuery(() => ({
+		...memberOptionsQuery(workspaceId, memberSearch),
+		enabled: can('project_membership.manage')
 	}));
 	const availableMembers = $derived(
 		(directory.data ?? []).filter(
@@ -57,13 +85,14 @@
 				!project?.active_participants.some((participant) => participant.user_id === member.user_id)
 		)
 	);
-	const selectedMember = $derived(
-		availableMembers.find((member) => member.user_id === selectedMemberId)
-	);
+	let selectedMember = $state<{ user_id: string; username: string } | undefined>();
 	const matchingMembers = $derived(
-		availableMembers.filter((member) =>
-			member.username.toLocaleLowerCase().includes(memberSearch.toLocaleLowerCase())
-		)
+		selectedMember
+			? [
+					selectedMember,
+					...availableMembers.filter((member) => member.user_id !== selectedMember?.user_id)
+				]
+			: availableMembers
 	);
 	const collection = $derived(
 		useListCollection({
@@ -200,7 +229,14 @@
 
 	async function addMember(event: SubmitEvent) {
 		event.preventDefault();
-		if (!selectedMember || !can('project_membership.manage')) return;
+		if (
+			busy ||
+			!selectedMember ||
+			selectedMember.user_id !== selectedMemberId ||
+			project?.active_participants.some((member) => member.user_id === selectedMemberId) ||
+			!can('project_membership.manage')
+		)
+			return;
 		const username = selectedMember.username;
 		const added = await mutate(
 			() =>
@@ -216,6 +252,7 @@
 		);
 		if (added) {
 			selectedMemberId = '';
+			selectedMember = undefined;
 			memberSearch = '';
 		} else await directory.refetch();
 	}
@@ -481,77 +518,105 @@
 					{:else if directory.isError}
 						<Notice variant="error">{$t('Unable to load members.')}</Notice>
 						<Button onclick={() => void directory.refetch()}>{$t('Retry')}</Button>
-					{:else if availableMembers.length === 0}<p>
-							{$t('All active Workspace members already participate.')}
-						</p>
-					{:else}
-						<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={addMember}>
-							<Combobox
-								class="min-w-64 flex-1"
-								{collection}
-								inputValue={memberSearch}
-								value={selectedMemberId ? [selectedMemberId] : []}
-								disabled={busy}
-								openOnClick
-								onInputValueChange={(details) => {
-									memberSearch = details.inputValue;
-									if (details.reason === 'input-change') selectedMemberId = '';
-								}}
-								onValueChange={(details) => {
-									selectedMemberId = details.value[0] ?? '';
-								}}
-							>
-								<Combobox.Label>{$t('Workspace member')}</Combobox.Label>
-								<Combobox.Control>
-									<Combobox.Input placeholder={$t('Search members')} />
-									<Combobox.Trigger aria-label={$t('Show members')}>⌄</Combobox.Trigger>
-								</Combobox.Control>
-								<Portal
-									><Combobox.Positioner
-										><Combobox.Content>
-											{#each matchingMembers as member (member.user_id)}
-												<Combobox.Item item={member}
-													><Combobox.ItemText>{member.username}</Combobox.ItemText></Combobox.Item
-												>
-											{:else}<p class="p-3">{$t('No matching members.')}</p>{/each}
-										</Combobox.Content></Combobox.Positioner
-									></Portal
-								>
-							</Combobox>
-							<Button disabled={busy || !selectedMember}>{$t('Add participant')}</Button>
-						</form>
 					{/if}
+					<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={addMember}>
+						<Combobox
+							class="min-w-64 flex-1"
+							{collection}
+							inputValue={selectedMember?.username ?? memberSearch}
+							value={selectedMemberId ? [selectedMemberId] : []}
+							disabled={busy}
+							openOnClick
+							onInputValueChange={(details) => {
+								if (details.reason === 'input-change') {
+									memberSearch = details.inputValue;
+									selectedMemberId = '';
+									selectedMember = undefined;
+								}
+							}}
+							onValueChange={(details) => {
+								selectedMemberId = details.value[0] ?? '';
+								selectedMember = matchingMembers.find(
+									(member) => member.user_id === selectedMemberId
+								);
+							}}
+						>
+							<Combobox.Label>{$t('Workspace member')}</Combobox.Label>
+							<Combobox.Control>
+								<Combobox.Input placeholder={$t('Search members')} />
+								<Combobox.Trigger aria-label={$t('Show members')}>⌄</Combobox.Trigger>
+							</Combobox.Control>
+							<Portal
+								><Combobox.Positioner
+									><Combobox.Content>
+										{#each matchingMembers as member (member.user_id)}
+											<Combobox.Item item={member}
+												><Combobox.ItemText>{member.username}</Combobox.ItemText></Combobox.Item
+											>
+										{:else}<p class="p-3">{$t('No matching members.')}</p>{/each}
+									</Combobox.Content></Combobox.Positioner
+								></Portal
+							>
+						</Combobox>
+						{#if directory.hasNextPage}<Button
+								type="button"
+								disabled={directory.isFetchingNextPage}
+								onclick={() => void directory.fetchNextPage()}>{$t('Load more members')}</Button
+							>{/if}
+						<Button disabled={busy || !selectedMember}>{$t('Add participant')}</Button>
+					</form>
 				{/if}
 			{/if}
 		</Panel>
 
 		<Panel>
 			<h2>{$t('Items')}</h2>
-			{#each project.items as item (item.id)}<ItemRow
-					class="grid-cols-[minmax(0,1fr)_auto] items-center"
-				>
-					<a
-						class="grid grid-cols-1 gap-1 no-underline"
-						href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
-						><strong><RichText html={item.title_html} /></strong><span class="text-surface-600-400"
-							>{item.authors ?? ''}</span
-						></a
-					>{#if can('project_item.manage')}<Button
-							disabled={busy || project.state !== 'active'}
-							onclick={() =>
-								void mutate(
-									() =>
-										workspace.api.request(
-											'DELETE',
-											'/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}',
-											{ params: { path: { project_id: projectId, item_id: item.id } } }
-										),
-									$t('Item removed from Project')
-								)}>{$t('Remove')}</Button
-						>{/if}
-				</ItemRow>{:else}<p class="text-surface-600-400">
-					{$t('No Items in this Project.')}
-				</p>{/each}
+			<input
+				class="input"
+				aria-label={$t('Search Items')}
+				placeholder={$t('Search Items')}
+				value={itemSearch}
+				oninput={(event) => {
+					itemSearch = event.currentTarget.value;
+					itemPage = 1;
+				}}
+			/>
+			{#if items.isPending}<p>{$t('Loading Items…')}</p>
+			{:else if items.isError}<Notice variant="error">{$t('Unable to load Items.')}</Notice>
+			{:else}
+				{#each items.data?.items ?? [] as item (item.id)}<ItemRow
+						class="grid-cols-[minmax(0,1fr)_auto] items-center"
+					>
+						<a
+							class="grid grid-cols-1 gap-1 no-underline"
+							href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
+							><strong><RichText html={item.title_html} /></strong><span
+								class="text-surface-600-400">{item.authors ?? ''}</span
+							></a
+						>{#if can('project_item.manage')}<Button
+								disabled={busy || project.state !== 'active'}
+								onclick={() =>
+									void mutate(
+										() =>
+											workspace.api.request(
+												'DELETE',
+												'/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}',
+												{ params: { path: { project_id: projectId, item_id: item.id } } }
+											),
+										$t('Item removed from Project')
+									)}>{$t('Remove')}</Button
+							>{/if}
+					</ItemRow>{:else}<p class="text-surface-600-400">
+						{itemSearch ? $t('No matching Items.') : $t('No Items in this Project.')}
+					</p>{/each}
+			{/if}
+			<Pagination
+				page={itemPage}
+				pageCount={Math.max(1, Math.ceil((items.data?.total ?? 0) / (items.data?.limit ?? 25)))}
+				onPage={(page) => (itemPage = page)}
+				label={$t('Items pagination')}
+				busy={items.isFetching}
+			/>
 		</Panel>
 
 		<Panel>

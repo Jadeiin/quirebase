@@ -20,7 +20,6 @@ const project = {
 			'project_discussion.create'
 		]
 	},
-	items: [],
 	active_participants: [{ user_id: 'member-1', username: 'researcher' }]
 };
 
@@ -48,12 +47,18 @@ async function mockWorkspaceRole(
 
 test.beforeEach(async ({ page }) => {
 	await mockSession(page);
-	await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/members?*', (route) =>
 		route.fulfill({
-			json: [
-				{ user_id: 'member-1', username: 'researcher', role: 'editor' },
-				{ user_id: 'member-2', username: 'collaborator', role: 'reviewer' }
-			]
+			json: directoryPage(
+				[
+					{ user_id: 'member-1', username: 'researcher', role: 'editor' },
+					{ user_id: 'member-2', username: 'collaborator', role: 'reviewer' }
+				],
+				route
+			)
 		})
 	);
 });
@@ -790,4 +795,115 @@ test('Project groups come from one collection while Join follows the server capa
 	await expect(open.getByText('Visible direction')).toBeVisible();
 	await expect(open.getByRole('button', { name: 'Join', exact: true })).toHaveCount(1);
 	expect(requests).toEqual(['all']);
+});
+
+test('participant selection reaches later member pages and clears after adding', async ({
+	page
+}) => {
+	const members = Array.from({ length: 28 }, (_, index) => ({
+		user_id: `person-${index}`,
+		username: `researcher-${String(index).padStart(2, '0')}`,
+		role: 'editor'
+	}));
+	const selected = members[27];
+	const added: string[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/members?*', (route) => {
+		const search = new URL(route.request().url()).searchParams.get('search') ?? '';
+		return route.fulfill({
+			json: directoryPage(
+				members.filter((member) => member.username.includes(search)),
+				route
+			)
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({
+			json: {
+				...project,
+				active_participants: members.filter((member) => added.includes(member.username))
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/participants', (route) => {
+		added.push(route.request().postDataJSON().username);
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	await page.getByRole('button', { name: 'Load more members' }).click();
+	const input = page.getByRole('combobox', { name: 'Workspace member' });
+	await input.click();
+	await page.getByRole('option', { name: selected.username, exact: true }).click();
+	await expect(input).toHaveValue(selected.username);
+	const add = page.getByRole('button', { name: 'Add participant', exact: true });
+	await expect(add).toBeEnabled();
+	await add.click();
+	await expect(page.getByText('Project participant added', { exact: true })).toBeVisible();
+	await expect(add).toBeDisabled();
+	await expect(input).toHaveValue('');
+	expect(added).toEqual([selected.username]);
+	await input.fill('missing-person');
+	await expect(page.getByText('No matching members.')).toBeVisible();
+	await expect(input).toHaveValue('missing-person');
+	await expect(add).toBeDisabled();
+	await input.fill('researcher-26');
+	await page.getByRole('option', { name: 'researcher-26', exact: true }).click();
+	await expect(add).toBeEnabled();
+	await input.fill('edited-input');
+	await expect(add).toBeDisabled();
+});
+
+test('Project Item pages recover after removing the last Item and support search', async ({
+	page
+}) => {
+	let assigned = Array.from({ length: 26 }, (_, index) => ({
+		id: `item-${index}`,
+		title_html: `Assigned Item ${String(index).padStart(2, '0')}`,
+		version: 1,
+		authors: null
+	}));
+	const requests: Array<{ project: string | null; offset: number }> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({
+			json: {
+				...project,
+				participation: 'workspace',
+				item_count: assigned.length,
+				active_participants: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
+		const params = new URL(route.request().url()).searchParams;
+		requests.push({ project: params.get('project'), offset: Number(params.get('offset')) });
+		const search = params.get('query') ?? '';
+		return route.fulfill({
+			json: directoryPage(
+				assigned.filter((item) => item.title_html.includes(search)),
+				route
+			)
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/items/item-25', (route) => {
+		assigned = assigned.filter((item) => item.id !== 'item-25');
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	const pager = page.getByRole('navigation', { name: 'Items pagination' });
+	await pager.getByRole('button', { name: 'Next', exact: true }).click();
+	const last = page.getByRole('link', { name: 'Assigned Item 25', exact: true }).locator('..');
+	await expect(last).toBeVisible();
+	await last.getByRole('button', { name: 'Remove', exact: true }).click();
+	await expect(pager.getByText('Page 1 of 1')).toBeVisible();
+	await expect(page.getByText('Assigned Item 00', { exact: true })).toBeVisible();
+	expect(requests.some((request) => request.offset === 25)).toBe(true);
+	expect(requests.every((request) => request.project === 'project-1')).toBe(true);
+	await page.getByRole('textbox', { name: 'Search Items' }).fill('Assigned Item 12');
+	await expect(page.getByText('Assigned Item 12', { exact: true })).toBeVisible();
+	await expect(page.getByText('Assigned Item 00', { exact: true })).toHaveCount(0);
 });

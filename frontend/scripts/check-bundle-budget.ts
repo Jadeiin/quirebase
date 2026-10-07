@@ -117,24 +117,26 @@ if (dashboardPdfDependencies.length) {
 }
 
 // SvelteKit 3 adds about 12.3 KiB raw / 4.6 KiB gzip to the shared client runtime.
-// Route budgets retain their previous headroom plus 13,000 raw / 5,000 gzip bytes.
+// Directory pagination and localized filters add about 1.1 KiB raw / 0.3 KiB gzip
+// to the shared shell; Library controls add another 1.4 KiB raw / 0.5 KiB gzip.
+// Refresh affected budgets against the locked build, including earlier directory changes.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	raw: 533000,
+	raw: 536000,
 	gzip: 168000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
-	raw: 583000,
+	raw: 587000,
 	gzip: 187000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
-	raw: 573000,
+	raw: 575000,
 	gzip: 183000
 });
 enforce(
 	'Item overview route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)'),
 	{
-		raw: 588000,
+		raw: 591000,
 		gzip: 187000
 	}
 );
@@ -150,7 +152,7 @@ enforce(
 	'Item files route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files'),
 	{
-		raw: 593000,
+		raw: 597000,
 		gzip: 190000
 	}
 );
@@ -158,27 +160,24 @@ enforce(
 	'Item organize route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
-		raw: 593000,
-		gzip: 188000
+		raw: 597000,
+		gzip: 190000
 	}
 );
 enforce(
 	'Item annotations route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
-		// Member selection and invitation account switching add shared localized copy.
-		// Measured growth is about 1.2 KiB raw / 0.2 KiB gzip; other route budgets still fit.
-		// Project grouping and participant-clear confirmation add about 1 KiB of localized copy.
-		raw: 586000,
-		gzip: 186500
+		raw: 592000,
+		gzip: 189000
 	}
 );
 enforce(
 	'Item discussion route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
-		raw: 588000,
-		gzip: 187000
+		raw: 593000,
+		gzip: 190000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {

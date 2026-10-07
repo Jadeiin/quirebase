@@ -334,8 +334,8 @@ async def scan_objects(
         | {attachment.object_key for attachment in attachments}
         | export_keys
     )
-    for records in (await db.scalars(select(ImportBatch.records))).all():
-        referenced.update(_import_object_keys(records))
+    for files in (await db.scalars(select(ImportBatch.staged_files))).all():
+        referenced.update(file.path for file in files)
     await db.rollback()
     active = await list_active_workflows()
     active_keys = set().union(
@@ -383,16 +383,6 @@ async def scan_objects(
     return errors, candidates, thumbnail_sizes
 
 
-def _import_object_keys(rows: list[dict]) -> set[str]:
-    return {
-        key
-        for row in rows
-        if isinstance(row, dict)
-        and isinstance((pdf := row.get("_pdf")), dict)
-        and isinstance((key := pdf.get("object_key")), str)
-    }
-
-
 async def _referenced_object_keys(db: AsyncSession) -> set[str]:
     keys = set((await db.scalars(select(FileRevision.file["filename"].as_string()))).all())
     keys.update(
@@ -401,8 +391,8 @@ async def _referenced_object_keys(db: AsyncSession) -> set[str]:
         if key
     )
     keys.update((await db.scalars(select(Attachment.file["filename"].as_string()))).all())
-    for records in (await db.scalars(select(ImportBatch.records))).all():
-        keys.update(_import_object_keys(records))
+    for files in (await db.scalars(select(ImportBatch.staged_files))).all():
+        keys.update(file.path for file in files)
     return keys
 
 

@@ -4,7 +4,8 @@ from dataclasses import asdict
 from typing import Annotated, Literal
 from uuid import UUID
 
-from advanced_alchemy.service import ResultConverter
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.service import OffsetPagination, ResultConverter
 from fastapi import APIRouter, Query, status
 
 from quirebase.access import SystemAction, require_system_action
@@ -30,7 +31,6 @@ from quirebase.operations import (
 )
 from quirebase.web.api.admin_schemas import (
     AdminAuditEventView,
-    AdminAuditView,
     AdminInvitationCreatedView,
     AdminInvitationView,
     AdminMaintenanceView,
@@ -79,7 +79,7 @@ async def admin_overview(user: ApiUser, db: Database):
     invitations = await list_invitations(db, user)
     await require_system_action(db, user, SystemAction.workflows_read)
     failed = await durable_operations().list(status="failed", limit=100)
-    events, _ = await query_events(db, user, page=1, page_size=10)
+    events, _ = await query_events(db, user, limit=10)
     return {
         "user_count": len(users),
         "pending_invitation_count": sum(
@@ -98,21 +98,28 @@ async def admin_users(
     search: str = "",
     role: str = "",
     active: bool | None = None,
-    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     users, total = await list_users_paginated(
-        db, user, search=search, role=role, active=active, page=page, page_size=20
+        db, user, search=search, role=role, active=active, limit=limit, offset=offset
     )
     invitations = await list_invitations(db, user)
-    return {
-        "users": result_converter.to_schema(users, schema_type=AdminUserView).items,
-        "total": total,
-        "page": page,
-        "per_page": 20,
-        "invitations": result_converter.to_schema(
-            invitations, schema_type=AdminInvitationView
-        ).items,
-    }
+    page = result_converter.to_schema(
+        users,
+        total=total,
+        filters=[LimitOffset(limit=limit, offset=offset)],
+        schema_type=AdminUserView,
+    )
+    return AdminUsersView(
+        items=list(page.items),
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+        invitations=list(
+            result_converter.to_schema(invitations, schema_type=AdminInvitationView).items
+        ),
+    )
 
 
 @router.post("/users", response_model=AdminUserView, status_code=status.HTTP_201_CREATED)
@@ -169,7 +176,7 @@ async def admin_create_invitation(data: InvitationCreateRequest, user: ApiUser, 
     }
 
 
-@router.get("/audit", response_model=AdminAuditView)
+@router.get("/audit", response_model=OffsetPagination[AdminAuditEventView])
 async def admin_audit(
     user: ApiUser,
     db: Database,
@@ -177,7 +184,8 @@ async def admin_audit(
     actor_id: UUID | None = None,
     action: str = "",
     target_type: str = "",
-    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     events, total = await query_events(
         db,
@@ -186,15 +194,15 @@ async def admin_audit(
         action=action.strip() or None,
         target_type=target_type.strip() or None,
         search=search,
-        page=page,
-        page_size=50,
+        limit=limit,
+        offset=offset,
     )
-    return {
-        "events": result_converter.to_schema(events, schema_type=AdminAuditEventView).items,
-        "total": total,
-        "page": page,
-        "per_page": 50,
-    }
+    return result_converter.to_schema(
+        events,
+        total=total,
+        filters=[LimitOffset(limit=limit, offset=offset)],
+        schema_type=AdminAuditEventView,
+    )
 
 
 @router.get("/workflows", response_model=AdminWorkflowsView)

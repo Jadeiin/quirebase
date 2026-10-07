@@ -23,8 +23,8 @@
 	const adminMutation = createMutation(() => adminMutationOptions('users', () => users.refetch()));
 	const busy = $derived(adminMutation.isPending);
 	const pageCount = $derived(
-		users.data?.total && users.data.per_page
-			? Math.max(1, Math.ceil(users.data.total / users.data.per_page))
+		users.data?.total && users.data.limit
+			? Math.max(1, Math.ceil(users.data.total / users.data.limit))
 			: 1
 	);
 

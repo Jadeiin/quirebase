@@ -162,13 +162,20 @@ async def update_user_workspace(
     return WriteResult(id=workspace.id)
 
 
-@workspace_router.get("/members", response_model=list[WorkspaceMemberDirectoryView])
+@workspace_router.get("/members", response_model=OffsetPagination[WorkspaceMemberDirectoryView])
 async def get_workspace_members(
-    workspace_id: UUID, context: WorkspaceAccess, db: Database
-) -> list[WorkspaceMemberDirectoryView]:
-    members = await list_workspace_members(db, context)
+    workspace_id: UUID,
+    context: WorkspaceAccess,
+    db: Database,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: str = "",
+) -> OffsetPagination[WorkspaceMemberDirectoryView]:
+    members, total = await list_workspace_members(
+        db, context, limit=limit, offset=offset, search=search
+    )
     usernames = await _usernames(db, {member.user_id for member in members})
-    return [
+    items = [
         WorkspaceMemberDirectoryView(
             user_id=member.user_id,
             username=usernames[member.user_id],
@@ -176,15 +183,25 @@ async def get_workspace_members(
         )
         for member in members
     ]
+    return OffsetPagination(items=items, total=total, limit=limit, offset=offset)
 
 
-@workspace_router.get("/governance/members", response_model=list[WorkspaceGovernanceMemberView])
+@workspace_router.get(
+    "/governance/members", response_model=OffsetPagination[WorkspaceGovernanceMemberView]
+)
 async def get_workspace_governance_members(
-    workspace_id: UUID, context: WorkspaceAccess, db: Database
-) -> list[WorkspaceGovernanceMemberView]:
-    members = await list_workspace_governance_members(db, context)
+    workspace_id: UUID,
+    context: WorkspaceAccess,
+    db: Database,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: str = "",
+) -> OffsetPagination[WorkspaceGovernanceMemberView]:
+    members, total = await list_workspace_governance_members(
+        db, context, limit=limit, offset=offset, search=search
+    )
     usernames = await _usernames(db, {member.user_id for member in members})
-    return [
+    items = [
         WorkspaceGovernanceMemberView(
             membership_id=member.id,
             user_id=member.user_id,
@@ -197,6 +214,7 @@ async def get_workspace_governance_members(
         )
         for member in members
     ]
+    return OffsetPagination(items=items, total=total, limit=limit, offset=offset)
 
 
 @workspace_router.post(

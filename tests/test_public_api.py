@@ -82,7 +82,7 @@ async def test_http_api_requires_a_bearer_api_token_and_rejects_cookie_or_query_
     assert query.status_code == 401
     assert invalid.status_code == 401
     assert accepted.status_code == 200
-    assert accepted.json() == {"items": [], "total": 0, "page": 1, "per_page": 25}
+    assert accepted.json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
 
 
 @pytest.mark.anyio
@@ -133,11 +133,15 @@ async def test_http_api_includes_the_public_capability_set(
             if method in {"get", "post", "put", "patch", "delete"}
         }
 
+    assert app.openapi()["components"]["schemas"]["AdminUsersView"]["properties"]["items"][
+        "items"
+    ] == {"$ref": "#/components/schemas/AdminUserView"}
+
     # The unified router also owns browser session and UI-specific aggregate capabilities.
     assert expected <= actual
     assert paths["/api/v1/workspaces/{workspace_id}/items"]["get"]["responses"]["200"]["content"][
         "application/json"
-    ]["schema"] == {"$ref": "#/components/schemas/LibrarySearchView"}
+    ]["schema"] == {"$ref": "#/components/schemas/OffsetPagination_ItemSearchView_"}
     assert paths["/api/v1/workspaces/{workspace_id}/items/{item_id}"]["get"]["responses"]["200"][
         "content"
     ]["application/json"]["schema"] == {"$ref": "#/components/schemas/ItemDetailView"}
