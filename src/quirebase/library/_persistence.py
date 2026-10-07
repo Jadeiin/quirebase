@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import update
 
-from quirebase.core.persistence import Repository, Service
+from quirebase.core.persistence import Repository
 from quirebase.models import Author, ImportBatch, Item, ItemAuthor, ItemIdentifier
 
 if TYPE_CHECKING:
@@ -38,10 +38,6 @@ class ItemRepository(Repository[Item]):
 
 class ImportBatchRepository(Repository[ImportBatch]):
     model_type = ImportBatch
-
-
-class ImportBatchService(Service[ImportBatch]):
-    repository_type = ImportBatchRepository
 
 
 class AuthorRepository(Repository[Author]):

@@ -143,6 +143,11 @@ business services. Core owns AA configuration, session-neutral persistence defau
 value types, as described in ADR 0014. CAS predicates, lock order, lineage checks, idempotent
 association SQL and reference-aware cleanup remain explicit rather than becoming generic CRUD.
 
+Architecture checks reject command-owned authorization, Audit, Search and durable enqueue calls
+inside persistence collaborators. Generic bulk mutation call locations require an explicit review
+of their target scope and concurrency protection; protected-root association helpers remain valid.
+Application and database tests establish the actual guarantees, as required by ADR 0014.
+
 The Access Module owns one immutable Casbin model and policy bundle packaged with the application.
 Casbin is the sole Workspace/System resource-action capability policy evaluator. System and Workspace requests
 both use `subject + resource + action + lifecycle + relation`; there is no separate capability

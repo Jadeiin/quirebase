@@ -43,7 +43,7 @@ from quirebase.models import ImportBatch, Item, User
 from quirebase.search import search_index
 
 from ._item_service import ItemService
-from ._persistence import ImportBatchService
+from ._persistence import ImportBatchRepository
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -139,7 +139,7 @@ async def stage_import_batch(
         records=records,
         errors=errors,
     )
-    batch = await ImportBatchService(db).create(batch)
+    batch = await ImportBatchRepository(session=db).add(batch)
     await db.commit()
     return batch, records, errors
 
@@ -174,7 +174,7 @@ async def stage_identifier_import_batch(
         records=[rec_dict],
         errors=[],
     )
-    batch = await ImportBatchService(db).create(batch)
+    batch = await ImportBatchRepository(session=db).add(batch)
     record_event(
         db,
         user.id,
@@ -265,7 +265,7 @@ async def stage_pdf_import_batch(
             errors=errors,
             status="pending",
         )
-        batch = await ImportBatchService(db).create(batch)
+        batch = await ImportBatchRepository(session=db).add(batch)
         workflow_id = f"prepare-pdf-import:{batch.id}"
         batch.workflow_id = workflow_id
         await durable_operations().enqueue_in_transaction(

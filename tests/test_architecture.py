@@ -685,6 +685,19 @@ def test_alchemy_repositories_and_services_stay_with_their_model_owner():
     for py_file in get_python_files(SRC_ROOT):
         owner = py_file.relative_to(SRC_ROOT).parts[0]
         tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        aliases = {}
+        for imported in ast.walk(tree):
+            if isinstance(imported, ast.Import):
+                for alias in imported.names:
+                    name = alias.asname or alias.name.split(".")[0]
+                    aliases[name] = alias.name if alias.asname else name
+            elif isinstance(imported, ast.ImportFrom) and imported.module:
+                module = imported.module
+                if imported.level:
+                    package = ("quirebase", *py_file.relative_to(SRC_ROOT).parts[:-1])
+                    module = ".".join((*package[: len(package) - imported.level + 1], module))
+                for alias in imported.names:
+                    aliases[alias.asname or alias.name] = f"{module}.{alias.name}"
         for node in tree.body:
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -704,6 +717,29 @@ def test_alchemy_repositories_and_services_stay_with_their_model_owner():
                     assert isinstance(statement.value, ast.Name)
                     assert ORM_MODEL_OWNERS[statement.value.id] == owner, py_file
             for call in ast.walk(node):
+                if isinstance(call, ast.Call):
+                    name, *attributes = ast.unparse(call.func).split(".")
+                    resolved = ".".join((aliases.get(name, name), *attributes))
+                    operation = resolved.rsplit(".", 1)[-1]
+                    authorization = resolved.startswith("quirebase.access.") and (
+                        operation.startswith(("require_", "resolve_", "can_"))
+                        or operation in {"action_allowed", "effective_resource_actions"}
+                    )
+                    command_operation = operation in {
+                        "record_event",
+                        "AuditEvent",
+                        "search_index",
+                        "durable_operations",
+                        "request_item_tag_recommendation",
+                        "enqueue_child_workflow",
+                        "index_item",
+                        "index_revision",
+                        "delete_item",
+                        "delete_revision",
+                    }
+                    assert not authorization and not command_operation, (
+                        f"{py_file}:{call.lineno} invokes a command-owned operation: {resolved}"
+                    )
                 if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
                     assert call.func.id not in {
                         "AsyncSession",
@@ -712,8 +748,14 @@ def test_alchemy_repositories_and_services_stay_with_their_model_owner():
                         "make_async_engine",
                     }, f"{py_file}:{call.lineno} creates a Session outside its caller"
                 if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
-                    assert call.func.attr not in {"commit", "rollback", "close"}, (
-                        f"{py_file}:{call.lineno} makes an internal collaborator own a transaction"
+                    assert call.func.attr not in {
+                        "commit",
+                        "rollback",
+                        "close",
+                        "enqueue",
+                        "enqueue_in_transaction",
+                    }, (
+                        f"{py_file}:{call.lineno} makes persistence own transaction/durable side effects"
                     )
     assert collaborators
     for owner in set(collaborators.values()):
@@ -734,6 +776,39 @@ def test_alchemy_repositories_and_services_stay_with_their_model_owner():
                         assert (
                             isinstance(keyword.value, ast.Constant) and keyword.value.value is False
                         ), f"{py_file}:{node.lineno} enables implicit transaction ownership"
+
+
+def test_generic_bulk_mutations_stay_at_reviewed_persistence_locations():
+    # Settings are global. Association deletes derive their targets from protected Item roots.
+    # New locations require a scope/concurrency review; inherited AA methods remain available.
+    reviewed = {
+        ("operations/settings.py", "RuntimeSettingsService.store", "update_many"),
+        ("library/authors.py", "_replace_item_authors_many", "delete_where"),
+        ("library/_item_identifiers.py", "_replace_item_identifiers_many", "delete_where"),
+    }
+
+    def calls_with_scope(node, scope=()):
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            scope = (*scope, node.name)
+        if isinstance(node, ast.Call):
+            yield scope, node
+        for child in ast.iter_child_nodes(node):
+            yield from calls_with_scope(child, scope)
+
+    for py_file in get_python_files(SRC_ROOT):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        for scope, call in calls_with_scope(tree):
+            if not isinstance(call.func, ast.Attribute) or call.func.attr not in {
+                "update_many",
+                "delete_many",
+                "delete_where",
+            }:
+                continue
+            location = (py_file.relative_to(SRC_ROOT).as_posix(), ".".join(scope), call.func.attr)
+            assert location in reviewed, (
+                f"{py_file}:{call.lineno} uses generic {call.func.attr}() at an unreviewed location; "
+                "prove target scope and concurrency protection before adding the location"
+            )
 
 
 def test_library_facade_exposes_owned_import_citation_and_recommendation_operations():

@@ -240,3 +240,12 @@ async def async_session_factory(tmp_path, monkeypatch):
 async def async_db(async_session_factory):
     async with async_session_factory() as session:
         yield session
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def persistence_sessions(request):
+    """Exercise persistence contracts against each supported database."""
+    if request.param == "postgres":
+        request.getfixturevalue("postgres_search_tables")
+        return request.getfixturevalue("postgres_sessions")
+    return request.getfixturevalue("async_session_factory")

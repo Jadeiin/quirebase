@@ -12,20 +12,25 @@ The follow-up implements the existing-use-case recommendations: bounded Workspac
 directories, the Library/User/Audit offset contract, Project detail summary with an independently
 paginated Item section, native file-presence and sorting filters, batch-owned staged PDF descriptors,
 optional native S3 signing, nested bibliography loaders and API Token result conversion. It preserves
-one initial migration and adds no previous-schema adapter. The accepted decision now records these
-choices in ADR 0014. The sections below retain the original investigation and alternatives.
+one initial migration and adds no previous-schema adapter. ADR 0014 defines the accepted boundaries;
+the [implementation record](../architecture/advanced-alchemy-implementation.md) preserves current
+choices. The sections below retain the original investigation and alternatives.
 
 EncryptedText is explicitly excluded by the user. MFA and semantic search require new product
 flows and were deferred after the user selected enhancement of existing use cases only. Direct S3
 delivery is a deployment opt-in because private object endpoints cannot be reached by browsers.
 Native signature generation is verified offline; it does not establish live S3/CORS compatibility.
 
-Verification: the backend suite passed 1,074 tests with 89 configured skips; the frontend passed
+Verification at the original implementation snapshot: the backend suite passed 1,074 tests with 89
+configured skips; the frontend passed
 114 unit tests, 156 browser tests and five real full-stack tests, including durable PDF Import.
 Ruff, mypy, frontend type/style/lint checks, localization and generated API types passed. A fresh
 SQLite database passed initialization and doctor; a separate migration-only database had no Alembic
 schema drift. The single PostgreSQL initial revision compiled offline; live PostgreSQL and S3/CORS
-remain unverified. Browser suites run sequentially because they share the frontend build directory.
+remained unverified at that snapshot. Browser suites run sequentially because they share the
+frontend build directory. Subsequent [CI at dd9118e](https://github.com/Jadeiin/quirebase/actions/runs/37598255080)
+passed live PostgreSQL, controlled concurrency and S3 object-store contracts. Direct browser S3/CORS
+configuration remains a deployment-specific requirement.
 
 An isolated same-lock build of the previous commit already exceeded six bundle budgets. This
 follow-up adds about 1.1 KiB raw / 0.3 KiB gzip to the shared shell, mostly localized directory copy;
