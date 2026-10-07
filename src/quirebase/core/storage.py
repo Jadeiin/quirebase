@@ -205,7 +205,10 @@ class ObjectStore:
             raise FileNotFoundError("download has expired")
         descriptor = FileObject(**(file.to_dict() | {"backend": self._backend}))
         url = await descriptor.sign_async(expires_in=lifetime, for_upload=False)
-        return SignedDownload(url=url, expires_at=now + timedelta(seconds=lifetime))
+        signed_until = datetime.now(UTC) + timedelta(seconds=lifetime)
+        if expires_at is not None and signed_until > expires_at:
+            raise FileNotFoundError("download has expired")
+        return SignedDownload(url=url, expires_at=signed_until)
 
     async def head(self, key: str) -> ObjectMetadata:
         self._validate_key(key)

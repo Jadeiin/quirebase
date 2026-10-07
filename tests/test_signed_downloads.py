@@ -180,3 +180,35 @@ async def test_export_signs_persisted_artifact_and_enforces_expiry(
         assert expired.status_code == 404 and len(calls) == 2
     finally:
         await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_delayed_signing_cannot_outlive_artifact_expiry(monkeypatch):
+    monkeypatch.setenv("QUIREBASE_SIGNED_DOWNLOADS", "true")
+    get_settings.cache_clear()
+    original = get_object_store()
+    started = datetime.now(UTC)
+    ticks = iter([started, started + timedelta(seconds=5)])
+
+    async def sign(_self, path, *, expires_in=None, for_upload=False):
+        await asyncio.sleep(0)
+        return "https://storage.example/delayed.pdf"
+
+    monkeypatch.setattr(ObstoreBackend, "sign_async", sign)
+    monkeypatch.setattr(
+        "quirebase.core.storage.datetime", SimpleNamespace(now=lambda _tz: next(ticks))
+    )
+    try:
+        store = ObjectStore(
+            S3Store(
+                "quirebase-test",
+                region="us-east-1",
+                access_key_id="test-key",
+                secret_access_key="test-secret",
+            )
+        )
+        file = FileObject(backend="documents", filename="aa/bb/example.pdf", size=10)
+        with pytest.raises(FileNotFoundError, match="download has expired"):
+            await store.sign_download(file, expires_at=started + timedelta(seconds=31))
+    finally:
+        storages.register_backend(original._backend)
