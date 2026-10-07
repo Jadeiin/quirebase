@@ -3932,8 +3932,8 @@ msgstr "This Project is read only in its current state."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
-msgid "This Project membership changed. Refresh and try again."
-msgstr "This Project membership changed. Refresh and try again."
+msgid "This Project participation changed. Refresh and try again."
+msgstr "This Project participation changed. Refresh and try again."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

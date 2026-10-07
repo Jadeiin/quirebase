@@ -22,7 +22,7 @@ from quirebase.models import (
     PdfAnnotation,
     Project,
     ProjectItem,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     SystemRole,
@@ -89,7 +89,7 @@ async def test_project_creation_requires_an_explicit_participation_choice(
         detail = await client.get(f"{endpoint}/{created.json()['id']}", headers=headers)
         assert detail.status_code == 200 and detail.json()["participation"] == "open"
         async with async_session_factory() as observer:
-            participants = list(await observer.scalars(select(ProjectMember.user_id)))
+            participants = list(await observer.scalars(select(ProjectParticipant.user_id)))
             assert participants == [actor.id]
 
 
@@ -563,7 +563,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         item_id=item.id,
         added_by=author.id,
     )
-    archived_project_member = ProjectMember(
+    archived_project_participant = ProjectParticipant(
         workspace_id=workspace_id,
         project_id=archived_project.id,
         user_id=administrator.id,
@@ -583,7 +583,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             metadata={"original_name": "admin-annotations.pdf"},
         ),
     )
-    db.add_all([revision, project_item, archived_project_item, archived_project_member])
+    db.add_all([revision, project_item, archived_project_item, archived_project_participant])
     await db.flush()
     payload = {
         "type": "note",
@@ -890,11 +890,11 @@ async def test_project_participation_does_not_gate_workspace_project_access(
         active_actions = set(summaries[str(active.id)]["authorization"]["allowed"])
         archived_actions = set(summaries[str(archived.id)]["authorization"]["allowed"])
         assert summaries[str(active.id)]["is_participating"] is False
-        assert "project_membership.manage" in active_actions
+        assert "project_participation.manage" in active_actions
         assert "project.update" in active_actions
         assert "project.archive" in active_actions
         assert "project.restore" in archived_actions
-        assert "project_membership.manage" not in archived_actions
+        assert "project_participation.manage" not in archived_actions
         assert "project.update" not in archived_actions
 
         active_detail = await client.get(f"{base}/{active.id}", headers=headers)
@@ -906,7 +906,7 @@ async def test_project_participation_does_not_gate_workspace_project_access(
             row for row in projects.json()["items"] if row["id"] == str(workspace_visible.id)
         )
         assert workspace_summary["is_participating"] is True
-        assert "project_membership.manage" not in workspace_summary["authorization"]["allowed"]
+        assert "project_participation.manage" not in workspace_summary["authorization"]["allowed"]
         workspace_detail = await client.get(f"{base}/{workspace_visible.id}", headers=headers)
         assert workspace_detail.json()["active_participants"] == []
         add_workspace_member = await client.post(
@@ -918,9 +918,9 @@ async def test_project_participation_does_not_gate_workspace_project_access(
             f"{base}/{workspace_visible.id}/participants/{administrator.id}", headers=headers
         )
         assert add_workspace_member.status_code == 409
-        assert add_workspace_member.json()["code"] == "project_member_conflict"
+        assert add_workspace_member.json()["code"] == "project_participation_conflict"
         assert remove_workspace_member.status_code == 409
-        assert remove_workspace_member.json()["code"] == "project_member_conflict"
+        assert remove_workspace_member.json()["code"] == "project_participation_conflict"
 
         settings = await client.patch(
             f"{base}/{active.id}",
@@ -968,3 +968,32 @@ async def test_project_participation_does_not_gate_workspace_project_access(
             json=json_payload({"username": owner.username}),
         )
         assert participant.status_code == 200
+        assert participant.json() == json_payload({
+            "user_id": owner.id,
+            "username": owner.username,
+        })
+        removed = await client.delete(
+            f"{base}/{active.id}/participants/{owner.id}", headers=headers
+        )
+        assert removed.status_code == 200
+        async with async_session_factory() as observer:
+            events = (
+                await observer.execute(
+                    select(
+                        AuditEvent.action,
+                        AuditEvent.target_type,
+                        AuditEvent.authorization_resource_action,
+                    )
+                    .where(
+                        AuditEvent.project_id == active.id,
+                        AuditEvent.target_type == "project_participant",
+                    )
+                    .order_by(AuditEvent.created_at, AuditEvent.id)
+                )
+            ).all()
+        assert events == [
+            ("project.participant.join", "project_participant", "project_participation.join"),
+            ("project.participant.leave", "project_participant", "project_participation.leave"),
+            ("project.participant.add", "project_participant", "project_participation.manage"),
+            ("project.participant.remove", "project_participant", "project_participation.manage"),
+        ]

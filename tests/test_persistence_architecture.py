@@ -34,7 +34,7 @@ EXPECTED_TABLES = {
     "pdf_annotation_objects",
     "pdf_annotation_replies",
     "project_items",
-    "project_members",
+    "project_participants",
     "projects",
     "system_settings",
     "tags",

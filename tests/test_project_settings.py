@@ -6,14 +6,14 @@ from test_http import authenticated_async_client
 from quirebase.access import resolve_workspace_context
 from quirebase.core.errors import WorkspaceMembershipRequired
 from quirebase.models import (
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     User,
     WorkspaceMember,
     WorkspaceRole,
 )
 from quirebase.projects import (
-    add_project_member,
+    add_project_participant,
     create_project,
     join_project,
     list_workspace_projects,
@@ -62,7 +62,7 @@ async def test_metadata_patch_preserves_concurrent_participation_change(
         assert project.participation is ProjectParticipation.managed
         assert (
             await async_db.scalar(
-                select(ProjectMember.id).where(ProjectMember.project_id == project_id)
+                select(ProjectParticipant.id).where(ProjectParticipant.project_id == project_id)
             )
             is not None
         )
@@ -115,17 +115,19 @@ async def test_suspension_retains_participation_but_termination_removes_it(
         async_db, owner, item.workspace_id, "Participation", participation
     )
     if participation is ProjectParticipation.managed:
-        await add_project_member(async_db, owner, item.workspace_id, project.id, target.username)
+        await add_project_participant(
+            async_db, owner, item.workspace_id, project.id, target.username
+        )
     else:
         await join_project(async_db, target, item.workspace_id, project.id)
     participant_id = await async_db.scalar(
-        select(ProjectMember.id).where(
-            ProjectMember.project_id == project.id, ProjectMember.user_id == target.id
+        select(ProjectParticipant.id).where(
+            ProjectParticipant.project_id == project.id, ProjectParticipant.user_id == target.id
         )
     )
 
     await suspend_workspace_member(async_db, owner, item.workspace_id, membership.id)
-    assert await async_db.get(ProjectMember, participant_id) is not None
+    assert await async_db.get(ProjectParticipant, participant_id) is not None
     with pytest.raises(WorkspaceMembershipRequired):
         await resolve_workspace_context(async_db, target, item.workspace_id)
     view = await open_project_workspace(
@@ -141,7 +143,7 @@ async def test_suspension_retains_participation_but_termination_removes_it(
     }
 
     await terminate_workspace_member(async_db, owner, item.workspace_id, membership.id)
-    assert await async_db.get(ProjectMember, participant_id, populate_existing=True) is None
+    assert await async_db.get(ProjectParticipant, participant_id, populate_existing=True) is None
     _, token = await invite_workspace_member(
         async_db, owner, item.workspace_id, target.username, "viewer"
     )
@@ -179,14 +181,14 @@ async def test_added_participant_response_survives_post_commit_deactivation(
     target_id, username = target.id, target.username
 
     async def add_then_deactivate(*args):
-        result = await add_project_member(*args)
+        result = await add_project_participant(*args)
         async with async_session_factory() as other_db:
             user = await other_db.get(User, target_id)
             user.active = False
             await other_db.commit()
         return result
 
-    monkeypatch.setattr(projects_api, "add_project_member", add_then_deactivate)
+    monkeypatch.setattr(projects_api, "add_project_participant_domain", add_then_deactivate)
     try:
         response = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/projects/{project.id}/participants",
@@ -196,8 +198,9 @@ async def test_added_participant_response_survives_post_commit_deactivation(
         assert response.json() == json_payload({"user_id": target_id, "username": username})
         assert (
             await async_db.scalar(
-                select(ProjectMember.id).where(
-                    ProjectMember.project_id == project.id, ProjectMember.user_id == target_id
+                select(ProjectParticipant.id).where(
+                    ProjectParticipant.project_id == project.id,
+                    ProjectParticipant.user_id == target_id,
                 )
             )
             is not None

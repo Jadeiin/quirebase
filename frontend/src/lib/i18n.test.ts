@@ -34,7 +34,7 @@ describe('frontend localization', () => {
 	it('translates marked domain labels through the active catalog', () => {
 		activateLocale('zh-CN');
 		expect(get(t)(msg('Owner'))).toBe('所有者');
-		expect(get(t)(msg({ message: 'Editor', comment: 'Project member role.' }))).toBe('编辑者');
+		expect(get(t)(msg({ message: 'Editor', comment: 'Workspace member role.' }))).toBe('编辑者');
 		expect(get(t)(msg('Viewer'))).toBe('查看者');
 		expect(get(t)('Owner')).toBe('所有者');
 	});

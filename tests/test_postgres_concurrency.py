@@ -68,7 +68,7 @@ from quirebase.models import (
     PdfAnnotation,
     Project,
     ProjectItem,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     SystemSetting,
@@ -81,9 +81,9 @@ from quirebase.models import (
 )
 from quirebase.operations.settings import RuntimeSettingsService, update_runtime_settings
 from quirebase.projects import (
-    ProjectMemberConflict,
+    ProjectParticipationConflict,
     add_item_to_project,
-    add_project_member,
+    add_project_participant,
     create_project,
     join_project,
     rename_project,
@@ -1122,9 +1122,11 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
                         db, actor, workspace_id, project_id, ProjectParticipation.workspace
                     )
                 else:
-                    await add_project_member(db, actor, workspace_id, project_id, target_username)
+                    await add_project_participant(
+                        db, actor, workspace_id, project_id, target_username
+                    )
                 return "committed"
-            except ProjectMemberConflict:
+            except ProjectParticipationConflict:
                 await db.rollback()
                 return "rejected"
 
@@ -1136,9 +1138,9 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
         assert project is not None
         assert project.participation is ProjectParticipation.workspace
         participants = await db.scalar(
-            select(func.count(ProjectMember.id)).where(
-                ProjectMember.workspace_id == workspace_id,
-                ProjectMember.project_id == project_id,
+            select(func.count(ProjectParticipant.id)).where(
+                ProjectParticipant.workspace_id == workspace_id,
+                ProjectParticipant.project_id == project_id,
             )
         )
         assert participants == 0
@@ -1504,10 +1506,10 @@ async def test_open_project_join_races_workspace_member_suspension(postgres_sess
         assert membership is not None
         assert membership.state.value == "suspended"
         participant = await db.scalar(
-            select(ProjectMember).where(
-                ProjectMember.workspace_id == workspace_id,
-                ProjectMember.project_id == project_id,
-                ProjectMember.user_id == target_id,
+            select(ProjectParticipant).where(
+                ProjectParticipant.workspace_id == workspace_id,
+                ProjectParticipant.project_id == project_id,
+                ProjectParticipant.user_id == target_id,
             )
         )
         if "rejected" in outcomes:

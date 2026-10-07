@@ -14,7 +14,7 @@ from quirebase.access import (
 from quirebase.core.errors import ResourceUnavailable, WorkspaceUnavailable
 from quirebase.models import (
     Project,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     User,
@@ -67,7 +67,7 @@ async def _assert_discovery_matrix(db, role, lifecycle):
     for project, participant in cases:
         if participant:
             db.add(
-                ProjectMember(
+                ProjectParticipant(
                     workspace_id=project.workspace_id, project_id=project.id, user_id=actor.id
                 )
             )
@@ -139,7 +139,7 @@ async def test_participation_discovery_is_independent_of_governance_grants(async
     async_db.add_all(projects)
     await async_db.flush()
     async_db.add_all([
-        ProjectMember(workspace_id=workspace.id, project_id=project.id, user_id=actor.id)
+        ProjectParticipant(workspace_id=workspace.id, project_id=project.id, user_id=actor.id)
         for project in projects
     ])
     await async_db.commit()
@@ -201,7 +201,9 @@ async def test_locked_project_loaders_filter_then_recheck_participation(
         await db.flush()
         if initially_discoverable:
             db.add(
-                ProjectMember(workspace_id=workspace.id, project_id=project.id, user_id=actor.id)
+                ProjectParticipant(
+                    workspace_id=workspace.id, project_id=project.id, user_id=actor.id
+                )
             )
         await db.commit()
         workspace_id, project_id, actor_id = workspace.id, project.id, actor.id
@@ -232,8 +234,9 @@ async def test_locked_project_loaders_filter_then_recheck_participation(
         await db.scalar(select(Project).where(Project.id == project_id).with_for_update())
         if initially_discoverable:
             await db.execute(
-                delete(ProjectMember).where(
-                    ProjectMember.project_id == project_id, ProjectMember.user_id == actor_id
+                delete(ProjectParticipant).where(
+                    ProjectParticipant.project_id == project_id,
+                    ProjectParticipant.user_id == actor_id,
                 )
             )
         postgres_race.start("load", load())

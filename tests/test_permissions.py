@@ -17,7 +17,7 @@ async def _provisioned_user(db, username: str) -> User:
 
 
 @pytest.mark.anyio
-async def test_item_access_is_workspace_membership_not_creator_or_project_membership(async_db):
+async def test_item_access_is_workspace_membership_not_creator_or_project_participation(async_db):
     db = async_db
     owner = await _provisioned_user(db, "owner")
     member = await _provisioned_user(db, "member")

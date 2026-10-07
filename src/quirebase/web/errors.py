@@ -29,7 +29,7 @@ from quirebase.core.errors import (
 from quirebase.documents.annotations import DocumentNotReady
 from quirebase.documents.revisions import UnsupportedMediaType
 from quirebase.library import BatchConflict, TagConflict, UpstreamServiceError
-from quirebase.projects.members import ProjectMemberConflict
+from quirebase.projects.participation import ProjectParticipationConflict
 from quirebase.web.api.common import ApiErrorView, ErrorField
 
 logger = logging.getLogger(__name__)
@@ -84,8 +84,13 @@ def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | Non
         return 409, "invitation_conflict", str(exc) or "invitation conflict", None
     if isinstance(exc, TagConflict):
         return 409, "tag_conflict", str(exc) or "Tag conflict", None
-    if isinstance(exc, ProjectMemberConflict):
-        return 409, "project_member_conflict", str(exc) or "Project member conflict", None
+    if isinstance(exc, ProjectParticipationConflict):
+        return (
+            409,
+            "project_participation_conflict",
+            str(exc) or "Project participation conflict",
+            None,
+        )
     if isinstance(exc, DocumentNotReady):
         return 409, "document_not_ready", str(exc) or "document not ready", None
     if isinstance(exc, BatchConflict):

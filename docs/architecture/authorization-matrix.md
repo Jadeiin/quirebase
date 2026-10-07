@@ -61,9 +61,9 @@ domain rules; this table alone does not establish permission for a concrete comm
 | `project_discussion.delete` | `own` | A | A | A | A | — |
 | `project_governance.read` | `any` | A/R/F | A/R/F | — | — | — |
 | `project_item.manage` | `any` | A | A | A | — | — |
-| `project_membership.join` | `open` | A | A | A | A | A |
-| `project_membership.leave` | `open` | A | A | A | A | A |
-| `project_membership.manage` | `managed` | A | A | — | — | — |
+| `project_participation.join` | `open` | A | A | A | A | A |
+| `project_participation.leave` | `open` | A | A | A | A | A |
+| `project_participation.manage` | `managed` | A | A | — | — | — |
 | `tag.create` | `any` | A | A | A | — | — |
 | `tag.manage` | `any` | A | A | — | — | — |
 | `tag.use` | `any` | A | A | A | — | — |

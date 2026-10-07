@@ -29,7 +29,7 @@ from quirebase.models import (
     LoginSession,
     Project,
     ProjectItem,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     User,
@@ -727,7 +727,7 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
             item_id=item.id,
             added_by=item.created_by,
         ),
-        ProjectMember(
+        ProjectParticipant(
             workspace_id=item.workspace_id,
             project_id=project.id,
             user_id=viewer.id,

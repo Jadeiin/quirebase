@@ -37,9 +37,9 @@ class ResourceAction(ResourceActionKey):
     project_delete = "project.delete"
     project_item_manage = "project_item.manage"
     project_governance_read = "project_governance.read"
-    project_membership_join = "project_membership.join"
-    project_membership_leave = "project_membership.leave"
-    project_membership_manage = "project_membership.manage"
+    project_participation_join = "project_participation.join"
+    project_participation_leave = "project_participation.leave"
+    project_participation_manage = "project_participation.manage"
     workspace_invitation_read = "workspace_invitation.read"
     workspace_invitation_create = "workspace_invitation.create"
     workspace_invitation_revoke = "workspace_invitation.revoke"
@@ -120,9 +120,9 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.project_delete: _WRITE,
     ResourceAction.project_item_manage: _WRITE,
     ResourceAction.project_governance_read: _READ,
-    ResourceAction.project_membership_join: ActionSpec(True, ("open",)),
-    ResourceAction.project_membership_leave: ActionSpec(True, ("open",)),
-    ResourceAction.project_membership_manage: ActionSpec(True, ("managed",)),
+    ResourceAction.project_participation_join: ActionSpec(True, ("open",)),
+    ResourceAction.project_participation_leave: ActionSpec(True, ("open",)),
+    ResourceAction.project_participation_manage: ActionSpec(True, ("managed",)),
     ResourceAction.workspace_invitation_read: _READ,
     ResourceAction.workspace_invitation_create: ActionSpec(
         mutating=True,

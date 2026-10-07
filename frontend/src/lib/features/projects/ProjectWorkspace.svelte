@@ -77,7 +77,7 @@
 	let selectedMemberId = $state('');
 	const directory = createInfiniteQuery(() => ({
 		...memberOptionsQuery(workspaceId, memberSearch),
-		enabled: can('project_membership.manage')
+		enabled: can('project_participation.manage')
 	}));
 	const availableMembers = $derived(
 		(directory.data ?? []).filter(
@@ -148,7 +148,7 @@
 			error = apiErrorMessage(reason, $t('Project action failed'));
 			if (
 				reason instanceof ApiError &&
-				['project_lifecycle_error', 'project_member_conflict'].includes(reason.code)
+				['project_lifecycle_error', 'project_participation_conflict'].includes(reason.code)
 			) {
 				await invalidateProject(queryClient, workspaceId);
 			} else {
@@ -227,14 +227,16 @@
 		);
 	}
 
-	async function addMember(event: SubmitEvent) {
+	async function addParticipant(event: SubmitEvent) {
 		event.preventDefault();
 		if (
 			busy ||
 			!selectedMember ||
 			selectedMember.user_id !== selectedMemberId ||
-			project?.active_participants.some((member) => member.user_id === selectedMemberId) ||
-			!can('project_membership.manage')
+			project?.active_participants.some(
+				(participant) => participant.user_id === selectedMemberId
+			) ||
+			!can('project_participation.manage')
 		)
 			return;
 		const username = selectedMember.username;
@@ -257,7 +259,7 @@
 		} else await directory.refetch();
 	}
 
-	async function removeMember(userId: string) {
+	async function removeParticipant(userId: string) {
 		await mutate(
 			() =>
 				workspace.api.request(
@@ -385,11 +387,11 @@
 			</div>
 			{#snippet actions()}
 				<div class="flex flex-wrap gap-2">
-					{#if can('project_membership.join')}<Button
+					{#if can('project_participation.join')}<Button
 							disabled={busy}
 							onclick={() => void joinProject()}>{$t('Join Project')}</Button
 						>{/if}
-					{#if can('project_membership.leave')}<Button
+					{#if can('project_participation.leave')}<Button
 							variant="tonal"
 							disabled={busy}
 							onclick={() => void leaveProject()}>{$t('Leave Project')}</Button
@@ -498,28 +500,29 @@
 				</p>
 				{#if project.active_participants.length > 0}
 					<ul class="mt-3 grid grid-cols-1 gap-2">
-						{#each project.active_participants as member (member.user_id)}<li
+						{#each project.active_participants as participant (participant.user_id)}<li
 								class="flex items-center justify-between gap-2 border-t border-surface-300-700 py-2"
 							>
-								<span>{member.username}</span>
-								{#if can('project_membership.manage')}<Button
+								<span>{participant.username}</span>
+								{#if can('project_participation.manage')}<Button
 										size="sm"
 										variant="tonal"
 										disabled={busy}
-										onclick={() => void removeMember(member.user_id)}>{$t('Remove')}</Button
+										onclick={() => void removeParticipant(participant.user_id)}
+										>{$t('Remove')}</Button
 									>{/if}
 							</li>{/each}
 					</ul>
 				{:else}<p class="mt-3 text-sm text-surface-600-400">
 						{$t('No Project participants yet.')}
 					</p>{/if}
-				{#if can('project_membership.manage')}
+				{#if can('project_participation.manage')}
 					{#if directory.isPending}<p>{$t('Loading members…')}</p>
 					{:else if directory.isError}
 						<Notice variant="error">{$t('Unable to load members.')}</Notice>
 						<Button onclick={() => void directory.refetch()}>{$t('Retry')}</Button>
 					{/if}
-					<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={addMember}>
+					<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={addParticipant}>
 						<Combobox
 							class="min-w-64 flex-1"
 							{collection}

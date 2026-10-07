@@ -406,16 +406,16 @@ class Project(EntityBase):
     )
 
 
-class ProjectMember(EntityBase):
-    __tablename__ = "project_members"
+class ProjectParticipant(EntityBase):
+    __tablename__ = "project_participants"
     __table_args__ = (
         UniqueConstraint(
-            "workspace_id", "project_id", "user_id", name="uq_project_member_workspace"
+            "workspace_id", "project_id", "user_id", name="uq_project_participant_workspace"
         ),
         ForeignKeyConstraint(
             ["workspace_id", "project_id"],
             ["projects.workspace_id", "projects.id"],
-            name="fk_project_members_project_workspace",
+            name="fk_project_participants_project_workspace",
             ondelete="CASCADE",
         ),
     )

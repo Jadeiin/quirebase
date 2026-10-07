@@ -3887,10 +3887,10 @@ export interface components {
 			 * Active Participants
 			 * @description Active explicit participants; Workspace participation is implicit.
 			 */
-			active_participants: components['schemas']['ProjectParticipant'][];
+			active_participants: components['schemas']['ProjectParticipantInfo'][];
 		};
-		/** ProjectParticipant */
-		ProjectParticipant: {
+		/** ProjectParticipantInfo */
+		ProjectParticipantInfo: {
 			/**
 			 * User Id
 			 * Format: uuid
@@ -4019,9 +4019,9 @@ export interface components {
 			| 'project.delete'
 			| 'project_item.manage'
 			| 'project_governance.read'
-			| 'project_membership.join'
-			| 'project_membership.leave'
-			| 'project_membership.manage'
+			| 'project_participation.join'
+			| 'project_participation.leave'
+			| 'project_participation.manage'
 			| 'workspace_invitation.read'
 			| 'workspace_invitation.create'
 			| 'workspace_invitation.revoke'
@@ -8305,7 +8305,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProjectParticipant'];
+					'application/json': components['schemas']['ProjectParticipantInfo'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8391,7 +8391,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProjectParticipant'];
+					'application/json': components['schemas']['ProjectParticipantInfo'];
 				};
 			};
 			/** @description Unprocessable Content */

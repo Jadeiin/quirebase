@@ -17,13 +17,13 @@ from quirebase.projects.loaders import (
     require_project,
     require_project_item,
 )
-from quirebase.projects.members import (
-    ProjectMemberConflict,
-    ProjectParticipant,
-    add_project_member,
+from quirebase.projects.participation import (
+    ProjectParticipantInfo,
+    ProjectParticipationConflict,
+    add_project_participant,
     join_project,
     leave_project,
-    remove_project_member,
+    remove_project_participant,
 )
 from quirebase.projects.workspaces import (
     ProjectWorkspace,
@@ -36,12 +36,12 @@ from quirebase.projects.workspaces import (
 )
 
 __all__ = [
-    "ProjectMemberConflict",
-    "ProjectParticipant",
+    "ProjectParticipantInfo",
+    "ProjectParticipationConflict",
     "ProjectWorkspace",
     "add_item_to_project",
     "add_items_to_project",
-    "add_project_member",
+    "add_project_participant",
     "check_project_integrity",
     "create_project",
     "delete_project",
@@ -53,7 +53,7 @@ __all__ = [
     "list_workspace_projects",
     "open_project_workspace",
     "remove_item_from_project",
-    "remove_project_member",
+    "remove_project_participant",
     "rename_project",
     "require_project",
     "require_project_item",

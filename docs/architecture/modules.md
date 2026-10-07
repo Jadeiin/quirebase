@@ -34,7 +34,7 @@ database initialization and durable-workflow diagnostics.
 | `access` | Domain-policy Module | Authorization decisions over Items, Tags, Projects, Documents and Annotations |
 | `audit` | Business Module | Audit Event construction, programmatic invocation provenance, detail serialization and administrative queries |
 | `library` | Business Module | Items, Authors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
-| `projects` | Business Module | Projects, Project membership and Item assignment |
+| `projects` | Business Module | Projects, Project participation and Item assignment |
 | `documents` | Business Module | File Revisions, Attachments, Annotations, uploads, PDF inspection, thumbnails, annotation-export workflows and Annotation Export Artifacts |
 | `operations` | Business Module | Runtime settings, health, backup, reconciliation and maintenance workflows |
 | `search` | Outbound adapter Module | The Library Search port plus SQLite and PostgreSQL adapters |
@@ -257,13 +257,13 @@ Opening a Project crosses the Projects interface through `open_project_workspace
 a typed read model containing the Project, active explicit participants for `open` and `managed` modes,
 the caller's participation state, and assigned Items. Workspace membership and concrete
 resource-action decisions are checked against the boundary-resolved WorkspaceContext behind that
-operation. ProjectMember gates discoverability only for `managed` Projects; it never grants
+operation. ProjectParticipant gates discoverability only for `managed` Projects; it never grants
 Workspace authority or canonical Item access. Projects have no owner or ownership-transfer
 operation; `created_by` is provenance only. Only the Web adapter
 maps the typed view to an API projection.
-The read model reuses the ProjectParticipant value returned by participation commands; it does
+The read model reuses the ProjectParticipantInfo value returned by participation commands; it does
 not wrap mutable User objects. `active_participants` excludes suspended memberships and inactive
-Users, while their stored ProjectMember selections remain available for reactivation.
+Users, while their stored ProjectParticipant selections remain available for reactivation.
 Managed participation uses `POST /projects/{id}/participants` and
 `DELETE /projects/{id}/participants/{user_id}`; these commands do not change Workspace membership.
 
@@ -277,8 +277,8 @@ suspended members. Metadata changes do not rewrite participation or its associat
 Projects owns exclusive root locks for aggregate mutations and shared guards for subordinate
 associations. Other Project-scoped mutation callers explicitly select their root lock through Access
 before locking children; `ActionSpec.mutating` does not select a Project lock implicitly. Project
-mutation authority comes from Workspace resource-action policy; ProjectMember has no role and never
-grants authority. `workspace` participation is implicit with no ProjectMember rows; `open` Projects
+mutation authority comes from Workspace resource-action policy; ProjectParticipant has no role and never
+grants authority. `workspace` participation is implicit with no ProjectParticipant rows; `open` Projects
 are discoverable to all active Workspace
 members and permit self-join/leave; `managed` Projects are discoverable only to participants and
 Workspace governors, who curate participation. Collection reads, direct loaders and root locks use

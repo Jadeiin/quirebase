@@ -381,7 +381,7 @@ async def test_project_choices_and_commands_do_not_infer_independent_grants(
     async_db, async_session_factory, tmp_path, monkeypatch, policy_bundle, metadata_allowed
 ):
     removed = (
-        ResourceAction.project_membership_manage
+        ResourceAction.project_participation_manage
         if metadata_allowed
         else ResourceAction.project_update
     )

@@ -20,9 +20,8 @@ from quirebase.library import (
 )
 from quirebase.models import ProjectState
 from quirebase.projects import (
-    ProjectParticipant,
+    ProjectParticipantInfo,
     add_item_to_project,
-    add_project_member,
     create_project,
     delete_project,
     join_project,
@@ -35,7 +34,10 @@ from quirebase.projects import (
     update_project_settings,
 )
 from quirebase.projects import (
-    remove_project_member as remove_project_member_domain,
+    add_project_participant as add_project_participant_domain,
+)
+from quirebase.projects import (
+    remove_project_participant as remove_project_participant_domain,
 )
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
@@ -184,12 +186,12 @@ async def remove_project_item(
     return OkView()
 
 
-@router.post("/{project_id}/join", response_model=ProjectParticipant)
+@router.post("/{project_id}/join", response_model=ProjectParticipantInfo)
 async def join_project_api(
     workspace_id: UUID, project_id: UUID, user: ApiUser, db: Database
-) -> ProjectParticipant:
+) -> ProjectParticipantInfo:
     await join_project(db, user, workspace_id, project_id)
-    return ProjectParticipant(user_id=user.id, username=user.username)
+    return ProjectParticipantInfo(user_id=user.id, username=user.username)
 
 
 @router.post("/{project_id}/leave", response_model=OkView)
@@ -200,22 +202,22 @@ async def leave_project_api(
     return OkView()
 
 
-@router.post("/{project_id}/participants", response_model=ProjectParticipant)
+@router.post("/{project_id}/participants", response_model=ProjectParticipantInfo)
 async def add_project_participant(
     workspace_id: UUID,
     project_id: UUID,
     data: ProjectParticipantRequest,
     user: ApiUser,
     db: Database,
-) -> ProjectParticipant:
-    return await add_project_member(db, user, workspace_id, project_id, data.username)
+) -> ProjectParticipantInfo:
+    return await add_project_participant_domain(db, user, workspace_id, project_id, data.username)
 
 
 @router.delete("/{project_id}/participants/{user_id}", response_model=OkView)
 async def remove_project_participant(
     workspace_id: UUID, project_id: UUID, user_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
-    await remove_project_member_domain(db, user, workspace_id, project_id, user_id)
+    await remove_project_participant_domain(db, user, workspace_id, project_id, user_id)
     return OkView()
 
 

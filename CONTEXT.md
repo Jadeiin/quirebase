@@ -70,23 +70,20 @@ Project-scoped annotations, discussions and notes. A Project does not grant acce
 raise a User's Workspace authority. A Project has no owner; `created_by` is provenance only.
 _Avoid_: Folder, Group
 
-**Project Member**:
-An explicit User–Project association that records a User's selected Project working context. It
-has no Project role and grants no Workspace authority. It controls discoverability of `managed`
-Projects only; it never grants access to canonical Workspace Items. Workspace-participation
-Projects have implicit participation and no Project Member rows.
-
 **Project Participant**:
 A User participating in a Project working context, implicitly in `workspace` mode or through an
-explicit Project Member selection in `open` and `managed` modes. Project detail exposes only
-active explicit participants in `active_participants`; a suspended Workspace membership retains
-its stored selection but has no effective participation until reactivated.
+explicit selection in `open` and `managed` modes. `ProjectParticipant` rows persist those explicit
+selections without a Project role or Workspace authority; `workspace` mode has no such rows.
+The selection controls discoverability of `managed` Projects and never grants canonical Item access.
+Project detail exposes active explicit participants as `ProjectParticipantInfo` values in
+`active_participants`; a suspended Workspace membership retains its stored selection but has no
+effective participation until reactivated.
 
 **Project Participation**:
 The Project `participation` field that expresses discoverability and participation policy, not a Project
 role or Workspace authority: `workspace` means all active Workspace members can discover and
-implicitly participate, with no Project Member rows; `open` means all active Workspace members can
-discover the Project and may choose to join or leave; `managed` means only Project Members and
+implicitly participate, with no Project Participant rows; `open` means all active Workspace members can
+discover the Project and may choose to join or leave; `managed` means only Project participants and
 Workspace owners/admins can discover the Project and its Project-scoped content, with participation
 curated by Workspace governance. Managed participation never changes access to canonical Workspace
 Items.
@@ -242,7 +239,7 @@ The HTTP API and its generated operation IDs use these verbs deliberately:
   whose identity is being destroyed (including a soft-deleted resource whose normal projection
   no longer exposes it).
 - **Remove** detaches an association while preserving both resources. Use remove for an
-  Item–Tag, Project–Item or Project–member relationship; neither the Item, Tag, Project nor User
+  Item–Tag, Project–Item or Project–participant relationship; neither the Item, Tag, Project nor User
   is deleted.
 
 An HTTP DELETE method can therefore generate either a delete_* or remove_* operation ID:
@@ -266,10 +263,10 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 - An Item has at most one current Item Tag Recommendation generation.
 - An Item may belong to multiple Projects in the same Workspace; ProjectItem is an organizational
   association and never grants Item access.
-- A Project has Project Members only when its participation is `open` or `managed`; these
-  role-less associations record participation. For `managed` Projects they also gate Project
+- A Project records explicit selections as `ProjectParticipant` rows in `open` or `managed` mode;
+  these role-less associations record participation. For `managed` Projects they also gate Project
   discoverability, but never grant access to canonical Workspace Items. A `workspace` Project has
-  implicit participation and no Project Member rows. A Project has no owner or ownership-transfer
+  implicit participation and no Project Participant rows. A Project has no owner or ownership-transfer
   operation; `created_by` is provenance, while Project lifecycle and participation operations use
   Workspace resource-action decisions.
 - An Annotation belongs to exactly one File Revision.

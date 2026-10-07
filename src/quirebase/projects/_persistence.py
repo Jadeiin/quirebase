@@ -1,7 +1,7 @@
 """Project persistence; participation and authorization stay in commands."""
 
 from quirebase.core.persistence import Repository, Service
-from quirebase.models import Project, ProjectMember
+from quirebase.models import Project, ProjectParticipant
 
 
 class ProjectRepository(Repository[Project]):
@@ -12,5 +12,5 @@ class ProjectService(Service[Project]):
     repository_type = ProjectRepository
 
 
-class ProjectMemberRepository(Repository[ProjectMember]):
-    model_type = ProjectMember
+class ProjectParticipantRepository(Repository[ProjectParticipant]):
+    model_type = ProjectParticipant

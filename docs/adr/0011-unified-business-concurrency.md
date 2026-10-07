@@ -21,7 +21,7 @@ Concurrency controls are selected by the invariant they protect:
    the Item or annotation.
 
 2. **Cross-row invariants use the owning root row.**
-   A Project row protects ownership/state transitions; an Item row protects destructive Item
+   A Project row protects participation/state transitions; an Item row protects destructive Item
    deletion and durable child finalization; an ImportBatch row protects confirmation/discard
    identity. The command that owns the invariant acquires the root lock internally. Callers never
    assemble a global `User -> Project -> Tag -> Item -> child` lock graph.
@@ -101,14 +101,14 @@ its required projection backfill. Running Alembic directly is an advanced mainte
 after a schema-only upgrade, operators should run the explicit batched Search reindex before
 relying on Search results.
 
-## Project ownership
+## Workspace ownership and Project participation
 
-Project ownership is represented authoritatively by `Project.owner_id`. The owner is also a
-ProjectMember with the `owner` role as a presentation mirror, but authorization never grants owner
-authority from that mirrored role. Non-owner edit authority is granted only by an `editor`
-membership. Ownership transfer locks the Project row and updates `owner_id` plus the two mirrored
-membership roles atomically. Removing or leaving the authoritative owner is rejected; no
-owner-count scan or multi-owner race is needed.
+ADR 0013 supersedes the original Project ownership and role design. Workspace ownership is
+represented by its active owner membership; transfer locks the Workspace root and changes the
+old and new owner memberships atomically. A Project has no owner or role-bearing membership.
+`ProjectParticipant` records explicit working-context selections. Participation changes lock the
+Project root and recheck Workspace authority, Project discoverability and participation policy;
+there is no minimum-participant invariant.
 
 ## Import confirmation
 

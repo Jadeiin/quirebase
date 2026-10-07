@@ -19,8 +19,8 @@ p, workspace:viewer, private_annotation_reply, delete, active, own
 p, workspace:viewer, private_annotation_reply, restore, active, own
 p, workspace:viewer, private_annotation_reply, update, active, own
 p, workspace:viewer, project_annotation, read, (active|archived|frozen), (other|own)
-p, workspace:viewer, project_membership, join, active, open
-p, workspace:viewer, project_membership, leave, active, open
+p, workspace:viewer, project_participation, join, active, open
+p, workspace:viewer, project_participation, leave, active, open
 p, workspace:viewer, workspace, export, (active|archived|frozen), any
 p, workspace:viewer, workspace, read, (active|archived|frozen), any
 
@@ -66,7 +66,7 @@ p, workspace:admin, project_annotation, review, (active|archived|frozen), any
 p, workspace:admin, project_annotation, unlock, active, other
 p, workspace:admin, project_discussion, delete, active, other
 p, workspace:admin, project_governance, read, (active|archived|frozen), any
-p, workspace:admin, project_membership, manage, active, managed
+p, workspace:admin, project_participation, manage, active, managed
 p, workspace:admin, tag, manage, active, any
 p, workspace:admin, workspace, archive, active, any
 p, workspace:admin, workspace, restore, archived, any

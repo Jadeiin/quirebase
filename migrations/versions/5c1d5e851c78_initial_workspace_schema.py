@@ -493,7 +493,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_project_items_item_id'), 'project_items', ['item_id'], unique=False)
     op.create_index(op.f('ix_project_items_project_id'), 'project_items', ['project_id'], unique=False)
     op.create_index(op.f('ix_project_items_workspace_id'), 'project_items', ['workspace_id'], unique=False)
-    op.create_table('project_members',
+    op.create_table('project_participants',
     sa.Column('id', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
     sa.Column('workspace_id', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
     sa.Column('project_id', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
@@ -501,14 +501,14 @@ def upgrade() -> None:
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', advanced_alchemy.types.datetime.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', advanced_alchemy.types.datetime.DateTimeUTC(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], name=op.f('fk_project_members_user_id_users'), ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['workspace_id', 'project_id'], ['projects.workspace_id', 'projects.id'], name='fk_project_members_project_workspace', ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_project_members')),
-    sa.UniqueConstraint('workspace_id', 'project_id', 'user_id', name='uq_project_member_workspace')
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], name=op.f('fk_project_participants_user_id_users'), ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'project_id'], ['projects.workspace_id', 'projects.id'], name='fk_project_participants_project_workspace', ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_project_participants')),
+    sa.UniqueConstraint('workspace_id', 'project_id', 'user_id', name='uq_project_participant_workspace')
     )
-    op.create_index(op.f('ix_project_members_project_id'), 'project_members', ['project_id'], unique=False)
-    op.create_index(op.f('ix_project_members_user_id'), 'project_members', ['user_id'], unique=False)
-    op.create_index(op.f('ix_project_members_workspace_id'), 'project_members', ['workspace_id'], unique=False)
+    op.create_index(op.f('ix_project_participants_project_id'), 'project_participants', ['project_id'], unique=False)
+    op.create_index(op.f('ix_project_participants_user_id'), 'project_participants', ['user_id'], unique=False)
+    op.create_index(op.f('ix_project_participants_workspace_id'), 'project_participants', ['workspace_id'], unique=False)
     op.create_table('pdf_annotations',
     sa.Column('id', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
     sa.Column('workspace_id', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
@@ -630,10 +630,10 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_pdf_annotations_file_revision_id'), table_name='pdf_annotations')
     op.drop_index(op.f('ix_pdf_annotations_author_id'), table_name='pdf_annotations')
     op.drop_table('pdf_annotations')
-    op.drop_index(op.f('ix_project_members_workspace_id'), table_name='project_members')
-    op.drop_index(op.f('ix_project_members_user_id'), table_name='project_members')
-    op.drop_index(op.f('ix_project_members_project_id'), table_name='project_members')
-    op.drop_table('project_members')
+    op.drop_index(op.f('ix_project_participants_workspace_id'), table_name='project_participants')
+    op.drop_index(op.f('ix_project_participants_user_id'), table_name='project_participants')
+    op.drop_index(op.f('ix_project_participants_project_id'), table_name='project_participants')
+    op.drop_table('project_participants')
     op.drop_index(op.f('ix_project_items_workspace_id'), table_name='project_items')
     op.drop_index(op.f('ix_project_items_project_id'), table_name='project_items')
     op.drop_index(op.f('ix_project_items_item_id'), table_name='project_items')

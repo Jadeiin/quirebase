@@ -289,7 +289,7 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 	]);
 });
 
-for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
+for (const code of ['project_participation_conflict', 'project_lifecycle_error']) {
 	test(`Projects refreshes its collection after Join returns ${code}`, async ({ page }) => {
 		await mockSession(page);
 		const workspaceReads = trackWorkspaceReads(page);
@@ -302,11 +302,11 @@ for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
 				id: 'project-1',
 				name: 'Reading Project',
 				state: changed && code === 'project_lifecycle_error' ? 'archived' : 'active',
-				participation: changed && code === 'project_member_conflict' ? 'managed' : 'open',
+				participation: changed && code === 'project_participation_conflict' ? 'managed' : 'open',
 				is_participating: false,
 				item_count: 0,
 				description: '',
-				authorization: { allowed: changed ? [] : ['project_membership.join'] }
+				authorization: { allowed: changed ? [] : ['project_participation.join'] }
 			};
 			return route.fulfill({
 				json: directoryPage(view === 'joinable' && changed ? [] : [project], route)
@@ -326,7 +326,8 @@ for (const code of ['project_member_conflict', 'project_lifecycle_error']) {
 		await expect(join).toHaveCount(0);
 		await expect(
 			page.getByRole('heading', {
-				name: code === 'project_member_conflict' ? 'Managed participation' : 'Archived Projects',
+				name:
+					code === 'project_participation_conflict' ? 'Managed participation' : 'Archived Projects',
 				exact: true
 			})
 		).toBeVisible();

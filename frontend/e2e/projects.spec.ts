@@ -16,7 +16,7 @@ const project = {
 			'project.update',
 			'project.archive',
 			'project_item.manage',
-			'project_membership.manage',
+			'project_participation.manage',
 			'project_discussion.create'
 		]
 	},
@@ -66,7 +66,7 @@ test('Workspace admins can open and govern managed Projects without being partic
 	await mockWorkspaceRole(page, 'admin', [
 		'workspace.read',
 		'project_item.manage',
-		'project_membership.manage',
+		'project_participation.manage',
 		'project_discussion.create'
 	]);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
@@ -357,7 +357,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 	await mockWorkspaceRole(
 		page,
 		'owner',
-		['workspace.read', 'project_item.manage', 'project_membership.manage'],
+		['workspace.read', 'project_item.manage', 'project_participation.manage'],
 		['managed', 'open', 'workspace']
 	);
 	let creation: Record<string, unknown> | null = null;
@@ -387,7 +387,7 @@ test('a Workspace owner can create an empty managed Project', async ({ page }) =
 						'project.update',
 						'project.archive',
 						'project_item.manage',
-						'project_membership.manage'
+						'project_participation.manage'
 					]
 				},
 				active_participants: []
@@ -534,7 +534,7 @@ test('Workspace resource actions govern Project settings and managed participati
 		[
 			'workspace.read',
 			'project_item.manage',
-			'project_membership.manage',
+			'project_participation.manage',
 			'project.delete',
 			'project_discussion.create'
 		],
@@ -561,7 +561,7 @@ test('Workspace resource actions govern Project settings and managed participati
 							'project.update',
 							'project.archive',
 							'project_item.manage',
-							...(currentParticipation === 'managed' ? ['project_membership.manage'] : []),
+							...(currentParticipation === 'managed' ? ['project_participation.manage'] : []),
 							'project.delete',
 							'project_discussion.create'
 						]
@@ -615,7 +615,7 @@ test('a managed Project may have zero participants', async ({ page }) => {
 	await mockWorkspaceRole(page, 'owner', [
 		'workspace.read',
 		'project_item.manage',
-		'project_membership.manage'
+		'project_participation.manage'
 	]);
 	let participants = [{ user_id: 'user-1', username: 'reader' }];
 	await page.route('**/api/v1/workspaces/workspace-1/projects/empty-project**', (route) => {
@@ -632,7 +632,7 @@ test('a managed Project may have zero participants', async ({ page }) => {
 				...project,
 				id: 'empty-project',
 				name: 'Paused direction',
-				authorization: { allowed: ['project_membership.manage'] },
+				authorization: { allowed: ['project_participation.manage'] },
 				active_participants: participants
 			}
 		});
@@ -781,7 +781,7 @@ test('Project groups come from one collection while Join follows the server capa
 						id: 'joinable',
 						name: 'Joinable direction',
 						participation: 'open',
-						authorization: { allowed: ['project_membership.join'] }
+						authorization: { allowed: ['project_participation.join'] }
 					},
 					{
 						...project,

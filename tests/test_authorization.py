@@ -153,7 +153,7 @@ def test_policy_decisions_and_system_projection_reuse_immutable_results():
     assert repeated.hits == first.hits + 1
 
 
-def test_relation_policies_cover_project_membership_authorship_and_governance():
+def test_relation_policies_cover_project_participation_authorship_and_governance():
     lifecycle = WorkspaceState.active
 
     assert workspace_action_allowed(WorkspaceRole.editor, "item", "create", lifecycle)
@@ -249,9 +249,9 @@ def test_mutating_relation_actions_fail_closed_outside_active_lifecycle():
 @pytest.mark.parametrize(
     "rule",
     [
-        "p, workspace:viewer, project_membership, join, active, member",
+        "p, workspace:viewer, project_participation, join, active, member",
         "p, workspace:editor, project, update, active, open",
-        "p, workspace:viewer, project_membership, join, active, (open|member)",
+        "p, workspace:viewer, project_participation, join, active, (open|member)",
         "p, system:member, workspace, create, active, own",
     ],
 )

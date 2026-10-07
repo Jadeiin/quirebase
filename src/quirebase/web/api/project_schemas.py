@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema  # ruff: ignore[typing-only-third-party-import] — Pydantic resolves field annotations.
 
 from quirebase.models import ProjectParticipation, ProjectState
-from quirebase.projects import ProjectParticipant, ProjectWorkspace
+from quirebase.projects import ProjectParticipantInfo, ProjectWorkspace
 from quirebase.web.api.common import WorkspaceAuthorizationView
 
 
@@ -24,7 +24,7 @@ class ProjectSummaryView(BaseModel):
 
 
 class ProjectDetailView(ProjectSummaryView):
-    active_participants: list[ProjectParticipant] = Field(
+    active_participants: list[ProjectParticipantInfo] = Field(
         description="Active explicit participants; Workspace participation is implicit."
     )
 

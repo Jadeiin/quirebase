@@ -133,7 +133,7 @@ def _project_participation_change_requirements(
     """One capability requirement set for both choices and command enforcement."""
     requirements = ((ResourceAction.project_update, "any"),)
     if current is not target and ProjectParticipation.managed in {current, target}:
-        return (*requirements, (ResourceAction.project_membership_manage, "managed"))
+        return (*requirements, (ResourceAction.project_participation_manage, "managed"))
     return requirements
 
 
@@ -187,24 +187,24 @@ def project_decisions(
     elif project.state is ProjectState.archived and ResourceAction.project_restore in actions:
         allowed.add(ResourceAction.project_restore)
     if (
-        action_allowed(context, ResourceAction.project_membership_manage, relation="managed")
+        action_allowed(context, ResourceAction.project_participation_manage, relation="managed")
         and project.state is ProjectState.active
         and project.participation is ProjectParticipation.managed
     ):
-        allowed.add(ResourceAction.project_membership_manage)
+        allowed.add(ResourceAction.project_participation_manage)
     if project.state is ProjectState.active and project.participation is ProjectParticipation.open:
         if is_participating and action_allowed(
             context,
-            ResourceAction.project_membership_leave,
+            ResourceAction.project_participation_leave,
             relation=project.participation.value,
         ):
-            allowed.add(ResourceAction.project_membership_leave)
+            allowed.add(ResourceAction.project_participation_leave)
         elif not is_participating and action_allowed(
             context,
-            ResourceAction.project_membership_join,
+            ResourceAction.project_participation_join,
             relation=project.participation.value,
         ):
-            allowed.add(ResourceAction.project_membership_join)
+            allowed.add(ResourceAction.project_participation_join)
     if ResourceAction.project_delete in actions:
         allowed.add(ResourceAction.project_delete)
     if ResourceAction.project_discussion_create in actions and project.state is ProjectState.active:

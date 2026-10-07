@@ -3932,8 +3932,8 @@ msgstr "此项目在当前状态下为只读。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
-msgid "This Project membership changed. Refresh and try again."
-msgstr "此项目的成员关系已更改。请刷新后重试。"
+msgid "This Project participation changed. Refresh and try again."
+msgstr "该项目的参与状态已变化，请刷新后重试。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

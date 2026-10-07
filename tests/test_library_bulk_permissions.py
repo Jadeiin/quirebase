@@ -28,7 +28,7 @@ from quirebase.models import (
     PdfAnnotation,
     Project,
     ProjectItem,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     User,
@@ -123,7 +123,7 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
         ProjectItem(workspace_id=item.workspace_id, project_id=source_project.id, item_id=item.id)
     )
     db.add(
-        ProjectMember(
+        ProjectParticipant(
             workspace_id=item.workspace_id, project_id=source_project.id, user_id=viewer_user.id
         )
     )
@@ -138,7 +138,7 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
     db.add(target_project)
     await db.flush()
     db.add(
-        ProjectMember(
+        ProjectParticipant(
             workspace_id=item.workspace_id, project_id=target_project.id, user_id=viewer_user.id
         )
     )
@@ -187,7 +187,7 @@ async def test_bulk_action_records_single_bulk_audit_event(
     db.add(target_project)
     await db.flush()
     db.add(
-        ProjectMember(
+        ProjectParticipant(
             workspace_id=item.workspace_id, project_id=target_project.id, user_id=owner.id
         )
     )
@@ -232,7 +232,7 @@ async def test_bulk_action_rejects_archived_project_assignment(
     db.add(target_project)
     await db.flush()
     db.add(
-        ProjectMember(
+        ProjectParticipant(
             workspace_id=item.workspace_id, project_id=target_project.id, user_id=owner.id
         )
     )
@@ -289,7 +289,7 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
     async_db.add_all([item, project])
     await async_db.flush()
     async_db.add(
-        ProjectMember(
+        ProjectParticipant(
             workspace_id=fixture_workspace_id(owner), project_id=project.id, user_id=owner.id
         )
     )
@@ -300,10 +300,10 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
         assert bulk_owner is not None
         stale_project = await bulk_session.get(Project, project.id)
         stale_member = await bulk_session.scalar(
-            select(ProjectMember).where(
-                ProjectMember.workspace_id == fixture_workspace_id(owner),
-                ProjectMember.project_id == project.id,
-                ProjectMember.user_id == owner.id,
+            select(ProjectParticipant).where(
+                ProjectParticipant.workspace_id == fixture_workspace_id(owner),
+                ProjectParticipant.project_id == project.id,
+                ProjectParticipant.user_id == owner.id,
             )
         )
         assert stale_project is not None and stale_member is not None

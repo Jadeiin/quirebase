@@ -18,7 +18,7 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.models import (
-    ProjectMember,
+    ProjectParticipant,
     User,
     Workspace,
     WorkspaceMember,
@@ -147,9 +147,9 @@ async def terminate_workspace_member(
         relation=workspace_member_relation(member.role),
     )
     await db.execute(
-        delete(ProjectMember).where(
-            ProjectMember.workspace_id == workspace_id,
-            ProjectMember.user_id == member.user_id,
+        delete(ProjectParticipant).where(
+            ProjectParticipant.workspace_id == workspace_id,
+            ProjectParticipant.user_id == member.user_id,
         )
     )
     member.terminated_at = datetime.now(UTC)

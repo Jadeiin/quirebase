@@ -15,7 +15,7 @@ from quirebase.models import (
     ItemTag,
     LoginSession,
     Project,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     SystemSetting,
     Tag,
@@ -64,10 +64,10 @@ async def test_projects_have_a_dedicated_workspace(
             "participation": "workspace",
         }
         membership = await db.scalar(
-            select(ProjectMember).where(
-                ProjectMember.workspace_id == item.workspace_id,
-                ProjectMember.project_id == project.id,
-                ProjectMember.user_id == item.created_by,
+            select(ProjectParticipant).where(
+                ProjectParticipant.workspace_id == item.workspace_id,
+                ProjectParticipant.project_id == project.id,
+                ProjectParticipant.user_id == item.created_by,
             )
         )
         assert membership is None

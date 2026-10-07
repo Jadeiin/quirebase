@@ -9,7 +9,7 @@ Project remains a Workspace-local research collaboration context and never grant
 Workspace Item authority.
 
 This decision supersedes the Item Owner authorization concept and the Project ownership, Project
-Role and Project-membership-as-Item-access assumptions recorded in the domain glossary and in the
+Role and Project-participation-as-Item-access assumptions recorded in the domain glossary and in the
 relevant portions of ADR 0011 and ADR 0004. Project `created_by` is provenance only; Projects have
 no owner or ownership-transfer operation. Quirebase is alpha software, so this is a forward-only
 model change with no compatibility layer for the previous assumptions.
@@ -17,7 +17,7 @@ model change with no compatibility layer for the previous assumptions.
 ## Context
 
 The instance-global library model conflates deployment, team governance and data ownership. It
-also makes Project membership carry more meaning than a research working set: membership can be
+also makes Project participation carry more meaning than a research working set: participation can be
 mistaken for Item access, while an Item shared by several Projects remains one canonical object.
 Tags, Discussions, Annotations and Agent/API requests lack one explicit governance root, and
 `created_by` fields are easily misread as durable ownership.
@@ -42,7 +42,7 @@ Instance
 │   ├── shared Tags
 │   ├── Item Discussions
 │   └── Projects
-│       ├── Project Members (no role)
+│       ├── Project participants (no role)
 │       ├── ProjectItems
 │       ├── Project Annotations
 │       └── Project Discussions and Notes
@@ -220,20 +220,20 @@ controlled by Workspace resource-action decisions.
 The Project `participation` field defines Project discoverability and participation policy. It does
 not create another role or authorization axis. HTTP creation requires an explicit participation
 choice. The creation form and default persistence/domain construction select `open`; Workspace-wide
-implicit participation must be selected deliberately. `ProjectMember` is a role-less association
+implicit participation must be selected deliberately. `ProjectParticipant` is a role-less association
 recording a User's selected working context; it grants no Workspace authority and never grants
 access to canonical Workspace Items:
 
 - `participation=workspace`: every active Workspace member can discover the Project and participates
-  implicitly. The Project has no ProjectMember associations and offers no join, leave or
-  member-management operations. Users with `project.create` may create one.
+  implicitly. The Project has no ProjectParticipant associations and offers no join, leave or
+  participant-management operations. Users with `project.create` may create one.
 - `participation=open`: every active Workspace member can discover the Project and may choose to join
   or leave. Creating an open Project, or switching from `workspace` to `open`, enrolls the actor
   as a participant. Switching from `managed` preserves the selected participants. Users with
   `project.create` may create one.
-- `participation=managed`: only ProjectMembers and Workspace owners/admins can discover the Project and
-  its Project-scoped content. Members cannot self-join or leave; Workspace owners/admins curate
-  participation with `project_membership.manage`. Only users allowed `project.create` with
+- `participation=managed`: only ProjectParticipants and Workspace owners/admins can discover the Project and
+  its Project-scoped content. Participants cannot self-join or leave; Workspace owners/admins curate
+  participation with `project_participation.manage`. Only users allowed `project.create` with
   `relation=managed` may create one, and a new managed Project starts with zero participants.
 
 Ordinary discovery is fixed domain behavior: active Workspace members discover `workspace` and
@@ -245,7 +245,7 @@ filter undiscoverable roots before locking and recheck discoverability in a fres
 the Project lock, including after waiting behind participant removal.
 
 Read models call implicit or explicit participation `is_participating`; the existence of a
-ProjectMember row is a different fact. Dashboard and personal Project lists include only
+ProjectParticipant row is a different fact. Dashboard and personal Project lists include only
 participating Projects. Managed Projects visible solely for governance stay in the directory
 and governance surfaces, rather than entering the governor's personal working context.
 
@@ -253,13 +253,13 @@ Project detail exposes `active_participants`, a list of active Users with active
 memberships and explicit selections. It is empty for implicit Workspace participation and omits
 retained selections of suspended members or inactive Users. Managed participation commands use
 `POST /projects/{id}/participants` and `DELETE /projects/{id}/participants/{user_id}`; the
-persisted ProjectMember association remains a working-context selection, not an ACL membership.
+persisted ProjectParticipant association remains a working-context selection, not an ACL membership.
 
 Project settings use one partial `PATCH /projects/{id}` command and one transaction. Omitted
-fields stay unchanged; metadata-only updates do not alter participation or ProjectMember rows.
+fields stay unchanged; metadata-only updates do not alter participation or ProjectParticipant rows.
 Participation changes are an explicit submitted field with their own capability check.
 
-Switching to `workspace` removes all ProjectMember associations in the same transaction, including
+Switching to `workspace` removes all ProjectParticipant associations in the same transaction, including
 those belonging to suspended Workspace members. The UI confirms this permanent loss of participant
 selection before submitting; switching back does not restore it. Switching
 between `open` and `managed` preserves selected participants; transitioning from `workspace` to
@@ -267,7 +267,7 @@ between `open` and `managed` preserves selected participants; transitioning from
 selection uses the active Workspace member directory and omits existing participants. An empty
 participant list is valid for `open` and `managed`. No Project has an owner, ownership transfer, or
 minimum-member invariant. Workspace membership and resource-action policy remain the authorization boundary for
-canonical Workspace data and Project mutations; ProjectMember affects only managed Project
+canonical Workspace data and Project mutations; ProjectParticipant affects only managed Project
 discoverability.
 
 Item organization shows already assigned Projects, Workspace Projects and joined Projects by
@@ -275,23 +275,23 @@ default. Other open Projects and managed Projects visible through governance are
 choices. This is a working-context filter, not an authority restriction: a permitted caller can
 still assign an Item to an open Project without joining it.
 
-Project membership never grants `item.read`, `item.update`, `file.manage`, `item.delete`, Tag
+Project participation never grants `item.read`, `item.update`, `file.manage`, `item.delete`, Tag
 governance or any other Workspace authority. ProjectItem means only “this Item is in this Project
 working set”; it cannot create a durable Item access grant or be used to cross a Workspace
 boundary. Canonical Items remain accessible according to Workspace membership and policy,
 even when their association with a managed Project is hidden.
 
 Managing participation for an active managed Project is an owner/admin decision
-(`resource=project_membership`, `action=manage`, `relation=managed`). Open Projects allow
-self-service participation, while Workspace Projects have no ProjectMember lifecycle. If
+(`resource=project_participation`, `action=manage`, `relation=managed`). Open Projects allow
+self-service participation, while Workspace Projects have no ProjectParticipant lifecycle. If
 delegation is needed later, it is represented by a resource-action policy grant rather than a
 Project role.
 
 No Project creator or participant must transfer ownership before leaving, suspension, termination
 or account deactivation. Those lifecycle operations remain governed by Workspace membership and
-the independent Workspace-owner invariant; ProjectMember associations are removed or become
+the independent Workspace-owner invariant; ProjectParticipant associations are removed or become
 inactive as appropriate without preserving a minimum participant count. Suspending a Workspace
-member retains their ProjectMember rows but makes participation ineffective because Workspace
+member retains their ProjectParticipant rows but makes participation ineffective because Workspace
 access is denied. Reactivation restores their prior participation. Termination deletes those
 rows; later Workspace admission does not restore old open or managed participation.
 
@@ -299,7 +299,7 @@ rows; later Workspace admission does not restore old open or managed participati
 
 Item Discussion is Workspace-scoped and is visible through Item access. Project Discussion, Notes
 and Project Annotations are Project-scoped: `workspace` and `open` Projects are visible to all
-active Workspace members, while managed Project content is visible only to ProjectMembers and
+active Workspace members, while managed Project content is visible only to ProjectParticipants and
 Workspace owners/admins. Mutations still require the caller's Workspace resource-action decision,
 and participation never grants that authority.
 
@@ -308,7 +308,7 @@ or `project_discussion.delete` decision is effective with `relation=own`. Worksp
 admins may perform `delete` with `relation=other` on another author's Item or Project Discussion
 message through a reason-required moderation operation with an audit event. Project moderation follows
 Project lineage and lifecycle rules; governors can reach managed Project content without becoming
-ProjectMembers. Moderation does not rewrite authored content or attribution. An instance
+ProjectParticipants. Moderation does not rewrite authored content or attribution. An instance
 administrator has no implicit Discussion moderation authority, and read-only break-glass cannot
 perform a moderation mutation.
 
@@ -434,13 +434,13 @@ provisioning, atomic ownership transfer and prohibitions on owner suspension, te
 deactivation; `workspace_owner_ids()` validates owner membership and account activity on reads in
 the same snapshot as Workspace existence. A concurrently deleted root is omitted, while an invalid
 surviving root is an integrity failure. `doctor` diagnoses missing or invalid owners and Project
-participation drift: Workspace-mode Projects must have no ProjectMember rows, and each explicit
+participation drift: Workspace-mode Projects must have no ProjectParticipant rows, and each explicit
 participant must have a current membership in the same Workspace. Suspended memberships and
 inactive accounts may retain participation for recovery; terminated memberships may not.
 Workspace-local Tag
 uniqueness is enforced by `UNIQUE(workspace_id, normalized_name)`. Projects have no owner invariant.
 The schema must not materialize implicit Workspace-wide participation or require a minimum
-ProjectMember count.
+ProjectParticipant count.
 
 ## Consequences
 
@@ -448,7 +448,7 @@ ProjectMember count.
   de-emphasize the selector while retaining the same explicit backend boundary.
 - Item stewardship, file access, Tag governance, Discussions, Annotations and Agent context have
   one auditable root instead of inheriting accidental Project or creator semantics.
-- Project membership records selected working contexts only. Workspace-wide participation remains
+- Project participation records selected working contexts only. Workspace-wide participation remains
   implicit, open participation is self-service, and managed participation is private-like and
   explicitly curated. Managed membership exposes Project-scoped content but does not create
   canonical Item grants or Workspace authority.
@@ -475,7 +475,7 @@ ProjectMember count.
 - **Use Workspace as UI-only grouping.** Rejected because it leaves the existing implicit ACL and
   provenance ambiguity intact.
 - **Preserve Item Owner or Project roles as a second authority path.** Rejected because creator or
-  Project membership would again bypass Workspace governance and produce conflicting decisions.
+  Project participation would again bypass Workspace governance and produce conflicting decisions.
 - **Give instance administrators implicit content access.** Rejected because tenancy governance and
   research-data access have different audit and least-privilege requirements.
 - **Introduce live cross-Workspace sharing now.** Rejected because its lifecycle, revocation and

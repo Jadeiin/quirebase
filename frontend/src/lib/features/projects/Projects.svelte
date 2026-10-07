@@ -114,7 +114,7 @@
 			error = apiErrorMessage(reason, $t('Unable to join Project'));
 			if (
 				reason instanceof ApiError &&
-				['project_lifecycle_error', 'project_member_conflict'].includes(reason.code)
+				['project_lifecycle_error', 'project_participation_conflict'].includes(reason.code)
 			) {
 				await refresh();
 			}
@@ -298,7 +298,7 @@
 						>{/if}
 					<div class="flex items-center justify-between gap-2">
 						<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
-						{#if can(project.authorization, 'project_membership.join')}<Button
+						{#if can(project.authorization, 'project_participation.join')}<Button
 								disabled={busy}
 								onclick={() => join(project.id)}>{$t('Join')}</Button
 							>{/if}

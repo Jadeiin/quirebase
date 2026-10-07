@@ -14,7 +14,7 @@ from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.models import (
     Project,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     User,
@@ -84,9 +84,9 @@ async def update_project_settings(
         normalized_participation,
     }:
         await db.execute(
-            delete(ProjectMember).where(
-                ProjectMember.workspace_id == workspace_id,
-                ProjectMember.project_id == project_id,
+            delete(ProjectParticipant).where(
+                ProjectParticipant.workspace_id == workspace_id,
+                ProjectParticipant.project_id == project_id,
             )
         )
     if (
@@ -95,7 +95,7 @@ async def update_project_settings(
         and project.participation is ProjectParticipation.workspace
     ):
         db.add(
-            ProjectMember(
+            ProjectParticipant(
                 workspace_id=workspace_id,
                 project_id=project_id,
                 user_id=context.actor_id,

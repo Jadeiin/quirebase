@@ -11,7 +11,7 @@ from quirebase.models import (
     AuditEvent,
     Item,
     Project,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     User,
@@ -51,7 +51,7 @@ async def test_project_defaults_select_open_without_workspace_wide_participation
         owner, target, workspace, _member = await _members(db)
         project = await create_project(db, owner, workspace.id, "Open by default")
         assert project.participation is ProjectParticipation.open
-        assert list(await db.scalars(select(ProjectMember.user_id))) == [owner.id]
+        assert list(await db.scalars(select(ProjectParticipant.user_id))) == [owner.id]
         other_context = await resolve_workspace_context(db, target, workspace.id)
         visible = await open_project_workspace(db, other_context, project.id)
         assert not visible.is_participating

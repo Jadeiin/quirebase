@@ -13,7 +13,7 @@ from quirebase.audit import record_event
 from quirebase.models import (
     AuditEvent,
     Project,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     User,
     Workspace,
@@ -21,7 +21,7 @@ from quirebase.models import (
     WorkspaceMemberState,
     WorkspaceRole,
 )
-from quirebase.projects import add_project_member, check_project_integrity, create_project
+from quirebase.projects import add_project_participant, check_project_integrity, create_project
 from quirebase.workspaces import (
     archive_workspace,
     check_workspace_integrity,
@@ -130,7 +130,7 @@ async def test_project_diagnostics_respect_retained_participation_and_detect_dri
         managed = await create_project(
             db, owner, workspace.id, "Managed", ProjectParticipation.managed
         )
-        await add_project_member(db, owner, workspace.id, managed.id, participant.username)
+        await add_project_participant(db, owner, workspace.id, managed.id, participant.username)
         assert await check_project_integrity(db) == []
         await suspend_workspace_member(db, owner, workspace.id, member.id)
         participant.active = False
@@ -142,7 +142,7 @@ async def test_project_diagnostics_respect_retained_participation_and_detect_dri
         await db.commit()
         findings = await check_project_integrity(db)
         explicit = await db.scalar(
-            select(ProjectMember).where(ProjectMember.project_id == managed.id)
+            select(ProjectParticipant).where(ProjectParticipant.project_id == managed.id)
         )
         assert len(findings) == 1 and str(explicit.id) in findings[0]
         member.terminated_at = None
@@ -157,7 +157,9 @@ async def test_project_diagnostics_respect_retained_participation_and_detect_dri
             )
         )
         db.add(
-            ProjectMember(workspace_id=workspace.id, project_id=implicit.id, user_id=participant.id)
+            ProjectParticipant(
+                workspace_id=workspace.id, project_id=implicit.id, user_id=participant.id
+            )
         )
         await db.commit()
         findings = await check_project_integrity(db)

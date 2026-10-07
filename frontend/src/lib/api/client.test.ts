@@ -396,7 +396,7 @@ describe('structured API errors', () => {
 	it.each([
 		'version_conflict',
 		'project_lifecycle_error',
-		'project_member_conflict',
+		'project_participation_conflict',
 		'tag_conflict',
 		'document_not_ready',
 		'import_batch_conflict'

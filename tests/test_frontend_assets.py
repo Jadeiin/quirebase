@@ -132,11 +132,11 @@ def test_item_sections_use_the_fixed_query_annotation_review_projection():
     assert "ItemWorkspacePermissionsView" not in item_schema
 
 
-def test_project_membership_copy_matches_managed_discovery_semantics():
+def test_project_participation_copy_matches_managed_discovery_semantics():
     project = read("frontend/src/lib/features/projects/ProjectWorkspace.svelte")
-    assert "can('project_membership.manage')" in project
-    assert "can('project_membership.join')" in project
-    assert "can('project_membership.leave')" in project
+    assert "can('project_participation.manage')" in project
+    assert "can('project_participation.join')" in project
+    assert "can('project_participation.leave')" in project
     assert (
         "Managed Projects are visible only to their participants and Workspace owners/admins."
         in project

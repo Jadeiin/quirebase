@@ -220,7 +220,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 						'project.update',
 						'project.archive',
 						'project_item.manage',
-						'project_membership.manage',
+						'project_participation.manage',
 						'project.delete'
 					]
 				},
@@ -245,7 +245,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 								'project.update',
 								'project.archive',
 								'project_item.manage',
-								'project_membership.manage',
+								'project_participation.manage',
 								'project.delete'
 							]
 						},

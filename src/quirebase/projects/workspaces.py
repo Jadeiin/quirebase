@@ -25,7 +25,7 @@ from quirebase.models import (
     Item,
     Project,
     ProjectItem,
-    ProjectMember,
+    ProjectParticipant,
     ProjectParticipation,
     ProjectState,
     User,
@@ -34,10 +34,10 @@ from quirebase.models import (
 )
 
 from ._locking import lock_project_root
-from ._persistence import ProjectMemberRepository, ProjectService
+from ._persistence import ProjectParticipantRepository, ProjectService
 from .lifecycle import _validate_description, _validate_name
 from .loaders import require_project
-from .members import ProjectParticipant
+from .participation import ProjectParticipantInfo
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class ProjectWorkspace:
     project: Project
-    active_participants: tuple[ProjectParticipant, ...]
+    active_participants: tuple[ProjectParticipantInfo, ...]
     item_count: int
     is_participating: bool
 
@@ -86,8 +86,8 @@ async def create_project(
     )
     project = await ProjectService(db).create(project)
     if parsed_participation is ProjectParticipation.open:
-        await ProjectMemberRepository(session=db).add(
-            ProjectMember(
+        await ProjectParticipantRepository(session=db).add(
+            ProjectParticipant(
                 workspace_id=workspace_id,
                 project_id=project.id,
                 user_id=user.id,
@@ -121,14 +121,14 @@ async def list_workspace_projects(
     if view not in {"mine", "joinable", "all"}:
         raise ValidationFailure("invalid Project list view")
     require_action(context, ResourceAction.workspace_read)
-    member_ids = (
-        workspace_select(ProjectMember, context)
-        .join(Project, Project.id == ProjectMember.project_id)
-        .where(ProjectMember.user_id == context.actor_id)
-        .with_only_columns(ProjectMember.project_id)
+    participant_project_ids = (
+        workspace_select(ProjectParticipant, context)
+        .join(Project, Project.id == ProjectParticipant.project_id)
+        .where(ProjectParticipant.user_id == context.actor_id)
+        .with_only_columns(ProjectParticipant.project_id)
     )
     is_participating = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
-        member_ids
+        participant_project_ids
     )
     query = (
         workspace_select(Project, context)
@@ -169,7 +169,11 @@ async def list_workspace_projects(
         .tuples()
         .all()
     )
-    joined = set((await db.scalars(member_ids.where(ProjectMember.project_id.in_(ids)))).all())
+    joined = set(
+        (
+            await db.scalars(participant_project_ids.where(ProjectParticipant.project_id.in_(ids)))
+        ).all()
+    )
     return [
         (
             project,
@@ -191,15 +195,15 @@ async def open_project_workspace(
         participant_users = (
             await db.scalars(
                 select(User)
-                .join(ProjectMember, ProjectMember.user_id == User.id)
+                .join(ProjectParticipant, ProjectParticipant.user_id == User.id)
                 .join(
                     WorkspaceMember,
-                    (WorkspaceMember.workspace_id == ProjectMember.workspace_id)
+                    (WorkspaceMember.workspace_id == ProjectParticipant.workspace_id)
                     & (WorkspaceMember.user_id == User.id),
                 )
                 .where(
-                    ProjectMember.workspace_id == workspace_id,
-                    ProjectMember.project_id == project_id,
+                    ProjectParticipant.workspace_id == workspace_id,
+                    ProjectParticipant.project_id == project_id,
                     User.active.is_(True),
                     WorkspaceMember.workspace_id == workspace_id,
                     WorkspaceMember.user_id == User.id,
@@ -211,10 +215,10 @@ async def open_project_workspace(
         ).all()
         is_participating = (
             await db.scalar(
-                select(ProjectMember.id).where(
-                    ProjectMember.workspace_id == workspace_id,
-                    ProjectMember.project_id == project_id,
-                    ProjectMember.user_id == workspace.actor_id,
+                select(ProjectParticipant.id).where(
+                    ProjectParticipant.workspace_id == workspace_id,
+                    ProjectParticipant.project_id == project_id,
+                    ProjectParticipant.user_id == workspace.actor_id,
                 )
             )
             is not None
@@ -228,7 +232,8 @@ async def open_project_workspace(
     return ProjectWorkspace(
         project=context.project,
         active_participants=tuple(
-            ProjectParticipant(user_id=row.id, username=row.username) for row in participant_users
+            ProjectParticipantInfo(user_id=row.id, username=row.username)
+            for row in participant_users
         ),
         item_count=item_count or 0,
         is_participating=is_participating,

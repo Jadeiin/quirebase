@@ -108,7 +108,7 @@ ORM_MODEL_OWNERS = {
     "PdfAnnotationReply": "documents",
     "Project": "projects",
     "ProjectItem": "projects",
-    "ProjectMember": "projects",
+    "ProjectParticipant": "projects",
     "SystemSetting": "operations",
     "Tag": "library",
     "User": "accounts",

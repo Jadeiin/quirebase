@@ -14,7 +14,7 @@ from quirebase.access.context import (
 from quirebase.access.scope import workspace_select
 from quirebase.access.workspace_policy import ResourceAction, action_allowed, action_spec
 from quirebase.core.errors import ProjectLifecycleError, ResourceUnavailable
-from quirebase.models import Project, ProjectMember, ProjectParticipation, ProjectState, User
+from quirebase.models import Project, ProjectParticipant, ProjectParticipation, ProjectState, User
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -36,14 +36,14 @@ def project_discovery_predicate(ctx: WorkspaceContext) -> ColumnElement[bool]:
     if action_allowed(ctx, ResourceAction.project_governance_read):
         discoverable = or_(discoverable, Project.participation == ProjectParticipation.managed)
     else:
-        member_project_ids = select(ProjectMember.project_id).where(
-            ProjectMember.workspace_id == ctx.workspace_id,
-            ProjectMember.user_id == ctx.actor_id,
+        participant_project_ids = select(ProjectParticipant.project_id).where(
+            ProjectParticipant.workspace_id == ctx.workspace_id,
+            ProjectParticipant.user_id == ctx.actor_id,
         )
         discoverable = or_(
             discoverable,
             (Project.participation == ProjectParticipation.managed)
-            & Project.id.in_(member_project_ids),
+            & Project.id.in_(participant_project_ids),
         )
     return and_(
         Project.workspace_id == ctx.workspace_id,
@@ -63,7 +63,7 @@ async def require_project_discoverable(
 ) -> ProjectContext:
     """Recheck discovery in a fresh statement after a root lock is acquired.
 
-    A statement waiting for a Project lock can have a membership snapshot from
+    A statement waiting for a Project lock can have a participation snapshot from
     before the prior transaction removed that participant.
     """
     discoverable_id = await db.scalar(
