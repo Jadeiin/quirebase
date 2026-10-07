@@ -272,7 +272,9 @@ test('governance freeze is visible and hides Workspace mutations', async ({ page
 	await expect(page.getByRole('button', { name: 'Reindex Workspace' })).toHaveCount(0);
 });
 
-test('Item actions require source export and file management decisions', async ({ page }) => {
+test('Item actions follow export, file management and copy-target projections', async ({
+	page
+}) => {
 	await mockSession(page);
 	await projectActions(page, 'viewer', ['workspace.read']);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
@@ -286,13 +288,7 @@ test('Item actions require source export and file management decisions', async (
 					processing_state: 'ready'
 				},
 				authorization: { allowed: ['item.update'] },
-				copy_targets: [
-					{
-						id: 'workspace-2',
-						name: 'Target',
-						authorization: { allowed: [] }
-					}
-				]
+				copy_targets: []
 			}
 		})
 	);
@@ -330,6 +326,8 @@ test('Item actions require source export and file management decisions', async (
 		})
 	);
 	await page.goto('/workspace/workspace-1/item/item-1/files');
+	await expect(page.getByRole('button', { name: 'Record tools' })).toBeVisible();
+	await expect(page.getByText('paper.pdf', { exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Export' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Copy to Workspace' })).toHaveCount(0);
