@@ -20,8 +20,8 @@ from quirebase.access import (
     visible_annotation_scope_predicate,
 )
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.library._metadata import ItemMetadata, metadata_from_item
 from quirebase.library.authors import get_item_authors
-from quirebase.library.item_metadata import ItemMetadata, metadata_from_item
 from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
 from quirebase.models import (
     Attachment,

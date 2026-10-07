@@ -38,7 +38,7 @@ from quirebase.models import (
 from quirebase.projects import list_workspace_projects
 from quirebase.search import search_index
 
-from ._persistence import ItemService
+from ._item_service import ItemService
 
 if TYPE_CHECKING:
     from advanced_alchemy.filters import StatementFilter

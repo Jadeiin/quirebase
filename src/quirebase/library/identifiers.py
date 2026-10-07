@@ -1,27 +1,25 @@
 from __future__ import annotations
 
-import contextlib
-import json
-import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from inquiro.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
-from inquiro.canonical import clean_markup, clean_rich_markup, normalize_reference_type
 from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 
-from quirebase.access import ResourceAction
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
-from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
+from quirebase.core.errors import ResourceUnavailable, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
-from quirebase.library.authors import parse_author_name, set_item_authors_from_string
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.search import search_index
+
+from ._item_identifiers import _replace_item_identifiers_many
+from ._item_service import ItemService
+from ._metadata import generate_bibtex_key
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -29,45 +27,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
-
-
-STOP_WORDS = {
-    "a",
-    "an",
-    "the",
-    "in",
-    "on",
-    "of",
-    "for",
-    "with",
-    "and",
-    "or",
-    "to",
-    "at",
-    "by",
-    "from",
-}
-
-_BOUNDED_METADATA_FIELDS = {
-    "publication_date": 32,
-    "volume": 100,
-    "issue": 100,
-    "pages": 100,
-    "place_published": 255,
-}
-
-
-def _bounded_text(value: str, field: str, limit: int) -> str:
-    if len(value) > limit:
-        raise ValidationFailure(f"{field} is too long")
-    return value
-
-
-def clean_identifier_value(provider: str, value: str) -> str:
-    cleaned = value.strip()
-    if provider.lower() == "doi":
-        cleaned = normalize_doi(cleaned).rstrip(".,; ")
-    return cleaned
 
 
 async def set_item_identifiers(
@@ -78,79 +37,13 @@ async def set_item_identifiers(
     id_pairs: list[tuple[str, str]],
 ) -> list[ItemIdentifier]:
     item = await require_editable_item(db, user, workspace_id, item_id)
-    return await _set_item_identifiers_for_item(db, user, item, id_pairs)
-
-
-async def _set_item_identifiers_for_item(
-    db: AsyncSession,
-    user: User,
-    item: Item,
-    id_pairs: list[tuple[str, str]],
-) -> list[ItemIdentifier]:
-    item_id = item.id
-
-    normalized_pairs: list[tuple[str, str]] = []
-    for provider, val in id_pairs:
-        prov = provider.strip().lower()
-        cleaned_val = clean_identifier_value(prov, val)
-        if not prov or not cleaned_val:
-            continue
-        if len(prov) > 40:
-            raise ValidationFailure("identifier provider is too long")
-        if len(cleaned_val) > 500:
-            raise ValidationFailure("identifier value is too long")
-        normalized_pairs.append((prov, cleaned_val))
-
-    await db.execute(delete(ItemIdentifier).where(ItemIdentifier.item_id == item_id))
-    await db.flush()
-
-    links: list[ItemIdentifier] = []
-    idents_dict: dict[str, str] = {}
-    doi_value: str | None = None
-
-    for prov, cleaned_val in normalized_pairs:
-        if prov == "doi":
-            # DOI is canonical on Item; it is not an upstream identifier row.
-            doi_value = cleaned_val
-            continue
-        link = ItemIdentifier(item_id=item_id, provider=prov, value=cleaned_val)
-        db.add(link)
-        links.append(link)
-        idents_dict[prov] = cleaned_val
-
-    item.doi = doi_value
-    item.identifiers = json.dumps(idents_dict) if idents_dict else None
-    await db.flush()
-    return links
+    return await _replace_item_identifiers_many(db, [(item, id_pairs)])
 
 
 async def get_item_identifiers(db: AsyncSession, item_id: UUID) -> list[ItemIdentifier]:
     return list(
         (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id))).all()
     )
-
-
-def generate_bibtex_key(item: Item) -> str:
-    author_part = "Unknown"
-    if item.authors:
-        first_author = item.authors.split(";")[0].strip()
-        last_name, _first_name = parse_author_name(first_author)
-        # Clean non-alphanumeric
-        last_clean = re.sub(r"[^A-Za-z0-9]", "", last_name)
-        if last_clean:
-            author_part = last_clean.capitalize()
-
-    year_part = extract_year(item.publication_date) or "XXXX"
-
-    title_part = "Work"
-    if item.title:
-        words = re.findall(r"[A-Za-z0-9]+", item.title)
-        for word in words:
-            if word.lower() not in STOP_WORDS and len(word) > 2:
-                title_part = word.capitalize()
-                break
-
-    return f"{author_part}{year_part}{title_part}"
 
 
 async def rescan_pdf_doi(
@@ -193,7 +86,7 @@ async def rescan_pdf_doi(
                     if ident.provider != "doi"
                 ]
                 existing_pairs.append(("doi", found_doi))
-                await _set_item_identifiers_for_item(db, user, item, existing_pairs)
+                await _replace_item_identifiers_many(db, [(item, existing_pairs)])
                 item.updated_by = user.id
                 item.updated_at = datetime.now(UTC)
                 item.version += 1
@@ -222,106 +115,11 @@ async def apply_metadata_record(
     merge: bool = False,
     forced_identifiers: dict[str, str] | None = None,
 ) -> Item:
-    """Map a metadata record onto an item.
-
-    With merge=False (new items) list fields (urls, keywords, identifiers)
-    are taken from the record; with merge=True (existing items) they are
-    merged with the item's current values.
-    """
-    rec = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
-
-    scalar_fields = {
-        "title": ("title", clean_rich_markup),
-        "abstract": ("abstract", clean_rich_markup),
-        "publication_date": ("publication_date", lambda value: str(value).strip()),
-        "publication_title": ("publication_title", clean_markup),
-        "journal_abbreviation": ("journal_abbreviation", clean_markup),
-        "volume": ("volume", lambda value: str(value).strip()),
-        "issue": ("issue", lambda value: str(value).strip()),
-        "pages": ("pages", lambda value: str(value).strip()),
-        "publisher": ("publisher", clean_markup),
-        "affiliation": ("affiliation", clean_markup),
-        "place_published": ("place_published", clean_markup),
-    }
-    for field, (record_field, transform) in scalar_fields.items():
-        value = rec.get(record_field)
-        if value and (cleaned_value := transform(value)):
-            if (limit := _BOUNDED_METADATA_FIELDS.get(field)) is not None:
-                cleaned_value = _bounded_text(str(cleaned_value), field, limit)
-            setattr(item, field, cleaned_value)
-
-    if rec.get("reference_type") and (ref_type := normalize_reference_type(rec["reference_type"])):
-        item.reference_type = _bounded_text(ref_type, "reference type", 40)
-        bib_type = rec.get("bibtex_type") or REFERENCE_TYPE_TO_BIBTEX.get(ref_type, ref_type)
-        if bib_type:
-            item.bibtex_type = _bounded_text(str(bib_type).strip().lower(), "BibTeX type", 40)
-    elif rec.get("bibtex_type"):
-        item.bibtex_type = _bounded_text(str(rec["bibtex_type"]).strip().lower(), "BibTeX type", 40)
-
-    for role, raw in (("author", rec.get("authors")), ("editor", rec.get("editors"))):
-        if raw:
-            if role == "author":
-                item.authors = str(raw).strip() or None
-            else:
-                item.editors = str(raw).strip() or None
-            await set_item_authors_from_string(db, user, item, role=role)
-
-    if merge:
-        urls = [u.strip() for u in (item.urls or "").splitlines() if u.strip()]
-        keywords = [k.strip() for k in (item.keywords or "").split(";") if k.strip()]
-    else:
-        urls = []
-        keywords = []
-    for url in str(rec.get("urls") or "").splitlines():
-        url = url.strip()
-        if url and url not in urls:
-            urls.append(url)
-    for keyword in str(rec.get("keywords") or "").split(";"):
-        keyword = keyword.strip()
-        if keyword and keyword not in keywords:
-            keywords.append(keyword)
-    if rec.get("urls") or not merge:
-        item.urls = "\n".join(urls) if urls else None
-    if rec.get("keywords") or not merge:
-        item.keywords = "; ".join(keywords) if keywords else None
-
-    custom_fields = rec.get("custom_fields")
-    if custom_fields is not None:
-        if not isinstance(custom_fields, dict):
-            raise ValidationFailure("custom fields must be a JSON object")
-        item.custom_fields = dict(custom_fields)
-
-    if not item.bibtex_id:
-        candidate_key = str(rec.get("bibtex_id") or "").strip() or generate_bibtex_key(item)
-        item.bibtex_id = _bounded_text(candidate_key, "BibTeX key", 255)
-
-    identifiers = (
-        {ident.provider: ident.value for ident in await get_item_identifiers(db, item.id)}
-        if merge
-        else {}
+    item = await require_editable_item(db, user, item.workspace_id, item.id)
+    values = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
+    return await ItemService(db).merge_candidate(
+        item, values, merge=merge, forced_identifiers=forced_identifiers
     )
-    if merge and item.doi:
-        # DOI is canonical on Item rather than an ItemIdentifier row. Seed it
-        # into the merge so non-DOI providers cannot erase it by omission.
-        identifiers["doi"] = item.doi
-    raw_idents = rec.get("identifiers")
-    if raw_idents:
-        with contextlib.suppress(json.JSONDecodeError, TypeError):
-            parsed = json.loads(raw_idents) if isinstance(raw_idents, str) else raw_idents
-            if isinstance(parsed, dict):
-                for provider, value in parsed.items():
-                    if isinstance(value, str) and value.strip():
-                        identifiers[provider] = clean_identifier_value(provider, value)
-    if rec.get("doi") and (doi := clean_identifier_value("doi", rec["doi"])):
-        identifiers["doi"] = doi
-    for provider, value in (forced_identifiers or {}).items():
-        cleaned_value = clean_identifier_value(provider, value)
-        if cleaned_value:
-            identifiers[provider] = cleaned_value
-    if identifiers:
-        await set_item_identifiers(db, user, item.workspace_id, item.id, list(identifiers.items()))
-
-    return item
 
 
 async def create_item_from_metadata_record(
@@ -331,10 +129,10 @@ async def create_item_from_metadata_record(
     record: CandidateRecord | dict,
 ) -> Item:
     """Create an imported Item and enqueue its initial Tag recommendation."""
-    item = Item(title="Untitled", workspace_id=workspace_id, created_by=user.id)
-    db.add(item)
-    await db.flush()
-    await apply_metadata_record(db, user, item, record)
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
+    values = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
+    items = await ItemService(db).create_many_from_candidates(workspace_id, user.id, [values])
+    item = items[0]
     await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=user.id)
     return item
 

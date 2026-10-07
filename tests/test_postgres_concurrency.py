@@ -53,10 +53,12 @@ from quirebase.library import (
     search_library,
     stage_import_batch,
 )
+from quirebase.library.authors import AuthorService
 from quirebase.library.citations import CitationStyleService, create_custom_citation_style
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
+    Author,
     CitationStyle,
     DiscussionMessage,
     FileRevision,
@@ -1776,3 +1778,35 @@ async def test_concurrent_citation_style_install_translates_unique_race_and_keep
             )
         )
         assert names == {"Shared", "Distinct"}
+
+
+@pytest.mark.concurrency_case("author-install")
+async def test_concurrent_author_batches_recover_conflicts_and_keep_missing_identities(
+    postgres_sessions, postgres_race
+):
+    async def install_second():
+        async with postgres_race.session("second") as db:
+            resolved = await AuthorService(db).resolve_many([
+                ("Shared", "Author"),
+                ("Onlysecond", None),
+                ("SHARED", "AUTHOR"),
+            ])
+            await db.commit()
+            return {key: author.id for key, author in resolved.items()}
+
+    async with postgres_race.session("first") as db:
+        first = await AuthorService(db).resolve_many([("Shared", "Author"), ("Onlyfirst", None)])
+        shared_id = first["shared\x1fauthor"].id
+        postgres_race.start("second", install_second())
+        await postgres_race.wait_blocked("second", "first")
+        await db.commit()
+        second = await postgres_race.join("second")
+        assert second["shared\x1fauthor"] == shared_id
+        assert "onlysecond\x1f" in second
+
+    async with postgres_race.session("verify") as db:
+        assert set(await db.scalars(select(Author.identity_key))) == {
+            "shared\x1fauthor",
+            "onlyfirst\x1f",
+            "onlysecond\x1f",
+        }

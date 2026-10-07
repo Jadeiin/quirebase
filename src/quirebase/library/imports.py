@@ -37,12 +37,13 @@ from quirebase.documents.revisions import (
 )
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
-from quirebase.library.identifiers import create_item_from_metadata_record
 from quirebase.library.providers import candidate_record_values, lookup_candidate
-from quirebase.models import ImportBatch, Item, ItemAuthor, User
+from quirebase.library.workflows import request_item_tag_recommendation
+from quirebase.models import ImportBatch, Item, User
 from quirebase.search import search_index
 
-from ._persistence import ImportBatchService, ItemService
+from ._item_service import ItemService
+from ._persistence import ImportBatchService
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -671,14 +672,22 @@ async def commit_import_batch(
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
     source_files = {file.metadata["source_id"]: file for file in batch.staged_files}
-    committed_item_ids: list[UUID] = []
+    candidates: list[dict] = []
+    selected_files: list[FileObject | None] = []
     for record in records:
         candidate = dict(record)
         source_id = candidate.pop("_source_id", None)
         pdf = source_files.get(source_id) if source_id is not None else None
         if source_id is not None and (pdf is None or pdf.size is None):
             raise BatchConflict("the candidate has no staged source file")
-        item = await create_item_from_metadata_record(db, actor, workspace_id, candidate)
+        candidates.append(candidate)
+        selected_files.append(pdf)
+    items = await ItemService(db).create_many_from_candidates(workspace_id, actor.id, candidates)
+    committed_item_ids: list[UUID] = []
+    for item, pdf in zip(items, selected_files, strict=True):
+        await request_item_tag_recommendation(
+            db, item.id, workspace_id=workspace_id, actor_id=actor.id
+        )
         if pdf is not None:
             await attach_staged_pdf(
                 db,
@@ -759,10 +768,9 @@ async def export_accessible_bibliography(
 ) -> tuple[str, str, str]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     items = list(
-        await ItemService(session=db, statement=visible_items_query(workspace_id)).get_many(
-            load=[[Item.author_links, ItemAuthor.author]],
-            order_by=[("updated_at", True), ("id", False)],
-        )
+        await ItemService(
+            session=db, statement=visible_items_query(workspace_id)
+        ).get_bibliography()
     )
     if file_format == "csl":
         return await format_csl_export(

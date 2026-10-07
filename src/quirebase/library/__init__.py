@@ -1,6 +1,14 @@
 from __future__ import annotations
 
 from quirebase.core.errors import UpstreamServiceError
+from quirebase.library._metadata import (
+    Contributor,
+    CustomField,
+    ExternalIdentifier,
+    ItemMetadata,
+    ItemWriteResult,
+    JsonValue,
+)
 from quirebase.library.activity import (
     get_accessible_item_identifiers,
     record_discovery_search_audit,
@@ -66,12 +74,6 @@ from quirebase.library.imports import (
     stage_pdf_import_batch,
 )
 from quirebase.library.item_metadata import (
-    Contributor,
-    CustomField,
-    ExternalIdentifier,
-    ItemMetadata,
-    ItemWriteResult,
-    JsonValue,
     create_item,
     regenerate_bibtex_key,
     revise_item_metadata,

@@ -10,7 +10,7 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, ValidationFailure
-from quirebase.library import ItemMetadata, create_item
+from quirebase.library import Contributor, ExternalIdentifier, ItemMetadata, create_item
 from quirebase.library.citations import (
     CitationStyleRepository,
     CitationStyleService,
@@ -18,7 +18,17 @@ from quirebase.library.citations import (
     delete_custom_citation_style,
 )
 from quirebase.library.tags import TagRepository, delete_tag, get_or_create_tag, rename_tag
-from quirebase.models import AuditEvent, CitationStyle, Item, SystemSetting, Tag, User
+from quirebase.models import (
+    AuditEvent,
+    Author,
+    CitationStyle,
+    Item,
+    ItemAuthor,
+    ItemIdentifier,
+    SystemSetting,
+    Tag,
+    User,
+)
 from quirebase.operations.settings import RuntimeSettingsService, update_runtime_settings
 
 
@@ -113,10 +123,15 @@ async def test_item_service_creation_rolls_back_search_and_audit_when_enqueue_fa
             async_db,
             persistence_actor,
             fixture_workspace_id(persistence_actor),
-            ItemMetadata("Uncommitted Item"),
+            ItemMetadata(
+                "Uncommitted Item",
+                authors=(Contributor("Uncommitted", "Author"),),
+                identifiers=(ExternalIdentifier("pmid", "uncommitted"),),
+            ),
         )
     async with async_session_factory() as observer:
-        assert await observer.scalar(select(func.count()).select_from(Item)) == 0
+        for model in (Item, Author, ItemAuthor, ItemIdentifier):
+            assert await observer.scalar(select(func.count()).select_from(model)) == 0
         assert await observer.scalar(text("SELECT count(*) FROM item_search")) == 0
         assert (
             await observer.scalar(select(AuditEvent).where(AuditEvent.action == "item.create"))
@@ -236,3 +251,132 @@ async def test_service_mutations_translate_a_root_deleted_after_initial_loading(
     monkeypatch.setattr(repository_type, "get", delete_before_get)
     with pytest.raises(domain_error, match="not found"):
         await mutation
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("size", [2, 50])
+async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
+    async_db, persistence_actor, size
+):
+    from sqlalchemy import event
+
+    from quirebase.library import commit_import_batch, stage_import_batch
+
+    workspace_id = fixture_workspace_id(persistence_actor)
+    contents = "\n".join(
+        f"@article{{entry{index}, title={{Batch item {index}}}, "
+        f"author={{Shared, Author and Writer{index}, Name}}, "
+        f"editor={{SHARED, AUTHOR}}, year={{2026}}, doi={{10.1000/{index}}}}}"
+        for index in range(size)
+    ).encode()
+    batch, records, errors = await stage_import_batch(
+        async_db, persistence_actor, workspace_id, contents, "bibtex"
+    )
+    assert len(records) == size and errors == []
+    batch_id = batch.id
+    author_reads: list[str] = []
+
+    def track_author_reads(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT") and "FROM authors" in statement:
+            author_reads.append(statement)
+
+    engine = async_db.bind.sync_engine
+    event.listen(engine, "before_cursor_execute", track_author_reads)
+    try:
+        item_ids = await commit_import_batch(async_db, persistence_actor, workspace_id, batch_id)
+    finally:
+        event.remove(engine, "before_cursor_execute", track_author_reads)
+    assert len(author_reads) == 1
+    items = [await async_db.get(Item, item_id) for item_id in item_ids]
+    assert [item.title for item in items] == [f"Batch item {index}" for index in range(size)]
+    assert [item.doi for item in items] == [f"10.1000/{index}" for index in range(size)]
+    assert await async_db.scalar(select(func.count()).select_from(Author)) == size + 1
+    assert await async_db.scalar(select(func.count()).select_from(ItemAuthor)) == size * 3
+    shared = await async_db.scalar(select(Author).where(Author.identity_key == "shared\x1fauthor"))
+    assert (
+        await async_db.scalar(
+            select(func.count()).select_from(ItemAuthor).where(ItemAuthor.author_id == shared.id)
+        )
+        == size * 2
+    )
+    assert (
+        await commit_import_batch(async_db, persistence_actor, workspace_id, batch_id) == item_ids
+    )
+    assert (
+        await async_db.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "bibliography.import")
+        )
+        == size
+    )
+
+
+@pytest.mark.anyio
+async def test_item_service_merge_preserves_omissions_and_replacement_clears_links(
+    async_db, persistence_actor
+):
+    from quirebase.library._item_service import ItemService
+
+    service = ItemService(async_db)
+    item = await service.create_from_metadata(
+        fixture_workspace_id(persistence_actor),
+        persistence_actor.id,
+        ItemMetadata(
+            "Original",
+            authors=(Contributor("Shared", "Author"),),
+            editors=(Contributor("Shared", "Author"),),
+            doi="10.1000/original",
+            identifiers=(ExternalIdentifier("pmid", "original"),),
+            urls=("https://example.com/original",),
+            keywords=("original",),
+            bibtex_key="UserSelectedKey",
+        ),
+    )
+    await service.merge_candidate(item, {"title": "Merged", "keywords": "new"})
+    assert item.title == "Merged"
+    assert item.authors == "Shared, Author" and item.editors == "Shared, Author"
+    assert item.doi == "10.1000/original" and item.bibtex_id == "UserSelectedKey"
+    assert item.urls == "https://example.com/original" and item.keywords == "original; new"
+    assert await async_db.scalar(select(func.count()).select_from(ItemAuthor)) == 2
+    assert await async_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 1
+
+    assert (
+        await service.replace_metadata(item, persistence_actor.id, 1, ItemMetadata("Replaced")) == 2
+    )
+    await async_db.refresh(item)
+    assert item.title == "Replaced" and item.version == 2
+    assert item.authors is None and item.editors is None
+    assert item.doi is None and item.identifiers is None
+    assert item.urls is None and item.keywords is None and item.bibtex_id is None
+    assert await async_db.scalar(select(func.count()).select_from(ItemAuthor)) == 0
+    assert await async_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 0
+
+
+@pytest.mark.anyio
+async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
+    async_db, async_session_factory, persistence_actor
+):
+    from quirebase.library._item_service import ItemService
+
+    items = await ItemService(async_db).create_many_from_candidates(
+        fixture_workspace_id(persistence_actor),
+        persistence_actor.id,
+        [
+            {"title": "First", "authors": "Shared, Author", "identifiers": {"pmid": "first"}},
+            {"title": "Second", "editors": "Shared, Author", "doi": "10.1000/second"},
+        ],
+    )
+    assert len(items) == 2
+    for item in items:
+        assert inspect(item).persistent and not inspect(item).expired
+    record_event(async_db, persistence_actor.id, "test.bulk", "item")
+    await async_db.flush()
+    await async_db.rollback()
+    async with async_session_factory() as observer:
+        for model in (Item, Author, ItemAuthor, ItemIdentifier):
+            assert await observer.scalar(select(func.count()).select_from(model)) == 0
+        assert (
+            await observer.scalar(select(AuditEvent).where(AuditEvent.action == "test.bulk"))
+            is None
+        )

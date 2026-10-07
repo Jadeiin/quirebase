@@ -36,6 +36,23 @@ through reloading conflicting keys; AA's select-then-write upsert is not an atom
 Accounts, Workspaces, Projects, Items, Import Batches and durable Document creation reuse their
 Module-owned repositories/services without changing public use-case interfaces.
 
+Library's Item service owns aggregate persistence for manual metadata creation/replacement,
+Provider merges and Import Batch creation. Library-owned metadata inputs convert to explicit write
+plans: replacement clears omitted associations, while Provider merges preserve missing fields,
+merge URLs/keywords and retain user-selected citation keys. Pure conversion shares bounded-column
+validation; no Web DTO enters the service. The Item repository's named replacement operation keeps
+Workspace lineage and expected-version CAS in its SQL. Commands retain authorization, conflict
+translation, Search, Audit Events, recommendation enqueue and commit/rollback order.
+
+Import confirmation creates Item roots with one native batch call, resolves all Author identities
+across both contributor roles together, and batches Contributor/Identifier links. Shared Authors
+are looked up in bounded chunks, and missing identities are inserted in stable identity order.
+A concurrent uniqueness conflict rolls back only that insertion savepoint, reloads installed
+identities and retries the remaining set with bounded progress. Each command keeps its caller's
+Session. Import result order and replay identity remain tied to the locked Import Batch; file
+ownership transfer and Audit Events remain in its confirmation transaction. Bibliography export
+uses an explicit Library-owned relationship loading profile rather than widening directory reads.
+
 Authorization and query scoping stay explicit. An authorized root statement may be passed to AA
 for filtering and pagination, but its SELECT predicates do not automatically scope arbitrary
 generic writes. Workspace lineage, command locks, fresh authority checks and version predicates

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import Settings
-from quirebase.library.item_metadata import ItemMetadata, create_item
+from quirebase.library import ItemMetadata, create_item
 from quirebase.library.tag_recommendations import recommend_item_tags
 from quirebase.library.workflows import (
     commit_item_tag_recommendation_step,

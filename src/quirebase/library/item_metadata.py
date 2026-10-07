@@ -2,242 +2,28 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from inquiro.canonical import normalize_reference_type
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
-from quirebase.core.errors import ResourceUnavailable, ValidationFailure, VersionConflict
-from quirebase.library.authors import set_item_authors
-from quirebase.library.identifiers import (
-    clean_identifier_value,
-    generate_bibtex_key,
-    set_item_identifiers,
-)
+from quirebase.core.errors import ResourceUnavailable, VersionConflict
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import Item, normalize_author_identity
+from quirebase.models import Item
 from quirebase.search import search_index
 
-from ._persistence import ItemService
+from ._item_service import ItemService
+from ._metadata import ItemMetadata, ItemWriteResult, generate_bibtex_key
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.models import ItemAuthor, ItemIdentifier, User
-
-type JsonValue = str | int | float | bool | tuple[JsonValue, ...] | Mapping[str, JsonValue] | None
-
-
-@dataclass(frozen=True)
-class Contributor:
-    last_name: str
-    first_name: str | None = None
-    is_corresponding: bool = False
-
-
-@dataclass(frozen=True)
-class ExternalIdentifier:
-    provider: str
-    value: str
-
-
-@dataclass(frozen=True)
-class CustomField:
-    name: str
-    value: JsonValue
-
-
-@dataclass(frozen=True)
-class ItemMetadata:
-    title: str
-    abstract: str | None = None
-    keywords: tuple[str, ...] = ()
-    publication_date: str | None = None
-    publication_title: str | None = None
-    reference_type: str | None = None
-    volume: str | None = None
-    issue: str | None = None
-    pages: str | None = None
-    affiliation: str | None = None
-    publisher: str | None = None
-    place_published: str | None = None
-    journal_abbreviation: str | None = None
-    bibtex_key: str | None = None
-    bibtex_type: str | None = None
-    urls: tuple[str, ...] = ()
-    authors: tuple[Contributor, ...] = ()
-    editors: tuple[Contributor, ...] = ()
-    doi: str | None = None
-    identifiers: tuple[ExternalIdentifier, ...] = ()
-    custom_fields: tuple[CustomField, ...] = ()
-
-
-@dataclass(frozen=True)
-class ItemWriteResult:
-    item_id: UUID
-    version: int
-
-
-def _stored_json_value(value: object) -> JsonValue:
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, list | tuple):
-        return tuple(_stored_json_value(entry) for entry in value)
-    if isinstance(value, Mapping) and all(isinstance(key, str) for key in value):
-        return {str(key): _stored_json_value(entry) for key, entry in value.items()}
-    raise ValidationFailure("stored custom fields contain an unsupported value")
-
-
-def metadata_from_item(
-    item: Item,
-    authors: Sequence[ItemAuthor],
-    editors: Sequence[ItemAuthor],
-    identifiers: Sequence[ItemIdentifier],
-) -> ItemMetadata:
-    """Project persisted Item metadata into the same shape accepted by replacement writes."""
-    custom_fields: tuple[CustomField, ...] = ()
-    if item.custom_fields:
-        parsed_custom_fields = item.custom_fields
-        if not isinstance(parsed_custom_fields, dict):
-            raise ValidationFailure("stored custom fields must be a JSON object")
-        custom_fields = tuple(
-            CustomField(str(name), _stored_json_value(value))
-            for name, value in parsed_custom_fields.items()
-        )
-
-    def contributors(links: Sequence[ItemAuthor]) -> tuple[Contributor, ...]:
-        return tuple(
-            Contributor(
-                last_name=link.author.last_name,
-                first_name=link.author.first_name,
-                is_corresponding=link.is_corresponding,
-            )
-            for link in links
-        )
-
-    return ItemMetadata(
-        title=item.title,
-        abstract=item.abstract,
-        keywords=tuple(
-            value.strip() for value in (item.keywords or "").split(";") if value.strip()
-        ),
-        publication_date=item.publication_date,
-        publication_title=item.publication_title,
-        reference_type=item.reference_type,
-        volume=item.volume,
-        issue=item.issue,
-        pages=item.pages,
-        affiliation=item.affiliation,
-        publisher=item.publisher,
-        place_published=item.place_published,
-        journal_abbreviation=item.journal_abbreviation,
-        bibtex_key=item.bibtex_id,
-        bibtex_type=item.bibtex_type,
-        urls=tuple(value.strip() for value in (item.urls or "").splitlines() if value.strip()),
-        authors=contributors(authors),
-        editors=contributors(editors),
-        doi=item.doi,
-        identifiers=tuple(ExternalIdentifier(row.provider, row.value) for row in identifiers),
-        custom_fields=custom_fields,
-    )
-
-
-def _optional_text(value: str | None) -> str | None:
-    return value.strip() or None if value else None
-
-
-def _bounded_optional_text(value: str | None, field: str, limit: int) -> str | None:
-    normalized = _optional_text(value)
-    if normalized is not None and len(normalized) > limit:
-        raise ValidationFailure(f"{field} is too long")
-    return normalized
-
-
-def _bibliographic_values(metadata: ItemMetadata) -> dict[str, object]:
-    title = metadata.title.strip()
-    if not title:
-        raise ValidationFailure("title is required")
-    reference_type = normalize_reference_type(metadata.reference_type or "")
-    return {
-        "title": title,
-        "abstract": _optional_text(metadata.abstract),
-        "keywords": "; ".join(value.strip() for value in metadata.keywords if value.strip())
-        or None,
-        "publication_date": _bounded_optional_text(
-            metadata.publication_date, "publication date", 32
-        ),
-        "publication_title": _optional_text(metadata.publication_title),
-        "reference_type": _bounded_optional_text(reference_type, "reference type", 40),
-        "volume": _bounded_optional_text(metadata.volume, "volume", 100),
-        "issue": _bounded_optional_text(metadata.issue, "issue", 100),
-        "pages": _bounded_optional_text(metadata.pages, "pages", 100),
-        "affiliation": _optional_text(metadata.affiliation),
-        "publisher": _optional_text(metadata.publisher),
-        "place_published": _bounded_optional_text(metadata.place_published, "place published", 255),
-        "journal_abbreviation": _optional_text(metadata.journal_abbreviation),
-        "bibtex_id": _bounded_optional_text(metadata.bibtex_key, "BibTeX key", 255),
-        "bibtex_type": _bounded_optional_text(metadata.bibtex_type, "BibTeX type", 40),
-        "urls": "\n".join(value.strip() for value in metadata.urls if value.strip()) or None,
-    }
-
-
-def _identifier_pairs(metadata: ItemMetadata) -> list[tuple[str, str]]:
-    pairs: dict[str, str] = {}
-    for identifier in metadata.identifiers:
-        provider = identifier.provider.strip().lower()
-        if not provider or provider == "doi":
-            continue
-        value = clean_identifier_value(provider, identifier.value)
-        if value:
-            pairs[provider] = value
-    if metadata.doi and (doi := clean_identifier_value("doi", metadata.doi)):
-        pairs["doi"] = doi
-    return list(pairs.items())
-
-
-def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool) -> list[dict]:
-    payload: list[dict] = []
-    seen: set[str] = set()
-    for contributor in contributors:
-        last_name = contributor.last_name.strip()
-        first_name = _optional_text(contributor.first_name)
-        if not last_name:
-            raise ValidationFailure("contributor last name is required")
-        if editor and contributor.is_corresponding:
-            raise ValidationFailure("editors cannot be corresponding authors")
-        identity = normalize_author_identity(last_name, first_name)
-        if len(last_name) > 120 or (first_name is not None and len(first_name) > 120):
-            raise ValidationFailure("contributor name is too long")
-        if identity in seen:
-            raise ValidationFailure("contributors must be unique within a role")
-        seen.add(identity)
-        payload.append({
-            "last_name": last_name,
-            "first_name": first_name,
-            "is_corresponding": contributor.is_corresponding,
-        })
-    return payload
-
-
-def _custom_field_values(fields: tuple[CustomField, ...]) -> dict | None:
-    values: dict[str, JsonValue] = {}
-    for custom_field in fields:
-        name = custom_field.name.strip()
-        if not name:
-            raise ValidationFailure("custom field name is required")
-        if name in values:
-            raise ValidationFailure("custom field names must be unique")
-        values[name] = custom_field.value
-    return values or None
+    from quirebase.models import User
 
 
 async def _create_item(
@@ -247,31 +33,7 @@ async def _create_item(
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     context = await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
-    values = _bibliographic_values(metadata)
-    values.update(
-        custom_fields=_custom_field_values(metadata.custom_fields),
-        created_by=actor.id,
-        workspace_id=workspace_id,
-    )
-    item = Item(**values)
-    item = await ItemService(db).create(item)
-    await set_item_identifiers(db, actor, workspace_id, item.id, _identifier_pairs(metadata))
-    await set_item_authors(
-        db,
-        actor,
-        workspace_id,
-        item.id,
-        _contributor_payload(metadata.authors, editor=False),
-        role="author",
-    )
-    await set_item_authors(
-        db,
-        actor,
-        workspace_id,
-        item.id,
-        _contributor_payload(metadata.editors, editor=True),
-        role="editor",
-    )
+    item = await ItemService(db).create_from_metadata(workspace_id, actor.id, metadata)
     await search_index(db).index_item(db, item.id)
     await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=actor.id)
     record_event(
@@ -311,45 +73,12 @@ async def _revise_item_metadata(
 ) -> ItemWriteResult:
     actor_id = actor.id
     item = await require_editable_item(db, actor, workspace_id, item_id)
-    values = _bibliographic_values(metadata)
-    values.update(
-        custom_fields=_custom_field_values(metadata.custom_fields),
-        updated_by=actor_id,
-        updated_at=datetime.now(UTC),
-        version=Item.version + 1,
-    )
-    version = await db.scalar(
-        update(Item)
-        .where(
-            Item.id == item_id,
-            Item.workspace_id == workspace_id,
-            Item.version == expected_version,
-        )
-        .values(**values)
-        .returning(Item.version)
-    )
+    version = await ItemService(db).replace_metadata(item, actor_id, expected_version, metadata)
     if version is None:
         await db.rollback()
         current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
 
-    await set_item_identifiers(db, actor, workspace_id, item_id, _identifier_pairs(metadata))
-    await set_item_authors(
-        db,
-        actor,
-        workspace_id,
-        item_id,
-        _contributor_payload(metadata.authors, editor=False),
-        role="author",
-    )
-    await set_item_authors(
-        db,
-        actor,
-        workspace_id,
-        item_id,
-        _contributor_payload(metadata.editors, editor=True),
-        role="editor",
-    )
     # The bulk UPDATE does not reliably populate every value used by the search
     # projection. Refresh only the mutated aggregate; expiring the whole session
     # also expires the caller's User and invites implicit async ORM I/O later.
