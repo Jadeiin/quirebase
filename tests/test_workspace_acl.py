@@ -147,18 +147,18 @@ from quirebase.workspaces import (
     accept_workspace_invitation,
     archive_workspace,
     create_workspace,
+    freeze_workspace_governance,
     invite_workspace_member,
     list_workspace_governance_members,
     list_workspace_members,
     permanently_delete_workspace,
     read_workspace_items_break_glass,
-    recover_workspace_governance,
     restore_workspace,
     set_workspace_member_role,
-    suspend_workspace_governance,
     suspend_workspace_member,
     terminate_workspace_member,
     transfer_workspace_ownership,
+    unfreeze_workspace_governance,
 )
 from quirebase.workspaces.workflows import cleanup_deleted_workspace_objects_step
 
@@ -166,8 +166,8 @@ from quirebase.workspaces.workflows import cleanup_deleted_workspace_objects_ste
 def test_effective_resource_actions_follow_workspace_lifecycle():
     active = effective_resource_actions(WorkspaceRole.owner, WorkspaceState.active)
     archived = effective_resource_actions(WorkspaceRole.owner, WorkspaceState.archived)
-    governance_suspended = effective_resource_actions(
-        WorkspaceRole.admin, WorkspaceState.active, governance_suspended=True
+    governance_frozen = effective_resource_actions(
+        WorkspaceRole.admin, WorkspaceState.active, governance_frozen=True
     )
 
     assert ResourceAction.item_create in active
@@ -175,7 +175,7 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     assert ResourceAction.project_create not in active
     assert ResourceAction.file_delete in active
     assert ResourceAction.workspace_read in archived
-    assert ResourceAction.workspace_member_read in archived
+    assert ResourceAction.workspace_membership_read in archived
     assert ResourceAction.workspace_invitation_read in archived
     assert ResourceAction.workspace_restore in archived
     assert ResourceAction.workspace_delete in archived
@@ -201,7 +201,7 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     }
     assert not workspace_project_participations(WorkspaceRole.reviewer, WorkspaceState.active)
     assert not workspace_project_participations(WorkspaceRole.viewer, WorkspaceState.active)
-    assert governance_suspended == frozenset({
+    assert governance_frozen == frozenset({
         ResourceAction.project_governance_read,
         ResourceAction.workspace_read,
         ResourceAction.workspace_export,
@@ -216,7 +216,7 @@ def test_effective_resource_action_projections_reuse_role_and_lifecycle_results(
     assert effective_resource_actions(WorkspaceRole.editor, WorkspaceState.active) is not active
     assert (
         effective_resource_actions(
-            WorkspaceRole.owner, WorkspaceState.active, governance_suspended=True
+            WorkspaceRole.owner, WorkspaceState.active, governance_frozen=True
         )
         is not active
     )
@@ -1465,7 +1465,7 @@ async def test_project_settings_projection_lists_allowed_participation_targets(a
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("read_only_mode", ["archived", "governance_suspended"])
+@pytest.mark.parametrize("read_only_mode", ["archived", "governance_frozen"])
 async def test_open_project_participation_rejects_read_only_workspaces(async_db, read_only_mode):
     owner = await _user(async_db, "open-lifecycle-owner")
     editor = await _user(async_db, "open-lifecycle-editor")
@@ -1488,8 +1488,8 @@ async def test_open_project_participation_rejects_read_only_workspaces(async_db,
     if read_only_mode == "archived":
         workspace.state = WorkspaceState.archived
     else:
-        workspace.governance_suspended_at = datetime.now(UTC)
-        workspace.governance_suspended_by = owner.id
+        workspace.governance_frozen_at = datetime.now(UTC)
+        workspace.governance_frozen_by = owner.id
     await async_db.commit()
     with pytest.raises(WorkspaceLifecycleError):
         await join_project(async_db, editor, workspace_id, project.id)
@@ -2363,7 +2363,13 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         )
     )
     await async_db.commit()
-    project = await create_project(async_db, owner, workspace_id, "Workspace-visible")
+    project = await create_project(
+        async_db,
+        owner,
+        workspace_id,
+        "Workspace-visible",
+        participation=ProjectParticipation.workspace,
+    )
     assert (
         await async_db.scalar(
             select(ProjectMember.id).where(ProjectMember.project_id == project.id)
@@ -2723,11 +2729,9 @@ async def test_item_organize_omits_deleted_projects(async_db):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("archived", [False, True])
-async def test_governance_suspension_is_read_only_and_recovery_preserves_lifecycle(
-    async_db, archived
-):
-    owner = await _user(async_db, "suspended-owner")
-    admin = await _user(async_db, "suspending-instance-admin")
+async def test_governance_freeze_is_read_only_and_unfreeze_preserves_lifecycle(async_db, archived):
+    owner = await _user(async_db, "frozen-owner")
+    admin = await _user(async_db, "freezing-instance-admin")
     admin.role = "administrator"
     await async_db.commit()
     workspace_id = fixture_workspace_id(owner)
@@ -2735,13 +2739,13 @@ async def test_governance_suspension_is_read_only_and_recovery_preserves_lifecyc
         await archive_workspace(async_db, owner, workspace_id)
     workspace = await async_db.get(Workspace, workspace_id)
     state, archived_at = workspace.state, workspace.archived_at
-    await suspend_workspace_governance(async_db, admin, workspace_id)
+    await freeze_workspace_governance(async_db, admin, workspace_id)
 
     for action in (ResourceAction.workspace_read, ResourceAction.workspace_export):
         await require_workspace_action(async_db, owner, workspace_id, action)
     for action in (
         ResourceAction.item_create,
-        ResourceAction.workspace_member_read,
+        ResourceAction.workspace_membership_read,
         ResourceAction.workspace_invitation_read,
     ):
         with pytest.raises(WorkspaceLifecycleError):
@@ -2753,18 +2757,18 @@ async def test_governance_suspension_is_read_only_and_recovery_preserves_lifecyc
     with pytest.raises(WorkspaceMembershipRequired):
         await require_workspace_action(async_db, admin, workspace_id, ResourceAction.workspace_read)
 
-    await recover_workspace_governance(async_db, admin, workspace_id)
+    await unfreeze_workspace_governance(async_db, admin, workspace_id)
     assert workspace.state is state
     assert workspace.archived_at == archived_at
-    assert workspace.governance_suspended_at is None
-    assert workspace.governance_suspended_by is None
+    assert workspace.governance_frozen_at is None
+    assert workspace.governance_frozen_by is None
     context = await resolve_workspace_context(async_db, owner, workspace_id)
     assert context.membership.state is WorkspaceMemberState.active
     assert action_allowed(context, ResourceAction.item_create) is (not archived)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("operation", ["suspend", "recover", "break_glass"])
+@pytest.mark.parametrize("operation", ["freeze", "unfreeze", "break_glass"])
 async def test_workspace_governance_rechecks_instance_admin_authority(
     async_db, async_session_factory, operation
 ):
@@ -2780,10 +2784,10 @@ async def test_workspace_governance_rechecks_instance_admin_authority(
         current_admin.role = "member"
         await authority_db.commit()
 
-    if operation == "suspend":
-        governance_call = suspend_workspace_governance(async_db, admin, workspace_id)
-    elif operation == "recover":
-        governance_call = recover_workspace_governance(async_db, admin, workspace_id)
+    if operation == "freeze":
+        governance_call = freeze_workspace_governance(async_db, admin, workspace_id)
+    elif operation == "unfreeze":
+        governance_call = unfreeze_workspace_governance(async_db, admin, workspace_id)
     else:
         governance_call = read_workspace_items_break_glass(
             async_db, admin, workspace_id, "Investigate stale authority"
@@ -2792,8 +2796,8 @@ async def test_workspace_governance_rechecks_instance_admin_authority(
         await governance_call
 
     action = {
-        "suspend": "admin.workspace.suspend",
-        "recover": "admin.workspace.recover",
+        "freeze": "admin.workspace.freeze",
+        "unfreeze": "admin.workspace.unfreeze",
         "break_glass": "admin.workspace.break_glass.read",
     }[operation]
     assert await async_db.scalar(select(AuditEvent.id).where(AuditEvent.action == action)) is None
@@ -3458,8 +3462,8 @@ async def test_project_restore_requires_writable_workspace(async_db):
         await set_project_state(async_db, author, workspace_id, project.id, ProjectState.active)
 
     workspace.state = WorkspaceState.active
-    workspace.governance_suspended_at = datetime.now(UTC)
-    workspace.governance_suspended_by = author.id
+    workspace.governance_frozen_at = datetime.now(UTC)
+    workspace.governance_frozen_by = author.id
     await async_db.commit()
     with pytest.raises(WorkspaceLifecycleError):
         await set_project_state(async_db, author, workspace_id, project.id, ProjectState.active)

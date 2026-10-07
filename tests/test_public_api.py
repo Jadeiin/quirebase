@@ -31,7 +31,7 @@ from quirebase.models import (
     WorkspaceMember,
     WorkspaceRole,
 )
-from quirebase.workspaces import archive_workspace, suspend_workspace_governance
+from quirebase.workspaces import archive_workspace, freeze_workspace_governance
 
 
 @asynccontextmanager
@@ -54,6 +54,43 @@ async def api_client(factory):
 
 def bearer(raw_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {raw_token}"}
+
+
+@pytest.mark.anyio
+async def test_project_creation_requires_an_explicit_participation_choice(
+    async_db, async_session_factory
+):
+    actor = User(username="explicit-project-mode", password_hash="unused")
+    other = User(username="other-project-user", password_hash="unused")
+    async_db.add_all([actor, other])
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, actor)
+    async_db.add(WorkspaceMember(workspace_id=workspace.id, user_id=other.id, role="editor"))
+    await async_db.commit()
+    grant = await create_api_token(async_db, actor, "Project mode", expires_in_days=30)
+    headers = bearer(grant.raw_token)
+    endpoint = f"/api/v1/workspaces/{workspace.id}/projects"
+
+    async with api_client(async_session_factory) as (client, _app):
+        rejected = await client.post(endpoint, headers=headers, json={"name": "Unspecified"})
+        assert rejected.status_code == 422
+        async with async_session_factory() as observer:
+            assert await observer.scalar(select(Project.id)) is None
+            assert (
+                await observer.scalar(
+                    select(AuditEvent.id).where(AuditEvent.action == "project.create")
+                )
+                is None
+            )
+        created = await client.post(
+            endpoint, headers=headers, json={"name": "Open project", "participation": "open"}
+        )
+        assert created.status_code == 201
+        detail = await client.get(f"{endpoint}/{created.json()['id']}", headers=headers)
+        assert detail.status_code == 200 and detail.json()["participation"] == "open"
+        async with async_session_factory() as observer:
+            participants = list(await observer.scalars(select(ProjectMember.user_id)))
+            assert participants == [actor.id]
 
 
 @pytest.mark.anyio
@@ -212,7 +249,7 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         project = await client.post(
             f"{workspace_base}/projects",
             headers=headers,
-            json=json_payload({"name": "API Project"}),
+            json=json_payload({"name": "API Project", "participation": "workspace"}),
         )
         project_id = project.json()["id"]
         assert (
@@ -767,7 +804,7 @@ async def test_http_api_tags_use_effective_management_action(
     if read_only_mode == "archived":
         await archive_workspace(db, owner, workspace_id)
     else:
-        await suspend_workspace_governance(db, instance_administrator, workspace_id)
+        await freeze_workspace_governance(db, instance_administrator, workspace_id)
 
     async with api_client(async_session_factory) as (client, _app):
         response = await client.get(

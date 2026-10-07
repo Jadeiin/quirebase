@@ -60,7 +60,7 @@ for (const [role, choices] of [
 			owner_id: 'user-1',
 			state: 'active',
 			current_role: role,
-			governance_suspended: false,
+			governance_frozen: false,
 			allowed_project_participations: choices,
 			authorization: { allowed: ['workspace.read'] }
 		};

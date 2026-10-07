@@ -27,7 +27,7 @@
 				params: { query: memberQuery },
 				signal
 			}),
-		enabled: Boolean(workspace.view) && !workspace.can('workspace_member.read')
+		enabled: Boolean(workspace.view) && !workspace.can('workspace_membership.read')
 	}));
 	const governanceMembers = createQuery(() => ({
 		queryKey: [...workspaceKeys.governanceMembers(workspace.workspaceId), memberQuery],
@@ -36,10 +36,12 @@
 				params: { query: memberQuery },
 				signal
 			}),
-		enabled: Boolean(workspace.view) && workspace.can('workspace_member.read')
+		enabled: Boolean(workspace.view) && workspace.can('workspace_membership.read')
 	}));
 	$effect(() => {
-		const members = workspace.can('workspace_member.read') ? governanceMembers : directoryMembers;
+		const members = workspace.can('workspace_membership.read')
+			? governanceMembers
+			: directoryMembers;
 		if (!members.isFetching && members.data) {
 			const lastPage = Math.max(1, Math.ceil(members.data.total / members.data.limit));
 			if (memberPage > lastPage) memberPage = lastPage;
@@ -76,7 +78,7 @@
 			await action();
 			message = success;
 			await Promise.all([
-				workspace.can('workspace_member.read')
+				workspace.can('workspace_membership.read')
 					? governanceMembers.refetch()
 					: directoryMembers.refetch(),
 				workspace.can('workspace_invitation.read') ? invitations.refetch() : Promise.resolve(),
@@ -295,7 +297,7 @@
 			memberPage = 1;
 		}}
 	/>
-	{#if workspace.can('workspace_member.read')}<section class="grid grid-cols-1 gap-3">
+	{#if workspace.can('workspace_membership.read')}<section class="grid grid-cols-1 gap-3">
 			<div>
 				<h2 class="text-xl font-semibold">{$t('Members')}</h2>
 				<p class="text-sm text-surface-600-400">
@@ -330,9 +332,7 @@
 										{#if member.allowed_roles.length > 0}
 											<select
 												aria-label={$t('Role for {username}', { username: member.username })}
-												value={member.allowed_roles.some((role) => role === member.role)
-													? member.role
-													: ''}
+												value=""
 												disabled={busyId !== ''}
 												onchange={(event) => {
 													const role = event.currentTarget.value as
@@ -470,7 +470,7 @@
 		pageCount={Math.max(
 			1,
 			Math.ceil(
-				((workspace.can('workspace_member.read')
+				((workspace.can('workspace_membership.read')
 					? governanceMembers.data?.total
 					: directoryMembers.data?.total) ?? 0) / 25
 			)

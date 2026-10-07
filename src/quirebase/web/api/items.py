@@ -65,7 +65,7 @@ async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
             target_actions = workspace_decisions(
                 member.role,
                 workspace.state,
-                governance_suspended=workspace.governance_suspended_at is not None,
+                governance_frozen=workspace.governance_frozen_at is not None,
             ).allowed
             if ResourceAction.item_create in target_actions:
                 copy_targets.append({"id": workspace.id, "name": workspace.name})

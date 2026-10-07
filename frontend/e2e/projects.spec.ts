@@ -37,7 +37,7 @@ async function mockWorkspaceRole(
 				owner_id: 'user-1',
 				state: 'active',
 				current_role: role,
-				governance_suspended: false,
+				governance_frozen: false,
 				allowed_project_participations: allowedProjectParticipations,
 				authorization: { allowed: allowedActions }
 			}
@@ -298,7 +298,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 		page,
 		'editor',
 		['workspace.read', 'project_item.manage', 'project_discussion.create'],
-		['open', 'workspace']
+		['workspace', 'open']
 	);
 	let creation: Record<string, unknown> | null = null;
 	await page.route('**/api/v1/workspaces/workspace-1/projects*', (route) => {
@@ -340,7 +340,7 @@ test('a Workspace editor can create an open Project but not a managed Project', 
 	await page.getByLabel('Name').fill('Members research');
 	await page.getByLabel('Description').fill('Scoped reading list');
 	await expect(page.getByLabel('Participation').locator('option[value="managed"]')).toHaveCount(0);
-	await page.getByLabel('Participation').selectOption('open');
+	await expect(page.getByLabel('Participation')).toHaveValue('open');
 	await page.getByRole('button', { name: 'Create Project' }).click();
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects\/project-1$/);
 	await expect

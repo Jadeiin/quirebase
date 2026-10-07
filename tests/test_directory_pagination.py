@@ -105,7 +105,12 @@ async def test_project_pages_count_authorized_roots_and_separate_governance_from
         created_by=owner.id,
         participation=ProjectParticipation.managed,
     )
-    implicit = Project(workspace_id=workspace.id, name="Workspace", created_by=owner.id)
+    implicit = Project(
+        workspace_id=workspace.id,
+        name="Workspace",
+        created_by=owner.id,
+        participation=ProjectParticipation.workspace,
+    )
     async_db.add_all([
         *roots,
         managed,

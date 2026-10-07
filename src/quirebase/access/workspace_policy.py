@@ -43,7 +43,7 @@ class ResourceAction(ResourceActionKey):
     workspace_invitation_read = "workspace_invitation.read"
     workspace_invitation_create = "workspace_invitation.create"
     workspace_invitation_revoke = "workspace_invitation.revoke"
-    workspace_member_read = "workspace_member.read"
+    workspace_membership_read = "workspace_membership.read"
     workspace_member_change_role = "workspace_member.change_role"
     workspace_member_promote = "workspace_member.promote"
     workspace_member_suspend = "workspace_member.suspend"
@@ -129,7 +129,7 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
         policy_relations=_MEMBER_RELATIONS,
     ),
     ResourceAction.workspace_invitation_revoke: _WRITE,
-    ResourceAction.workspace_member_read: _READ,
+    ResourceAction.workspace_membership_read: _READ,
     ResourceAction.workspace_member_change_role: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.workspace_member_promote: ActionSpec(True, ("member",)),
     ResourceAction.workspace_member_suspend: ActionSpec(True, _MEMBER_RELATIONS),
@@ -184,12 +184,12 @@ def workspace_resource_action_allowed(
     state: WorkspaceState,
     resource_action: ResourceAction,
     *,
-    governance_suspended: bool = False,
+    governance_frozen: bool = False,
     relation: str = "any",
 ) -> bool:
     """Evaluate one resource/action pair through the sole Casbin policy source."""
 
-    lifecycle = "suspended" if governance_suspended else state
+    lifecycle = "frozen" if governance_frozen else state
     return workspace_action_allowed(
         role,
         resource_action.resource,
@@ -206,7 +206,7 @@ def effective_resource_actions(
     role: WorkspaceRole,
     state: WorkspaceState,
     *,
-    governance_suspended: bool = False,
+    governance_frozen: bool = False,
 ) -> frozenset[ResourceAction]:
     """Return relation-free resource actions available in a Workspace state."""
 
@@ -217,7 +217,7 @@ def effective_resource_actions(
             role,
             state,
             resource_action,
-            governance_suspended=governance_suspended,
+            governance_frozen=governance_frozen,
         )
     )
 
@@ -230,9 +230,7 @@ def action_allowed(
 ) -> bool:
     """Evaluate a resource action without moving canonical fact loading into policy."""
 
-    lifecycle = (
-        "suspended" if ctx.workspace.governance_suspended_at is not None else ctx.workspace.state
-    )
+    lifecycle = "frozen" if ctx.workspace.governance_frozen_at is not None else ctx.workspace.state
     return workspace_action_allowed(
         ctx.role,
         resource_action.resource,

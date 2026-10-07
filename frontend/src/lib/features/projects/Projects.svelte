@@ -65,7 +65,7 @@
 	let createOpen = $state(false);
 	let name = $state('');
 	let description = $state('');
-	let participation = $state<'workspace' | 'open' | 'managed'>('workspace');
+	let participation = $state<'workspace' | 'open' | 'managed'>('open');
 	const allowedParticipation = $derived(workspace.view?.allowed_project_participations ?? []);
 	$effect(() => {
 		if (!allowedParticipation.includes(participation) && allowedParticipation[0]) {
@@ -89,7 +89,9 @@
 			});
 			name = '';
 			description = '';
-			participation = allowedParticipation[0] ?? 'workspace';
+			participation = allowedParticipation.includes('open')
+				? 'open'
+				: (allowedParticipation[0] ?? 'open');
 			createOpen = false;
 			await refresh();
 			await goto(resolve(workspaceHref(workspaceId, `projects/${created.id}`)));

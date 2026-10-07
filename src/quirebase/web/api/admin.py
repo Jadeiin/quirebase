@@ -53,10 +53,10 @@ from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 from quirebase.workspaces import (
+    freeze_workspace_governance,
     list_workspaces_for_governance,
     read_workspace_items_break_glass,
-    recover_workspace_governance,
-    suspend_workspace_governance,
+    unfreeze_workspace_governance,
     workspace_owner_ids,
 )
 
@@ -257,23 +257,23 @@ async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceVi
             name=workspace.name,
             owner_id=owner_ids[workspace.id],
             state=workspace.state,
-            governance_suspended_at=workspace.governance_suspended_at,
-            governance_suspended_by=workspace.governance_suspended_by,
+            governance_frozen_at=workspace.governance_frozen_at,
+            governance_frozen_by=workspace.governance_frozen_by,
         )
         for workspace in workspaces
         if workspace.id in owner_ids
     ]
 
 
-@router.post("/workspaces/{workspace_id}/suspend", response_model=OkView)
-async def admin_suspend_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
-    await suspend_workspace_governance(db, user, workspace_id)
+@router.post("/workspaces/{workspace_id}/freeze", response_model=OkView)
+async def admin_freeze_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
+    await freeze_workspace_governance(db, user, workspace_id)
     return OkView()
 
 
-@router.post("/workspaces/{workspace_id}/recover", response_model=OkView)
-async def admin_recover_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
-    await recover_workspace_governance(db, user, workspace_id)
+@router.post("/workspaces/{workspace_id}/unfreeze", response_model=OkView)
+async def admin_unfreeze_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
+    await unfreeze_workspace_governance(db, user, workspace_id)
     return OkView()
 
 

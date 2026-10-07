@@ -22,16 +22,16 @@
 	let inspectionReason = $state('');
 	let inspectionWorkspaceId = $state('');
 
-	async function govern(workspaceId: string, operation: 'suspend' | 'recover') {
+	async function govern(workspaceId: string, operation: 'freeze' | 'unfreeze') {
 		busyId = workspaceId;
 		error = '';
 		try {
-			if (operation === 'suspend')
-				await apiRequest('POST', '/admin/workspaces/{workspace_id}/suspend', {
+			if (operation === 'freeze')
+				await apiRequest('POST', '/admin/workspaces/{workspace_id}/freeze', {
 					params: { path: { workspace_id: workspaceId } }
 				});
 			else
-				await apiRequest('POST', '/admin/workspaces/{workspace_id}/recover', {
+				await apiRequest('POST', '/admin/workspaces/{workspace_id}/unfreeze', {
 					params: { path: { workspace_id: workspaceId } }
 				});
 			await Promise.all([
@@ -72,7 +72,7 @@
 		<h2 class="text-2xl font-bold">{$t('Workspace governance')}</h2>
 		<p class="text-sm text-surface-600-400">
 			{$t(
-				'Instance administrators can suspend or recover Workspace governance. This does not grant ordinary content access.'
+				'Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access.'
 			)}
 		</p>
 	</header>
@@ -87,22 +87,22 @@
 						<strong>{workspace.name}</strong>
 						<p class="text-xs text-surface-600-400">
 							{workspace.id} · {$t(domainLabel(workspace.state))} · {$t('owner')}
-							{workspace.owner_id}{workspace.governance_suspended_at
-								? ` · ${$t('suspended')} ${new Date(workspace.governance_suspended_at).toLocaleString()}`
+							{workspace.owner_id}{workspace.governance_frozen_at
+								? ` · ${$t('read-only freeze')} ${new Date(workspace.governance_frozen_at).toLocaleString()}`
 								: ''}
 						</p>
 					</div>
 					<div class="flex gap-2">
-						{#if workspace.governance_suspended_at}<Button
+						{#if workspace.governance_frozen_at}<Button
 								size="sm"
 								disabled={busyId !== ''}
-								onclick={() => void govern(workspace.id, 'recover')}>{$t('Recover')}</Button
+								onclick={() => void govern(workspace.id, 'unfreeze')}
+								>{$t('Unfreeze writes')}</Button
 							>{:else}<Button
 								size="sm"
 								variant="tonal"
 								disabled={busyId !== ''}
-								onclick={() => void govern(workspace.id, 'suspend')}
-								>{$t('Suspend governance')}</Button
+								onclick={() => void govern(workspace.id, 'freeze')}>{$t('Freeze writes')}</Button
 							>{/if}
 					</div>
 				</article>{/each}
@@ -113,7 +113,7 @@
 		<h3 class="text-xl font-semibold">{$t('BREAK GLASS · read-only item inspection')}</h3>
 		<p>
 			{$t(
-				'Current backend MVP requires a reason for each read request. This response is not a durable access grant; it has no persistent scope, expiry, or revocation endpoint.'
+				'Each inspection requires a reason and returns at most 100 Items. It grants no continuing access.'
 			)}
 		</p>
 		<label class="grid grid-cols-1 gap-1"
@@ -138,7 +138,7 @@
 		{#if inspection}<aside class="grid grid-cols-1 gap-2 rounded-md bg-warning-100-900 p-4">
 				<strong>{$t('BREAK GLASS')}</strong><span>{$t('Reason:')} {inspectionReason}</span><span
 					>{$t('Scope: Workspace')} {inspectionWorkspaceId} · {$t('Item list read-only')}</span
-				><span>{$t('Expiration: single response; no continuing access is granted')}</span
+				><span>{$t('Single response; no continuing access is granted')}</span
 				>{#each inspection as item (item.id)}<div class="border-surface-400-700 border-t pt-2">
 						<RichText html={item.title_html} /><small class="block text-surface-600-400"
 							>{item.authors ?? ''} · {item.publication_date ?? ''}</small

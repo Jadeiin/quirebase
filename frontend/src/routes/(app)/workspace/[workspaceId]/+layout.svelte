@@ -80,10 +80,10 @@
 			: apiErrorMessage(workspace.error, $t('Unable to load workspace.'))}</Notice
 	>
 {:else}
-	{#if workspace.data?.governance_suspended}
+	{#if workspace.data?.governance_frozen}
 		<Notice variant="warning"
 			>{$t(
-				'Workspace governance is suspended. Content is read only until an instance administrator recovers this Workspace.'
+				'Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace.'
 			)}</Notice
 		>
 	{:else if workspace.data?.state === 'archived'}

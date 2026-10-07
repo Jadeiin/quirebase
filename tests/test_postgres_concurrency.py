@@ -91,10 +91,10 @@ from quirebase.projects import (
 )
 from quirebase.workspaces import (
     archive_workspace,
+    freeze_workspace_governance,
     invite_workspace_member,
     list_workspaces,
     list_workspaces_for_governance,
-    suspend_workspace_governance,
     suspend_workspace_member,
     transfer_workspace_ownership,
     workspace_owner_ids,
@@ -552,7 +552,7 @@ async def test_workspace_governance_serializes_with_admin_demotion(postgres_sess
             actor = await db.get(User, governance_admin_id)
             assert actor is not None
             governance_started.set()
-            await suspend_workspace_governance(db, actor, workspace_id)
+            await freeze_workspace_governance(db, actor, workspace_id)
             return "suspended"
 
     async def demote():

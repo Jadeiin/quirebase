@@ -46,12 +46,12 @@ def workspace_decisions(
     role: WorkspaceRole,
     state: WorkspaceState,
     *,
-    governance_suspended: bool = False,
+    governance_frozen: bool = False,
 ) -> AuthorizationProjection:
     allowed = effective_resource_actions(
         role,
         state,
-        governance_suspended=governance_suspended,
+        governance_frozen=governance_frozen,
     )
     return AuthorizationProjection(allowed=tuple(sorted(allowed, key=lambda action: action.value)))
 
@@ -60,7 +60,7 @@ def workspace_project_participations(
     role: WorkspaceRole,
     state: WorkspaceState,
     *,
-    governance_suspended: bool = False,
+    governance_frozen: bool = False,
 ) -> tuple[ProjectParticipation, ...]:
     """Project concrete creation choices without exposing Casbin relations."""
     return tuple(
@@ -70,7 +70,7 @@ def workspace_project_participations(
             role,
             state,
             ResourceAction.project_create,
-            governance_suspended=governance_suspended,
+            governance_frozen=governance_frozen,
             relation=participation.value,
         )
     )
@@ -86,7 +86,7 @@ def workspace_invitation_roles(
     role: WorkspaceRole,
     state: WorkspaceState,
     *,
-    governance_suspended: bool = False,
+    governance_frozen: bool = False,
 ) -> tuple[WorkspaceInvitationRole, ...]:
     """Project allowed admission roles without exposing policy classifications to clients."""
     return tuple(
@@ -96,7 +96,7 @@ def workspace_invitation_roles(
             role,
             state,
             ResourceAction.workspace_invitation_create,
-            governance_suspended=governance_suspended,
+            governance_frozen=governance_frozen,
             relation=workspace_member_relation(target.value),
         )
     )
@@ -259,7 +259,8 @@ def workspace_member_roles(
     return tuple(
         target
         for target in WorkspaceInvitationRole
-        if action_allowed(
+        if target.value != member.role.value
+        and action_allowed(
             context,
             workspace_member_role_action(member.role, WorkspaceRole(target.value)),
             relation=workspace_member_relation(member.role),

@@ -39,7 +39,7 @@ def test_workspace_action_metadata_is_complete_and_classifies_reads():
     for action in (
         ResourceAction.workspace_read,
         ResourceAction.workspace_export,
-        ResourceAction.workspace_member_read,
+        ResourceAction.workspace_membership_read,
         ResourceAction.workspace_invitation_read,
         ResourceAction.project_governance_read,
     ):
@@ -229,7 +229,7 @@ def test_policy_regexes_match_complete_lifecycle_and_relation_values_only():
 
 
 def test_mutating_relation_actions_fail_closed_outside_active_lifecycle():
-    for lifecycle in (WorkspaceState.archived, "suspended"):
+    for lifecycle in (WorkspaceState.archived, "frozen"):
         assert not workspace_action_allowed(
             WorkspaceRole.owner,
             "project_annotation",

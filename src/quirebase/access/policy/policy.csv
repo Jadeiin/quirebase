@@ -11,18 +11,18 @@ g, system:administrator, system:member
 # Viewer: baseline read access, private authorship, and open Project participation.
 p, workspace:viewer, private_annotation, create, active, own
 p, workspace:viewer, private_annotation, delete, active, own
-p, workspace:viewer, private_annotation, read, (active|archived|suspended), own
+p, workspace:viewer, private_annotation, read, (active|archived|frozen), own
 p, workspace:viewer, private_annotation, restore, active, own
 p, workspace:viewer, private_annotation, update, active, own
 p, workspace:viewer, private_annotation_reply, create, active, own
 p, workspace:viewer, private_annotation_reply, delete, active, own
 p, workspace:viewer, private_annotation_reply, restore, active, own
 p, workspace:viewer, private_annotation_reply, update, active, own
-p, workspace:viewer, project_annotation, read, (active|archived|suspended), (other|own)
+p, workspace:viewer, project_annotation, read, (active|archived|frozen), (other|own)
 p, workspace:viewer, project_membership, join, active, open
 p, workspace:viewer, project_membership, leave, active, open
-p, workspace:viewer, workspace, export, (active|archived|suspended), any
-p, workspace:viewer, workspace, read, (active|archived|suspended), any
+p, workspace:viewer, workspace, export, (active|archived|frozen), any
+p, workspace:viewer, workspace, read, (active|archived|frozen), any
 
 # Reviewer: shared authorship and Discussion participation.
 p, workspace:reviewer, item_discussion, create, active, any
@@ -62,10 +62,10 @@ p, workspace:admin, project_annotation, delete, active, other
 p, workspace:admin, project_annotation, hide, active, other
 p, workspace:admin, project_annotation, lock, active, other
 p, workspace:admin, project_annotation, restore, active, other
-p, workspace:admin, project_annotation, review, (active|archived|suspended), any
+p, workspace:admin, project_annotation, review, (active|archived|frozen), any
 p, workspace:admin, project_annotation, unlock, active, other
 p, workspace:admin, project_discussion, delete, active, other
-p, workspace:admin, project_governance, read, (active|archived|suspended), any
+p, workspace:admin, project_governance, read, (active|archived|frozen), any
 p, workspace:admin, project_membership, manage, active, managed
 p, workspace:admin, tag, manage, active, any
 p, workspace:admin, workspace, archive, active, any
@@ -77,9 +77,9 @@ p, workspace:admin, workspace_invitation, revoke, active, any
 p, workspace:admin, workspace_maintenance, run, active, any
 p, workspace:admin, workspace_member, change_role, active, member
 p, workspace:admin, workspace_member, reactivate, active, member
-p, workspace:admin, workspace_member, read, (active|archived), any
 p, workspace:admin, workspace_member, suspend, active, member
 p, workspace:admin, workspace_member, terminate, active, member
+p, workspace:admin, workspace_membership, read, (active|archived), any
 
 # Owner: destructive Workspace governance and authority over admin members.
 p, workspace:owner, workspace, delete, archived, any
@@ -122,6 +122,6 @@ p, system:administrator, user, revoke_sessions, active, any
 p, system:administrator, workflow, read, active, any
 p, system:administrator, workspace, create, active, admins_only
 p, system:administrator, workspace_break_glass, read, active, any
+p, system:administrator, workspace_governance, freeze, active, any
 p, system:administrator, workspace_governance, read, active, any
-p, system:administrator, workspace_governance, recover, active, any
-p, system:administrator, workspace_governance, suspend, active, any
+p, system:administrator, workspace_governance, unfreeze, active, any

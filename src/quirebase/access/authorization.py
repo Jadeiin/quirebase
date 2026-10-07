@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 _POLICY_DIR = Path(__file__).with_name("policy")
 _MODEL_PATH = _POLICY_DIR / "model.conf"
 _POLICY_PATH = _POLICY_DIR / "policy.csv"
-_WORKSPACE_LIFECYCLES = frozenset({"active", "archived", "suspended"})
+_WORKSPACE_LIFECYCLES = frozenset({"active", "archived", "frozen"})
 _EXPECTED_ROLE_EDGES = frozenset({
     ("workspace:owner", "workspace:admin"),
     ("workspace:admin", "workspace:editor"),
@@ -69,8 +69,8 @@ class SystemAction(ResourceActionKey):
     workspaces_create = "workspace.create"
     workspace_invitations_accept = "workspace_invitation.accept"
     workspaces_governance_read = "workspace_governance.read"
-    workspaces_governance_suspend = "workspace_governance.suspend"
-    workspaces_governance_recover = "workspace_governance.recover"
+    workspaces_governance_freeze = "workspace_governance.freeze"
+    workspaces_governance_unfreeze = "workspace_governance.unfreeze"
     workspaces_break_glass_read = "workspace_break_glass.read"
 
 

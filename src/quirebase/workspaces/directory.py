@@ -164,7 +164,7 @@ async def list_workspace_governance_members(
     offset: int = 0,
     search: str = "",
 ) -> tuple[list[WorkspaceMember], int]:
-    require_action(context, ResourceAction.workspace_member_read)
+    require_action(context, ResourceAction.workspace_membership_read)
     query = (
         select(WorkspaceMember)
         .join(User, User.id == WorkspaceMember.user_id)

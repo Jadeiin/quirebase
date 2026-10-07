@@ -375,7 +375,7 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("lifecycle", ["archived", "governance-suspended"])
+@pytest.mark.parametrize("lifecycle", ["archived", "governance-frozen"])
 async def test_read_only_workspace_pdf_viewer_disables_annotation_edits(
     async_db, async_session_factory, tmp_path, monkeypatch, lifecycle
 ):
@@ -387,7 +387,7 @@ async def test_read_only_workspace_pdf_viewer_disables_annotation_edits(
     if lifecycle == "archived":
         workspace.state = WorkspaceState.archived
     else:
-        workspace.governance_suspended_at = datetime.now(UTC)
+        workspace.governance_frozen_at = datetime.now(UTC)
     await async_db.commit()
     base = f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}"
     try:

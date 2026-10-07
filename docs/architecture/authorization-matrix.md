@@ -83,10 +83,10 @@ domain rules; this table alone does not establish permission for a concrete comm
 | `workspace_member.promote` | `member` | A | — | — | — | — |
 | `workspace_member.reactivate` | `admin` | A | — | — | — | — |
 | `workspace_member.reactivate` | `member` | A | A | — | — | — |
-| `workspace_member.read` | `any` | A/R | A/R | — | — | — |
 | `workspace_member.suspend` | `admin` | A | — | — | — | — |
 | `workspace_member.suspend` | `member` | A | A | — | — | — |
 | `workspace_member.terminate` | `admin` | A | — | — | — | — |
 | `workspace_member.terminate` | `member` | A | A | — | — | — |
 | `workspace_member.transfer_ownership` | `admin` | A | — | — | — | — |
 | `workspace_member.transfer_ownership` | `member` | A | — | — | — | — |
+| `workspace_membership.read` | `any` | A/R | A/R | — | — | — |

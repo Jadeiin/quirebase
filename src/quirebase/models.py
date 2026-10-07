@@ -169,8 +169,8 @@ class Workspace(EntityBase):
     state: Mapped[WorkspaceState] = mapped_column(
         enum_type(WorkspaceState, "workspace_state"), default=WorkspaceState.active
     )
-    governance_suspended_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
-    governance_suspended_by: Mapped[UUID | None] = mapped_column(
+    governance_frozen_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    governance_frozen_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
@@ -402,7 +402,7 @@ class Project(EntityBase):
     )
     participation: Mapped[ProjectParticipation] = mapped_column(
         enum_type(ProjectParticipation, "project_participation"),
-        default=ProjectParticipation.workspace,
+        default=ProjectParticipation.open,
     )
 
 

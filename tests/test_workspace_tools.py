@@ -38,7 +38,7 @@ async def test_projects_have_a_dedicated_workspace(
     try:
         created = await client.post(
             f"{workspace_base}/projects",
-            json=json_payload({"name": "Review queue"}),
+            json=json_payload({"name": "Review queue", "participation": "open"}),
         )
         project = await db.scalar(select(Project).where(Project.name == "Review queue"))
         assert project is not None
@@ -295,7 +295,7 @@ async def test_workspace_invitation_uses_username_and_global_acceptance_route(
             for row in governance_members.json()["items"]
             if row["user_id"] == str(governed_member.id)
         )
-        assert set(governed_view["allowed_roles"]) == {"admin", "editor", "reviewer", "viewer"}
+        assert set(governed_view["allowed_roles"]) == {"admin", "reviewer", "viewer"}
         assert set(governed_view["authorization"]["allowed"]) == {
             "workspace_member.transfer_ownership",
             "workspace_member.suspend",

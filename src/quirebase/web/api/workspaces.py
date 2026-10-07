@@ -65,7 +65,7 @@ def _workspace_view(workspace, member, *, owner_id: UUID) -> WorkspaceView:
     projection = workspace_decisions(
         member.role,
         workspace.state,
-        governance_suspended=workspace.governance_suspended_at is not None,
+        governance_frozen=workspace.governance_frozen_at is not None,
     )
     return WorkspaceView(
         id=workspace.id,
@@ -73,19 +73,19 @@ def _workspace_view(workspace, member, *, owner_id: UUID) -> WorkspaceView:
         owner_id=owner_id,
         state=workspace.state,
         current_role=member.role,
-        governance_suspended=workspace.governance_suspended_at is not None,
+        governance_frozen=workspace.governance_frozen_at is not None,
         allowed_project_participations=list(
             workspace_project_participations(
                 member.role,
                 workspace.state,
-                governance_suspended=workspace.governance_suspended_at is not None,
+                governance_frozen=workspace.governance_frozen_at is not None,
             )
         ),
         allowed_invitation_roles=list(
             workspace_invitation_roles(
                 member.role,
                 workspace.state,
-                governance_suspended=workspace.governance_suspended_at is not None,
+                governance_frozen=workspace.governance_frozen_at is not None,
             )
         ),
         authorization=authorization_view(projection),

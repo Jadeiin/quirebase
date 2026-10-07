@@ -150,7 +150,12 @@ fine-grained gates, create a second Project role axis or infer authority from `c
 
 `System Role=administrator` is instance-level tenancy and lifecycle governance. It does not make
 the administrator an implicit Workspace member or grant content access. An administrator may use
-normal membership, or an explicit temporary break-glass operation, when content access is needed.
+normal membership, or an explicit one-request break-glass inspection, when content access is needed.
+
+Instance governance provides administrative freeze/unfreeze and reason-bound read-only inspection.
+It does not repair missing or inactive Workspace ownership. Integrity checks diagnose those
+conditions; an owner-repair command would require a separate, narrowly scoped, audited decision
+and would not grant ordinary content access.
 
 ### User provisioning, Workspace creation and membership
 
@@ -172,11 +177,13 @@ Instance registration and Workspace admission are separate operations:
 - A valid membership has state `active` or `suspended`. Removal terminates the membership and is
   retained as an audit/history record, not as an ACL-satisfying `removed` state.
 - Workspace owner/admin manages ordinary membership. An instance administrator may perform only
-  coarse tenancy/lifecycle governance such as suspension or recovery, not ordinary content access.
+  coarse lifecycle governance such as freeze/unfreeze, not ordinary content access.
 - The active member directory exposes Workspace roles as collaboration metadata, requiring both
   an active User account and an active current Workspace membership. The governance view retains
   current memberships for inactive accounts and adds membership identifiers, state, join time,
   concrete allowed role choices and member-specific lifecycle decisions for owners/admins.
+  The active directory requires `workspace.read`; the governance view requires
+  `workspace_membership.read`. Role choices omit the current role while commands remain idempotent.
 - Ownership transfer is required before an owner can leave, be suspended or be removed. Each
   surviving Workspace has exactly one active authoritative owner membership. Transfer promotes
   the new owner to `owner` and changes the previous owner to `admin` in the same transaction.
@@ -211,7 +218,9 @@ Annotations, Discussions and Notes. A Project has no owner field or ownership-tr
 controlled by Workspace resource-action decisions.
 
 The Project `participation` field defines Project discoverability and participation policy. It does
-not create another role or authorization axis. `ProjectMember` is a role-less association
+not create another role or authorization axis. HTTP creation requires an explicit participation
+choice. The creation form and default persistence/domain construction select `open`; Workspace-wide
+implicit participation must be selected deliberately. `ProjectMember` is a role-less association
 recording a User's selected working context; it grants no Workspace authority and never grants
 access to canonical Workspace Items:
 
@@ -332,26 +341,31 @@ Archived Workspace governance member and invitation lists remain readable to own
 their mutations remain disabled.
 
 An instance administrator may impose an administrative read-only freeze through
-`governance_suspended_at` and `governance_suspended_by`. This is an overlay on Workspace state,
+`governance_frozen_at` and `governance_frozen_by`. This is an overlay on Workspace state,
 not a tenancy shutdown or a WorkspaceMember suspension. Active members retain content reads,
 downloads and exports, while all Workspace mutations, ownership transfers, member and invitation
 governance reads, restore and permanent deletion are blocked. Memberships and Project participation
-are preserved. Only an instance administrator may recover the Workspace by clearing the overlay;
-recovery preserves its underlying active/archived state and archive retention timestamp. An
-administrator gains no implicit content access by freezing or recovering a Workspace.
+are preserved. Only an instance administrator may unfreeze the Workspace by clearing the overlay;
+unfreezing preserves its underlying active/archived state and archive retention timestamp. An
+administrator gains no implicit content access by freezing or unfreezing a Workspace.
 
 Archive is member-controlled preservation with owner/admin governance reads and restoration;
-the administrative freeze reserves recovery to instance governance. Suspending an individual
+the administrative freeze reserves unfreezing to instance governance. Suspending an individual
 WorkspaceMember instead removes that member's effective content access.
 
 An archived Project is readable but rejects ProjectItem, Annotation, Discussion, Notes and
-membership mutations. Project archive/restore is controlled by separate `project.archive` and
+participation mutations. Project archive/restore is controlled by separate `project.archive` and
 `project.restore` decisions and does not archive or remove its Workspace Items. Permanent Item
 deletion is limited to the `item.delete` decision. Instance administrators have no implicit delete
-authority; recovery or break-glass writes are explicit, temporary and fully audited.
+authority. The current break-glass inspection grants no mutation authority.
+
+Project deletion has no archive prerequisite: a caller allowed `project.delete` confirms the
+current Project name before an active or archived Project enters internal `deleted` state.
+This removes the Project working context, not its canonical Workspace Items. Workspace permanent
+deletion retains its stronger archive and retention requirements.
 
 Project archive/restore, Workspace-member suspend/reactivate and role setting, invitation revoke,
-and instance governance freeze/recover tolerate retries after reaching the requested state.
+and instance governance freeze/unfreeze tolerate retries after reaching the requested state.
 They still acquire their roots and recheck current authority before returning success; a repeat
 does not change timestamps or add an Audit Event. Invitation revocation also leaves an already
 expired invitation unchanged. Accepted invitations and terminated memberships remain unavailable
@@ -398,8 +412,9 @@ callers explicitly choose a shared or exclusive Project root lock; action metada
 chooses a Project lock or upgrades it. Root locks precede cascading child-row locks.
 
 Instance administrators may invoke only the explicit `resource=workspace_break_glass`,
-`action=read` decision. It is temporary, reason-required, fully audited and read-only in the
-current contract: each request grants one read and does not create a reusable session or lease.
+`action=read` decision. It performs one reason-required, fully audited, read-only inspection of
+at most 100 Items. It does not create a grant, reusable session or lease, and has no grant expiry
+or revocation protocol.
 Write/delete break-glass semantics require a later security decision; ordinary
 endpoints never infer this authority.
 
@@ -444,7 +459,7 @@ ProjectMember count.
   resource-action interface rather than branch on role strings.
 - Database lineage constraints, explicit Workspace context and finalizer re-authorization add
   schema and API surface, but prevent accidental cross-team references.
-- Instance administrators can perform tenancy recovery without receiving silent research-data
+- Instance administrators can freeze/unfreeze governance without receiving silent research-data
   access; break-glass access is visible and reviewable.
 - This is an alpha forward-only cutover. Existing instance-global ownership assumptions, Project
   roles and Project-derived Item grants are removed rather than adapted through compatibility

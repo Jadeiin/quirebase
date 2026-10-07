@@ -6,27 +6,32 @@ import pytest
 from sqlalchemy import func, select
 
 from quirebase.access import resolve_workspace_context
-from quirebase.core.errors import PermissionDenied, ResourceNotFound
+from quirebase.core.errors import PermissionDenied, ResourceNotFound, ValidationFailure
 from quirebase.models import (
     AuditEvent,
+    Item,
+    Project,
+    ProjectMember,
+    ProjectParticipation,
     ProjectState,
     User,
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
 )
-from quirebase.projects import create_project, set_project_state
+from quirebase.projects import create_project, open_project_workspace, set_project_state
 from quirebase.workspaces import (
+    freeze_workspace_governance,
     invite_workspace_member,
     provision_initial_workspace,
     reactivate_workspace_member,
-    recover_workspace_governance,
+    read_workspace_items_break_glass,
     revoke_workspace_invitation,
     set_workspace_member_role,
-    suspend_workspace_governance,
     suspend_workspace_member,
     terminate_workspace_member,
     transfer_workspace_ownership,
+    unfreeze_workspace_governance,
 )
 
 
@@ -38,6 +43,22 @@ from quirebase.workspaces import (
 )
 def command_sessions(request):
     return request.getfixturevalue(request.param)
+
+
+@pytest.mark.anyio
+async def test_project_defaults_select_open_without_workspace_wide_participation(command_sessions):
+    async with command_sessions() as db:
+        owner, target, workspace, _member = await _members(db)
+        project = await create_project(db, owner, workspace.id, "Open by default")
+        assert project.participation is ProjectParticipation.open
+        assert list(await db.scalars(select(ProjectMember.user_id))) == [owner.id]
+        other_context = await resolve_workspace_context(db, target, workspace.id)
+        visible = await open_project_workspace(db, other_context, project.id)
+        assert not visible.is_participating
+        direct = Project(workspace_id=workspace.id, created_by=owner.id, name="ORM default")
+        db.add(direct)
+        await db.flush()
+        assert direct.participation is ProjectParticipation.open
 
 
 async def _members(db):
@@ -200,18 +221,54 @@ async def test_governance_retries_preserve_freeze_provenance_and_require_system_
     async with command_sessions() as db:
         owner, target, workspace, _ = await _members(db)
         workspace_id, owner_id = workspace.id, owner.id
-        await recover_workspace_governance(db, owner, workspace_id)
-        assert await _event_count(db, "admin.workspace.recover", workspace_id) == 0
-        await suspend_workspace_governance(db, owner, workspace_id)
-        suspended_at = workspace.governance_suspended_at
-        await suspend_workspace_governance(db, owner, workspace_id)
-        assert workspace.governance_suspended_at == suspended_at
-        assert workspace.governance_suspended_by == owner_id
-        assert await _event_count(db, "admin.workspace.suspend", workspace_id) == 1
+        await unfreeze_workspace_governance(db, owner, workspace_id)
+        assert await _event_count(db, "admin.workspace.unfreeze", workspace_id) == 0
+        await freeze_workspace_governance(db, owner, workspace_id)
+        frozen_at = workspace.governance_frozen_at
+        await freeze_workspace_governance(db, owner, workspace_id)
+        assert workspace.governance_frozen_at == frozen_at
+        assert workspace.governance_frozen_by == owner_id
+        assert await _event_count(db, "admin.workspace.freeze", workspace_id) == 1
         with pytest.raises(ResourceNotFound):
-            await suspend_workspace_governance(db, target, workspace_id)
+            await freeze_workspace_governance(db, target, workspace_id)
         await db.rollback()
         owner = await db.get(User, owner_id)
-        await recover_workspace_governance(db, owner, workspace_id)
-        await recover_workspace_governance(db, owner, workspace_id)
-        assert await _event_count(db, "admin.workspace.recover", workspace_id) == 1
+        await unfreeze_workspace_governance(db, owner, workspace_id)
+        await unfreeze_workspace_governance(db, owner, workspace_id)
+        assert await _event_count(db, "admin.workspace.unfreeze", workspace_id) == 1
+
+
+@pytest.mark.anyio
+async def test_break_glass_inspection_is_bounded_and_audits_only_successful_reads(command_sessions):
+    async with command_sessions() as db:
+        owner, _, workspace, _ = await _members(db)
+        admin = User(username="inspection-admin", password_hash="unused", role="administrator")
+        db.add(admin)
+        db.add_all([
+            Item(workspace_id=workspace.id, title=f"Item {index}", created_by=owner.id)
+            for index in range(101)
+        ])
+        await db.commit()
+        admin_id, workspace_id = admin.id, workspace.id
+        reason = "Investigate reported data loss"
+        items = await read_workspace_items_break_glass(db, admin, workspace_id, reason)
+        assert len(items) == 100
+        event = await db.scalar(
+            select(AuditEvent).where(AuditEvent.action == "admin.workspace.break_glass.read")
+        )
+        assert event.detail["result_count"] == 100
+        assert (
+            await db.scalar(
+                select(WorkspaceMember.id).where(
+                    WorkspaceMember.workspace_id == workspace_id,
+                    WorkspaceMember.user_id == admin_id,
+                )
+            )
+            is None
+        )
+        for limit in (0, 101):
+            admin = await db.get(User, admin_id)
+            with pytest.raises(ValidationFailure, match="between 1 and 100"):
+                await read_workspace_items_break_glass(db, admin, workspace_id, reason, limit=limit)
+            await db.rollback()
+        assert await _event_count(db, "admin.workspace.break_glass.read", workspace_id) == 1

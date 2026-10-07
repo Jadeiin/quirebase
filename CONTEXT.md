@@ -24,6 +24,11 @@ lineage. Workspaces all use the same domain and authorization rules; there is no
 Workspace kind. User provisioning creates an ordinary Workspace for its new User.
 _Avoid_: Tenant when discussing research data
 
+**Workspace Freeze**:
+An instance-administrator read-only overlay that blocks Workspace mutations while retaining
+active members' content reads, downloads and exports. Unfreezing preserves the underlying
+active or archived state. It neither suspends members nor grants the administrator content access.
+
 **Workspace Member**:
 A User with an active or suspended membership in a Workspace. An active membership is required
 for Workspace data access; suspension and termination remove effective access without changing

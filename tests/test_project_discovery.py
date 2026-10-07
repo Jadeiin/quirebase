@@ -48,7 +48,7 @@ async def _assert_discovery_matrix(db, role, lifecycle):
     if lifecycle == "archived":
         workspace.state = WorkspaceState.archived
     elif lifecycle == "suspended":
-        workspace.governance_suspended_at = datetime.now(UTC)
+        workspace.governance_frozen_at = datetime.now(UTC)
 
     cases = []
     for root, participation, participant, state in product(

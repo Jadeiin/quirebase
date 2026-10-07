@@ -38,7 +38,7 @@ def render() -> str:
             grants = [
                 "/".join(
                     label
-                    for label, lifecycle in (("A", "active"), ("R", "archived"), ("F", "suspended"))
+                    for label, lifecycle in (("A", "active"), ("R", "archived"), ("F", "frozen"))
                     if workspace_action_allowed(
                         role, action.resource, action.action, lifecycle, relation
                     )

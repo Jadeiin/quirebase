@@ -51,7 +51,7 @@ def project_detail_view(
 
 class ProjectCreateRequest(BaseModel):
     name: str = Field(max_length=240)
-    participation: ProjectParticipation = ProjectParticipation.workspace
+    participation: ProjectParticipation
     description: str = Field(default="", max_length=2000)
 
 

@@ -156,13 +156,13 @@ test('administrators can respond to compromised user accounts', async ({ page })
 		});
 });
 
-test('Workspace governance suspends, recovers, and performs reason-bound break-glass inspection', async ({
+test('Workspace governance freezes, unfreezes, and performs reason-bound break-glass inspection', async ({
 	page
 }) => {
 	await mockSession(page, 'administrator');
-	let suspended = false;
-	let suspendRequests = 0;
-	let recoverRequests = 0;
+	let frozen = false;
+	let freezeRequests = 0;
+	let unfreezeRequests = 0;
 	let inspectionBody: unknown;
 	await page.route('**/api/v1/admin/workspaces', (route) =>
 		route.fulfill({
@@ -172,20 +172,20 @@ test('Workspace governance suspends, recovers, and performs reason-bound break-g
 					name: 'Research',
 					owner_id: 'user-1',
 					state: 'active',
-					governance_suspended_at: suspended ? '2026-09-01T00:00:00Z' : null,
-					governance_suspended_by: suspended ? 'admin-1' : null
+					governance_frozen_at: frozen ? '2026-09-01T00:00:00Z' : null,
+					governance_frozen_by: frozen ? 'admin-1' : null
 				}
 			]
 		})
 	);
-	await page.route('**/api/v1/admin/workspaces/workspace-1/suspend', (route) => {
-		suspendRequests += 1;
-		suspended = true;
+	await page.route('**/api/v1/admin/workspaces/workspace-1/freeze', (route) => {
+		freezeRequests += 1;
+		frozen = true;
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.route('**/api/v1/admin/workspaces/workspace-1/recover', (route) => {
-		recoverRequests += 1;
-		suspended = false;
+	await page.route('**/api/v1/admin/workspaces/workspace-1/unfreeze', (route) => {
+		unfreezeRequests += 1;
+		frozen = false;
 		return route.fulfill({ json: { ok: true } });
 	});
 	await page.route('**/api/v1/admin/workspaces/workspace-1/break-glass/items', (route) => {
@@ -207,10 +207,10 @@ test('Workspace governance suspends, recovers, and performs reason-bound break-g
 
 	await page.goto('/admin/workspaces');
 	await expect(page.locator('article').getByText('Research', { exact: true })).toBeVisible();
-	await page.getByRole('button', { name: 'Suspend governance' }).click();
-	await expect.poll(() => suspendRequests).toBe(1);
-	await page.getByRole('button', { name: 'Recover' }).click();
-	await expect.poll(() => recoverRequests).toBe(1);
+	await page.getByRole('button', { name: 'Freeze writes' }).click();
+	await expect.poll(() => freezeRequests).toBe(1);
+	await page.getByRole('button', { name: 'Unfreeze writes' }).click();
+	await expect.poll(() => unfreezeRequests).toBe(1);
 	await page.getByLabel('Target Workspace').selectOption('workspace-1');
 	await page.getByLabel(/Reason/).fill('Investigating a reported access issue');
 	await page.getByRole('button', { name: 'Inspect Items once' }).click();
@@ -233,16 +233,16 @@ test('break-glass inspection keeps the Workspace that authorized the displayed r
 					name: 'Research',
 					owner_id: 'owner-1',
 					state: 'active',
-					governance_suspended_at: null,
-					governance_suspended_by: null
+					governance_frozen_at: null,
+					governance_frozen_by: null
 				},
 				{
 					id: 'workspace-2',
 					name: 'Archive',
 					owner_id: 'owner-2',
 					state: 'active',
-					governance_suspended_at: null,
-					governance_suspended_by: null
+					governance_frozen_at: null,
+					governance_frozen_by: null
 				}
 			]
 		})

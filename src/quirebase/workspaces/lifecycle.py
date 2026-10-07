@@ -87,8 +87,8 @@ async def archive_workspace(db: AsyncSession, actor: User, workspace_id: UUID) -
 async def restore_workspace(db: AsyncSession, actor: User, workspace_id: UUID) -> Workspace:
     # Restore is the one mutation intentionally authorized while archived.
     workspace = await _lock_workspace(db, workspace_id)
-    if workspace.governance_suspended_at is not None:
-        raise WorkspaceLifecycleError("Workspace governance is suspended")
+    if workspace.governance_frozen_at is not None:
+        raise WorkspaceLifecycleError("Workspace writes are frozen")
     context = await require_workspace_membership(db, actor, workspace_id)
     require_action(context, ResourceAction.workspace_restore)
     workspace.state = WorkspaceState.active
@@ -112,8 +112,8 @@ async def permanently_delete_workspace(
 ) -> Workspace:
     # Deletion is permitted only from archived state, so membership and role are checked separately.
     workspace = await _lock_workspace(db, workspace_id)
-    if workspace.governance_suspended_at is not None:
-        raise WorkspaceLifecycleError("Workspace governance is suspended")
+    if workspace.governance_frozen_at is not None:
+        raise WorkspaceLifecycleError("Workspace writes are frozen")
     context = await require_workspace_membership(db, actor, workspace_id)
     require_action(context, ResourceAction.workspace_delete)
     if workspace.state is not WorkspaceState.archived:

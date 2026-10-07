@@ -88,7 +88,7 @@ def _context(role, lifecycle="active"):
         name="Projection",
         created_by=actor.id,
         state=WorkspaceState.archived if lifecycle == "archived" else WorkspaceState.active,
-        governance_suspended_at=datetime.now(UTC) if lifecycle == "suspended" else None,
+        governance_frozen_at=datetime.now(UTC) if lifecycle == "frozen" else None,
     )
     member = WorkspaceMember(workspace_id=workspace.id, user_id=actor.id, role=role)
     return WorkspaceContext(actor, workspace, member, role)
@@ -107,7 +107,7 @@ ITEM_SURFACE_ACTIONS = (
 
 
 @pytest.mark.parametrize("role", WorkspaceRole)
-@pytest.mark.parametrize("lifecycle", ["active", "archived", "suspended"])
+@pytest.mark.parametrize("lifecycle", ["active", "archived", "frozen"])
 def test_item_surface_projects_each_enforceable_action(role, lifecycle):
     context = _context(role, lifecycle)
     projected = set(item_decisions(context).allowed)
@@ -161,7 +161,7 @@ def test_restore_projection_requires_archived_project_even_without_archive_grant
 
 
 @pytest.mark.parametrize("role", WorkspaceRole)
-@pytest.mark.parametrize("lifecycle", ["active", "archived", "suspended"])
+@pytest.mark.parametrize("lifecycle", ["active", "archived", "frozen"])
 @pytest.mark.parametrize("current", ProjectParticipation)
 @pytest.mark.parametrize("target", ProjectParticipation)
 def test_participation_choices_match_enforcement_for_every_transition(
@@ -335,6 +335,7 @@ async def test_concrete_member_roles_match_actual_transitions(async_db, role, ta
             else ["editor", "reviewer", "viewer"]
         )
     )
+    expected = [value for value in expected if value != target_role.value]
     assert list(choices) == expected
     initial_role = member.role
     for requested in choices:
@@ -416,7 +417,7 @@ async def test_project_choices_and_commands_do_not_infer_independent_grants(
         assert participation.status_code == 403
         await async_db.refresh(project)
         assert project.name == ("Metadata" if metadata_allowed else "Independent choices")
-        assert project.participation is ProjectParticipation.workspace
+        assert project.participation is ProjectParticipation.open
     finally:
         await client.aclose()
 

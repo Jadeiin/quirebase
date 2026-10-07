@@ -487,7 +487,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/admin/workspaces/{workspace_id}/suspend': {
+	'/api/v1/admin/workspaces/{workspace_id}/freeze': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -496,15 +496,15 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Admin Suspend Workspace */
-		post: operations['admin.admin_suspend_workspace'];
+		/** Admin Freeze Workspace */
+		post: operations['admin.admin_freeze_workspace'];
 		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/admin/workspaces/{workspace_id}/recover': {
+	'/api/v1/admin/workspaces/{workspace_id}/unfreeze': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -513,8 +513,8 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Admin Recover Workspace */
-		post: operations['admin.admin_recover_workspace'];
+		/** Admin Unfreeze Workspace */
+		post: operations['admin.admin_unfreeze_workspace'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -2301,10 +2301,10 @@ export interface components {
 			 */
 			owner_id: string;
 			state: components['schemas']['WorkspaceState'];
-			/** Governance Suspended At */
-			governance_suspended_at?: string | null;
-			/** Governance Suspended By */
-			governance_suspended_by?: string | null;
+			/** Governance Frozen At */
+			governance_frozen_at?: string | null;
+			/** Governance Frozen By */
+			governance_frozen_by?: string | null;
 		};
 		/** AnnotationCreate */
 		AnnotationCreate: {
@@ -3848,7 +3848,6 @@ export interface components {
 		ProjectCreateRequest: {
 			/** Name */
 			name: string;
-			/** @default workspace */
 			participation: components['schemas']['ProjectParticipation'];
 			/**
 			 * Description
@@ -4026,7 +4025,7 @@ export interface components {
 			| 'workspace_invitation.read'
 			| 'workspace_invitation.create'
 			| 'workspace_invitation.revoke'
-			| 'workspace_member.read'
+			| 'workspace_membership.read'
 			| 'workspace_member.change_role'
 			| 'workspace_member.promote'
 			| 'workspace_member.suspend'
@@ -4197,8 +4196,8 @@ export interface components {
 			| 'workspace.create'
 			| 'workspace_invitation.accept'
 			| 'workspace_governance.read'
-			| 'workspace_governance.suspend'
-			| 'workspace_governance.recover'
+			| 'workspace_governance.freeze'
+			| 'workspace_governance.unfreeze'
 			| 'workspace_break_glass.read';
 		/**
 		 * SystemAuthorizationView
@@ -4538,8 +4537,8 @@ export interface components {
 			owner_id: string;
 			state: components['schemas']['WorkspaceState'];
 			current_role: components['schemas']['WorkspaceRole'];
-			/** Governance Suspended */
-			governance_suspended: boolean;
+			/** Governance Frozen */
+			governance_frozen: boolean;
 			/** Allowed Project Participations */
 			allowed_project_participations: components['schemas']['ProjectParticipation'][];
 			/** Allowed Invitation Roles */
@@ -5978,7 +5977,7 @@ export interface operations {
 			};
 		};
 	};
-	'admin.admin_suspend_workspace': {
+	'admin.admin_freeze_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -6018,7 +6017,7 @@ export interface operations {
 			};
 		};
 	};
-	'admin.admin_recover_workspace': {
+	'admin.admin_unfreeze_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;

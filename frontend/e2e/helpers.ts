@@ -10,7 +10,7 @@ export function workspaceView(id: string, name: string) {
 		owner_id: 'user-1',
 		state: 'active',
 		current_role: 'owner',
-		governance_suspended: false,
+		governance_frozen: false,
 		allowed_project_participations: ['managed', 'open', 'workspace'],
 		allowed_invitation_roles: ['viewer', 'reviewer', 'editor', 'admin'],
 		authorization: {
@@ -35,7 +35,7 @@ export function workspaceView(id: string, name: string) {
 				'project_item.manage',
 				'workspace_invitation.read',
 				'workspace_invitation.revoke',
-				'workspace_member.read',
+				'workspace_membership.read',
 				'item_discussion.create',
 				'project_discussion.create',
 				'private_annotation.create',

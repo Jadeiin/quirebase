@@ -124,7 +124,9 @@ async def test_project_diagnostics_respect_retained_participation_and_detect_dri
 ):
     async with integrity_sessions() as db:
         owner, participant, workspace, member = await _workspace(db)
-        implicit = await create_project(db, owner, workspace.id, "Implicit")
+        implicit = await create_project(
+            db, owner, workspace.id, "Implicit", participation=ProjectParticipation.workspace
+        )
         managed = await create_project(
             db, owner, workspace.id, "Managed", ProjectParticipation.managed
         )

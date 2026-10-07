@@ -10,13 +10,13 @@ from quirebase.models import WorkspaceRole, WorkspaceState
 
 
 @pytest.mark.parametrize("role", WorkspaceRole)
-@pytest.mark.parametrize("lifecycle", ["active", "archived", "suspended"])
+@pytest.mark.parametrize("lifecycle", ["active", "archived", "frozen"])
 def test_workspace_projection_separates_base_grants_and_concrete_choices(role, lifecycle):
     state = WorkspaceState.archived if lifecycle == "archived" else WorkspaceState.active
-    suspended = lifecycle == "suspended"
-    decisions = workspace_decisions(role, state, governance_suspended=suspended)
-    invitations = workspace_invitation_roles(role, state, governance_suspended=suspended)
-    projects = workspace_project_participations(role, state, governance_suspended=suspended)
+    frozen = lifecycle == "frozen"
+    decisions = workspace_decisions(role, state, governance_frozen=frozen)
+    invitations = workspace_invitation_roles(role, state, governance_frozen=frozen)
+    projects = workspace_project_participations(role, state, governance_frozen=frozen)
 
     assert ResourceAction.project_create not in decisions.allowed
     assert ResourceAction.workspace_invitation_create not in decisions.allowed

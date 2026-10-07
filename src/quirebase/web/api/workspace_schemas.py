@@ -36,7 +36,7 @@ class WorkspaceView(BaseModel):
     owner_id: UUID
     state: WorkspaceState
     current_role: WorkspaceRole
-    governance_suspended: bool
+    governance_frozen: bool
     allowed_project_participations: list[ProjectParticipation]
     allowed_invitation_roles: list[WorkspaceInvitationRole] = Field(default_factory=list)
     authorization: WorkspaceAuthorizationView

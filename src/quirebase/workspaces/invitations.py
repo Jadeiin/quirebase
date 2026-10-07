@@ -163,7 +163,7 @@ async def get_workspace_invitation_by_token(
     if (
         workspace is None
         or workspace.state is not WorkspaceState.active
-        or workspace.governance_suspended_at is not None
+        or workspace.governance_frozen_at is not None
     ):
         return None
     return invitation
@@ -189,10 +189,7 @@ async def accept_workspace_invitation(
     if observed is None or observed.workspace_id != workspace_id:
         raise ResourceNotFound("Workspace invitation not found or expired")
     workspace = await _lock_workspace(db, workspace_id)
-    if (
-        workspace.state is not WorkspaceState.active
-        or workspace.governance_suspended_at is not None
-    ):
+    if workspace.state is not WorkspaceState.active or workspace.governance_frozen_at is not None:
         raise WorkspaceLifecycleError("Workspace is not accepting membership changes")
     invitation = await db.scalar(
         select(WorkspaceInvitation)

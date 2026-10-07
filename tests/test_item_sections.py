@@ -371,7 +371,7 @@ async def test_item_overview_offers_only_eligible_copy_targets_and_rechecks_on_c
     if blocked_reason == "archived":
         archived_target.state = WorkspaceState.archived
     elif blocked_reason == "frozen":
-        archived_target.governance_suspended_at = datetime.now(UTC)
+        archived_target.governance_frozen_at = datetime.now(UTC)
     db.add_all([
         WorkspaceMember(
             workspace_id=active_target.id,

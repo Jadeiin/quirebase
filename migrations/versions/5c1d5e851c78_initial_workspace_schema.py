@@ -157,8 +157,8 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=240), nullable=False),
     sa.Column('created_by', advanced_alchemy.types.guid.GUID(length=16), nullable=False),
     sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='workspace_state', native_enum=False), nullable=False),
-    sa.Column('governance_suspended_at', advanced_alchemy.types.datetime.DateTimeUTC(timezone=True), nullable=True),
-    sa.Column('governance_suspended_by', advanced_alchemy.types.guid.GUID(length=16), nullable=True),
+    sa.Column('governance_frozen_at', advanced_alchemy.types.datetime.DateTimeUTC(timezone=True), nullable=True),
+    sa.Column('governance_frozen_by', advanced_alchemy.types.guid.GUID(length=16), nullable=True),
     sa.Column('archived_at', advanced_alchemy.types.datetime.DateTimeUTC(timezone=True), nullable=True),
     sa.Column('deleted_at', advanced_alchemy.types.datetime.DateTimeUTC(timezone=True), nullable=True),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
@@ -166,7 +166,7 @@ def upgrade() -> None:
     sa.Column('updated_at', advanced_alchemy.types.datetime.DateTimeUTC(timezone=True), nullable=False),
     sa.CheckConstraint("state IN ('active', 'archived', 'deleted')", name=op.f('ck_workspaces_state')),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], name=op.f('fk_workspaces_created_by_users')),
-    sa.ForeignKeyConstraint(['governance_suspended_by'], ['users.id'], name=op.f('fk_workspaces_governance_suspended_by_users'), ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['governance_frozen_by'], ['users.id'], name=op.f('fk_workspaces_governance_frozen_by_users'), ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_workspaces'))
     )
     op.create_table('citation_styles',

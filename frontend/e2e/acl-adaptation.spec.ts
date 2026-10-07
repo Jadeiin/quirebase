@@ -14,7 +14,7 @@ async function projectActions(
 		owner_id: 'user-1',
 		state: 'active',
 		current_role: role,
-		governance_suspended: suspended,
+		governance_frozen: suspended,
 		allowed_project_participations: [],
 		authorization: { allowed: allowedActions }
 	};
@@ -258,14 +258,14 @@ test('viewer can search Discovery but cannot stage Import or use write shortcuts
 	await expect(page.getByRole('button', { name: 'Review and import' })).toHaveCount(0);
 });
 
-test('governance suspension is visible and hides Workspace mutations', async ({ page }) => {
+test('governance freeze is visible and hides Workspace mutations', async ({ page }) => {
 	await mockSession(page);
 	await projectActions(page, 'owner', ['workspace.read', 'workspace.export'], true);
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
 	await page.goto('/workspace/workspace-1');
-	await expect(page.getByText(/Workspace governance is suspended/)).toBeVisible();
+	await expect(page.getByText(/Workspace writes are frozen/)).toBeVisible();
 	await expect(page.getByRole('link', { name: /Import Items/ })).toHaveCount(0);
 	await page.goto('/workspace/workspace-1/settings');
 	await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(0);
@@ -349,7 +349,7 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 		owner_id: 'user-1',
 		state: 'active',
 		current_role: 'admin',
-		governance_suspended: false,
+		governance_frozen: false,
 		authorization: {
 			allowed: ['workspace.read', 'workspace.update', 'workspace_maintenance.run']
 		}
@@ -399,7 +399,7 @@ test('a lifecycle conflict refreshes the Workspace action projection', async ({ 
 		owner_id: 'user-1',
 		state: archived ? 'archived' : 'active',
 		current_role: 'owner',
-		governance_suspended: false,
+		governance_frozen: false,
 		authorization: {
 			allowed: archived
 				? ['workspace.read', 'workspace.restore']
@@ -463,7 +463,7 @@ test('missing Workspace context opens recovery and emits a diagnostic', async ({
 				owner_id: 'user-1',
 				state: 'active',
 				current_role: 'owner',
-				governance_suspended: false,
+				governance_frozen: false,
 				authorization: { allowed: ['workspace.read', 'workspace.update'] }
 			}
 		});

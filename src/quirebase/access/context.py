@@ -61,7 +61,7 @@ class WorkspaceContext:
         return effective_resource_actions(
             self.role,
             self.workspace.state,
-            governance_suspended=self.workspace.governance_suspended_at is not None,
+            governance_frozen=self.workspace.governance_frozen_at is not None,
         )
 
 
@@ -100,7 +100,7 @@ def require_action(
             ctx.role,
             ctx.workspace.state,
             resource_action,
-            governance_suspended=ctx.workspace.governance_suspended_at is not None,
+            governance_frozen=ctx.workspace.governance_frozen_at is not None,
             relation=relation,
         ),
         active_allowed=workspace_action_allowed(
@@ -125,7 +125,7 @@ def _require_workspace_decision(
         return ctx
     if active_allowed and (
         ctx.workspace.state is not WorkspaceState.active
-        or ctx.workspace.governance_suspended_at is not None
+        or ctx.workspace.governance_frozen_at is not None
     ):
         raise WorkspaceLifecycleError("Workspace is read-only")
     raise PermissionDenied(message)

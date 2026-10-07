@@ -233,7 +233,7 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
             if revocation == "archive":
                 workspace.state = WorkspaceState.archived
             elif revocation == "governance_suspend":
-                workspace.governance_suspended_at = datetime.now(UTC)
+                workspace.governance_frozen_at = datetime.now(UTC)
             else:
                 revoked_membership = await governance_db.get(WorkspaceMember, membership_id)
                 assert revoked_membership is not None
@@ -264,7 +264,7 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
     workspace = await async_db.get(Workspace, workspace_id)
     assert workspace is not None
     workspace.state = WorkspaceState.active
-    workspace.governance_suspended_at = None
+    workspace.governance_frozen_at = None
     await async_db.commit()
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",

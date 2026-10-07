@@ -1037,11 +1037,6 @@ msgid "CSL XML"
 msgstr "CSL XML"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Current backend MVP requires a reason for each read request. This response is not a durable access grant; it has no persistent scope, expiry, or revocation endpoint."
-msgstr "Current backend MVP requires a reason for each read request. This response is not a durable access grant; it has no persistent scope, expiry, or revocation endpoint."
-
-#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Current password"
 msgstr "Current password"
@@ -1366,6 +1361,11 @@ msgid "Durable workflows"
 msgstr "Durable workflows"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Each inspection requires a reason and returns at most 100 Items. It grants no continuing access."
+msgstr "Each inspection requires a reason and returns at most 100 Items. It grants no continuing access."
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Each workspace follows the same access and governance rules. Choose one to open its library and projects."
 msgstr "Each workspace follows the same access and governance rules. Choose one to open its library and projects."
@@ -1427,11 +1427,6 @@ msgstr "Excluded fields"
 #: src/lib/app/AppSidebar.svelte
 msgid "Expand sidebar"
 msgstr "Expand sidebar"
-
-#. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Expiration: single response; no continuing access is granted"
-msgstr "Expiration: single response; no continuing access is granted"
 
 #. API Token or invitation state.
 #. js-lingui-explicit-id
@@ -1580,6 +1575,11 @@ msgstr "Free more horizontal space for reading and metadata work."
 #: src/lib/domain-labels.ts
 msgid "Free text"
 msgstr "Free text"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Freeze writes"
+msgstr "Freeze writes"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -1743,8 +1743,8 @@ msgstr "Install Citation Style"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Instance administrators can suspend or recover Workspace governance. This does not grant ordinary content access."
-msgstr "Instance administrators can suspend or recover Workspace governance. This does not grant ordinary content access."
+msgid "Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access."
+msgstr "Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access."
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -3078,6 +3078,11 @@ msgid "Read PDF"
 msgstr "Read PDF"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "read-only freeze"
+msgstr "read-only freeze"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Reading"
 msgstr "Reading"
@@ -3138,11 +3143,6 @@ msgstr "Record"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Record tools"
 msgstr "Record tools"
-
-#. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Recover"
-msgstr "Recover"
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -3617,6 +3617,11 @@ msgid "Similar title"
 msgstr "Similar title"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Single response; no continuing access is granted"
+msgstr "Single response; no continuing access is granted"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
@@ -3702,15 +3707,9 @@ msgstr "Supplements: {state}"
 msgid "Suspend"
 msgstr "Suspend"
 
-#. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Suspend governance"
-msgstr "Suspend governance"
-
 #. Workspace member state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "suspended"
 msgstr "suspended"
 
@@ -4199,6 +4198,11 @@ msgid "Underline"
 msgstr "Underline"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Unfreeze writes"
+msgstr "Unfreeze writes"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/LibraryResults.svelte
@@ -4455,11 +4459,6 @@ msgid "Workspace governance"
 msgstr "Workspace governance"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
-msgid "Workspace governance is suspended. Content is read only until an instance administrator recovers this Workspace."
-msgstr "Workspace governance is suspended. Content is read only until an instance administrator recovers this Workspace."
-
-#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Workspace maintenance"
 msgstr "Workspace maintenance"
@@ -4519,6 +4518,11 @@ msgstr "Workspace settings"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Workspace settings · Quirebase"
 msgstr "Workspace settings · Quirebase"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace."
+msgstr "Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace."
 
 #. Project participation policy.
 #. js-lingui-explicit-id

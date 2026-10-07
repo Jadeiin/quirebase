@@ -127,7 +127,7 @@ test('an archived Workspace selected as default opens again from the root', asyn
 		owner_id: 'user-1',
 		state: 'archived',
 		current_role: 'owner',
-		governance_suspended: false,
+		governance_frozen: false,
 		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace.export', 'workspace.restore'] }
 	};
@@ -165,7 +165,7 @@ test('workspace creation submits an explicit owner and opens the Workspace when 
 		owner_id: 'user-1',
 		state: 'active',
 		current_role: 'owner',
-		governance_suspended: false,
+		governance_frozen: false,
 		allowed_project_participations: [],
 		authorization: {
 			allowed: ['workspace.read', 'workspace.update', 'item.create']
@@ -218,7 +218,7 @@ test('an instance administrator who assigns another owner is not added to Worksp
 						owner_id: 'user-1',
 						state: 'active',
 						current_role: 'owner',
-						governance_suspended: false,
+						governance_frozen: false,
 						allowed_project_participations: [],
 						authorization: { allowed: ['workspace.read'] }
 					}
@@ -294,7 +294,7 @@ test('the root route surfaces Workspace list failures and retries', async ({ pag
 						owner_id: 'user-1',
 						state: 'active',
 						current_role: 'owner',
-						governance_suspended: false,
+						governance_frozen: false,
 						allowed_project_participations: [],
 						authorization: { allowed: ['workspace.read'] }
 					}
@@ -358,7 +358,7 @@ test('availability recovery releases its guard for a later membership revocation
 		owner_id: 'user-1',
 		state: 'active',
 		current_role: 'owner',
-		governance_suspended: false,
+		governance_frozen: false,
 		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read'] }
 	};
@@ -574,9 +574,9 @@ test('Workspace admins do not get governance controls for other admin members', 
 		owner_id: 'owner-1',
 		state: 'active',
 		current_role: 'admin',
-		governance_suspended: false,
+		governance_frozen: false,
 		allowed_project_participations: [],
-		authorization: { allowed: ['workspace.read', 'workspace_member.read'] }
+		authorization: { allowed: ['workspace.read', 'workspace_membership.read'] }
 	};
 	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
 		route.fulfill({ json: directoryPage([workspace], route) })
@@ -600,7 +600,7 @@ test('Workspace admins do not get governance controls for other admin members', 
 					},
 					{
 						membership_id: 'editor-membership',
-						allowed_roles: ['editor', 'reviewer', 'viewer'],
+						allowed_roles: ['reviewer', 'viewer'],
 						user_id: 'editor-user',
 						username: 'editor',
 						role: 'editor',
@@ -630,6 +630,8 @@ test('Workspace admins do not get governance controls for other admin members', 
 	await expect(adminRow.getByRole('button')).toHaveCount(0);
 	const editorRow = page.getByRole('row').filter({ hasText: 'editor' });
 	await expect(editorRow.getByRole('combobox', { name: 'Role for editor' })).toBeVisible();
+	await expect(editorRow.getByRole('combobox').locator('option[value="editor"]')).toHaveCount(0);
+	await expect(editorRow.getByRole('combobox')).toHaveValue('');
 	await expect(editorRow.getByRole('button', { name: 'Suspend' })).toBeVisible();
 });
 
@@ -641,7 +643,7 @@ test('Workspace members see the active directory without governance data', async
 		owner_id: 'owner-1',
 		state: 'active',
 		current_role: 'editor',
-		governance_suspended: false,
+		governance_frozen: false,
 		allowed_project_participations: [],
 		authorization: { allowed: ['workspace.read', 'workspace.export', 'item.update'] }
 	};
@@ -691,7 +693,7 @@ for (const roles of [['reviewer'], []]) {
 			owner_id: 'user-1',
 			state: 'active',
 			current_role: 'owner',
-			governance_suspended: false,
+			governance_frozen: false,
 			allowed_project_participations: [],
 			allowed_invitation_roles: roles,
 			authorization: { allowed: ['workspace.read', 'workspace_invitation.read'] }
@@ -803,7 +805,7 @@ test('an inaccessible default Workspace is cleared before root navigation recove
 							owner_id: 'user-1',
 							state: 'active',
 							current_role: 'owner',
-							governance_suspended: false,
+							governance_frozen: false,
 							allowed_project_participations: [],
 							authorization: { allowed: ['workspace.read', 'item.create'] }
 						}
@@ -946,7 +948,7 @@ for (const maintenance of [false, true]) {
 					owner_id: 'owner',
 					state: 'active',
 					current_role: 'admin',
-					governance_suspended: false,
+					governance_frozen: false,
 					allowed_project_participations: [],
 					authorization: {
 						allowed: [

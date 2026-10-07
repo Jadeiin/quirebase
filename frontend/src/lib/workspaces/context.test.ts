@@ -12,7 +12,7 @@ const view = (
 	owner_id: 'user-1',
 	state: 'active',
 	current_role: role,
-	governance_suspended: false,
+	governance_frozen: false,
 	allowed_project_participations: [],
 	authorization: { allowed }
 });
@@ -28,7 +28,7 @@ describe('workspaceCan', () => {
 			...view('owner', ['workspace.read', 'workspace.archive']),
 			state: 'archived'
 		};
-		const suspended = { ...view('owner', ['workspace.read']), governance_suspended: true };
+		const suspended = { ...view('owner', ['workspace.read']), governance_frozen: true };
 		expect(workspaceCan(archived, 'workspace.archive')).toBe(true);
 		expect(workspaceCan(archived, 'item.update')).toBe(false);
 		expect(workspaceCan(suspended, 'workspace.archive')).toBe(false);

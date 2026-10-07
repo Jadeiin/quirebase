@@ -60,7 +60,7 @@ async def create_project(
     user: User,
     workspace_id: UUID,
     name: str,
-    participation: ProjectParticipation | str = ProjectParticipation.workspace,
+    participation: ProjectParticipation | str = ProjectParticipation.open,
     description: str = "",
 ) -> Project:
     normalized = _validate_name(name)

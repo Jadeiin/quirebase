@@ -30,8 +30,8 @@ class AdminWorkspaceView(BaseModel):
     name: str
     owner_id: UUID
     state: WorkspaceState
-    governance_suspended_at: datetime | None = None
-    governance_suspended_by: UUID | None = None
+    governance_frozen_at: datetime | None = None
+    governance_frozen_by: UUID | None = None
 
 
 class UserRoleRequest(BaseModel):
