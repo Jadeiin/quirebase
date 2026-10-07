@@ -1647,7 +1647,9 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
         items, total, *_ = await search_library(db, owner, workspace_id)
         assert total == 2 and {item.id for item in items} == set(first_ids)
         events, total = await query_events(db, owner, action="bibliography.import")
-        assert total == 2 and {event.target_id for event in events} == set(first_ids)
+        assert total == 2 and {event.target_id for event in events} == {
+            str(item_id) for item_id in first_ids
+        }
         items, total, *_ = await search_library(db, owner, workspace_id, q="Alphaconfirm")
         assert total == 1 and items[0].id in first_ids
 
