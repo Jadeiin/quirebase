@@ -1084,43 +1084,47 @@ async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
 
 
 @pytest.mark.concurrency_case("participation-recheck")
-async def test_project_participation_add_races_switch_to_workspace_mode(postgres_sessions):
+@pytest.mark.parametrize("first", ["settings", "add"])
+async def test_project_participation_add_races_switch_to_workspace_mode(
+    postgres_sessions, postgres_race, monkeypatch, first
+):
     async with postgres_sessions() as db:
         owner = await _user(db, "participation-owner")
         target = await _user(db, "participation-target")
         workspace_id = fixture_workspace_id(owner)
-        owner_id = owner.id
-        target_id = target.id
-        target_username = target.username
-        membership = WorkspaceMember(
-            workspace_id=workspace_id,
-            user_id=target_id,
-            role=WorkspaceRole.editor,
-            invited_by=owner_id,
+        owner_id, target_id, target_username = owner.id, target.id, target.username
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=target_id,
+                role=WorkspaceRole.editor,
+                invited_by=owner_id,
+            )
         )
-        db.add(membership)
         await db.commit()
         project = await create_project(
             db, owner, workspace_id, "Concurrent participation", ProjectParticipation.managed
         )
         project_id = project.id
 
-    gate = asyncio.Event()
-    ready = 0
-    ready_lock = asyncio.Lock()
+    ready_to_commit = asyncio.Event()
+    release_commit = asyncio.Event()
 
-    async def change_participation(switch_to_workspace: bool):
-        nonlocal ready
-        async with postgres_sessions() as db:
+    async def mutate(operation):
+        async with postgres_race.session(operation) as db:
             actor = await db.get(User, owner_id)
-            assert actor is not None
-            async with ready_lock:
-                ready += 1
-                if ready == 2:
-                    gate.set()
-            await gate.wait()
+            if operation == first:
+                commit = db.commit
+
+                async def held_commit():
+                    await db.flush()
+                    ready_to_commit.set()
+                    await release_commit.wait()
+                    await commit()
+
+                monkeypatch.setattr(db, "commit", held_commit)
             try:
-                if switch_to_workspace:
+                if operation == "settings":
                     await set_project_participation(
                         db, actor, workspace_id, project_id, ProjectParticipation.workspace
                     )
@@ -1133,20 +1137,41 @@ async def test_project_participation_add_races_switch_to_workspace_mode(postgres
                 await db.rollback()
                 return "rejected"
 
-    outcomes = await asyncio.gather(change_participation(True), change_participation(False))
-    assert sorted(outcomes) in (["committed", "committed"], ["committed", "rejected"])
+    second = "add" if first == "settings" else "settings"
+    postgres_race.start(first, mutate(first))
+    await asyncio.wait_for(ready_to_commit.wait(), timeout=5)
+    postgres_race.start(second, mutate(second))
+    try:
+        await postgres_race.wait_blocked(second, first)
+    finally:
+        release_commit.set()
+    assert await postgres_race.join(first) == "committed"
+    assert await postgres_race.join(second) == ("rejected" if first == "settings" else "committed")
 
     async with postgres_sessions() as db:
         project = await db.get(Project, project_id)
-        assert project is not None
         assert project.participation is ProjectParticipation.workspace
-        participants = await db.scalar(
-            select(func.count(ProjectParticipant.id)).where(
-                ProjectParticipant.workspace_id == workspace_id,
-                ProjectParticipant.project_id == project_id,
+        assert (
+            await db.scalar(
+                select(ProjectParticipant.id).where(ProjectParticipant.project_id == project_id)
+            )
+            is None
+        )
+        add_events = await db.scalar(
+            select(func.count(AuditEvent.id)).where(
+                AuditEvent.project_id == project_id, AuditEvent.action == "project.participant.add"
             )
         )
-        assert participants == 0
+        assert add_events == int(first == "add")
+        assert (
+            await db.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.project_id == project_id,
+                    AuditEvent.action == "project.settings.update",
+                )
+            )
+            == 1
+        )
 
 
 @pytest.mark.concurrency_case("annotation-recheck")

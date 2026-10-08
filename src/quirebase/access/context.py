@@ -41,6 +41,9 @@ class WorkspaceContext:
     A command may change this membership, such as demoting the previous owner
     during ownership transfer. Audit must retain the role that authorized that
     command. A subsequent command resolves a fresh context under its own locks.
+
+    This is a transaction-local fact set, not an authorization grant that survives
+    commit, rollback or durable replay. Cross-transaction operations reload it.
     """
 
     actor: User
@@ -176,6 +179,8 @@ async def require_workspace_action(
     # PostgreSQL holds this shared root lock through commit. Governance takes
     # an exclusive lock on the same root, while unrelated writers may proceed
     # concurrently. SQLite follows its ordinary single-process semantics.
+    # The locked recheck is the mutation authorization point. Keep that lock
+    # through the command's commit; resolve a fresh context after releasing it.
     return require_action(
         await lock_workspace_context(db, actor, workspace_id),
         resource_action,

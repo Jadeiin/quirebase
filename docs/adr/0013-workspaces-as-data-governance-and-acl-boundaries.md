@@ -118,6 +118,11 @@ Item metadata, files, Tags and ProjectItem capabilities are projected independen
 authority is not a prerequisite for those subordinate operations. Reindex uses the separate
 `workspace_maintenance.run` decision at dispatch and at every durable batch.
 
+Workspace projections describe capabilities in the current Workspace state. Resource projections
+also apply the loaded resource's lifecycle and domain conditions, and concrete choices apply the
+requested variant. None is a durable grant or a guarantee that a future payload or expected version
+will be accepted; commands recheck current facts under their own concurrency protection.
+
 The initial role presets are:
 
 | Resource-action family | Owner | Admin | Editor | Reviewer | Viewer |
@@ -259,6 +264,9 @@ persisted ProjectParticipant association remains a working-context selection, no
 Project settings use one partial `PATCH /projects/{id}` command and one transaction. Omitted
 fields stay unchanged; metadata-only updates do not alter participation or ProjectParticipant rows.
 Participation changes are an explicit submitted field with their own capability check.
+Settings use a Project root write lock rather than client-version CAS. Updates to the same field
+are applied in lock order; omitted fields retain the values reread under that lock. Participant
+changes use compatible root guards, so mode transitions and association changes cannot interleave.
 
 Switching to `workspace` removes all ProjectParticipant associations in the same transaction, including
 those belonging to suspended Workspace members. The UI confirms this permanent loss of participant

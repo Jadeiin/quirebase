@@ -103,7 +103,12 @@ def workspace_invitation_roles(
 
 
 def item_decisions(context: WorkspaceContext) -> AuthorizationProjection:
-    """Project independent capabilities for an Item already loaded in this Workspace."""
+    """Project capabilities for an Item already loaded in this Workspace.
+
+    Items have no additional lifecycle state. File readiness and Project state
+    belong to their own resources; these grants do not bypass those conditions
+    or payload/version validation in the owning command.
+    """
     actions = context.allowed_actions.intersection({
         ResourceAction.item_update,
         ResourceAction.item_delete,

@@ -2,14 +2,17 @@ import pytest
 from app_helpers import json_payload
 from sqlalchemy import select
 from test_http import authenticated_async_client
+from workspace_helpers import fixture_membership_id, provision_initial_workspace
 
 from quirebase.access import resolve_workspace_context
 from quirebase.core.errors import WorkspaceMembershipRequired
 from quirebase.models import (
+    AuditEvent,
     ProjectParticipant,
     ProjectParticipation,
     User,
     WorkspaceMember,
+    WorkspaceMemberState,
     WorkspaceRole,
 )
 from quirebase.projects import (
@@ -28,6 +31,140 @@ from quirebase.workspaces import (
     suspend_workspace_member,
     terminate_workspace_member,
 )
+
+
+@pytest.mark.anyio
+@pytest.mark.shared_postgres
+@pytest.mark.parametrize(
+    ("current", "target"),
+    [
+        (current, target)
+        for current in ProjectParticipation
+        for target in ProjectParticipation
+        if current is not target
+    ],
+)
+async def test_participation_transitions_preserve_or_clear_membership_selections(
+    persistence_db, current, target
+):
+    db = persistence_db
+    owner = User(username="transition-owner", password_hash="unused")
+    active = User(username="transition-active", password_hash="unused")
+    suspended = User(username="transition-suspended", password_hash="unused")
+    db.add_all([owner, active, suspended])
+    await db.flush()
+    workspace = await provision_initial_workspace(db, owner)
+    memberships = [
+        WorkspaceMember(workspace_id=workspace.id, user_id=active.id, role=WorkspaceRole.editor),
+        WorkspaceMember(
+            workspace_id=workspace.id,
+            user_id=suspended.id,
+            role=WorkspaceRole.viewer,
+            state=WorkspaceMemberState.suspended,
+        ),
+    ]
+    db.add_all(memberships)
+    await db.commit()
+    project = await create_project(db, owner, workspace.id, "Transition", current)
+    if current is not ProjectParticipation.workspace:
+        db.add_all([
+            ProjectParticipant(
+                workspace_id=workspace.id,
+                project_id=project.id,
+                workspace_member_id=member.id,
+                user_id=member.user_id,
+            )
+            for member in memberships
+        ])
+        await db.commit()
+    before = dict(
+        (
+            await db.execute(
+                select(ProjectParticipant.user_id, ProjectParticipant.id).where(
+                    ProjectParticipant.project_id == project.id
+                )
+            )
+        ).all()
+    )
+    owner_member_id = await fixture_membership_id(db, workspace.id, owner.id)
+
+    await update_project_settings(db, owner, workspace.id, project.id, participation=target)
+    after = dict(
+        (
+            await db.execute(
+                select(ProjectParticipant.user_id, ProjectParticipant.id).where(
+                    ProjectParticipant.project_id == project.id
+                )
+            )
+        ).all()
+    )
+    assert project.participation is target
+    if target is ProjectParticipation.workspace:
+        assert after == {}
+    elif current is ProjectParticipation.workspace:
+        assert set(after) == ({owner.id} if target is ProjectParticipation.open else set())
+        if after:
+            participant = await db.get(ProjectParticipant, after[owner.id])
+            assert participant.workspace_member_id == owner_member_id
+    else:
+        assert after == before  # Includes the suspended membership's original row identity.
+
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "project.settings.update", AuditEvent.project_id == project.id
+        )
+    )
+    assert event.detail["old"]["participation"] == current.value
+    assert event.detail["new"]["participation"] == target.value
+    if target is ProjectParticipation.workspace:
+        await update_project_settings(db, owner, workspace.id, project.id, participation=current)
+        selected = set(
+            await db.scalars(
+                select(ProjectParticipant.user_id).where(
+                    ProjectParticipant.project_id == project.id
+                )
+            )
+        )
+        assert active.id not in selected and suspended.id not in selected
+
+
+@pytest.mark.anyio
+@pytest.mark.shared_postgres
+async def test_participation_transition_rolls_back_with_its_audit_on_commit_failure(
+    persistence_db, monkeypatch
+):
+    db = persistence_db
+    owner = User(username="transition-rollback", password_hash="unused")
+    db.add(owner)
+    await db.flush()
+    workspace = await provision_initial_workspace(db, owner)
+    project = await create_project(db, owner, workspace.id, "Rollback", ProjectParticipation.open)
+    workspace_id, project_id = workspace.id, project.id
+    participant_id = await db.scalar(
+        select(ProjectParticipant.id).where(ProjectParticipant.project_id == project_id)
+    )
+
+    async def fail_commit():
+        await db.flush()
+        raise RuntimeError("commit aborted")
+
+    monkeypatch.setattr(db, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="commit aborted"):
+        await update_project_settings(
+            db, owner, workspace_id, project_id, participation=ProjectParticipation.workspace
+        )
+    await db.rollback()
+    await db.refresh(project)
+    assert project.participation is ProjectParticipation.open
+    assert await db.get(ProjectParticipant, participant_id) is not None
+    assert (
+        await db.scalar(
+            select(AuditEvent.id).where(
+                AuditEvent.action == "project.settings.update", AuditEvent.project_id == project_id
+            )
+        )
+        is None
+    )
 
 
 @pytest.mark.anyio
