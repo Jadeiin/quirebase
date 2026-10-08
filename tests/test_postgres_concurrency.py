@@ -58,6 +58,7 @@ from quirebase.library.citations import CitationStyleService, create_custom_cita
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
+    AuditEvent,
     Author,
     CitationStyle,
     DiscussionMessage,
@@ -86,6 +87,8 @@ from quirebase.projects import (
     add_project_participant,
     create_project,
     join_project,
+    leave_project,
+    remove_project_participant,
     rename_project,
     set_project_participation,
 )
@@ -1814,3 +1817,184 @@ async def test_concurrent_author_batches_recover_conflicts_and_keep_missing_iden
             "onlyfirst\x1f",
             "onlysecond\x1f",
         }
+
+
+@pytest.mark.concurrency_case("participation-recheck")
+@pytest.mark.parametrize("operation", ["join", "leave", "add", "remove"])
+async def test_participation_guards_preserve_independent_writes_and_revocation(
+    postgres_sessions, postgres_race, operation
+):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "participant-guards-owner")
+        target = await _user(db, "participant-guards-target")
+        workspace_id = fixture_workspace_id(owner)
+        db.add(
+            WorkspaceMember(workspace_id=workspace_id, user_id=target.id, role=WorkspaceRole.viewer)
+        )
+        await db.commit()
+        mode = (
+            ProjectParticipation.managed
+            if operation in {"add", "remove"}
+            else ProjectParticipation.open
+        )
+        project = await create_project(db, owner, workspace_id, "Guarded participation", mode)
+        if operation == "leave":
+            await join_project(db, target, workspace_id, project.id)
+        elif operation == "remove":
+            await add_project_participant(db, owner, workspace_id, project.id, target.username)
+        project_id, owner_id, target_id, username = project.id, owner.id, target.id, target.username
+
+    async def mutate():
+        async with postgres_race.session("mutation") as db:
+            actor = await db.get(User, owner_id if operation in {"add", "remove"} else target_id)
+            if operation == "join":
+                await join_project(db, actor, workspace_id, project_id)
+            elif operation == "leave":
+                await leave_project(db, actor, workspace_id, project_id)
+            elif operation == "add":
+                await add_project_participant(db, actor, workspace_id, project_id, username)
+            else:
+                await remove_project_participant(db, actor, workspace_id, project_id, target_id)
+            return "committed"
+
+    async with postgres_race.session("reader") as db:
+        await db.scalar(
+            select(Project.id).where(Project.id == project_id).with_for_update(read=True)
+        )
+        postgres_race.start("mutation", mutate())
+        if operation == "remove":
+            await postgres_race.wait_blocked("mutation", "reader")
+            await db.rollback()
+        assert await postgres_race.join("mutation") == "committed"
+        await db.rollback()
+
+    async with postgres_sessions() as db:
+        participant_id = await db.scalar(
+            select(ProjectParticipant.id).where(
+                ProjectParticipant.project_id == project_id, ProjectParticipant.user_id == target_id
+            )
+        )
+        assert (participant_id is not None) == (operation in {"join", "add"})
+
+
+@pytest.mark.concurrency_case("relation-idempotency")
+@pytest.mark.parametrize("operation", ["join", "add", "leave"])
+async def test_duplicate_participation_commands_have_one_audit_effect(
+    postgres_sessions, postgres_race, operation
+):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "atomic-participant-owner")
+        target = await _user(db, "atomic-participant-target")
+        workspace_id = fixture_workspace_id(owner)
+        db.add(
+            WorkspaceMember(workspace_id=workspace_id, user_id=target.id, role=WorkspaceRole.viewer)
+        )
+        await db.commit()
+        mode = ProjectParticipation.managed if operation == "add" else ProjectParticipation.open
+        project = await create_project(db, owner, workspace_id, "Atomic participation", mode)
+        if operation == "leave":
+            await join_project(db, target, workspace_id, project.id)
+        project_id, owner_id, target_id, username = project.id, owner.id, target.id, target.username
+
+    reached_commit, release_commit = asyncio.Event(), asyncio.Event()
+
+    async def mutate(name):
+        async with postgres_race.session(name) as db:
+            actor = await db.get(User, owner_id if operation == "add" else target_id)
+            if name == "winner":
+                commit = db.commit
+
+                async def held_commit():
+                    reached_commit.set()
+                    await release_commit.wait()
+                    await commit()
+
+                db.commit = held_commit
+            if operation == "join":
+                return (await join_project(db, actor, workspace_id, project_id)).id
+            if operation == "add":
+                return await add_project_participant(db, actor, workspace_id, project_id, username)
+            return await leave_project(db, actor, workspace_id, project_id)
+
+    postgres_race.start("winner", mutate("winner"))
+    await asyncio.wait_for(reached_commit.wait(), timeout=5)
+    postgres_race.start("loser", mutate("loser"))
+    try:
+        await postgres_race.wait_blocked("loser", "winner")
+    finally:
+        release_commit.set()
+    assert await postgres_race.join("winner") == await postgres_race.join("loser")
+    async with postgres_sessions() as db:
+        count = await db.scalar(
+            select(func.count(ProjectParticipant.id)).where(
+                ProjectParticipant.project_id == project_id, ProjectParticipant.user_id == target_id
+            )
+        )
+        assert count == (0 if operation == "leave" else 1)
+        events = await db.scalar(
+            select(func.count(AuditEvent.id)).where(
+                AuditEvent.project_id == project_id,
+                AuditEvent.action == f"project.participant.{operation}",
+            )
+        )
+        assert events == 1
+
+
+@pytest.mark.concurrency_case("relation-idempotency")
+async def test_open_join_recovers_when_leave_wins_before_existing_row_reread(
+    postgres_sessions, postgres_race
+):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "join-leave-owner")
+        target = await _user(db, "join-leave-target")
+        workspace_id = fixture_workspace_id(owner)
+        db.add(
+            WorkspaceMember(workspace_id=workspace_id, user_id=target.id, role=WorkspaceRole.viewer)
+        )
+        await db.commit()
+        project = await create_project(
+            db, owner, workspace_id, "Opposing selections", ProjectParticipation.open
+        )
+        selection = await join_project(db, target, workspace_id, project.id)
+        project_id, target_id, old_selection_id = project.id, target.id, selection.id
+
+    rereading, resume = asyncio.Event(), asyncio.Event()
+
+    async def rejoin():
+        async with postgres_race.session("rejoin") as db:
+            scalar = db.scalar
+
+            async def paused_scalar(statement, *args, **kwargs):
+                if (
+                    statement.is_select
+                    and not rereading.is_set()
+                    and statement.column_descriptions[0].get("entity") is ProjectParticipant
+                ):
+                    rereading.set()
+                    await resume.wait()
+                return await scalar(statement, *args, **kwargs)
+
+            db.scalar = paused_scalar
+            actor = await db.get(User, target_id)
+            return (await join_project(db, actor, workspace_id, project_id)).id
+
+    postgres_race.start("rejoin", rejoin())
+    await asyncio.wait_for(rereading.wait(), timeout=5)
+    try:
+        async with postgres_race.session("leave") as db:
+            actor = await db.get(User, target_id)
+            await leave_project(db, actor, workspace_id, project_id)
+    finally:
+        resume.set()
+    new_selection_id = await postgres_race.join("rejoin")
+    assert new_selection_id != old_selection_id
+    async with postgres_sessions() as db:
+        rows = (
+            await db.scalars(
+                select(ProjectParticipant).where(
+                    ProjectParticipant.project_id == project_id,
+                    ProjectParticipant.user_id == target_id,
+                )
+            )
+        ).all()
+        assert [row.id for row in rows] == [new_selection_id]

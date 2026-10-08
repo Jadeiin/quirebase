@@ -4,6 +4,7 @@ import asyncio
 import json
 import zipfile
 from datetime import UTC, datetime
+from uuid import UUID
 
 import pymupdf
 import pytest
@@ -13,7 +14,11 @@ from import_helpers import pdf_import_batch_data
 from sqlalchemy import select
 from storage_helpers import collect_body, local_object_path, put_pdf_object
 from test_http import authenticated_async_client
-from workspace_helpers import fixture_workspace_id, provision_initial_workspace
+from workspace_helpers import (
+    fixture_membership_id,
+    fixture_workspace_id,
+    provision_initial_workspace,
+)
 
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import PermissionDenied, ProjectLifecycleError
@@ -124,7 +129,10 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
     )
     db.add(
         ProjectParticipant(
-            workspace_id=item.workspace_id, project_id=source_project.id, user_id=viewer_user.id
+            workspace_id=item.workspace_id,
+            project_id=source_project.id,
+            user_id=viewer_user.id,
+            workspace_member_id=await fixture_membership_id(db, item.workspace_id, viewer_user.id),
         )
     )
 
@@ -139,7 +147,10 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
     await db.flush()
     db.add(
         ProjectParticipant(
-            workspace_id=item.workspace_id, project_id=target_project.id, user_id=viewer_user.id
+            workspace_id=item.workspace_id,
+            project_id=target_project.id,
+            user_id=viewer_user.id,
+            workspace_member_id=await fixture_membership_id(db, item.workspace_id, viewer_user.id),
         )
     )
     await db.commit()
@@ -188,7 +199,10 @@ async def test_bulk_action_records_single_bulk_audit_event(
     await db.flush()
     db.add(
         ProjectParticipant(
-            workspace_id=item.workspace_id, project_id=target_project.id, user_id=owner.id
+            workspace_id=item.workspace_id,
+            project_id=target_project.id,
+            user_id=owner.id,
+            workspace_member_id=await fixture_membership_id(db, item.workspace_id, owner.id),
         )
     )
     await db.commit()
@@ -233,7 +247,10 @@ async def test_bulk_action_rejects_archived_project_assignment(
     await db.flush()
     db.add(
         ProjectParticipant(
-            workspace_id=item.workspace_id, project_id=target_project.id, user_id=owner.id
+            workspace_id=item.workspace_id,
+            project_id=target_project.id,
+            user_id=owner.id,
+            workspace_member_id=await fixture_membership_id(db, item.workspace_id, owner.id),
         )
     )
     await db.commit()
@@ -290,7 +307,12 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
     await async_db.flush()
     async_db.add(
         ProjectParticipant(
-            workspace_id=fixture_workspace_id(owner), project_id=project.id, user_id=owner.id
+            workspace_id=fixture_workspace_id(owner),
+            project_id=project.id,
+            user_id=owner.id,
+            workspace_member_id=await fixture_membership_id(
+                async_db, fixture_workspace_id(owner), owner.id
+            ),
         )
     )
     await async_db.commit()
@@ -555,4 +577,57 @@ async def test_bulk_export_rejects_inaccessible_items(
 
     assert response.status_code == 422
     assert "Private metadata" not in response.text
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_bulk_archive_roots_are_unique_for_uuid7_and_adversarial_titles(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    from quirebase.documents.bundles import assemble_document_bundle
+
+    db = async_db
+    client, original, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await db.get(User, original.created_by)
+    ids = [UUID(f"01930abc-0000-7000-8000-{i:012d}") for i in range(1, 6)]
+    items = [
+        Item(
+            id=item_id,
+            workspace_id=original.workspace_id,
+            created_by=owner.id,
+            title="Same title",
+            bibtex_id=(f"Same-{ids[2]}" if i == 0 else "Same"),
+        )
+        for i, item_id in enumerate(ids)
+    ]
+    db.add_all(items)
+    await db.flush()
+    revisions = [
+        FileRevision(
+            workspace_id=original.workspace_id,
+            item_id=item.id,
+            created_by=owner.id,
+            processing_state="ready",
+            file=revision.file,
+        )
+        for item in items
+    ]
+    db.add_all(revisions)
+    await db.commit()
+    archive = await assemble_document_bundle(db, owner, items)
+    with zipfile.ZipFile(await collect_body(archive.body)) as bundle:
+        names = bundle.namelist()
+        assert len(names) == len(set(names))
+        manifest = json.loads(bundle.read("manifest.json"))
+        folders = [entry["folder"] for entry in manifest["items"]]
+        assert len(set(folders)) == len(items)
+        assert len([name for name in names if name.endswith(".pdf")]) == len(items)
+        for item, revision, entry in zip(items, revisions, manifest["items"], strict=True):
+            assert entry["item_id"] == str(item.id)
+            pdfs = json.loads(bundle.read(f"{entry['folder']}/manifest.json"))["pdf_revisions"]
+            assert len(pdfs) == 1 and pdfs[0]["revision_id"] == str(revision.id)
+            assert pdfs[0]["filename"].startswith(entry["folder"] + "/")
+            assert pdfs[0]["filename"] in names
     await client.aclose()

@@ -90,6 +90,7 @@ async def create_project(
             ProjectParticipant(
                 workspace_id=workspace_id,
                 project_id=project.id,
+                workspace_member_id=context.membership.id,
                 user_id=user.id,
             )
         )
@@ -124,7 +125,7 @@ async def list_workspace_projects(
     participant_project_ids = (
         workspace_select(ProjectParticipant, context)
         .join(Project, Project.id == ProjectParticipant.project_id)
-        .where(ProjectParticipant.user_id == context.actor_id)
+        .where(ProjectParticipant.workspace_member_id == context.membership.id)
         .with_only_columns(ProjectParticipant.project_id)
     )
     is_participating = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
@@ -199,6 +200,7 @@ async def open_project_workspace(
                 .join(
                     WorkspaceMember,
                     (WorkspaceMember.workspace_id == ProjectParticipant.workspace_id)
+                    & (WorkspaceMember.id == ProjectParticipant.workspace_member_id)
                     & (WorkspaceMember.user_id == User.id),
                 )
                 .where(
@@ -218,7 +220,7 @@ async def open_project_workspace(
                 select(ProjectParticipant.id).where(
                     ProjectParticipant.workspace_id == workspace_id,
                     ProjectParticipant.project_id == project_id,
-                    ProjectParticipant.user_id == workspace.actor_id,
+                    ProjectParticipant.workspace_member_id == workspace.membership.id,
                 )
             )
             is not None

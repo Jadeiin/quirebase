@@ -10,7 +10,11 @@ from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 from storage_helpers import local_object_path, put_pdf_object
-from workspace_helpers import fixture_workspace_id, provision_initial_workspace
+from workspace_helpers import (
+    fixture_membership_id,
+    fixture_workspace_id,
+    provision_initial_workspace,
+)
 
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
@@ -731,6 +735,7 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
             workspace_id=item.workspace_id,
             project_id=project.id,
             user_id=viewer.id,
+            workspace_member_id=await fixture_membership_id(db, item.workspace_id, viewer.id),
         ),
         LoginSession(
             token_hash=token_hash("annotation-viewer-session"),

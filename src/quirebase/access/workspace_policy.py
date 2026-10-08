@@ -87,9 +87,8 @@ class ActionSpec:
 
 _READ = ActionSpec(mutating=False)
 _WRITE = ActionSpec(mutating=True)
-_OWN = ("own",)
 _AUTHOR_RELATIONS = ("own", "other")
-_MEMBER_RELATIONS = ("member", "admin")
+_MEMBER_RELATIONS = ("owner", "admin", "member")
 _PARTICIPATION_RELATIONS = tuple(value.value for value in ProjectParticipation)
 
 # This registry describes command shape and mutation semantics. Casbin remains the only grant source.
@@ -131,7 +130,7 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.workspace_invitation_revoke: _WRITE,
     ResourceAction.workspace_membership_read: _READ,
     ResourceAction.workspace_member_change_role: ActionSpec(True, _MEMBER_RELATIONS),
-    ResourceAction.workspace_member_promote: ActionSpec(True, ("member",)),
+    ResourceAction.workspace_member_promote: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.workspace_member_suspend: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.workspace_member_reactivate: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.workspace_member_terminate: ActionSpec(True, _MEMBER_RELATIONS),
@@ -140,34 +139,40 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.item_discussion_delete: ActionSpec(True, _AUTHOR_RELATIONS),
     ResourceAction.project_discussion_create: _WRITE,
     ResourceAction.project_discussion_delete: ActionSpec(True, _AUTHOR_RELATIONS),
-    ResourceAction.private_annotation_create: ActionSpec(True, _OWN),
-    ResourceAction.private_annotation_read: ActionSpec(False, _OWN),
-    ResourceAction.private_annotation_update: ActionSpec(True, _OWN),
-    ResourceAction.private_annotation_delete: ActionSpec(True, _OWN),
-    ResourceAction.private_annotation_restore: ActionSpec(True, _OWN),
-    ResourceAction.project_annotation_create: ActionSpec(True, _OWN),
+    ResourceAction.private_annotation_create: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_read: ActionSpec(False, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_update: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_delete: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_restore: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_create: ActionSpec(True, _AUTHOR_RELATIONS),
     ResourceAction.project_annotation_read: ActionSpec(False, _AUTHOR_RELATIONS),
     ResourceAction.project_annotation_review: _READ,
-    ResourceAction.project_annotation_update: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_update: ActionSpec(True, _AUTHOR_RELATIONS),
     ResourceAction.project_annotation_delete: ActionSpec(True, _AUTHOR_RELATIONS),
     ResourceAction.project_annotation_restore: ActionSpec(True, _AUTHOR_RELATIONS),
-    ResourceAction.project_annotation_hide: ActionSpec(True, ("other",)),
-    ResourceAction.project_annotation_archive: ActionSpec(True, ("other",)),
-    ResourceAction.project_annotation_lock: ActionSpec(True, ("other",)),
-    ResourceAction.project_annotation_unlock: ActionSpec(True, ("other",)),
-    ResourceAction.private_annotation_reply_create: ActionSpec(True, _OWN),
-    ResourceAction.private_annotation_reply_update: ActionSpec(True, _OWN),
-    ResourceAction.private_annotation_reply_delete: ActionSpec(True, _OWN),
-    ResourceAction.private_annotation_reply_restore: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_hide: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_archive: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_lock: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_unlock: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_reply_create: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_reply_update: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_reply_delete: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.private_annotation_reply_restore: ActionSpec(True, _AUTHOR_RELATIONS),
     ResourceAction.project_annotation_reply_create: ActionSpec(True, _AUTHOR_RELATIONS),
-    ResourceAction.project_annotation_reply_update: ActionSpec(True, _OWN),
-    ResourceAction.project_annotation_reply_delete: ActionSpec(True, _OWN),
-    ResourceAction.project_annotation_reply_restore: ActionSpec(True, _OWN),
+    ResourceAction.project_annotation_reply_update: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_reply_delete: ActionSpec(True, _AUTHOR_RELATIONS),
+    ResourceAction.project_annotation_reply_restore: ActionSpec(True, _AUTHOR_RELATIONS),
 }
 
 
 def action_spec(resource_action: ResourceAction) -> ActionSpec:
     return ACTION_SPECS[resource_action]
+
+
+def validate_action_relation(resource_action: ResourceAction, relation: str) -> None:
+    """Reject malformed request facts before a programming error becomes a denial."""
+    if relation not in action_spec(resource_action).policy_relations:
+        raise ValueError(f"{resource_action.value} does not accept relation {relation!r}")
 
 
 def validate_action_specs() -> None:
@@ -189,6 +194,7 @@ def workspace_resource_action_allowed(
 ) -> bool:
     """Evaluate one resource/action pair through the sole Casbin policy source."""
 
+    validate_action_relation(resource_action, relation)
     lifecycle = "frozen" if governance_frozen else state
     return workspace_action_allowed(
         role,
@@ -213,7 +219,8 @@ def effective_resource_actions(
     return frozenset(
         resource_action
         for resource_action in ResourceAction
-        if workspace_resource_action_allowed(
+        if "any" in action_spec(resource_action).policy_relations
+        and workspace_resource_action_allowed(
             role,
             state,
             resource_action,
@@ -230,6 +237,7 @@ def action_allowed(
 ) -> bool:
     """Evaluate a resource action without moving canonical fact loading into policy."""
 
+    validate_action_relation(resource_action, relation)
     lifecycle = "frozen" if ctx.workspace.governance_frozen_at is not None else ctx.workspace.state
     return workspace_action_allowed(
         ctx.role,

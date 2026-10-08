@@ -180,6 +180,7 @@ class Workspace(EntityBase):
 class WorkspaceMember(EntityBase):
     __tablename__ = "workspace_members"
     __table_args__ = (
+        UniqueConstraint("workspace_id", "id", "user_id", name="uq_workspace_members_identity"),
         CheckConstraint(
             "role IN ('owner', 'admin', 'editor', 'reviewer', 'viewer')",
             name="role",
@@ -418,10 +419,18 @@ class ProjectParticipant(EntityBase):
             name="fk_project_participants_project_workspace",
             ondelete="CASCADE",
         ),
+        ForeignKeyConstraint(
+            ["workspace_id", "workspace_member_id", "user_id"],
+            ["workspace_members.workspace_id", "workspace_members.id", "workspace_members.user_id"],
+            name="fk_project_participants_workspace_member",
+            ondelete="CASCADE",
+        ),
     )
     workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     project_id: Mapped[UUID] = mapped_column(GUID(), index=True)
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Retain the query-facing User identity, but prove it matches this membership.
+    workspace_member_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    user_id: Mapped[UUID] = mapped_column(GUID(), index=True)
 
 
 class ProjectItem(EntityBase):

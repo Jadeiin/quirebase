@@ -149,7 +149,7 @@ async def terminate_workspace_member(
     await db.execute(
         delete(ProjectParticipant).where(
             ProjectParticipant.workspace_id == workspace_id,
-            ProjectParticipant.user_id == member.user_id,
+            ProjectParticipant.workspace_member_id == member.id,
         )
     )
     member.terminated_at = datetime.now(UTC)

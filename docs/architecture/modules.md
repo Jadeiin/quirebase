@@ -18,7 +18,9 @@ within one Business Module, rather than additional service or repository layers.
 
 Frontend principal-role comparisons cannot select behavior; ESLint guards direct comparisons
 and `includes` checks, while backend architecture tests guard direct WorkspaceContext role
-branches outside Access. Role labels and target-role form values remain presentation facts.
+branches outside Access. Role labels and target-role form values remain presentation facts. Access validates typed Workspace
+actions against their accepted relation facts before invoking policy; malformed facts are programming
+errors, while valid facts without a grant remain permission denials.
 The [generated capability matrix](authorization-matrix.md) makes effective policy changes
 reviewable without maintaining another grant table.
 

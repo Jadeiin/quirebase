@@ -75,8 +75,10 @@ A User participating in a Project working context, implicitly in `workspace` mod
 explicit selection in `open` and `managed` modes. `ProjectParticipant` rows persist those explicit
 selections without a Project role or Workspace authority; `workspace` mode has no such rows.
 The selection controls discoverability of `managed` Projects and never grants canonical Item access.
-Project detail exposes active explicit participants as `ProjectParticipantInfo` values in
-`active_participants`; a suspended Workspace membership retains its stored selection but has no
+Each selection references one Workspace membership generation; termination clears it, while a later
+rejoin creates a new membership without restoring old selections. Project detail exposes active
+explicit participants as `ProjectParticipantInfo` values in `active_participants`; a suspended
+Workspace membership retains its stored selection but has no
 effective participation until reactivated.
 
 **Project Participation**:

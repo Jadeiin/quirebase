@@ -38,7 +38,7 @@ def project_discovery_predicate(ctx: WorkspaceContext) -> ColumnElement[bool]:
     else:
         participant_project_ids = select(ProjectParticipant.project_id).where(
             ProjectParticipant.workspace_id == ctx.workspace_id,
-            ProjectParticipant.user_id == ctx.actor_id,
+            ProjectParticipant.workspace_member_id == ctx.membership.id,
         )
         discoverable = or_(
             discoverable,

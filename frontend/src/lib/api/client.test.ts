@@ -214,6 +214,39 @@ describe('GET downloads', () => {
 		expect(revokeObjectURL).toHaveBeenCalledWith('blob:fallback');
 	});
 
+	it.each(['unavailable', 'blocked'] as const)(
+		'uses the caller filename when a signed response omits it (%s picker)',
+		async (mode) => {
+			const link = document.createElement('a');
+			const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);
+			vi.spyOn(document, 'createElement').mockReturnValue(link);
+			vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:signed-pdf');
+			vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+			vi.stubGlobal(
+				'showSaveFilePicker',
+				mode === 'blocked'
+					? vi.fn(async () => {
+							throw new DOMException('blocked', 'SecurityError');
+						})
+					: undefined
+			);
+			const fetcher = vi.fn(
+				async () =>
+					new Response('pdf content', {
+						headers: { 'Content-Type': 'application/pdf' }
+					})
+			) as typeof fetch;
+			vi.stubGlobal('fetch', fetcher);
+			await workspaceApi.downloadGet(
+				'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content',
+				{ params: { path: { item_id: 'item-1', revision_id: 'revision-1' } } },
+				{ suggestedName: '原始论文.pdf' }
+			);
+			expect(link.download).toBe('原始论文.pdf');
+			expect(click).toHaveBeenCalledOnce();
+		}
+	);
+
 	it('saves a zero-byte file when a successful response has no body', async () => {
 		const link = document.createElement('a');
 		const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);

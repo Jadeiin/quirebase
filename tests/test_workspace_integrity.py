@@ -5,9 +5,10 @@ from uuid import uuid4
 
 import anyio
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import insert, select, update
 from sqlalchemy.exc import IntegrityError
 from typer.testing import CliRunner
+from workspace_helpers import fixture_membership_id
 
 from quirebase.audit import record_event
 from quirebase.models import (
@@ -158,7 +159,10 @@ async def test_project_diagnostics_respect_retained_participation_and_detect_dri
         )
         db.add(
             ProjectParticipant(
-                workspace_id=workspace.id, project_id=implicit.id, user_id=participant.id
+                workspace_id=workspace.id,
+                project_id=implicit.id,
+                user_id=participant.id,
+                workspace_member_id=await fixture_membership_id(db, workspace.id, participant.id),
             )
         )
         await db.commit()
@@ -217,3 +221,124 @@ async def test_doctor_reports_domain_integrity_failures(async_session_factory, m
     assert "[ok] object integrity" in result.output
     assert "[failed] domain Workspace" in result.output
     assert "active account" in result.output
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mismatch", ["workspace", "user", "missing_member"])
+async def test_participant_database_lineage_rejects_mismatched_membership(
+    integrity_sessions, mismatch
+):
+    async with integrity_sessions() as db:
+        owner, participant, workspace, member = await _workspace(db)
+        project = await create_project(
+            db, owner, workspace.id, "Lineage", ProjectParticipation.managed
+        )
+        foreign = await provision_initial_workspace(db, participant)
+        foreign_member_id = await fixture_membership_id(db, foreign.id, participant.id)
+        values = {
+            "workspace_id": workspace.id,
+            "project_id": project.id,
+            "workspace_member_id": member.id,
+            "user_id": participant.id,
+        }
+        if mismatch == "workspace":
+            values["workspace_member_id"] = foreign_member_id
+        elif mismatch == "user":
+            values["user_id"] = owner.id
+        else:
+            values["workspace_member_id"] = uuid4()
+        async with db.begin_nested() as savepoint:
+            with pytest.raises(IntegrityError):
+                await db.execute(insert(ProjectParticipant).values(**values))
+            await savepoint.rollback()
+        assert (
+            await db.scalar(
+                select(ProjectParticipant.id).where(ProjectParticipant.project_id == project.id)
+            )
+            is None
+        )
+        assert await check_project_integrity(db) == []
+
+
+@pytest.mark.anyio
+async def test_participation_belongs_to_one_membership_generation(integrity_sessions):
+    from quirebase.workspaces import reactivate_workspace_member
+
+    async with integrity_sessions() as db:
+        owner, participant, workspace, member = await _workspace(db)
+        project = await create_project(
+            db, owner, workspace.id, "Generations", ProjectParticipation.managed
+        )
+        await add_project_participant(db, owner, workspace.id, project.id, participant.username)
+        selection = await db.scalar(
+            select(ProjectParticipant).where(ProjectParticipant.project_id == project.id)
+        )
+        selection_id, old_member_id = selection.id, member.id
+        assert selection.workspace_member_id == old_member_id
+        await suspend_workspace_member(db, owner, workspace.id, member.id)
+        await reactivate_workspace_member(db, owner, workspace.id, member.id)
+        assert (await db.get(ProjectParticipant, selection_id)).workspace_member_id == old_member_id
+        await terminate_workspace_member(db, owner, workspace.id, member.id)
+        new_member = WorkspaceMember(
+            workspace_id=workspace.id, user_id=participant.id, role=WorkspaceRole.viewer
+        )
+        db.add(new_member)
+        await db.commit()
+        assert new_member.id != old_member_id
+        assert (
+            await db.scalar(
+                select(ProjectParticipant.id).where(ProjectParticipant.project_id == project.id)
+            )
+            is None
+        )
+        await add_project_participant(db, owner, workspace.id, project.id, participant.username)
+        current = await db.scalar(
+            select(ProjectParticipant).where(ProjectParticipant.project_id == project.id)
+        )
+        assert current.workspace_member_id == new_member.id
+        # Physical membership deletion also cascades the selection at the database boundary.
+        await db.delete(new_member)
+        await db.commit()
+        assert (
+            await db.scalar(
+                select(ProjectParticipant.id).where(ProjectParticipant.project_id == project.id)
+            )
+            is None
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mode", [ProjectParticipation.open, ProjectParticipation.managed])
+async def test_stale_selection_cannot_attach_to_a_later_membership(integrity_sessions, mode):
+    from quirebase.access import discoverable_project_ids_query, resolve_workspace_context
+    from quirebase.projects import join_project, list_workspace_projects, open_project_workspace
+
+    async with integrity_sessions() as db:
+        owner, participant, workspace, member = await _workspace(db)
+        project = await create_project(db, owner, workspace.id, "Historical selection", mode)
+        if mode is ProjectParticipation.open:
+            await join_project(db, participant, workspace.id, project.id)
+        else:
+            await add_project_participant(db, owner, workspace.id, project.id, participant.username)
+        # Simulate a maintenance write that neglected the command's relation cleanup.
+        member.terminated_at = datetime.now(UTC)
+        await db.commit()
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace.id, user_id=participant.id, role=WorkspaceRole.viewer
+            )
+        )
+        await db.commit()
+        context = await resolve_workspace_context(db, participant, workspace.id)
+        mine, total = await list_workspace_projects(db, context, view="mine")
+        assert mine == [] and total == 0
+        if mode is ProjectParticipation.managed:
+            assert project.id not in set(
+                (await db.scalars(discoverable_project_ids_query(context))).all()
+            )
+        else:
+            assert not (await open_project_workspace(db, context, project.id)).is_participating
+        owner_context = await resolve_workspace_context(db, owner, workspace.id)
+        opened = await open_project_workspace(db, owner_context, project.id)
+        assert participant.id not in {p.user_id for p in opened.active_participants}
+        assert len(await check_project_integrity(db)) == 1

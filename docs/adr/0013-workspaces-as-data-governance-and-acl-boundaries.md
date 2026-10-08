@@ -150,7 +150,8 @@ fine-grained gates, create a second Project role axis or infer authority from `c
 
 `System Role=administrator` is instance-level tenancy and lifecycle governance. It does not make
 the administrator an implicit Workspace member or grant content access. An administrator may use
-normal membership, or an explicit one-request break-glass inspection, when content access is needed.
+normal membership, or explicit reason-bound, audited, read-only break-glass access, when content
+access is needed. The current implementation provides one-shot inspection requests.
 
 Instance governance provides administrative freeze/unfreeze and reason-bound read-only inspection.
 It does not repair missing or inactive Workspace ownership. Integrity checks diagnose those
@@ -410,11 +411,15 @@ membership and the concrete resource-action decision before committing. A stale 
 grant rejects finalization rather than inheriting request-time authority. Project-scoped mutation
 callers explicitly choose a shared or exclusive Project root lock; action metadata never silently
 chooses a Project lock or upgrades it. Root locks precede cascading child-row locks.
+Project join, open leave and managed add use shared root guards with atomic association writes.
+Removing a managed participant retains an exclusive root guard because it revokes discoverability;
+it waits for protected Project operations and forces waiting callers to recheck discovery.
 
 Instance administrators may invoke only the explicit `resource=workspace_break_glass`,
-`action=read` decision. It performs one reason-required, fully audited, read-only inspection of
-at most 100 Items. It does not create a grant, reusable session or lease, and has no grant expiry
-or revocation protocol.
+`action=read` decision. Break-glass access is explicit, reason-bound, read-only and fully audited.
+The current implementation performs one-shot inspections of at most 100 Items, without issuing
+persistent grants, reusable sessions or leases. A future scoped read grant would require an explicit
+expiry and revocation protocol.
 Write/delete break-glass semantics require a later security decision; ordinary
 endpoints never infer this authority.
 
@@ -435,7 +440,12 @@ deactivation; `workspace_owner_ids()` validates owner membership and account act
 the same snapshot as Workspace existence. A concurrently deleted root is omitted, while an invalid
 surviving root is an integrity failure. `doctor` diagnoses missing or invalid owners and Project
 participation drift: Workspace-mode Projects must have no ProjectParticipant rows, and each explicit
-participant must have a current membership in the same Workspace. Suspended memberships and
+participant must have a current membership in the same Workspace. Each ProjectParticipant stores
+`workspace_member_id` and a query-facing `user_id`; a composite foreign key over Workspace,
+membership and User identity binds all three to the same WorkspaceMember. Termination removes
+that membership's selections; a later User rejoin creates a new membership and restores none.
+The database enforces identity and lineage, while commands and diagnostics enforce the referenced
+membership's current status. Suspended memberships and
 inactive accounts may retain participation for recovery; terminated memberships may not.
 Workspace-local Tag
 uniqueness is enforced by `UNIQUE(workspace_id, normalized_name)`. Projects have no owner invariant.

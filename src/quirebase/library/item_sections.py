@@ -289,7 +289,7 @@ async def _open_organize(
     tags = await _assigned_tags(db, item)
     participant_project_ids = select(ProjectParticipant.project_id).where(
         ProjectParticipant.workspace_id == context.workspace_id,
-        ProjectParticipant.user_id == context.actor_id,
+        ProjectParticipant.workspace_member_id == context.membership.id,
     )
     is_participating = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
         participant_project_ids

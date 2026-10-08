@@ -12,7 +12,11 @@ from sqlalchemy import event, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from storage_helpers import collect_body, put_pdf_object
-from workspace_helpers import fixture_workspace_id, provision_initial_workspace
+from workspace_helpers import (
+    fixture_membership_id,
+    fixture_workspace_id,
+    provision_initial_workspace,
+)
 
 from quirebase.access import (
     ResourceAction,
@@ -859,6 +863,7 @@ async def test_pdf_viewer_hides_managed_project_contexts_from_nonparticipants(as
             workspace_id=item.workspace_id,
             project_id=managed_project.id,
             user_id=viewer.id,
+            workspace_member_id=await fixture_membership_id(async_db, item.workspace_id, viewer.id),
         )
     )
     await async_db.commit()
@@ -1537,7 +1542,12 @@ async def test_dashboard_uses_participation_instead_of_governance_visibility(asy
     async_db.add_all(projects)
     await async_db.flush()
     async_db.add_all([
-        ProjectParticipant(workspace_id=workspace_id, project_id=project.id, user_id=actor.id)
+        ProjectParticipant(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            user_id=actor.id,
+            workspace_member_id=await fixture_membership_id(async_db, workspace_id, actor.id),
+        )
         for project in (projects[1], projects[3])
     ])
     await async_db.commit()
@@ -1627,6 +1637,9 @@ async def test_project_discussion_uses_participation_and_resource_actions(async_
             workspace_id=fixture_workspace_id(owner),
             project_id=project.id,
             user_id=reviewer.id,
+            workspace_member_id=await fixture_membership_id(
+                async_db, fixture_workspace_id(owner), reviewer.id
+            ),
         )
     )
     await async_db.commit()
@@ -1789,7 +1802,12 @@ async def test_project_discussion_moderation_respects_lifecycle_and_lineage(asyn
         async_db, owner, workspace_id, "Moderated Project", ProjectParticipation.managed
     )
     async_db.add(
-        ProjectParticipant(workspace_id=workspace_id, project_id=project.id, user_id=author.id)
+        ProjectParticipant(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            user_id=author.id,
+            workspace_member_id=await fixture_membership_id(async_db, workspace_id, author.id),
+        )
     )
     await async_db.commit()
     message = await add_project_discussion_message(
@@ -2385,7 +2403,12 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
 
     # Model a stale legacy association under a Workspace-visible Project.
     async_db.add(
-        ProjectParticipant(workspace_id=workspace_id, project_id=project.id, user_id=editor.id)
+        ProjectParticipant(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            user_id=editor.id,
+            workspace_member_id=await fixture_membership_id(async_db, workspace_id, editor.id),
+        )
     )
     await async_db.commit()
 

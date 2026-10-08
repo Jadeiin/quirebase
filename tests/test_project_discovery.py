@@ -3,6 +3,7 @@ from itertools import product
 
 import pytest
 from sqlalchemy import delete, select
+from workspace_helpers import fixture_membership_id
 
 from quirebase.access import (
     ResourceAction,
@@ -44,7 +45,10 @@ async def _assert_discovery_matrix(db, role, lifecycle):
         WorkspaceMember(workspace_id=foreign.id, user_id=owner.id, role=WorkspaceRole.owner),
     ])
     if actor is not owner:
-        db.add(WorkspaceMember(workspace_id=workspace.id, user_id=actor.id, role=role))
+        db.add_all([
+            WorkspaceMember(workspace_id=workspace.id, user_id=actor.id, role=role),
+            WorkspaceMember(workspace_id=foreign.id, user_id=actor.id, role=role),
+        ])
     if lifecycle == "archived":
         workspace.state = WorkspaceState.archived
     elif lifecycle == "suspended":
@@ -68,7 +72,12 @@ async def _assert_discovery_matrix(db, role, lifecycle):
         if participant:
             db.add(
                 ProjectParticipant(
-                    workspace_id=project.workspace_id, project_id=project.id, user_id=actor.id
+                    workspace_id=project.workspace_id,
+                    project_id=project.id,
+                    user_id=actor.id,
+                    workspace_member_id=await fixture_membership_id(
+                        db, project.workspace_id, actor.id
+                    ),
                 )
             )
     await db.commit()
@@ -139,7 +148,12 @@ async def test_participation_discovery_is_independent_of_governance_grants(async
     async_db.add_all(projects)
     await async_db.flush()
     async_db.add_all([
-        ProjectParticipant(workspace_id=workspace.id, project_id=project.id, user_id=actor.id)
+        ProjectParticipant(
+            workspace_id=workspace.id,
+            project_id=project.id,
+            user_id=actor.id,
+            workspace_member_id=await fixture_membership_id(async_db, workspace.id, actor.id),
+        )
         for project in projects
     ])
     await async_db.commit()
@@ -202,7 +216,10 @@ async def test_locked_project_loaders_filter_then_recheck_participation(
         if initially_discoverable:
             db.add(
                 ProjectParticipant(
-                    workspace_id=workspace.id, project_id=project.id, user_id=actor.id
+                    workspace_id=workspace.id,
+                    project_id=project.id,
+                    user_id=actor.id,
+                    workspace_member_id=await fixture_membership_id(db, workspace.id, actor.id),
                 )
             )
         await db.commit()

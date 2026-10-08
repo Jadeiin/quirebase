@@ -8,7 +8,11 @@ import pytest
 from advanced_alchemy.types import FileObject
 from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
-from workspace_helpers import fixture_workspace_id, provision_initial_workspace
+from workspace_helpers import (
+    fixture_membership_id,
+    fixture_workspace_id,
+    provision_initial_workspace,
+)
 
 from quirebase.accounts import create_api_token
 from quirebase.core.database import get_db
@@ -567,6 +571,7 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
         workspace_id=workspace_id,
         project_id=archived_project.id,
         user_id=administrator.id,
+        workspace_member_id=await fixture_membership_id(db, workspace_id, administrator.id),
     )
     revision = FileRevision(
         workspace_id=workspace_id,

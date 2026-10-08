@@ -412,7 +412,13 @@ async def assemble_document_bundle(
         for item in items:
             root = _item_archive_prefix(item)
             if root in used_roots:
-                root = f"{root}-{str(item.id)[:8]}"
+                root = f"{root}-{item.id}"
+            # A supplied title/key can also equal another Item's suffixed name.
+            base = root
+            suffix = 2
+            while root in used_roots:
+                root = f"{base}-{suffix}"
+                suffix += 1
             used_roots.add(root)
             async for member in _item_members(
                 db,

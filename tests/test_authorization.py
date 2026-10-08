@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -262,3 +263,57 @@ def test_policy_validator_rejects_relations_from_another_action(tmp_path, monkey
     # Validate this bundle directly, independent of the already-initialized process cache.
     with pytest.raises(RuntimeError, match=r"invalid relation.*on policy\.csv"):
         authorization._validate_policy_bundle.__wrapped__()
+
+
+@pytest.mark.parametrize("decision", ["require", "allowed", "role"])
+@pytest.mark.parametrize(
+    "action,relation",
+    [
+        (ResourceAction.project_participation_manage, "managerd"),
+        (ResourceAction.project_participation_manage, "open"),
+        (ResourceAction.project_participation_join, "any"),
+        (ResourceAction.item_update, "own"),
+    ],
+)
+def test_workspace_decision_rejects_invalid_action_facts(decision, action, relation):
+    from quirebase.access import action_allowed, require_action
+    from quirebase.access.context import WorkspaceContext
+    from quirebase.access.workspace_policy import workspace_resource_action_allowed
+    from quirebase.models import User, Workspace, WorkspaceMember
+
+    actor = User(id=uuid4())
+    workspace = Workspace(id=uuid4(), state=WorkspaceState.active)
+    member = WorkspaceMember(user_id=actor.id, workspace_id=workspace.id, role=WorkspaceRole.owner)
+    context = WorkspaceContext(actor, workspace, member, WorkspaceRole.owner)
+    if decision == "role":
+        operation = lambda: workspace_resource_action_allowed(
+            context.role, workspace.state, action, relation=relation
+        )
+    else:
+        check = require_action if decision == "require" else action_allowed
+        operation = lambda: check(context, action, relation=relation)
+    with pytest.raises(ValueError, match="does not accept relation"):
+        operation()
+
+
+@pytest.mark.parametrize(
+    "action,relation",
+    [
+        (ResourceAction.workspace_member_terminate, "owner"),
+        (ResourceAction.private_annotation_update, "other"),
+        (ResourceAction.project_annotation_hide, "own"),
+    ],
+)
+def test_valid_denied_facts_remain_permission_denials(action, relation):
+    from quirebase.access import action_allowed, require_action
+    from quirebase.access.context import WorkspaceContext
+    from quirebase.core.errors import PermissionDenied
+    from quirebase.models import User, Workspace, WorkspaceMember
+
+    actor = User(id=uuid4())
+    workspace = Workspace(id=uuid4(), state=WorkspaceState.active)
+    member = WorkspaceMember(user_id=actor.id, workspace_id=workspace.id, role=WorkspaceRole.owner)
+    context = WorkspaceContext(actor, workspace, member, WorkspaceRole.owner)
+    assert not action_allowed(context, action, relation=relation)
+    with pytest.raises(PermissionDenied):
+        require_action(context, action, relation=relation)

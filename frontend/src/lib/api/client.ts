@@ -272,7 +272,7 @@ async function rawRequest<Path extends ApiPath, Method extends HttpMethod>(
 	return { data, response };
 }
 
-export function downloadFilename(disposition: string): string {
+export function downloadFilename(disposition: string, fallback = 'quirebase-export'): string {
 	const extended = disposition.match(/(?:^|;)\s*filename\*\s*=\s*(?:"([^"]*)"|([^;]*))/i);
 	const encoded = (extended?.[1] ?? extended?.[2] ?? '').trim();
 	const parts = encoded.match(/^([^']*)'[^']*'(.*)$/);
@@ -284,7 +284,7 @@ export function downloadFilename(disposition: string): string {
 		}
 	}
 	const plain = disposition.match(/(?:^|;)\s*filename\s*=\s*(?:"([^"]*)"|([^;]*))/i);
-	return (plain?.[1] ?? plain?.[2] ?? '').trim() || 'quirebase-export';
+	return (plain?.[1] ?? plain?.[2] ?? '').trim() || fallback;
 }
 
 function saveBlob(blob: Blob, filename: string) {
@@ -301,7 +301,7 @@ type DownloadPicker = {
 };
 
 export type ApiDownloadOptions = {
-	/** Filename to show in the save picker before the response headers arrive. */
+	/** Save-picker name and download fallback when the response omits a filename. */
 	suggestedName?: string;
 };
 
@@ -388,7 +388,10 @@ export async function apiDownload<Path extends PathsWithMethod<'post'>>(
 	const { fetcher, suggestedName } = downloadConfig(fetcherOrOptions);
 	if (fetcher !== fetch) {
 		const { data, response } = await rawRequest(path, 'post', options, '*/*', 'blob', fetcher);
-		const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
+		const filename = downloadFilename(
+			response.headers.get('Content-Disposition') ?? '',
+			suggestedName
+		);
 		saveBlob(data as Blob, filename);
 		return;
 	}
@@ -398,7 +401,10 @@ export async function apiDownload<Path extends PathsWithMethod<'post'>>(
 	// filename hint while preserving the click's transient activation.
 	const target = await openSaveTarget(suggestedName);
 	const { data, response } = await rawRequest(path, 'post', options, '*/*', 'stream', fetcher);
-	const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
+	const filename = downloadFilename(
+		response.headers.get('Content-Disposition') ?? '',
+		suggestedName
+	);
 	await saveStream(data as ReadableStream<Uint8Array> | null, filename, target);
 }
 
@@ -413,12 +419,18 @@ export async function apiDownloadGet<Path extends PathsWithMethod<'get'>>(
 		// transient user activation required by the File System Access API.
 		const target = await openSaveTarget(suggestedName);
 		const { data, response } = await rawRequest(path, 'get', options, '*/*', 'stream', fetcher);
-		const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
+		const filename = downloadFilename(
+			response.headers.get('Content-Disposition') ?? '',
+			suggestedName
+		);
 		await saveStream(data as ReadableStream<Uint8Array> | null, filename, target);
 		return;
 	}
 	const { data, response } = await rawRequest(path, 'get', options, '*/*', 'blob', fetcher);
-	const filename = downloadFilename(response.headers.get('Content-Disposition') ?? '');
+	const filename = downloadFilename(
+		response.headers.get('Content-Disposition') ?? '',
+		suggestedName
+	);
 	saveBlob(data as Blob, filename);
 }
 

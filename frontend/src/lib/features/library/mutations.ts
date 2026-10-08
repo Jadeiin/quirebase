@@ -97,7 +97,7 @@ export async function runLibraryBulkMutation(
 		body: {
 			item_ids: input.itemIds,
 			action: input.action,
-			project_id: input.projectId,
+			project_id: input.projectId || undefined,
 			tag_name: input.tagName,
 			confirmation: input.action === 'delete' ? 'delete' : ''
 		}

@@ -25,6 +25,7 @@ async def check_project_integrity(db: AsyncSession) -> list[str]:
         .where(
             ~exists().where(
                 WorkspaceMember.workspace_id == ProjectParticipant.workspace_id,
+                WorkspaceMember.id == ProjectParticipant.workspace_member_id,
                 WorkspaceMember.user_id == ProjectParticipant.user_id,
                 WorkspaceMember.terminated_at.is_(None),
             )

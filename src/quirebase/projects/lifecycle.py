@@ -98,6 +98,7 @@ async def update_project_settings(
             ProjectParticipant(
                 workspace_id=workspace_id,
                 project_id=project_id,
+                workspace_member_id=context.membership.id,
                 user_id=context.actor_id,
             )
         )

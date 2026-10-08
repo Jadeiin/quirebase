@@ -55,3 +55,15 @@ async def fixture_workspace_id_or_create(db, user: User) -> str:
         _fixture_workspace_ids[user.id] = existing
         return existing
     return (await provision_initial_workspace(db, user)).id
+
+
+async def fixture_membership_id(db, workspace_id, user_id):
+    member_id = await db.scalar(
+        select(WorkspaceMember.id).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == user_id,
+            WorkspaceMember.terminated_at.is_(None),
+        )
+    )
+    assert member_id is not None
+    return member_id
