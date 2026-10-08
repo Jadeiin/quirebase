@@ -292,7 +292,10 @@
 		{:else if projects.isError}<p class="text-error-700-300">{$t('Unable to load Projects.')}</p>
 		{:else}{#each joinable as project (project.id)}
 				<ItemRow>
-					<strong>{project.name}</strong>
+					<a
+						href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
+						class="font-semibold hover:text-primary-800-200">{project.name}</a
+					>
 					{#if project.description}<span class="text-sm text-surface-700-300"
 							>{project.description}</span
 						>{/if}

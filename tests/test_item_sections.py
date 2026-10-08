@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
+from zipfile import ZipFile
 
 import pytest
 from advanced_alchemy.types import FileObject
@@ -33,6 +36,7 @@ from quirebase.models import (
     AttachmentRole,
     AuditEvent,
     DiscussionMessage,
+    FileRevision,
     Item,
     ItemIdentifier,
     ItemRead,
@@ -49,6 +53,74 @@ from quirebase.models import (
     WorkspaceState,
 )
 from quirebase.web.api import documents as documents_api
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("include_valid_revision", [False, True])
+async def test_item_archive_rejects_invalid_revision_ids_before_download(
+    async_db, async_session_factory, tmp_path, monkeypatch, include_valid_revision
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    values = ["not-a-uuid"]
+    if include_valid_revision:
+        values.insert(0, str(revision.id))
+    try:
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/archive",
+            params={"revisions": ",".join(values)},
+        )
+        assert response.status_code == 422
+        error = response.json()
+        assert error["code"] == "validation_failed"
+        assert error["fields"][0]["path"] == ["query", "revisions", int(include_valid_revision)]
+        assert (
+            await async_db.scalar(
+                select(AuditEvent.id).where(AuditEvent.action == "item.download_bundle")
+            )
+            is None
+        )
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_archive_packages_only_selected_revision_ids(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    other_revisions = [
+        FileRevision(
+            workspace_id=item.workspace_id,
+            item_id=item.id,
+            created_by=item.created_by,
+            processing_state="ready",
+            file=revision.file,
+        )
+        for _ in range(2)
+    ]
+    async_db.add_all(other_revisions)
+    await async_db.commit()
+    selected_ids = [revision.id, other_revisions[0].id]
+    try:
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/archive",
+            params={"revisions": ",".join(str(value) for value in selected_ids)},
+        )
+        assert response.status_code == 200
+        with ZipFile(BytesIO(response.content)) as archive:
+            manifest = json.loads(archive.read("manifest.json"))
+            assert {entry["revision_id"] for entry in manifest["pdf_revisions"]} == {
+                str(value) for value in selected_ids
+            }
+            assert sum(name.endswith(".pdf") for name in archive.namelist()) == 2
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
 
 
 @pytest.mark.anyio

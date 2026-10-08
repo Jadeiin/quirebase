@@ -27,7 +27,11 @@ async function mockWorkspaceRole(
 	page: Parameters<typeof mockSession>[0],
 	role: 'owner' | 'admin' | 'editor' | 'viewer',
 	allowedActions: string[],
-	allowedProjectParticipations: string[] = []
+	allowedProjectParticipations: string[] = [],
+	workspaceState: { state: 'active' | 'archived'; governance_frozen: boolean } = {
+		state: 'active',
+		governance_frozen: false
+	}
 ) {
 	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
 		route.fulfill({
@@ -35,9 +39,8 @@ async function mockWorkspaceRole(
 				id: 'workspace-1',
 				name: 'Research',
 				owner_id: 'user-1',
-				state: 'active',
 				current_role: role,
-				governance_frozen: false,
+				...workspaceState,
 				allowed_project_participations: allowedProjectParticipations,
 				authorization: { allowed: allowedActions }
 			}
@@ -169,54 +172,75 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
 });
 
-test('an unjoined archived open Project stays discoverable and its Discussion loads', async ({
-	page
-}) => {
-	await mockWorkspaceRole(page, 'viewer', ['workspace.read']);
-	const archivedProject = {
-		...project,
-		id: 'archived-open',
-		name: 'Archived reading group',
-		state: 'archived',
-		participation: 'open',
-		is_participating: false,
-		authorization: { allowed: [] },
-		active_participants: []
-	};
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
-		route.fulfill({ json: directoryPage([archivedProject], route) })
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
-		route.fulfill({ json: directoryPage([], route) })
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects/archived-open', (route) =>
-		route.fulfill({ json: archivedProject })
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects/archived-open/discussions', (route) =>
-		route.fulfill({
-			json: [
-				{
-					id: 'archived-message',
-					author_id: 'editor-1',
-					author_username: 'editor',
-					mine: false,
-					body: 'Preserved discussion',
-					authorization: { allowed: [] },
-					created_at: '2026-09-01T12:00:00Z'
-				}
-			]
-		})
-	);
+for (const scenario of [
+	{
+		name: 'an archived Project',
+		workspace: { state: 'active', governance_frozen: false },
+		projectState: 'archived',
+		section: 'Archived Projects'
+	},
+	{
+		name: 'a frozen Workspace',
+		workspace: { state: 'active', governance_frozen: true },
+		projectState: 'active',
+		section: 'Open Projects'
+	},
+	{
+		name: 'an archived Workspace',
+		workspace: { state: 'archived', governance_frozen: false },
+		projectState: 'active',
+		section: 'Open Projects'
+	}
+] as const) {
+	test(`an unjoined open Project remains readable in ${scenario.name}`, async ({ page }) => {
+		await mockWorkspaceRole(page, 'viewer', ['workspace.read'], [], scenario.workspace);
+		const readOnlyProject = {
+			...project,
+			id: 'read-only-open',
+			name: 'Reading group',
+			state: scenario.projectState,
+			participation: 'open',
+			is_participating: false,
+			authorization: { allowed: [] },
+			active_participants: []
+		};
+		await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+			route.fulfill({ json: directoryPage([readOnlyProject], route) })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/projects?view=joinable*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/projects/read-only-open', (route) =>
+			route.fulfill({ json: readOnlyProject })
+		);
+		await page.route(
+			'**/api/v1/workspaces/workspace-1/projects/read-only-open/discussions',
+			(route) =>
+				route.fulfill({
+					json: [
+						{
+							id: 'archived-message',
+							author_id: 'editor-1',
+							author_username: 'editor',
+							mine: false,
+							body: 'Preserved discussion',
+							authorization: { allowed: [] },
+							created_at: '2026-09-01T12:00:00Z'
+						}
+					]
+				})
+		);
 
-	await page.goto('/workspace/workspace-1/projects');
-	const archivedSection = page.getByRole('heading', { name: 'Archived Projects' }).locator('..');
-	await expect(archivedSection.getByRole('link', { name: /Archived reading group/ })).toBeVisible();
-	await expect(archivedSection.getByRole('button', { name: 'Join' })).toHaveCount(0);
-	await page.goto('/workspace/workspace-1/projects/archived-open');
-	await expect(page.getByText('Preserved discussion')).toBeVisible();
-	await expect(page.getByPlaceholder('Write a message')).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
-});
+		await page.goto('/workspace/workspace-1/projects');
+		const section = page.getByRole('heading', { name: scenario.section }).locator('..');
+		await expect(section.getByRole('button', { name: 'Join' })).toHaveCount(0);
+		await section.getByRole('link', { name: /Reading group/ }).click();
+		await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects\/read-only-open$/);
+		await expect(page.getByText('Preserved discussion')).toBeVisible();
+		await expect(page.getByPlaceholder('Write a message')).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+	});
+}
 
 test('an archived Project with delete authority exposes its delete control', async ({ page }) => {
 	await mockWorkspaceRole(page, 'admin', ['workspace.read']);

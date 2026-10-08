@@ -5,6 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Request, UploadFile, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 
 from quirebase.access import ResourceAction, require_item_action
@@ -212,17 +213,27 @@ async def download_item_archive(
     include_supplements: bool = False,
     timezone: str | None = None,
 ) -> StreamingResponse:
-    revision_ids = (
-        [UUID(value.strip()) for value in revisions.split(",") if value.strip()]
-        if revisions
-        else None
-    )
+    revision_ids = []
+    for index, value in enumerate(revisions.split(",") if revisions else []):
+        if not value.strip():
+            continue
+        try:
+            revision_ids.append(UUID(value.strip()))
+        except ValueError as exc:
+            raise RequestValidationError([
+                {
+                    "type": "uuid_parsing",
+                    "loc": ("query", "revisions", index),
+                    "msg": "Input should be a valid UUID",
+                    "input": value,
+                }
+            ]) from exc
     bundle = await create_item_document_bundle(
         db,
         user,
         workspace_id,
         item_id,
-        revision_ids=revision_ids,
+        revision_ids=revision_ids or None,
         include_annotations=include_annotations,
         include_supplements=include_supplements,
         timezone=timezone,
