@@ -1,16 +1,31 @@
 from __future__ import annotations
 
-from uuid import uuid4
+import asyncio
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
 from inquiro.bibliography import builtin_style_xml
-from sqlalchemy import delete, func, inspect, select, text
+from sqlalchemy import delete, event, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.access import resolve_workspace_context
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, ValidationFailure
-from quirebase.library import Contributor, ExternalIdentifier, ItemMetadata, create_item
+from quirebase.library import (
+    Contributor,
+    ExternalIdentifier,
+    ItemMetadata,
+    ItemMetadataData,
+    ItemOverviewData,
+    ItemSection,
+    create_item,
+    item_sections,
+    open_item_section,
+)
+from quirebase.library._persistence import ItemReadRepository, ItemTagRepository
 from quirebase.library.citations import (
     CitationStyleRepository,
     CitationStyleService,
@@ -25,11 +40,16 @@ from quirebase.models import (
     Item,
     ItemAuthor,
     ItemIdentifier,
+    ItemRead,
+    ItemTag,
+    Project,
+    ProjectItem,
     SystemSetting,
     Tag,
     User,
 )
 from quirebase.operations.settings import RuntimeSettingsService, update_runtime_settings
+from quirebase.projects._persistence import ProjectItemRepository
 
 pytestmark = pytest.mark.shared_postgres
 
@@ -42,6 +62,232 @@ async def persistence_actor(persistence_db):
     await provision_initial_workspace(persistence_db, actor)
     await persistence_db.commit()
     return actor
+
+
+async def _association_batch(db, actor, kind):
+    workspace_id = fixture_workspace_id(actor)
+    items = [
+        Item(workspace_id=workspace_id, title=f"Batch item {index}", created_by=actor.id)
+        for index in range(501)
+    ]
+    root = (
+        Tag(workspace_id=workspace_id, name="Batch tag", created_by=actor.id)
+        if kind == "tag"
+        else Project(workspace_id=workspace_id, name="Batch project", created_by=actor.id)
+    )
+    db.add_all([*items, root])
+    await db.commit()
+    item_ids = [item.id for item in items]
+    root_id, actor_id = root.id, actor.id
+
+    async def add(ids):
+        if kind == "tag":
+            _assignments, created_ids = await ItemTagRepository(session=db).assign_many(
+                workspace_id, ids, root_id
+            )
+            return len(created_ids)
+        return await ProjectItemRepository(session=db).add_missing(
+            workspace_id, root_id, ids, actor_id
+        )
+
+    return item_ids, add, ItemTag if kind == "tag" else ProjectItem, root_id
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kind", ["tag", "project"])
+async def test_association_batches_deduplicate_and_share_caller_rollback(
+    persistence_db, persistence_sessions, persistence_actor, kind
+):
+    item_ids, add, model, _root_id = await _association_batch(
+        persistence_db, persistence_actor, kind
+    )
+    engine = persistence_db.bind.sync_engine
+    inserts = []
+
+    def record_insert(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.startswith(f"INSERT INTO {model.__tablename__}"):
+            inserts.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record_insert)
+    try:
+        assert await add([*item_ids, item_ids[0]]) == len(item_ids)
+        # Bound the write count: crossing a batch boundary must not become
+        # one statement or savepoint per Item.
+        assert len(inserts) == 2
+        assert await add(item_ids) == 0
+        assert len(inserts) == 2
+    finally:
+        event.remove(engine, "before_cursor_execute", record_insert)
+    async with persistence_sessions() as observer:
+        assert await observer.scalar(select(func.count()).select_from(model)) == 0
+    await persistence_db.rollback()
+    assert await persistence_db.scalar(select(func.count()).select_from(model)) == 0
+    assert await add(item_ids[:1]) == 1
+    await persistence_db.commit()
+    async with persistence_sessions() as observer:
+        assert await observer.scalar(select(func.count()).select_from(model)) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kind", ["tag", "project"])
+async def test_association_batch_constraint_failure_rolls_back_all_chunks(
+    persistence_db, persistence_actor, kind
+):
+    item_ids, add, model, root_id = await _association_batch(
+        persistence_db, persistence_actor, kind
+    )
+    # This missing Item sorts after every existing root, so the first chunk
+    # succeeds before a later chunk fails its lineage foreign key.
+    with pytest.raises(IntegrityError) as failure:
+        await add([*item_ids, UUID(int=(1 << 128) - 1)])
+    assert await persistence_db.scalar(select(func.count()).select_from(model)) == 0
+    # Keep the failure traceback alive: rolled-back ORM results must not remain
+    # readable as phantom links through Session.get()'s identity-map fast path.
+    if kind == "tag":
+        assert await persistence_db.get(ItemTag, (min(item_ids), root_id)) is None
+    assert failure.value is not None
+    # Recovery preserves the caller's transaction for a subsequent valid write.
+    assert await add(item_ids[:1]) == 1
+    await persistence_db.commit()
+
+
+@pytest.mark.anyio
+@pytest.mark.concurrency_case("item-reading")
+@pytest.mark.parametrize("first_section", [ItemSection.overview, ItemSection.metadata])
+async def test_concurrent_item_sections_record_reading_once(
+    persistence_db, persistence_sessions, persistence_actor, monkeypatch, first_section
+):
+    actor_id = persistence_actor.id
+    workspace_id = fixture_workspace_id(persistence_actor)
+    item = Item(workspace_id=workspace_id, title="Concurrent reading", created_by=actor_id)
+    persistence_db.add(item)
+    await persistence_db.commit()
+    item_id = item.id
+    first_ready, second_writing, release_commit = (asyncio.Event() for _ in range(3))
+
+    async with persistence_sessions() as first_db, persistence_sessions() as second_db:
+        first_actor = await first_db.get(User, actor_id)
+        second_actor = await second_db.get(User, actor_id)
+        first_context = await resolve_workspace_context(first_db, first_actor, workspace_id)
+        second_context = await resolve_workspace_context(second_db, second_actor, workspace_id)
+        commit = first_db.commit
+
+        async def held_commit():
+            # Hold the first inserted reading row uncommitted while the other
+            # section attempts to write the same user/Item reading record.
+            await first_db.flush()
+            first_ready.set()
+            await release_commit.wait()
+            await commit()
+
+        monkeypatch.setattr(first_db, "commit", held_commit)
+        connection = await second_db.connection()
+
+        def record_write(_connection, _cursor, statement, _parameters, _context, _many):
+            if statement.startswith(("INSERT INTO item_reads", "UPDATE item_reads")):
+                second_writing.set()
+
+        event.listen(connection.sync_connection, "before_cursor_execute", record_write)
+        second_section = (
+            ItemSection.metadata if first_section is ItemSection.overview else ItemSection.overview
+        )
+        try:
+            async with asyncio.timeout(5), asyncio.TaskGroup() as tasks:
+                first = tasks.create_task(
+                    open_item_section(first_db, first_context, item_id, first_section)
+                )
+                await first_ready.wait()
+                second = tasks.create_task(
+                    open_item_section(second_db, second_context, item_id, second_section)
+                )
+                await second_writing.wait()
+                release_commit.set()
+        finally:
+            event.remove(connection.sync_connection, "before_cursor_execute", record_write)
+
+        views = {type(first.result()), type(second.result())}
+        assert views == {ItemOverviewData, ItemMetadataData}
+        assert first.result().item.id == second.result().item.id == item_id
+
+    async with persistence_sessions() as observer:
+        reads = (await observer.scalars(select(ItemRead))).all()
+        assert len(reads) == 1
+        assert (reads[0].user_id, reads[0].item_id, reads[0].workspace_id) == (
+            actor_id,
+            item_id,
+            workspace_id,
+        )
+
+
+@pytest.mark.anyio
+async def test_item_reading_retains_the_latest_timestamp(
+    persistence_db, persistence_sessions, persistence_actor, monkeypatch
+):
+    actor_id = persistence_actor.id
+    workspace_id = fixture_workspace_id(persistence_actor)
+    item = Item(workspace_id=workspace_id, title="Reading order", created_by=actor_id)
+    persistence_db.add(item)
+    await persistence_db.commit()
+    item_id = item.id
+    started_at = datetime(2026, 10, 8, tzinfo=UTC)
+    read_at = started_at
+    latest_read_at = started_at
+    monkeypatch.setattr(item_sections, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
+
+    for offset in (0, 1, -1):
+        read_at = started_at + timedelta(seconds=offset)
+        latest_read_at = max(latest_read_at, read_at)
+        context = await resolve_workspace_context(persistence_db, persistence_actor, workspace_id)
+        await open_item_section(persistence_db, context, item_id, ItemSection.overview)
+        async with persistence_sessions() as observer:
+            read = await observer.get(ItemRead, (actor_id, item_id))
+            assert read.last_read_at == latest_read_at
+
+
+@pytest.mark.anyio
+async def test_item_reading_insert_shares_the_callers_rollback(
+    persistence_db, persistence_sessions, persistence_actor
+):
+    workspace_id = fixture_workspace_id(persistence_actor)
+    actor_id = persistence_actor.id
+    item = Item(workspace_id=workspace_id, title="Uncommitted reading", created_by=actor_id)
+    persistence_db.add(item)
+    await persistence_db.commit()
+    item_id = item.id
+    await ItemReadRepository(session=persistence_db).record_reading(
+        workspace_id, actor_id, item_id, datetime.now(UTC)
+    )
+    async with persistence_sessions() as observer:
+        assert await observer.get(ItemRead, (actor_id, item_id)) is None
+    await persistence_db.rollback()
+    async with persistence_sessions() as observer:
+        assert await observer.get(ItemRead, (actor_id, item_id)) is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("existing", [False, True])
+async def test_item_reading_propagates_foreign_workspace_constraint_errors(
+    persistence_db, persistence_actor, existing
+):
+    workspace_id = fixture_workspace_id(persistence_actor)
+    actor_id = persistence_actor.id
+    item = Item(workspace_id=workspace_id, title="Scoped reading", created_by=actor_id)
+    persistence_db.add(item)
+    await persistence_db.commit()
+    item_id = item.id
+    read_at = datetime.now(UTC)
+    repository = ItemReadRepository(session=persistence_db)
+    if existing:
+        await repository.record_reading(workspace_id, actor_id, item_id, read_at)
+        await persistence_db.commit()
+
+    with pytest.raises(IntegrityError):
+        await repository.record_reading(uuid4(), actor_id, item_id, read_at + timedelta(seconds=1))
+    # Savepoint recovery leaves the caller's transaction usable even when the
+    # insert failed for lineage rather than a recoverable concurrent reading.
+    await repository.record_reading(workspace_id, actor_id, item_id, read_at)
+    read = await persistence_db.get(ItemRead, (actor_id, item_id))
+    assert (read.workspace_id, read.last_read_at) == (workspace_id, read_at)
 
 
 @pytest.mark.anyio

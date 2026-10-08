@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
@@ -20,6 +20,7 @@ from quirebase.search import search_index
 from ._item_identifiers import _replace_item_identifiers_many
 from ._item_service import ItemService
 from ._metadata import generate_bibtex_key
+from ._persistence import ItemRepository
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -165,19 +166,8 @@ async def _sync_metadata_from_upstream(
         raise ResourceUnavailable("user not available")
     user = reloaded_user
     item = await require_editable_item(db, user, workspace_id, item_id)
-    version = await db.scalar(
-        update(Item)
-        .where(
-            Item.id == item_id,
-            Item.workspace_id == workspace_id,
-            Item.version == expected_version,
-        )
-        .values(
-            updated_by=user.id,
-            updated_at=datetime.now(UTC),
-            version=Item.version + 1,
-        )
-        .returning(Item.version)
+    version = await ItemRepository(session=db).advance_metadata_version(
+        workspace_id, item_id, expected_version, user.id, datetime.now(UTC)
     )
     if version is None:
         await db.rollback()

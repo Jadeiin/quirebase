@@ -4,10 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 from advanced_alchemy.exceptions import NotFoundError
-from advanced_alchemy.types import GUID
-from sqlalchemy import and_, delete, func, literal, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -29,6 +26,7 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.core.persistence import Repository, Service
+from quirebase.library._persistence import ItemTagRepository
 from quirebase.library.tag_recommendations import decoded_candidates
 from quirebase.library.workflows import (
     item_tag_recommendation_status,
@@ -91,9 +89,27 @@ def normalize_tag_name(name: str) -> str:
 class TagRepository(Repository[Tag]):
     model_type = Tag
 
+    async def find_or_add(self, candidate: Tag) -> Tag:
+        tag = await self.get_one_or_none(
+            workspace_id=candidate.workspace_id, normalized_name=candidate.normalized_name
+        )
+        if tag is not None:
+            return tag
+        try:
+            async with self.session.begin_nested():
+                return await self.add(candidate)
+        except IntegrityError:
+            tag = await self.get_one_or_none(
+                workspace_id=candidate.workspace_id, normalized_name=candidate.normalized_name
+            )
+            if tag is None:
+                raise
+            return tag
+
 
 class TagService(Service[Tag]):
     repository_type = TagRepository
+    repository: TagRepository
 
     async def to_model_on_create(self, data: ModelDictT[Tag]) -> Tag:
         tag = await self.to_model(data)
@@ -108,25 +124,7 @@ class TagService(Service[Tag]):
         candidate = await self.to_model(
             {"workspace_id": workspace_id, "created_by": actor_id, "name": name}, "create"
         )
-        tag = await self.get_one_or_none(
-            workspace_id=workspace_id, normalized_name=candidate.normalized_name
-        )
-        if tag is not None:
-            return tag
-        try:
-            async with self.repository.session.begin_nested():
-                return await self.repository.add(candidate)
-        except IntegrityError:
-            tag = await self.get_one_or_none(
-                workspace_id=workspace_id, normalized_name=candidate.normalized_name
-            )
-            if tag is None:  # pragma: no cover - constraint unrelated to Tag identity
-                raise
-            return tag
-
-
-class ItemTagRepository(Repository[ItemTag]):
-    model_type = ItemTag
+        return await self.repository.find_or_add(candidate)
 
 
 async def get_or_create_tag(db: AsyncSession, user: User, workspace_id: UUID, name: str) -> Tag:
@@ -151,33 +149,10 @@ async def _add_tag_id_to_item(
     *,
     commit: bool = True,
 ) -> ItemTag:
-    assignment = await db.scalar(
-        select(ItemTag).where(
-            ItemTag.workspace_id == workspace_id,
-            ItemTag.item_id == item_id,
-            ItemTag.tag_id == tag_id,
-        )
+    assignments, created_ids = await ItemTagRepository(session=db).assign_many(
+        workspace_id, [item_id], tag_id
     )
-    created = False
-    if assignment is None:
-        try:
-            async with db.begin_nested():
-                assignment = ItemTag(workspace_id=workspace_id, item_id=item_id, tag_id=tag_id)
-                assignment = await ItemTagRepository(session=db).add(assignment)
-                created = True
-        except IntegrityError:
-            assignment = await db.scalar(
-                select(ItemTag)
-                .where(
-                    ItemTag.workspace_id == workspace_id,
-                    ItemTag.item_id == item_id,
-                    ItemTag.tag_id == tag_id,
-                )
-                .execution_options(populate_existing=True)
-            )
-            if assignment is None:  # pragma: no cover - constraint unrelated to association PK
-                raise
-    if created:
+    if item_id in created_ids:
         record_event(
             db,
             user.id,
@@ -189,7 +164,7 @@ async def _add_tag_id_to_item(
         )
     if commit:
         await db.commit()
-    return assignment
+    return assignments[item_id]
 
 
 async def add_existing_tag_to_item(
@@ -223,14 +198,8 @@ async def _remove_tag_from_item(
     *,
     commit: bool = True,
 ) -> None:
-    result = await db.execute(
-        delete(ItemTag).where(
-            ItemTag.workspace_id == workspace_id,
-            ItemTag.item_id == item_id,
-            ItemTag.tag_id == tag_id,
-        )
-    )
-    if getattr(result, "rowcount", 0):
+    removed = await ItemTagRepository(session=db).remove(workspace_id, item_id, tag_id)
+    if removed:
         record_event(
             db,
             user.id,
@@ -465,26 +434,8 @@ async def merge_tags(
     if source_tag.workspace_id != target_tag.workspace_id:
         raise ResourceUnavailable("Tags not found")
 
-    dialect = db.get_bind().dialect.name
-    insert = pg_insert(ItemTag) if dialect == "postgresql" else sqlite_insert(ItemTag)
-    await db.execute(
-        insert.from_select(
-            ["workspace_id", "item_id", "tag_id"],
-            select(
-                ItemTag.workspace_id,
-                ItemTag.item_id,
-                literal(target_tag.id, type_=GUID()),
-            ).where(
-                ItemTag.workspace_id == workspace_id,
-                ItemTag.tag_id == source_tag.id,
-            ),
-        ).on_conflict_do_nothing(index_elements=["item_id", "tag_id"])
-    )
-    await db.execute(
-        delete(ItemTag).where(
-            ItemTag.workspace_id == workspace_id,
-            ItemTag.tag_id == source_tag.id,
-        )
+    await ItemTagRepository(session=db).move_tag_assignments(
+        workspace_id, source_tag.id, target_tag.id
     )
     await db.delete(source_tag)
     await db.flush()

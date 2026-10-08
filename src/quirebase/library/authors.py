@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from inquiro.bibliography import Contributor as BibliographyContributor
 from sqlalchemy import or_, select, tuple_
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from quirebase.access import ResourceAction, require_workspace_action
@@ -57,6 +56,7 @@ def parse_author_list_string(raw: str | None) -> list[dict[str, str | None]]:
 
 class AuthorService(Service[Author]):
     repository_type = AuthorRepository
+    repository: AuthorRepository
 
     async def resolve_many(self, names: Sequence[tuple[str, str | None]]) -> dict[str, Author]:
         """Resolve shared identities in batches without committing the caller's transaction."""
@@ -72,42 +72,7 @@ class AuthorService(Service[Author]):
         if not candidates:
             return {}
 
-        async def existing(keys: set[str]) -> dict[str, Author]:
-            found: dict[str, Author] = {}
-            ordered = sorted(keys)
-            for offset in range(0, len(ordered), 500):
-                found.update({
-                    author.identity_key: author
-                    for author in await self.get_many(
-                        Author.identity_key.in_(ordered[offset : offset + 500])
-                    )
-                })
-            return found
-
-        resolved = await existing(set(candidates))
-        pending = set(candidates) - resolved.keys()
-        while pending:
-            try:
-                async with self.repository.session.begin_nested():
-                    # Stable identity order also orders concurrent unique-index acquisition.
-                    created = await self.create_many([
-                        {
-                            "identity_key": key,
-                            "last_name": candidates[key][0],
-                            "first_name": candidates[key][1],
-                        }
-                        for key in sorted(pending)
-                    ])
-            except IntegrityError:
-                installed = await existing(pending)
-                if not installed:
-                    raise
-                resolved.update(installed)
-                pending -= installed.keys()
-            else:
-                resolved.update({author.identity_key: author for author in created})
-                break
-        return resolved
+        return await self.repository.resolve_identities(candidates)
 
 
 async def find_or_create_author(

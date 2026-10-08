@@ -21,6 +21,7 @@ from quirebase.access import (
 )
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.library._metadata import ItemMetadata, metadata_from_item
+from quirebase.library._persistence import ItemReadRepository
 from quirebase.library.authors import get_item_authors
 from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
 from quirebase.models import (
@@ -30,7 +31,6 @@ from quirebase.models import (
     Item,
     ItemAuthor,
     ItemIdentifier,
-    ItemRead,
     ItemTag,
     PdfAnnotation,
     Project,
@@ -135,11 +135,9 @@ type ItemSectionResult = (
 
 
 async def _record_read(db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID) -> None:
-    read = await db.get(ItemRead, (user.id, item_id))
-    if read is None:
-        db.add(ItemRead(user_id=user.id, workspace_id=workspace_id, item_id=item_id))
-    else:
-        read.last_read_at = datetime.now(UTC)
+    await ItemReadRepository(session=db).record_reading(
+        workspace_id, user.id, item_id, datetime.now(UTC)
+    )
 
 
 async def _assigned_tags(db: AsyncSession, item: Item) -> tuple[Tag, ...]:

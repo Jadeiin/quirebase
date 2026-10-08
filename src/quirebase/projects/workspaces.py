@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING, Literal
 
 from advanced_alchemy.filters import LimitOffset, SearchFilter
 from sqlalchemy import delete, func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -34,7 +32,7 @@ from quirebase.models import (
 )
 
 from ._locking import lock_project_root
-from ._persistence import ProjectParticipantRepository, ProjectService
+from ._persistence import ProjectItemRepository, ProjectParticipantRepository, ProjectService
 from .lifecycle import _validate_description, _validate_name
 from .loaders import require_project
 from .participation import ProjectParticipantInfo
@@ -255,21 +253,13 @@ async def add_item_to_project(
     )
     if item is None:
         raise ResourceUnavailable("Item or Project not found")
-    dialect = db.get_bind().dialect.name
-    insert = pg_insert(ProjectItem) if dialect == "postgresql" else sqlite_insert(ProjectItem)
     try:
-        async with db.begin_nested():
-            result = await db.execute(
-                insert.values(
-                    workspace_id=workspace_id,
-                    project_id=project_id,
-                    item_id=item_id,
-                    added_by=user.id,
-                ).on_conflict_do_nothing(index_elements=["workspace_id", "project_id", "item_id"])
-            )
+        inserted = await ProjectItemRepository(session=db).add_missing(
+            workspace_id, project_id, [item_id], user.id
+        )
     except IntegrityError as error:
         raise ResourceUnavailable("Item or Project not found") from error
-    if getattr(result, "rowcount", 0):
+    if inserted:
         record_event(
             db,
             user.id,
@@ -340,24 +330,9 @@ async def add_items_to_project(
     )
     if accessible != set(ids):
         raise ResourceUnavailable("Item or Project not found")
-    rows = [
-        {
-            "workspace_id": workspace_id,
-            "project_id": project_id,
-            "item_id": item_id,
-            "added_by": user.id,
-        }
-        for item_id in ids
-    ]
-    dialect = db.get_bind().dialect.name
-    insert = pg_insert(ProjectItem) if dialect == "postgresql" else sqlite_insert(ProjectItem)
     try:
-        async with db.begin_nested():
-            result = await db.execute(
-                insert.values(rows).on_conflict_do_nothing(
-                    index_elements=["workspace_id", "project_id", "item_id"]
-                )
-            )
+        return await ProjectItemRepository(session=db).add_missing(
+            workspace_id, project_id, ids, user.id
+        )
     except IntegrityError as error:
         raise ResourceUnavailable("Item or Project not found") from error
-    return int(getattr(result, "rowcount", 0) or 0)

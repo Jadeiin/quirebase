@@ -44,11 +44,46 @@ and has no previous-schema conversion path.
 
 ## Persistence use cases
 
-Library's Tag service normalizes create/update values. Citation Style persistence validates CSL
-and recovers concurrent name installation. Operations validates an entire runtime-setting batch,
-reads existing keys once, and uses native create/update batches with fresh identity-map values.
-Concurrent first insertion uses a savepoint, reloads installed keys and retries with bounded
-progress. AA 1.11.0's select-then-write upsert is not an atomic database upsert.
+Library's Tag service normalizes create/update values; its Repository owns scoped uniqueness
+recovery. Citation Style validation stays in the service, while its Repository inserts under a
+savepoint and reports whether the name is already installed. Operations validates an entire
+runtime-setting batch before its Repository reads existing keys and uses native create/update
+batches with refreshed identity-map values. Concurrent first insertion uses a savepoint, reloads
+installed keys and retries only missing keys, removing installed keys on every retry.
+AA 1.11.0's select-then-write upsert is not an atomic database upsert.
+
+Library's reading repository uses a database-neutral update-first write. An absent reading is
+inserted inside a savepoint; a concurrent insert rolls back only that savepoint and repeats the
+scoped update. The update retains the latest reading timestamp, and unrelated constraint failures
+remain errors. The Item section command still owns authorization and the outer commit/rollback.
+
+Item–Tag and Project–Item repositories share single and bulk association write paths within their
+owning Modules. Generic SQLAlchemy inserts use stable identity order and batches of at most 500
+links. A uniqueness conflict rolls back the insertion savepoint, reloads matching Workspace links
+and retries only missing identities; every retry removes installed identities. A surrounding
+savepoint rolls back all inserted chunks on an unrelated constraint failure. Repositories report
+the links added by the current call so commands can preserve their audit semantics. Item–Tag uses
+ORM batch insertion so savepoint rollback also removes newly attached identities from the Session.
+Tag merge uses the same Item–Tag writer after its command locks both Tag roots.
+
+Projects' Participant Repository owns scoped insertion and removal of explicit selections.
+Insertion uses one savepoint; a duplicate reread returns the existing selection without another
+Audit Event. If a competing Leave removes that selection before the locked reread, the command
+returns `ProjectParticipationConflict` (HTTP 409). It does not automatically reinsert the selection;
+a fresh Join is a new command that rechecks authority and participation policy. Commands retain
+Workspace/Project guards, authorization, Audit and transaction ownership.
+
+Accounts' Login Throttle Repository uses a database-neutral conditional update to increment the
+counter or reset an expired window atomically. An absent counter is inserted in a savepoint; an
+insertion collision recovers with one update. If the counter disappears before that update, the
+command reports `LoginThrottleConflict` (HTTP 409, `login_throttle_conflict`). Expiry cleanup uses
+the observed cutoff in its deletion predicate so it cannot delete a newly reset window. The
+authentication command owns credential checks, Audit Events and Login Session creation.
+
+Documents' Annotation and Reply repositories own scoped version CAS for editing, soft deletion,
+restoration and Annotation moderation. Restoration retains its distinct deleted-state predicates,
+including the prohibition on author restoration after moderation deletion. Commands keep payload
+validation, authorization, root locking, version-conflict translation, Audit and transaction ownership.
 
 The Item persistence service coordinates manual creation/replacement, Provider merges and Import
 Batch creation. Metadata inputs become explicit write plans: replacement clears omitted
@@ -56,12 +91,15 @@ associations; Provider merges preserve missing fields, merge URLs/keywords and r
 keys. Bounded-column validation is shared without accepting Web DTOs. The named Item replacement
 operation retains Workspace, identity and expected-version predicates in its SQL. `Item.version`
 is an application CAS field; the Item mapper does not configure SQLAlchemy `version_id_col`.
+Provider synchronization advances the version through the same Item Repository CAS predicate;
+external I/O, authority rechecks, merge decisions, conflicts, Audit and Search remain in the command.
 
 Import confirmation batches Item roots and Contributor/Identifier links, resolves shared Authors
-across both roles in bounded chunks and inserts missing identities in stable order. Uniqueness
-conflicts roll back only the insertion savepoint, reload installed identities and retry the
-remaining set with bounded progress. The locked Import Batch preserves result ordering and replay
-identity. File ownership transfer, Search, Audit and enqueue remain in the confirmation command.
+across both roles through the Author Repository in bounded chunks and inserts missing identities
+in stable order. Uniqueness conflicts roll back only the insertion savepoint, reload installed
+identities and retry the remaining set, removing installed identities on every retry. The locked
+Import Batch preserves result ordering and replay identity. File ownership transfer, Search, Audit
+and enqueue remain in the confirmation command.
 Import Batch creation adds prepared ORM roots through its Repository without an extra Service.
 Bibliography export uses an explicit Contributor relationship-loading profile.
 

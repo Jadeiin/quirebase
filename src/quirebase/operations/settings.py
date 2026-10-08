@@ -60,27 +60,28 @@ class RuntimeSettingRepository(Repository[SystemSetting]):
     model_type = SystemSetting
     id_attribute = "key"
 
-
-class RuntimeSettingsService(Service[SystemSetting]):
-    repository_type = RuntimeSettingRepository
-
-    async def store(self, actor_id: UUID, updates: dict[str, Any]) -> None:
-        sanitized = {key: _setting_value(key, value) for key, value in updates.items()}
-        if not sanitized:
+    async def store_values(self, actor_id: UUID, settings: dict[str, str], now: datetime) -> None:
+        if not settings:
             return
         existing_keys = {
-            record.key for record in await self.get_many(SystemSetting.key.in_(sanitized))
+            record.key for record in await self.get_many(SystemSetting.key.in_(settings))
         }
-        now = datetime.now(UTC)
         values = {
-            key: {"key": key, "value": value, "updated_by": actor_id, "updated_at": now}
-            for key, value in sanitized.items()
+            key: SystemSetting(key=key, value=value, updated_by=actor_id, updated_at=now)
+            for key, value in settings.items()
         }
-        pending = set(sanitized) - existing_keys
+        pending = set(settings) - existing_keys
         while pending:
             try:
-                async with self.repository.session.begin_nested():
-                    await self.create_many([values[key] for key in sorted(pending)])
+                async with self.session.begin_nested():
+                    # Rebuild candidates after rollback; their identity-map
+                    # state must belong to this insertion attempt.
+                    await self.add_many([
+                        SystemSetting(
+                            key=key, value=settings[key], updated_by=actor_id, updated_at=now
+                        )
+                        for key in sorted(pending)
+                    ])
                 break
             except IntegrityError:
                 # A concurrent administrator may have installed one of the missing keys.
@@ -97,6 +98,15 @@ class RuntimeSettingsService(Service[SystemSetting]):
                 [values[key] for key in sorted(existing_keys)],
                 execution_options={"populate_existing": True},
             )
+
+
+class RuntimeSettingsService(Service[SystemSetting]):
+    repository_type = RuntimeSettingRepository
+    repository: RuntimeSettingRepository
+
+    async def store(self, actor_id: UUID, updates: dict[str, Any]) -> None:
+        sanitized = {key: _setting_value(key, value) for key, value in updates.items()}
+        await self.repository.store_values(actor_id, sanitized, datetime.now(UTC))
 
 
 async def get_runtime_settings(db: AsyncSession) -> dict[str, Any]:

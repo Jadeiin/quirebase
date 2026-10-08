@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import UUID  # ruff: ignore[typing-only-standard-library-import] - Pydantic exposes ProjectParticipantInfo
 
-from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
     ResourceAction,
@@ -25,6 +24,7 @@ from quirebase.models import (
 )
 
 from ._locking import lock_project_root
+from ._persistence import ProjectParticipantRepository
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,39 +51,12 @@ async def _add_participant(
     resource_action: ResourceAction,
     authorization_role: str,
 ) -> ProjectParticipant:
-    insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
-    statement = (
-        insert(ProjectParticipant)
-        .values(
-            workspace_id=workspace_id,
-            project_id=project_id,
-            workspace_member_id=target.id,
-            user_id=target.user_id,
+    try:
+        participant, inserted = await ProjectParticipantRepository(session=db).ensure_selection(
+            workspace_id, project_id, target.id, target.user_id
         )
-        .on_conflict_do_nothing(index_elements=["workspace_id", "project_id", "user_id"])
-        .returning(ProjectParticipant)
-    )
-    for _attempt in range(3):
-        participant = await db.scalar(statement)
-        inserted = participant is not None
-        if inserted:
-            break
-        participant = await db.scalar(
-            select(ProjectParticipant)
-            .where(
-                ProjectParticipant.workspace_id == workspace_id,
-                ProjectParticipant.project_id == project_id,
-                ProjectParticipant.workspace_member_id == target.id,
-            )
-            .with_for_update()
-        )
-        if participant is not None:
-            break
-        # A concurrent open leave can win between conflict detection and reread.
-        # Retry this association only; root authority and mode remain guarded.
-    else:
-        raise ProjectParticipationConflict("Project participation changed concurrently")
-    assert participant is not None
+    except IntegrityError as error:
+        raise ProjectParticipationConflict("Project participation changed concurrently") from error
     if inserted:
         record_event(
             db,
@@ -133,14 +106,8 @@ async def leave_project(db: AsyncSession, user: User, workspace_id: UUID, projec
     if project.participation is not ProjectParticipation.open:
         raise ProjectParticipationConflict("Only open Projects allow self-service participation")
     require_action(context, ResourceAction.project_participation_leave, relation="open")
-    participant_id = await db.scalar(
-        delete(ProjectParticipant)
-        .where(
-            ProjectParticipant.workspace_id == workspace_id,
-            ProjectParticipant.project_id == project_id,
-            ProjectParticipant.workspace_member_id == context.membership.id,
-        )
-        .returning(ProjectParticipant.id)
+    participant_id = await ProjectParticipantRepository(session=db).remove_membership_selection(
+        workspace_id, project_id, context.membership.id
     )
     if participant_id is not None:
         record_event(
@@ -216,14 +183,8 @@ async def remove_project_participant(
         raise ProjectParticipationConflict("Only managed Projects have curated participation")
     require_action(context, ResourceAction.project_participation_manage, relation="managed")
     # Removal revokes managed discovery, so retain the exclusive root guard.
-    participant_id = await db.scalar(
-        delete(ProjectParticipant)
-        .where(
-            ProjectParticipant.workspace_id == workspace_id,
-            ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == participant_user_id,
-        )
-        .returning(ProjectParticipant.id)
+    participant_id = await ProjectParticipantRepository(session=db).remove_user_selection(
+        workspace_id, project_id, participant_user_id
     )
     if participant_id is None:
         raise ResourceNotFound("Project participant not found")

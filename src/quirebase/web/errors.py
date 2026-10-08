@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from quirebase.accounts import LoginThrottleConflict
 from quirebase.accounts.invitations import InvitationConflict
 from quirebase.accounts.registration import RegistrationClosed, RegistrationInvitationRequired
 from quirebase.accounts.throttling import LoginThrottled
@@ -71,6 +72,13 @@ def _error_response(
 def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | None]:
     if isinstance(exc, LoginThrottled):
         return 429, "login_throttled", str(exc) or "too many login attempts; try again later", None
+    if isinstance(exc, LoginThrottleConflict):
+        return (
+            409,
+            "login_throttle_conflict",
+            str(exc) or "login failure counter changed concurrently; try again",
+            None,
+        )
     if isinstance(exc, RegistrationClosed):
         return 403, "registration_closed", str(exc) or "registration is closed", None
     if isinstance(exc, RegistrationInvitationRequired):

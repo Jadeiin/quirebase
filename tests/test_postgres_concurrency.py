@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -17,7 +18,15 @@ from quirebase.accounts import (
     change_own_password,
     change_user_role,
     reset_user_password,
+    throttling,
     update_user_status,
+)
+from quirebase.accounts.throttling import (
+    THROTTLE_WINDOW,
+    LoginThrottleConflict,
+    check_login_throttle,
+    clear_login_failures,
+    record_login_failure,
 )
 from quirebase.audit import query_events
 from quirebase.core.errors import (
@@ -32,8 +41,10 @@ from quirebase.core.errors import (
 )
 from quirebase.documents import (
     AnnotationReplyCreate,
+    AnnotationReplyUpdate,
     AnnotationUpdate,
     create_annotation_reply,
+    update_annotation_reply,
     update_document_annotation,
 )
 from quirebase.documents.workflows import _lock_upload_authority
@@ -47,6 +58,7 @@ from quirebase.library import (
     apply_bulk_item_action,
     commit_import_batch,
     delete_discussion_message,
+    item_sections,
     moderate_project_discussion_message,
     open_item_section,
     revise_item_metadata,
@@ -65,8 +77,11 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
+    ItemRead,
     ItemTag,
+    LoginThrottle,
     PdfAnnotation,
+    PdfAnnotationReply,
     Project,
     ProjectItem,
     ProjectParticipant,
@@ -84,6 +99,7 @@ from quirebase.operations.settings import RuntimeSettingsService, update_runtime
 from quirebase.projects import (
     ProjectParticipationConflict,
     add_item_to_project,
+    add_items_to_project,
     add_project_participant,
     create_project,
     join_project,
@@ -122,6 +138,186 @@ async def _user(db: AsyncSession, prefix: str) -> User:
     await provision_initial_workspace(db, user)
     await db.commit()
     return user
+
+
+@pytest.mark.concurrency_case("login-throttle")
+@pytest.mark.parametrize("clear_before_retry", [False, True])
+async def test_first_login_failure_recovers_insert_or_reports_a_clear_conflict(
+    postgres_sessions, postgres_race, monkeypatch, clear_before_retry
+):
+    identity = "a" * 64
+    read_at = datetime(2026, 10, 8, tzinfo=UTC)
+    monkeypatch.setattr(throttling, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
+    absent, resume_insert = asyncio.Event(), asyncio.Event()
+    retrying, resume_retry = asyncio.Event(), asyncio.Event()
+
+    async def first_failure():
+        async with postgres_race.session("first") as db:
+            scalar = db.scalar
+            updates = 0
+
+            async def paused_scalar(statement, *args, **kwargs):
+                nonlocal updates
+                is_counter_update = (
+                    statement.is_update and statement.table.name == LoginThrottle.__tablename__
+                )
+                if is_counter_update:
+                    updates += 1
+                    if updates == 2 and clear_before_retry:
+                        retrying.set()
+                        postgres_race.note("counter.retry", actor="first")
+                        await asyncio.wait_for(resume_retry.wait(), timeout=5)
+                result = await scalar(statement, *args, **kwargs)
+                if is_counter_update and updates == 1:
+                    assert result is None
+                    absent.set()
+                    postgres_race.note("counter.absent", actor="first")
+                    await asyncio.wait_for(resume_insert.wait(), timeout=5)
+                return result
+
+            monkeypatch.setattr(db, "scalar", paused_scalar)
+            try:
+                await record_login_failure(db, identity)
+            except LoginThrottleConflict:
+                await db.rollback()
+                return "conflict"
+            return "recorded"
+
+    postgres_race.start("first", first_failure())
+    await asyncio.wait_for(absent.wait(), timeout=5)
+    try:
+        read_at += timedelta(seconds=1)
+        async with postgres_race.session("second") as db:
+            await record_login_failure(db, identity)
+        resume_insert.set()
+        if clear_before_retry:
+            await asyncio.wait_for(retrying.wait(), timeout=5)
+            async with postgres_race.session("clear") as db:
+                await clear_login_failures(db, identity)
+    finally:
+        resume_insert.set()
+        resume_retry.set()
+    assert await postgres_race.join("first") == ("conflict" if clear_before_retry else "recorded")
+    if clear_before_retry:
+        # The cleared row stays cleared after rejection. A fresh request can
+        # create the counter without silently losing the rejected attempt.
+        async with postgres_race.session("retry") as db:
+            assert await db.get(LoginThrottle, identity) is None
+            await record_login_failure(db, identity)
+    async with postgres_race.session("verify") as db:
+        row = await db.get(LoginThrottle, identity)
+        assert row.failures == (1 if clear_before_retry else 2)
+        assert row.window_started_at == read_at
+
+
+@pytest.mark.concurrency_case("login-throttle")
+async def test_expired_login_check_does_not_delete_a_concurrently_reset_window(
+    postgres_sessions, postgres_race, monkeypatch
+):
+    identity = "b" * 64
+    now = datetime(2026, 10, 8, tzinfo=UTC)
+    monkeypatch.setattr(throttling, "datetime", SimpleNamespace(now=lambda _timezone: now))
+    async with postgres_sessions() as db:
+        db.add(
+            LoginThrottle(
+                identity_hash=identity,
+                failures=10,
+                window_started_at=now - THROTTLE_WINDOW - timedelta(seconds=1),
+            )
+        )
+        await db.commit()
+    expired_read, resume = asyncio.Event(), asyncio.Event()
+
+    async def check():
+        async with postgres_race.session("check") as db:
+            scalar = db.scalar
+
+            async def paused_scalar(statement, *args, **kwargs):
+                result = await scalar(statement, *args, **kwargs)
+                if (
+                    statement.is_select
+                    and statement.column_descriptions[0].get("entity") is LoginThrottle
+                ):
+                    assert result.window_started_at < now - THROTTLE_WINDOW
+                    expired_read.set()
+                    await asyncio.wait_for(resume.wait(), timeout=5)
+                return result
+
+            monkeypatch.setattr(db, "scalar", paused_scalar)
+            await check_login_throttle(db, identity)
+
+    postgres_race.start("check", check())
+    await asyncio.wait_for(expired_read.wait(), timeout=5)
+    try:
+        async with postgres_race.session("failure") as db:
+            await record_login_failure(db, identity)
+    finally:
+        resume.set()
+    await postgres_race.join("check")
+    async with postgres_race.session("verify") as db:
+        row = await db.get(LoginThrottle, identity)
+        assert (row.failures, row.window_started_at) == (1, now)
+
+
+@pytest.mark.concurrency_case("item-reading")
+async def test_item_reading_recovers_an_insert_after_the_initial_update(
+    postgres_sessions, postgres_race, monkeypatch
+):
+    async with postgres_sessions() as db:
+        owner = await _user(db, "reading-gap")
+        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        item = Item(workspace_id=workspace_id, title="Reading gap", created_by=owner_id)
+        db.add(item)
+        await db.commit()
+        item_id = item.id
+
+    initial_update, resume = asyncio.Event(), asyncio.Event()
+    read_at = datetime(2026, 10, 8, tzinfo=UTC)
+    monkeypatch.setattr(item_sections, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
+
+    async def first_read():
+        async with postgres_race.session("first") as db:
+            scalar = db.scalar
+
+            async def paused_scalar(statement, *args, **kwargs):
+                result = await scalar(statement, *args, **kwargs)
+                if (
+                    statement.is_update
+                    and statement.table.name == ItemRead.__tablename__
+                    and not initial_update.is_set()
+                ):
+                    assert result is None
+                    postgres_race.note("reading.absent", actor="first")
+                    initial_update.set()
+                    await asyncio.wait_for(resume.wait(), timeout=5)
+                return result
+
+            monkeypatch.setattr(db, "scalar", paused_scalar)
+            actor = await db.get(User, owner_id)
+            context = await resolve_workspace_context(db, actor, workspace_id)
+            return await open_item_section(db, context, item_id, ItemSection.overview)
+
+    async def second_read():
+        async with postgres_race.session("second") as db:
+            actor = await db.get(User, owner_id)
+            context = await resolve_workspace_context(db, actor, workspace_id)
+            return await open_item_section(db, context, item_id, ItemSection.metadata)
+
+    postgres_race.start("first", first_read())
+    await asyncio.wait_for(initial_update.wait(), timeout=5)
+    try:
+        read_at += timedelta(seconds=1)
+        postgres_race.start("second", second_read())
+        assert (await postgres_race.join("second")).item.id == item_id
+    finally:
+        resume.set()
+    # The older reader now conflicts on insert, recovers its savepoint and
+    # updates without overwriting the newer timestamp committed by the second.
+    assert (await postgres_race.join("first")).item.id == item_id
+    async with postgres_race.session("verify") as db:
+        reads = (await db.scalars(select(ItemRead).where(ItemRead.item_id == item_id))).all()
+        assert len(reads) == 1
+        assert reads[0].last_read_at == read_at
 
 
 @pytest.mark.concurrency_case("workspace-read-delete")
@@ -252,6 +448,110 @@ async def _project_annotation_context(
     db.add(annotation)
     await db.commit()
     return workspace_id, owner_id, item.id, project.id, assignment.id, annotation.id
+
+
+@pytest.mark.concurrency_case("annotation-version")
+@pytest.mark.parametrize("kind", ["annotation", "reply"])
+async def test_annotation_edits_with_one_version_have_one_commit_and_audit(
+    postgres_sessions, postgres_race, monkeypatch, kind
+):
+    async with postgres_sessions() as db:
+        (
+            workspace_id,
+            owner_id,
+            item_id,
+            _project_id,
+            _assignment_id,
+            annotation_id,
+        ) = await _project_annotation_context(
+            db, "annotation-version", annotation_scope=AnnotationScope.private
+        )
+        annotation = await db.get(PdfAnnotation, annotation_id)
+        revision = await db.get(FileRevision, annotation.file_revision_id)
+        revision.processing_state = "ready"
+        revision.page_count = 1
+        revision.page_geometry = [[0, 0, 100, 100]]
+        target_id = annotation_id
+        if kind == "reply":
+            reply = PdfAnnotationReply(
+                workspace_id=workspace_id,
+                annotation_id=annotation_id,
+                author_id=owner_id,
+                body="Initial reply",
+            )
+            db.add(reply)
+            await db.flush()
+            target_id = reply.id
+        await db.commit()
+
+    reached_commit, resume = asyncio.Event(), asyncio.Event()
+
+    async def edit(name):
+        async with postgres_race.session(name) as db:
+            actor = await db.get(User, owner_id)
+            if name == "first":
+                commit = db.commit
+
+                async def held_commit():
+                    await db.flush()
+                    reached_commit.set()
+                    await asyncio.wait_for(resume.wait(), timeout=5)
+                    await commit()
+
+                monkeypatch.setattr(db, "commit", held_commit)
+            try:
+                if kind == "reply":
+                    return await update_annotation_reply(
+                        db,
+                        actor,
+                        workspace_id,
+                        item_id,
+                        annotation_id,
+                        target_id,
+                        AnnotationReplyUpdate(version=1, body=name),
+                    )
+                return await update_document_annotation(
+                    db,
+                    actor,
+                    workspace_id,
+                    item_id,
+                    annotation_id,
+                    AnnotationUpdate.model_validate({
+                        "version": 1,
+                        "page_index": 0,
+                        "kind": "note",
+                        "scope": "private",
+                        "body": name,
+                        "payload": {
+                            "type": "note",
+                            "rect": {"x": 1, "y": 1, "width": 1, "height": 1},
+                        },
+                    }),
+                )
+            except VersionConflict as error:
+                await db.rollback()
+                return error
+
+    postgres_race.start("first", edit("first"))
+    await asyncio.wait_for(reached_commit.wait(), timeout=5)
+    postgres_race.start("second", edit("second"))
+    try:
+        await postgres_race.wait_blocked("second", "first")
+    finally:
+        resume.set()
+    assert (await postgres_race.join("first"))["version"] == 2
+    conflict = await postgres_race.join("second")
+    assert isinstance(conflict, VersionConflict)
+    assert conflict.current_version == 2
+    async with postgres_race.session("verify") as db:
+        model = PdfAnnotation if kind == "annotation" else PdfAnnotationReply
+        record = await db.get(model, target_id)
+        assert (record.body, record.version) == ("first", 2)
+        action = "annotation.update" if kind == "annotation" else "annotation_reply.update"
+        assert (
+            await db.scalar(select(func.count(AuditEvent.id)).where(AuditEvent.action == action))
+            == 1
+        )
 
 
 @pytest.mark.concurrency_case("foreign-lock-isolation")
@@ -1631,6 +1931,84 @@ async def test_concurrent_item_tag_add_is_idempotent(postgres_sessions):
         assert count == 1
 
 
+@pytest.mark.concurrency_case("relation-idempotency")
+@pytest.mark.parametrize("kind", ["tag", "project"])
+async def test_association_batch_recovers_a_competing_insert_without_losing_other_links(
+    postgres_sessions, postgres_race, monkeypatch, kind
+):
+    async with postgres_sessions() as db:
+        actor = await _user(db, f"{kind}-batch-overlap")
+        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
+        items = [
+            Item(workspace_id=workspace_id, title=f"Overlap {index}", created_by=actor_id)
+            for index in range(2)
+        ]
+        root = (
+            Tag(workspace_id=workspace_id, name="Overlap tag", created_by=actor_id)
+            if kind == "tag"
+            else Project(workspace_id=workspace_id, name="Overlap project", created_by=actor_id)
+        )
+        db.add_all([*items, root])
+        await db.commit()
+        item_ids, root_id = [item.id for item in items], root.id
+
+    model = ItemTag if kind == "tag" else ProjectItem
+    checked, resume = asyncio.Event(), asyncio.Event()
+
+    async def batch():
+        async with postgres_race.session("batch") as db:
+            scalars = db.scalars
+
+            async def paused_scalars(statement, *args, **kwargs):
+                result = await scalars(statement, *args, **kwargs)
+                if (
+                    statement.is_select
+                    and not checked.is_set()
+                    and statement.column_descriptions[0].get("entity") is model
+                ):
+                    assert result.all() == []
+                    checked.set()
+                    postgres_race.note("association.absent", actor="batch")
+                    await asyncio.wait_for(resume.wait(), timeout=5)
+                return result
+
+            monkeypatch.setattr(db, "scalars", paused_scalars)
+            actor = await db.get(User, actor_id)
+            if kind == "tag":
+                return await apply_bulk_item_action(
+                    db, actor, workspace_id, item_ids, "add_tag", tag_name="Overlap tag"
+                )
+            inserted = await add_items_to_project(db, actor, workspace_id, root_id, item_ids)
+            await db.commit()
+            return inserted
+
+    async def single():
+        async with postgres_race.session("single") as db:
+            actor = await db.get(User, actor_id)
+            if kind == "tag":
+                await add_existing_tag_to_item(db, actor, workspace_id, item_ids[0], root_id)
+            else:
+                await add_item_to_project(db, actor, workspace_id, root_id, item_ids[0])
+
+    postgres_race.start("batch", batch())
+    await asyncio.wait_for(checked.wait(), timeout=5)
+    try:
+        postgres_race.start("single", single())
+        await postgres_race.join("single")
+    finally:
+        resume.set()
+    inserted = await postgres_race.join("batch")
+    if kind == "project":
+        assert inserted == 1
+    async with postgres_race.session("verify") as db:
+        assert set(await db.scalars(select(model.item_id))) == set(item_ids)
+        action = "tag.add" if kind == "tag" else "project.item.add"
+        assert (
+            await db.scalar(select(func.count(AuditEvent.id)).where(AuditEvent.action == action))
+            == 1
+        )
+
+
 @pytest.mark.concurrency_case("import-replay")
 @pytest.mark.parametrize("first", ["first", "second"], ids=["first-starts", "second-starts"])
 async def test_concurrent_import_confirmation_and_response_loss_replay(
@@ -1965,8 +2343,8 @@ async def test_duplicate_participation_commands_have_one_audit_effect(
         assert events == 1
 
 
-@pytest.mark.concurrency_case("relation-idempotency")
-async def test_open_join_recovers_when_leave_wins_before_existing_row_reread(
+@pytest.mark.concurrency_case("participation-recheck")
+async def test_open_join_reports_conflict_when_leave_wins_before_existing_row_reread(
     postgres_sessions, postgres_race
 ):
     async with postgres_sessions() as db:
@@ -2001,7 +2379,12 @@ async def test_open_join_recovers_when_leave_wins_before_existing_row_reread(
 
             db.scalar = paused_scalar
             actor = await db.get(User, target_id)
-            return (await join_project(db, actor, workspace_id, project_id)).id
+            try:
+                await join_project(db, actor, workspace_id, project_id)
+            except ProjectParticipationConflict:
+                await db.rollback()
+                return "conflict"
+            return "joined"
 
     postgres_race.start("rejoin", rejoin())
     await asyncio.wait_for(rereading.wait(), timeout=5)
@@ -2011,9 +2394,8 @@ async def test_open_join_recovers_when_leave_wins_before_existing_row_reread(
             await leave_project(db, actor, workspace_id, project_id)
     finally:
         resume.set()
-    new_selection_id = await postgres_race.join("rejoin")
-    assert new_selection_id != old_selection_id
-    async with postgres_sessions() as db:
+    assert await postgres_race.join("rejoin") == "conflict"
+    async with postgres_race.session("verify-rejected") as db:
         rows = (
             await db.scalars(
                 select(ProjectParticipant).where(
@@ -2022,4 +2404,22 @@ async def test_open_join_recovers_when_leave_wins_before_existing_row_reread(
                 )
             )
         ).all()
-        assert [row.id for row in rows] == [new_selection_id]
+        assert rows == []
+        join_events = select(func.count(AuditEvent.id)).where(
+            AuditEvent.project_id == project_id,
+            AuditEvent.action == "project.participant.join",
+        )
+        assert await db.scalar(join_events) == 1
+        assert (
+            await db.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.project_id == project_id,
+                    AuditEvent.action == "project.participant.leave",
+                )
+            )
+            == 1
+        )
+        actor = await db.get(User, target_id)
+        fresh_selection = await join_project(db, actor, workspace_id, project_id)
+        assert fresh_selection.id != old_selection_id
+        assert await db.scalar(join_events) == 2

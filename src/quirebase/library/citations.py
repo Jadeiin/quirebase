@@ -52,9 +52,21 @@ if TYPE_CHECKING:
 class CitationStyleRepository(Repository[CitationStyle]):
     model_type = CitationStyle
 
+    async def add_if_name_available(self, style: CitationStyle) -> CitationStyle | None:
+        if await self.exists(workspace_id=style.workspace_id, name=style.name):
+            return None
+        try:
+            async with self.session.begin_nested():
+                return await self.add(style)
+        except IntegrityError:
+            if not await self.exists(workspace_id=style.workspace_id, name=style.name):
+                raise
+            return None
+
 
 class CitationStyleService(Service[CitationStyle]):
     repository_type = CitationStyleRepository
+    repository: CitationStyleRepository
 
     async def to_model_on_create(self, data: ModelDictT[CitationStyle]) -> CitationStyle:
         style = await self.to_model(data)
@@ -72,15 +84,10 @@ class CitationStyleService(Service[CitationStyle]):
             {"workspace_id": workspace_id, "created_by": actor_id, "name": name, "csl_xml": csl},
             "create",
         )
-        if await self.exists(workspace_id=workspace_id, name=style.name):
-            raise ValidationFailure("citation style name already exists in Workspace")
-        try:
-            async with self.repository.session.begin_nested():
-                return await self.repository.add(style)
-        except IntegrityError:
-            if not await self.exists(workspace_id=workspace_id, name=style.name):
-                raise
+        installed = await self.repository.add_if_name_available(style)
+        if installed is None:
             raise ValidationFailure("citation style name already exists in Workspace") from None
+        return installed
 
 
 def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:

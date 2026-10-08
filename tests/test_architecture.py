@@ -778,11 +778,38 @@ def test_alchemy_repositories_and_services_stay_with_their_model_owner():
                         ), f"{py_file}:{node.lineno} enables implicit transaction ownership"
 
 
+def test_association_inserts_and_annotation_cas_stay_in_owned_repositories():
+    # Commands retain authorization, lock order, domain errors and side effects.
+    # These shared write mechanisms have explicit Repository ownership.
+    command_writes = {
+        "library/tags.py": ("insert", {"ItemTag"}),
+        "library/bulk_items.py": ("insert", {"ItemTag"}),
+        "projects/workspaces.py": ("insert", {"ProjectItem"}),
+        "projects/participation.py": ("insert", {"ProjectParticipant"}),
+        "documents/annotations.py": ("update", {"PdfAnnotation", "PdfAnnotationReply"}),
+        "library/identifiers.py": ("update", {"Item"}),
+        "accounts/throttling.py": ("insert", {"LoginThrottle"}),
+    }
+    for path, (operation, models) in command_writes.items():
+        tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
+        constructors = (
+            {"insert", "pg_insert", "sqlite_insert"} if operation == "insert" else {operation}
+        )
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            name = ast.unparse(node.func).rsplit(".", 1)[-1]
+            target = node.args[0]
+            assert not (
+                name in constructors and isinstance(target, ast.Name) and target.id in models
+            ), f"{path}:{node.lineno} constructs {operation} outside its owning Repository"
+
+
 def test_generic_bulk_mutations_stay_at_reviewed_persistence_locations():
     # Settings are global. Association deletes derive their targets from protected Item roots.
     # New locations require a scope/concurrency review; inherited AA methods remain available.
     reviewed = {
-        ("operations/settings.py", "RuntimeSettingsService.store", "update_many"),
+        ("operations/settings.py", "RuntimeSettingRepository.store_values", "update_many"),
         ("library/authors.py", "_replace_item_authors_many", "delete_where"),
         ("library/_item_identifiers.py", "_replace_item_identifiers_many", "delete_where"),
     }
