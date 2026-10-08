@@ -793,23 +793,26 @@ def test_association_inserts_and_annotation_cas_stay_in_owned_repositories():
     for path, (operation, models) in command_writes.items():
         tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
         constructors = (
-            {"insert", "pg_insert", "sqlite_insert"} if operation == "insert" else {operation}
+            {"insert", "pg_insert", "sqlite_insert", "conflict_insert"}
+            if operation == "insert"
+            else {operation}
         )
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not node.args:
                 continue
             name = ast.unparse(node.func).rsplit(".", 1)[-1]
-            target = node.args[0]
+            target = (
+                node.args[1] if name == "conflict_insert" and len(node.args) > 1 else node.args[0]
+            )
             assert not (
                 name in constructors and isinstance(target, ast.Name) and target.id in models
             ), f"{path}:{node.lineno} constructs {operation} outside its owning Repository"
 
 
 def test_generic_bulk_mutations_stay_at_reviewed_persistence_locations():
-    # Settings are global. Association deletes derive their targets from protected Item roots.
+    # Association deletes derive their targets from protected Item roots.
     # New locations require a scope/concurrency review; inherited AA methods remain available.
     reviewed = {
-        ("operations/settings.py", "RuntimeSettingRepository.store_values", "update_many"),
         ("library/authors.py", "_replace_item_authors_many", "delete_where"),
         ("library/_item_identifiers.py", "_replace_item_identifiers_many", "delete_where"),
     }

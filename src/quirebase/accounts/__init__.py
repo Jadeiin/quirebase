@@ -49,7 +49,6 @@ from quirebase.accounts.sessions import (
     revoke_session,
 )
 from quirebase.accounts.throttling import (
-    LoginThrottleConflict,
     LoginThrottled,
     check_login_throttle,
     clear_login_failures,
@@ -64,7 +63,6 @@ __all__ = [
     "AuthenticationFailure",
     "InvalidCredentials",
     "InvitationConflict",
-    "LoginThrottleConflict",
     "LoginThrottled",
     "RegistrationClosed",
     "RegistrationInvitationRequired",

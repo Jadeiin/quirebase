@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import case, delete, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import case, delete, select
 
-from quirebase.core.persistence import Repository, Service
+from quirebase.core.persistence import Repository, Service, conflict_insert
 from quirebase.models import Invitation, LoginThrottle, User
 
 if TYPE_CHECKING:
@@ -39,28 +38,23 @@ class LoginThrottleRepository(Repository[LoginThrottle]):
 
     async def record_failure(self, identity: str, now: datetime, cutoff: datetime) -> None:
         expired = LoginThrottle.window_started_at <= cutoff
-        statement = (
-            update(LoginThrottle)
-            .where(LoginThrottle.identity_hash == identity)
-            .values(
-                failures=case((expired, 1), else_=LoginThrottle.failures + 1),
-                window_started_at=case((expired, now), else_=LoginThrottle.window_started_at),
+        statement = conflict_insert(self.session, LoginThrottle).values(
+            identity_hash=identity, failures=1, window_started_at=now
+        )
+        await self.session.scalar(
+            statement
+            .on_conflict_do_update(
+                index_elements=[LoginThrottle.identity_hash],
+                set_={
+                    "failures": case((expired, 1), else_=LoginThrottle.failures + 1),
+                    "window_started_at": case(
+                        (expired, now), else_=LoginThrottle.window_started_at
+                    ),
+                },
             )
             .returning(LoginThrottle)
             .execution_options(populate_existing=True)
         )
-        if await self.session.scalar(statement) is not None:
-            return
-        try:
-            async with self.session.begin_nested():
-                await self.add(
-                    LoginThrottle(identity_hash=identity, failures=1, window_started_at=now)
-                )
-        except IntegrityError:
-            # Recover a competing first insert once. If a successful login
-            # already cleared it, let the command report the conflict.
-            if await self.session.scalar(statement) is None:
-                raise
 
     async def delete_expired(self, identity: str, cutoff: datetime) -> bool:
         return (

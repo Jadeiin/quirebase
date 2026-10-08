@@ -10,7 +10,6 @@ from sqlalchemy import select
 
 from quirebase.accounts import (
     InvalidCredentials,
-    LoginThrottleConflict,
     authenticate_user,
     change_own_password,
     create_api_token,
@@ -99,50 +98,6 @@ async def test_failed_and_successful_logins_are_audited_without_credentials(
         assert "correct-password" not in details
         assert "wrong-password" not in details
         assert "audited" not in details
-    finally:
-        await client.aclose()
-        get_settings.cache_clear()
-
-
-@pytest.mark.anyio
-async def test_login_counter_conflict_returns_409_without_login_side_effects(
-    async_db, async_session_factory, monkeypatch
-):
-    db = async_db
-    user = User(username="conflicting-login", password_hash=hash_password("correct-password"))
-    db.add(user)
-    await db.commit()
-
-    async def conflicting_failure(_db, _identity):  # ruff: ignore[unused-async]
-        raise LoginThrottleConflict("login failure counter changed concurrently; try again")
-
-    monkeypatch.setattr(
-        "quirebase.accounts.authentication.record_login_failure", conflicting_failure
-    )
-    client, _ = await web_client(db, async_session_factory)
-    try:
-        rejected = await client.post(
-            "/api/v1/session",
-            json=json_payload({"username": user.username, "password": "wrong-password"}),
-        )
-        assert rejected.status_code == 409
-        assert rejected.json()["code"] == "login_throttle_conflict"
-        assert "set-cookie" not in rejected.headers
-        assert (await client.get("/api/v1/session")).json()["authenticated"] is False
-        assert (
-            await db.scalars(select(LoginSession).where(LoginSession.user_id == user.id))
-        ).all() == []
-        assert (
-            await db.scalars(
-                select(AuditEvent).where(
-                    AuditEvent.action.in_([
-                        "auth.login.failed",
-                        "auth.login.succeeded",
-                        "auth.login.throttled",
-                    ])
-                )
-            )
-        ).all() == []
     finally:
         await client.aclose()
         get_settings.cache_clear()

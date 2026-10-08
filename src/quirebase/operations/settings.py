@@ -3,13 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy.exc import IntegrityError
-
 from quirebase.access import SystemAction, require_system_action
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ValidationFailure
-from quirebase.core.persistence import Repository, Service
+from quirebase.core.persistence import Repository, Service, conflict_insert
 from quirebase.models import SystemSetting, User
 
 if TYPE_CHECKING:
@@ -63,41 +61,25 @@ class RuntimeSettingRepository(Repository[SystemSetting]):
     async def store_values(self, actor_id: UUID, settings: dict[str, str], now: datetime) -> None:
         if not settings:
             return
-        existing_keys = {
-            record.key for record in await self.get_many(SystemSetting.key.in_(settings))
-        }
-        values = {
-            key: SystemSetting(key=key, value=value, updated_by=actor_id, updated_at=now)
-            for key, value in settings.items()
-        }
-        pending = set(settings) - existing_keys
-        while pending:
-            try:
-                async with self.session.begin_nested():
-                    # Rebuild candidates after rollback; their identity-map
-                    # state must belong to this insertion attempt.
-                    await self.add_many([
-                        SystemSetting(
-                            key=key, value=settings[key], updated_by=actor_id, updated_at=now
-                        )
-                        for key in sorted(pending)
-                    ])
-                break
-            except IntegrityError:
-                # A concurrent administrator may have installed one of the missing keys.
-                # Every retry removes those keys; unrelated constraint failures propagate.
-                installed = {
-                    record.key for record in await self.get_many(SystemSetting.key.in_(pending))
-                }
-                if not installed:
-                    raise
-                existing_keys.update(installed)
-                pending -= installed
-        if existing_keys:
-            await self.update_many(
-                [values[key] for key in sorted(existing_keys)],
-                execution_options={"populate_existing": True},
+        statement = conflict_insert(self.session, SystemSetting).values([
+            {"key": key, "value": settings[key], "updated_by": actor_id, "updated_at": now}
+            for key in sorted(settings)
+        ])
+        async with self.session.begin_nested():
+            records = await self.session.scalars(
+                statement
+                .on_conflict_do_update(
+                    index_elements=[SystemSetting.key],
+                    set_={
+                        "value": statement.excluded.value,
+                        "updated_by": statement.excluded.updated_by,
+                        "updated_at": statement.excluded.updated_at,
+                    },
+                )
+                .returning(SystemSetting)
+                .execution_options(populate_existing=True)
             )
+            records.all()
 
 
 class RuntimeSettingsService(Service[SystemSetting]):

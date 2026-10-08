@@ -149,9 +149,13 @@ async def _add_tag_id_to_item(
     *,
     commit: bool = True,
 ) -> ItemTag:
-    assignments, created_ids = await ItemTagRepository(session=db).assign_many(
-        workspace_id, [item_id], tag_id
+    repository = ItemTagRepository(session=db)
+    created_ids = await repository.assign_many(workspace_id, [item_id], tag_id)
+    assignment = await repository.get_one_or_none(
+        workspace_id=workspace_id, item_id=item_id, tag_id=tag_id
     )
+    if assignment is None:
+        raise TagConflict("tag association changed concurrently; retry the action")
     if item_id in created_ids:
         record_event(
             db,
@@ -164,7 +168,7 @@ async def _add_tag_id_to_item(
         )
     if commit:
         await db.commit()
-    return assignments[item_id]
+    return assignment
 
 
 async def add_existing_tag_to_item(

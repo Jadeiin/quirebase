@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.core.persistence import Repository, Service
+from quirebase.core.persistence import Repository, Service, conflict_insert
 from quirebase.models import Project, ProjectItem, ProjectParticipant
 
 if TYPE_CHECKING:
@@ -88,60 +88,35 @@ class ProjectParticipantRepository(Repository[ProjectParticipant]):
 class ProjectItemRepository(Repository[ProjectItem]):
     model_type = ProjectItem
 
-    async def _existing(
-        self, workspace_id: UUID, project_id: UUID, item_ids: Sequence[UUID]
-    ) -> set[UUID]:
-        return set(
-            await self.session.scalars(
-                select(ProjectItem.item_id).where(
-                    ProjectItem.workspace_id == workspace_id,
-                    ProjectItem.project_id == project_id,
-                    ProjectItem.item_id.in_(item_ids),
-                )
-            )
-        )
-
     async def add_missing(
         self, workspace_id: UUID, project_id: UUID, item_ids: Sequence[UUID], actor_id: UUID
     ) -> int:
         """Add authorized Item links under the command's Project root guard."""
         ordered = sorted(set(item_ids))
-        existing: set[UUID] = set()
-        for offset in range(0, len(ordered), 500):
-            existing.update(
-                await self._existing(workspace_id, project_id, ordered[offset : offset + 500])
-            )
-        missing = sorted(set(ordered) - existing)
-        if not missing:
+        if not ordered:
             return 0
         inserted = 0
         async with self.session.begin_nested():
-            for offset in range(0, len(missing), 500):
-                pending = set(missing[offset : offset + 500])
-                while pending:
-                    try:
-                        async with self.session.begin_nested():
-                            added = list(
-                                await self.session.scalars(
-                                    insert(ProjectItem)
-                                    .values([
-                                        {
-                                            "workspace_id": workspace_id,
-                                            "project_id": project_id,
-                                            "item_id": item_id,
-                                            "added_by": actor_id,
-                                        }
-                                        for item_id in sorted(pending)
-                                    ])
-                                    .returning(ProjectItem.item_id)
-                                )
-                            )
-                    except IntegrityError:
-                        installed = await self._existing(workspace_id, project_id, sorted(pending))
-                        if not installed:
-                            raise
-                        pending -= installed
-                    else:
-                        inserted += len(added)
-                        break
+            for offset in range(0, len(ordered), 500):
+                added = await self.session.scalars(
+                    conflict_insert(self.session, ProjectItem)
+                    .values([
+                        {
+                            "workspace_id": workspace_id,
+                            "project_id": project_id,
+                            "item_id": item_id,
+                            "added_by": actor_id,
+                        }
+                        for item_id in ordered[offset : offset + 500]
+                    ])
+                    .on_conflict_do_nothing(
+                        index_elements=[
+                            ProjectItem.workspace_id,
+                            ProjectItem.project_id,
+                            ProjectItem.item_id,
+                        ]
+                    )
+                    .returning(ProjectItem.item_id)
+                )
+                inserted += len(added.all())
         return inserted

@@ -80,8 +80,8 @@ async def apply_bulk_item_action(
                 workspace_id, [item.id for item in items], tag_record.id
             )
         except IntegrityError as error:
-            # A competing duplicate may be removed before savepoint recovery
-            # can reload it. The repository has rolled back every new link.
+            # A root may disappear before insertion. The Repository savepoint
+            # rolls back every new link and leaves the caller transaction usable.
             raise TagConflict(
                 "tag associations changed concurrently; retry the bulk action"
             ) from error

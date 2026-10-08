@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy.exc import IntegrityError
-
 from quirebase.core.errors import DomainError
 
 from ._persistence import LoginThrottleRepository
@@ -24,10 +22,6 @@ class LoginThrottled(DomainError):
         self.detail = message
 
 
-class LoginThrottleConflict(DomainError):
-    status_code: int = 409
-
-
 async def check_login_throttle(db: AsyncSession, identity: str) -> None:
     repository = LoginThrottleRepository(session=db)
     row = await repository.current(identity)
@@ -43,14 +37,7 @@ async def check_login_throttle(db: AsyncSession, identity: str) -> None:
 
 async def record_login_failure(db: AsyncSession, identity: str) -> None:
     now = datetime.now(UTC)
-    try:
-        await LoginThrottleRepository(session=db).record_failure(
-            identity, now, now - THROTTLE_WINDOW
-        )
-    except IntegrityError as error:
-        raise LoginThrottleConflict(
-            "login failure counter changed concurrently; try again"
-        ) from error
+    await LoginThrottleRepository(session=db).record_failure(identity, now, now - THROTTLE_WINDOW)
     await db.commit()
 
 

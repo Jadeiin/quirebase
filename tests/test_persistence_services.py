@@ -82,7 +82,7 @@ async def _association_batch(db, actor, kind):
 
     async def add(ids):
         if kind == "tag":
-            _assignments, created_ids = await ItemTagRepository(session=db).assign_many(
+            created_ids = await ItemTagRepository(session=db).assign_many(
                 workspace_id, ids, root_id
             )
             return len(created_ids)
@@ -115,7 +115,9 @@ async def test_association_batches_deduplicate_and_share_caller_rollback(
         # one statement or savepoint per Item.
         assert len(inserts) == 2
         assert await add(item_ids) == 0
-        assert len(inserts) == 2
+        assert len(inserts) == 4
+        assert await add([]) == 0
+        assert len(inserts) == 4
     finally:
         event.remove(engine, "before_cursor_execute", record_insert)
     async with persistence_sessions() as observer:
@@ -283,8 +285,8 @@ async def test_item_reading_propagates_foreign_workspace_constraint_errors(
 
     with pytest.raises(IntegrityError):
         await repository.record_reading(uuid4(), actor_id, item_id, read_at + timedelta(seconds=1))
-    # Savepoint recovery leaves the caller's transaction usable even when the
-    # insert failed for lineage rather than a recoverable concurrent reading.
+    # The savepoint preserves the caller transaction after invalid lineage,
+    # including when the upsert follows its update path.
     await repository.record_reading(workspace_id, actor_id, item_id, read_at)
     read = await persistence_db.get(ItemRead, (actor_id, item_id))
     assert (read.workspace_id, read.last_read_at) == (workspace_id, read_at)

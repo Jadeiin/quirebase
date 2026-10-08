@@ -21,9 +21,9 @@ from quirebase.accounts import (
     throttling,
     update_user_status,
 )
+from quirebase.accounts._persistence import LoginThrottleRepository
 from quirebase.accounts.throttling import (
     THROTTLE_WINDOW,
-    LoginThrottleConflict,
     check_login_throttle,
     clear_login_failures,
     record_login_failure,
@@ -67,6 +67,7 @@ from quirebase.library import (
     search_library,
     stage_import_batch,
 )
+from quirebase.library._persistence import ItemTagRepository
 from quirebase.library.authors import AuthorService
 from quirebase.library.citations import CitationStyleService, create_custom_citation_style
 from quirebase.models import (
@@ -144,73 +145,72 @@ async def _user(db: AsyncSession, prefix: str) -> User:
 
 
 @pytest.mark.concurrency_case("login-throttle")
-@pytest.mark.parametrize("clear_before_retry", [False, True])
-async def test_first_login_failure_recovers_insert_or_reports_a_clear_conflict(
-    postgres_sessions, postgres_race, monkeypatch, clear_before_retry
+@pytest.mark.parametrize("clear_before_insert", [False, True])
+async def test_login_failure_upsert_increments_or_recreates_a_cleared_counter(
+    postgres_sessions, postgres_race, monkeypatch, clear_before_insert
 ):
     identity = "a" * 64
     read_at = datetime(2026, 10, 8, tzinfo=UTC)
     monkeypatch.setattr(throttling, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
-    absent, resume_insert = asyncio.Event(), asyncio.Event()
-    retrying, resume_retry = asyncio.Event(), asyncio.Event()
+    first_at = read_at
+    inserting, resume = asyncio.Event(), asyncio.Event()
 
     async def first_failure():
         async with postgres_race.session("first") as db:
             scalar = db.scalar
-            updates = 0
 
             async def paused_scalar(statement, *args, **kwargs):
-                nonlocal updates
-                is_counter_update = (
-                    statement.is_update and statement.table.name == LoginThrottle.__tablename__
-                )
-                if is_counter_update:
-                    updates += 1
-                    if updates == 2 and clear_before_retry:
-                        retrying.set()
-                        postgres_race.note("counter.retry", actor="first")
-                        await asyncio.wait_for(resume_retry.wait(), timeout=5)
-                result = await scalar(statement, *args, **kwargs)
-                if is_counter_update and updates == 1:
-                    assert result is None
-                    absent.set()
-                    postgres_race.note("counter.absent", actor="first")
-                    await asyncio.wait_for(resume_insert.wait(), timeout=5)
-                return result
+                if statement.is_insert and statement.table.name == LoginThrottle.__tablename__:
+                    inserting.set()
+                    postgres_race.note("counter.before_upsert", actor="first")
+                    await asyncio.wait_for(resume.wait(), timeout=5)
+                return await scalar(statement, *args, **kwargs)
 
             monkeypatch.setattr(db, "scalar", paused_scalar)
-            try:
-                await record_login_failure(db, identity)
-            except LoginThrottleConflict:
-                await db.rollback()
-                return "conflict"
-            return "recorded"
+            await record_login_failure(db, identity)
 
     postgres_race.start("first", first_failure())
-    await asyncio.wait_for(absent.wait(), timeout=5)
+    await asyncio.wait_for(inserting.wait(), timeout=5)
     try:
         read_at += timedelta(seconds=1)
         async with postgres_race.session("second") as db:
             await record_login_failure(db, identity)
-        resume_insert.set()
-        if clear_before_retry:
-            await asyncio.wait_for(retrying.wait(), timeout=5)
+        if clear_before_insert:
             async with postgres_race.session("clear") as db:
                 await clear_login_failures(db, identity)
     finally:
-        resume_insert.set()
-        resume_retry.set()
-    assert await postgres_race.join("first") == ("conflict" if clear_before_retry else "recorded")
-    if clear_before_retry:
-        # The cleared row stays cleared after rejection. A fresh request can
-        # create the counter without silently losing the rejected attempt.
-        async with postgres_race.session("retry") as db:
-            assert await db.get(LoginThrottle, identity) is None
-            await record_login_failure(db, identity)
+        resume.set()
+    await postgres_race.join("first")
     async with postgres_race.session("verify") as db:
         row = await db.get(LoginThrottle, identity)
-        assert row.failures == (1 if clear_before_retry else 2)
-        assert row.window_started_at == read_at
+        assert row.failures == (1 if clear_before_insert else 2)
+        assert row.window_started_at == (first_at if clear_before_insert else read_at)
+
+
+@pytest.mark.concurrency_case("login-throttle")
+async def test_concurrent_first_login_failures_wait_and_preserve_both_counts(
+    postgres_sessions, postgres_race
+):
+    identity = "c" * 64
+    now = datetime.now(UTC)
+
+    async def second_failure():
+        async with postgres_race.session("second") as db:
+            await record_login_failure(db, identity)
+
+    async with postgres_race.session("first") as db:
+        await LoginThrottleRepository(session=db).record_failure(
+            identity, now, now - THROTTLE_WINDOW
+        )
+        postgres_race.start("second", second_failure())
+        await postgres_race.wait_blocked("second", "first")
+        await db.commit()
+        await postgres_race.join("second")
+
+    async with postgres_sessions() as db:
+        row = await db.get(LoginThrottle, identity)
+        assert row.failures == 2
+        assert row.window_started_at == now
 
 
 @pytest.mark.concurrency_case("login-throttle")
@@ -263,7 +263,7 @@ async def test_expired_login_check_does_not_delete_a_concurrently_reset_window(
 
 
 @pytest.mark.concurrency_case("item-reading")
-async def test_item_reading_recovers_an_insert_after_the_initial_update(
+async def test_item_reading_upsert_keeps_a_competing_readers_newer_timestamp(
     postgres_sessions, postgres_race, monkeypatch
 ):
     async with postgres_sessions() as db:
@@ -274,28 +274,26 @@ async def test_item_reading_recovers_an_insert_after_the_initial_update(
         await db.commit()
         item_id = item.id
 
-    initial_update, resume = asyncio.Event(), asyncio.Event()
+    inserting, resume = asyncio.Event(), asyncio.Event()
     read_at = datetime(2026, 10, 8, tzinfo=UTC)
     monkeypatch.setattr(item_sections, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
 
     async def first_read():
         async with postgres_race.session("first") as db:
-            scalar = db.scalar
+            execute = db.execute
 
-            async def paused_scalar(statement, *args, **kwargs):
-                result = await scalar(statement, *args, **kwargs)
+            async def paused_execute(statement, *args, **kwargs):
                 if (
-                    statement.is_update
+                    statement.is_insert
                     and statement.table.name == ItemRead.__tablename__
-                    and not initial_update.is_set()
+                    and not inserting.is_set()
                 ):
-                    assert result is None
-                    postgres_race.note("reading.absent", actor="first")
-                    initial_update.set()
+                    postgres_race.note("reading.before_upsert", actor="first")
+                    inserting.set()
                     await asyncio.wait_for(resume.wait(), timeout=5)
-                return result
+                return await execute(statement, *args, **kwargs)
 
-            monkeypatch.setattr(db, "scalar", paused_scalar)
+            monkeypatch.setattr(db, "execute", paused_execute)
             actor = await db.get(User, owner_id)
             context = await resolve_workspace_context(db, actor, workspace_id)
             return await open_item_section(db, context, item_id, ItemSection.overview)
@@ -307,15 +305,15 @@ async def test_item_reading_recovers_an_insert_after_the_initial_update(
             return await open_item_section(db, context, item_id, ItemSection.metadata)
 
     postgres_race.start("first", first_read())
-    await asyncio.wait_for(initial_update.wait(), timeout=5)
+    await asyncio.wait_for(inserting.wait(), timeout=5)
     try:
         read_at += timedelta(seconds=1)
         postgres_race.start("second", second_read())
         assert (await postgres_race.join("second")).item.id == item_id
     finally:
         resume.set()
-    # The older reader now conflicts on insert, recovers its savepoint and
-    # updates without overwriting the newer timestamp committed by the second.
+    # The older reader takes the native update path without overwriting the
+    # newer timestamp committed by the second.
     assert (await postgres_race.join("first")).item.id == item_id
     async with postgres_race.session("verify") as db:
         reads = (await db.scalars(select(ItemRead).where(ItemRead.item_id == item_id))).all()
@@ -1974,11 +1972,66 @@ async def test_concurrent_item_tag_add_is_idempotent(postgres_sessions):
             )
         )
         assert count == 1
+        assert (
+            await db.scalar(select(func.count(AuditEvent.id)).where(AuditEvent.action == "tag.add"))
+            == 1
+        )
+
+
+@pytest.mark.concurrency_case("relation-idempotency")
+async def test_single_tag_add_reports_conflict_if_skipped_link_is_removed_before_result_read(
+    postgres_sessions, postgres_race, monkeypatch
+):
+    async with postgres_sessions() as db:
+        actor = await _user(db, "single-tag-remove-owner")
+        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
+        item = Item(workspace_id=workspace_id, title="Removed duplicate", created_by=actor_id)
+        tag = Tag(workspace_id=workspace_id, name="Existing tag", created_by=actor_id)
+        db.add_all([item, tag])
+        await db.commit()
+        item_id, tag_id = item.id, tag.id
+        await add_existing_tag_to_item(db, actor, workspace_id, item_id, tag_id)
+
+    rereading, resume = asyncio.Event(), asyncio.Event()
+    get_one_or_none = ItemTagRepository.get_one_or_none
+
+    async def paused_read(self, *args, **kwargs):
+        rereading.set()
+        await asyncio.wait_for(resume.wait(), timeout=5)
+        return await get_one_or_none(self, *args, **kwargs)
+
+    monkeypatch.setattr(ItemTagRepository, "get_one_or_none", paused_read)
+
+    async def add():
+        async with postgres_race.session("add") as db:
+            actor = await db.get(User, actor_id)
+            try:
+                await add_existing_tag_to_item(db, actor, workspace_id, item_id, tag_id)
+            except TagConflict:
+                await db.rollback()
+                return "conflict"
+            return "added"
+
+    postgres_race.start("add", add())
+    await asyncio.wait_for(rereading.wait(), timeout=5)
+    try:
+        async with postgres_race.session("remove") as db:
+            actor = await db.get(User, actor_id)
+            await remove_tag_from_item(db, actor, workspace_id, item_id, tag_id)
+    finally:
+        resume.set()
+    assert await postgres_race.join("add") == "conflict"
+    async with postgres_race.session("verify") as db:
+        assert await db.get(ItemTag, (item_id, tag_id)) is None
+        assert (
+            await db.scalar(select(func.count(AuditEvent.id)).where(AuditEvent.action == "tag.add"))
+            == 1
+        )
 
 
 @pytest.mark.concurrency_case("relation-idempotency")
 @pytest.mark.parametrize("kind", ["tag", "project"])
-async def test_association_batch_recovers_a_competing_insert_without_losing_other_links(
+async def test_association_batch_skips_a_competing_insert_without_losing_other_links(
     postgres_sessions, postgres_race, monkeypatch, kind
 ):
     async with postgres_sessions() as db:
@@ -2005,17 +2058,15 @@ async def test_association_batch_recovers_a_competing_insert_without_losing_othe
             scalars = db.scalars
 
             async def paused_scalars(statement, *args, **kwargs):
-                result = await scalars(statement, *args, **kwargs)
                 if (
-                    statement.is_select
+                    statement.is_insert
                     and not checked.is_set()
-                    and statement.column_descriptions[0].get("entity") is model
+                    and statement.table.name == model.__tablename__
                 ):
-                    assert result.all() == []
                     checked.set()
-                    postgres_race.note("association.absent", actor="batch")
+                    postgres_race.note("association.before_insert", actor="batch")
                     await asyncio.wait_for(resume.wait(), timeout=5)
-                return result
+                return await scalars(statement, *args, **kwargs)
 
             monkeypatch.setattr(db, "scalars", paused_scalars)
             actor = await db.get(User, actor_id)
@@ -2055,7 +2106,7 @@ async def test_association_batch_recovers_a_competing_insert_without_losing_othe
 
 
 @pytest.mark.concurrency_case("relation-idempotency")
-async def test_bulk_tag_add_reports_conflict_when_duplicate_disappears_before_recovery(
+async def test_bulk_tag_add_does_not_resurrect_a_link_removed_after_conflict_skip(
     postgres_sessions, postgres_race, monkeypatch
 ):
     async with postgres_sessions() as db:
@@ -2069,77 +2120,40 @@ async def test_bulk_tag_add_reports_conflict_when_duplicate_disappears_before_re
         db.add_all([*items, tag])
         await db.commit()
         item_ids, tag_id = [item.id for item in items], tag.id
+        await add_existing_tag_to_item(db, actor, workspace_id, item_ids[0], tag_id)
 
-    checked, resume_insert = asyncio.Event(), asyncio.Event()
-    recovering, resume_recovery = asyncio.Event(), asyncio.Event()
+    inserted, resume = asyncio.Event(), asyncio.Event()
 
     async def batch():
         async with postgres_race.session("batch") as db:
             scalars = db.scalars
-            reads = 0
 
             async def paused_scalars(statement, *args, **kwargs):
-                nonlocal reads
-                association_read = (
-                    statement.is_select
-                    and statement.column_descriptions[0].get("entity") is ItemTag
-                )
-                if association_read:
-                    reads += 1
-                    if reads == 2:
-                        recovering.set()
-                        postgres_race.note("association.recovery", actor="batch")
-                        await asyncio.wait_for(resume_recovery.wait(), timeout=5)
                 result = await scalars(statement, *args, **kwargs)
-                if association_read and reads == 1:
-                    assert result.all() == []
-                    checked.set()
-                    await asyncio.wait_for(resume_insert.wait(), timeout=5)
+                if statement.is_insert and statement.table.name == ItemTag.__tablename__:
+                    inserted.set()
+                    postgres_race.note("association.skipped_duplicate", actor="batch")
+                    await asyncio.wait_for(resume.wait(), timeout=5)
                 return result
 
             monkeypatch.setattr(db, "scalars", paused_scalars)
             actor = await db.get(User, actor_id)
-            try:
-                await apply_bulk_item_action(
-                    db, actor, workspace_id, item_ids, "add_tag", tag_name=tag.name
-                )
-            except TagConflict as error:
-                assert isinstance(error.__cause__, IntegrityError)
-                # All new links roll back and the caller transaction stays usable.
-                assert await db.scalar(select(func.count()).select_from(ItemTag)) == 0
-                assert (
-                    await db.scalar(
-                        select(func.count(AuditEvent.id)).where(
-                            AuditEvent.action == "library.bulk.add_tag"
-                        )
-                    )
-                    == 0
-                )
-                await db.rollback()
-                return "conflict"
-            return "added"
+            await apply_bulk_item_action(
+                db, actor, workspace_id, item_ids, "add_tag", tag_name=tag.name
+            )
 
     postgres_race.start("batch", batch())
-    await asyncio.wait_for(checked.wait(), timeout=5)
-    async with postgres_race.session("single") as db:
-        actor = await db.get(User, actor_id)
-        await add_existing_tag_to_item(db, actor, workspace_id, item_ids[0], tag_id)
-    resume_insert.set()
-    await asyncio.wait_for(recovering.wait(), timeout=5)
+    await asyncio.wait_for(inserted.wait(), timeout=5)
     try:
         async with postgres_race.session("remove") as db:
             actor = await db.get(User, actor_id)
             await remove_tag_from_item(db, actor, workspace_id, item_ids[0], tag_id)
     finally:
-        resume_recovery.set()
-    assert await postgres_race.join("batch") == "conflict"
+        resume.set()
+    await postgres_race.join("batch")
 
-    async with postgres_race.session("retry") as db:
-        actor = await db.get(User, actor_id)
-        await apply_bulk_item_action(
-            db, actor, workspace_id, item_ids, "add_tag", tag_name=tag.name
-        )
-        assert set(await db.scalars(select(ItemTag.item_id))) == set(item_ids)
+    async with postgres_race.session("verify") as db:
+        assert set(await db.scalars(select(ItemTag.item_id))) == {item_ids[1]}
         assert (
             await db.scalar(
                 select(func.count(AuditEvent.id)).where(AuditEvent.action == "library.bulk.add_tag")
@@ -2248,9 +2262,7 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
 
 
 @pytest.mark.concurrency_case("settings-install")
-async def test_concurrent_setting_install_reloads_conflicts_and_preserves_whole_batch(
-    postgres_sessions, postgres_race
-):
+async def test_concurrent_setting_upserts_preserve_whole_batch(postgres_sessions, postgres_race):
     async with postgres_sessions() as db:
         first = User(username="settings-first", password_hash="unused", role="administrator")
         second = User(username="settings-second", password_hash="unused", role="administrator")

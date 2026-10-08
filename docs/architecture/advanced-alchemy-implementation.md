@@ -14,6 +14,8 @@ Core uses `SQLAlchemyAsyncConfig`, `EngineConfig`, a shared metadata registry an
 commit, refresh and expunge, retain raw SQLAlchemy exceptions, and use independent pagination
 counts. No CRUD implementation is duplicated in Core. AA not-found errors from repeated mutation
 reads are translated by their owning Module when a concurrently deleted root becomes unavailable.
+Core's `conflict_insert` selects the supported database's native INSERT builder. Repositories own
+the conflict target and update expressions; business commands use the same Repository interface.
 
 Core ensures a physical SQLite outer transaction before the first savepoint when sqlite3's legacy
 driver has not begun one. Releasing the savepoint cannot commit independently of caller rollback.
@@ -47,24 +49,24 @@ and has no previous-schema conversion path.
 Library's Tag service normalizes create/update values; its Repository owns scoped uniqueness
 recovery. Citation Style validation stays in the service, while its Repository inserts under a
 savepoint and reports whether the name is already installed. Operations validates an entire
-runtime-setting batch before its Repository reads existing keys and uses native create/update
-batches with refreshed identity-map values. Concurrent first insertion uses a savepoint, reloads
-installed keys and retries only missing keys, removing installed keys on every retry.
-AA 1.11.0's select-then-write upsert is not an atomic database upsert.
+runtime-setting batch before its Repository performs one ordered native upsert, refreshing loaded
+values through `RETURNING`. A savepoint preserves the caller transaction on a constraint failure.
+AA 1.11.0's select-then-write upsert is not used as an atomic database upsert.
 
-Library's reading repository uses a database-neutral update-first write. An absent reading is
-inserted inside a savepoint; a concurrent insert rolls back only that savepoint and repeats the
-scoped update. The update retains the latest reading timestamp, and unrelated constraint failures
-remain errors. The Item section command still owns authorization and the outer commit/rollback.
+Library's reading Repository uses one native upsert, retaining the latest reading timestamp on
+conflict. Both insert and update validate the supplied Workspace lineage through the composite
+foreign key. A savepoint preserves the caller transaction on an invalid lineage; there is no
+duplicate-insert retry. The Item section command owns authorization and the outer commit/rollback.
 
 Item–Tag and Project–Item repositories share single and bulk association write paths within their
-owning Modules. Generic SQLAlchemy inserts use stable identity order and batches of at most 500
-links. A uniqueness conflict rolls back the insertion savepoint, reloads matching Workspace links
-and retries only missing identities; every retry removes installed identities. A surrounding
-savepoint rolls back all inserted chunks on an unrelated constraint failure. Repositories report
-the links added by the current call so commands can preserve their audit semantics. Item–Tag uses
-ORM batch insertion so savepoint rollback also removes newly attached identities from the Session.
-Tag merge uses the same Item–Tag writer after its command locks both Tag roots.
+owning Modules. Native `ON CONFLICT DO NOTHING` inserts use stable identity order and batches of at
+most 500 links. `RETURNING item_id` reports only the current call's new links, without pre-reading
+associations or retrying duplicates. A surrounding savepoint rolls back all inserted chunks on an
+unrelated constraint failure. Bulk insertion returns scalar identities and does not load ORM links
+that could survive a failed later chunk in the Session identity map. Single Item–Tag commands load
+their result after insertion and report a conflict if a skipped duplicate disappears before that
+read. Concurrent removal after a bulk insert skips a duplicate may win normally; the batch does
+not recreate that link. Tag merge uses the same writer after its command locks both Tag roots.
 
 Projects' Participant Repository owns scoped insertion and removal of explicit selections.
 Insertion uses one savepoint; a duplicate reread returns the existing selection without another
@@ -73,12 +75,11 @@ returns `ProjectParticipationConflict` (HTTP 409). It does not automatically rei
 a fresh Join is a new command that rechecks authority and participation policy. Commands retain
 Workspace/Project guards, authorization, Audit and transaction ownership.
 
-Accounts' Login Throttle Repository uses a database-neutral conditional update to increment the
-counter or reset an expired window atomically. An absent counter is inserted in a savepoint; an
-insertion collision recovers with one update. If the counter disappears before that update, the
-command reports `LoginThrottleConflict` (HTTP 409, `login_throttle_conflict`). Expiry cleanup uses
-the observed cutoff in its deletion predicate so it cannot delete a newly reset window. The
-authentication command owns credential checks, Audit Events and Login Session creation.
+Accounts' Login Throttle Repository uses one native upsert to increment the counter or reset an
+expired window atomically, refreshing loaded counter values. A clear committed before the upsert
+allows the failure to start a new window; there is no intermediate insertion-recovery conflict.
+Expiry cleanup uses the observed cutoff in its deletion predicate so it cannot delete a newly
+reset window. Authentication owns credential checks, Audit Events and Login Session creation.
 
 Documents' Annotation and Reply repositories own scoped version CAS for editing, soft deletion,
 restoration and Annotation moderation. Restoration retains its distinct deleted-state predicates,

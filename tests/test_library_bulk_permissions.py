@@ -243,7 +243,7 @@ async def test_bulk_tag_integrity_race_returns_http_conflict(
         "assign_many",
         AsyncMock(
             side_effect=IntegrityError(
-                "INSERT INTO item_tags", {}, Exception("duplicate disappeared")
+                "INSERT INTO item_tags", {}, Exception("tag foreign key disappeared")
             )
         ),
     )

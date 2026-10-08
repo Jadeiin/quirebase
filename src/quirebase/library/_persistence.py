@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from sqlalchemy import case, delete, insert, select, update
+from sqlalchemy import case, delete, select, update
 from sqlalchemy.exc import IntegrityError
 
-from quirebase.core.persistence import Repository
+from quirebase.core.persistence import Repository, conflict_insert
 from quirebase.models import (
     Author,
     ImportBatch,
@@ -72,37 +72,22 @@ class ItemReadRepository(Repository[ItemRead]):
     async def record_reading(
         self, workspace_id: UUID, user_id: UUID, item_id: UUID, read_at: datetime
     ) -> None:
-        statement = (
-            update(ItemRead)
-            .where(
-                ItemRead.workspace_id == workspace_id,
-                ItemRead.user_id == user_id,
-                ItemRead.item_id == item_id,
-            )
-            .values(
-                last_read_at=case(
-                    (ItemRead.last_read_at < read_at, read_at), else_=ItemRead.last_read_at
-                )
-            )
-            .returning(ItemRead.item_id)
+        statement = conflict_insert(self.session, ItemRead).values(
+            workspace_id=workspace_id, user_id=user_id, item_id=item_id, last_read_at=read_at
         )
-        if await self.session.scalar(statement) is not None:
-            return
-        try:
-            async with self.session.begin_nested():
-                await self.session.execute(
-                    insert(ItemRead).values(
-                        workspace_id=workspace_id,
-                        user_id=user_id,
-                        item_id=item_id,
-                        last_read_at=read_at,
-                    )
+        async with self.session.begin_nested():
+            await self.session.execute(
+                statement.on_conflict_do_update(
+                    index_elements=[ItemRead.user_id, ItemRead.item_id],
+                    set_={
+                        # Validate the supplied lineage on the update path too.
+                        "workspace_id": statement.excluded.workspace_id,
+                        "last_read_at": case(
+                            (ItemRead.last_read_at < read_at, read_at), else_=ItemRead.last_read_at
+                        ),
+                    },
                 )
-        except IntegrityError:
-            # A competing reader may insert after the update found no row.
-            # Recover only if the matching Workspace reading now exists.
-            if await self.session.scalar(statement) is None:
-                raise
+            )
 
 
 class AuthorRepository(Repository[Author]):
@@ -164,61 +149,30 @@ class ItemIdentifierRepository(Repository[ItemIdentifier]):
 class ItemTagRepository(Repository[ItemTag]):
     model_type = ItemTag
 
-    async def _existing(
-        self, workspace_id: UUID, item_ids: Sequence[UUID], tag_id: UUID
-    ) -> dict[UUID, ItemTag]:
-        return {
-            assignment.item_id: assignment
-            for assignment in await self.session.scalars(
-                select(ItemTag)
-                .where(
-                    ItemTag.workspace_id == workspace_id,
-                    ItemTag.item_id.in_(item_ids),
-                    ItemTag.tag_id == tag_id,
-                )
-                .execution_options(populate_existing=True)
-            )
-        }
-
     async def assign_many(
         self, workspace_id: UUID, item_ids: Sequence[UUID], tag_id: UUID
-    ) -> tuple[dict[UUID, ItemTag], set[UUID]]:
+    ) -> set[UUID]:
         """Add links for authorized roots; report only this call's new links."""
         ordered = sorted(set(item_ids))
-        resolved: dict[UUID, ItemTag] = {}
-        for offset in range(0, len(ordered), 500):
-            resolved.update(
-                await self._existing(workspace_id, ordered[offset : offset + 500], tag_id)
-            )
-        missing = sorted(set(ordered) - resolved.keys())
         created_ids: set[UUID] = set()
-        if not missing:
-            return resolved, created_ids
+        if not ordered:
+            return created_ids
         # Roll back every chunk if a non-identity constraint fails. The caller
         # still owns the surrounding transaction and any authorized root locks.
         async with self.session.begin_nested():
-            for offset in range(0, len(missing), 500):
-                pending = set(missing[offset : offset + 500])
-                while pending:
-                    try:
-                        async with self.session.begin_nested():
-                            # ORM insertion tracks new identities across nested
-                            # rollback; INSERT ... RETURNING ORM loads do not.
-                            created = await self.add_many([
-                                ItemTag(workspace_id=workspace_id, item_id=item_id, tag_id=tag_id)
-                                for item_id in sorted(pending)
-                            ])
-                    except IntegrityError:
-                        installed = await self._existing(workspace_id, sorted(pending), tag_id)
-                        if not installed:
-                            raise
-                        resolved.update(installed)
-                        pending -= installed.keys()
-                    else:
-                        resolved.update({assignment.item_id: assignment for assignment in created})
-                        created_ids.update(pending)
-                        break
-        return resolved, created_ids
+            for offset in range(0, len(ordered), 500):
+                created_ids.update(
+                    await self.session.scalars(
+                        conflict_insert(self.session, ItemTag)
+                        .values([
+                            {"workspace_id": workspace_id, "item_id": item_id, "tag_id": tag_id}
+                            for item_id in ordered[offset : offset + 500]
+                        ])
+                        .on_conflict_do_nothing(index_elements=[ItemTag.item_id, ItemTag.tag_id])
+                        .returning(ItemTag.item_id)
+                    )
+                )
+        return created_ids
 
     async def remove(self, workspace_id: UUID, item_id: UUID, tag_id: UUID) -> bool:
         return (
