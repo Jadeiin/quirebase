@@ -21,7 +21,8 @@ parameterized node IDs, so a passed selected schedule does not imply all possibl
 | `workspace-archive-write`, `project-archive-write` | Archive / discussion write | Admitted Workspace write finishes before archive; Workspace or Project archive commits before a waiting writer rechecks lifecycle |
 | `actor-revocation`, `governance-demotion` | User deactivation or admin demotion / authorized mutations | Invitation, import confirmation, ownership transfer, governance and password boundaries; import explicitly observes the User → Workspace wait chain |
 | `ownership-transfer`, `membership-identity` | Two ownership transfers or rejoins | One authoritative Workspace owner; one current membership; losing authority is rechecked |
-| `participation-recheck`, `relation-idempotency` | Project join/leave, mode switch, member suspension or duplicate association additions | Participation follows current mode/membership; independent guards remain shared; duplicate additions create one relation. Leave committed before a duplicate Join's reread causes a conflict, leaves no selection and adds no Join Audit Event; an explicit fresh Join succeeds. A competing single insert between a bulk read and insertion retains all requested links and counts only newly added links |
+| `participation-recheck`, `relation-idempotency` | Project join/leave, mode switch, member suspension or duplicate association additions | Participation follows current mode/membership; independent guards remain shared; duplicate additions create one relation. Leave committed before a duplicate Join's reread causes a conflict, leaves no selection and adds no Join Audit Event; an explicit fresh Join succeeds. A competing single insert between a bulk read and insertion retains all requested links and counts only newly added links. Removing a duplicate before bulk Tag recovery returns a domain conflict with no partial links or bulk Audit Event; an explicit retry succeeds |
+| `upload-finalization` | Upload finalizers for different Items / Workspace archive | Ordinary and Graphical Abstract finalizer guards share the Workspace root; a second Item proceeds while the first transaction remains open. Archive waits for that guard, and finalization rechecks authority after archive commits |
 | `annotation-recheck`, `assignment-item-delete` | Reply/scope change or assignment / moderation, detachment or Item deletion | Waiting mutation rechecks lineage and authority; integrity failures become domain errors |
 | `annotation-version` | Two Annotation or Reply edits with version 1 | First edit held before commit; second edit waits, then receives version 2 conflict; one successful edit and one audit event |
 | `metadata-version` | Two metadata replacements with version 1 | Both winner orders; exactly one version 2 result; loser receives `VersionConflict`; public Item view, full-text search and audit agree |
@@ -34,9 +35,8 @@ Search and Audit interfaces. They use native PostgreSQL search tables rather tha
 
 The report's `evidence_enabled` flag distinguishes scenarios using the shared harness from legacy
 tests with local synchronization. Legacy results are included in the matrix but do not gain SQL/lock
-evidence automatically. In particular, the existing upload-finalizer test exercises a private
-authorization helper, not a real DBOS restart; neither it nor the in-memory durable client proves
-crash recovery.
+evidence automatically. The upload-finalizer guard tests exercise a private authorization helper;
+neither those tests nor the in-memory durable client prove crash recovery through a real DBOS restart.
 
 `test_durable_recovery.py` separately exercises real process death with DBOS. It stops the PDF
 Import executor after completed extraction/database checkpoints, changes live descriptor metadata

@@ -52,6 +52,7 @@ from quirebase.library import (
     ItemMetadata,
     ItemMetadataData,
     ItemSection,
+    TagConflict,
     add_discussion_message,
     add_existing_tag_to_item,
     add_project_discussion_message,
@@ -61,6 +62,7 @@ from quirebase.library import (
     item_sections,
     moderate_project_discussion_message,
     open_item_section,
+    remove_tag_from_item,
     revise_item_metadata,
     search_library,
     stage_import_batch,
@@ -70,6 +72,7 @@ from quirebase.library.citations import CitationStyleService, create_custom_cita
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
+    AttachmentRole,
     AuditEvent,
     Author,
     CitationStyle,
@@ -1280,6 +1283,48 @@ async def test_upload_finalizer_and_deactivation_follow_user_workspace_lock_orde
     assert outcomes == ["finalized", "deactivated"]
 
 
+@pytest.mark.concurrency_case("upload-finalization")
+@pytest.mark.parametrize("role", [None, AttachmentRole.graphical_abstract])
+async def test_upload_finalizers_for_different_items_share_workspace_guard(
+    postgres_sessions, postgres_race, role
+):
+    async with postgres_sessions() as db:
+        actor = await _user(db, "parallel-upload-owner")
+        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
+        items = [
+            Item(workspace_id=workspace_id, title=f"Parallel upload {i}", created_by=actor_id)
+            for i in range(2)
+        ]
+        db.add_all(items)
+        await db.commit()
+        item_ids = [item.id for item in items]
+
+    async def finalize_second():
+        async with postgres_race.session("second") as db:
+            await _lock_upload_authority(db, actor_id, workspace_id, item_ids[1], role=role)
+            await db.commit()
+            return "finalized"
+
+    async def archive():
+        async with postgres_race.session("archive") as db:
+            actor = await db.get(User, actor_id)
+            await archive_workspace(db, actor, workspace_id)
+
+    async with postgres_race.session("first") as db:
+        await _lock_upload_authority(db, actor_id, workspace_id, item_ids[0], role=role)
+        postgres_race.start("second", finalize_second())
+        # A second Item can finalize while the first transaction remains open.
+        assert await postgres_race.join("second") == "finalized"
+        postgres_race.start("archive", archive())
+        await postgres_race.wait_blocked("archive", "first")
+        await db.commit()
+        await postgres_race.join("archive")
+
+    async with postgres_race.session("rejected") as db:
+        with pytest.raises(ValueError, match="no longer writable"):
+            await _lock_upload_authority(db, actor_id, workspace_id, item_ids[1], role=role)
+
+
 @pytest.mark.concurrency_case("actor-revocation")
 async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_order(
     postgres_sessions,
@@ -2005,6 +2050,100 @@ async def test_association_batch_recovers_a_competing_insert_without_losing_othe
         action = "tag.add" if kind == "tag" else "project.item.add"
         assert (
             await db.scalar(select(func.count(AuditEvent.id)).where(AuditEvent.action == action))
+            == 1
+        )
+
+
+@pytest.mark.concurrency_case("relation-idempotency")
+async def test_bulk_tag_add_reports_conflict_when_duplicate_disappears_before_recovery(
+    postgres_sessions, postgres_race, monkeypatch
+):
+    async with postgres_sessions() as db:
+        actor = await _user(db, "bulk-tag-remove-owner")
+        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
+        items = [
+            Item(workspace_id=workspace_id, title=f"Tag race {i}", created_by=actor_id)
+            for i in range(2)
+        ]
+        tag = Tag(workspace_id=workspace_id, name="Disappearing duplicate", created_by=actor_id)
+        db.add_all([*items, tag])
+        await db.commit()
+        item_ids, tag_id = [item.id for item in items], tag.id
+
+    checked, resume_insert = asyncio.Event(), asyncio.Event()
+    recovering, resume_recovery = asyncio.Event(), asyncio.Event()
+
+    async def batch():
+        async with postgres_race.session("batch") as db:
+            scalars = db.scalars
+            reads = 0
+
+            async def paused_scalars(statement, *args, **kwargs):
+                nonlocal reads
+                association_read = (
+                    statement.is_select
+                    and statement.column_descriptions[0].get("entity") is ItemTag
+                )
+                if association_read:
+                    reads += 1
+                    if reads == 2:
+                        recovering.set()
+                        postgres_race.note("association.recovery", actor="batch")
+                        await asyncio.wait_for(resume_recovery.wait(), timeout=5)
+                result = await scalars(statement, *args, **kwargs)
+                if association_read and reads == 1:
+                    assert result.all() == []
+                    checked.set()
+                    await asyncio.wait_for(resume_insert.wait(), timeout=5)
+                return result
+
+            monkeypatch.setattr(db, "scalars", paused_scalars)
+            actor = await db.get(User, actor_id)
+            try:
+                await apply_bulk_item_action(
+                    db, actor, workspace_id, item_ids, "add_tag", tag_name=tag.name
+                )
+            except TagConflict as error:
+                assert isinstance(error.__cause__, IntegrityError)
+                # All new links roll back and the caller transaction stays usable.
+                assert await db.scalar(select(func.count()).select_from(ItemTag)) == 0
+                assert (
+                    await db.scalar(
+                        select(func.count(AuditEvent.id)).where(
+                            AuditEvent.action == "library.bulk.add_tag"
+                        )
+                    )
+                    == 0
+                )
+                await db.rollback()
+                return "conflict"
+            return "added"
+
+    postgres_race.start("batch", batch())
+    await asyncio.wait_for(checked.wait(), timeout=5)
+    async with postgres_race.session("single") as db:
+        actor = await db.get(User, actor_id)
+        await add_existing_tag_to_item(db, actor, workspace_id, item_ids[0], tag_id)
+    resume_insert.set()
+    await asyncio.wait_for(recovering.wait(), timeout=5)
+    try:
+        async with postgres_race.session("remove") as db:
+            actor = await db.get(User, actor_id)
+            await remove_tag_from_item(db, actor, workspace_id, item_ids[0], tag_id)
+    finally:
+        resume_recovery.set()
+    assert await postgres_race.join("batch") == "conflict"
+
+    async with postgres_race.session("retry") as db:
+        actor = await db.get(User, actor_id)
+        await apply_bulk_item_action(
+            db, actor, workspace_id, item_ids, "add_tag", tag_name=tag.name
+        )
+        assert set(await db.scalars(select(ItemTag.item_id))) == set(item_ids)
+        assert (
+            await db.scalar(
+                select(func.count(AuditEvent.id)).where(AuditEvent.action == "library.bulk.add_tag")
+            )
             == 1
         )
 

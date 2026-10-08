@@ -64,8 +64,10 @@ async def _lock_upload_authority(
     )
     if actor is None:
         raise ValueError("Item is no longer writable")
+    # Freeze authority against exclusive governance while allowing finalizers
+    # for unrelated Items to hold the same Workspace guard through commit.
     workspace = await db.scalar(
-        select(Workspace).where(Workspace.id == workspace_id).with_for_update()
+        select(Workspace).where(Workspace.id == workspace_id).with_for_update(read=True)
     )
     if workspace is None:
         raise ValueError("Workspace is no longer writable")

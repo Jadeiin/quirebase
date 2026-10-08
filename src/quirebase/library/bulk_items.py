@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import (
@@ -24,7 +25,7 @@ from quirebase.documents.bundles import (
     assemble_document_bundle,
 )
 from quirebase.library._persistence import ItemTagRepository
-from quirebase.library.tags import get_or_create_tag
+from quirebase.library.tags import TagConflict, get_or_create_tag
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -74,9 +75,16 @@ async def apply_bulk_item_action(
         for item in sorted(items, key=lambda candidate: candidate.id):
             await require_editable_item(db, user, workspace_id, item.id)
         tag_record = await get_or_create_tag(db, user, workspace_id, tag_name)
-        await ItemTagRepository(session=db).assign_many(
-            workspace_id, [item.id for item in items], tag_record.id
-        )
+        try:
+            await ItemTagRepository(session=db).assign_many(
+                workspace_id, [item.id for item in items], tag_record.id
+            )
+        except IntegrityError as error:
+            # A competing duplicate may be removed before savepoint recovery
+            # can reload it. The repository has rolled back every new link.
+            raise TagConflict(
+                "tag associations changed concurrently; retry the bulk action"
+            ) from error
         audit_action = "library.bulk.add_tag"
     elif action in ("delete_items", "delete"):
         await require_workspace_action(db, user, workspace_id, ResourceAction.item_delete)

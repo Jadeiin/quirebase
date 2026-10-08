@@ -4,6 +4,7 @@ import asyncio
 import json
 import zipfile
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pymupdf
@@ -12,6 +13,7 @@ from advanced_alchemy.types import FileObject
 from app_helpers import json_payload
 from import_helpers import pdf_import_batch_data
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from storage_helpers import collect_body, local_object_path, put_pdf_object
 from test_http import authenticated_async_client
 from workspace_helpers import (
@@ -25,11 +27,13 @@ from quirebase.core.errors import PermissionDenied, ProjectLifecycleError
 from quirebase.core.storage import ObjectMetadata, ObjectResponse
 from quirebase.documents import create_item_document_bundle
 from quirebase.library import apply_bulk_item_action, download_selected_item_documents
+from quirebase.library._persistence import ItemTagRepository
 from quirebase.models import (
     AuditEvent,
     FileRevision,
     ImportBatch,
     Item,
+    ItemTag,
     PdfAnnotation,
     Project,
     ProjectItem,
@@ -224,6 +228,45 @@ async def test_bulk_action_records_single_bulk_audit_event(
     assert event is not None
     assert event.detail["item_ids"] == json_payload([item.id])
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_bulk_tag_integrity_race_returns_http_conflict(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+
+    monkeypatch.setattr(
+        ItemTagRepository,
+        "assign_many",
+        AsyncMock(
+            side_effect=IntegrityError(
+                "INSERT INTO item_tags", {}, Exception("duplicate disappeared")
+            )
+        ),
+    )
+    try:
+        response = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/items/bulk",
+            json=json_payload({
+                "item_ids": [item.id],
+                "action": "add_tag",
+                "tag_name": "Concurrent Tag",
+            }),
+        )
+        assert response.status_code == 409
+        assert response.json()["code"] == "tag_conflict"
+        assert await async_db.scalar(select(ItemTag)) is None
+        assert (
+            await async_db.scalar(
+                select(AuditEvent).where(AuditEvent.action == "library.bulk.add_tag")
+            )
+            is None
+        )
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio
