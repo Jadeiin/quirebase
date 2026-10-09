@@ -436,7 +436,7 @@ async function selectReaderAnnotation(page: Page, id: string) {
 			.provides()
 			.forDocument('revision-1');
 		annotations.deselectAnnotation();
-		annotations.selectAnnotation(0, annotationId);
+		annotations.selectAnnotation(0, `annotation:${annotationId}`);
 		return annotations.getSelectedAnnotation()?.object.id ?? null;
 	}, id);
 }
@@ -452,7 +452,7 @@ for (const projectId of ['project-1', 'project-archived']) {
 		await setAnnotationSource(page, projectId === 'project-1' ? 'Shared' : 'Archived');
 		await expect
 			.poll(() => selectReaderAnnotation(page, 'annotation-private'))
-			.toBe('annotation-private');
+			.toBe('annotation:annotation-private');
 		const deleteButton = page.locator('[data-epdf-i="delete-annotation"] button');
 		await expect(deleteButton).toBeVisible();
 		await expect(deleteButton).toBeEnabled();
@@ -484,9 +484,10 @@ test('PDF restores creation tools after remounting in a read-only Project', asyn
 	await refocusReader(page);
 	await expect.poll(() => state.contentRequests).toBeGreaterThan(loadedContentRequests);
 	await expect(page.getByRole('button', { name: 'Document Menu' })).toBeVisible();
-	await page.getByText('Displayed annotation sources', { exact: true }).click();
-	await expect(page.locator('details').getByLabel('Archived', { exact: true })).toBeChecked();
-	await page.getByText('Displayed annotation sources', { exact: true }).click();
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await expect(page.getByRole('checkbox', { name: 'Archived', exact: true })).toBeChecked();
+	await sources.click();
 	await expect(page.getByLabel('New annotation source')).toHaveValue('');
 	await expectAnnotationMode(page, true);
 });

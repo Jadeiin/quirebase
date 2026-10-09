@@ -924,7 +924,7 @@ test('Project Item pages recover after removing the last Item and support search
 	});
 	await page.goto('/workspace/workspace-1/projects/project-1');
 	const pager = page.getByRole('navigation', { name: 'Items pagination' });
-	await pager.getByRole('button', { name: 'Next', exact: true }).click();
+	await pager.getByRole('button', { name: 'Next page', exact: true }).click();
 	const last = page.getByRole('link', { name: 'Assigned Item 25', exact: true }).locator('..');
 	await expect(last).toBeVisible();
 	await last.getByRole('button', { name: 'Remove', exact: true }).click();

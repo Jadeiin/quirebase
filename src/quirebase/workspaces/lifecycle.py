@@ -20,7 +20,7 @@ from quirebase.core.workflows import (
     durable_operations,
     object_reservation_attributes,
 )
-from quirebase.documents import delete_workspace_annotation_identities, snapshot_workspace_documents
+from quirebase.documents import snapshot_workspace_documents
 from quirebase.models import User, Workspace, WorkspaceState
 from quirebase.search import search_index
 
@@ -160,6 +160,5 @@ async def permanently_delete_workspace(
     # every Workspace-owned aggregate is connected by cascading foreign keys.
     await db.delete(workspace)
     await db.flush()
-    await delete_workspace_annotation_identities(db, documents)
     await db.commit()
     return workspace

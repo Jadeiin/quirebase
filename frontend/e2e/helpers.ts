@@ -158,10 +158,10 @@ export function annotationList(
 }
 
 export async function setAnnotationSource(page: Page, name: string, checked = true) {
-	const sources = page.locator('details').filter({ hasText: 'Displayed annotation sources' });
-	await sources.locator('summary').click();
-	await sources.getByLabel(name, { exact: true }).setChecked(checked);
-	await sources.locator('summary').click();
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await page.getByRole('checkbox', { name, exact: true }).setChecked(checked);
+	await sources.click();
 }
 
 export function directoryPage(items: unknown[], route: Route) {

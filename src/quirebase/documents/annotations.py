@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -45,7 +45,6 @@ from quirebase.models import (
     FileRevision,
     FileRevisionProcessingState,
     PdfAnnotation,
-    PdfAnnotationObject,
     PdfAnnotationReply,
     Project,
     ProjectItem,
@@ -89,58 +88,6 @@ async def _lock_annotation_project_item(
     if project_item is None:
         raise ResourceUnavailable("ProjectItem not found")
     return project_item
-
-
-async def delete_project_item_annotations(
-    db: AsyncSession, workspace_id: UUID, project_item_id: UUID
-) -> None:
-    """Remove a detached ProjectItem's annotations, replies and UUID identities.
-
-    The caller holds an exclusive lock on the ProjectItem until commit. Locking
-    its annotations also fences concurrent reply insertion through their FK.
-    """
-    annotation_ids = list(
-        (
-            await db.scalars(
-                select(PdfAnnotation.id)
-                .where(
-                    PdfAnnotation.workspace_id == workspace_id,
-                    PdfAnnotation.project_item_id == project_item_id,
-                )
-                .with_for_update()
-            )
-        ).all()
-    )
-    for start in range(0, len(annotation_ids), 500):
-        batch = annotation_ids[start : start + 500]
-        reply_ids = list(
-            (
-                await db.scalars(
-                    select(PdfAnnotationReply.id).where(
-                        PdfAnnotationReply.workspace_id == workspace_id,
-                        PdfAnnotationReply.annotation_id.in_(batch),
-                    )
-                )
-            ).all()
-        )
-        await db.execute(
-            delete(PdfAnnotationReply).where(
-                PdfAnnotationReply.workspace_id == workspace_id,
-                PdfAnnotationReply.annotation_id.in_(batch),
-            )
-        )
-        await db.execute(
-            delete(PdfAnnotation).where(
-                PdfAnnotation.workspace_id == workspace_id,
-                PdfAnnotation.id.in_(batch),
-            )
-        )
-        identity_ids = batch + reply_ids
-        for identity_start in range(0, len(identity_ids), 500):
-            identities = identity_ids[identity_start : identity_start + 500]
-            await db.execute(
-                delete(PdfAnnotationObject).where(PdfAnnotationObject.id.in_(identities))
-            )
 
 
 @dataclass(frozen=True)
@@ -762,7 +709,7 @@ async def create_document_annotation(
             db.add(record)
             await db.flush()
     except IntegrityError as error:
-        raise VersionConflict(message="annotation object ID already exists") from error
+        raise VersionConflict(message="annotation ID already exists") from error
     record_event(
         db,
         user.id,
@@ -1129,7 +1076,7 @@ async def create_annotation_reply(
             db.add(record)
             await db.flush()
     except IntegrityError as error:
-        raise VersionConflict(message="annotation object ID already exists") from error
+        raise VersionConflict(message="annotation reply ID already exists") from error
     record_event(
         db,
         locked_user.id,

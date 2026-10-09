@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
-from sqlalchemy import event, select, update
+from sqlalchemy import delete, event, select, update
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.audit import record_event
@@ -17,8 +17,9 @@ from quirebase.models import (
     ImportBatch,
     Item,
     PdfAnnotation,
-    PdfAnnotationObject,
     PdfAnnotationReply,
+    Project,
+    ProjectItem,
     User,
 )
 
@@ -26,7 +27,10 @@ pytestmark = pytest.mark.shared_postgres
 
 
 @pytest.mark.anyio
-async def test_client_annotation_ids_keep_one_native_uuid_session_identity(persistence_db):
+@pytest.mark.parametrize("delete_target", ["annotation", "revision", "project_item"])
+async def test_annotation_and_reply_share_uuid_and_follow_database_cascades(
+    persistence_db, delete_target
+):
     db = persistence_db
     actor = User(username="annotation-identity", password_hash="unused")
     db.add(actor)
@@ -50,15 +54,22 @@ async def test_client_annotation_ids_keep_one_native_uuid_session_identity(persi
         ),
     )
     db.add(revision)
+    project = Project(workspace_id=workspace.id, name="Annotations", created_by=actor.id)
+    db.add(project)
+    await db.flush()
+    project_item = ProjectItem(
+        workspace_id=workspace.id, project_id=project.id, item_id=item.id, added_by=actor.id
+    )
+    db.add(project_item)
     await db.commit()
     inserted = []
 
     @event.listens_for(db.sync_session, "pending_to_persistent")
     def retain_inserted_identity(_session, instance):
-        if isinstance(instance, (PdfAnnotation, PdfAnnotationReply, PdfAnnotationObject)):
+        if isinstance(instance, (PdfAnnotation, PdfAnnotationReply)):
             inserted.append(instance)
 
-    annotation_id, reply_id = uuid4(), uuid4()
+    annotation_id = reply_id = uuid4()
     annotation = await create_document_annotation(
         db,
         actor,
@@ -69,6 +80,8 @@ async def test_client_annotation_ids_keep_one_native_uuid_session_identity(persi
             "revision_id": revision.id,
             "page_index": 0,
             "kind": "note",
+            "scope": "project",
+            "project_id": project.id,
             "body": "Original note",
             "payload": {"type": "note", "rect": {"x": 0, "y": 0, "width": 10, "height": 10}},
         }),
@@ -83,7 +96,7 @@ async def test_client_annotation_ids_keep_one_native_uuid_session_identity(persi
     )
     assert str(annotation["id"]) == str(annotation_id)
     assert str(reply["id"]) == str(reply_id)
-    assert len(inserted) == 4
+    assert len(inserted) == 2
     for instance in inserted:
         assert isinstance(instance.id, UUID) and instance.id.version == 4
         loaded = await db.scalar(select(type(instance)).where(type(instance).id == instance.id))
@@ -93,9 +106,23 @@ async def test_client_annotation_ids_keep_one_native_uuid_session_identity(persi
         len([
             value
             for value in db.identity_map.values()
-            if isinstance(value, (PdfAnnotation, PdfAnnotationReply, PdfAnnotationObject))
+            if isinstance(value, (PdfAnnotation, PdfAnnotationReply))
         ])
-        == 4
+        == 2
+    )
+    model, identity = {
+        "annotation": (PdfAnnotation, annotation_id),
+        "revision": (FileRevision, revision.id),
+        "project_item": (ProjectItem, project_item.id),
+    }[delete_target]
+    await db.execute(delete(model).where(model.id == identity))
+    await db.commit()
+    assert (
+        await db.scalar(select(PdfAnnotation.id).where(PdfAnnotation.id == annotation_id)) is None
+    )
+    assert (
+        await db.scalar(select(PdfAnnotationReply.id).where(PdfAnnotationReply.id == reply_id))
+        is None
     )
 
 

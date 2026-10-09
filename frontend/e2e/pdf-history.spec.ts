@@ -4,12 +4,14 @@ import { minimalPdf, mockSession, annotationList, setAnnotationSource } from './
 
 async function mockReplyReader(
 	page: Page,
-	options: { deferRootDelete?: boolean; withReply?: boolean } = {}
+	options: { deferRootDelete?: boolean; withReply?: boolean; sharedUUID?: boolean } = {}
 ) {
 	await mockSession(page);
+	const annotationId = options.sharedUUID ? '6ca651e8-b815-45e8-8e73-20db3e24d531' : 'annotation-1';
+	const replyId = options.sharedUUID ? annotationId : 'reply-1';
 	const reply = {
-		id: 'reply-1',
-		annotation_id: 'annotation-1',
+		id: replyId,
+		annotation_id: annotationId,
 		body: 'Owned reply',
 		version: 1,
 		author_display_name: 'reader',
@@ -18,7 +20,7 @@ async function mockReplyReader(
 		updated_at: '2026-09-16T00:00:00Z'
 	};
 	const annotation = {
-		id: 'annotation-1',
+		id: annotationId,
 		revision_id: 'revision-1',
 		page_index: 0,
 		kind: 'note',
@@ -49,6 +51,8 @@ async function mockReplyReader(
 		releaseRootDelete = resolve;
 	});
 	const state = {
+		annotationId,
+		replyId,
 		deleted: options.withReply === false,
 		rootDeleted: false,
 		rootDeletePending: false,
@@ -144,6 +148,39 @@ async function readerHistoryAction(page: Page, action: 'undo' | 'redo' = 'undo')
 	}, action);
 }
 
+test('PDF keeps an Annotation and Reply with the same UUID separate during delete and Undo', async ({
+	page
+}) => {
+	const state = await mockReplyReader(page, { sharedUUID: true });
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeAttached();
+	await page.getByRole('button', { name: 'Comment', exact: true }).click();
+	await expect(page.getByText('Owned annotation', { exact: true })).toBeVisible();
+	await expect(page.getByText('Owned reply', { exact: true })).toBeVisible();
+	await page.locator('embedpdf-container').evaluate(async (element, id) => {
+		const registry = await (element as HTMLElement & { registry: Promise<PluginRegistry> })
+			.registry;
+		const scope = registry
+			.getPlugin<AnnotationPlugin>('annotation')!
+			.provides()
+			.forDocument('revision-1');
+		const reply = scope.getAnnotationById(`reply:${id}`)!;
+		if (reply.object.inReplyToId !== `annotation:${id}`) throw new Error('Incorrect Reply parent');
+		scope.deleteAnnotation(0, reply.object.id);
+	}, state.replyId);
+	await expect(page.getByText('Saved', { exact: true })).toBeAttached();
+	await expect(page.getByText('Owned reply', { exact: true })).toHaveCount(0);
+	await expect(page.getByText('Owned annotation', { exact: true })).toBeVisible();
+	expect(state.rootDeleted).toBe(false);
+	await readerHistoryAction(page);
+	await expect.poll(() => state.deleted).toBe(false);
+	await expect(page.getByText('Owned reply', { exact: true })).toBeVisible();
+	expect(state.replyRequests).toEqual([
+		`DELETE /api/v1/workspaces/workspace-1/items/item-1/annotations/${state.annotationId}/replies/${state.replyId}?version=1`,
+		`POST /api/v1/workspaces/workspace-1/items/item-1/annotations/${state.annotationId}/replies/${state.replyId}/restore?version=2`
+	]);
+});
+
 for (const sources of ['unchanged', 'add-project', 'hide-private']) {
 	test(`PDF restores deleted replies through Undo after changing sources: ${sources}`, async ({
 		page
@@ -160,7 +197,7 @@ for (const sources of ['unchanged', 'add-project', 'hide-private']) {
 				.getPlugin<AnnotationPlugin>('annotation')!
 				.provides()
 				.forDocument('revision-1')
-				.deleteAnnotation(0, 'reply-1');
+				.deleteAnnotation(0, 'reply:reply-1');
 		});
 		await expect(page.getByText('Saved', { exact: true })).toBeAttached();
 		await expect(page.getByText('Owned reply', { exact: true })).toHaveCount(0);
@@ -203,7 +240,7 @@ for (const withReply of [false, true]) {
 				.getPlugin<AnnotationPlugin>('annotation')!
 				.provides()
 				.forDocument('revision-1')
-				.deleteAnnotation(0, 'annotation-1');
+				.deleteAnnotation(0, 'annotation:annotation-1');
 		});
 		await expect.poll(() => state.rootDeletePending).toBe(true);
 		await readerHistoryAction(page); // Undo while the DELETE response is still held.

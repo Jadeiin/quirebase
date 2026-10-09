@@ -10,9 +10,11 @@ Create revisions from the repository root and never hand-write revision identifi
     uv run alchemy --config quirebase.core.database.database_config make-migrations -m "add widget state" --no-prompt
 
 Include the generated file in the change. Alembic assigns a random 12-character revision
-identifier, which fits the `alembic_version.version_num` column it creates. Fill in the
-upgrade/downgrade bodies where autogenerate cannot see the change, such as the
-dialect-specific full-text search tables.
+identifier, which fits the `alembic_version.version_num` column it creates. The initial business
+schema is generated entirely from metadata. Dialect-specific full-text search projections are
+maintained in a separate second revision, so they do not require edits to the generated initial
+schema. Create a revision for changes outside metadata with `make-migrations --no-autogenerate`,
+then fill in only its schema/data upgrade/downgrade bodies.
 
 Check an up-to-date database for model drift with:
 

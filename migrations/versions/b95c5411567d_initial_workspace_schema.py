@@ -1,8 +1,8 @@
 """initial workspace schema
 
-Revision ID: 8a60bab5df5d
+Revision ID: b95c5411567d
 Revises:
-Create Date: 2026-10-09 16:31:16.893539
+Create Date: 2026-10-09 20:08:03.974700
 
 """
 
@@ -42,7 +42,7 @@ sa.TOTPSecret = TOTPSecret
 sa.OneTimeCode = OneTimeCode
 
 # revision identifiers, used by Alembic.
-revision = '8a60bab5df5d'
+revision = 'b95c5411567d'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -100,13 +100,6 @@ def schema_upgrades() -> None:
     with op.batch_alter_table('object_integrity_scans', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_object_integrity_scans_checked_at'), ['checked_at'], unique=False)
 
-    op.create_table('pdf_annotation_objects',
-    sa.Column('id', sa.GUID(length=16), nullable=False),
-    sa.Column('object_type', sa.Enum('annotation', 'reply', name='annotation_object_type', native_enum=False), nullable=False),
-    sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
-    sa.CheckConstraint("object_type IN ('annotation', 'reply')", name=op.f('ck_pdf_annotation_objects_type')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_pdf_annotation_objects'))
-    )
     op.create_table('users',
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('username', sa.String(length=120), nullable=False),
@@ -628,7 +621,6 @@ def schema_upgrades() -> None:
     sa.CheckConstraint("kind IN ('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow')", name=op.f('ck_pdf_annotations_kind')),
     sa.CheckConstraint("scope IN ('private', 'project')", name=op.f('ck_pdf_annotations_scope')),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], name=op.f('fk_pdf_annotations_author_id_users'), ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['id'], ['pdf_annotation_objects.id'], name='fk_pdf_annotations_object_id'),
     sa.ForeignKeyConstraint(['moderated_by'], ['users.id'], name=op.f('fk_pdf_annotations_moderated_by_users'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['workspace_id', 'file_revision_id', 'item_id'], ['file_revisions.workspace_id', 'file_revisions.id', 'file_revisions.item_id'], name='fk_pdf_annotations_revision_item_workspace', ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['workspace_id', 'project_item_id', 'item_id'], ['project_items.workspace_id', 'project_items.id', 'project_items.item_id'], name='fk_pdf_annotations_project_item_revision_item', ondelete='CASCADE'),
@@ -654,7 +646,6 @@ def schema_upgrades() -> None:
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], name=op.f('fk_pdf_annotation_replies_author_id_users'), ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['id'], ['pdf_annotation_objects.id'], name='fk_pdf_annotation_replies_object_id'),
     sa.ForeignKeyConstraint(['workspace_id', 'annotation_id'], ['pdf_annotations.workspace_id', 'pdf_annotations.id'], name='fk_pdf_annotation_replies_annotation_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_pdf_annotation_replies'))
     )
@@ -665,54 +656,8 @@ def schema_upgrades() -> None:
 
     # ### end Alembic commands ###
 
-    if op.get_bind().dialect.name == "postgresql":
-        op.execute(
-            """
-            CREATE TABLE item_search (
-                item_id uuid PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-                document tsvector NOT NULL
-            )
-            """
-        )
-        op.execute("CREATE INDEX ix_item_search_document ON item_search USING gin(document)")
-        op.execute(
-            """
-            CREATE TABLE revision_search (
-                revision_id uuid PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,
-                item_id uuid NOT NULL,
-                document tsvector NOT NULL
-            )
-            """
-        )
-        op.execute(
-            "CREATE INDEX ix_revision_search_document ON revision_search USING gin(document)"
-        )
-        op.execute("CREATE INDEX ix_revision_search_item_id ON revision_search(item_id)")
-    else:
-        op.execute(
-            """
-            CREATE VIRTUAL TABLE item_search USING fts5(
-                item_id UNINDEXED,
-                content,
-                tokenize='unicode61 remove_diacritics 2'
-            )
-            """
-        )
-        op.execute(
-            """
-            CREATE VIRTUAL TABLE revision_search USING fts5(
-                revision_id UNINDEXED,
-                item_id UNINDEXED,
-                content,
-                tokenize='unicode61 remove_diacritics 2'
-            )
-            """
-        )
-
 def schema_downgrades() -> None:
     """schema downgrade migrations go here."""
-    op.execute("DROP TABLE IF EXISTS revision_search")
-    op.execute("DROP TABLE IF EXISTS item_search")
     # ### commands auto generated by Alembic - please adjust! ###
     with op.batch_alter_table('pdf_annotation_replies', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_pdf_annotation_replies_workspace_id'))
@@ -859,7 +804,6 @@ def schema_downgrades() -> None:
         batch_op.drop_index(batch_op.f('ix_users_username'))
 
     op.drop_table('users')
-    op.drop_table('pdf_annotation_objects')
     with op.batch_alter_table('object_integrity_scans', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_object_integrity_scans_checked_at'))
 

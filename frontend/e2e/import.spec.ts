@@ -125,6 +125,6 @@ test('Import preview paginates restored batches', async ({ page }) => {
 	await page.goto('/workspace/workspace-1/import?batch=batch-many');
 	await expect(page.getByText('Record 1', { exact: true })).toBeVisible();
 	await expect(page.getByText('Record 21', { exact: true })).toHaveCount(0);
-	await page.getByRole('button', { name: 'Next' }).click();
+	await page.getByRole('button', { name: 'Next page' }).click();
 	await expect(page.getByText('Record 21', { exact: true })).toBeVisible();
 });

@@ -97,7 +97,11 @@ function harness() {
 		onStatus: (status) => statuses.push(status)
 	});
 	sync.attach({ forDocument: () => scope } as unknown as AnnotationCapability);
-	async function event(type: 'create' | 'delete', record: AnnotationView, replyId?: string) {
+	async function event(
+		type: 'create' | 'update' | 'delete',
+		record: AnnotationView,
+		replyId?: string
+	) {
 		const canonical = canonicalAnnotationFromView(record);
 		const object = replyId
 			? adapter.vendorReplyFromCanonical(
@@ -105,14 +109,15 @@ function harness() {
 					canonical.replies.find((r) => r.id === replyId)!
 				)
 			: adapter.vendorFromCanonical(canonical);
-		if (type === 'create') objects.set(object.id, object);
-		else objects.delete(object.id);
+		if (type === 'delete') objects.delete(object.id);
+		else objects.set(object.id, object);
 		sync.handleEvent({
 			type,
 			annotation: object,
 			pageIndex: 0,
 			documentId: 'revision-1',
-			committed: false
+			committed: false,
+			...(type === 'update' ? { patch: { contents: object.contents } } : {})
 		} as AnnotationEvent);
 		await sync.flush();
 	}
@@ -120,6 +125,89 @@ function harness() {
 }
 
 describe('reader annotation reconciliation', () => {
+	it('isolates a root and reply sharing a UUID throughout edit, delete, and Undo', async () => {
+		const { sync, objects, event } = harness();
+		const record = annotation('6ca651e8-b815-45e8-8e73-20db3e24d531');
+		const child = { ...reply(record), id: record.id };
+		record.replies = [child];
+		const rootObjectId = adapter.annotationObjectId(record.id);
+		const replyObjectId = adapter.replyObjectId(child.id);
+		request.mockResolvedValueOnce(list([record]));
+		await sync.load(privateSource);
+		sync.handleEvent({ type: 'loaded', documentId: 'revision-1', total: 0 });
+		expect(objects.size).toBe(2);
+		expect(objects.get(replyObjectId)?.inReplyToId).toBe(rootObjectId);
+		expect(objects.get(rootObjectId)?.flags).not.toContain('readOnly');
+		expect(objects.get(replyObjectId)?.flags).not.toContain('readOnly');
+
+		child.body = 'Edited reply';
+		request.mockResolvedValueOnce({ ...child, version: 2 });
+		await event('update', record, child.id);
+		expect(request.mock.calls.at(-1)?.[2]).toMatchObject({
+			params: { path: { annotation_id: record.id, reply_id: child.id } },
+			body: { version: 1, body: 'Edited reply' }
+		});
+		expect(objects.get(rootObjectId)?.contents).toBe('Server note');
+		expect(objects.get(replyObjectId)?.contents).toBe('Edited reply');
+
+		request.mockResolvedValueOnce({ ok: true });
+		await event('delete', record, child.id);
+		expect(objects.has(rootObjectId)).toBe(true);
+		expect(objects.has(replyObjectId)).toBe(false);
+		request.mockResolvedValueOnce({ ...child, version: 4 });
+		await event('create', record, child.id);
+		expect(request.mock.calls.at(-1)?.[2]).toMatchObject({
+			params: { path: { annotation_id: record.id, reply_id: child.id }, query: { version: 3 } }
+		});
+		expect(objects.size).toBe(2);
+		expect(objects.get(replyObjectId)?.inReplyToId).toBe(rootObjectId);
+
+		request.mockResolvedValueOnce({ ...record, body: 'Edited root', version: 2 });
+		await event('update', { ...record, body: 'Edited root' });
+		expect(request.mock.calls.at(-1)?.[2].params.path.annotation_id).toBe(record.id);
+		expect(objects.get(rootObjectId)?.contents).toBe('Edited root');
+		expect(objects.get(replyObjectId)?.contents).toBe('Edited reply');
+	});
+
+	it('retains freshly authored viewer IDs across refresh and history replay', async () => {
+		const { sync, objects } = harness();
+		const record = annotation('6ca651e8-b815-45e8-8e73-20db3e24d531');
+		request.mockResolvedValueOnce(list([])).mockResolvedValueOnce(record);
+		await sync.load(privateSource);
+		const object = {
+			...adapter.vendorFromCanonical(canonicalAnnotationFromView(record)),
+			id: record.id
+		};
+		const created = {
+			type: 'create',
+			annotation: object,
+			pageIndex: 0,
+			documentId: 'revision-1',
+			committed: false
+		} as AnnotationEvent;
+		objects.set(object.id, object);
+		sync.handleEvent(created);
+		await sync.flush();
+		expect(request.mock.calls[1][2].body.id).toBe(record.id);
+		record.replies = [{ ...reply(record), id: record.id }];
+		request.mockResolvedValueOnce(list([record]));
+		await sync.load(privateSource);
+		expect(objects.size).toBe(2);
+		expect(objects.get(record.id)?.id).toBe(record.id);
+		expect(objects.get(adapter.replyObjectId(record.id))?.inReplyToId).toBe(record.id);
+
+		request.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ...record, version: 3 });
+		objects.delete(object.id);
+		sync.handleEvent({ ...created, type: 'delete' } as AnnotationEvent);
+		await sync.flush();
+		objects.set(object.id, object);
+		sync.handleEvent(created);
+		await sync.flush();
+		expect(request.mock.calls.at(-1)?.[2].params.path.annotation_id).toBe(record.id);
+		expect(objects.has(record.id)).toBe(true);
+		expect(objects.get(adapter.replyObjectId(record.id))?.inReplyToId).toBe(record.id);
+	});
+
 	it.each(['before', 'after'])(
 		'loads server annotations once when native annotations finish %s the server load',
 		async (order) => {
@@ -136,7 +224,7 @@ describe('reader annotation reconciliation', () => {
 			if (order === 'after') sync.handleEvent(loaded);
 			expect(request.mock.calls.filter(([method]) => method === 'GET')).toHaveLength(1);
 			expect(objects.get(native.id)?.flags).toContain('readOnly');
-			expect(objects.get(record.id)?.flags).not.toContain('readOnly');
+			expect(objects.get(adapter.annotationObjectId(record.id))?.flags).not.toContain('readOnly');
 			expect(statuses.at(-1)).toEqual({ state: 'loaded', count: 1 });
 		}
 	);
@@ -156,7 +244,7 @@ describe('reader annotation reconciliation', () => {
 		await sync.load(privateSource);
 		const deleting = event('delete', record);
 		const undoing = event('create', record);
-		expect(objects.has(record.id)).toBe(true); // EmbedPDF has already replayed Undo.
+		expect(objects.has(adapter.annotationObjectId(record.id))).toBe(true); // EmbedPDF has already replayed Undo.
 		finishDelete({ ok: true });
 		await Promise.all([deleting, undoing]);
 		expect(request.mock.calls[2]).toMatchObject([
@@ -164,8 +252,8 @@ describe('reader annotation reconciliation', () => {
 			'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/restore',
 			{ params: { query: { version: 2 } } }
 		]);
-		expect(objects.has(record.id)).toBe(true);
-		expect(objects.get('reply-1')?.contents).toBe('Restored reply');
+		expect(objects.has(adapter.annotationObjectId(record.id))).toBe(true);
+		expect(objects.get(adapter.replyObjectId('reply-1'))?.contents).toBe('Restored reply');
 		expect(statuses.at(-1)).toEqual({ state: 'saved' });
 		expect(request.mock.calls.filter(([method]) => method === 'GET')).toHaveLength(1);
 	});
@@ -193,11 +281,11 @@ describe('reader annotation reconciliation', () => {
 		const undoing = event('create', record);
 		const undoingReply = event('create', record, child.id);
 		await sync.load(privateSource);
-		expect(objects.has(child.id)).toBe(false);
+		expect(objects.has(adapter.replyObjectId(child.id))).toBe(false);
 		finishDelete({ ok: true });
 		await Promise.all([deleting, undoing, undoingReply]);
-		expect(objects.has(record.id)).toBe(true);
-		expect(objects.get(child.id)?.contents).toBe('Server-restored reply');
+		expect(objects.has(adapter.annotationObjectId(record.id))).toBe(true);
+		expect(objects.get(adapter.replyObjectId(child.id))?.contents).toBe('Server-restored reply');
 		expect(request.mock.calls[5]).toMatchObject([
 			'POST',
 			'/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore',
@@ -220,10 +308,10 @@ describe('reader annotation reconciliation', () => {
 		await sync.load(privateSource);
 		const deleting = event('delete', record);
 		await sync.load(privateSource);
-		expect(objects.has(record.id)).toBe(true);
+		expect(objects.has(adapter.annotationObjectId(record.id))).toBe(true);
 		finishDelete({ ok: true });
 		await deleting;
-		expect(objects.has(record.id)).toBe(false);
+		expect(objects.has(adapter.annotationObjectId(record.id))).toBe(false);
 	});
 
 	it('keeps an early Undo hidden if its source is unselected before restore completes', async () => {
@@ -259,7 +347,7 @@ describe('reader annotation reconciliation', () => {
 			.mockResolvedValueOnce(list(rows.slice(100), null, 100));
 		await sync.load(privateSource);
 		expect(objects.size).toBe(101);
-		expect(objects.has('id-100')).toBe(true);
+		expect(objects.has(adapter.annotationObjectId('id-100'))).toBe(true);
 		expect(request.mock.calls[1][2].params.query).toMatchObject({
 			pagination: 'cursor',
 			cursor: 'id-099'
@@ -273,7 +361,7 @@ describe('reader annotation reconciliation', () => {
 		request.mockResolvedValueOnce(list([])).mockResolvedValueOnce(record);
 		await sync.load(privateSource);
 		await event('create', record);
-		expect(objects.has(record.id)).toBe(true);
+		expect(objects.has(adapter.annotationObjectId(record.id))).toBe(true);
 		request.mockResolvedValueOnce(list([]));
 		await sync.load(privateSource); // Another session deleted the record.
 		expect(objects.size).toBe(0);
@@ -301,7 +389,7 @@ describe('reader annotation reconciliation', () => {
 		await event('create', record);
 		finishRead(list([])); // This collection was read before the creation committed.
 		await loading;
-		expect(objects.has(record.id)).toBe(true);
+		expect(objects.has(adapter.annotationObjectId(record.id))).toBe(true);
 		expect(request.mock.calls.filter(([method]) => method === 'GET')).toHaveLength(2);
 		await event('create', record);
 		expect(request.mock.calls.filter(([method]) => method === 'POST')).toHaveLength(1);

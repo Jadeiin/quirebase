@@ -91,7 +91,6 @@ from quirebase.models import (
     LoginSession,
     LoginThrottle,
     PdfAnnotation,
-    PdfAnnotationObject,
     PdfAnnotationReply,
     Project,
     ProjectItem,
@@ -2874,8 +2873,6 @@ async def test_item_delete_waits_for_project_reply_without_annotation_lock_cycle
         assert await db.get(Item, item_id) is None
         assert await db.get(PdfAnnotation, annotation_id) is None
         assert await db.get(PdfAnnotationReply, reply_id) is None
-        assert await db.get(PdfAnnotationObject, annotation_id) is None
-        assert await db.get(PdfAnnotationObject, reply_id) is None
         for action in ("annotation_reply.create", "item.delete"):
             assert (
                 await db.scalar(select(AuditEvent.id).where(AuditEvent.action == action))

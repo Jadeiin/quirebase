@@ -76,7 +76,7 @@ test('Tag page clamps after deleting the last page of Tags', async ({ page }) =>
 	await page.goto('/workspace/workspace-1/tools');
 	await page.getByRole('tab', { name: 'Manage Tags' }).click();
 	await expect(page.getByText('21 Tags')).toBeVisible();
-	await page.getByRole('button', { name: 'Next' }).click();
+	await page.getByRole('button', { name: 'Next page' }).click();
 	await expect(page.getByText('Page 2 of 2')).toBeVisible();
 	const tagRow = (name: string) =>
 		page.locator('strong').filter({ hasText: new RegExp(`^${name}$`) });

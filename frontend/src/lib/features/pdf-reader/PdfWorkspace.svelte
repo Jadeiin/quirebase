@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
+	import { Menu, Popover, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { ApiError, isDownloadCancelled } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -104,12 +104,13 @@
 	class="grid h-dvh min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-surface-300-700"
 >
 	<header
-		class="flex items-center gap-3 border-b border-surface-300-700 bg-surface-50-950 px-3 py-2"
+		class="flex min-w-0 items-center gap-2 border-b border-surface-300-700 bg-surface-50-950 px-3 py-2 sm:gap-3"
 	>
 		<a
-			class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
+			class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
+			aria-label={$t('Item')}
 			href={resolve(workspaceHref(workspaceId, `item/${itemId}`))}
-			><Icon name="chevron-left" /> <span>{$t('Item')}</span></a
+			><Icon name="chevron-left" /> <span class="hidden sm:inline">{$t('Item')}</span></a
 		>
 		<div class="grid min-w-0 flex-1 grid-cols-1">
 			<strong class="truncate text-sm"
@@ -123,14 +124,68 @@
 			class={`max-w-44 truncate text-xs ${annotationSyncFailed ? 'inline font-semibold text-error-700-300' : 'hidden text-surface-600-400 lg:inline'}`}
 			>{annotationStatus}</span
 		>
+		{#if viewer.data}
+			<Popover positioning={{ placement: 'bottom-end', gutter: 6 }}>
+				<Popover.Trigger
+					class="inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
+					aria-label={$t('Displayed annotation sources')}
+					title={$t('Displayed annotation sources')}
+				>
+					<Icon name="annotation" />
+					<span class="hidden md:inline">{$t('Annotations')}</span>
+					<span class="hidden sm:inline-flex"><Icon name="chevron-down" size={14} /></span>
+				</Popover.Trigger>
+				<Portal>
+					<Popover.Positioner class="z-100">
+						<Popover.Content
+							class="max-h-72 w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-md border border-surface-300-700 bg-surface-50-950 p-3 text-sm shadow-xl"
+						>
+							<Popover.Title class="mb-3 text-xs font-semibold text-surface-600-400"
+								>{$t('Displayed annotation sources')}</Popover.Title
+							>
+							<div class="grid grid-cols-1 gap-2">
+								<label class="flex min-w-0 items-center gap-2"
+									><input type="checkbox" bind:checked={includePrivate} />{$t(
+										'Private annotations'
+									)}</label
+								>
+								{#each viewer.data.projects as project (project.id)}
+									<label class="flex min-w-0 items-center gap-2"
+										><input
+											type="checkbox"
+											checked={visibleProjects.includes(project.id)}
+											onchange={(event) => showProject(project.id, event.currentTarget.checked)}
+										/><span class="min-w-0 wrap-break-word">{project.name}</span></label
+									>
+								{/each}
+							</div>
+						</Popover.Content>
+					</Popover.Positioner>
+				</Portal>
+			</Popover>
+			<label class="min-w-0 shrink-0">
+				<span class="sr-only">{$t('New annotation source')}</span>
+				<select
+					class="min-h-9 w-28 truncate rounded-md border border-surface-300-700 bg-surface-100-900 px-2 py-1 text-xs text-surface-900-100 sm:w-40"
+					title={$t('New annotation source')}
+					bind:value={writeProject}
+					onchange={(event) => selectWriteProject(event.currentTarget.value)}
+				>
+					<option value="" disabled={!viewer.data.editable}>{$t('Private annotations')}</option>
+					{#each viewer.data.projects as project (project.id)}<option
+							value={project.id}
+							disabled={!project.editable}>{project.name}</option
+						>{/each}
+				</select>
+			</label>
+		{/if}
 		<Menu positioning={{ placement: 'bottom-end', gutter: 6 }}>
 			<Menu.Trigger
-				class="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
+				class="inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
+				aria-label={$t('Download')}
 			>
-				<Icon name="download" /> <span class="hidden sm:inline">{$t('Download')}</span><Icon
-					name="chevron-down"
-					size={14}
-				/>
+				<Icon name="download" /> <span class="hidden sm:inline">{$t('Download')}</span>
+				<span class="hidden sm:inline-flex"><Icon name="chevron-down" size={14} /></span>
 			</Menu.Trigger>
 			<Portal>
 				<Menu.Positioner class="z-100">
@@ -185,50 +240,6 @@
 		</Menu>
 	</header>
 	<div class="flex h-full min-h-0 flex-col overflow-hidden bg-surface-300-700">
-		{#if viewer.data}
-			<div
-				class="flex shrink-0 flex-wrap items-center gap-3 border-b border-surface-300-700 bg-surface-50-950 px-3 py-2 text-xs"
-			>
-				<details class="relative">
-					<summary
-						class="cursor-pointer rounded-md border border-surface-300-700 px-2.5 py-2 font-semibold"
-						>{$t('Displayed annotation sources')}</summary
-					>
-					<div
-						class="absolute top-full left-0 z-50 mt-1 grid max-h-72 w-64 grid-cols-1 gap-2 overflow-y-auto rounded-md border border-surface-300-700 bg-surface-50-950 p-3 shadow-xl"
-					>
-						<label class="flex items-center gap-2"
-							><input type="checkbox" bind:checked={includePrivate} />{$t(
-								'Private annotations'
-							)}</label
-						>
-						{#each viewer.data.projects as project (project.id)}
-							<label class="flex items-center gap-2"
-								><input
-									type="checkbox"
-									checked={visibleProjects.includes(project.id)}
-									onchange={(event) => showProject(project.id, event.currentTarget.checked)}
-								/>{project.name}</label
-							>
-						{/each}
-					</div>
-				</details>
-				<label class="flex min-w-0 items-center gap-2"
-					>{$t('New annotation source')}
-					<select
-						class="min-h-9 max-w-40 rounded-md border border-surface-300-700 bg-surface-100-900 px-2 py-1 text-xs text-surface-900-100"
-						bind:value={writeProject}
-						onchange={(event) => selectWriteProject(event.currentTarget.value)}
-					>
-						<option value="" disabled={!viewer.data.editable}>{$t('Private annotations')}</option>
-						{#each viewer.data.projects as project (project.id)}<option
-								value={project.id}
-								disabled={!project.editable}>{project.name}</option
-							>{/each}
-					</select>
-				</label>
-			</div>
-		{/if}
 		{#if downloadError}
 			<aside
 				class="flex shrink-0 border-b border-error-300-700 bg-error-50-950 px-3 py-1.5 text-xs font-medium text-error-800-200"

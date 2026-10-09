@@ -163,7 +163,9 @@ async function editOrCreate(page: Page, createId?: string) {
 			.getPlugin<AnnotationPlugin>('annotation')!
 			.provides()
 			.forDocument('revision-1');
-		const original = scope.getAnnotations().find((entry) => entry.object.id === 'shared-2')!.object;
+		const original = scope
+			.getAnnotations()
+			.find((entry) => entry.object.id === 'annotation:shared-2')!.object;
 		if (id) scope.createAnnotation(0, { ...original, id, contents: 'New note' });
 		else scope.updateAnnotation(0, original.id, { contents: 'Edited original source' });
 	}, createId);

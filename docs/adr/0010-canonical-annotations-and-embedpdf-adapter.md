@@ -23,6 +23,17 @@ Annotation. Replies inherit the root's visibility, carry their own author, body,
 timestamps, and deliberately have no PDF geometry or vendor payload. The Web adapter translates
 them to EmbedPDF reply objects only while rendering the comment sidebar.
 
+Annotation and Reply IDs are unique within their own entity types; the two tables may contain
+the same UUID. Physical deletion cascades from File Revision or ProjectItem through Annotation
+to Reply. No separate Annotation Object identity registry is required. Ordinary soft deletion
+retains the records and their versions for restore.
+
+The Web adapter imports canonical objects with type-qualified viewer IDs and maps events back
+to canonical UUIDs. Newly authored objects retain EmbedPDF's own IDs for the viewer session,
+including subsequent source refreshes, so Undo/Redo continues to address the original objects.
+This viewer-local mapping keeps EmbedPDF's shared object-ID namespace out of domain persistence
+and the REST/MCP interfaces.
+
 The reader may overlay the author's private Annotations and multiple readable Projects at once.
 Displayed sources are independent of the single destination selected for newly authored
 Annotations. Updates and Replies retain the existing root's source. This does not duplicate an

@@ -1004,7 +1004,7 @@ test('A preferred Workspace outside the first directory page opens directly and 
 	await expect(
 		page.getByRole('link', { name: 'Open workspace Workspace 27', exact: true })
 	).toHaveCount(0);
-	await page.getByRole('button', { name: 'Next', exact: true }).click();
+	await page.getByRole('button', { name: 'Next page', exact: true }).click();
 	const choice = page.getByRole('link', { name: 'Open workspace Workspace 27', exact: true });
 	await expect(choice).toBeVisible();
 	await expect(choice).toContainText('Default');
@@ -1039,7 +1039,7 @@ test('Workspace member governance supports later pages and username search', asy
 	);
 	await page.goto('/workspace/workspace-1/settings');
 	const pager = page.getByRole('navigation', { name: 'Members pagination' });
-	await pager.getByRole('button', { name: 'Next', exact: true }).click();
+	await pager.getByRole('button', { name: 'Next page', exact: true }).click();
 	await expect(page.getByRole('cell', { name: 'member-27', exact: true })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Search members' }).fill('member-12');
 	await expect(page.getByRole('cell', { name: 'member-12', exact: true })).toBeVisible();

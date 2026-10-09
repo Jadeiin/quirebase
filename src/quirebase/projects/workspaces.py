@@ -19,7 +19,6 @@ from quirebase.access import (
 from quirebase.audit import record_event
 from quirebase.core.errors import ProjectLifecycleError, ResourceUnavailable, ValidationFailure
 from quirebase.core.persistence import conflict_insert, select_page
-from quirebase.documents import delete_project_item_annotations
 from quirebase.models import (
     Item,
     Project,
@@ -306,7 +305,6 @@ async def remove_item_from_project(
         .with_for_update()
     )
     if project_item is not None:
-        await delete_project_item_annotations(db, workspace_id, project_item.id)
         await db.execute(delete(ProjectItem).where(ProjectItem.id == project_item.id))
         record_event(
             db,

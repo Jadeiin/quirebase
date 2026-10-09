@@ -153,8 +153,10 @@ Bibliography export uses explicit `selectinload` for Contributors and a determin
 
 Documents persists prepared File Revision, Attachment, Export Artifact, Annotation and Reply
 instances directly through the caller Session. Versioned mutations use explicit CAS.
-Client-authored Annotation/Reply UUID4 values use native UUIDs through insertion and rereads,
-including their shared Annotation Object identity.
+Client-authored Annotation/Reply UUID4 values use native UUIDs through insertion and rereads.
+Each entity has its own primary key and ORM identity; an Annotation and a Reply may share a UUID.
+Database foreign keys cascade physical deletion from File Revision or ProjectItem through
+Annotation to Reply without an auxiliary identity registry.
 
 Web uses native result conversion for attribute-only administrative and API Token DTO fields.
 Business Modules explicitly project computed status, identity, authorization and domain choices.

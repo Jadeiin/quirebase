@@ -28,7 +28,7 @@ The architecture suite keeps this list complete when mappings are added or remov
 | Workspaces | `Workspace`, `WorkspaceMember`, `WorkspaceInvitation` |
 | Library | `Item`, `Author`, `ItemAuthor`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `ItemTagRecommendation`, `DiscussionMessage`, `ImportBatch`, `CitationStyle` |
 | Projects | `Project`, `ProjectParticipant`, `ProjectItem` |
-| Documents | `FileRevision`, `Attachment`, `PdfAnnotationObject`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
+| Documents | `FileRevision`, `Attachment`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
 | Audit | `AuditEvent` |
 | Operations | `SystemSetting`, `ObjectIntegrityScan` |
 

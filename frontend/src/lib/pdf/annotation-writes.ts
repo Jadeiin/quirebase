@@ -1,6 +1,11 @@
 import type { AnnotationEvent } from '@embedpdf/svelte-pdf-viewer';
 import { createWorkspaceApi } from '#lib/api/client.js';
-import type { CanonicalAnnotation, CanonicalReply } from '#lib/pdf/annotation-adapter.js';
+import {
+	canonicalAnnotationId,
+	canonicalReplyId,
+	type CanonicalAnnotation,
+	type CanonicalReply
+} from '#lib/pdf/annotation-adapter.js';
 
 type WritableAnnotationEvent = Exclude<AnnotationEvent, { type: 'loaded' }>;
 type ReplyIdentity = { itemId: string; annotationId: string; replyId: string };
@@ -108,13 +113,14 @@ export async function persistReplyEvent({
 	tombstones: Map<string, CanonicalReply>;
 	api: AnnotationReplyApi;
 }): Promise<{ parent: CanonicalAnnotation; reply: CanonicalReply | null } | null> {
-	const parentId = event.annotation.inReplyToId;
-	if (!parentId) return null;
+	const parentObjectId = event.annotation.inReplyToId;
+	if (!parentObjectId) return null;
+	const parentId = canonicalAnnotationId(parentObjectId);
 	const parent = records.get(parentId);
 	// EmbedPDF can emit reply removals while a parent annotation is being purged.
 	if (!parent) return null;
 
-	const replyId = event.annotation.id;
+	const replyId = canonicalReplyId(event.annotation.id);
 	const existing = parent.replies.find((reply) => reply.id === replyId);
 	let saved: CanonicalReply | null = null;
 

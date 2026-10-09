@@ -107,7 +107,6 @@ from quirebase.models import (
     Item,
     ItemTag,
     PdfAnnotation,
-    PdfAnnotationObject,
     PdfAnnotationReply,
     Project,
     ProjectItem,
@@ -1095,11 +1094,8 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
         assert await check_db.get(Item, item_id) is None
         assert await check_db.get(Project, project_id) is None
         assert await check_db.get(Tag, tag_id) is None
-        assert (
-            await check_db.scalars(
-                select(PdfAnnotationObject.id).where(PdfAnnotationObject.id.in_(annotation_ids))
-            )
-        ).all() == []
+        assert await check_db.get(PdfAnnotation, annotation_ids[0]) is None
+        assert await check_db.get(PdfAnnotationReply, annotation_ids[1]) is None
         deletion_event = await check_db.scalar(
             select(AuditEvent).where(
                 AuditEvent.workspace_id == workspace_id,
@@ -2088,9 +2084,9 @@ async def test_project_annotation_requires_revision_and_project_item_for_same_it
 
 
 @pytest.mark.anyio
-async def test_detaching_project_item_cleans_annotation_and_reply_identities(async_db):
+async def test_detaching_project_item_cascades_to_annotations_and_replies(async_db):
     owner, _viewer, item, project, _revision, annotation, reply = await _shared_annotation_context(
-        async_db, "detach-annotation-identities"
+        async_db, "detach-annotations"
     )
     await remove_item_from_project(async_db, owner, item.workspace_id, project.id, item.id)
     assert (
@@ -2100,18 +2096,6 @@ async def test_detaching_project_item_cleans_annotation_and_reply_identities(asy
     assert (
         await async_db.scalar(
             select(PdfAnnotationReply.id).where(PdfAnnotationReply.id == reply.id)
-        )
-        is None
-    )
-    assert (
-        await async_db.scalar(
-            select(PdfAnnotationObject.id).where(PdfAnnotationObject.id == annotation.id)
-        )
-        is None
-    )
-    assert (
-        await async_db.scalar(
-            select(PdfAnnotationObject.id).where(PdfAnnotationObject.id == reply.id)
         )
         is None
     )

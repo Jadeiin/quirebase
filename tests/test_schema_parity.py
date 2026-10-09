@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from advanced_alchemy.alembic.commands import AlembicCommands
+from alembic.script import ScriptDirectory
 from sqlalchemy import (
     CheckConstraint,
     UniqueConstraint,
@@ -315,6 +316,28 @@ def test_initial_schema_upgrade_downgrade_roundtrip(migration_database):
     assert inspect(engine).get_table_names() == ["alembic_version"]
     _migrate_database(database_url)
     _assert_schema_matches_metadata(inspect(engine), engine)
+
+
+def test_search_projection_revision_roundtrip(migration_database):
+    database_url, engine = migration_database
+    _migrate_database(database_url)
+    scripts = ScriptDirectory.from_config(
+        AlembicCommands(_make_database_config(database_url)).config
+    )
+    search_revision = scripts.get_revision("head")
+    assert search_revision.down_revision is not None
+    _migrate_database(database_url, search_revision.down_revision, downgrade=True)
+    assert set(inspect(engine).get_table_names()) == set(Base.metadata.tables) | {"alembic_version"}
+    _assert_schema_matches_metadata(inspect(engine), engine)
+    _migrate_database(database_url)
+    assert set(inspect(engine).get_table_names()) >= SEARCH_PROJECTION_TABLES
+    with engine.connect() as connection:
+        for table_name in sorted(SEARCH_PROJECTION_TABLES):
+            if engine.dialect.name == "sqlite":
+                query = f"SELECT rowid FROM {table_name} WHERE {table_name} MATCH 'probe'"
+            else:
+                query = f"SELECT * FROM {table_name} WHERE document @@ plainto_tsquery('probe')"
+            assert not connection.execute(text(query)).all()
 
 
 def test_autogenerate_has_no_pending_schema_changes(

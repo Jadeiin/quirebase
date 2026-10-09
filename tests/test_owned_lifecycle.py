@@ -35,7 +35,6 @@ from quirebase.models import (
     Item,
     LoginSession,
     PdfAnnotation,
-    PdfAnnotationObject,
     PdfAnnotationReply,
     Project,
     ProjectParticipant,
@@ -658,11 +657,8 @@ async def test_workspace_teardown_cleans_owned_projections_and_rollback_is_atomi
         assert await search_index(fresh).search(fresh, "Teardown") == []
         for table in ("item_search", "revision_search"):
             assert (await fresh.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0
-        assert not list(
-            await fresh.scalars(
-                select(PdfAnnotationObject.id).where(PdfAnnotationObject.id.in_(identities))
-            )
-        )
+        assert await fresh.get(PdfAnnotation, identities[0]) is None
+        assert await fresh.get(PdfAnnotationReply, identities[1]) is None
     assert await get_object_store().exists(stored.key)  # I/O is deferred until after commit.
     assert fake_durable_operations.enqueues[-1]["attributes"]["object_intent"] == "cleanup"
 
@@ -820,8 +816,6 @@ async def test_item_deletion_retires_document_identities_and_cleanup_is_atomic(
             (Attachment, attachment_id),
             (PdfAnnotation, annotation_id),
             (PdfAnnotationReply, reply_id),
-            (PdfAnnotationObject, annotation_id),
-            (PdfAnnotationObject, reply_id),
         ):
             assert await db.get(model, identity) is not None
         assert await search_index(db).search(db, "Retired") == [item_id]
@@ -839,8 +833,6 @@ async def test_item_deletion_retires_document_identities_and_cleanup_is_atomic(
             (Attachment, attachment_id),
             (PdfAnnotation, annotation_id),
             (PdfAnnotationReply, reply_id),
-            (PdfAnnotationObject, annotation_id),
-            (PdfAnnotationObject, reply_id),
         ):
             assert await fresh.get(model, identity) is None
         assert await fresh.get(Item, retained_id) is not None

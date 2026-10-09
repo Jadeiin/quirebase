@@ -509,12 +509,16 @@ for (const operation of ['create', 'update', 'reply', 'version']) {
 				.provides()
 				.forDocument('revision-1');
 			if (operation === 'create') {
-				const original = scope.getAnnotationById('project-note')!.object;
+				const original = scope.getAnnotationById('annotation:project-note')!.object;
 				scope.createAnnotation(0, { ...original, id: 'rejected-note', contents: 'Rejected mark' });
 			} else {
-				scope.updateAnnotation(0, operation === 'reply' ? 'reply-1' : 'project-note', {
-					contents: 'Rejected edit'
-				});
+				scope.updateAnnotation(
+					0,
+					operation === 'reply' ? 'reply:reply-1' : 'annotation:project-note',
+					{
+						contents: 'Rejected edit'
+					}
+				);
 			}
 		}, operation);
 		await expect.poll(() => writes.length).toBe(1);
@@ -549,10 +553,14 @@ for (const operation of ['create', 'update', 'reply', 'version']) {
 					return {
 						rejected: Boolean(scope.getAnnotationById('rejected-note')),
 						projectReadonly:
-							scope.getAnnotationById('project-note')?.object.flags?.includes('readOnly') ?? false,
+							scope
+								.getAnnotationById('annotation:project-note')
+								?.object.flags?.includes('readOnly') ?? false,
 						privateReadonly:
-							scope.getAnnotationById('private-note')?.object.flags?.includes('readOnly') ?? false,
-						replyBody: scope.getAnnotationById('reply-1')?.object.contents
+							scope
+								.getAnnotationById('annotation:private-note')
+								?.object.flags?.includes('readOnly') ?? false,
+						replyBody: scope.getAnnotationById('reply:reply-1')?.object.contents
 					};
 				})
 			)

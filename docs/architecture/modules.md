@@ -426,8 +426,8 @@ rather than one large datasource output. Unknown keys and doctor probes are neve
 
 Workspace teardown holds the exclusive Workspace root through authorization, retention, snapshots,
 root deletion, Audit, durable enqueue and commit. Search's `remove_workspace` removes both derived
-projections before the cascade, including SQLite FTS rows. Documents supplies its descriptor and
-Annotation/Reply identity snapshot and removes captured identities after the cascade. Library
+projections before the cascade, including SQLite FTS rows. Documents supplies its descriptor
+snapshot; database foreign keys cascade to Annotations and Replies. Library
 supplies retained Import Staging keys. These owner operations use the caller's Session without
 committing or rolling it back. Workspaces enqueues bounded cleanup batches in the deletion
 transaction; cleanup intent does not reserve those keys.
@@ -437,8 +437,8 @@ transaction; cleanup intent does not reserve those keys.
 `delete_item_documents` runs under the caller's authorized, exclusive Item root locks in stable
 order. It locks existing ProjectItem rows before their Annotations, matching Reply writes and
 preventing a lock inversion during the Item cascade. It collects File Revision, PDF Thumbnail
-and Attachment keys, fences Reply insertion with Annotation locks, deletes Document children
-and retires Annotation/Reply identities. It returns
+and Attachment keys, fences Reply insertion with Annotation locks, and deletes Document children
+with their Annotations and Replies through cascading foreign keys. It returns
 keys without object-store I/O or transaction completion. Single and bulk Library deletion retain
 Item deletion, Search removal, Audit, transactional cleanup enqueue and commit. Independently
 expiring Annotation Export Artifacts retain their own lifecycle.
@@ -466,9 +466,8 @@ keys; the checks do not make database writes atomic with arbitrary Object Store 
 for the caller's datasource transaction to checkpoint with descriptor retirement. Neither operation
 completes the caller's transaction. Renewed or replaced descriptors remain protected.
 
-`snapshot_workspace_documents` returns Document object keys and Annotation/Reply identities under
-the caller's exclusive Workspace root lock. `delete_workspace_annotation_identities` consumes the
-snapshot after root deletion has been flushed. Library's `import_staging_object_keys` and Search's
+`snapshot_workspace_documents` returns Document object keys under
+the caller's exclusive Workspace root lock. Library's `import_staging_object_keys` and Search's
 `remove_workspace` use the same caller transaction without commit or rollback.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is

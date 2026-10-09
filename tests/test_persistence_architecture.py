@@ -33,7 +33,6 @@ EXPECTED_TABLES = {
     "login_throttles",
     "object_integrity_scans",
     "pdf_annotations",
-    "pdf_annotation_objects",
     "pdf_annotation_replies",
     "project_items",
     "project_participants",

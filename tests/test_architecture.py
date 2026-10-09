@@ -61,7 +61,6 @@ ORM_MODEL_OWNERS = {
     "LoginSession": "accounts",
     "LoginThrottle": "accounts",
     "PdfAnnotation": "documents",
-    "PdfAnnotationObject": "documents",
     "PdfAnnotationReply": "documents",
     "Project": "projects",
     "ProjectItem": "projects",
@@ -124,7 +123,6 @@ def test_invariant_ownership_and_narrow_reverse_interfaces():
             "ImportBatch",
             "PdfAnnotation",
             "PdfAnnotationReply",
-            "PdfAnnotationObject",
         },
     }
     for path, forbidden in forbidden_models.items():

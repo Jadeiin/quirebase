@@ -138,7 +138,7 @@
 		/>
 		<main
 			class={readerRoute
-				? 'mx-auto min-h-0 w-full max-w-[100rem] min-w-0'
+				? 'min-h-0 w-full min-w-0'
 				: 'mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]'}
 		>
 			{#if contextError}<Notice variant="error"

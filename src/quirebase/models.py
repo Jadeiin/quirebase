@@ -29,7 +29,6 @@ from sqlalchemy import (
     Enum as SqlEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from uuid_utils.compat import uuid7
 
 from .core.database import Base, EntityBase, IdentityBase
 from .core.passwords import PreparedPasswordHash
@@ -126,11 +125,6 @@ class AnnotationKind(StrEnum):
 class AnnotationScope(StrEnum):
     private = "private"
     project = "project"
-
-
-class AnnotationObjectType(StrEnum):
-    annotation = "annotation"
-    reply = "reply"
 
 
 class FileRevisionProcessingState(StrEnum):
@@ -611,19 +605,6 @@ class Attachment(EntityBase):
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
 
 
-class PdfAnnotationObject(IdentityBase):
-    __tablename__ = "pdf_annotation_objects"
-    __table_args__ = (
-        CheckConstraint(
-            "object_type IN ('annotation', 'reply')",
-            name="type",
-        ),
-    )
-    object_type: Mapped[AnnotationObjectType] = mapped_column(
-        enum_type(AnnotationObjectType, "annotation_object_type")
-    )
-
-
 class PdfAnnotation(EntityBase):
     __tablename__ = "pdf_annotations"
     __table_args__ = (
@@ -652,16 +633,7 @@ class PdfAnnotation(EntityBase):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[UUID] = mapped_column(
-        ForeignKey(
-            "pdf_annotation_objects.id",
-            name="fk_pdf_annotations_object_id",
-        ),
-        primary_key=True,
-        default=uuid7,
-    )
     workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
-    object_identity: Mapped[PdfAnnotationObject] = relationship()
     file_revision_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     page_index: Mapped[int] = mapped_column(Integer)
@@ -686,17 +658,6 @@ class PdfAnnotation(EntityBase):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    def __init__(self, **kwargs):
-        object_id = kwargs.setdefault("id", uuid7())
-        kwargs.setdefault(
-            "object_identity",
-            PdfAnnotationObject(
-                id=object_id,
-                object_type=AnnotationObjectType.annotation,
-            ),
-        )
-        super().__init__(**kwargs)
-
 
 class PdfAnnotationReply(EntityBase):
     __tablename__ = "pdf_annotation_replies"
@@ -708,32 +669,12 @@ class PdfAnnotationReply(EntityBase):
             ondelete="CASCADE",
         ),
     )
-    id: Mapped[UUID] = mapped_column(
-        ForeignKey(
-            "pdf_annotation_objects.id",
-            name="fk_pdf_annotation_replies_object_id",
-        ),
-        primary_key=True,
-        default=uuid7,
-    )
     workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
-    object_identity: Mapped[PdfAnnotationObject] = relationship()
     annotation_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     author_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text)
     version: Mapped[int] = mapped_column(Integer, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
-
-    def __init__(self, **kwargs):
-        object_id = kwargs.setdefault("id", uuid7())
-        kwargs.setdefault(
-            "object_identity",
-            PdfAnnotationObject(
-                id=object_id,
-                object_type=AnnotationObjectType.reply,
-            ),
-        )
-        super().__init__(**kwargs)
 
 
 class ExportArtifact(Base):

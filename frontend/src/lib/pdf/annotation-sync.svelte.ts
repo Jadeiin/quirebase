@@ -7,6 +7,7 @@ import type {
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { createWorkspaceApi } from '#lib/api/client.js';
 import {
+	canonicalAnnotationId,
 	canonicalAnnotationFromView,
 	createAnnotationAdapter,
 	type CanonicalAnnotation,
@@ -117,8 +118,9 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 		importedIds.clear();
 		for (const record of rows) {
 			records.set(record.id, record);
-			importedIds.set(record.id, record.page_index);
-			for (const reply of record.replies) importedIds.set(reply.id, record.page_index);
+			importedIds.set(adapter.annotationObjectId(record.id), record.page_index);
+			for (const reply of record.replies)
+				importedIds.set(adapter.replyObjectId(reply.id), record.page_index);
 		}
 		scope.importAnnotations(
 			rows.flatMap((record) => [
@@ -169,7 +171,8 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 		const api = annotationApi;
 		if (!api || event.documentId !== options.documentId || nativeIds.has(event.annotation.id))
 			return;
-		const id = event.annotation.id;
+		const objectId = event.annotation.id;
+		const id = canonicalAnnotationId(objectId);
 		const scope = api.forDocument(options.documentId);
 		try {
 			if (event.annotation.inReplyToId) {
@@ -183,24 +186,26 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				});
 				if (result) writeGeneration += 1;
 				if (result?.reply) {
+					const replyObjectId = adapter.replyObjectId(result.reply.id);
 					if (displayed(result.parent)) {
-						importedIds.set(result.reply.id, result.parent.page_index);
+						importedIds.set(replyObjectId, result.parent.page_index);
 						scope.syncAnnotationObject(
-							result.reply.id,
+							replyObjectId,
 							adapter.vendorReplyFromCanonical(result.parent, result.reply)
 						);
 						if (event.type === 'create')
 							importMissingAnnotations(scope, [
 								adapter.vendorReplyFromCanonical(result.parent, result.reply)
 							]);
-					} else scope.purgeAnnotation(result.parent.page_index, result.reply.id);
-				} else if (!result && event.type === 'create') scope.purgeAnnotation(event.pageIndex, id);
+					} else scope.purgeAnnotation(result.parent.page_index, replyObjectId);
+				} else if (!result && event.type === 'create')
+					scope.purgeAnnotation(event.pageIndex, objectId);
 			} else if (event.type === 'create') {
 				const existing = records.get(id);
 				if (existing) {
 					if (displayed(existing))
-						scope.syncAnnotationObject(id, adapter.vendorFromCanonical(existing));
-					else scope.purgeAnnotation(event.pageIndex, id);
+						scope.syncAnnotationObject(objectId, adapter.vendorFromCanonical(existing));
+					else scope.purgeAnnotation(event.pageIndex, objectId);
 					return;
 				}
 				options.onStatus({ state: 'saving-annotation' });
@@ -235,17 +240,18 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				records.set(id, saved);
 				writeGeneration += 1;
 				if (displayed(saved)) {
-					importedIds.set(id, saved.page_index);
+					importedIds.set(objectId, saved.page_index);
 					if (tombstone) {
 						// DELETE may have purged objects already recreated by an early Undo.
 						// Import without adding history entries or overwriting later edits.
-						for (const reply of saved.replies) importedIds.set(reply.id, saved.page_index);
+						for (const reply of saved.replies)
+							importedIds.set(adapter.replyObjectId(reply.id), saved.page_index);
 						importMissingAnnotations(scope, [
 							adapter.vendorFromCanonical(saved),
 							...saved.replies.map((reply) => adapter.vendorReplyFromCanonical(saved, reply))
 						]);
 					}
-				} else scope.purgeAnnotation(saved.page_index, id);
+				} else scope.purgeAnnotation(saved.page_index, objectId);
 			} else if (event.type === 'update') {
 				const existing = records.get(id);
 				if (!existing) return;
@@ -271,7 +277,7 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				);
 				records.set(id, saved);
 				writeGeneration += 1;
-				scope.syncAnnotationObject(id, adapter.vendorFromCanonical(saved));
+				scope.syncAnnotationObject(objectId, adapter.vendorFromCanonical(saved));
 			} else {
 				const existing = records.get(id);
 				if (!existing) return;
@@ -288,18 +294,19 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				);
 				tombstones.set(id, { ...existing, version: existing.version + 1 });
 				records.delete(id);
-				importedIds.delete(id);
+				importedIds.delete(objectId);
 				writeGeneration += 1;
 				// A source load may have reimported this object while DELETE was pending.
 				for (const reply of existing.replies) {
-					importedIds.delete(reply.id);
-					scope.purgeAnnotation(existing.page_index, reply.id);
+					const replyObjectId = adapter.replyObjectId(reply.id);
+					importedIds.delete(replyObjectId);
+					scope.purgeAnnotation(existing.page_index, replyObjectId);
 				}
-				scope.purgeAnnotation(existing.page_index, id);
+				scope.purgeAnnotation(existing.page_index, objectId);
 			}
 			options.onStatus({ state: 'saved' });
 		} catch (reason) {
-			if (event.type === 'create') scope.purgeAnnotation(event.pageIndex, id);
+			if (event.type === 'create') scope.purgeAnnotation(event.pageIndex, objectId);
 			options.onStatus({ state: 'sync-failed', reason });
 			await load(currentSources).catch(() => undefined);
 		}
@@ -314,6 +321,7 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 			return;
 		}
 		if (nativeIds.has(event.annotation.id)) return;
+		adapter.rememberVendorObject(event.annotation);
 		if (event.type === 'create' && event.annotation.type === PdfAnnotationSubtype.TEXT) {
 			options.onCommentPanel?.();
 		}

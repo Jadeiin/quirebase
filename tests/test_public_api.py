@@ -389,13 +389,7 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
         assert annotation["payload"]["type"] == "note"
         assert annotation["author_display_name"] == user.username
         assert annotation["mine"] is True and annotation["editable"] is True
-        root_id_as_reply = await client.post(
-            f"{workspace_base}/items/{item_id}/annotations/{annotation_id}/replies",
-            headers=headers,
-            json=json_payload({"id": annotation_id, "body": "Conflicting reply ID"}),
-        )
-        assert root_id_as_reply.status_code == 409
-        reply_id = str(uuid4())
+        reply_id = annotation_id
         created_reply = await client.post(
             f"{workspace_base}/items/{item_id}/annotations/{annotation_id}/replies",
             headers=headers,
@@ -403,7 +397,13 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
         )
         assert created_reply.status_code == 201
         assert created_reply.json()["body"] == "API reply"
-        reply_id_as_root = await client.post(
+        duplicate_reply = await client.post(
+            f"{workspace_base}/items/{item_id}/annotations/{annotation_id}/replies",
+            headers=headers,
+            json=json_payload({"id": reply_id, "body": "Duplicate reply ID"}),
+        )
+        assert duplicate_reply.status_code == 409
+        duplicate_annotation = await client.post(
             f"{workspace_base}/items/{item_id}/annotations",
             headers=headers,
             json=json_payload({
@@ -413,14 +413,14 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
                 "kind": "note",
                 "scope": "project",
                 "project_id": project.id,
-                "body": "Conflicting annotation ID",
+                "body": "Duplicate annotation ID",
                 "payload": {
                     "type": "note",
                     "rect": {"x": 10, "y": 20, "width": 24, "height": 24},
                 },
             }),
         )
-        assert reply_id_as_root.status_code == 409
+        assert duplicate_annotation.status_code == 409
         listed = await client.get(
             f"{workspace_base}/items/{item_id}/annotations",
             headers=headers,
