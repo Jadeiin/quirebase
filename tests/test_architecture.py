@@ -25,51 +25,8 @@ PACKAGE_ROLES = {
     "workspaces": "business",
 }
 
-ALLOWED_PACKAGE_DEPENDENCIES = {
-    "access": {"core", "models"},
-    "accounts": {"access", "audit", "core", "models", "operations", "workspaces"},
-    "audit": {"access", "core", "models"},
-    "core": set(),
-    "documents": {"access", "audit", "core", "models", "operations", "search"},
-    "library": {
-        "access",
-        "audit",
-        "core",
-        "documents",
-        "models",
-        "operations",
-        "projects",
-        "search",
-    },
-    "workspaces": {"access", "audit", "core", "documents", "models", "operations"},
-    "mcp": {"accounts", "audit", "core"},
-    "operations": {"access", "audit", "core", "library", "models", "search"},
-    "projects": {"access", "audit", "core", "documents", "models"},
-    "search": {"models"},
-    "web": {
-        "access",
-        "accounts",
-        "audit",
-        "core",
-        "documents",
-        "library",
-        "mcp",
-        "models",
-        "operations",
-        "projects",
-        "search",
-        "workspaces",
-    },
-}
-
-ALLOWED_STANDALONE_DEPENDENCIES = {
-    "documents": {"inquiro"},
-    "library": {"inquiro", "rubrica"},
-    "search": {"inquiro"},
-}
 
 BUSINESS_ROLES = {"business", "domain-policy"}
-FORBIDDEN_BUSINESS_IMPORTS = ("fastapi", "mcp", "pydantic_ai", "quirebase.web")
 SESSION_METHODS = {
     "add",
     "commit",
@@ -187,18 +144,6 @@ def imported_modules(py_file: Path) -> set[str]:
     return modules
 
 
-def imported_quirebase_packages(package_dir: Path) -> set[str]:
-    packages: set[str] = set()
-    for py_file in get_python_files(package_dir):
-        for module in imported_modules(py_file):
-            if module == "quirebase.models":
-                packages.add("models")
-            elif module.startswith("quirebase."):
-                packages.add(module.split(".", 2)[1])
-    packages.discard(package_dir.name)
-    return packages
-
-
 def exported_names(package: str) -> set[str]:
     init_file = SRC_ROOT / package / "__init__.py"
     tree = ast.parse(init_file.read_text(encoding="utf-8"), filename=str(init_file))
@@ -294,18 +239,14 @@ def test_every_python_package_has_an_architectural_role():
         "Update PACKAGE_ROLES and docs/architecture/modules.md when adding or removing a package: "
         f"discovered={sorted(discovered)}, classified={sorted(PACKAGE_ROLES)}"
     )
-
-
-def test_package_dependencies_match_the_documented_policy():
-    assert set(ALLOWED_PACKAGE_DEPENDENCIES) == set(PACKAGE_ROLES)
-    for package_name in PACKAGE_ROLES:
-        actual = imported_quirebase_packages(SRC_ROOT / package_name)
-        disallowed = actual - ALLOWED_PACKAGE_DEPENDENCIES[package_name]
-        assert not disallowed, (
-            f"quirebase.{package_name} imports undocumented packages {sorted(disallowed)}; "
-            "remove the dependency or document its ownership reason in "
-            "docs/architecture/modules.md and ALLOWED_PACKAGE_DEPENDENCIES"
-        )
+    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    contracts = {
+        contract["id"]: contract for contract in metadata["tool"]["importlinter"]["contracts"]
+    }
+    for package in discovered:
+        contract = contracts[f"module-{package}"]
+        assert contract["type"] == "protected"
+        assert contract["protected_modules"] == [f"quirebase.{package}"]
 
 
 def test_casbin_is_the_only_application_authorization_policy_source():
@@ -365,37 +306,6 @@ def test_casbin_is_the_only_application_authorization_policy_source():
     )
 
 
-def test_standalone_dependency_policy_covers_every_application_edge():
-    for package_name in PACKAGE_ROLES:
-        actual: set[str] = set()
-        for py_file in get_python_files(SRC_ROOT / package_name):
-            for module in imported_modules(py_file):
-                root = module.split(".", 1)[0]
-                if root in STANDALONE_WORKSPACE_PACKAGES:
-                    actual.add(root)
-        allowed = ALLOWED_STANDALONE_DEPENDENCIES.get(package_name, set())
-        disallowed = actual - allowed
-        assert not disallowed, (
-            f"quirebase.{package_name} imports undocumented workspace packages "
-            f"{sorted(disallowed)}; update docs/architecture/modules.md and "
-            "ALLOWED_STANDALONE_DEPENDENCIES"
-        )
-
-
-def test_non_library_inquiro_edges_are_restricted_to_rich_text():
-    for package_name in ("documents", "search"):
-        imports = {
-            module
-            for py_file in get_python_files(SRC_ROOT / package_name)
-            for module in imported_modules(py_file)
-            if module == "inquiro" or module.startswith("inquiro.")
-        }
-        assert imports <= {"inquiro.richtext"}, (
-            f"quirebase.{package_name} may use only the neutral Inquiro Rich Text Interface; "
-            f"found {sorted(imports)}"
-        )
-
-
 def test_standalone_workspace_packages_are_classified():
     packages_root = REPO_ROOT / "packages"
     discovered = {
@@ -408,6 +318,8 @@ def test_standalone_workspace_packages_are_classified():
         f"removing a workspace package: discovered={sorted(discovered)}, "
         f"classified={sorted(STANDALONE_WORKSPACE_PACKAGES)}"
     )
+    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert set(metadata["tool"]["importlinter"]["root_packages"]) == {"quirebase", *discovered}
 
 
 def test_standalone_workspace_packages_own_their_test_surfaces():
@@ -586,17 +498,6 @@ def route(connection: DatabaseSession):
     assert [call.func.attr for call in calls if isinstance(call.func, ast.Attribute)] == ["commit"]
 
 
-def test_business_modules_do_not_import_transport_frameworks_or_vendor_ai_sdks():
-    for package_name, role in PACKAGE_ROLES.items():
-        if role not in BUSINESS_ROLES:
-            continue
-        for py_file in get_python_files(SRC_ROOT / package_name):
-            for module in imported_modules(py_file):
-                assert not module.startswith(FORBIDDEN_BUSINESS_IMPORTS), (
-                    f"{py_file} illegally imports transport or vendor module {module}"
-                )
-
-
 def test_inbound_adapters_do_not_own_transactions_persistence_or_audit():
     for adapter in ("mcp", "web"):
         for py_file in get_python_files(SRC_ROOT / adapter):
@@ -625,17 +526,6 @@ def test_inbound_adapters_do_not_own_transactions_persistence_or_audit():
                     )
 
 
-def test_only_core_storage_imports_obstore():
-    storage_module = SRC_ROOT / "core" / "storage.py"
-    for py_file in get_python_files(SRC_ROOT):
-        if py_file == storage_module:
-            continue
-        for module in imported_modules(py_file):
-            assert not module.startswith("obstore"), (
-                f"{py_file} bypasses the Core ObjectStore facade with {module}"
-            )
-
-
 def test_only_audit_module_constructs_audit_events():
     for package_name, role in PACKAGE_ROLES.items():
         if package_name == "audit" or role not in BUSINESS_ROLES:
@@ -651,11 +541,6 @@ def test_only_audit_module_constructs_audit_events():
                     raise AssertionError(
                         f"{py_file} constructs AuditEvent outside the Audit Module interface"
                     )
-
-
-def test_multi_item_document_downloads_cross_the_library_bulk_seam():
-    export_routes = SRC_ROOT / "web" / "api" / "library_exports.py"
-    assert "quirebase.documents" not in imported_modules(export_routes)
 
 
 def test_orm_models_have_one_documented_owner():
@@ -755,25 +640,6 @@ def test_library_facade_exposes_owned_import_citation_and_recommendation_operati
     assert not missing, f"quirebase.library facade is missing owned operations {sorted(missing)}"
 
 
-def test_external_callers_use_library_facade_for_owned_operations():
-    for package in ("mcp", "web"):
-        for py_file in get_python_files(SRC_ROOT / package):
-            for module in imported_modules(py_file):
-                assert not module.startswith("quirebase.library."), (
-                    f"{py_file} bypasses the Library facade through {module}"
-                )
-
-
-def test_standalone_workspace_packages_do_not_depend_on_quirebase_or_orm():
-    for package in STANDALONE_WORKSPACE_PACKAGES:
-        package_files = get_python_files(REPO_ROOT / "packages" / package / "src" / package)
-        for py_file in package_files:
-            for module in imported_modules(py_file):
-                assert not module.startswith(("quirebase", "sqlalchemy")), (
-                    f"{py_file} illegally imports {module}"
-                )
-
-
 def test_inquiro_runtime_owns_one_private_provider_catalog():
     inquiro_src = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
     assert "inquiro.providers._catalog" in imported_modules(inquiro_src / "runtime.py")
@@ -781,80 +647,18 @@ def test_inquiro_runtime_owns_one_private_provider_catalog():
     assert "inquiro.providers" not in imported_modules(inquiro_facade)
 
 
-def test_inquiro_providers_are_leaf_implementations():
-    provider_root = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "providers"
-    provider_files = [
-        py_file for py_file in provider_root.glob("*.py") if not py_file.name.startswith("_")
-    ]
-    provider_modules = {f"inquiro.providers.{py_file.stem}" for py_file in provider_files}
-    for py_file in provider_files:
-        dependencies = imported_modules(py_file)
-        peer_dependencies = dependencies & provider_modules
-        assert not peer_dependencies, (
-            f"{py_file} imports peer Providers {sorted(peer_dependencies)}"
-        )
-        assert "inquiro.runtime" not in dependencies
-        assert "inquiro.providers._catalog" not in dependencies
-
-
-def test_bibliography_package_facade_is_the_only_import_surface():
-    inquiro_src = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
-    internal_modules = {
-        f"inquiro.bibliography.{name}"
-        for name in (
-            "records",
-            "options",
-            "keys",
-            "formats",
-            "styles",
-            "engine",
-            "item_dicts",
-        )
-    }
-    outside = [
-        py_file
-        for py_file in get_python_files(REPO_ROOT / "src")
-        + get_python_files(REPO_ROOT / "tests")
-        + get_python_files(REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro")
-        if not py_file.is_relative_to(inquiro_src / "bibliography")
-    ]
-    for py_file in outside:
-        deep_imports = imported_modules(py_file) & internal_modules
+def test_bibliography_integration_tests_use_the_package_facade():
+    # Import Linter analyzes production packages; root tests remain application
+    # integrations and must also respect the Bibliography facade.
+    for py_file in get_python_files(REPO_ROOT / "tests"):
+        deep_imports = {
+            module
+            for module in imported_modules(py_file)
+            if module.startswith("inquiro.bibliography.")
+        }
         assert not deep_imports, (
             f"{py_file} bypasses the inquiro.bibliography facade: {sorted(deep_imports)}"
         )
-
-
-def test_bibliography_package_layers_stay_acyclic():
-    layer_order = {
-        "records": 0,
-        "options": 0,
-        "canonical": 0,
-        "keys": 1,
-        "formats": 2,
-        "styles": 2,
-        "item_dicts": 2,
-        "engine": 3,
-    }
-    package_root = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "bibliography"
-    for py_file in package_root.glob("*.py"):
-        if py_file.name == "__init__.py":
-            continue
-        layer = layer_order[py_file.stem]
-        for module in imported_modules(py_file):
-            if module.startswith("inquiro.bibliography.") and module != "inquiro.bibliography":
-                inner = module.removeprefix("inquiro.bibliography.")
-                assert layer_order.get(inner, layer) <= layer, (
-                    f"{py_file.name} (layer {layer}) imports higher layer {module}"
-                )
-
-
-def test_web_does_not_import_inquiro():
-    for py_file in get_python_files(SRC_ROOT / "web"):
-        dependencies = imported_modules(py_file)
-        assert not any(
-            module == "inquiro" or module.startswith("inquiro.") for module in dependencies
-        ), f"{py_file} imports Inquiro; Web Rich Text projection belongs to the frontend Adapter"
 
 
 def test_inquiro_facade_is_the_narrow_provider_interface():
@@ -902,9 +706,3 @@ def test_inquiro_sources_do_not_embed_quirebase_identity():
     package = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
     for source in package.rglob("*.py"):
         assert "quirebase" not in source.read_text(encoding="utf-8").casefold()
-
-
-def test_search_adapters_do_not_depend_on_each_other():
-    for adapter_name, peer_name in (("sqlite", "postgres"), ("postgres", "sqlite")):
-        py_file = SRC_ROOT / "search" / f"{adapter_name}.py"
-        assert f"quirebase.search.{peer_name}" not in imported_modules(py_file)

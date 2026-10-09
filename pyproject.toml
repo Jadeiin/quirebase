@@ -57,6 +57,7 @@ dev = [
   "pytest-cov>=6.2,<7",
   "pytest-xdist>=3.8,<4",
   "ruff>=0.16,<1",
+  "import-linter[ui]>=2.15,<3.0",
 ]
 
 [project.scripts]
@@ -182,3 +183,296 @@ version_files = [
   "packages/rubrica/pyproject.toml",
   "src/quirebase/__init__.py",
 ]
+
+# Import boundaries follow docs/architecture/modules.md. Protected contracts check
+# direct imports; legal indirect business dependencies remain allowed.
+[tool.importlinter]
+root_packages = ["quirebase", "inquiro", "rubrica"]
+include_external_packages = true
+exclude_type_checking_imports = false
+
+[[tool.importlinter.contracts]]
+id = "module-access"
+name = "Access has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.access"]
+allowed_importers = [
+  "quirebase.accounts",
+  "quirebase.audit",
+  "quirebase.documents",
+  "quirebase.library",
+  "quirebase.operations",
+  "quirebase.projects",
+  "quirebase.web",
+  "quirebase.workspaces",
+]
+
+[[tool.importlinter.contracts]]
+id = "module-accounts"
+name = "Accounts has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.accounts"]
+allowed_importers = ["quirebase.cli", "quirebase.mcp", "quirebase.web"]
+
+[[tool.importlinter.contracts]]
+id = "module-audit"
+name = "Audit has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.audit"]
+allowed_importers = [
+  "quirebase.accounts",
+  "quirebase.documents",
+  "quirebase.library",
+  "quirebase.mcp",
+  "quirebase.operations",
+  "quirebase.projects",
+  "quirebase.web",
+  "quirebase.workspaces",
+]
+
+[[tool.importlinter.contracts]]
+id = "module-core"
+name = "Core has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.core"]
+allowed_importers = [
+  "quirebase.access",
+  "quirebase.accounts",
+  "quirebase.audit",
+  "quirebase.cli",
+  "quirebase.documents",
+  "quirebase.library",
+  "quirebase.mcp",
+  "quirebase.models",
+  "quirebase.operations",
+  "quirebase.projects",
+  "quirebase.web",
+  "quirebase.workspaces",
+]
+
+[[tool.importlinter.contracts]]
+id = "module-documents"
+name = "Documents has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.documents"]
+allowed_importers = [
+  "quirebase.cli",
+  "quirebase.library",
+  "quirebase.projects",
+  "quirebase.web",
+  "quirebase.workspaces",
+]
+
+[[tool.importlinter.contracts]]
+id = "module-library"
+name = "Library has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.library"]
+allowed_importers = ["quirebase.cli", "quirebase.operations", "quirebase.web"]
+
+[[tool.importlinter.contracts]]
+id = "module-mcp"
+name = "Mcp has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.mcp"]
+allowed_importers = ["quirebase.web"]
+
+[[tool.importlinter.contracts]]
+id = "module-operations"
+name = "Operations has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.operations"]
+allowed_importers = [
+  "quirebase.accounts",
+  "quirebase.cli",
+  "quirebase.documents",
+  "quirebase.library",
+  "quirebase.web",
+  "quirebase.workspaces",
+]
+
+[[tool.importlinter.contracts]]
+id = "module-projects"
+name = "Projects has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.projects"]
+allowed_importers = ["quirebase.cli", "quirebase.library", "quirebase.web"]
+
+[[tool.importlinter.contracts]]
+id = "module-search"
+name = "Search has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.search"]
+allowed_importers = [
+  "quirebase.cli",
+  "quirebase.documents",
+  "quirebase.library",
+  "quirebase.operations",
+  "quirebase.web",
+]
+
+[[tool.importlinter.contracts]]
+id = "module-web"
+name = "Web has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.web"]
+allowed_importers = []
+
+[[tool.importlinter.contracts]]
+id = "module-workspaces"
+name = "Workspaces has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.workspaces"]
+allowed_importers = ["quirebase.accounts", "quirebase.cli", "quirebase.web"]
+
+[[tool.importlinter.contracts]]
+id = "module-models"
+name = "Models has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.models"]
+allowed_importers = [
+  "quirebase.access",
+  "quirebase.accounts",
+  "quirebase.audit",
+  "quirebase.cli",
+  "quirebase.documents",
+  "quirebase.library",
+  "quirebase.operations",
+  "quirebase.projects",
+  "quirebase.search",
+  "quirebase.web",
+  "quirebase.workspaces",
+]
+
+[[tool.importlinter.contracts]]
+id = "module-cli"
+name = "Cli has only documented direct callers"
+type = "protected"
+protected_modules = ["quirebase.cli"]
+allowed_importers = []
+
+[[tool.importlinter.contracts]]
+id = "business-transport"
+name = "Business Modules do not import transport frameworks or vendor AI SDKs"
+type = "forbidden"
+source_modules = [
+  "quirebase.access",
+  "quirebase.accounts",
+  "quirebase.audit",
+  "quirebase.documents",
+  "quirebase.library",
+  "quirebase.operations",
+  "quirebase.projects",
+  "quirebase.workspaces",
+]
+forbidden_modules = ["fastapi", "mcp", "pydantic_ai", "quirebase.web"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "obstore-owner"
+name = "Only Core storage imports obstore"
+type = "protected"
+protected_modules = ["obstore"]
+allowed_importers = ["quirebase.core.storage"]
+
+[[tool.importlinter.contracts]]
+id = "inquiro-callers"
+name = "Inquiro has only documented application callers"
+type = "protected"
+protected_modules = ["inquiro"]
+allowed_importers = ["quirebase.documents", "quirebase.library", "quirebase.search"]
+
+[[tool.importlinter.contracts]]
+id = "rubrica-callers"
+name = "Only Library adapts Rubrica"
+type = "protected"
+protected_modules = ["rubrica"]
+allowed_importers = ["quirebase.library"]
+
+[[tool.importlinter.contracts]]
+id = "standalone-packages"
+name = "Standalone packages do not depend on Quirebase or its ORM"
+type = "forbidden"
+source_modules = ["inquiro", "rubrica"]
+forbidden_modules = ["quirebase", "sqlalchemy"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "inquiro-richtext-callers"
+name = "Non-Library Inquiro callers use only Rich Text"
+type = "protected"
+protected_modules = ["inquiro.*"]
+allowed_importers = ["inquiro", "quirebase.library"]
+# Rich Text is the neutral interface shared with Documents and Search. The root
+# Inquiro contract still restricts which application Modules may use it.
+ignore_imports = ["quirebase.** -> inquiro.richtext"]
+
+[[tool.importlinter.contracts]]
+id = "inquiro-provider-facade"
+name = "Documents and Search do not import the Inquiro Provider facade"
+type = "forbidden"
+source_modules = [
+  "quirebase.documents",
+  "quirebase.documents.**",
+  "quirebase.search",
+  "quirebase.search.**",
+]
+forbidden_modules = ["inquiro"]
+as_packages = false
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "library-facade"
+name = "Library callers use its facade; CLI registers owned workflows"
+type = "protected"
+protected_modules = ["quirebase.library.*"]
+allowed_importers = ["quirebase.library", "quirebase.cli"]
+
+[[tool.importlinter.contracts]]
+id = "bibliography-facade"
+name = "Bibliography callers use its facade"
+type = "protected"
+protected_modules = ["inquiro.bibliography.*"]
+allowed_importers = ["inquiro.bibliography"]
+
+[[tool.importlinter.contracts]]
+id = "bibliography-layers"
+name = "Bibliography implementation layers stay acyclic"
+type = "layers"
+containers = ["inquiro.bibliography"]
+layers = ["engine", "formats : styles", "keys", "records : options"]
+exhaustive = true
+
+[[tool.importlinter.contracts]]
+id = "provider-layers"
+name = "Providers are independent leaves below their private catalog"
+type = "layers"
+containers = ["inquiro.providers"]
+layers = [
+  "_catalog",
+  "arxiv | crossref | datacite | ieee | nasa_ads | openalex | openlibrary | pmc | pubmed",
+  "_contracts : _payload",
+]
+exhaustive = true
+
+[[tool.importlinter.contracts]]
+id = "provider-runtime"
+name = "Provider implementations do not depend on the runtime"
+type = "forbidden"
+source_modules = ["inquiro.providers"]
+forbidden_modules = ["inquiro.runtime"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "search-adapters"
+name = "Search adapters are independent"
+type = "independence"
+modules = ["quirebase.search.sqlite", "quirebase.search.postgres"]
+
+[[tool.importlinter.contracts]]
+id = "bulk-downloads"
+name = "Multi-Item downloads cross the Library bulk interface"
+type = "forbidden"
+source_modules = ["quirebase.web.api.library_exports"]
+forbidden_modules = ["quirebase.documents"]
+allow_indirect_imports = true

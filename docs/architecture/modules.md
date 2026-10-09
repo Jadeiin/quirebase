@@ -2,7 +2,9 @@
 
 Quirebase is one bounded context implemented as a modular monolith. Top-level Python
 packages are Modules with explicit roles and ownership; directory placement alone does not
-make a seam. The enforceable dependency baseline lives in `tests/test_architecture.py`.
+make a seam. Import boundaries are declared under `[tool.importlinter]` in `pyproject.toml`.
+`tests/test_architecture.py` enforces ownership, facade exports and command responsibilities
+that cannot be expressed through module imports.
 
 Planned deepening work is ordered in `docs/architecture/deep-module-roadmap.md`.
 
@@ -96,6 +98,11 @@ and not the owner of the concepts it maps. The prototype and decision in
 capability packages would distribute SQLAlchemy relationship and import-order knowledge without
 deepening business interfaces. Architecture tests enforce one conceptual owner for every mapped
 class.
+
+The CLI also owns application bootstrap: its import contracts explicitly permit Accounts, Core,
+Documents, Library, Models, Operations, Projects, Search and Workspaces. Bootstrap registers owned
+durable workflows through their implementation modules; ordinary Library callers use its facade.
+The persistence mapping may import Core, and no other Module may import the CLI.
 
 ## Interfaces
 
@@ -387,7 +394,7 @@ product decision retires it; test-only use cases require the same review.
 
 ## Allowed dependency directions
 
-Every new top-level dependency must be added to the policy test and justified here. Existing
+Every new top-level dependency must be added to the import contracts and justified here. Existing
 directions are:
 
 | Source | May depend on | Ownership reason |
@@ -425,6 +432,20 @@ Business Modules never import FastAPI, MCP transports or vendor AI SDKs. Inbound
 not own transactions, ORM persistence, audit recording, object storage or search-index writes.
 True external systems receive a port and production/test adapters; local concrete dependencies
 remain concrete until a second adapter is justified.
+
+Run `uv run lint-imports` or `make lint-architecture` to check imports across Quirebase, Inquiro
+and Rubrica. The same check runs through prek locally and in CI, and `make lint-all` includes it.
+Protected contracts list each Module's allowed direct callers; they preserve the documented
+direct dependency policy even where business Modules have legal indirect dependencies or cycles.
+Type-checking imports are included. Bibliography and Provider internals use exhaustive layer
+contracts, while Search adapters use an independence contract. New top-level Modules need a role
+and a protected contract; new Bibliography or Provider implementation modules need a layer.
+
+Import Linter is a development dependency. It checks module imports, including relative imports
+and imports from parent packages. It does not check symbol-level rules, dynamic imports,
+transaction completion, authorization or Audit Event construction; the architecture and behavior
+tests retain those responsibilities. Package-owned tests may exercise private implementation seams;
+root integration tests continue to respect the Bibliography facade.
 
 ## Change completion criterion
 
