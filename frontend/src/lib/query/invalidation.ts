@@ -1,36 +1,50 @@
 import type { QueryClient, QueryKey } from '@tanstack/svelte-query';
-import { dashboardKeys } from '$lib/features/dashboard/queries';
-import { itemKeys } from '$lib/features/item/queries';
-import { libraryKeys } from '$lib/features/library/queries';
-import { projectKeys } from '$lib/features/projects/queries';
+import { dashboardKeys } from '#lib/features/dashboard/queries.js';
+import { itemKeys } from '#lib/features/item/queries.js';
+import { libraryKeys } from '#lib/features/library/queries.js';
+import { projectKeys } from '#lib/features/projects/queries.js';
 
 async function invalidate(queryClient: QueryClient, keys: QueryKey[]) {
 	await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 }
 
-export function invalidateItem(queryClient: QueryClient, itemId: string) {
+export function invalidateItem(queryClient: QueryClient, workspaceId: string, itemId: string) {
 	return invalidate(queryClient, [
-		itemKeys.detail(itemId),
-		itemKeys.workspace(itemId),
-		libraryKeys.all,
-		dashboardKeys.all
+		itemKeys.detail(workspaceId, itemId),
+		itemKeys.overview(workspaceId, itemId),
+		libraryKeys.all(workspaceId),
+		dashboardKeys.all(workspaceId)
 	]);
 }
-export function invalidateItemFiles(queryClient: QueryClient, itemId: string) {
-	return invalidate(queryClient, [itemKeys.files(itemId), itemKeys.workspace(itemId)]);
+export function invalidateItemFiles(queryClient: QueryClient, workspaceId: string, itemId: string) {
+	return invalidate(queryClient, [
+		itemKeys.files(workspaceId, itemId),
+		itemKeys.overview(workspaceId, itemId)
+	]);
 }
-export function invalidateItemOrganize(queryClient: QueryClient, itemId: string) {
-	return invalidate(queryClient, [itemKeys.organize(itemId), itemKeys.workspace(itemId)]);
+export function invalidateItemOrganize(
+	queryClient: QueryClient,
+	workspaceId: string,
+	itemId: string
+) {
+	return invalidate(queryClient, [
+		itemKeys.organize(workspaceId, itemId),
+		itemKeys.overview(workspaceId, itemId)
+	]);
 }
-export function invalidateItemDiscussion(queryClient: QueryClient, itemId: string) {
-	return invalidate(queryClient, [itemKeys.discussion(itemId), itemKeys.workspace(itemId)]);
+export function invalidateItemDiscussion(
+	queryClient: QueryClient,
+	workspaceId: string,
+	itemId: string
+) {
+	return invalidate(queryClient, [
+		itemKeys.discussion(workspaceId, itemId),
+		itemKeys.overview(workspaceId, itemId)
+	]);
 }
-export function invalidateLibrary(queryClient: QueryClient) {
-	return invalidate(queryClient, [libraryKeys.all, dashboardKeys.all]);
+export function invalidateLibrary(queryClient: QueryClient, workspaceId: string) {
+	return invalidate(queryClient, [libraryKeys.all(workspaceId), dashboardKeys.all(workspaceId)]);
 }
-export function invalidateProject(queryClient: QueryClient, projectId?: string) {
-	return invalidate(
-		queryClient,
-		projectId ? [projectKeys.detail(projectId), projectKeys.lists()] : [projectKeys.all]
-	);
+export function invalidateProject(queryClient: QueryClient, workspaceId: string) {
+	return invalidate(queryClient, [projectKeys.all(workspaceId), libraryKeys.all(workspaceId)]);
 }

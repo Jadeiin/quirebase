@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Annotated, Literal
+from uuid import UUID  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves schemas
 
 from pydantic import (
     UUID4,
@@ -151,11 +152,11 @@ AnnotationPayload = Annotated[
 
 class AnnotationCreate(CanonicalModel):
     id: UUID4
-    revision_id: str = Field(min_length=1, max_length=36)
+    revision_id: UUID
     page_index: int = Field(ge=0)
     kind: AnnotationKind
     scope: AnnotationScope = AnnotationScope.private
-    project_id: str | None = Field(default=None, max_length=36)
+    project_id: UUID | None = None
     body: str | None = Field(default=None, max_length=20_000)
     selected_text: PdfSelectedText | None = Field(default=None, max_length=50_000)
     payload: AnnotationPayload
@@ -174,7 +175,7 @@ class AnnotationUpdate(CanonicalModel):
     page_index: int = Field(ge=0)
     kind: AnnotationKind
     scope: AnnotationScope
-    project_id: str | None = Field(default=None, max_length=36)
+    project_id: UUID | None = None
     body: str | None = Field(default=None, max_length=20_000)
     selected_text: PdfSelectedText | None = Field(default=None, max_length=50_000)
     payload: AnnotationPayload
@@ -199,7 +200,7 @@ class AnnotationReplyUpdate(CanonicalModel):
 
 
 class ExportCreate(BaseModel):
-    revision_id: str
-    project_id: str | None = None
+    revision_id: UUID
+    project_id: UUID | None = None
     include_private: bool = True
     timezone: str | None = None

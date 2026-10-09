@@ -1,6 +1,10 @@
+---
+status: accepted
+---
+
 # ADR 0008: DBOS workflows and owned UUID objects
 
-Status: accepted. Supersedes the Job/Pipeline and FileLock decisions in ADR 0002 and ADR 0006,
+Supersedes the Job/Pipeline and FileLock decisions in ADR 0002 and ADR 0006,
 and the SHA-addressed object layout and reservation requirement in ADR 0007.
 
 Quirebase uses DBOS 2.x for durable execution. Web is a DBOS Client and a separately invoked

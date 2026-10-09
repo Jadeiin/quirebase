@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from uuid import UUID
+
+from advanced_alchemy.service import ResultConverter
+from advanced_alchemy.utils.serialization import schema_dump
 from fastapi import APIRouter, Request, Response, status
 
 from quirebase.accounts import (
@@ -10,39 +14,56 @@ from quirebase.accounts import (
     get_valid_invitation,
     list_api_tokens,
     list_user_sessions,
+    register_user,
     revoke_all_sessions,
     revoke_api_token,
     revoke_session,
 )
 from quirebase.core.config import get_settings
+from quirebase.models import User, Workspace
 from quirebase.web.api.account_schemas import (
     AccountSummaryView,
     ApiTokenCreateRequest,
     ApiTokenGrantView,
     ApiTokenView,
     InvitationAcceptRequest,
-    InvitationDetailsView,
     PasswordChangeRequest,
+    PublicInvitationDetailsView,
+    RegisterRequest,
+    WorkspaceInvitationDetailsView,
 )
 from quirebase.web.api.auth import require_same_origin
-from quirebase.web.api.common import OkView
+from quirebase.web.api.common import OkView, system_authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.errors import ApiHTTPException
+from quirebase.workspaces import get_workspace_invitation_by_token
 
-router = APIRouter(tags=["HTTP API"])
+router = APIRouter(tags=["Accounts and invitations"])
 
 
-@router.get("/invitations/{token}", response_model=InvitationDetailsView)
+@router.get("/invitations/{token}", response_model=PublicInvitationDetailsView)
 async def invitation_details(token: str, db: Database):
     invitation = await get_valid_invitation(db, token)
     if invitation is None:
+        workspace_invitation = await get_workspace_invitation_by_token(db, token)
+        if workspace_invitation is not None:
+            target = await db.get(User, workspace_invitation.user_id)
+            workspace = await db.get(Workspace, workspace_invitation.workspace_id)
+            if target is not None and workspace is not None:
+                return WorkspaceInvitationDetailsView(
+                    username=target.username,
+                    role=workspace_invitation.role,
+                    workspace_name=workspace.name,
+                    expires_at=workspace_invitation.expires_at,
+                )
         raise ApiHTTPException(
             status.HTTP_404_NOT_FOUND,
             "invitation_not_found",
             "invitation not found or expired",
         )
     return {
+        "kind": "account",
         "username": invitation.username,
         "role": invitation.role,
         "expires_at": invitation.expires_at,
@@ -58,15 +79,27 @@ async def accept_user_invitation(
     return OkView()
 
 
+@router.post("/register", response_model=OkView, status_code=status.HTTP_201_CREATED)
+async def register_account(data: RegisterRequest, request: Request, db: Database) -> OkView:
+    require_same_origin(request)
+    await register_user(db, data.username, data.password)
+    return OkView()
+
+
 @router.get("/account", response_model=AccountSummaryView)
 async def account_summary(request: Request, user: ApiUser, db: Database):
 
     raw_session = request.cookies.get(get_settings().session_cookie, "")
     current = await get_login_session_by_token(db, raw_session)
-    sessions = await list_user_sessions(db, user.id)
+    sessions = await list_user_sessions(db, user)
     tokens = await list_api_tokens(db, user)
     return {
-        "user": {"id": user.id, "username": user.username, "role": user.role},
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "authorization": system_authorization_view(user.role),
+        },
         "sessions": [
             LoginSessionView(
                 id=session.id,
@@ -76,16 +109,12 @@ async def account_summary(request: Request, user: ApiUser, db: Database):
             )
             for session in sessions
         ],
-        "api_tokens": [
-            ApiTokenView(
-                id=token.token_id,
-                name=token.name,
-                status=token.status,
-                expires_at=token.expires_at,
-                created_at=token.created_at,
-            )
-            for token in tokens
-        ],
+        "api_tokens": ResultConverter()
+        .to_schema(
+            [schema_dump(token) | {"status": token.status} for token in tokens],
+            schema_type=ApiTokenView,
+        )
+        .items,
     }
 
 
@@ -103,7 +132,7 @@ async def create_own_api_token(
 
 
 @router.delete("/account/api-tokens/{token_id}", response_model=OkView)
-async def revoke_own_api_token(token_id: str, user: ApiUser, db: Database) -> OkView:
+async def revoke_own_api_token(token_id: UUID, user: ApiUser, db: Database) -> OkView:
     await revoke_api_token(db, user, token_id)
     return OkView()
 
@@ -115,7 +144,7 @@ async def update_password(data: PasswordChangeRequest, user: ApiUser, db: Databa
 
 
 @router.delete("/account/sessions/{session_id}", response_model=OkView)
-async def revoke_own_session(session_id: str, user: ApiUser, db: Database) -> OkView:
+async def revoke_own_session(session_id: UUID, user: ApiUser, db: Database) -> OkView:
     await revoke_session(db, user, session_id)
     return OkView()
 

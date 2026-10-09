@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Toast } from '@skeletonlabs/skeleton-svelte';
-	import Icon from '$lib/design/Icon.svelte';
-	import { toaster } from '$lib/toaster';
-	import { t } from '$lib/i18n';
+	import Icon from '#lib/design/Icon.svelte';
+	import { toaster } from '#lib/toaster.js';
+	import { t } from '#lib/i18n.js';
 </script>
 
 <Toast.Group {toaster} class="group">

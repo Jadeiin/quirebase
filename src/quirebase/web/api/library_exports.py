@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter
 from fastapi.responses import Response, StreamingResponse
 
@@ -41,11 +43,12 @@ def _bibliography_options(data: BibliographyExportRequest) -> BibliographyExport
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_item_selection(
-    data: BibliographyExportRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: BibliographyExportRequest, user: ApiUser, db: Database
 ) -> Response:
     contents, media_type, filename = await export_selected_bibliography(
         db,
         user,
+        workspace_id,
         data.item_ids,
         data.file_format,
         style_key=data.style,
@@ -73,11 +76,12 @@ async def export_item_selection(
     },
 )
 async def download_item_selection(
-    data: DocumentArchiveRequest, user: ApiUser, db: Database
+    workspace_id: UUID, data: DocumentArchiveRequest, user: ApiUser, db: Database
 ) -> StreamingResponse:
     archive = await download_selected_item_documents(
         db,
         user,
+        workspace_id,
         data.item_ids,
         include_annotations=data.include_annotations,
         include_supplements=data.include_supplements,
@@ -99,10 +103,14 @@ async def download_item_selection(
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_library_bibliography(
-    user: ApiUser, db: Database, file_format: str, style: str = "apa"
+    workspace_id: UUID,
+    user: ApiUser,
+    db: Database,
+    file_format: str,
+    style: str = "apa",
 ) -> Response:
     contents, media_type, filename = await export_accessible_bibliography(
-        db, user, file_format, style_key=style
+        db, user, workspace_id, file_format, style_key=style
     )
     return Response(
         contents,

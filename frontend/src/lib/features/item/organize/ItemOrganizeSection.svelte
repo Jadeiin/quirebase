@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { domainLabel } from '$lib/domain-labels';
-	import Badge from '$lib/design/Badge.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { can } from '#lib/authorization/can.js';
+	import Badge from '#lib/design/Badge.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { t } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
 	import type { OrganizeView } from '../types';
-	import Button from '$lib/design/Button.svelte';
+	import Button from '#lib/design/Button.svelte';
 
 	let { data, busy, onToggleProject, onAddTag, onToggleTag, onAddSuggestedTag, onRefresh } =
 		$props<{
@@ -19,7 +20,31 @@
 		}>();
 
 	let tagFilter = $state('');
-	const canEdit = $derived(data.permissions.edit);
+	let projectFilter = $state('');
+	const primaryProjects = $derived(
+		data.projects.filter(
+			(project: OrganizeView['projects'][number]) =>
+				project.assigned || project.is_participating || project.participation === 'workspace'
+		)
+	);
+	const otherOpenProjects = $derived(
+		data.projects.filter(
+			(project: OrganizeView['projects'][number]) =>
+				!project.assigned &&
+				!project.is_participating &&
+				project.participation === 'open' &&
+				project.name.toLocaleLowerCase().includes(projectFilter.toLocaleLowerCase())
+		)
+	);
+	const managedProjects = $derived(
+		data.projects.filter(
+			(project: OrganizeView['projects'][number]) =>
+				!project.assigned && !project.is_participating && project.participation === 'managed'
+		)
+	);
+	const canUseTags = $derived(can(data.authorization, 'tag.use'));
+	const canCreateTags = $derived(canUseTags && can(data.authorization, 'tag.create'));
+	const canManageProjects = $derived(can(data.authorization, 'project_item.manage'));
 	const groups = $derived(
 		data.tag_matrix.groups
 			.map((group: components['schemas']['TagMatrixGroupView']) => ({
@@ -31,6 +56,24 @@
 			.filter((group: components['schemas']['TagMatrixGroupView']) => group.tags.length)
 	);
 </script>
+
+{#snippet projectRows(projects: OrganizeView['projects'])}
+	<div class="divide-y divide-surface-300-700">
+		{#each projects as project (project.id)}
+			<div class="flex items-center justify-between gap-3 py-2">
+				<strong class="truncate text-sm font-semibold">{project.name}</strong>
+				<Button
+					variant={project.assigned ? 'tonal' : 'primary'}
+					size="sm"
+					disabled={busy || !canManageProjects}
+					onclick={() => onToggleProject(project)}
+				>
+					{project.assigned ? $t('Remove') : $t('Add')}
+				</Button>
+			</div>
+		{/each}
+	</div>
+{/snippet}
 
 <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(19rem,1fr)]">
 	<div class="grid grid-cols-1 gap-4">
@@ -62,7 +105,7 @@
 									type="button"
 									variant={assigned ? 'primary' : 'surface'}
 									class={`cursor-pointer border ${assigned ? 'border-primary-700-300' : 'border-surface-300-700'}`}
-									disabled={busy || !canEdit}
+									disabled={busy || !canUseTags}
 									aria-pressed={assigned}
 									onclick={() => onToggleTag(tag.id, assigned)}
 									>{tag.name}{data.tag_matrix.recommended_ids.includes(tag.id) ? ' ★' : ''}</Badge
@@ -76,28 +119,36 @@
 		</Panel>
 		<Panel>
 			<h2 class="m-0 mb-2">{$t('Projects')}</h2>
-			<div class="divide-y divide-surface-300-700">
-				{#each data.projects as project (project.id)}
-					<div class="flex items-center justify-between gap-3 py-2">
-						<div class="flex min-w-0 items-center gap-2">
-							<strong class="truncate text-sm font-semibold">{project.name}</strong>
-							<Badge class="shrink-0 border border-surface-300-700"
-								>{$t(domainLabel(project.role))}</Badge
-							>
-						</div>
-						<Button
-							variant={project.assigned ? 'tonal' : 'primary'}
-							size="sm"
-							class={`shrink-0 border ${project.assigned ? 'border-surface-300-700' : 'border-primary-700-300/30'}`}
-							disabled={busy || !canEdit}
-							onclick={() => onToggleProject(project)}
-							>{project.assigned ? $t('Remove') : $t('Add')}</Button
-						>
-					</div>
-				{:else}
-					<p class="m-0 text-sm text-surface-600-400">{$t('No available projects.')}</p>
-				{/each}
-			</div>
+
+			{#if primaryProjects.length > 0}
+				<p class="text-sm text-surface-600-400">{$t('Assigned, Workspace and Your Projects')}</p>
+				{@render projectRows(primaryProjects)}
+			{/if}
+			{#if data.projects.some((project: OrganizeView['projects'][number]) => !project.assigned && !project.is_participating && project.participation === 'open')}
+				<details class="mt-3">
+					<summary class="cursor-pointer text-sm font-semibold">{$t('Other open Projects')}</summary
+					>
+					<input
+						class="mt-2 input"
+						bind:value={projectFilter}
+						aria-label={$t('Search Projects')}
+						placeholder={$t('Search Projects')}
+					/>
+					{@render projectRows(otherOpenProjects)}
+					{#if otherOpenProjects.length === 0}<p class="text-sm text-surface-600-400">
+							{$t('No matching Projects.')}
+						</p>{/if}
+				</details>
+			{/if}
+			{#if managedProjects.length > 0}
+				<details class="mt-3">
+					<summary class="cursor-pointer text-sm font-semibold">{$t('Managed Projects')}</summary>
+					{@render projectRows(managedProjects)}
+				</details>
+			{/if}
+			{#if data.projects.length === 0}<p class="m-0 text-sm text-surface-600-400">
+					{$t('No available projects.')}
+				</p>{/if}
 		</Panel>
 	</div>
 	<div class="grid grid-cols-1 gap-4">
@@ -113,25 +164,23 @@
 						type="button"
 						variant="primary"
 						class="cursor-pointer border border-primary-700-300/20"
-						disabled={busy || !canEdit}
+						disabled={busy || !canUseTags}
 						onclick={() => onToggleTag(tag.id, true)}>{tag.name} ×</Badge
 					>
 				{:else}
 					<span class="text-sm text-surface-600-400">{$t('No tags')}</span>
 				{/each}
 			</div>
-			<form class="mt-3 flex items-center gap-2" onsubmit={onAddTag}>
-				<input
-					class="input min-w-0 flex-1 border border-surface-300-700 field-sm"
-					name="name"
-					placeholder={$t('New tag')}
-					required
-				/><Button
-					size="sm"
-					class="shrink-0 border border-surface-300-700"
-					disabled={busy || !canEdit}>{$t('Add tag')}</Button
-				>
-			</form>
+			{#if canCreateTags}<form class="mt-3 flex items-center gap-2" onsubmit={onAddTag}>
+					<input
+						class="input min-w-0 flex-1 border border-surface-300-700 field-sm"
+						name="name"
+						placeholder={$t('New tag')}
+						required
+					/><Button size="sm" class="shrink-0 border border-surface-300-700" disabled={busy}
+						>{$t('Add tag')}</Button
+					>
+				</form>{/if}
 		</Panel>
 		<Panel>
 			<div class="flex items-start justify-between gap-3">
@@ -139,7 +188,7 @@
 				<Button
 					size="sm"
 					class="shrink-0 border border-surface-300-700"
-					disabled={busy || !canEdit}
+					disabled={busy || !can(data.authorization, 'item.update')}
 					onclick={onRefresh}>{$t('Refresh')}</Button
 				>
 			</div>
@@ -156,7 +205,7 @@
 						type="button"
 						variant="warning"
 						class="cursor-pointer border border-warning-700-300/30"
-						disabled={busy || !canEdit}
+						disabled={busy || !canCreateTags}
 						onclick={() => onAddSuggestedTag(name)}>+ {name}</Badge
 					>
 				{:else}

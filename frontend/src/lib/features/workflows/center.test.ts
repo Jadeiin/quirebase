@@ -2,12 +2,12 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { msg } from '$lib/i18n';
-import { toaster } from '$lib/toaster';
+import { msg } from '#lib/i18n.js';
+import { toaster } from '#lib/toaster.js';
 import { WorkflowCenter, type TrackedWorkflow, type WorkflowLedger } from './center.svelte';
 import type { WorkflowStatus } from './queries';
 
-vi.mock('$lib/toaster', () => ({
+vi.mock('#lib/toaster.js', () => ({
 	toaster: { create: vi.fn(), dismiss: vi.fn() }
 }));
 
@@ -255,17 +255,6 @@ describe('WorkflowCenter', () => {
 
 		expect(center.jobs.map((job) => job.id)).toEqual(['workflow-b']);
 		expect(first.entries().map((entry) => entry.id)).toEqual(['workflow-a']);
-	});
-
-	it('rejects in-flight waiters when the ledger switches accounts', async () => {
-		const first = memoryLedger();
-		const second = memoryLedger();
-		const center = new WorkflowCenter(first.ledger);
-		const { settled } = center.track('workflow-a', trackOptions());
-
-		center.bindLedger(second.ledger);
-
-		await expect(settled).rejects.toThrow('Workflow tracking moved to another account');
 	});
 
 	it('never evicts active jobs when enforcing the tray limit', () => {

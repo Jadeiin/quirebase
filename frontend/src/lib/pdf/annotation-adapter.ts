@@ -6,7 +6,7 @@ import {
 	PdfAnnotationSubtype,
 	type PdfAnnotationObject
 } from '@embedpdf/models';
-import type { components } from '$lib/api/schema';
+import type { components } from '#lib/api/schema.js';
 
 type AnnotationKind = components['schemas']['AnnotationKind'];
 type AnnotationView = components['schemas']['AnnotationView'];

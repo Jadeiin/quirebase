@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from inquiro.richtext import convert_rich_text
@@ -18,7 +19,7 @@ def search_text_for_item(item: Item) -> str:
             item.authors,
             item.editors,
             item.keywords,
-            item.custom_fields,
+            json.dumps(item.custom_fields, ensure_ascii=False) if item.custom_fields else None,
             item.identifiers,
         )
         if value

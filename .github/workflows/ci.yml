@@ -13,6 +13,9 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.2"
@@ -31,7 +34,22 @@ jobs:
       - run: bun run test
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e
+      - name: Repeat PDF save interleavings
+        env:
+          PDF_REPLAY_COUNT: ${{ github.event_name == 'workflow_dispatch' && '30' || '5' }}
+        run: >-
+          bun run test:e2e -- e2e/pdf.spec.ts -g 'private edits|private draft'
+          --repeat-each="$PDF_REPLAY_COUNT" --workers=2
       - run: bun run test:e2e:fullstack
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-e2e-failures
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 14
   sqlite:
     strategy:
       matrix:
@@ -53,14 +71,23 @@ jobs:
       - run: uv sync
       - run: bun install --cwd frontend --frozen-lockfile
       - run: bun run --cwd frontend build
+      - run: uv run python scripts/export-authorization-matrix.py --check
       - run: uv run prek run --all-files
       - run: uv run mypy src/quirebase
       - run: uv run pytest -q -m "not oa" -n 4 --dist loadscope
       - run: uv run quirebase init-db
       - run: uv run quirebase doctor
+      - run: uv run alchemy --config quirebase.core.database.database_config check
       - run: uv build --all-packages --no-sources
+      - name: Initialize authorization from installed wheels
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv venv "${RUNNER_TEMP}/quirebase-wheel-smoke" --python 3.12
+          uv pip install --python "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" dist/*.whl
+          "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" -I -c "from quirebase.access import initialize_authorization; initialize_authorization()"
   postgres:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:18
@@ -82,7 +109,25 @@ jobs:
           version: "0.12.14"
           python-version: "3.12"
       - run: uv sync --extra postgres
-      - run: uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py tests/test_schema_parity.py
+      - name: PostgreSQL contracts and controlled concurrency
+        run: >-
+          uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
+          tests/test_project_discovery.py
+          tests/test_workspace_commands.py
+          tests/test_workspace_integrity.py
+          tests/test_persistence_dependencies.py tests/test_persistence_boundaries.py
+          tests/test_persistence_operations.py tests/test_persistence_values.py
+          tests/test_owned_lifecycle.py
+          tests/test_durable_recovery.py
+          tests/test_concurrency_harness.py tests/test_concurrency_reporting.py tests/test_schema_parity.py
+          --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
+      - name: Preserve concurrency coverage and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgres-concurrency
+          path: concurrency-results/
+          retention-days: 14
       - name: Verify migrations and durable workflows against PostgreSQL
         env:
           QUIREBASE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quirebase_migrations
@@ -90,6 +135,7 @@ jobs:
           uv run python -c "import psycopg; psycopg.connect('postgresql://postgres:postgres@localhost:5432/postgres', autocommit=True).execute('CREATE DATABASE quirebase_migrations')"
           uv run quirebase init-db
           uv run quirebase doctor
+          uv run alchemy --config quirebase.core.database.database_config check
   s3-object-store:
     runs-on: ubuntu-latest
     env:

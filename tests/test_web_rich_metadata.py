@@ -6,9 +6,11 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidateRecord, Identifier
 from sqlalchemy import func, select
 from test_http import authenticated_async_client
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
 from quirebase.models import (
@@ -20,6 +22,7 @@ from quirebase.models import (
     ItemTagRecommendation,
     SystemSetting,
     Tag,
+    User,
 )
 
 
@@ -28,13 +31,14 @@ async def test_http_api_creates_complete_metadata(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, _item, _ = await authenticated_async_client(
+    client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
 
     response = await client.post(
-        "/api/v1/items",
-        json={
+        f"{workspace_base}/items",
+        json=json_payload({
             "title": "Complete manual record",
             "abstract": "All editable metadata is accepted during creation.",
             "reference_type": "article",
@@ -59,20 +63,20 @@ async def test_http_api_creates_complete_metadata(
                 {"last_name": "Turing", "first_name": "Alan"},
             ],
             "editors": [{"last_name": "Hopper", "first_name": "Grace"}],
-        },
+        }),
     )
 
     assert response.status_code == 201
     created = await db.scalar(select(Item).where(Item.title == "Complete manual record"))
     assert created is not None
-    assert response.json() == {"id": created.id, "version": 1}
+    assert response.json() == json_payload({"id": created.id, "version": 1})
     assert created.authors == "Lovelace, Ada; Turing, Alan"
     assert created.editors == "Hopper, Grace"
     assert created.doi == "10.1000/complete"
     assert json.loads(created.identifiers or "") == {"pmid": "12345"}
     assert created.keywords == "forms; metadata"
     assert created.urls == "https://example.test/record\nhttps://example.test/pdf"
-    assert json.loads(created.custom_fields or "") == {"rating": 5}
+    assert (created.custom_fields or {}) == {"rating": 5}
     await client.aclose()
 
 
@@ -84,10 +88,11 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     response = await client.put(
-        f"/api/v1/items/{item_id}",
-        json={
+        f"{workspace_base}/items/{item_id}",
+        json=json_payload({
             "expected_version": item.version,
             "metadata": {
                 "title": "Attention Is All You Need",
@@ -124,7 +129,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
                     {"last_name": "von Luxburg", "first_name": "Ulrike"},
                 ],
             },
-        },
+        }),
     )
     assert response.status_code == 200
 
@@ -137,7 +142,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
     assert updated.pages == "5998-6008"
     assert updated.affiliation == "Google Brain"
     assert updated.bibtex_id == "vaswani2017attention"
-    assert json.loads(updated.custom_fields or "") == {
+    assert (updated.custom_fields or {}) == {
         "rating": 5,
         "flags": ["reviewed"],
         "meta": {"source": "manual"},
@@ -168,29 +173,31 @@ async def test_http_api_tag_matrix_and_selection(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     item.keywords = "Natural Language Processing; New Research Direction"
 
-    tag1 = Tag(name="Machine Learning", created_by=item.created_by)
-    tag2 = Tag(name="Transformers", created_by=item.created_by)
+    tag1 = Tag(workspace_id=item.workspace_id, name="Machine Learning", created_by=item.created_by)
+    tag2 = Tag(workspace_id=item.workspace_id, name="Transformers", created_by=item.created_by)
     db.add_all([tag1, tag2])
     await db.flush()
-    db.add(ItemTag(item_id=item.id, tag_id=tag2.id))
+    db.add(ItemTag(workspace_id=item.workspace_id, item_id=item.id, tag_id=tag2.id))
     recommendation = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item.id)
     )
     if recommendation is None:
         recommendation = ItemTagRecommendation(
+            workspace_id=item.workspace_id,
             item_id=item.id,
             generation_token=1,
         )
         db.add(recommendation)
-    recommendation.single_words = json.dumps([])
-    recommendation.phrases = json.dumps(["Natural Language Processing", "New Research Direction"])
+    recommendation.single_words = []
+    recommendation.phrases = ["Natural Language Processing", "New Research Direction"]
     recommendation.generated_at = datetime.now(UTC)
     await db.commit()
 
-    organize = await client.get(f"/api/v1/items/{item_id}/organize")
+    organize = await client.get(f"{workspace_base}/items/{item_id}/organize")
     assert organize.status_code == 200
     assert organize.json()["tag_matrix"]["suggested_names"] == [
         "Natural Language Processing",
@@ -198,8 +205,8 @@ async def test_http_api_tag_matrix_and_selection(
     ]
 
     response = await client.put(
-        f"/api/v1/items/{item_id}/tags",
-        json={
+        f"{workspace_base}/items/{item_id}/tags",
+        json=json_payload({
             "add_tag_ids": [tag1.id],
             "remove_tag_ids": [tag2.id],
             "new_names": [
@@ -207,22 +214,19 @@ async def test_http_api_tag_matrix_and_selection(
                 "New Research Direction",
                 "Deep Learning",
             ],
-        },
+        }),
     )
     assert response.status_code == 200
 
-    db.expire_all()
-    item_tags = list(
-        await db.scalars(
-            select(Tag).join(ItemTag, ItemTag.tag_id == Tag.id).where(ItemTag.item_id == item_id)
-        )
-    )
-    item_tags = [tag.name for tag in item_tags]
-    assert "Machine Learning" in item_tags
-    assert "Natural Language Processing" in item_tags
-    assert "New Research Direction" in item_tags
-    assert "Deep Learning" in item_tags
-    assert "Transformers" not in item_tags
+    organized = await client.get(f"{workspace_base}/items/{item_id}/organize")
+    assert organized.status_code == 200
+    selected_tags = {tag["name"] for tag in organized.json()["tags"]}
+    assert selected_tags == {
+        "Machine Learning",
+        "Natural Language Processing",
+        "New Research Direction",
+        "Deep Learning",
+    }
     await client.aclose()
 
 
@@ -234,25 +238,27 @@ async def test_http_api_tag_recommendation_pending_failed_and_retry_states(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     workflow_id = f"recommendation-ui:{item.id}"
     await fake_durable_operations.enqueue(
         "library.recommend_tags",
         queue_name="library",
         workflow_id=workflow_id,
-        attributes={"owner_id": item.created_by},
+        attributes={"actor_id": item.created_by, "workspace_id": item.workspace_id},
     )
     recommendation = ItemTagRecommendation(
+        workspace_id=item.workspace_id,
         item_id=item.id,
         generation_token=1,
         workflow_id=workflow_id,
-        single_words=json.dumps(["stale-candidate"]),
-        phrases=json.dumps([]),
+        single_words=["stale-candidate"],
+        phrases=[],
     )
     db.add(recommendation)
     await db.commit()
 
-    pending = await client.get(f"/api/v1/items/{item_id}/organize")
+    pending = await client.get(f"{workspace_base}/items/{item_id}/organize")
     assert pending.json()["tag_matrix"]["recommendation_state"] == "pending"
     assert pending.json()["tag_matrix"]["suggested_names"] == []
 
@@ -260,19 +266,19 @@ async def test_http_api_tag_recommendation_pending_failed_and_retry_states(
     fake_durable_operations.workflows[workflow_id] = replace(
         current, state="failed", raw_status="ERROR", error="RuntimeError: extraction failed"
     )
-    failed = await client.get(f"/api/v1/items/{item_id}/organize")
+    failed = await client.get(f"{workspace_base}/items/{item_id}/organize")
     assert failed.json()["tag_matrix"]["recommendation_state"] == "failed"
     assert failed.json()["tag_matrix"]["recommendation_error"] == (
         "RuntimeError: extraction failed"
     )
 
     retry = await client.post(
-        f"/api/v1/items/{item_id}/tag-recommendations",
+        f"{workspace_base}/items/{item_id}/tag-recommendations",
     )
     assert retry.status_code == 200
     retry_workflow_id = retry.json()["id"]
     assert retry_workflow_id == f"item-recommend-tags:{item_id}:2"
-    progress = await client.get(f"/api/v1/workflows/{retry_workflow_id}")
+    progress = await client.get(f"{workspace_base}/workflows/{retry_workflow_id}")
     assert progress.json()["state"] == "pending"
     await db.refresh(recommendation)
     assert recommendation.generation_token == 2
@@ -288,6 +294,7 @@ async def test_http_api_syncs_metadata_and_updates_bibtex_key(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
 
     item.title = "Temporary Title"
@@ -297,7 +304,7 @@ async def test_http_api_syncs_metadata_and_updates_bibtex_key(
 
     # Test update citation key
     response = await client.post(
-        f"/api/v1/items/{item_id}/citation-key/regenerate",
+        f"{workspace_base}/items/{item_id}/citation-key/regenerate",
     )
     assert response.status_code == 200
     db.expire_all()
@@ -330,12 +337,12 @@ async def test_http_api_syncs_metadata_and_updates_bibtex_key(
         ),
     ):
         response = await client.post(
-            f"/api/v1/items/{item_id}/metadata/sync",
-            json={
+            f"{workspace_base}/items/{item_id}/metadata/sync",
+            json=json_payload({
                 "expected_version": item.version,
                 "provider": "doi",
                 "uid": "10.1038/s41586-019-1666-5",
-            },
+            }),
         )
         assert response.status_code == 200
 
@@ -356,6 +363,7 @@ async def test_http_api_sync_metadata_uses_effective_runtime_provider_settings(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     db.add(SystemSetting(key="nasa_ads_token", value="runtime-ads-token"))
     await db.commit()
 
@@ -370,12 +378,12 @@ async def test_http_api_sync_metadata_uses_effective_runtime_provider_settings(
         ),
     ) as lookup:
         response = await client.post(
-            f"/api/v1/items/{item.id}/metadata/sync",
-            json={
+            f"{workspace_base}/items/{item.id}/metadata/sync",
+            json=json_payload({
                 "expected_version": item.version,
                 "provider": "bibcode",
                 "uid": "2024ApJ...123A...1X",
-            },
+            }),
         )
 
     assert response.status_code == 200
@@ -398,15 +406,16 @@ async def test_http_api_sync_metadata_translates_expected_lookup_failures(
     client, item, _ = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
 
     with patch("quirebase.library.identifiers.lookup_candidate", new=AsyncMock(side_effect=error)):
         response = await client.post(
-            f"/api/v1/items/{item.id}/metadata/sync",
-            json={
+            f"{workspace_base}/items/{item.id}/metadata/sync",
+            json=json_payload({
                 "expected_version": item.version,
                 "provider": "doi",
                 "uid": "invalid",
-            },
+            }),
         )
 
     assert response.status_code == status_code
@@ -416,25 +425,47 @@ async def test_http_api_sync_metadata_translates_expected_lookup_failures(
 @pytest.mark.anyio
 async def test_http_api_suggests_authors(async_db, async_session_factory, tmp_path, monkeypatch):
     db = async_db
-    client, _, _ = await authenticated_async_client(
+    client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
 
     a1 = Author(last_name="LeCun", first_name="Yann")
     a2 = Author(last_name="Bengio", first_name="Yoshua")
     a3 = Author(last_name="Hinton", first_name="Geoffrey")
-    db.add_all([a1, a2, a3])
+    remote = Author(last_name="Leibniz", first_name="Gottfried")
+    other = User(username="author-suggestion-other", password_hash="unused")
+    db.add_all([a1, a2, a3, remote, other])
+    await db.flush()
+    await provision_initial_workspace(db, other)
+    other_item = Item(workspace_id=fixture_workspace_id(other), title="Other", created_by=other.id)
+    db.add(other_item)
+    await db.flush()
+    db.add_all([
+        ItemAuthor(item_id=item.id, author_id=a1.id),
+        ItemAuthor(item_id=other_item.id, author_id=remote.id),
+    ])
     await db.commit()
 
-    response = await client.get("/api/v1/authors?query=le")
+    response = await client.get(f"{workspace_base}/authors?query=le")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
     assert data[0]["last_name"] == "LeCun"
     assert data[0]["first_name"] == "Yann"
+    assert data[0]["id"] == str(a1.id)
+
+    forbidden = await client.get(
+        f"/api/v1/workspaces/{fixture_workspace_id(other)}/authors?query=le"
+    )
+    assert forbidden.status_code == 404
+    assert forbidden.json() == {
+        "code": "workspace_unavailable",
+        "message": "Workspace not found",
+    }
 
     client.cookies.clear()
-    assert (await client.get("/api/v1/authors?query=le")).status_code == 401
+    assert (await client.get(f"{workspace_base}/authors?query=le")).status_code == 401
     await client.aclose()
 
 
@@ -446,6 +477,7 @@ async def test_http_api_edit_synchronizes_identifier_rows(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"))
     item.doi = "10.1000/old"
@@ -453,8 +485,8 @@ async def test_http_api_edit_synchronizes_identifier_rows(
     await db.commit()
 
     response = await client.put(
-        f"/api/v1/items/{item_id}",
-        json={
+        f"{workspace_base}/items/{item_id}",
+        json=json_payload({
             "expected_version": item.version,
             "metadata": {
                 "title": item.title,
@@ -464,7 +496,7 @@ async def test_http_api_edit_synchronizes_identifier_rows(
                     {"provider": "arxiv", "value": "2401.12345"},
                 ],
             },
-        },
+        }),
     )
 
     assert response.status_code == 200
@@ -488,6 +520,7 @@ async def test_http_api_edit_can_clear_all_structured_editors(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     editor = Author(last_name="Knuth", first_name="Donald")
     db.add(editor)
@@ -497,11 +530,11 @@ async def test_http_api_edit_can_clear_all_structured_editors(
     await db.commit()
 
     response = await client.put(
-        f"/api/v1/items/{item_id}",
-        json={
+        f"{workspace_base}/items/{item_id}",
+        json=json_payload({
             "expected_version": item.version,
             "metadata": {"title": item.title, "editors": []},
-        },
+        }),
     )
 
     assert response.status_code == 200
@@ -528,6 +561,7 @@ async def test_http_api_serializes_structured_people_as_json(
     client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     author = Author(last_name='O"Connor & Co\\', first_name='Ada "A"')
     editor = Author(last_name="D'Angelo", first_name="Luca")
     db.add_all([author, editor])
@@ -549,7 +583,7 @@ async def test_http_api_serializes_structured_people_as_json(
     ])
     await db.commit()
 
-    response = await client.get(f"/api/v1/items/{item.id}")
+    response = await client.get(f"{workspace_base}/items/{item.id}")
 
     assert response.status_code == 200
     assert response.json()["structured_authors"] == [

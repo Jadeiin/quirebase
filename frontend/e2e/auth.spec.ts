@@ -1,16 +1,21 @@
+import { directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
 
 test('stored locale activates navigation without an unrelated rerender', async ({ page }) => {
 	await page.addInitScript(() => localStorage.setItem('quirebase:locale', 'zh-CN'));
 	await mockSession(page);
-	await page.route('**/api/v1/dashboard', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({
 			json: { new_items: [], recent_items: [], projects: [], session_count: 1 }
 		})
 	);
-	await page.route('**/api/v1/items*', (route) =>
-		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
+	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 
 	await page.goto('/');

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+from uuid import UUID
 
+from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, ConfigDict, Field
 
-from quirebase.core.timezones import as_utc
-from quirebase.library import ItemMetadata
+from quirebase.access import WorkspaceContext, discussion_message_decisions
+from quirebase.library import ItemMetadata, ItemMetadataData
+from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
 class ItemSearchView(BaseModel):
-    id: str
+    id: UUID
     title_html: str
     authors: str | None
     publication_date: str | None
@@ -18,17 +21,13 @@ class ItemSearchView(BaseModel):
     version: int
 
 
-class LibrarySearchView(BaseModel):
-    items: list[ItemSearchView]
-    total: int
-    page: int
-    per_page: int
+LibrarySearchView = OffsetPagination[ItemSearchView]
 
 
 class BulkActionRequest(BaseModel):
-    item_ids: list[str]
+    item_ids: list[UUID]
     action: str
-    project_id: str = ""
+    project_id: UUID | None = None
     tag_name: str = ""
     confirmation: str = ""
 
@@ -53,20 +52,23 @@ class ItemDetailView(ItemSearchView):
 
 
 class TagView(BaseModel):
-    id: str
+    id: UUID
     name: str
     accessible_item_count: int
-    can_manage: bool
+    authorization: WorkspaceAuthorizationView
 
 
 class DiscussionMessageView(BaseModel):
-    id: str
-    item_id: str
-    author_id: str
+    id: UUID
+    item_id: UUID | None = None
+    project_id: UUID | None = None
+    author_id: UUID
     author_username: str
+    mine: bool
     body: str
     created_at: str
     updated_at: str
+    authorization: WorkspaceAuthorizationView
 
 
 class CitationView(BaseModel):
@@ -75,7 +77,7 @@ class CitationView(BaseModel):
 
 
 class AuthorSuggestionView(BaseModel):
-    id: str
+    id: UUID
     last_name: str
     first_name: str | None = None
     full_name: str
@@ -103,27 +105,27 @@ def item_search_view(item: Any) -> ItemSearchView:
     )
 
 
-def item_detail_view(workspace: Any) -> ItemDetailView:
-    item = workspace.item
+def item_detail_view(view: ItemMetadataData) -> ItemDetailView:
+    item = view.item
     return ItemDetailView(
         **item_search_view(item).model_dump(),
-        metadata=workspace.metadata,
+        metadata=view.metadata,
         abstract_html=item.abstract,
         editors=[
             ContributorView(
-                first_name=row.author.first_name,
-                last_name=row.author.last_name,
+                first_name=row.first_name,
+                last_name=row.last_name,
                 is_corresponding=row.is_corresponding,
             )
-            for row in workspace.editors
+            for row in view.metadata.editors
         ],
         structured_authors=[
             ContributorView(
-                first_name=row.author.first_name,
-                last_name=row.author.last_name,
+                first_name=row.first_name,
+                last_name=row.last_name,
                 is_corresponding=row.is_corresponding,
             )
-            for row in workspace.authors
+            for row in view.metadata.authors
         ],
         reference_type=item.reference_type,
         volume=item.volume,
@@ -134,24 +136,46 @@ def item_detail_view(workspace: Any) -> ItemDetailView:
     )
 
 
-def discussion_message_views(workspace: Any) -> list[DiscussionMessageView]:
-    return [
-        DiscussionMessageView(
-            id=row.id,
-            item_id=row.item_id,
-            author_id=row.author_id,
-            author_username=row.author.username,
-            body=row.body,
-            created_at=as_utc(row.created_at).isoformat(),
-            updated_at=as_utc(row.updated_at).isoformat(),
-        )
-        for row in workspace.messages
-    ]
+def discussion_message_view(
+    row: Any, context: WorkspaceContext, *, writable: bool = True
+) -> DiscussionMessageView:
+    relation = "own" if row.author_id == context.actor_id else "other"
+    return DiscussionMessageView(
+        id=row.id,
+        item_id=row.item_id,
+        project_id=row.project_id,
+        author_id=row.author_id,
+        author_username=row.author.username,
+        mine=relation == "own",
+        body=row.body,
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
+        authorization=authorization_view(
+            discussion_message_decisions(context, row, writable=writable)
+        ),
+    )
+
+
+def discussion_message_views(
+    workspace: Any, context: WorkspaceContext
+) -> list[DiscussionMessageView]:
+    return [discussion_message_view(row, context) for row in workspace.messages]
 
 
 class ItemUpdateRequest(BaseModel):
     expected_version: int = Field(ge=1)
     metadata: ItemMetadata
+
+
+class CrossWorkspaceCopyRequest(BaseModel):
+    target_workspace_id: UUID
+
+
+class CrossWorkspaceCopyView(BaseModel):
+    source_workspace_id: UUID
+    source_item_id: UUID
+    target_workspace_id: UUID
+    target_item_id: UUID
 
 
 class NameRequest(BaseModel):
@@ -161,10 +185,14 @@ class NameRequest(BaseModel):
 class TagSetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    add_tag_ids: list[str] = Field(default_factory=list)
-    remove_tag_ids: list[str] = Field(default_factory=list)
+    add_tag_ids: list[UUID] = Field(default_factory=list)
+    remove_tag_ids: list[UUID] = Field(default_factory=list)
     new_names: list[str] = Field(default_factory=list)
 
 
 class DiscussionRequest(BaseModel):
     body: str
+
+
+class DiscussionModerationRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select
+from advanced_alchemy.filters import LimitOffset
+from sqlalchemy import Text, cast, or_, select
 
+from quirebase.access.authorization import SystemAction, require_system_action
 from quirebase.audit.invocations import current_programmatic_invocation
-from quirebase.core.errors import ResourceUnavailable
+from quirebase.core.persistence import select_page
 from quirebase.models import AuditEvent
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.models import User
@@ -17,11 +20,19 @@ if TYPE_CHECKING:
 
 def record_event(
     db: AsyncSession,
-    actor_id: str | None,
+    actor_id: UUID | None,
     action: str,
     target_type: str,
-    target_id: str | None = None,
+    target_id: UUID | str | None = None,
     detail: dict[str, Any] | str | None = None,
+    *,
+    workspace_id: UUID | None = None,
+    project_id: UUID | None = None,
+    target_ids: list[UUID] | tuple[UUID, ...] | None = None,
+    authorization_role: str | None = None,
+    authorization_resource_action: str | None = None,
+    result: str = "succeeded",
+    source: str | None = None,
 ) -> AuditEvent:
     invocation = current_programmatic_invocation()
     if invocation is not None:
@@ -31,17 +42,19 @@ def record_event(
             detail = {"message": detail, "invocation": invocation.detail()}
         else:
             detail = {"invocation": invocation.detail()}
-    detail_text: str | None = None
-    if isinstance(detail, dict):
-        detail_text = json.dumps(detail, ensure_ascii=False)
-    elif isinstance(detail, str):
-        detail_text = detail
     event = AuditEvent(
         actor_id=actor_id,
+        workspace_id=workspace_id,
+        project_id=project_id,
         action=action,
         target_type=target_type,
-        target_id=target_id,
-        detail=detail_text,
+        target_id=str(target_id) if target_id is not None else None,
+        detail=detail,
+        target_ids=[str(target_id) for target_id in target_ids] if target_ids is not None else None,
+        authorization_role=authorization_role,
+        authorization_resource_action=authorization_resource_action,
+        result=result,
+        source=source or (invocation.protocol if invocation is not None else "internal"),
     )
     db.add(event)
     return event
@@ -50,17 +63,15 @@ def record_event(
 async def query_events(
     db: AsyncSession,
     admin: User,
-    actor_id: str | None = None,
+    actor_id: UUID | None = None,
     action: str | None = None,
     target_type: str | None = None,
     search: str = "",
-    page: int = 1,
-    page_size: int = 50,
+    limit: int = 50,
+    offset: int = 0,
 ) -> tuple[list[AuditEvent], int]:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    await require_system_action(db, admin, SystemAction.audit_read)
     query = select(AuditEvent)
-    count_query = select(func.count(AuditEvent.id))
     filters = []
     if actor_id:
         filters.append(AuditEvent.actor_id == actor_id)
@@ -75,19 +86,15 @@ async def query_events(
                 AuditEvent.action.ilike(term),
                 AuditEvent.target_type.ilike(term),
                 AuditEvent.target_id.ilike(term),
-                AuditEvent.detail.ilike(term),
+                cast(AuditEvent.detail, Text).ilike(term),
             )
         )
     if filters:
         query = query.where(*filters)
-        count_query = count_query.where(*filters)
-    total = await db.scalar(count_query) or 0
-    offset = max(0, (page - 1) * page_size)
-    events = list(
-        (
-            await db.scalars(
-                query.order_by(AuditEvent.created_at.desc()).offset(offset).limit(page_size)
-            )
-        ).all()
+    records, total = await select_page(
+        db,
+        query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()),
+        AuditEvent,
+        LimitOffset(limit=limit, offset=offset),
     )
-    return events, total
+    return list(records), total

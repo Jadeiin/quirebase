@@ -4,13 +4,13 @@ import { mockSession } from './helpers';
 test('pending PDF imports refresh until they can be committed', async ({ page }) => {
 	await mockSession(page);
 	let previewRequests = 0;
-	await page.route('**/api/v1/imports/pdfs', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/imports/pdfs', (route) =>
 		route.fulfill({
 			status: 202,
 			json: { id: 'batch-1', status: 'pending', workflow_id: 'workflow-1', records: [], errors: [] }
 		})
 	);
-	await page.route('**/api/v1/imports/batch-1', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/imports/batch-1', (route) => {
 		previewRequests += 1;
 		return route.fulfill({
 			json: {
@@ -23,7 +23,7 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 		});
 	});
 	let workflowReads = 0;
-	await page.route('**/api/v1/workflows/workflow-1', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/workflows/workflow-1', (route) => {
 		workflowReads += 1;
 		return route.fulfill({
 			json: {
@@ -34,7 +34,7 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 		});
 	});
 
-	await page.goto('/import');
+	await page.goto('/workspace/workspace-1/import');
 	await page.locator('input[name="pdfs"]').setInputFiles({
 		name: 'paper.pdf',
 		mimeType: 'application/pdf',
@@ -47,17 +47,49 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 	await expect(page.getByText('Imported PDF')).toBeVisible();
 });
 
+test('shared pending Import previews poll the batch without actor-only workflow access', async ({
+	page
+}) => {
+	await mockSession(page);
+	let previewRequests = 0;
+	let workflowRequests = 0;
+	await page.route('**/api/v1/workspaces/workspace-1/imports/batch-shared', (route) => {
+		previewRequests += 1;
+		return route.fulfill({
+			json: {
+				id: 'batch-shared',
+				file_format: 'pdf',
+				status: previewRequests > 1 ? 'ready' : 'pending',
+				workflow_id: null,
+				records: previewRequests > 1 ? [{ title: 'Shared imported PDF' }] : [],
+				errors: []
+			}
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/workflows/*', (route) => {
+		workflowRequests += 1;
+		return route.fulfill({ status: 404, json: { code: 'resource_not_found' } });
+	});
+
+	await page.goto('/workspace/workspace-1/import?batch=batch-shared');
+
+	await expect.poll(() => previewRequests, { timeout: 5_000 }).toBeGreaterThan(1);
+	await expect(page.getByRole('button', { name: 'Commit' })).toBeEnabled();
+	await expect(page.getByText('Shared imported PDF')).toBeVisible();
+	expect(workflowRequests).toBe(0);
+});
+
 test('PDF import accumulates and deduplicates repeated file selections', async ({ page }) => {
 	await mockSession(page);
 	let uploadBody = '';
-	await page.route('**/api/v1/imports/pdfs', (route) => {
+	await page.route('**/api/v1/workspaces/workspace-1/imports/pdfs', (route) => {
 		uploadBody = route.request().postData() ?? '';
 		return route.fulfill({
 			status: 202,
 			json: { id: 'batch-files', status: 'ready', workflow_id: null, records: [], errors: [] }
 		});
 	});
-	await page.goto('/import');
+	await page.goto('/workspace/workspace-1/import');
 	const input = page.locator('input[name="pdfs"]');
 	await input.setInputFiles({
 		name: 'first.pdf',
@@ -78,7 +110,7 @@ test('PDF import accumulates and deduplicates repeated file selections', async (
 
 test('Import preview paginates restored batches', async ({ page }) => {
 	await mockSession(page);
-	await page.route('**/api/v1/imports/batch-many', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/imports/batch-many', (route) =>
 		route.fulfill({
 			json: {
 				id: 'batch-many',
@@ -90,7 +122,7 @@ test('Import preview paginates restored batches', async ({ page }) => {
 		})
 	);
 
-	await page.goto('/import?batch=batch-many');
+	await page.goto('/workspace/workspace-1/import?batch=batch-many');
 	await expect(page.getByText('Record 1', { exact: true })).toBeVisible();
 	await expect(page.getByText('Record 21', { exact: true })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Next' }).click();

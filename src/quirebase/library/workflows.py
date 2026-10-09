@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from dbos import DBOS
 from sqlalchemy import select
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.workflows import (
     DOCUMENT_CLEANUP_QUEUE,
@@ -14,9 +14,10 @@ from quirebase.core.workflows import (
     ads,
     durable_operations,
     enqueue_child_workflow,
+    object_reservation_attributes,
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
-from quirebase.models import ImportBatch, Item, ItemTagRecommendation
+from quirebase.models import ImportBatch, Item, ItemTagRecommendation, User
 
 from .tag_recommendations import (
     RecommendationCandidates,
@@ -24,6 +25,8 @@ from .tag_recommendations import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 RECOMMEND_TAGS_WORKFLOW = "library.recommend_tags"
@@ -49,21 +52,36 @@ async def item_tag_recommendation_status(
 
 async def request_item_tag_recommendation(
     db: AsyncSession,
-    item_id: str,
+    item_id: UUID,
     *,
-    owner_id: str | None = None,
+    workspace_id: UUID,
+    actor_id: UUID,
     force: bool = False,
 ) -> ItemTagRecommendation:
     """Create an idempotent generation request without committing its caller's transaction."""
+    actor = await db.get(User, actor_id)
+    if actor is None:
+        raise ValueError("recommendation actor is unavailable")
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.item_update)
+    if (
+        await db.scalar(
+            select(Item.id).where(Item.id == item_id, Item.workspace_id == workspace_id)
+        )
+        is None
+    ):
+        raise ValueError("Item does not belong to the requested Workspace")
     # Inspect the durable workflow before taking the recommendation row lock.  A slow DBOS
     # lookup must not block other recommendation requests or Item mutations.
     observed_record = await db.scalar(
-        select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_id)
+        select(ItemTagRecommendation).where(
+            ItemTagRecommendation.item_id == item_id,
+            ItemTagRecommendation.workspace_id == workspace_id,
+        )
     )
     observed_workflow_id = observed_record.workflow_id if observed_record else None
     workflow = await _linked_workflow(observed_record) if observed_record and not force else None
     if db.get_bind().dialect.name == "postgresql":
-        item_lock = select(Item.id).where(Item.id == item_id)
+        item_lock = select(Item.id).where(Item.id == item_id, Item.workspace_id == workspace_id)
         # An absent recommendation row cannot be locked. Serialize its creation
         # on the Item root; existing generations serialize on their own row.
         item_lock = (
@@ -73,12 +91,17 @@ async def request_item_tag_recommendation(
         )
         locked_item_id = await db.scalar(item_lock)
     else:
-        locked_item_id = await db.scalar(select(Item.id).where(Item.id == item_id))
+        locked_item_id = await db.scalar(
+            select(Item.id).where(Item.id == item_id, Item.workspace_id == workspace_id)
+        )
     if locked_item_id is None:
         raise ValueError("Item no longer exists")
     record = await db.scalar(
         select(ItemTagRecommendation)
-        .where(ItemTagRecommendation.item_id == item_id)
+        .where(
+            ItemTagRecommendation.item_id == item_id,
+            ItemTagRecommendation.workspace_id == workspace_id,
+        )
         .execution_options(populate_existing=True)
         .with_for_update(key_share=True)
     )
@@ -100,6 +123,7 @@ async def request_item_tag_recommendation(
     token = (record.generation_token + 1) if record else 1
     if record is None:
         record = ItemTagRecommendation(
+            workspace_id=workspace_id,
             item_id=item_id,
             generation_token=token,
         )
@@ -114,12 +138,19 @@ async def request_item_tag_recommendation(
     await durable_operations().enqueue_in_transaction(
         db,
         RECOMMEND_TAGS_WORKFLOW,
+        actor_id,
+        workspace_id,
         item_id,
         token,
         workflow_id,
         queue_name=RECOMMENDATION_QUEUE,
         workflow_id=workflow_id,
-        attributes={"capability": "library", "owner_id": owner_id, "item_id": item_id},
+        attributes={
+            "capability": "library",
+            "actor_id": actor_id,
+            "workspace_id": workspace_id,
+            "item_id": item_id,
+        },
     )
     record.workflow_id = workflow_id
     await db.flush()
@@ -128,14 +159,28 @@ async def request_item_tag_recommendation(
 
 async def _store_item_tag_recommendation(
     db: AsyncSession,
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
     candidates: RecommendationCandidates,
 ) -> dict[str, Any]:
+    actor = await db.get(User, actor_id)
+    if actor is None:
+        return {"unauthorized": True}
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.item_update)
+    item = await db.scalar(
+        select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id).with_for_update()
+    )
+    if item is None:
+        return {"deleted": True}
     record = await db.scalar(
         select(ItemTagRecommendation)
-        .where(ItemTagRecommendation.item_id == item_id)
+        .where(
+            ItemTagRecommendation.item_id == item_id,
+            ItemTagRecommendation.workspace_id == workspace_id,
+        )
         .with_for_update(key_share=True)
     )
     if (
@@ -144,8 +189,8 @@ async def _store_item_tag_recommendation(
         or record.workflow_id != workflow_id
     ):
         return {"stale": True}
-    record.single_words = json.dumps(candidates["single_words"], ensure_ascii=False)
-    record.phrases = json.dumps(candidates["phrases"], ensure_ascii=False)
+    record.single_words = candidates["single_words"]
+    record.phrases = candidates["phrases"]
     record.generated_at = datetime.now(UTC)
     return {
         "single_words": len(candidates["single_words"]),
@@ -154,9 +199,9 @@ async def _store_item_tag_recommendation(
 
 
 async def item_ids_for_tag_recommendation(
-    db: AsyncSession, after_id: str | None, limit: int
-) -> tuple[str, ...]:
-    query = select(Item.id).order_by(Item.id).limit(limit)
+    db: AsyncSession, workspace_id: UUID, after_id: UUID | None, limit: int
+) -> tuple[UUID, ...]:
+    query = select(Item.id).where(Item.workspace_id == workspace_id).order_by(Item.id).limit(limit)
     if after_id is not None:
         query = query.where(Item.id > after_id)
     return tuple((await db.scalars(query)).all())
@@ -171,7 +216,7 @@ async def extract_pdf_import_doi_step(pending: dict[str, Any]) -> dict[str, Any]
 
 @ads.transaction(isolation_level="READ COMMITTED")
 async def check_pdf_import_doi_step(
-    batch_id: str,
+    batch_id: UUID,
     pending: dict[str, Any],
     detected_doi: str,
 ) -> dict[str, Any]:
@@ -182,7 +227,7 @@ async def check_pdf_import_doi_step(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def lookup_pdf_import_candidate_step(
-    batch_id: str,
+    batch_id: UUID,
     pending: dict[str, Any],
     detected_doi: str,
 ) -> dict[str, Any]:
@@ -194,7 +239,9 @@ async def lookup_pdf_import_candidate_step(
 
 @ads.transaction()
 async def finalize_pdf_import_batch_step(
-    batch_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    batch_id: UUID,
     workflow_id: str,
     records: list[dict[str, Any]],
     errors: list[dict[str, Any]],
@@ -202,12 +249,12 @@ async def finalize_pdf_import_batch_step(
     from .imports import finalize_pdf_import_batch
 
     return await finalize_pdf_import_batch(
-        ads.sql_session(), batch_id, workflow_id, records, errors
+        ads.sql_session(), actor_id, workspace_id, batch_id, workflow_id, records, errors
     )
 
 
 @ads.transaction()
-async def fail_pdf_import_batch_step(batch_id: str, workflow_id: str) -> bool:
+async def fail_pdf_import_batch_step(batch_id: UUID, workflow_id: str) -> bool:
     """Publish terminal failure only for the workflow generation that still owns the batch."""
     batch = await ads.sql_session().get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
@@ -218,7 +265,9 @@ async def fail_pdf_import_batch_step(batch_id: str, workflow_id: str) -> bool:
 
 @DBOS.workflow(name=PREPARE_PDF_IMPORT_WORKFLOW)
 async def prepare_pdf_import_workflow(
-    batch_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    batch_id: UUID,
     workflow_id: str,
     pending_records: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -253,11 +302,15 @@ async def prepare_pdf_import_workflow(
                 if isinstance(result.get("error"), dict):
                     errors.append(result["error"])
                 rejected_keys.append(result["object_key"])
-        finalized = await finalize_pdf_import_batch_step(batch_id, workflow_id, records, errors)
+        finalized = await finalize_pdf_import_batch_step(
+            actor_id, workspace_id, batch_id, workflow_id, records, errors
+        )
         cleanup_keys = rejected_keys if finalized else all_keys
         if cleanup_keys:
             await enqueue_child_workflow(
                 OBJECT_CLEANUP_WORKFLOW,
+                actor_id,
+                workspace_id,
                 cleanup_keys,
                 workflow_id,
                 queue_name=DOCUMENT_CLEANUP_QUEUE,
@@ -265,8 +318,10 @@ async def prepare_pdf_import_workflow(
                 attributes={
                     "capability": "documents",
                     "operation": "pdf_import_cleanup",
+                    "actor_id": actor_id,
+                    "workspace_id": workspace_id,
                     "batch_id": batch_id,
-                    "object_keys": cleanup_keys,
+                    **object_reservation_attributes(cleanup_keys, intent="cleanup"),
                 },
             )
         return {
@@ -280,11 +335,23 @@ async def prepare_pdf_import_workflow(
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
-async def request_item_tag_recommendation_step(item_id: str, owner_id: str | None) -> None:
+async def request_item_tag_recommendation_step(
+    actor_id: UUID, workspace_id: UUID, item_id: UUID
+) -> None:
     """Retry the idempotent request boundary, including its separate DBOS Client lookup."""
     async with AsyncSessionLocal() as db:
         try:
-            await request_item_tag_recommendation(db, item_id, owner_id=owner_id, force=True)
+            actor = await db.get(User, actor_id)
+            if actor is None:
+                return
+            await require_workspace_action(db, actor, workspace_id, ResourceAction.item_update)
+            await request_item_tag_recommendation(
+                db,
+                item_id,
+                workspace_id=workspace_id,
+                actor_id=actor_id,
+                force=True,
+            )
         except ValueError:
             # File Revision events may outlive their deleted Item.
             return
@@ -293,14 +360,14 @@ async def request_item_tag_recommendation_step(item_id: str, owner_id: str | Non
 
 @DBOS.workflow(name=FILE_REVISION_CHANGED_WORKFLOW)
 async def file_revision_changed_workflow(
-    revision_id: str, item_id: str, owner_id: str | None
+    actor_id: UUID, workspace_id: UUID, revision_id: UUID, item_id: UUID
 ) -> None:
-    await request_item_tag_recommendation_step(item_id, owner_id)
+    await request_item_tag_recommendation_step(actor_id, workspace_id, item_id)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def generate_item_tag_recommendation_step(
-    item_id: str,
+    item_id: UUID,
 ) -> RecommendationCandidates | None:
     """Retry a read-only generation; its checkpoint contains no Item full text."""
     async with AsyncSessionLocal() as db:
@@ -313,7 +380,7 @@ async def generate_item_tag_recommendation_step(
 
 @ads.transaction(isolation_level="READ COMMITTED")
 async def item_tag_recommendation_is_current_step(
-    item_id: str,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
 ) -> bool:
@@ -330,20 +397,24 @@ async def item_tag_recommendation_is_current_step(
 
 @ads.transaction()
 async def commit_item_tag_recommendation_step(
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
     candidates: RecommendationCandidates,
 ) -> dict[str, Any]:
     db = ads.sql_session()
     return await _store_item_tag_recommendation(
-        db, item_id, generation_token, workflow_id, candidates
+        db, actor_id, workspace_id, item_id, generation_token, workflow_id, candidates
     )
 
 
 @DBOS.workflow(name=RECOMMEND_TAGS_WORKFLOW)
 async def recommend_tags_workflow(
-    item_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    item_id: UUID,
     generation_token: int,
     workflow_id: str,
 ) -> dict[str, Any]:
@@ -353,5 +424,5 @@ async def recommend_tags_workflow(
     if candidates is None:
         return {"deleted": True}
     return await commit_item_tag_recommendation_step(
-        item_id, generation_token, workflow_id, candidates
+        actor_id, workspace_id, item_id, generation_token, workflow_id, candidates
     )

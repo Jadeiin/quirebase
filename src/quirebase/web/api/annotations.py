@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
@@ -8,23 +9,25 @@ from quirebase.documents import (
     AnnotationCreate,
     AnnotationReplyCreate,
     AnnotationReplyUpdate,
+    AnnotationScope,
     AnnotationUpdate,
     create_annotation_reply,
     create_document_annotation,
     delete_annotation_reply,
     delete_document_annotation,
     list_document_annotations,
+    moderate_document_annotation,
     restore_annotation_reply,
     restore_document_annotation,
-    review_item_annotations,
     update_annotation_reply,
     update_document_annotation,
 )
 from quirebase.web.api.annotation_schemas import (
+    AnnotationListView,
+    AnnotationModerationRequest,
+    AnnotationProjectView,
     AnnotationReplyView,
-    AnnotationReviewAnnotationView,
-    AnnotationReviewRevisionView,
-    AnnotationReviewView,
+    AnnotationRevisionView,
     AnnotationView,
 )
 from quirebase.web.api.common import OkView
@@ -33,57 +36,58 @@ from quirebase.web.api.dependencies import ApiUser, Database
 router = APIRouter(tags=["Annotations"])
 
 
-@router.get("/items/{item_id}/annotations/review", response_model=AnnotationReviewView)
-async def review_annotations(
-    item_id: str,
+@router.get("/items/{item_id}/annotations", response_model=AnnotationListView)
+async def list_annotations(
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 50,
-    revision_id: str | None = None,
-) -> AnnotationReviewView:
-    review = await review_item_annotations(
+    revision_id: UUID | None = None,
+    scope: AnnotationScope | None = None,
+    project_id: Annotated[
+        list[UUID] | None,
+        Query(description="Repeat to select multiple readable Projects linked to this Item."),
+    ] = None,
+    pagination: Literal["page", "cursor"] = "page",
+    cursor: Annotated[UUID | None, Query()] = None,
+) -> AnnotationListView:
+    """List authorized Annotations across revisions and sources.
+
+    With no filters, return all visible sources. Project selection also includes the caller's
+    private Annotations unless scope=project; scope=private excludes Project Annotations.
+    Revision and Project choices are independent of the applied filters.
+    Use pagination=cursor to traverse by immutable ID, then pass next_cursor as cursor.
+    Page mode orders by latest update; cursor mode avoids skips when content is edited or deleted.
+    """
+    result = await list_document_annotations(
         db,
         user,
+        workspace_id,
         item_id,
+        revision_id,
         page=page,
         per_page=per_page,
-        revision_id=revision_id,
+        scope=scope,
+        project_ids=tuple(project_id) if project_id is not None else None,
+        pagination=pagination,
+        cursor=cursor,
     )
-    revision_names = {revision.id: revision.original_name for revision in review.revisions}
-    return AnnotationReviewView(
+    return AnnotationListView(
         revisions=[
-            AnnotationReviewRevisionView(id=revision.id, original_name=revision.original_name)
-            for revision in review.revisions
+            AnnotationRevisionView(id=revision.id, original_name=revision.original_name)
+            for revision in result.revisions
         ],
-        annotations=[
-            AnnotationReviewAnnotationView.model_validate({
-                **annotation,
-                "revision_name": revision_names[annotation["revision_id"]],
-            })
-            for annotation in review.annotations
+        projects=[
+            AnnotationProjectView(id=project.id, name=project.name) for project in result.projects
         ],
-        total=review.total,
+        annotations=[AnnotationView.model_validate(row) for row in result.annotations],
+        total=result.total,
         page=page,
         per_page=per_page,
+        next_cursor=result.next_cursor,
     )
-
-
-@router.get(
-    "/items/{item_id}/annotations",
-    response_model=list[AnnotationView],
-)
-async def list_annotations(
-    item_id: str,
-    revision_id: str,
-    user: ApiUser,
-    db: Database,
-    project_id: str | None = None,
-) -> list[AnnotationView]:
-    return [
-        AnnotationView.model_validate(row)
-        for row in await list_document_annotations(db, user, item_id, revision_id, project_id)
-    ]
 
 
 @router.post(
@@ -92,9 +96,15 @@ async def list_annotations(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_annotation(
-    item_id: str, data: AnnotationCreate, user: ApiUser, db: Database
+    workspace_id: UUID,
+    item_id: UUID,
+    data: AnnotationCreate,
+    user: ApiUser,
+    db: Database,
 ) -> AnnotationView:
-    return AnnotationView.model_validate(await create_document_annotation(db, user, item_id, data))
+    return AnnotationView.model_validate(
+        await create_document_annotation(db, user, workspace_id, item_id, data)
+    )
 
 
 @router.patch(
@@ -102,14 +112,15 @@ async def create_annotation(
     response_model=AnnotationView,
 )
 async def update_annotation(
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationUpdate,
     user: ApiUser,
     db: Database,
 ) -> AnnotationView:
     return AnnotationView.model_validate(
-        await update_document_annotation(db, user, item_id, annotation_id, data)
+        await update_document_annotation(db, user, workspace_id, item_id, annotation_id, data)
     )
 
 
@@ -118,18 +129,53 @@ async def update_annotation(
     response_model=OkView,
 )
 async def delete_annotation(
-    item_id: str, annotation_id: str, version: int, user: ApiUser, db: Database
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    version: int,
+    user: ApiUser,
+    db: Database,
 ) -> OkView:
-    await delete_document_annotation(db, user, item_id, annotation_id, version)
+    await delete_document_annotation(db, user, workspace_id, item_id, annotation_id, version)
     return OkView()
 
 
 @router.post("/items/{item_id}/annotations/{annotation_id}/restore", response_model=AnnotationView)
 async def restore_annotation(
-    item_id: str, annotation_id: str, version: int, user: ApiUser, db: Database
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    version: int,
+    user: ApiUser,
+    db: Database,
 ) -> AnnotationView:
     return AnnotationView.model_validate(
-        await restore_document_annotation(db, user, item_id, annotation_id, version)
+        await restore_document_annotation(db, user, workspace_id, item_id, annotation_id, version)
+    )
+
+
+@router.post(
+    "/items/{item_id}/annotations/{annotation_id}/moderation",
+    response_model=AnnotationView,
+)
+async def moderate_annotation(
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    data: AnnotationModerationRequest,
+    user: ApiUser,
+    db: Database,
+) -> AnnotationView:
+    return AnnotationView.model_validate(
+        await moderate_document_annotation(
+            db,
+            user,
+            workspace_id,
+            item_id,
+            annotation_id,
+            data.action,
+            data.version,
+        )
     )
 
 
@@ -139,14 +185,15 @@ async def restore_annotation(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_reply(
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationReplyCreate,
     user: ApiUser,
     db: Database,
 ) -> AnnotationReplyView:
     return AnnotationReplyView.model_validate(
-        await create_annotation_reply(db, user, item_id, annotation_id, data)
+        await create_annotation_reply(db, user, workspace_id, item_id, annotation_id, data)
     )
 
 
@@ -155,15 +202,18 @@ async def create_reply(
     response_model=AnnotationReplyView,
 )
 async def update_reply(
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     data: AnnotationReplyUpdate,
     user: ApiUser,
     db: Database,
 ) -> AnnotationReplyView:
     return AnnotationReplyView.model_validate(
-        await update_annotation_reply(db, user, item_id, annotation_id, reply_id, data)
+        await update_annotation_reply(
+            db, user, workspace_id, item_id, annotation_id, reply_id, data
+        )
     )
 
 
@@ -172,14 +222,15 @@ async def update_reply(
     response_model=OkView,
 )
 async def delete_reply(
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
     user: ApiUser,
     db: Database,
 ) -> OkView:
-    await delete_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
+    await delete_annotation_reply(db, user, workspace_id, item_id, annotation_id, reply_id, version)
     return OkView()
 
 
@@ -188,13 +239,16 @@ async def delete_reply(
     response_model=AnnotationReplyView,
 )
 async def restore_reply(
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
     user: ApiUser,
     db: Database,
 ) -> AnnotationReplyView:
     return AnnotationReplyView.model_validate(
-        await restore_annotation_reply(db, user, item_id, annotation_id, reply_id, version)
+        await restore_annotation_reply(
+            db, user, workspace_id, item_id, annotation_id, reply_id, version
+        )
     )

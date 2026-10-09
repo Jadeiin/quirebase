@@ -1,8 +1,8 @@
 <script lang="ts">
-	import Panel from '$lib/design/Panel.svelte';
-	import { t, type MessageKey } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-	import Button from '$lib/design/Button.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { t, type MessageKey } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
+	import Button from '#lib/design/Button.svelte';
 
 	type Settings = components['schemas']['AdminSettingsView'];
 
@@ -19,13 +19,27 @@
 	<form class="grid grid-cols-1 gap-3" onsubmit={onSave}>
 		{#each fields as [key, label] (key)}
 			<label
-				>{$t(label)}<input
-					class="input"
-					name={key}
-					type={typeof settings[key] === 'number' ? 'number' : 'text'}
-					value={settings[key]}
-					required={typeof settings[key] === 'number'}
-				/></label
+				>{$t(label)}
+				{#if key === 'registration_policy'}
+					<select class="input" name={key} value={settings.registration_policy}>
+						<option value="open">{$t('Open')}</option>
+						<option value="closed">{$t('Closed')}</option>
+						<option value="invitation_only">{$t('Invitation only')}</option>
+					</select>
+				{:else if key === 'workspace_creation_policy'}
+					<select class="input" name={key} value={settings.workspace_creation_policy}>
+						<option value="admins_only">{$t('Administrators only')}</option>
+						<option value="members_allowed">{$t('All members')}</option>
+					</select>
+				{:else}
+					<input
+						class="input"
+						name={key}
+						type={typeof settings[key] === 'number' ? 'number' : 'text'}
+						value={settings[key]}
+						required={typeof settings[key] === 'number'}
+					/>
+				{/if}</label
 			>
 		{/each}
 		<p class="text-surface-600-400">

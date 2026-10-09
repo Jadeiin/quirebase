@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, status
-from fastapi.responses import StreamingResponse
+from uuid import UUID
 
+from fastapi import APIRouter, status
+from fastapi.responses import RedirectResponse, StreamingResponse
+
+from quirebase.core.storage import SignedDownload
 from quirebase.documents import (
     create_export_job,
     get_export_file,
@@ -22,37 +25,43 @@ router = APIRouter(tags=["Document exports"])
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def create_export(
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: ExportCreate,
     user: ApiUser,
     db: Database,
 ):
-    workflow_id = await create_export_job(db, user, item_id, data)
+    workflow_id = await create_export_job(db, user, workspace_id, item_id, data)
     return {
         "id": workflow_id,
         "state": "pending",
-        "status_url": f"/api/v1/annotation-exports/{workflow_id}",
+        "status_url": f"/api/v1/workspaces/{workspace_id}/annotation-exports/{workflow_id}",
     }
 
 
 @router.get("/annotation-exports/{workflow_id}", response_model=WorkflowStatusView)
-async def export_status(workflow_id: str, user: ApiUser, db: Database):
-    return await get_export_status(db, user, workflow_id)
+async def export_status(workspace_id: UUID, workflow_id: str, user: ApiUser, db: Database):
+    return await get_export_status(db, user, workspace_id, workflow_id)
 
 
 @router.get(
     "/annotation-exports/{workflow_id}/content",
     response_class=StreamingResponse,
     responses={
+        307: {"description": "Short-lived authorized S3 download; response is not cacheable."},
         200: {
             "content": {
                 "application/pdf": {"schema": {"type": "string", "format": "binary"}},
             }
-        }
+        },
     },
 )
-async def export_content(workflow_id: str, user: ApiUser, db: Database):
-    response = await get_export_file(db, user, workflow_id)
+async def export_content(workspace_id: UUID, workflow_id: str, user: ApiUser, db: Database):
+    response = await get_export_file(db, user, workspace_id, workflow_id)
+    if isinstance(response, SignedDownload):
+        return RedirectResponse(
+            response.url, status_code=307, headers={"Cache-Control": "private, no-store"}
+        )
     return StreamingResponse(
         response.body,
         media_type="application/pdf",

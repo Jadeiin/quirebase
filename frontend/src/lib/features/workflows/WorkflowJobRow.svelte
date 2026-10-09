@@ -1,19 +1,21 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Icon from '$lib/design/Icon.svelte';
-	import { getWorkflowCenter, type TrackedJob } from '$lib/features/workflows/center.svelte';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Icon from '#lib/design/Icon.svelte';
+	import { getWorkflowCenter, type TrackedJob } from '#lib/features/workflows/center.svelte.js';
 	import {
 		isRecoverableWorkflowStatusError,
 		isTerminalWorkflowState,
 		workflowStatusQuery
-	} from '$lib/features/workflows/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
+	} from '#lib/features/workflows/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
 
 	let { job, visible = true } = $props<{ job: TrackedJob; visible?: boolean }>();
 	const center = getWorkflowCenter();
-	const status = createQuery(() => workflowStatusQuery(job.id, () => !job.outcome));
+	const status = createQuery(() =>
+		workflowStatusQuery(job.workspaceId, job.id, () => !job.outcome)
+	);
 	const state = $derived(job.outcome?.state ?? status.data?.state);
 
 	$effect(() => {

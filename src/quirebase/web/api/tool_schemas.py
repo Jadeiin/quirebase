@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 from quirebase.web.api.library_schemas import ItemSearchView
@@ -9,8 +13,8 @@ class CitationStyleCreateRequest(BaseModel):
 
 
 class TagMergeRequest(BaseModel):
-    source_tag_id: str
-    target_tag_id: str
+    source_tag_id: UUID
+    target_tag_id: UUID
 
 
 class DuplicatesReviewView(BaseModel):

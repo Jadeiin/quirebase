@@ -1,6 +1,8 @@
-# ADR 0002: organize the modular monolith by business capability
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0002: organize the modular monolith by business capability
 
 Quirebase will remain a single deployable Python application, but its internal
 code will be organized around Account, Access, Library, Item, Project,

@@ -5,40 +5,50 @@
 		AnnotationPlugin,
 		CommandsPlugin,
 		DocumentManagerPlugin,
-		LockModeType,
 		PDFViewer,
 		UIPlugin,
 		type AnnotationCapability,
+		type CommandsCapability,
 		type PDFViewerConfig,
 		type PluginRegistry,
 		type UICapability
 	} from '@embedpdf/svelte-pdf-viewer';
 	import pdfiumWasmUrl from '@embedpdf/pdfium/pdfium.wasm?url';
 	import { i18n } from '@lingui/core';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { t } from '$lib/i18n';
-	import { createAnnotationSync, type AnnotationSyncStatus } from '$lib/pdf/annotation-sync.svelte';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { t } from '#lib/i18n.js';
+	import {
+		createAnnotationSync,
+		type AnnotationSources,
+		type AnnotationSyncStatus
+	} from '#lib/pdf/annotation-sync.svelte.js';
 
 	let {
 		itemId,
+		workspaceId,
 		documentId,
 		name,
 		url,
 		editable,
+		canModifyAnnotations,
 		annotationAuthor,
 		pageGeometry,
-		selectedProject = $bindable(''),
+		sources,
+		writeProject,
 		onstatus
 	} = $props<{
 		itemId: string;
+		workspaceId: string;
 		documentId: string;
 		name: string;
 		url: string;
 		editable: boolean;
+		canModifyAnnotations: boolean;
 		annotationAuthor: string;
 		pageGeometry: number[][];
-		selectedProject?: string;
-		onstatus?: (status: string, failed: boolean) => void;
+		sources: AnnotationSources;
+		writeProject: string;
+		onstatus?: (status: string, failed: boolean, reason?: unknown) => void;
 	}>();
 
 	const disabledCategories = [
@@ -63,6 +73,18 @@
 		'annotation-widget-edit',
 		'annotation-group'
 	];
+	// Scope permissions gate creation. Existing annotations retain their own
+	// server-authored readOnly flags, including private annotations in Project views.
+	const annotationCreationCategories = [
+		'mode-annotate',
+		'mode-shapes',
+		'annotation-markup',
+		'annotation-ink',
+		'annotation-text',
+		'annotation-comment-tool',
+		'annotation-shape',
+		'annotation-overflow'
+	];
 
 	// svelte-ignore state_referenced_locally
 	const config: PDFViewerConfig = {
@@ -70,7 +92,9 @@
 		fontFallback: null,
 		fonts: { ui: null, signature: null },
 		tabBar: 'never',
-		disabledCategories,
+		disabledCategories: editable
+			? disabledCategories
+			: [...disabledCategories, ...annotationCreationCategories],
 		i18n: { defaultLocale: i18n.locale.startsWith('zh') ? 'zh-CN' : 'en' },
 		documentManager: {
 			initialDocuments: [{ url, documentId, name, requestOptions: { credentials: 'same-origin' } }]
@@ -82,22 +106,29 @@
 			editAfterCreate: true
 		},
 		permissions: {
-			overrides: { print: false, copyContents: true, modifyAnnotations: editable }
+			// EmbedPDF's built-in comment sidebar only supports this document gate.
+			// The backend authorizes each target mutation; keep private edits available
+			// even when the selected Project does not allow annotation creation.
+			overrides: { print: false, copyContents: true, modifyAnnotations: canModifyAnnotations }
 		}
 	};
 
 	let registry: PluginRegistry | null = null;
 	let annotationApi: AnnotationCapability | null = null;
+	let commandsApi: CommandsCapability | null = null;
 	let uiApi: UICapability | null = null;
+	let documentReady = $state(false);
 	let unsubscribeEvents: (() => void) | null = null;
 	let destroyed = false;
 	let cancelDocumentWait = () => {};
 	// svelte-ignore state_referenced_locally
 	const sync = createAnnotationSync({
+		workspaceId,
 		itemId,
 		documentId,
 		pageGeometry,
-		initialProject: selectedProject,
+		initialSources: sources,
+		initialWriteProject: writeProject,
 		onStatus: reportStatus,
 		onCommentPanel: () =>
 			uiApi?.forDocument(documentId).setActiveSidebar('right', 'main', 'comment-panel')
@@ -127,7 +158,7 @@
 				onstatus($t('Saved'), false);
 				break;
 			case 'sync-failed':
-				onstatus($t('Annotation sync failed'), true);
+				onstatus(apiErrorMessage(status.reason, $t('Annotation sync failed')), true, status.reason);
 				break;
 			case 'load-failed':
 				onstatus($t('Unable to load annotations'), true);
@@ -178,7 +209,7 @@
 			registry = ready;
 			annotationApi = ready.getPlugin<AnnotationPlugin>(AnnotationPlugin.id)?.provides() ?? null;
 			uiApi = ready.getPlugin<UIPlugin>(UIPlugin.id)?.provides() ?? null;
-			const commandsApi = ready.getPlugin<CommandsPlugin>(CommandsPlugin.id)?.provides() ?? null;
+			commandsApi = ready.getPlugin<CommandsPlugin>(CommandsPlugin.id)?.provides() ?? null;
 			commandsApi?.registerCommand({
 				id: 'annotation:add-callout',
 				action: () => {},
@@ -212,9 +243,9 @@
 			await ready.pluginsReady();
 			await waitForDocument();
 			if (destroyed) return;
-			if (!editable) annotationApi.setLocked({ type: LockModeType.All }, documentId);
+			documentReady = true;
 			sync.lockNative();
-			await sync.load(selectedProject).catch(() => {
+			await sync.load(sources).catch(() => {
 				if (!destroyed) reportStatus({ state: 'load-failed' });
 			});
 		} catch (error) {
@@ -222,6 +253,23 @@
 			onstatus?.(apiErrorMessage(error, $t('Unable to open this PDF.')), true);
 		}
 	}
+
+	$effect(() => {
+		if (!documentReady) return;
+		if (!editable) {
+			commandsApi?.execute('mode:view', documentId);
+			annotationApi?.setActiveTool(null, documentId);
+		}
+		for (const category of annotationCreationCategories) {
+			if (editable) {
+				commandsApi?.enableCategory(category);
+				uiApi?.enableCategory(category);
+			} else {
+				commandsApi?.disableCategory(category);
+				uiApi?.disableCategory(category);
+			}
+		}
+	});
 
 	$effect(() => {
 		const guardPendingWrites = (event: BeforeUnloadEvent) => {
@@ -237,7 +285,8 @@
 
 	// Client-side navigation does not fire beforeunload. Keep the viewer mounted
 	// until every queued annotation write has settled before SvelteKit tears it down.
-	onNavigate(({ willUnload }) => {
+	onNavigate(({ willUnload, shallow }) => {
+		if (shallow) return;
 		if (willUnload || !sync.hasPending()) return;
 		return sync.flush().catch((reason) => {
 			onstatus?.(apiErrorMessage(reason, $t('Annotation sync failed')), true);
@@ -245,11 +294,17 @@
 		});
 	});
 
-	let previousProject = selectedProject;
 	$effect(() => {
-		if (selectedProject === previousProject) return;
-		previousProject = selectedProject;
-		sync.switchProject(selectedProject);
+		sync.setWriteProject(writeProject);
+	});
+
+	// svelte-ignore state_referenced_locally
+	let previousSources = JSON.stringify(sources);
+	$effect(() => {
+		const key = JSON.stringify(sources);
+		if (key === previousSources) return;
+		previousSources = key;
+		sync.switchSources(sources);
 	});
 
 	onDestroy(() => {

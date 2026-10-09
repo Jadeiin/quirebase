@@ -1,47 +1,63 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import (
+    ResourceAction,
+    WorkspaceContext,
+    action_allowed,
+    discoverable_project_ids_query,
+    require_project_context,
+    require_workspace_action,
+    resolve_workspace_context,
+)
 from quirebase.access.annotations import (
+    annotation_decisions,
+    annotation_moderation_action,
     editable_annotation_ids,
     editable_annotation_reply_ids,
+    require_deletable_annotation,
     require_editable_annotation,
     require_restorable_annotation,
     require_visible_annotation_for_reply_mutation,
+    visible_annotation_scope_predicate,
 )
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_readable_item
-from quirebase.access.projects import project_member
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     DomainError,
+    PermissionDenied,
     ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
     VersionConflict,
 )
-from quirebase.core.timezones import as_utc
+from quirebase.documents.read_models import DocumentInfo, document_info, list_item_revisions
 from quirebase.documents.schemas import ArrowPayload, InkPayload, LinePayload, TextMarkupPayload
 from quirebase.models import (
     AnnotationScope,
     FileRevision,
     FileRevisionProcessingState,
     PdfAnnotation,
+    PdfAnnotationObject,
     PdfAnnotationReply,
+    Project,
     ProjectItem,
-    ProjectMember,
-    SystemRole,
+    ProjectState,
     User,
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql import Select
 
     from quirebase.documents.schemas import (
         AnnotationCreate,
@@ -56,28 +72,107 @@ class DocumentNotReady(DomainError):
     pass
 
 
+async def _lock_annotation_project_item(
+    db: AsyncSession, workspace_id: UUID, project_id: UUID, item_id: UUID
+) -> ProjectItem:
+    """Fence ProjectItem detachment while an Annotation write binds to it."""
+    project_item = await db.scalar(
+        select(ProjectItem)
+        .where(
+            ProjectItem.workspace_id == workspace_id,
+            ProjectItem.project_id == project_id,
+            ProjectItem.item_id == item_id,
+        )
+        .execution_options(populate_existing=True)
+        .with_for_update(read=True)
+    )
+    if project_item is None:
+        raise ResourceUnavailable("ProjectItem not found")
+    return project_item
+
+
+async def delete_project_item_annotations(
+    db: AsyncSession, workspace_id: UUID, project_item_id: UUID
+) -> None:
+    """Remove a detached ProjectItem's annotations, replies and UUID identities.
+
+    The caller holds an exclusive lock on the ProjectItem until commit. Locking
+    its annotations also fences concurrent reply insertion through their FK.
+    """
+    annotation_ids = list(
+        (
+            await db.scalars(
+                select(PdfAnnotation.id)
+                .where(
+                    PdfAnnotation.workspace_id == workspace_id,
+                    PdfAnnotation.project_item_id == project_item_id,
+                )
+                .with_for_update()
+            )
+        ).all()
+    )
+    for start in range(0, len(annotation_ids), 500):
+        batch = annotation_ids[start : start + 500]
+        reply_ids = list(
+            (
+                await db.scalars(
+                    select(PdfAnnotationReply.id).where(
+                        PdfAnnotationReply.workspace_id == workspace_id,
+                        PdfAnnotationReply.annotation_id.in_(batch),
+                    )
+                )
+            ).all()
+        )
+        await db.execute(
+            delete(PdfAnnotationReply).where(
+                PdfAnnotationReply.workspace_id == workspace_id,
+                PdfAnnotationReply.annotation_id.in_(batch),
+            )
+        )
+        await db.execute(
+            delete(PdfAnnotation).where(
+                PdfAnnotation.workspace_id == workspace_id,
+                PdfAnnotation.id.in_(batch),
+            )
+        )
+        identity_ids = batch + reply_ids
+        for identity_start in range(0, len(identity_ids), 500):
+            identities = identity_ids[identity_start : identity_start + 500]
+            await db.execute(
+                delete(PdfAnnotationObject).where(PdfAnnotationObject.id.in_(identities))
+            )
+
+
 @dataclass(frozen=True)
-class AnnotationReview:
-    revisions: tuple[FileRevision, ...]
+class AnnotationPage:
+    revisions: tuple[DocumentInfo, ...]
+    projects: tuple[Project, ...]
     annotations: tuple[dict[str, Any], ...]
     total: int
+    next_cursor: UUID | None = None
 
 
 def annotation_json(
     record: PdfAnnotation,
-    current_user_id: str,
+    current_user_id: UUID,
     *,
     author_display_name: str,
     editable: bool,
+    authorization_resource_actions: list[str],
+    revision_name: str,
+    project_id: UUID | None = None,
+    project_name: str | None = None,
     replies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": record.id,
         "revision_id": record.file_revision_id,
+        "revision_name": revision_name,
         "page_index": record.page_index,
         "kind": record.kind,
         "scope": record.scope,
-        "project_id": record.project_id,
+        "project_id": project_id,
+        "project_name": project_name,
         "body": record.body,
         "selected_text": record.selected_text,
         "payload": record.payload,
@@ -85,15 +180,20 @@ def annotation_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
-        "created_at": as_utc(record.created_at).isoformat(),
-        "updated_at": as_utc(record.updated_at).isoformat(),
+        "authorization": {"allowed": authorization_resource_actions},
+        "hidden_at": record.hidden_at.isoformat() if record.hidden_at else None,
+        "archived_at": record.archived_at.isoformat() if record.archived_at else None,
+        "locked_at": record.locked_at.isoformat() if record.locked_at else None,
+        "moderated_by": record.moderated_by,
+        "created_at": record.created_at.isoformat(),
+        "updated_at": record.updated_at.isoformat(),
         "replies": replies or [],
     }
 
 
 def annotation_reply_json(
     record: PdfAnnotationReply,
-    current_user_id: str,
+    current_user_id: UUID,
     *,
     author_display_name: str,
     editable: bool,
@@ -106,8 +206,8 @@ def annotation_reply_json(
         "author_display_name": author_display_name,
         "mine": record.author_id == current_user_id,
         "editable": editable,
-        "created_at": as_utc(record.created_at).isoformat(),
-        "updated_at": as_utc(record.updated_at).isoformat(),
+        "created_at": record.created_at.isoformat(),
+        "updated_at": record.updated_at.isoformat(),
     }
 
 
@@ -117,10 +217,7 @@ def _page_size(revision: FileRevision, page_index: int) -> tuple[float, float]:
         or revision.processing_state != FileRevisionProcessingState.ready
     ):
         raise DocumentNotReady("PDF is not ready")
-    try:
-        geometry = json.loads(revision.page_geometry or "[]")
-    except (TypeError, json.JSONDecodeError) as error:
-        raise DocumentNotReady("PDF geometry is not ready") from error
+    geometry = revision.page_geometry or []
     if len(geometry) != revision.page_count:
         raise DocumentNotReady("PDF geometry is not ready")
     if page_index >= revision.page_count:
@@ -186,34 +283,48 @@ def validate_payload(page_index: int, payload: AnnotationPayload, revision: File
 async def select_visible_annotations(
     db: AsyncSession,
     user: User,
-    revision_id: str,
-    item_id: str,
-    project_id: str | None = None,
+    workspace_id: UUID,
+    revision_id: UUID,
+    item_id: UUID,
+    project_id: UUID | None = None,
 ) -> list[PdfAnnotation]:
-    """Load the annotations visible to one user: own private ones, plus a project's."""
-    scopes = [
-        and_(PdfAnnotation.scope == AnnotationScope.private, PdfAnnotation.author_id == user.id)
-    ]
+    """Load exportable annotations: own private ones, plus a project's.
+
+    Exports exclude hidden and archived annotations even for moderators.
+    """
+    workspace = await require_workspace_action(
+        db, user, workspace_id, ResourceAction.workspace_read
+    )
+    project_item_ids = None
     if project_id:
-        if (
-            await project_member(db, user, project_id) is None
-            or await db.get(ProjectItem, (project_id, item_id)) is None
-        ):
-            raise ResourceUnavailable("project membership or project item not found")
-        scopes.append(
-            and_(
-                PdfAnnotation.scope == AnnotationScope.project,
-                PdfAnnotation.project_id == project_id,
+        await require_project_context(
+            db, user, workspace_id, project_id, ResourceAction.workspace_read
+        )
+        project_item = await db.scalar(
+            select(ProjectItem).where(
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.project_id == project_id,
+                ProjectItem.item_id == item_id,
             )
         )
+        if project_item is None:
+            raise ResourceUnavailable("ProjectItem not found")
+        project_item_ids = (project_item.id,)
     return list(
         (
             await db.scalars(
                 select(PdfAnnotation)
                 .where(
                     PdfAnnotation.file_revision_id == revision_id,
+                    PdfAnnotation.workspace_id == workspace_id,
                     PdfAnnotation.deleted_at.is_(None),
-                    or_(*scopes),
+                    PdfAnnotation.hidden_at.is_(None),
+                    PdfAnnotation.archived_at.is_(None),
+                    visible_annotation_scope_predicate(
+                        workspace,
+                        project_item_ids=project_item_ids,
+                        include_project=project_id is not None,
+                    ),
                 )
                 .order_by(PdfAnnotation.created_at, PdfAnnotation.id)
             )
@@ -222,7 +333,12 @@ async def select_visible_annotations(
 
 
 async def _annotation_views(
-    db: AsyncSession, user: User, records: list[PdfAnnotation]
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    records: list[PdfAnnotation],
+    *,
+    revision_names: dict[UUID, str] | None = None,
 ) -> list[dict[str, Any]]:
     if not records:
         return []
@@ -233,6 +349,7 @@ async def _annotation_views(
                 select(PdfAnnotationReply)
                 .where(
                     PdfAnnotationReply.annotation_id.in_(annotation_ids),
+                    PdfAnnotationReply.workspace_id == workspace_id,
                     PdfAnnotationReply.deleted_at.is_(None),
                 )
                 .order_by(PdfAnnotationReply.created_at, PdfAnnotationReply.id)
@@ -243,11 +360,45 @@ async def _annotation_views(
     author_rows = (
         await db.execute(select(User.id, User.username).where(User.id.in_(author_ids)))
     ).all()
-    authors: dict[str, str] = {row[0]: row[1] for row in author_rows}
-    editable_ids = await editable_annotation_ids(db, user, records)
+    authors: dict[UUID, str] = {row[0]: row[1] for row in author_rows}
+    project_item_ids = {
+        record.project_item_id for record in records if record.project_item_id is not None
+    }
+    project_rows = (
+        await db.execute(
+            select(ProjectItem.id, ProjectItem.project_id, Project.state, Project.name)
+            .join(Project, Project.id == ProjectItem.project_id)
+            .where(
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.id.in_(project_item_ids),
+            )
+        )
+    ).all()
+    project_ids_by_item: dict[UUID, UUID] = {row[0]: row[1] for row in project_rows}
+    project_states_by_item: dict[UUID, ProjectState] = {row[0]: row[2] for row in project_rows}
+    project_names_by_item: dict[UUID, str] = {row[0]: row[3] for row in project_rows}
+    if revision_names is None:
+        revision_names = dict(
+            (
+                await db.execute(
+                    select(
+                        FileRevision.id, FileRevision.file["metadata"]["original_name"].as_string()
+                    ).where(
+                        FileRevision.id.in_({record.file_revision_id for record in records}),
+                        FileRevision.workspace_id == workspace_id,
+                    )
+                )
+            )
+            .tuples()
+            .all()
+        )
+    editable_ids = await editable_annotation_ids(db, user, workspace_id, records)
+    workspace = await resolve_workspace_context(db, user, workspace_id)
     records_by_id = {record.id: record for record in records}
-    editable_reply_ids = await editable_annotation_reply_ids(db, user, replies, records_by_id)
-    replies_by_annotation: dict[str, list[dict[str, Any]]] = {
+    editable_reply_ids = await editable_annotation_reply_ids(
+        db, user, workspace_id, replies, records_by_id
+    )
+    replies_by_annotation: dict[UUID, list[dict[str, Any]]] = {
         annotation_id: [] for annotation_id in annotation_ids
     }
     for reply in replies:
@@ -259,155 +410,349 @@ async def _annotation_views(
                 editable=reply.id in editable_reply_ids,
             )
         )
-    return [
-        annotation_json(
-            record,
-            user.id,
-            author_display_name=authors.get(record.author_id, ""),
-            editable=record.id in editable_ids,
-            replies=replies_by_annotation[record.id],
+    views: list[dict[str, Any]] = []
+    for record in records:
+        revision_name = revision_names.get(record.file_revision_id)
+        if revision_name is None:
+            raise ResourceNotFound("revision not found")
+        authorization_resource_actions = [
+            action.value
+            for action in annotation_decisions(
+                workspace,
+                record,
+                editable=record.id in editable_ids,
+                project_active=(
+                    record.project_item_id is not None
+                    and project_states_by_item.get(record.project_item_id) is ProjectState.active
+                ),
+            )
+        ]
+
+        views.append(
+            annotation_json(
+                record,
+                user.id,
+                author_display_name=authors.get(record.author_id, ""),
+                editable=record.id in editable_ids,
+                authorization_resource_actions=authorization_resource_actions,
+                revision_name=revision_name,
+                project_id=(
+                    project_ids_by_item.get(record.project_item_id)
+                    if record.project_item_id is not None
+                    else None
+                ),
+                project_name=(
+                    project_names_by_item.get(record.project_item_id)
+                    if record.project_item_id is not None
+                    else None
+                ),
+                replies=replies_by_annotation[record.id],
+            )
         )
-        for record in records
-    ]
+    return views
 
 
 async def _editable_reply(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
+    *,
+    action: str,
 ) -> tuple[PdfAnnotation, PdfAnnotationReply]:
-    locked_user, annotation = await require_visible_annotation_for_reply_mutation(
-        db, user, item_id, annotation_id
+    _locked_user, annotation = await require_visible_annotation_for_reply_mutation(
+        db, user, workspace_id, item_id, annotation_id, action=action
     )
     reply = await db.scalar(
         select(PdfAnnotationReply)
         .where(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.annotation_id == annotation_id,
+            PdfAnnotationReply.workspace_id == workspace_id,
             PdfAnnotationReply.deleted_at.is_(None),
         )
         .with_for_update()
     )
     if reply is None:
         raise ResourceUnavailable("annotation reply not found or cannot be edited")
-    editable_ids = await editable_annotation_reply_ids(
-        db, locked_user, [reply], {annotation.id: annotation}
+    resource_action = ResourceAction(
+        f"{'private' if annotation.scope is AnnotationScope.private else 'project'}"
+        f"_annotation_reply.{action}"
     )
-    if reply.id not in editable_ids:
-        raise ResourceUnavailable("annotation reply not found or cannot be edited")
+    relation = "own" if reply.author_id == user.id else "other"
+    try:
+        await _require_reply_action(
+            db,
+            user,
+            workspace_id,
+            annotation,
+            resource_action,
+            relation=relation,
+        )
+    except PermissionDenied as error:
+        raise ResourceUnavailable("annotation reply not found or cannot be edited") from error
     return annotation, reply
+
+
+async def _require_reply_action(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    annotation: PdfAnnotation,
+    resource_action: ResourceAction,
+    *,
+    relation: str,
+) -> None:
+    if annotation.scope is AnnotationScope.private:
+        await require_workspace_action(
+            db,
+            user,
+            workspace_id,
+            resource_action,
+            relation=relation,
+        )
+        return
+    project_item = await db.scalar(
+        select(ProjectItem).where(
+            ProjectItem.id == annotation.project_item_id,
+            ProjectItem.workspace_id == workspace_id,
+        )
+    )
+    if project_item is None:
+        raise ResourceUnavailable("Annotation not found")
+    await require_project_context(
+        db,
+        user,
+        workspace_id,
+        project_item.project_id,
+        resource_action,
+        relation=relation,
+        lock="shared",
+    )
+
+
+@dataclass(frozen=True)
+class AnnotationView:
+    annotation: PdfAnnotation
+    revision: DocumentInfo
+    author: User
+
+
+def _browsable_annotations(
+    context: WorkspaceContext,
+    item_id: UUID,
+    *,
+    revision_id: UUID | None = None,
+    scope: AnnotationScope | None = None,
+    project_ids: tuple[UUID, ...] | None = None,
+) -> Select[tuple[PdfAnnotation]]:
+    """Complete browse rules, with Project discovery rechecked by each statement.
+
+    Browse includes hidden/archived records for moderators. Export deliberately
+    keeps its separate, stricter selection rules in select_visible_annotations.
+    """
+    project_items = select(ProjectItem.id).where(
+        ProjectItem.workspace_id == context.workspace_id,
+        ProjectItem.item_id == item_id,
+        ProjectItem.project_id.in_(discoverable_project_ids_query(context)),
+    )
+    if project_ids is not None:
+        project_items = project_items.where(ProjectItem.project_id.in_(project_ids))
+    query = select(PdfAnnotation).where(
+        PdfAnnotation.workspace_id == context.workspace_id,
+        PdfAnnotation.item_id == item_id,
+        PdfAnnotation.deleted_at.is_(None),
+        visible_annotation_scope_predicate(
+            context,
+            project_item_ids=project_items,
+            include_private=scope is not AnnotationScope.project,
+            include_project=scope is not AnnotationScope.private,
+        ),
+    )
+    if not action_allowed(context, ResourceAction.project_annotation_review):
+        query = query.where(PdfAnnotation.hidden_at.is_(None), PdfAnnotation.archived_at.is_(None))
+    if revision_id is not None:
+        query = query.where(PdfAnnotation.file_revision_id == revision_id)
+    return query
+
+
+async def count_item_annotations(db: AsyncSession, context: WorkspaceContext, item_id: UUID) -> int:
+    """Count browsable Annotations for an Item already authorized by the caller."""
+    return (
+        await db.execute(
+            _browsable_annotations(context, item_id)
+            .with_only_columns(func.count())
+            .select_from(PdfAnnotation)
+        )
+    ).scalar_one()
+
+
+async def list_item_annotation_views(
+    db: AsyncSession, context: WorkspaceContext, item_id: UUID
+) -> tuple[AnnotationView, ...]:
+    """Build a composite section read without leaking Document descriptors."""
+    rows = (
+        (
+            await db.execute(
+                _browsable_annotations(context, item_id)
+                .add_columns(FileRevision, User)
+                .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
+                .join(User, User.id == PdfAnnotation.author_id)
+                .order_by(PdfAnnotation.updated_at.desc(), PdfAnnotation.id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    return tuple(
+        AnnotationView(annotation, document_info(revision), author)
+        for annotation, revision, author in rows
+    )
 
 
 async def list_document_annotations(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    revision_id: str,
-    project_id: str | None = None,
-) -> list[dict[str, Any]]:
-    revision = await require_revision(db, user, revision_id)
-    if revision.item_id != item_id:
-        raise ResourceNotFound("revision not found for item")
-    records = await select_visible_annotations(db, user, revision_id, item_id, project_id)
-    return await _annotation_views(db, user, records)
-
-
-async def review_item_annotations(
-    db: AsyncSession,
-    user: User,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID | None = None,
     *,
-    page: int,
-    per_page: int,
-    revision_id: str | None = None,
-) -> AnnotationReview:
-    """Load every Annotation scope visible to the caller for one Item in fixed queries."""
-    await require_readable_item(db, user, item_id)
-    revisions = tuple(
+    page: int = 1,
+    per_page: int = 50,
+    scope: AnnotationScope | None = None,
+    project_ids: tuple[UUID, ...] | None = None,
+    pagination: Literal["page", "cursor"] = "page",
+    cursor: UUID | None = None,
+) -> AnnotationPage:
+    """List visible Item annotations, with independent revision and source filters."""
+    if page < 1 or not 1 <= per_page <= 100:
+        raise ValidationFailure("Invalid annotation pagination")
+    if (
+        pagination not in ("page", "cursor")
+        or (pagination == "page" and cursor is not None)
+        or (pagination == "cursor" and page != 1)
+    ):
+        raise ValidationFailure("Invalid annotation pagination mode")
+    await require_readable_item(db, user, workspace_id, item_id)
+    workspace = await require_workspace_action(
+        db, user, workspace_id, ResourceAction.workspace_read
+    )
+    revisions = await list_item_revisions(db, workspace_id, item_id, all_revisions=True)
+    if revision_id is not None and revision_id not in {revision.id for revision in revisions}:
+        raise ResourceNotFound("revision not found for item")
+    projects = tuple(
         (
             await db.scalars(
-                select(FileRevision)
-                .where(FileRevision.item_id == item_id)
-                .order_by(FileRevision.created_at.desc(), FileRevision.id)
+                select(Project)
+                .join(ProjectItem, ProjectItem.project_id == Project.id)
+                .where(
+                    ProjectItem.workspace_id == workspace_id,
+                    ProjectItem.item_id == item_id,
+                    Project.id.in_(discoverable_project_ids_query(workspace)),
+                )
+                .order_by(Project.name, Project.id)
             )
         ).all()
     )
-    if not revisions:
-        return AnnotationReview(revisions=(), annotations=(), total=0)
-
-    item_project_ids = select(ProjectItem.project_id).where(ProjectItem.item_id == item_id)
-    if user.role == SystemRole.administrator.value:
-        private_scope = PdfAnnotation.scope == AnnotationScope.private
-        visible_project_ids = item_project_ids
+    visible_project_ids = {project.id for project in projects}
+    if project_ids is not None and not set(project_ids) <= visible_project_ids:
+        raise ResourceUnavailable("ProjectItem not found")
+    visible = _browsable_annotations(
+        workspace,
+        item_id,
+        revision_id=revision_id,
+        scope=scope,
+        project_ids=tuple(visible_project_ids) if project_ids is None else project_ids,
+    )
+    total = (
+        await db.execute(visible.with_only_columns(func.count()).select_from(PdfAnnotation))
+    ).scalar_one()
+    # Read names with their annotations: a later statement under READ COMMITTED
+    # could see the revision's cascade deletion after these ORM objects are loaded.
+    query = visible.add_columns(FileRevision.file["metadata"]["original_name"].as_string()).join(
+        FileRevision
+    )
+    if pagination == "cursor":
+        # IDs never move when content is edited, and a deleted cursor row need
+        # not exist for the next page to remain reachable.
+        if cursor is not None:
+            query = query.where(PdfAnnotation.id > cursor)
+        query = query.order_by(PdfAnnotation.id).limit(per_page + 1)
     else:
-        private_scope = and_(
-            PdfAnnotation.scope == AnnotationScope.private,
-            PdfAnnotation.author_id == user.id,
+        query = (
+            query
+            .order_by(PdfAnnotation.updated_at.desc(), PdfAnnotation.id)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         )
-        visible_project_ids = select(ProjectMember.project_id).where(
-            ProjectMember.user_id == user.id,
-            ProjectMember.project_id.in_(item_project_ids),
-        )
-    filters = [
-        PdfAnnotation.file_revision_id.in_([revision.id for revision in revisions]),
-        PdfAnnotation.deleted_at.is_(None),
-        or_(
-            private_scope,
-            and_(
-                PdfAnnotation.scope == AnnotationScope.project,
-                PdfAnnotation.project_id.in_(visible_project_ids),
-            ),
-        ),
-    ]
-    if revision_id is not None:
-        filters.append(PdfAnnotation.file_revision_id == revision_id)
-    total = int(
-        await db.scalar(select(func.count()).select_from(PdfAnnotation).where(*filters)) or 0
+    rows = (await db.execute(query)).tuples().all()
+    records = [record for record, _name in rows]
+    revision_names = {record.file_revision_id: name for record, name in rows}
+    next_cursor = (
+        records[per_page - 1].id if pagination == "cursor" and len(records) > per_page else None
     )
-    records = list(
-        (
-            await db.scalars(
-                select(PdfAnnotation)
-                .where(*filters)
-                .order_by(PdfAnnotation.updated_at.desc(), PdfAnnotation.id)
-                .offset((page - 1) * per_page)
-                .limit(per_page)
-            )
-        ).all()
-    )
-    return AnnotationReview(
+    records = records[:per_page]
+    return AnnotationPage(
         revisions=revisions,
-        annotations=tuple(await _annotation_views(db, user, records)),
+        projects=projects,
+        annotations=tuple(
+            await _annotation_views(db, user, workspace_id, records, revision_names=revision_names)
+        ),
         total=total,
+        next_cursor=next_cursor,
     )
 
 
 async def create_document_annotation(
     db: AsyncSession,
     user: User,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     data: AnnotationCreate,
 ) -> dict[str, Any]:
-    revision = await require_revision(db, user, data.revision_id)
+    revision = await require_revision(db, user, workspace_id, data.revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
-    if data.scope is AnnotationScope.project and (
-        await project_member(db, user, data.project_id) is None
-        or await db.get(ProjectItem, (data.project_id, item_id)) is None
-    ):
-        raise ResourceUnavailable("project membership or project item not found")
+    project_item: ProjectItem | None = None
+    if data.scope is AnnotationScope.project:
+        assert data.project_id is not None
+        await require_project_context(
+            db,
+            user,
+            workspace_id,
+            data.project_id,
+            ResourceAction.project_annotation_create,
+            relation="own",
+            lock="shared",
+        )
+        project_item = await _lock_annotation_project_item(
+            db,
+            workspace_id,
+            data.project_id,
+            item_id,
+        )
+    else:
+        await require_workspace_action(
+            db,
+            user,
+            workspace_id,
+            ResourceAction.private_annotation_create,
+            relation="own",
+        )
     validate_payload(data.page_index, data.payload, revision)
-    object_id = str(data.id)
+    object_id = data.id
     record = PdfAnnotation(
         id=object_id,
+        workspace_id=workspace_id,
         file_revision_id=data.revision_id,
+        item_id=item_id,
         page_index=data.page_index,
         author_id=user.id,
         kind=data.kind,
         scope=data.scope,
-        project_id=data.project_id,
+        project_item_id=project_item.id if project_item else None,
         body=data.body,
         selected_text=data.selected_text,
         payload=data.payload.model_dump(mode="json"),
@@ -418,39 +763,67 @@ async def create_document_annotation(
             await db.flush()
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
-    record_event(db, user.id, "annotation.create", "pdf_annotation", record.id)
-    await db.commit()
-    return annotation_json(
-        record,
+    record_event(
+        db,
         user.id,
-        author_display_name=user.username,
-        editable=True,
+        "annotation.create",
+        "pdf_annotation",
+        record.id,
+        workspace_id=workspace_id,
+        project_id=data.project_id,
+        authorization_resource_action=(
+            ResourceAction.project_annotation_create.value
+            if data.scope is AnnotationScope.project
+            else ResourceAction.private_annotation_create.value
+        ),
     )
+    await db.commit()
+    return (await _annotation_views(db, user, workspace_id, [record]))[0]
 
 
 async def update_document_annotation(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationUpdate,
 ) -> dict[str, Any]:
-    record = await require_editable_annotation(db, user, item_id, annotation_id)
+    record = await require_editable_annotation(db, user, workspace_id, item_id, annotation_id)
     revision = await db.get(FileRevision, record.file_revision_id)
     if revision is None:
         raise ResourceNotFound("revision not found")
-    if data.scope is AnnotationScope.project and (
-        await db.get(ProjectItem, (data.project_id, item_id)) is None
-        or (
-            user.role != SystemRole.administrator.value
-            and await project_member(db, user, data.project_id) is None
+    project_item: ProjectItem | None = None
+    if data.scope is AnnotationScope.project:
+        assert data.project_id is not None
+        await require_project_context(
+            db,
+            user,
+            workspace_id,
+            data.project_id,
+            ResourceAction.project_annotation_update,
+            relation="own",
+            lock="shared",
         )
-    ):
-        raise ResourceUnavailable("project membership or project item not found")
+        project_item = await _lock_annotation_project_item(
+            db,
+            workspace_id,
+            data.project_id,
+            item_id,
+        )
+    else:
+        await require_workspace_action(
+            db,
+            user,
+            workspace_id,
+            ResourceAction.private_annotation_update,
+            relation="own",
+        )
     validate_payload(data.page_index, data.payload, revision)
     new_version = await db.scalar(
         update(PdfAnnotation)
         .where(
+            PdfAnnotation.workspace_id == workspace_id,
             PdfAnnotation.id == annotation_id,
             PdfAnnotation.version == data.version,
             PdfAnnotation.deleted_at.is_(None),
@@ -459,7 +832,7 @@ async def update_document_annotation(
             page_index=data.page_index,
             kind=data.kind,
             scope=data.scope,
-            project_id=data.project_id,
+            project_item_id=project_item.id if project_item else None,
             body=data.body,
             selected_text=data.selected_text,
             payload=data.payload.model_dump(mode="json"),
@@ -470,94 +843,283 @@ async def update_document_annotation(
     )
     if new_version is None:
         current_version = await db.scalar(
-            select(PdfAnnotation.version).where(PdfAnnotation.id == annotation_id)
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
         )
         raise VersionConflict(current_version)
     await db.refresh(record)
-    record_event(db, user.id, "annotation.update", "pdf_annotation", record.id)
+    record_event(
+        db,
+        user.id,
+        "annotation.update",
+        "pdf_annotation",
+        record.id,
+        workspace_id=workspace_id,
+        project_id=data.project_id,
+        authorization_resource_action=(
+            ResourceAction.project_annotation_update.value
+            if data.scope is AnnotationScope.project
+            else ResourceAction.private_annotation_update.value
+        ),
+    )
     await db.commit()
-    return (await _annotation_views(db, user, [record]))[0]
+    return (await _annotation_views(db, user, workspace_id, [record]))[0]
 
 
 async def delete_document_annotation(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     version: int,
 ) -> None:
-    record = await require_editable_annotation(db, user, item_id, annotation_id)
+    record = await require_deletable_annotation(db, user, workspace_id, item_id, annotation_id)
     deleted_at = datetime.now(UTC)
     new_version = await db.scalar(
         update(PdfAnnotation)
         .where(
+            PdfAnnotation.workspace_id == workspace_id,
             PdfAnnotation.id == annotation_id,
             PdfAnnotation.version == version,
             PdfAnnotation.deleted_at.is_(None),
         )
         .values(
             deleted_at=deleted_at,
-            updated_at=deleted_at,
+            deleted_by_moderation=False,
             version=PdfAnnotation.version + 1,
+            updated_at=deleted_at,
         )
         .returning(PdfAnnotation.version)
     )
     if new_version is None:
         current_version = await db.scalar(
-            select(PdfAnnotation.version).where(PdfAnnotation.id == annotation_id)
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
         )
         raise VersionConflict(current_version)
-    record_event(db, user.id, "annotation.delete", "pdf_annotation", record.id)
+    record_event(
+        db,
+        user.id,
+        "annotation.delete",
+        "pdf_annotation",
+        record.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=(
+            ResourceAction.project_annotation_delete.value
+            if record.scope is AnnotationScope.project
+            else ResourceAction.private_annotation_delete.value
+        ),
+    )
     await db.commit()
 
 
 async def restore_document_annotation(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     version: int,
 ) -> dict[str, Any]:
-    record = await require_restorable_annotation(db, user, item_id, annotation_id)
+    record = await require_restorable_annotation(db, user, workspace_id, item_id, annotation_id)
     restored_at = datetime.now(UTC)
     new_version = await db.scalar(
         update(PdfAnnotation)
         .where(
+            PdfAnnotation.workspace_id == workspace_id,
             PdfAnnotation.id == annotation_id,
             PdfAnnotation.version == version,
             PdfAnnotation.deleted_at.is_not(None),
+            PdfAnnotation.deleted_by_moderation.is_(False),
         )
-        .values(
-            deleted_at=None,
-            updated_at=restored_at,
-            version=PdfAnnotation.version + 1,
-        )
+        .values(deleted_at=None, version=PdfAnnotation.version + 1, updated_at=restored_at)
         .returning(PdfAnnotation.version)
     )
     if new_version is None:
         current_version = await db.scalar(
-            select(PdfAnnotation.version).where(PdfAnnotation.id == annotation_id)
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
         )
         raise VersionConflict(current_version)
     await db.refresh(record)
-    record_event(db, user.id, "annotation.restore", "pdf_annotation", record.id)
+    record_event(
+        db,
+        user.id,
+        "annotation.restore",
+        "pdf_annotation",
+        record.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=(
+            ResourceAction.project_annotation_restore.value
+            if record.scope is AnnotationScope.project
+            else ResourceAction.private_annotation_restore.value
+        ),
+    )
     await db.commit()
-    return (await _annotation_views(db, user, [record]))[0]
+    return (await _annotation_views(db, user, workspace_id, [record]))[0]
+
+
+async def moderate_document_annotation(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    action: str,
+    version: int,
+) -> dict[str, Any]:
+    """Change moderation state without rewriting authored content or attribution."""
+    moderation_actions = {"hide", "archive", "restore", "lock", "unlock", "delete"}
+    if action not in moderation_actions:
+        raise ValidationFailure("invalid Annotation moderation action")
+    workspace = await require_workspace_action(
+        db, user, workspace_id, ResourceAction.workspace_read
+    )
+    await require_readable_item(db, user, workspace_id, item_id)
+    record = await db.scalar(
+        select(PdfAnnotation).where(
+            PdfAnnotation.id == annotation_id,
+            PdfAnnotation.workspace_id == workspace_id,
+            PdfAnnotation.deleted_at.is_(None),
+        )
+    )
+    revision = (
+        await db.scalar(
+            select(FileRevision).where(
+                FileRevision.id == record.file_revision_id,
+                FileRevision.workspace_id == workspace_id,
+                FileRevision.item_id == item_id,
+            )
+        )
+        if record is not None
+        else None
+    )
+    if record is None or revision is None or record.scope is not AnnotationScope.project:
+        raise ResourceUnavailable("Annotation not found")
+    relation = "own" if record.author_id == workspace.actor_id else "other"
+    if relation == "own":
+        raise ValidationFailure("authors cannot moderate their own Annotation")
+    moderation_action = annotation_moderation_action(action)
+    project_item = await db.scalar(
+        select(ProjectItem).where(
+            ProjectItem.id == record.project_item_id,
+            ProjectItem.workspace_id == workspace_id,
+            ProjectItem.item_id == item_id,
+        )
+    )
+    if project_item is None:
+        raise ResourceUnavailable("Annotation not found")
+    project = await db.scalar(
+        select(Project).where(
+            Project.id == project_item.project_id,
+            Project.workspace_id == workspace_id,
+            Project.state != ProjectState.deleted,
+        )
+    )
+    if project is None:
+        raise ResourceUnavailable("Annotation Project not found")
+    project_context = await require_project_context(
+        db,
+        user,
+        workspace_id,
+        project_item.project_id,
+        moderation_action,
+        relation=relation,
+        lock="shared",
+    )
+    workspace = project_context.workspace
+
+    changed_at = datetime.now(UTC)
+    values: dict[str, object] = {
+        "moderated_by": user.id,
+    }
+    if action == "hide":
+        values["hidden_at"] = changed_at
+    elif action == "archive":
+        values["archived_at"] = changed_at
+    elif action == "restore":
+        values["hidden_at"] = None
+        values["archived_at"] = None
+    elif action == "lock":
+        values["locked_at"] = changed_at
+    elif action == "unlock":
+        values["locked_at"] = None
+    elif action == "delete":
+        values["deleted_at"] = changed_at
+        values["deleted_by_moderation"] = True
+    else:  # Pydantic and the guard above keep this branch unreachable.
+        raise ValidationFailure("invalid Annotation moderation action")
+
+    new_version = await db.scalar(
+        update(PdfAnnotation)
+        .where(
+            PdfAnnotation.workspace_id == workspace_id,
+            PdfAnnotation.id == annotation_id,
+            PdfAnnotation.version == version,
+            PdfAnnotation.deleted_at.is_(None),
+        )
+        .values(**values, version=PdfAnnotation.version + 1, updated_at=changed_at)
+        .returning(PdfAnnotation.version)
+    )
+    if new_version is None:
+        current_version = await db.scalar(
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
+        )
+        raise VersionConflict(current_version)
+    await db.refresh(record)
+    record_event(
+        db,
+        user.id,
+        f"annotation.moderate.{action}",
+        "pdf_annotation",
+        record.id,
+        detail={"author_id": record.author_id} if action == "delete" else None,
+        workspace_id=workspace_id,
+        project_id=project_item.project_id,
+        authorization_role=workspace.role.value,
+        authorization_resource_action=moderation_action.value,
+    )
+    await db.commit()
+    return (await _annotation_views(db, user, workspace_id, [record]))[0]
 
 
 async def create_annotation_reply(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
     data: AnnotationReplyCreate,
 ) -> dict[str, Any]:
-    locked_user, _annotation = await require_visible_annotation_for_reply_mutation(
-        db, user, item_id, annotation_id
+    locked_user, annotation = await require_visible_annotation_for_reply_mutation(
+        db, user, workspace_id, item_id, annotation_id, action="create"
     )
-    object_id = str(data.id)
+    context = await resolve_workspace_context(db, locked_user, workspace_id)
+    resource = (
+        "private_annotation_reply"
+        if annotation.scope is AnnotationScope.private
+        else "project_annotation_reply"
+    )
+    relation = "own" if annotation.author_id == context.actor_id else "other"
+    resource_action = ResourceAction(f"{resource}.create")
+    await _require_reply_action(
+        db,
+        locked_user,
+        workspace_id,
+        annotation,
+        resource_action,
+        relation=relation,
+    )
+    object_id = data.id
     record = PdfAnnotationReply(
         id=object_id,
+        workspace_id=workspace_id,
         annotation_id=annotation_id,
         author_id=locked_user.id,
         body=data.body,
@@ -568,7 +1130,15 @@ async def create_annotation_reply(
             await db.flush()
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
-    record_event(db, locked_user.id, "annotation_reply.create", "pdf_annotation_reply", record.id)
+    record_event(
+        db,
+        locked_user.id,
+        "annotation_reply.create",
+        "pdf_annotation_reply",
+        record.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=resource_action.value,
+    )
     await db.commit()
     return annotation_reply_json(
         record,
@@ -581,33 +1151,56 @@ async def create_annotation_reply(
 async def update_annotation_reply(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     data: AnnotationReplyUpdate,
 ) -> dict[str, Any]:
-    _annotation, reply = await _editable_reply(db, user, item_id, annotation_id, reply_id)
+    annotation, reply = await _editable_reply(
+        db,
+        user,
+        workspace_id,
+        item_id,
+        annotation_id,
+        reply_id,
+        action="update",
+    )
+    resource_action = ResourceAction(
+        "private_annotation_reply.update"
+        if annotation.scope is AnnotationScope.private
+        else "project_annotation_reply.update"
+    )
     new_version = await db.scalar(
         update(PdfAnnotationReply)
         .where(
+            PdfAnnotationReply.workspace_id == workspace_id,
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.version == data.version,
             PdfAnnotationReply.deleted_at.is_(None),
         )
         .values(
-            body=data.body,
-            version=PdfAnnotationReply.version + 1,
-            updated_at=datetime.now(UTC),
+            body=data.body, version=PdfAnnotationReply.version + 1, updated_at=datetime.now(UTC)
         )
         .returning(PdfAnnotationReply.version)
     )
     if new_version is None:
         current_version = await db.scalar(
-            select(PdfAnnotationReply.version).where(PdfAnnotationReply.id == reply_id)
+            select(PdfAnnotationReply.version).where(
+                PdfAnnotationReply.workspace_id == workspace_id, PdfAnnotationReply.id == reply_id
+            )
         )
         raise VersionConflict(current_version)
     await db.refresh(reply)
-    record_event(db, user.id, "annotation_reply.update", "pdf_annotation_reply", reply.id)
+    record_event(
+        db,
+        user.id,
+        "annotation_reply.update",
+        "pdf_annotation_reply",
+        reply.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=resource_action.value,
+    )
     await db.commit()
     author_name = await db.scalar(select(User.username).where(User.id == reply.author_id)) or ""
     return annotation_reply_json(
@@ -621,85 +1214,129 @@ async def update_annotation_reply(
 async def delete_annotation_reply(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
 ) -> None:
-    _annotation, reply = await _editable_reply(db, user, item_id, annotation_id, reply_id)
+    annotation, reply = await _editable_reply(
+        db,
+        user,
+        workspace_id,
+        item_id,
+        annotation_id,
+        reply_id,
+        action="delete",
+    )
+    resource_action = ResourceAction(
+        "private_annotation_reply.delete"
+        if annotation.scope is AnnotationScope.private
+        else "project_annotation_reply.delete"
+    )
     deleted_at = datetime.now(UTC)
     new_version = await db.scalar(
         update(PdfAnnotationReply)
         .where(
+            PdfAnnotationReply.workspace_id == workspace_id,
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.version == version,
             PdfAnnotationReply.deleted_at.is_(None),
         )
         .values(
-            deleted_at=deleted_at,
-            updated_at=deleted_at,
-            version=PdfAnnotationReply.version + 1,
+            deleted_at=deleted_at, version=PdfAnnotationReply.version + 1, updated_at=deleted_at
         )
         .returning(PdfAnnotationReply.version)
     )
     if new_version is None:
         current_version = await db.scalar(
-            select(PdfAnnotationReply.version).where(PdfAnnotationReply.id == reply_id)
+            select(PdfAnnotationReply.version).where(
+                PdfAnnotationReply.workspace_id == workspace_id, PdfAnnotationReply.id == reply_id
+            )
         )
         raise VersionConflict(current_version)
-    record_event(db, user.id, "annotation_reply.delete", "pdf_annotation_reply", reply.id)
+    record_event(
+        db,
+        user.id,
+        "annotation_reply.delete",
+        "pdf_annotation_reply",
+        reply.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=resource_action.value,
+    )
     await db.commit()
 
 
 async def restore_annotation_reply(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    annotation_id: str,
-    reply_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    annotation_id: UUID,
+    reply_id: UUID,
     version: int,
 ) -> dict[str, Any]:
     locked_user, annotation = await require_visible_annotation_for_reply_mutation(
-        db, user, item_id, annotation_id
+        db, user, workspace_id, item_id, annotation_id, action="restore"
+    )
+    resource_action = ResourceAction(
+        "private_annotation_reply.restore"
+        if annotation.scope is AnnotationScope.private
+        else "project_annotation_reply.restore"
     )
     reply = await db.scalar(
         select(PdfAnnotationReply)
         .where(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.annotation_id == annotation_id,
+            PdfAnnotationReply.workspace_id == workspace_id,
             PdfAnnotationReply.deleted_at.is_not(None),
         )
         .with_for_update()
     )
     if reply is None:
         raise ResourceUnavailable("annotation reply not found or cannot be restored")
-    editable_ids = await editable_annotation_reply_ids(
-        db, locked_user, [reply], {annotation.id: annotation}
-    )
-    if reply.id not in editable_ids:
-        raise ResourceUnavailable("annotation reply not found or cannot be restored")
+    relation = "own" if reply.author_id == locked_user.id else "other"
+    try:
+        await _require_reply_action(
+            db,
+            locked_user,
+            workspace_id,
+            annotation,
+            resource_action,
+            relation=relation,
+        )
+    except PermissionDenied as error:
+        raise ResourceUnavailable("annotation reply not found or cannot be restored") from error
     restored_at = datetime.now(UTC)
     new_version = await db.scalar(
         update(PdfAnnotationReply)
         .where(
+            PdfAnnotationReply.workspace_id == workspace_id,
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.version == version,
             PdfAnnotationReply.deleted_at.is_not(None),
         )
-        .values(
-            deleted_at=None,
-            updated_at=restored_at,
-            version=PdfAnnotationReply.version + 1,
-        )
+        .values(deleted_at=None, version=PdfAnnotationReply.version + 1, updated_at=restored_at)
         .returning(PdfAnnotationReply.version)
     )
     if new_version is None:
         current_version = await db.scalar(
-            select(PdfAnnotationReply.version).where(PdfAnnotationReply.id == reply_id)
+            select(PdfAnnotationReply.version).where(
+                PdfAnnotationReply.workspace_id == workspace_id, PdfAnnotationReply.id == reply_id
+            )
         )
         raise VersionConflict(current_version)
     await db.refresh(reply)
-    record_event(db, user.id, "annotation_reply.restore", "pdf_annotation_reply", reply.id)
+    record_event(
+        db,
+        user.id,
+        "annotation_reply.restore",
+        "pdf_annotation_reply",
+        reply.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=resource_action.value,
+    )
     await db.commit()
     author_name = await db.scalar(select(User.username).where(User.id == reply.author_id)) or ""
     return annotation_reply_json(

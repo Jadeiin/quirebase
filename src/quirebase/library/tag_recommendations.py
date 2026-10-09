@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import importlib.util
-import json
 import os
 import re
 from dataclasses import dataclass
@@ -29,6 +28,8 @@ from quirebase.models import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 _URL = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
@@ -122,20 +123,19 @@ async def _item_text(db: AsyncSession, item: Item, settings: Settings) -> str:
 
 
 def _engine(settings: Settings):
-    validate_engine_configuration(settings)
-    name = settings.recommendation_engine.strip().casefold()
-    if name == "yake":
+    descriptor = validate_engine_configuration(settings)
+    if descriptor.name == "yake":
         return YakeRecommendationEngine()
-    if name == "keybert":
+    if descriptor.name == "keybert":
         if settings.keybert_model_path is None:
             raise RuntimeError("QUIREBASE_KEYBERT_MODEL_PATH is required for the keybert engine")
         return load_local_keybert(str(settings.keybert_model_path))
-    raise RuntimeError(f"unsupported recommendation engine: {settings.recommendation_engine}")
+    raise RuntimeError(f"unsupported recommendation engine: {descriptor.name}")
 
 
 async def recommend_item_tags(
     db: AsyncSession,
-    item_id: str,
+    item_id: UUID,
     *,
     settings: Settings | None = None,
 ) -> RecommendationCandidates:
@@ -146,7 +146,7 @@ async def recommend_item_tags(
     text = await _item_text(db, item, effective)
     result = await asyncio.to_thread(
         lambda: _engine(effective).recommend(
-            (RecommendationDocument(identifier=item_id, text=text),),
+            (RecommendationDocument(identifier=str(item_id), text=text),),
             RecommendationLimits(single_words=10, phrases=10),
         )
     )
@@ -162,12 +162,7 @@ def decoded_candidates(
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if record is None or record.generated_at is None:
         return (), ()
-    try:
-        words = tuple(str(value) for value in json.loads(record.single_words or "[]"))
-        phrases = tuple(str(value) for value in json.loads(record.phrases or "[]"))
-    except (TypeError, json.JSONDecodeError):
-        return (), ()
-    return words, phrases
+    return tuple(record.single_words or ()), tuple(record.phrases or ())
 
 
 __all__ = [

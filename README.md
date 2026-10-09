@@ -74,11 +74,16 @@ tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
 API errors return a stable JSON object with `code` and `message`, plus optional `fields` for request
 validation and `meta` for structured conflict details.
 
+Research data access is governed by Workspace resource-action decisions. Workspace roles are
+`owner`, `admin`, `editor`, `reviewer` and `viewer`; Project participation is role-less and never
+grants access to canonical Workspace Items. Permanent Item deletion requires the Workspace
+`item.delete` action. An instance administrator has no implicit access to research data.
+
 ## PDF architecture
 
 - EmbedPDF's Svelte viewer components and bundled PDFium engine render the document, text and annotation layers in the browser.
 - PyMuPDF validates PDFs, extracts text, creates thumbnails, and writes database-backed highlights and notes into temporary export copies.
-- Original PDFs are content-addressed and never modified.
+- Logical PDF uploads use preallocated owned UUID object keys; historical SHA-256 content-addressed keys remain recognizable. Original PDFs are never modified.
 
 Password-protected PDFs, OCR and flattened annotations are outside the first milestone.
 
@@ -93,7 +98,7 @@ Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under 
 
 ## Completed scope
 
-Quirebase includes local accounts and invitations, administrator/member and project owner/editor/viewer permissions, audited login attempts, per-session and all-session logout, durable login throttling, Item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source Discovery (online scholarly search), automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and owner-confirmed deletion, EmbedPDF reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native Library Search, staged BibTeX/RIS Import, audit events, a global background-task tray for resumable jobs, metrics, backup/restore, and integrity checks.
+Quirebase includes local accounts and invitations, Workspace resource-action authorization with role-less Project participation, audited login attempts, per-session and all-session logout, durable login throttling, Item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source Discovery (online scholarly search), automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and confirmed, audited Workspace-authorized Item deletion through `item.delete`, EmbedPDF reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native Library Search, staged BibTeX/RIS Import, audit events, a global background-task tray for resumable jobs, metrics, backup/restore, and integrity checks.
 
 Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
 

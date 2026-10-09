@@ -1,7 +1,10 @@
 <script lang="ts">
-	import type { LibraryProject } from '$lib/features/library/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
+	import { can } from '#lib/authorization/can.js';
+	import type { LibraryProject } from '#lib/features/library/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import { canRunBulkAction } from '#lib/workspaces/actions.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 
 	let {
 		selectedCount,
@@ -24,6 +27,15 @@
 		onApply: () => void;
 		onClearSelection: () => void;
 	}>();
+	const workspace = getWorkspaceContext();
+	const assignableProjects: LibraryProject[] = $derived(
+		projects.filter((project: LibraryProject) => can(project.authorization, 'project_item.manage'))
+	);
+	$effect(() => {
+		if (bulkProject && !assignableProjects.some((project) => project.id === bulkProject)) {
+			bulkProject = '';
+		}
+	});
 </script>
 
 {#if selectedCount}
@@ -33,18 +45,29 @@
 		<strong class="mr-2">{$t('{count} selected', { count: selectedCount })}</strong>
 		<select class="input w-auto min-w-36" bind:value={bulkAction} aria-label={$t('Bulk action')}>
 			<option value="">{$t('Choose action')}</option>
-			<option value="add_project">{$t('Add to Project')}</option>
-			<option value="add_tag">{$t('Add Tag')}</option>
-			<option value="bibliography">{$t('Export bibliography')}</option>
-			<option value="documents">{$t('Download documents')}</option>
-			<option value="delete">{$t('Permanently delete')}</option>
+			{#if canRunBulkAction(workspace.can, 'add_project')}<option value="add_project"
+					>{$t('Add to Project')}</option
+				>{/if}
+			{#if canRunBulkAction(workspace.can, 'add_tag')}<option value="add_tag"
+					>{$t('Add Tag')}</option
+				>{/if}
+			{#if canRunBulkAction(workspace.can, 'bibliography')}<option value="bibliography"
+					>{$t('Export bibliography')}</option
+				>{/if}
+			{#if canRunBulkAction(workspace.can, 'documents')}<option value="documents"
+					>{$t('Download documents')}</option
+				>{/if}
+			{#if canRunBulkAction(workspace.can, 'delete')}<option value="delete"
+					>{$t('Permanently delete')}</option
+				>{/if}
 		</select>
 		{#if bulkAction === 'add_project'}<select
 				class="input w-auto min-w-36"
 				bind:value={bulkProject}
 				aria-label={$t('Select Project')}
 				><option value="">{$t('Select Project')}</option
-				>{#each projects as option (option.id)}<option value={option.id}>{option.name}</option
+				>{#each assignableProjects as option (option.id)}<option value={option.id}
+						>{option.name}</option
 					>{/each}</select
 			>{/if}
 		{#if bulkAction === 'add_tag'}<input
@@ -63,6 +86,10 @@
 			variant="filled"
 			disabled={busy ||
 				!bulkAction ||
+				!canRunBulkAction(
+					workspace.can,
+					bulkAction as import('#lib/features/library/mutations.js').LibraryBulkAction
+				) ||
 				(bulkAction === 'add_project' && !bulkProject) ||
 				(bulkAction === 'add_tag' && !bulkTag.trim())}
 			onclick={onApply}>{$t('Apply')}</Button

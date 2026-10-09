@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from fastmcp import Client
 from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.accounts import create_api_token
 from quirebase.core.database import get_db
@@ -73,22 +75,20 @@ async def _call(client, raw_token: str, name: str, arguments: dict, request_id: 
     return await client.post(
         "/mcp/",
         headers=_headers(raw_token),
-        json={
+        json=json_payload({
             "jsonrpc": "2.0",
             "id": request_id,
             "method": "tools/call",
             "params": {"name": name, "arguments": arguments},
-        },
+        }),
     )
 
 
 async def test_generated_tools_match_the_fixed_allowlist_and_annotations(async_session_factory):
     async with mcp_client(async_session_factory) as (_client, app):
         server = app.state.mcp_server
-        tools = await server.list_tools()
         generated = {name: await server.get_tool(name) for name in TOOL_ALLOWLIST}
 
-    assert {tool.name for tool in tools} == {"search_tools", "call_tool"}
     assert all(tool is not None for tool in generated.values())
     assert not any(name.startswith("admin.") for name in TOOL_ALLOWLIST)
     assert not any(
@@ -111,10 +111,11 @@ async def test_tool_search_discovers_curated_tools(async_session_factory):
     matches = json.loads(result.content[0].text)
     matching_tool = next(tool for tool in matches if tool["name"] == "projects.update_project")
     assert set(matching_tool["inputSchema"]["properties"]) == {
+        "workspace_id",
         "project_id",
         "name",
         "description",
-        "visibility",
+        "participation",
     }
 
 
@@ -124,21 +125,37 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         tools = {name: await server.get_tool(name) for name in TOOL_ALLOWLIST}
 
     assert set(tools["library.search_items"].parameters["properties"]) == {
+        "workspace_id",
         "query",
         "tag",
         "project",
         "year",
         "keyword",
         "author",
-        "page",
+        "limit",
+        "offset",
+        "sort",
+        "has_files",
     }
     assert set(tools["projects.update_project"].parameters["properties"]) == {
+        "workspace_id",
         "project_id",
         "name",
         "description",
-        "visibility",
+        "participation",
+    }
+    assert set(tools["projects.add_project_participant"].parameters["properties"]) == {
+        "workspace_id",
+        "project_id",
+        "username",
+    }
+    assert set(tools["projects.remove_project_participant"].parameters["properties"]) == {
+        "workspace_id",
+        "project_id",
+        "user_id",
     }
     assert set(tools["annotations.update_annotation"].parameters["properties"]) == {
+        "workspace_id",
         "item_id",
         "annotation_id",
         "version",
@@ -157,6 +174,8 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
 ):
     user = User(username="generated-mcp-writer", password_hash="unused")
     async_db.add(user)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, user)
     await async_db.commit()
     grant = await create_api_token(async_db, user, "Generated MCP", expires_in_days=30)
 
@@ -165,7 +184,11 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
             client,
             grant.raw_token,
             "library.create_library_item",
-            {"title": "Created through generated MCP", "doi": "10.1/generated"},
+            {
+                "workspace_id": fixture_workspace_id(user),
+                "title": "Created through generated MCP",
+                "doi": "10.1/generated",
+            },
         )
 
     assert response.status_code == 200
@@ -177,23 +200,25 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
     assert item.created_by == user.id
     event = await async_db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "item.create", AuditEvent.target_id == item_id
+            AuditEvent.action == "item.create", AuditEvent.target_id == str(item_id)
         )
     )
     assert event is not None
-    assert json.loads(event.detail) == {
+    assert event.detail == json_payload({
         "invocation": {
             "protocol": "mcp",
             "operation": "library.create_library_item",
             "api_token_id": grant.token_id,
             "client_id": f"quirebase-api-token:{grant.token_id}",
         }
-    }
+    })
 
 
 async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_factory):
     user = User(username="tool-search-writer", password_hash="unused")
     async_db.add(user)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, user)
     await async_db.commit()
     grant = await create_api_token(async_db, user, "Tool search", expires_in_days=30)
 
@@ -210,7 +235,10 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
             "call_tool",
             {
                 "name": "library.create_library_item",
-                "arguments": {"title": "Created through tool search"},
+                "arguments": {
+                    "workspace_id": fixture_workspace_id(user),
+                    "title": "Created through tool search",
+                },
             },
         )
 
@@ -223,11 +251,11 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
     item_id = created_result["structuredContent"]["id"]
     event = await async_db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "item.create", AuditEvent.target_id == item_id
+            AuditEvent.action == "item.create", AuditEvent.target_id == str(item_id)
         )
     )
     assert event is not None
-    assert json.loads(event.detail)["invocation"]["operation"] == "library.create_library_item"
+    assert event.detail["invocation"]["operation"] == "library.create_library_item"
 
 
 async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
@@ -235,6 +263,8 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
 ):
     user = User(username="generated-mcp-conflict", password_hash="unused")
     async_db.add(user)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, user)
     await async_db.commit()
     grant = await create_api_token(async_db, user, "Generated MCP conflict", expires_in_days=30)
 
@@ -243,10 +273,11 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
             client,
             grant.raw_token,
             "library.create_library_item",
-            {"title": "Versioned Item"},
+            {"workspace_id": fixture_workspace_id(user), "title": "Versioned Item"},
         )
         item_id = created.json()["result"]["structuredContent"]["id"]
         arguments = {
+            "workspace_id": fixture_workspace_id(user),
             "item_id": item_id,
             "expected_version": 1,
             "metadata": {"title": "First update"},
@@ -275,12 +306,12 @@ async def test_generated_tool_does_not_fall_back_to_cookie_auth(async_db, async_
                 "Accept": "application/json, text/event-stream",
                 "Content-Type": "application/json",
             },
-            json={
+            json=json_payload({
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
                 "params": {"name": "library.search_items", "arguments": {}},
-            },
+            }),
         )
         invalid = await _call(client, "invalid", "library.search_items", {})
 

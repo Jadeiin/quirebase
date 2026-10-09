@@ -3,24 +3,31 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, type Snippet } from 'svelte';
-	import { apiRequest, onAuthenticationRequired } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import Notice from '$lib/design/Notice.svelte';
-	import Toast from '$lib/design/Toast.svelte';
-	import { t } from '$lib/i18n';
-	import Login from '$lib/features/auth/Login.svelte';
-	import { sessionQuery, setSession } from '$lib/session';
-	import { WorkflowCenter, setWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import { localStorageWorkflowLedger } from '$lib/features/workflows/ledger';
-	import WorkflowTray from '$lib/features/workflows/WorkflowTray.svelte';
+	import {
+		apiRequest,
+		onAuthenticationRequired,
+		onWorkspaceContextRequired
+	} from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import Button from '#lib/design/Button.svelte';
+	import Toast from '#lib/design/Toast.svelte';
+	import { t } from '#lib/i18n.js';
+	import Login from '#lib/features/auth/Login.svelte';
+	import { sessionQuery, setSession } from '#lib/session.js';
+	import { WorkflowCenter, setWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import { localStorageWorkflowLedger } from '#lib/features/workflows/ledger.js';
+	import WorkflowTray from '#lib/features/workflows/WorkflowTray.svelte';
 	import {
 		applyTheme,
 		readThemePreference,
 		saveThemePreference,
 		type ThemePreference
-	} from '$lib/theme';
+	} from '#lib/theme.js';
 	import AppSidebar from './AppSidebar.svelte';
 	import MobileNavigation from './MobileNavigation.svelte';
+	import WorkspaceMenu from './WorkspaceMenu.svelte';
+	import { isRouteActive } from './navigation';
 
 	let { children } = $props<{ children: Snippet }>();
 	const session = createQuery(() => sessionQuery());
@@ -34,17 +41,28 @@
 		ledgerUserId = userId;
 		workflowCenter.bindLedger(localStorageWorkflowLedger(userId));
 	});
+
 	const routeIsActive = (route: string) =>
-		route === '/' ? page.url.pathname === route : page.url.pathname.startsWith(route);
+		isRouteActive(
+			page.url.pathname,
+			route,
+			route === '/' ||
+				(route === '/workspace' && !page.params.workspaceId) ||
+				route === (page.params.workspaceId ? `/workspace/${page.params.workspaceId}` : '')
+		);
 	const readerRoute = $derived(/\/item\/[^/]+\/pdf\/[^/]+$/.test(page.url.pathname));
 	let sidebarCollapsed = $state(false);
 	let actionError = $state('');
+	let contextError = $state(false);
 	let actionBusy = $state(false);
 	let themePreference = $state<ThemePreference>('system');
 	let colorSchemeQuery: MediaQueryList | undefined;
 
 	onMount(() => {
 		const unregisterAuthenticationHandler = onAuthenticationRequired(() => void session.refetch());
+		const unregisterContextHandler = onWorkspaceContextRequired(() => {
+			contextError = true;
+		});
 		sidebarCollapsed = localStorage.getItem('quirebase:sidebar-collapsed') === 'true';
 		themePreference = readThemePreference();
 		colorSchemeQuery = matchMedia('(prefers-color-scheme: dark)');
@@ -56,6 +74,7 @@
 		colorSchemeQuery.addEventListener('change', handleColorSchemeChange);
 		return () => {
 			unregisterAuthenticationHandler();
+			unregisterContextHandler();
 			colorSchemeQuery?.removeEventListener('change', handleColorSchemeChange);
 		};
 	});
@@ -97,15 +116,10 @@
 	<div
 		class={`sticky top-0 z-40 items-center justify-between bg-primary-950 px-4 py-3 text-white md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	>
-		<a class="flex items-center gap-2 font-bold no-underline" href={resolve('/')}
-			><span
-				class="grid size-7 grid-cols-1 place-items-center rounded-lg bg-white text-sm font-extrabold text-primary-800"
-				>Q</span
-			>Quirebase</a
-		>
+		<WorkspaceMenu workspaceId={page.params.workspaceId} mobile />
 		<a
 			class="grid size-8 grid-cols-1 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
-			href={resolve('/account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
+			href={resolve('account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
 		>
 	</div>
 	<div
@@ -113,6 +127,7 @@
 	>
 		<AppSidebar
 			user={session.data.user}
+			workspaceId={page.params.workspaceId}
 			collapsed={sidebarCollapsed}
 			{routeIsActive}
 			onToggle={toggleSidebar}
@@ -126,12 +141,17 @@
 				? 'mx-auto min-h-0 w-full max-w-[100rem] min-w-0'
 				: 'mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]'}
 		>
+			{#if contextError}<Notice variant="error"
+					>{$t('Workspace context could not be restored. Refresh the page to recover.')}
+					<Button onclick={() => location.reload()}>{$t('Refresh page')}</Button></Notice
+				>{/if}
 			{#if actionError}<Notice variant="error">{actionError}</Notice>{/if}
 			{@render children()}
 		</main>
 	</div>
 	<MobileNavigation
 		user={session.data.user}
+		workspaceId={page.params.workspaceId}
 		{routeIsActive}
 		{readerRoute}
 		{themePreference}

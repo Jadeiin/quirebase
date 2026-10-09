@@ -1,6 +1,8 @@
-# ADR 0009: durable Import preparation and object maintenance
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0009: durable Import preparation and object maintenance
 
 ## Context
 
@@ -29,7 +31,10 @@ deletion and Import Batch discard enqueue cleanup in the same transaction as the
 Library Search projection and Recommendation inference use separate queues so slow local inference
 does not delay projection. Operations retains reconciliation as a correctness backstop: each
 integrity scan lists the Object Store once, compares that inventory with database references, and
-rechecks all orphan candidates once before deletion.
+delegates reference and reservation protection to Documents, which rechecks each orphan key
+immediately before physical deletion. Core owns reservation/cleanup-intent metadata; Library
+provides retained PDF staging facts. Reservation reads precede staging-source and committed
+Document-destination reads so finalization and confirmation transfers remain protected.
 
 Storage metrics use SQL counts and recorded byte sizes. PDF Thumbnail size is recorded with its File
 Revision. A persisted integrity-scan result supplies availability diagnostics; opening an admin page
@@ -41,7 +46,11 @@ step checkpoints replace the worker-owned sleep loop. Active object reservations
 active DBOS states, and global Search rebuilds and bulk Tag Recommendation requests use bounded
 keyset datasource-transaction checkpoints. Successful annotation exports create lightweight
 Annotation Export Artifact records containing their object identity, filename, size and expiration;
-maintenance deletes expired artifacts in bounded batches without reading terminal DBOS history.
+maintenance retires still-expired matching descriptors through Documents in bounded datasource
+transactions. The returned object keys are checkpointed atomically with retirement before a
+retryable Documents deletion step rechecks all remaining references. Recovery therefore retains
+keys after descriptors disappear, without reading terminal DBOS history.
+See [the object lifecycle interface contracts](../architecture/modules.md#object-lifecycle-interface-contracts).
 Read-heavy datasource transactions use `READ COMMITTED` where the database supports it, while
 business state transitions retain `SERIALIZABLE` isolation or explicit row locking.
 

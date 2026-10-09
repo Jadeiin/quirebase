@@ -2,23 +2,29 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
+from quirebase.access import (
+    ResourceAction,
+    lock_workspace_context,
+    require_action,
+    require_project_participation_change,
+)
 from quirebase.audit import record_event
-from quirebase.core.errors import PermissionDenied, ResourceUnavailable, ValidationFailure
+from quirebase.core.errors import ValidationFailure
 from quirebase.models import (
     Project,
-    ProjectItem,
-    ProjectMember,
-    ProjectRole,
+    ProjectParticipant,
+    ProjectParticipation,
     ProjectState,
-    ProjectVisibility,
     User,
 )
 
-from ._locking import lock_project_delete, lock_project_root
+from ._locking import lock_project_root
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -26,66 +32,84 @@ def validate_project_state(value: ProjectState | str) -> ProjectState:
     try:
         return ProjectState(value)
     except ValueError as error:
-        raise ValidationFailure("invalid project state") from error
+        raise ValidationFailure("invalid Project state") from error
 
 
-async def rename_project(db: AsyncSession, user: User, project_id: str, name: str) -> Project:
-    project = await lock_project_root(db, project_id)
-    if project is None or (user.id != project.owner_id and user.role != "administrator"):
-        raise ResourceUnavailable("project not found or owner role required")
+def _validate_name(name: str) -> str:
     normalized = name.strip()
-    if not normalized:
-        raise ValidationFailure("project name is required")
-    if len(normalized) > 240:
-        raise ValidationFailure("project name is too long")
-    old_name = project.name
-    project.name = normalized
-    record_event(
-        db,
-        user.id,
-        "project.rename",
-        "project",
-        project.id,
-        detail={"old_name": old_name, "name": normalized},
-    )
-    await db.commit()
-    return project
+    if not normalized or len(normalized) > 240:
+        raise ValidationFailure("Project name must contain 1 to 240 characters")
+    return normalized
+
+
+def _validate_description(description: str) -> str:
+    normalized = description.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if len(normalized) > 2000:
+        raise ValidationFailure("Project description is too long")
+    return normalized
 
 
 async def update_project_settings(
     db: AsyncSession,
     user: User,
-    project_id: str,
+    workspace_id: UUID,
+    project_id: UUID,
     *,
-    name: str,
-    description: str,
-    visibility: ProjectVisibility | str,
+    name: str | None = None,
+    description: str | None = None,
+    participation: ProjectParticipation | str | None = None,
 ) -> Project:
-    """Validate and commit the editable Project settings as one operation."""
-    normalized_name = name.strip()
-    if not normalized_name:
-        raise ValidationFailure("project name is required")
-    if len(normalized_name) > 240:
-        raise ValidationFailure("project name is too long")
-    normalized_description = description.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if len(normalized_description) > 2000:
-        raise ValidationFailure("project description is too long")
+    context = await lock_workspace_context(db, user, workspace_id)
+    project = await lock_project_root(db, context, project_id, state=ProjectState.active)
+    require_action(context, ResourceAction.project_update)
+    normalized_name = _validate_name(project.name if name is None else name)
+    normalized_description = _validate_description(
+        project.description if description is None else description
+    )
     try:
-        normalized_visibility = ProjectVisibility(visibility)
+        normalized_participation = ProjectParticipation(
+            project.participation if participation is None else participation
+        )
     except ValueError as error:
-        raise ValidationFailure("invalid project visibility") from error
-
-    project = await lock_project_root(db, project_id)
-    if project is None or (user.id != project.owner_id and user.role != "administrator"):
-        raise ResourceUnavailable("project not found or owner role required")
-    old_values = {
+        raise ValidationFailure("invalid Project participation") from error
+    participation_changed = normalized_participation is not project.participation
+    if participation_changed:
+        require_project_participation_change(
+            context,
+            project.participation,
+            normalized_participation,
+        )
+    if participation_changed and ProjectParticipation.workspace in {
+        project.participation,
+        normalized_participation,
+    }:
+        await db.execute(
+            delete(ProjectParticipant).where(
+                ProjectParticipant.workspace_id == workspace_id,
+                ProjectParticipant.project_id == project_id,
+            )
+        )
+    if (
+        participation_changed
+        and normalized_participation is ProjectParticipation.open
+        and project.participation is ProjectParticipation.workspace
+    ):
+        db.add(
+            ProjectParticipant(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                workspace_member_id=context.membership.id,
+                user_id=context.actor_id,
+            )
+        )
+    old = {
         "name": project.name,
         "description": project.description,
-        "visibility": project.visibility.value,
+        "participation": project.participation.value,
     }
     project.name = normalized_name
     project.description = normalized_description
-    project.visibility = normalized_visibility
+    project.participation = normalized_participation
     record_event(
         db,
         user.id,
@@ -93,130 +117,108 @@ async def update_project_settings(
         "project",
         project.id,
         detail={
-            "old": old_values,
+            "old": old,
             "new": {
                 "name": normalized_name,
                 "description": normalized_description,
-                "visibility": normalized_visibility.value,
+                "participation": normalized_participation.value,
             },
         },
+        workspace_id=workspace_id,
+        project_id=project_id,
+        authorization_role=context.role.value,
+        authorization_resource_action=ResourceAction.project_update.value,
     )
     await db.commit()
     return project
 
 
-async def update_project_description(
-    db: AsyncSession, user: User, project_id: str, description: str
+async def rename_project(
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, name: str
 ) -> Project:
-    project = await lock_project_root(db, project_id)
-    if project is None or user.id != project.owner_id:
-        raise ResourceUnavailable("project not found or owner role required")
-    normalized = description.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if len(normalized) > 2000:
-        raise ValidationFailure("project description is too long")
-    project.description = normalized
-    record_event(db, user.id, "project.description.update", "project", project.id)
+    return await update_project_settings(db, user, workspace_id, project_id, name=name)
+
+
+async def update_project_description(
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, description: str
+) -> Project:
+    return await update_project_settings(
+        db, user, workspace_id, project_id, description=description
+    )
+
+
+async def set_project_participation(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    project_id: UUID,
+    participation: ProjectParticipation | str,
+) -> Project:
+    return await update_project_settings(
+        db, user, workspace_id, project_id, participation=participation
+    )
+
+
+async def set_project_state(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    project_id: UUID,
+    state: ProjectState | str,
+) -> Project:
+    desired = validate_project_state(state)
+    if desired is ProjectState.deleted:
+        raise ValidationFailure("use Project delete for permanent deletion")
+    authorization_resource_action = (
+        ResourceAction.project_archive
+        if desired is ProjectState.archived
+        else ResourceAction.project_restore
+    )
+    workspace = await lock_workspace_context(db, user, workspace_id)
+    project = await lock_project_root(db, workspace, project_id)
+    require_action(workspace, authorization_resource_action)
+    if project.state is desired:
+        await db.commit()
+        return project
+    project.state = desired
+    record_event(
+        db,
+        user.id,
+        f"project.{desired.value}",
+        "project",
+        project_id,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        authorization_role=workspace.role.value,
+        authorization_resource_action=authorization_resource_action.value,
+    )
     await db.commit()
     return project
 
 
-async def delete_project(db: AsyncSession, user: User, project_id: str, confirmation: str) -> None:
-    project = await lock_project_delete(db, project_id)
-    if project is None or (user.role != "administrator" and user.id != project.owner_id):
-        raise ResourceUnavailable("project not found or owner role required")
+async def delete_project(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    project_id: UUID,
+    confirmation: str,
+) -> None:
+    context = await lock_workspace_context(db, user, workspace_id)
+    project = await lock_project_root(db, context, project_id)
+    require_action(context, ResourceAction.project_delete)
     if confirmation.strip() != project.name:
-        raise ValidationFailure("project name confirmation does not match")
+        raise ValidationFailure("Project name confirmation does not match")
+    project.state = ProjectState.deleted
     record_event(
         db,
         user.id,
         "project.delete",
         "project",
         project.id,
-        detail={"name": project.name, "state": project.state.value},
-    )
-    # Explicitly remove project-owned rows so deletion is deterministic on
-    # SQLite deployments where foreign-key cascades may be disabled.
-    await db.execute(delete(ProjectMember).where(ProjectMember.project_id == project_id))
-    await db.execute(delete(ProjectItem).where(ProjectItem.project_id == project_id))
-    await db.delete(project)
-    await db.commit()
-
-
-async def transfer_project_ownership(
-    db: AsyncSession, user: User, project_id: str, target_user_id: str
-) -> None:
-    await lock_project_root(db, project_id)
-    actor = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
-    target = await db.get(ProjectMember, (project_id, target_user_id), populate_existing=True)
-    project = await db.get(Project, project_id, populate_existing=True)
-    if project is None or user.id != project.owner_id or target is None:
-        raise ResourceUnavailable("project or target member not found")
-    if target.user_id == user.id:
-        raise ValidationFailure("target must be another member")
-    target_user = await db.scalar(
-        select(User).where(User.id == target.user_id).with_for_update(read=True)
-    )
-    if target_user is None or not target_user.active:
-        raise ValidationFailure("target user must be active")
-    if actor is not None:
-        actor.role = ProjectRole.editor
-    target.role = ProjectRole.owner
-    project.owner_id = target.user_id
-    record_event(
-        db,
-        user.id,
-        "project.ownership.transfer",
-        "project",
-        project_id,
-        detail={"from_user_id": user.id, "to_user_id": target_user_id},
+        detail={"name": project.name},
+        workspace_id=workspace_id,
+        project_id=project_id,
+        authorization_role=context.role.value,
+        authorization_resource_action=ResourceAction.project_delete.value,
     )
     await db.commit()
-
-
-async def leave_project(db: AsyncSession, user: User, project_id: str) -> None:
-    await lock_project_root(db, project_id)
-    project = await db.get(Project, project_id, populate_existing=True)
-    member = await db.get(ProjectMember, (project_id, user.id), populate_existing=True)
-    if project is None or member is None:
-        raise ResourceUnavailable("project membership required")
-    if user.id == project.owner_id:
-        raise PermissionDenied("transfer ownership before leaving")
-    await db.delete(member)
-    record_event(db, user.id, "project.member.leave", "project", project_id)
-    await db.commit()
-
-
-async def set_project_state(
-    db: AsyncSession, user: User, project_id: str, state: ProjectState
-) -> Project:
-    state = validate_project_state(state)
-    project = await lock_project_root(db, project_id)
-    if project is None or (user.id != project.owner_id and user.role != "administrator"):
-        raise ResourceUnavailable("project not found or owner role required")
-    project.state = state
-    record_event(db, user.id, f"project.{state.value}", "project", project_id)
-    await db.commit()
-    return project
-
-
-async def set_project_visibility(
-    db: AsyncSession, user: User, project_id: str, visibility: ProjectVisibility | str
-) -> Project:
-    try:
-        visibility = ProjectVisibility(visibility)
-    except ValueError as error:
-        raise ValidationFailure("invalid project visibility") from error
-    project = await lock_project_root(db, project_id)
-    if project is None or (user.id != project.owner_id and user.role != "administrator"):
-        raise ResourceUnavailable("project not found or owner role required")
-    project.visibility = visibility
-    record_event(
-        db,
-        user.id,
-        "project.visibility.set",
-        "project",
-        project_id,
-        detail={"visibility": project.visibility.value},
-    )
-    await db.commit()
-    return project

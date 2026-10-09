@@ -17,18 +17,32 @@ import stream_zip
 from inquiro.richtext import convert_rich_text
 from sqlalchemy import select
 
+from quirebase.access import (
+    ResourceAction,
+    discoverable_project_ids_query,
+    require_workspace_action,
+    visible_annotation_scope_predicate,
+)
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_accessible_items
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
 from quirebase.core.storage import get_object_store
-from quirebase.core.timezones import annotation_export_timezone, as_utc
+from quirebase.core.timezones import annotation_export_timezone
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.documents.pdf import export_annotations
-from quirebase.models import Attachment, FileRevision, Item, PdfAnnotation, User
+from quirebase.models import (
+    Attachment,
+    FileRevision,
+    Item,
+    PdfAnnotation,
+    ProjectItem,
+    User,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, AsyncIterator
+    from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
     from stream_zip import AsyncMemberFile
@@ -55,7 +69,7 @@ def _archive_name(value: str, fallback: str) -> str:
 def _item_archive_prefix(item: Item) -> str:
     return _archive_name(
         item.bibtex_id or convert_rich_text(item.title, source="html", target="text"),
-        item.id[:8],
+        str(item.id)[:8],
     )
 
 
@@ -157,15 +171,32 @@ async def _bytes_body(value: bytes) -> AsyncIterator[bytes]:
     yield value
 
 
-async def _own_annotations(db: AsyncSession, user: User, revision_id: str) -> list[PdfAnnotation]:
+async def _own_annotations(
+    db: AsyncSession, user: User, revision: FileRevision
+) -> list[PdfAnnotation]:
+    workspace_id = revision.workspace_id
+    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
+    visible_projects = discoverable_project_ids_query(context)
+    visible_project_items = select(ProjectItem.id).where(
+        ProjectItem.workspace_id == workspace_id,
+        ProjectItem.item_id == revision.item_id,
+        ProjectItem.project_id.in_(visible_projects),
+    )
     return list(
         (
             await db.scalars(
                 select(PdfAnnotation)
                 .where(
-                    PdfAnnotation.file_revision_id == revision_id,
-                    PdfAnnotation.author_id == user.id,
+                    PdfAnnotation.workspace_id == workspace_id,
+                    PdfAnnotation.file_revision_id == revision.id,
                     PdfAnnotation.deleted_at.is_(None),
+                    PdfAnnotation.hidden_at.is_(None),
+                    PdfAnnotation.archived_at.is_(None),
+                    visible_annotation_scope_predicate(
+                        context,
+                        project_item_ids=visible_project_items,
+                        relations=("own",),
+                    ),
                 )
                 .order_by(PdfAnnotation.created_at)
             )
@@ -185,13 +216,13 @@ async def _revision_member(
 ) -> AsyncMemberFile:
     store = get_object_store()
     if include_annotations:
-        annotations = await _own_annotations(db, user, revision.id)
+        annotations = await _own_annotations(db, user, revision)
     else:
         annotations = []
     if annotations:
         target = _temporary_path(prefix="quirebase-annotated-", suffix=".pdf")
         try:
-            async with store.materialize(revision.object_key) as source:
+            async with store.materialize(revision.file.path) as source:
                 await asyncio.to_thread(
                     export_annotations,
                     source,
@@ -206,7 +237,7 @@ async def _revision_member(
             raise
         body = _bridge(_path_body(target, delete_after=True), active_reads)
     else:
-        response = await store.get(revision.object_key)
+        response = await store.get(revision.file.path)
         size = response.metadata.size
         body = _bridge(response.body, active_reads)
     return (
@@ -224,7 +255,7 @@ async def _item_members(
     item: Item,
     *,
     root: str = "",
-    revision_ids: list[str] | None = None,
+    revision_ids: list[UUID] | None = None,
     include_annotations: bool,
     include_supplements: bool,
     timezone: str | None,
@@ -232,7 +263,10 @@ async def _item_members(
 ) -> AsyncIterator[AsyncMemberFile]:
     query = (
         select(FileRevision)
-        .where(FileRevision.item_id == item.id)
+        .where(
+            FileRevision.workspace_id == item.workspace_id,
+            FileRevision.item_id == item.id,
+        )
         .order_by(FileRevision.created_at.desc())
     )
     if revision_ids:
@@ -242,7 +276,7 @@ async def _item_members(
     manifest: list[dict[str, object]] = []
     for index, revision in enumerate(revisions, start=1):
         filename = _revision_archive_name(
-            prefix, index, revision.original_name, annotated=include_annotations
+            prefix, index, revision.file.metadata["original_name"], annotated=include_annotations
         )
         archive_filename = _bundle_path(root, filename)
         yield await _revision_member(
@@ -257,14 +291,16 @@ async def _item_members(
         manifest.append({
             "version": index,
             "revision_id": revision.id,
-            "original_name": revision.original_name,
+            "original_name": revision.file.metadata["original_name"],
             "filename": archive_filename,
-            "created_at": as_utc(revision.created_at).isoformat(),
+            "created_at": revision.created_at.isoformat(),
             "processing_state": getattr(
                 revision.processing_state, "value", revision.processing_state
             ),
         })
-    manifest_bytes = json.dumps({"pdf_revisions": manifest}, ensure_ascii=False, indent=2).encode()
+    manifest_bytes = json.dumps(
+        {"pdf_revisions": manifest}, ensure_ascii=False, indent=2, default=str
+    ).encode()
     yield (
         _bundle_path(root, "manifest.json"),
         item.updated_at,
@@ -277,15 +313,18 @@ async def _item_members(
         attachments = (
             await db.scalars(
                 select(Attachment)
-                .where(Attachment.item_id == item.id)
+                .where(
+                    Attachment.workspace_id == item.workspace_id,
+                    Attachment.item_id == item.id,
+                )
                 .order_by(Attachment.created_at)
             )
         ).all()
         for index, attachment in enumerate(attachments, start=1):
             safe_name = _archive_name(
-                Path(attachment.original_name).name, f"supplement-{index:02d}"
+                Path(attachment.file.metadata["original_name"]).name, f"supplement-{index:02d}"
             )
-            response = await store.get(attachment.object_key)
+            response = await store.get(attachment.file.path)
             yield (
                 _bundle_path(root, f"supplements/{index:02d}-{safe_name}"),
                 attachment.created_at,
@@ -312,14 +351,15 @@ async def _zip_body(
 async def create_item_document_bundle(
     db: AsyncSession,
     user: User,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     *,
-    revision_ids: list[str] | None = None,
+    revision_ids: list[UUID] | None = None,
     include_annotations: bool = False,
     include_supplements: bool = False,
     timezone: str | None = None,
 ) -> ItemDownloadBundle:
-    item = (await require_accessible_items(db, user, [item_id]))[0]
+    item = (await require_accessible_items(db, user, workspace_id, [item_id]))[0]
     prefix = _item_archive_prefix(item)
     record_event(
         db,
@@ -332,6 +372,8 @@ async def create_item_document_bundle(
             "include_supplements": include_supplements,
             "revision_ids": revision_ids or [],
         },
+        workspace_id=workspace_id,
+        authorization_resource_action=ResourceAction.workspace_export.value,
     )
     await db.commit()
     active_reads = _ActiveReads()
@@ -370,7 +412,13 @@ async def assemble_document_bundle(
         for item in items:
             root = _item_archive_prefix(item)
             if root in used_roots:
-                root = f"{root}-{item.id[:8]}"
+                root = f"{root}-{item.id}"
+            # A supplied title/key can also equal another Item's suffixed name.
+            base = root
+            suffix = 2
+            while root in used_roots:
+                root = f"{base}-{suffix}"
+                suffix += 1
             used_roots.add(root)
             async for member in _item_members(
                 db,
@@ -388,7 +436,9 @@ async def assemble_document_bundle(
                 "title": convert_rich_text(item.title, source="html", target="text"),
                 "folder": root,
             })
-        value = json.dumps({"items": item_manifest}, ensure_ascii=False, indent=2).encode()
+        value = json.dumps(
+            {"items": item_manifest}, ensure_ascii=False, indent=2, default=str
+        ).encode()
         yield (
             "manifest.json",
             items[0].updated_at,
@@ -408,11 +458,12 @@ async def assemble_document_bundle(
 async def _record_revision_pdf_export(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     *,
     include_annotations: bool,
-    project_id: str | None,
+    project_id: UUID | None,
 ) -> None:
     record_event(
         db,
@@ -425,6 +476,8 @@ async def _record_revision_pdf_export(
             "include_annotations": include_annotations,
             "project_id": project_id,
         },
+        workspace_id=workspace_id,
+        authorization_resource_action=ResourceAction.workspace_export.value,
     )
     await db.commit()
 
@@ -432,18 +485,19 @@ async def _record_revision_pdf_export(
 async def export_revision_pdf(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     *,
     include_annotations: bool = True,
-    project_id: str | None = None,
+    project_id: UUID | None = None,
     timezone: str | None = None,
 ) -> ExportedRevision:
-    revision = await require_revision(db, user, revision_id)
+    revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     annotations = (
-        await select_visible_annotations(db, user, revision.id, item_id, project_id)
+        await select_visible_annotations(db, user, workspace_id, revision.id, item_id, project_id)
         if include_annotations
         else []
     )
@@ -461,7 +515,7 @@ async def export_revision_pdf(
                     )
                 ).all()
                 author_names = {row[0]: row[1] for row in rows}
-            async with store.materialize(revision.object_key) as source:
+            async with store.materialize(revision.file.path) as source:
                 await asyncio.to_thread(
                     export_annotations,
                     source,
@@ -470,20 +524,23 @@ async def export_revision_pdf(
                     author_names=author_names,
                     display_timezone=annotation_export_timezone(timezone),
                 )
-            safe_name = _archive_name(Path(revision.original_name).stem, "document")
+            safe_name = _archive_name(
+                Path(revision.file.metadata["original_name"]).stem, "document"
+            )
             filename = f"{safe_name}-annotated.pdf"
         except BaseException:
             await asyncio.to_thread(target.unlink, missing_ok=True)
             raise
         body: AsyncIterable[bytes] = _path_body(target, delete_after=True)
     else:
-        response = await store.get(revision.object_key)
+        response = await store.get(revision.file.path)
         body = response.body
-        filename = revision.original_name
+        filename = revision.file.metadata["original_name"]
     try:
         await _record_revision_pdf_export(
             db,
             user,
+            revision.workspace_id,
             item_id,
             revision_id,
             include_annotations=include_annotations,

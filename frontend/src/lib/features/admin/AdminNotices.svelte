@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Notice from '$lib/design/Notice.svelte';
-	import { t, type MessageKey } from '$lib/i18n';
+	import Notice from '#lib/design/Notice.svelte';
+	import { t, type MessageKey } from '#lib/i18n.js';
 
 	let { error = '', notice = null } = $props<{
 		error?: string;

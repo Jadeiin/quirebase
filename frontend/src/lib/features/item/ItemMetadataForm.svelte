@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { components } from '$lib/api/schema';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { msg, t, type MessageKey } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
+	import type { components } from '#lib/api/schema.js';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { msg, t, type MessageKey } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
 
 	type Metadata = components['schemas']['ItemMetadata-Input'];
 	type ContributorRow = {

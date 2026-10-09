@@ -11,6 +11,7 @@ from quirebase.core.timezones import server_timezone
 if TYPE_CHECKING:
     from datetime import datetime
     from pathlib import Path
+    from uuid import UUID
 
     from quirebase.models import PdfAnnotation
 
@@ -184,7 +185,7 @@ def export_annotations(
     output: Path,
     annotations: list[PdfAnnotation],
     *,
-    author_names: dict[str, str] | None = None,
+    author_names: dict[UUID, str] | None = None,
     display_timezone: tzinfo | None = None,
 ) -> None:
     author_names = author_names or {}

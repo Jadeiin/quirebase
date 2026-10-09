@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import Icon from '$lib/design/Icon.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import Button from '$lib/design/Button.svelte';
+	import Icon from '#lib/design/Icon.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import Button from '#lib/design/Button.svelte';
 
 	let {
 		icon,

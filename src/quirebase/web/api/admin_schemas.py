@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves it
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
+from uuid import UUID
 
+from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, Field
 
-from quirebase.web.api.library_schemas import ItemSearchView
+from quirebase.models import WorkspaceState
 
 
 class AdminUserCreateRequest(BaseModel):
@@ -16,6 +19,19 @@ class AdminUserCreateRequest(BaseModel):
 
 class UserStatusRequest(BaseModel):
     active: bool
+
+
+class BreakGlassReadRequest(BaseModel):
+    reason: str = Field(min_length=10, max_length=1000)
+
+
+class AdminWorkspaceView(BaseModel):
+    id: UUID
+    name: str
+    owner_id: UUID
+    state: WorkspaceState
+    governance_frozen_at: datetime | None = None
+    governance_frozen_by: UUID | None = None
 
 
 class UserRoleRequest(BaseModel):
@@ -32,6 +48,8 @@ class InvitationCreateRequest(BaseModel):
 
 
 class RuntimeSettingsRequest(BaseModel):
+    registration_policy: Literal["open", "closed", "invitation_only"] = "invitation_only"
+    workspace_creation_policy: Literal["admins_only", "members_allowed"] = "admins_only"
     metadata_contact_email: str = ""
     ncbi_api_key: str = ""
     openalex_api_key: str = ""
@@ -44,7 +62,7 @@ class RuntimeSettingsRequest(BaseModel):
 
 
 class AdminUserView(BaseModel):
-    id: str
+    id: UUID
     username: str
     role: str
     active: bool
@@ -52,51 +70,26 @@ class AdminUserView(BaseModel):
 
 
 class AdminInvitationView(BaseModel):
-    id: str
+    id: UUID
     username: str
     role: str
     expires_at: datetime
     accepted_at: datetime | None = None
 
 
-class AdminUsersView(BaseModel):
-    users: list[AdminUserView]
-    total: int
-    page: int
-    per_page: int
+@dataclass
+class AdminUsersView(OffsetPagination[AdminUserView]):
+    items: list[AdminUserView]
     invitations: list[AdminInvitationView]
 
 
 class AdminInvitationCreatedView(BaseModel):
-    id: str
+    id: UUID
     username: str
     role: str
     expires_at: datetime
     token: str
     accept_path: str
-
-
-class AdminProjectUserView(BaseModel):
-    id: str
-    username: str
-
-
-class AdminProjectItemView(BaseModel):
-    id: str
-    name: str
-    description: str
-    state: str
-    visibility: str
-    creator: AdminProjectUserView
-    member_count: int
-    item_count: int
-
-
-class AdminProjectsView(BaseModel):
-    projects: list[AdminProjectItemView]
-    total: int
-    page: int
-    per_page: int
 
 
 class StorageMetricsView(BaseModel):
@@ -114,11 +107,18 @@ class StorageMetricsView(BaseModel):
 
 
 class AdminAuditEventView(BaseModel):
-    id: str
-    actor_id: str | None = None
+    id: UUID
+    actor_id: UUID | None = None
+    workspace_id: UUID | None = None
+    project_id: UUID | None = None
     action: str
     target_type: str
     target_id: str | None = None
+    target_ids: list[str] | None = None
+    authorization_role: str | None = None
+    authorization_resource_action: str | None = None
+    result: str | None = None
+    source: str | None = None
     detail: Any | None = None
     created_at: datetime
 
@@ -146,26 +146,13 @@ class AdminOverviewView(BaseModel):
     recent_events: list[AdminAuditEventView]
 
 
-class AdminItemsView(BaseModel):
-    items: list[ItemSearchView]
-    total: int
-    page: int
-    per_page: int
-    storage: StorageMetricsView
-
-
-class AdminAuditView(BaseModel):
-    events: list[AdminAuditEventView]
-    total: int
-    page: int
-    per_page: int
-
-
 class AdminWorkflowsView(BaseModel):
     workflows: list[WorkflowSummaryView]
 
 
 class AdminSettingsView(BaseModel):
+    registration_policy: Literal["open", "closed", "invitation_only"]
+    workspace_creation_policy: Literal["admins_only", "members_allowed"]
     metadata_contact_email: str
     ncbi_api_key: str
     openalex_api_key: str

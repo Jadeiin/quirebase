@@ -2,27 +2,34 @@
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { Tabs } from '@skeletonlabs/skeleton-svelte';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import PromptDialog from '$lib/design/PromptDialog.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { tagKeys, tagsQuery } from '$lib/features/tags/queries';
-	import { citationStylesQuery, duplicateScanQuery, toolKeys } from '$lib/features/tools/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import { ApiError } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { can, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import PromptDialog from '#lib/design/PromptDialog.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { tagKeys, tagsQuery } from '#lib/features/tags/queries.js';
+	import {
+		citationStylesQuery,
+		duplicateScanQuery,
+		toolKeys
+	} from '#lib/features/tools/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	type Tool = 'duplicates' | 'tags' | 'citation-styles';
 	type Tag = {
 		id: string;
 		name: string;
 		accessible_item_count: number;
-		can_manage: boolean;
+		authorization: AuthorizationDecisionSet;
 	};
 	type CitationStyle = { key: string; name: string; scope: 'builtin' | 'custom' };
 
@@ -47,10 +54,12 @@
 	let confirmStyleDeleteOpen = $state(false);
 	const pageSize = 20;
 	const queryClient = useQueryClient();
+	const workspace = getWorkspaceContext();
+	const { workspaceId } = workspace;
 
-	const tags = createQuery(() => tagsQuery());
-	const duplicates = createQuery(() => duplicateScanQuery(scannedMode));
-	const citationStyles = createQuery(() => citationStylesQuery(styleQuery));
+	const tags = createQuery(() => tagsQuery(workspaceId));
+	const duplicates = createQuery(() => duplicateScanQuery(workspaceId, scannedMode));
+	const citationStyles = createQuery(() => citationStylesQuery(workspaceId, styleQuery));
 
 	const filteredTags = $derived(
 		(tags.data ?? []).filter((tag) =>
@@ -69,11 +78,14 @@
 		notice = '';
 		try {
 			await operation();
-			await queryClient.invalidateQueries({ queryKey: tagKeys.all });
+			await queryClient.invalidateQueries({ queryKey: tagKeys.all(workspaceId) });
 			notice = success;
 			return true;
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Tag action failed'));
+			if (reason instanceof ApiError && reason.code === 'tag_conflict') {
+				await queryClient.invalidateQueries({ queryKey: tagKeys.all(workspaceId) });
+			}
 			return false;
 		} finally {
 			busy = false;
@@ -92,7 +104,7 @@
 		if (!tag || !name || name === tag.name) return;
 		void tagMutation(
 			() =>
-				apiRequest('PATCH', '/tags/{tag_id}', {
+				workspace.api.request('PATCH', '/workspaces/{workspace_id}/tags/{tag_id}', {
 					params: { path: { tag_id: tag.id } },
 					body: { name }
 				}),
@@ -112,7 +124,7 @@
 		if (!tag) return;
 		void tagMutation(
 			() =>
-				apiRequest('DELETE', '/tags/{tag_id}', {
+				workspace.api.request('DELETE', '/workspaces/{workspace_id}/tags/{tag_id}', {
 					params: { path: { tag_id: tag.id } }
 				}),
 			$t('Tag deleted')
@@ -123,7 +135,7 @@
 		if (!sourceTag || !targetTag || sourceTag === targetTag) return;
 		void tagMutation(
 			() =>
-				apiRequest('POST', '/tags/merge', {
+				workspace.api.request('POST', '/workspaces/{workspace_id}/tags/merge', {
 					body: { source_tag_id: sourceTag, target_tag_id: targetTag }
 				}),
 			$t('Tags merged')
@@ -147,12 +159,12 @@
 		error = '';
 		notice = '';
 		try {
-			await apiRequest('POST', '/citation-styles', {
+			await workspace.api.request('POST', '/workspaces/{workspace_id}/citation-styles', {
 				body: { name: styleName, csl: styleCsl }
 			});
 			styleName = '';
 			styleCsl = '';
-			await queryClient.invalidateQueries({ queryKey: toolKeys.all });
+			await queryClient.invalidateQueries({ queryKey: toolKeys.all(workspaceId) });
 			notice = $t('Citation Style added');
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to add Citation Style'));
@@ -174,10 +186,14 @@
 		busy = true;
 		error = '';
 		try {
-			await apiRequest('DELETE', '/citation-styles/{style_id}', {
-				params: { path: { style_id: style.key } }
-			});
-			await queryClient.invalidateQueries({ queryKey: toolKeys.all });
+			await workspace.api.request(
+				'DELETE',
+				'/workspaces/{workspace_id}/citation-styles/{style_id}',
+				{
+					params: { path: { style_id: style.key } }
+				}
+			);
+			await queryClient.invalidateQueries({ queryKey: toolKeys.all(workspaceId) });
 			notice = $t('Citation Style deleted');
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to delete Citation Style'));
@@ -285,7 +301,7 @@
 						<article class="mb-4 rounded-lg border border-surface-300-700 p-3 last:mb-0">
 							<h3>{$t('Duplicate group {number}', { number: index + 1 })}</h3>
 							{#each group as item (item.id)}
-								<ItemRow as="a" href={resolve('/(app)/item/[itemId]', { itemId: item.id })}>
+								<ItemRow as="a" href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}>
 									<strong><RichText html={item.title_html} /></strong>
 									<span class="text-surface-600-400"
 										>{item.authors ?? $t('Unknown contributors')}</span
@@ -330,11 +346,15 @@
 							</p>
 						</div>
 						<div class="flex flex-wrap gap-2">
-							<Button as="a" href={resolve(`/library?tag=${encodeURIComponent(tag.id)}`)}
-								>{$t('View Items')}</Button
+							<Button
+								as="a"
+								href={resolve(
+									workspaceHref(workspaceId, `library?tag=${encodeURIComponent(tag.id)}`)
+								)}>{$t('View Items')}</Button
 							>
-							{#if tag.can_manage}<Button disabled={busy} onclick={() => renameTag(tag)}
-									>{$t('Rename')}</Button
+							{#if can(tag.authorization, 'tag.manage')}<Button
+									disabled={busy}
+									onclick={() => renameTag(tag)}>{$t('Rename')}</Button
 								><Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
 									>{$t('Delete')}</Button
 								>{/if}
@@ -358,7 +378,7 @@
 				<label
 					>{$t('Source Tag')}<select class="select" bind:value={sourceTag}
 						><option value="">{$t('Select a Tag')}</option
-						>{#each (tags.data ?? []).filter((tag) => tag.can_manage) as tag (tag.id)}<option
+						>{#each (tags.data ?? []).filter( (tag) => can(tag.authorization, 'tag.manage') ) as tag (tag.id)}<option
 								value={tag.id}>{tag.name}</option
 							>{/each}</select
 					></label
@@ -402,7 +422,7 @@
 							<strong>{style.name}</strong>
 							<p class="mb-0 text-sm text-surface-600-400">{style.scope}</p>
 						</div>
-						{#if style.scope === 'custom'}<Button
+						{#if style.scope === 'custom' && workspace.can('citation_style.manage')}<Button
 								variant="danger"
 								disabled={busy}
 								onclick={() => deleteStyle(style)}>{$t('Delete')}</Button
@@ -412,24 +432,24 @@
 						{$t('No Citation Styles match this search.')}
 					</p>{/each}
 			</Panel>
-			<Panel
-				as="form"
-				class="grid grid-cols-1 gap-3 self-start"
-				onsubmit={(event) => {
-					event.preventDefault();
-					void createStyle();
-				}}
-			>
-				<h2>{$t('Add custom Citation Style')}</h2>
-				<label>{$t('Style name')}<input class="input" bind:value={styleName} required /></label>
-				<label
-					>{$t('CSL XML')}<textarea
-						class="textarea min-h-64 font-mono text-xs"
-						bind:value={styleCsl}
-						required></textarea></label
+			{#if workspace.can('citation_style.manage')}<Panel
+					as="form"
+					class="grid grid-cols-1 gap-3 self-start"
+					onsubmit={(event) => {
+						event.preventDefault();
+						void createStyle();
+					}}
 				>
-				<Button variant="filled" disabled={busy}>{$t('Install Citation Style')}</Button>
-			</Panel>
+					<h2>{$t('Add custom Citation Style')}</h2>
+					<label>{$t('Style name')}<input class="input" bind:value={styleName} required /></label>
+					<label
+						>{$t('CSL XML')}<textarea
+							class="textarea min-h-64 font-mono text-xs"
+							bind:value={styleCsl}
+							required></textarea></label
+					>
+					<Button variant="filled" disabled={busy}>{$t('Install Citation Style')}</Button>
+				</Panel>{/if}
 		</div>
 	</Tabs.Content>
 </Tabs>

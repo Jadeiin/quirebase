@@ -23,8 +23,6 @@ const baseSelectors = new Set([
 	'textarea:focus-visible'
 ]);
 
-const legacySelectors = new Set<string>([]);
-
 const bannedUtilityPatterns = [
 	/(?:bg|text|border|divide|ring|fill|stroke|from|via|to)-(?:surface|primary|success|warning|error)\//g,
 	/(?:bg|text|border|divide|ring)-line\b/g,
@@ -66,19 +64,10 @@ function svelteFiles(directory: string): string[] {
 const findings: string[] = [];
 
 const selectors = ruleSelectors(readFileSync(appStylesheet, 'utf8'));
-const allowedSelectors = new Set([...baseSelectors, ...legacySelectors]);
 for (const selector of selectors) {
-	if (!allowedSelectors.has(selector)) {
+	if (!baseSelectors.has(selector)) {
 		findings.push(
-			`${appStylesheet}: global selector "${selector}" is not allowed; use a design token, a Tailwind utility, or a $lib/design component`
-		);
-	}
-}
-const presentSelectors = new Set(selectors);
-for (const selector of legacySelectors) {
-	if (!presentSelectors.has(selector)) {
-		findings.push(
-			`${appStylesheet}: legacy selector "${selector}" no longer exists; remove it from the ledger in scripts/check-styling.ts`
+			`${appStylesheet}: global selector "${selector}" is not allowed; use a design token, a Tailwind utility, or a #lib/design component`
 		);
 	}
 }
@@ -95,7 +84,7 @@ for (const file of svelteFiles(sourceDirectory)) {
 	if (file.startsWith(designDirectory)) continue;
 	for (const match of contents.matchAll(primitivePattern)) {
 		findings.push(
-			`${file}: Skeleton primitive "${match[0]}" must live inside a $lib/design component`
+			`${file}: Skeleton primitive "${match[0]}" must live inside a #lib/design component`
 		);
 	}
 	for (const match of contents.matchAll(/class="([^"]*)"/g)) {
@@ -112,6 +101,4 @@ if (findings.length > 0) {
 	throw new Error(`Styling check failed:\n- ${findings.join('\n- ')}`);
 }
 
-console.log(
-	`Styling check passed: ${selectors.length} global selectors, ${legacySelectors.size} legacy selectors left to remove`
-);
+console.log(`Styling check passed: ${selectors.length} global selectors`);

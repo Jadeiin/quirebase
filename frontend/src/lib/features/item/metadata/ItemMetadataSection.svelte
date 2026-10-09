@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type { components } from '$lib/api/schema';
-	import Panel from '$lib/design/Panel.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import ItemMetadataForm from '$lib/features/item/ItemMetadataForm.svelte';
-	import { t } from '$lib/i18n';
+	import type { components } from '#lib/api/schema.js';
+	import Panel from '#lib/design/Panel.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import ItemMetadataForm from '#lib/features/item/ItemMetadataForm.svelte';
+	import { t } from '#lib/i18n.js';
 	import type { ItemDetail } from '../types';
 
 	let { item, canEdit, busy, onSubmit } = $props<{

@@ -1,87 +1,78 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from pydantic.json_schema import SkipJsonSchema  # ruff: ignore[typing-only-third-party-import] — Pydantic resolves field annotations.
 
-from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
+from quirebase.models import ProjectParticipation, ProjectState
+from quirebase.projects import ProjectParticipantInfo, ProjectWorkspace
+from quirebase.web.api.common import WorkspaceAuthorizationView
 
 
 class ProjectSummaryView(BaseModel):
-    id: str
+    id: UUID
     name: str
-    role: str
     item_count: int
-    state: str
-    visibility: str
+    state: ProjectState
+    participation: ProjectParticipation
+    is_participating: bool
     description: str = ""
-
-
-class ProjectMemberView(BaseModel):
-    user_id: str
-    username: str
-    role: str
+    allowed_participation_changes: list[ProjectParticipation]
+    authorization: WorkspaceAuthorizationView
 
 
 class ProjectDetailView(ProjectSummaryView):
-    members: list[ProjectMemberView]
-    items: list[ItemSearchView]
+    active_participants: list[ProjectParticipantInfo] = Field(
+        description="Active explicit participants; Workspace participation is implicit."
+    )
 
 
-class JoinableProjectView(BaseModel):
-    id: str
-    name: str
-    item_count: int
-    state: str
-    visibility: str
-    description: str = ""
-
-
-def project_detail_view(workspace: Any) -> ProjectDetailView:
+def project_detail_view(
+    workspace: ProjectWorkspace,
+    *,
+    authorization: WorkspaceAuthorizationView,
+    allowed_participation_changes: list[ProjectParticipation],
+) -> ProjectDetailView:
     return ProjectDetailView(
         id=workspace.project.id,
         name=workspace.project.name,
-        role=workspace.membership.role,
-        item_count=len(workspace.items),
-        state=workspace.project.state.value,
-        visibility=workspace.project.visibility.value,
+        item_count=workspace.item_count,
+        state=workspace.project.state,
+        participation=workspace.project.participation,
+        is_participating=workspace.is_participating,
         description=workspace.project.description,
-        members=[
-            ProjectMemberView(
-                user_id=member.user.id,
-                username=member.user.username,
-                role=member.role,
-            )
-            for member in workspace.members
-        ],
-        items=[item_search_view(item) for item in workspace.items],
+        authorization=authorization,
+        allowed_participation_changes=allowed_participation_changes,
+        active_participants=list(workspace.active_participants),
     )
 
 
 class ProjectCreateRequest(BaseModel):
     name: str = Field(max_length=240)
-    visibility: Literal["private", "public"] = "private"
+    participation: ProjectParticipation
     description: str = Field(default="", max_length=2000)
 
 
 class ProjectSettingsRequest(BaseModel):
-    name: str = Field(max_length=240)
-    visibility: Literal["private", "public"]
-    description: str = Field(max_length=2000)
+    name: str | SkipJsonSchema[None] = Field(default=None, max_length=240)
+    participation: ProjectParticipation | SkipJsonSchema[None] = None
+    description: str | SkipJsonSchema[None] = Field(default=None, max_length=2000)
 
-
-class ProjectVisibilityRequest(BaseModel):
-    visibility: Literal["private", "public"]
-
-
-class ProjectDescriptionRequest(BaseModel):
-    description: str = Field(max_length=2000)
+    @model_validator(mode="before")
+    @classmethod
+    def require_changes(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            changes = {field: value[field] for field in cls.model_fields if field in value}
+            if not changes or any(change is None for change in changes.values()):
+                raise ValueError("Supply at least one Project setting; settings cannot be null")
+        return value
 
 
 class ProjectDeleteRequest(BaseModel):
     confirmation: str
 
 
-class ProjectMemberRequest(BaseModel):
+class ProjectParticipantRequest(BaseModel):
     username: str
-    role: Literal["editor", "viewer"] = "viewer"

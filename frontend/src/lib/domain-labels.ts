@@ -1,20 +1,26 @@
-import { msg, type MessageKey } from '$lib/i18n';
+import { msg, type MessageKey } from '#lib/i18n.js';
 
 const labels = {
 	administrator: msg({ message: 'Administrator', comment: 'User role.' }),
 	member: msg({ message: 'Member', comment: 'User role.' }),
-	owner: msg({ message: 'Owner', comment: 'Project member role.' }),
-	editor: msg({ message: 'Editor', comment: 'Project member role.' }),
-	viewer: msg({ message: 'Viewer', comment: 'Project member role.' }),
-	active: msg({ message: 'Active', comment: 'Project state.' }),
-	archived: msg({ message: 'Archived', comment: 'Project state.' }),
+	owner: msg({ message: 'Owner', comment: 'Workspace role or resource owner label.' }),
+	admin: msg({ message: 'admin', comment: 'Workspace role.' }),
+	editor: msg({ message: 'Editor', comment: 'Workspace role.' }),
+	reviewer: msg({ message: 'reviewer', comment: 'Workspace role.' }),
+	viewer: msg({ message: 'Viewer', comment: 'Workspace role.' }),
+	active: msg({ message: 'Active', comment: 'Workspace or Project lifecycle state.' }),
+	archived: msg({ message: 'Archived', comment: 'Workspace or Project lifecycle state.' }),
+	suspended: msg({ message: 'suspended', comment: 'Workspace member state.' }),
+	workspace: msg({ message: 'Workspace-wide', comment: 'Project participation policy.' }),
+	open: msg({ message: 'Open', comment: 'Project participation policy.' }),
+	managed: msg({ message: 'Managed', comment: 'Project participation policy.' }),
 	private: msg({
 		message: 'Private',
-		comment: 'Project visibility or annotation scope.'
+		comment: 'Project participation or annotation scope.'
 	}),
 	public: msg({
 		message: 'Public',
-		comment: 'Project visibility or annotation scope.'
+		comment: 'Project participation or annotation scope.'
 	}),
 	pending: msg({ message: 'Pending', comment: 'Workflow or record state.' }),
 	ready: msg({ message: 'Ready', comment: 'Workflow or record state.' }),

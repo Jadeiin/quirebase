@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import]
+from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -12,13 +13,13 @@ class IdentifierImportRequest(BaseModel):
 
 
 class ImportBatchRetryView(BaseModel):
-    id: str
+    id: UUID
     status: str
     workflow_id: str | None = None
 
 
 class ImportBatchView(BaseModel):
-    id: str
+    id: UUID
     file_format: str
     status: str
     workflow_id: str | None = None

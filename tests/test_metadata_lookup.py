@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidateRecord, Identifier
 from sqlalchemy import select
 from test_http import authenticated_async_client
@@ -14,9 +15,10 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
+    workspace_id = item.workspace_id
     record = CandidateRecord(
         provider="crossref",
         identifier=Identifier("doi", "10.1/looked-up"),
@@ -35,8 +37,8 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
     )
     try:
         preview = await client.post(
-            "/api/v1/imports/identifier",
-            json={"identifier": "10.1/looked-up", "provider": "auto"},
+            f"/api/v1/workspaces/{workspace_id}/imports/identifier",
+            json=json_payload({"identifier": "10.1/looked-up", "provider": "auto"}),
         )
         assert preview.status_code == 201
         assert "Looked-up paper" in preview.text
@@ -45,9 +47,10 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
             select(ImportBatch).where(ImportBatch.file_format == "metadata:doi")
         )
         assert batch is not None
+        batch_id = batch.id
         committed = await client.post(
-            f"/api/v1/imports/{batch.id}/commit",
-            json={},
+            f"/api/v1/workspaces/{workspace_id}/imports/{batch_id}/commit",
+            json=json_payload({}),
         )
         assert committed.status_code == 200
         imported = await db.scalar(select(Item).where(Item.title == "Looked-up paper"))

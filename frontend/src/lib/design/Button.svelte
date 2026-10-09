@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
-	import { buttonClass, type ButtonVariant } from '$lib/design/button-classes';
+	import { buttonClass, type ButtonVariant } from '#lib/design/button-classes.js';
 
 	type ButtonElement = 'a' | 'button';
 	type ButtonProps = {

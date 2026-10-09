@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from quirebase.audit import query_events, record_event
@@ -62,7 +60,7 @@ async def test_query_events(async_db):
     events, total = await query_events(db, admin, search="val2")
     assert total == 1
     assert events[0].action == "user.test_action_2"
-    assert json.loads(events[0].detail or "") == {"key": "val2"}
+    assert (events[0].detail or {}) == {"key": "val2"}
 
 
 @pytest.mark.anyio
@@ -74,9 +72,11 @@ async def test_query_events_filters_and_paginates(async_db):
     record_event(db, admin.id, "project.only", "project", "project-1")
     await db.commit()
 
-    first_page, total = await query_events(db, admin, target_type="item", page=1, page_size=1)
+    first_page, total = await query_events(
+        db, admin, target_type="item", offset=(1 - 1) * 1, limit=1
+    )
     second_page, second_total = await query_events(
-        db, admin, target_type="item", page=2, page_size=1
+        db, admin, target_type="item", offset=(2 - 1) * 1, limit=1
     )
 
     assert total == second_total == 2

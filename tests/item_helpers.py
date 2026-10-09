@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from workspace_helpers import fixture_workspace_id_or_create
+
 from quirebase.library import (
     Contributor,
     ItemMetadata,
@@ -17,6 +19,7 @@ async def create_item_record(
     abstract: str = "",
     authors: str = "",
 ) -> Item:
+    workspace_id = await fixture_workspace_id_or_create(db, actor)
     contributors = tuple(
         Contributor(
             last_name=str(person.get("last_name") or ""),
@@ -27,6 +30,7 @@ async def create_item_record(
     result = await create_item(
         db,
         actor,
+        workspace_id,
         ItemMetadata(title=title, abstract=abstract, authors=contributors),
     )
     item = await db.get(Item, result.item_id)

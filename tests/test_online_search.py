@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidatePage, CandidateRecord, Identifier
 from provider_helpers import provider_runtime
 from sqlalchemy import select
 from test_http import authenticated_async_client
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.models import AuditEvent, Item, ItemIdentifier
@@ -19,7 +20,7 @@ async def test_online_search_page_keeps_search_separate_from_import(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
     result = CandidateRecord(
@@ -36,11 +37,11 @@ async def test_online_search_page_keeps_search_separate_from_import(
     )
     try:
         searched = await client.post(
-            "/api/v1/discovery/search",
-            json={
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
+            json=json_payload({
                 "provider": "openalex",
                 "clauses": [{"operator": "and", "field": "title", "term": "quantum"}],
-            },
+            }),
         )
         assert searched.status_code == 200
         assert searched.json() == {
@@ -65,7 +66,7 @@ async def test_online_search_page_keeps_search_separate_from_import(
         }
         event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.search"))
         assert event is not None
-        assert json.loads(event.detail)["fields"] == ["title"]
+        assert event.detail["fields"] == ["title"]
         assert await db.scalar(select(AuditEvent).where(AuditEvent.action == "item.create")) is None
         assert (await db.scalars(select(Item.title))).all() == ["Paper"]
     finally:
@@ -95,11 +96,11 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
     )
     try:
         searched = await client.post(
-            "/api/v1/discovery/search",
-            json={
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
+            json=json_payload({
                 "provider": "openalex",
                 "clauses": [{"operator": "and", "field": "title", "term": "imported"}],
-            },
+            }),
         )
 
         assert searched.status_code == 200
@@ -120,19 +121,19 @@ async def test_discovery_search_uses_runtime_provider_settings(
     async_db.add(admin)
     await async_db.commit()
     await update_runtime_settings(async_db, admin, {"nasa_ads_token": "runtime-token"})
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     search_candidates = AsyncMock(return_value=CandidatePage("nasa", (), 0, 1, 10))
     monkeypatch.setattr("quirebase.library.discovery.search_candidates", search_candidates)
     try:
-        providers = await client.get("/api/v1/discovery/providers")
+        providers = await client.get(f"/api/v1/workspaces/{item.workspace_id}/discovery/providers")
         searched = await client.post(
-            "/api/v1/discovery/search",
-            json={
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
+            json=json_payload({
                 "provider": "nasa",
                 "clauses": [{"operator": "and", "field": "any", "term": "stars"}],
-            },
+            }),
         )
 
         assert searched.status_code == 200
@@ -154,17 +155,17 @@ async def test_discovery_search_uses_runtime_provider_settings(
 async def test_discovery_search_rejects_invalid_years(
     async_db, async_session_factory, tmp_path, monkeypatch, year_from, expected_error
 ):
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     try:
         response = await client.post(
-            "/api/v1/discovery/search",
-            json={
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
+            json=json_payload({
                 "provider": "crossref",
                 "clauses": [{"field": "title", "operator": "and", "term": "quantum"}],
                 "year_from": year_from,
-            },
+            }),
         )
 
         assert response.status_code == 422
@@ -182,7 +183,7 @@ async def test_discovery_search_rejects_invalid_years(
 async def test_discovery_search_preserves_sparse_condition_rows(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    client, _item, _revision = await authenticated_async_client(
+    client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     search_candidates = AsyncMock(return_value=CandidatePage("openalex", (), 0, 1, 10))
@@ -192,15 +193,15 @@ async def test_discovery_search_preserves_sparse_condition_rows(
     )
     try:
         response = await client.post(
-            "/api/v1/discovery/search",
-            json={
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
+            json=json_payload({
                 "provider": "openalex",
                 "clauses": [
                     {"field": "title", "operator": "and", "term": "quantum"},
                     {"field": "author", "operator": "and", "term": ""},
                     {"field": "abstract", "operator": "not", "term": "review"},
                 ],
-            },
+            }),
         )
         assert response.status_code == 200
         search = search_candidates.await_args.args[0]
@@ -227,7 +228,7 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
         if request.url.host == "api.adsabs.harvard.edu":
             return httpx2.Response(
                 200,
-                json={
+                json=json_payload({
                     "response": {
                         "docs": [
                             {
@@ -239,12 +240,12 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
                             }
                         ]
                     }
-                },
+                }),
             )
         if request.url.host == "ieeexploreapi.ieee.org":
             return httpx2.Response(
                 200,
-                json={
+                json=json_payload({
                     "articles": [
                         {
                             "title": "IEEE No-DOI result",
@@ -254,7 +255,7 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
                             "authors": {"authors": [{"full_name": "Ieee Author"}]},
                         }
                     ]
-                },
+                }),
             )
         raise NotImplementedError(str(request.url))
 
@@ -269,11 +270,15 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     db = async_db
     user = User(username="search_user", password_hash="unused")
     db.add(user)
+    await db.flush()
+
+    await provision_initial_workspace(db, user)
     await db.commit()
 
     batch_nasa, records_nasa, errors_nasa = await stage_identifier_import_batch(
         db,
         user,
+        fixture_workspace_id(user),
         "2025ApJ...123..456A",
         "bibcode",
     )
@@ -284,6 +289,7 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     batch_ieee, records_ieee, errors_ieee = await stage_identifier_import_batch(
         db,
         user,
+        fixture_workspace_id(user),
         "9876543",
         "article_number",
     )

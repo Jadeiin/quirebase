@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from inquiro import CandidateRecord, Identifier
 from inquiro.bibliography import (
     builtin_style_xml,
@@ -16,13 +17,15 @@ from provider_helpers import provider_runtime
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from test_http import authenticated_async_client
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.access import resolve_workspace_context
 from quirebase.core.config import get_settings
 from quirebase.library import (
-    MetadataWorkspace,
-    SummaryWorkspace,
-    WorkspaceSection,
-    open_item_workspace,
+    ItemMetadataData,
+    ItemOverviewData,
+    ItemSection,
+    open_item_section,
 )
 from quirebase.library.identifiers import sync_metadata_from_upstream
 from quirebase.library.imports import (
@@ -100,7 +103,7 @@ async def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
     """Seam 1: External OpenAlex lookup parses inverted index, cleans HTML, and formats URLs/UIDs for OA paper."""
 
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
+        return httpx2.Response(200, json=json_payload(OA_CORPUS_OPENALEX_PAYLOAD))
 
     async with provider_runtime(transport=httpx2.MockTransport(mock_handler)) as runtime:
         record = await runtime.lookup("10.3390/ejihpe13110181", provider="openalex")
@@ -140,11 +143,13 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
     db = async_db
     user = User(username="oa_corpus_tester", password_hash="secret")
     db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
     await db.commit()
     user_id = user.id
 
     def mock_handler(_request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json=OA_CORPUS_OPENALEX_PAYLOAD)
+        return httpx2.Response(200, json=json_payload(OA_CORPUS_OPENALEX_PAYLOAD))
 
     monkeypatch.setattr(
         "quirebase.library.providers.provider_runtime",
@@ -157,13 +162,14 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
     batch, records, errors = await stage_identifier_import_batch(
         db,
         user,
+        fixture_workspace_id(user),
         identifier="10.3390/ejihpe13110181",
         provider="openalex",
     )
     assert not errors
     assert len(records) == 1
 
-    await commit_import_batch(db, user, batch.id)
+    await commit_import_batch(db, user, fixture_workspace_id(user), batch.id)
 
     # Verify persisted Item
     item = await db.scalar(
@@ -216,6 +222,7 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
     user = User(username="sync_corpus_tester", password_hash="secret")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
 
     # Initial minimal item
     item = await create_item(
@@ -257,6 +264,7 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
         updated = await sync_metadata_from_upstream(
             db,
             user,
+            fixture_workspace_id(user),
             item.id,
             item.version,
             provider="doi",
@@ -281,7 +289,7 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
     # Audit event recorded
     audit = await db.scalar(
         select(AuditEvent)
-        .where(AuditEvent.target_id == item.id)
+        .where(AuditEvent.target_id == str(item.id))
         .where(AuditEvent.action == "item.sync_upstream")
     )
     assert audit is not None
@@ -294,8 +302,10 @@ async def test_seam4_oa_corpus_citation_generation_and_csl_export(async_db):
     user = User(username="cite_corpus_tester", password_hash="secret")
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
 
     item = Item(
+        workspace_id=fixture_workspace_id(user),
         title="Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
         authors="Hasanein, Ahmed M.; Sobaih, Abu Elnasr E.",
         publication_title="European Journal of Investigation in Health, Psychology and Education",
@@ -355,6 +365,7 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         assert user is not None
 
         item = Item(
+            workspace_id=seed_item.workspace_id,
             title="Drivers and Consequences of ChatGPT Use in Higher Education",
             authors="Hasanein, Ahmed M.",
             publication_title="European Journal of Investigation in Health, Psychology and Education",
@@ -370,16 +381,16 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         item_id = item.id
         item_version = item.version
 
-        # 1. Fetch workspace view
-        resp = await client.get(f"/api/v1/items/{item_id}")
+        # 1. Fetch Item detail
+        resp = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")
         assert resp.status_code == 200
         assert resp.json()["title_html"] == item.title
         assert resp.json()["doi"] == "10.3390/ejihpe13110181"
 
         # 2. Submit edit form modifying title and adding second author
         edit_resp = await client.put(
-            f"/api/v1/items/{item_id}",
-            json={
+            f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}",
+            json=json_payload({
                 "expected_version": item_version,
                 "metadata": {
                     "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
@@ -393,32 +404,43 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
                     "pages": "2599-2614",
                     "doi": "10.3390/ejihpe13110181",
                 },
-            },
+            }),
         )
         assert edit_resp.status_code == 200
-        edited = await client.get(f"/api/v1/items/{item_id}")
+        edited = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")
         assert (
             edited.json()["title_html"]
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
 
-        # 3. Verify structured relations in DB
+        # 3. Verify persisted structured Contributors through the section interface.
+        workspace_id = seed_item.workspace_id
         db.expire_all()
         user = await db.get(User, user_id)
         assert user is not None
-        workspace_data = await open_item_workspace(db, user, item_id, WorkspaceSection.summary)
-        assert isinstance(workspace_data, SummaryWorkspace)
+        overview = await open_item_section(
+            db,
+            await resolve_workspace_context(db, user, workspace_id),
+            item_id,
+            ItemSection.overview,
+        )
+        assert isinstance(overview, ItemOverviewData)
         assert (
-            workspace_data.item.title
+            overview.item.title
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
-        metadata = await open_item_workspace(db, user, item_id, WorkspaceSection.metadata)
-        assert isinstance(metadata, MetadataWorkspace)
-        author_links = metadata.authors
-        assert len(author_links) == 2
-        assert author_links[0].author.last_name == "Hasanein"
-        assert author_links[1].author.last_name == "Sobaih"
-        assert author_links[1].author.first_name == "Abu Elnasr E."
+        metadata = await open_item_section(
+            db,
+            await resolve_workspace_context(db, user, workspace_id),
+            item_id,
+            ItemSection.metadata,
+        )
+        assert isinstance(metadata, ItemMetadataData)
+        contributors = metadata.metadata.authors
+        assert len(contributors) == 2
+        assert contributors[0].last_name == "Hasanein"
+        assert contributors[1].last_name == "Sobaih"
+        assert contributors[1].first_name == "Abu Elnasr E."
     finally:
         await client.aclose()
         get_settings.cache_clear()

@@ -4,13 +4,17 @@ import os
 from datetime import UTC, datetime
 
 import pytest
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 from dbos import AsyncSQLAlchemyDatasource
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import Base, async_database_url, make_async_engine
 from quirebase.core.storage import get_object_store
 from quirebase.core.workflows import DBOSAdapter, WorkflowSummary, ads, durable_operations
+
+pytest_plugins = ["concurrency_plugin"]
 
 
 class InMemoryDurableOperations:
@@ -30,6 +34,7 @@ class InMemoryDurableOperations:
         partition_key: str | None = None,
         attributes: dict[str, object] | None = None,
     ) -> str:
+        attributes = decode_json(encode_json(attributes)) if attributes else attributes
         self.enqueues.append({
             "workflow_name": workflow_name,
             "args": args,
@@ -139,10 +144,60 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
+async def postgres_sessions(tmp_path, monkeypatch):
+    database_url = os.getenv("QUIREBASE_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("PostgreSQL is not configured")
+    monkeypatch.setenv("QUIREBASE_DATA_DIR", str(tmp_path / "postgres-data"))
+    get_settings.cache_clear()
+    get_object_store.cache_clear()
+    get_object_store()
+    engine = make_async_engine(database_url)
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    try:
+        yield factory
+    finally:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
+        get_settings.cache_clear()
+        get_object_store.cache_clear()
+
+
+@pytest.fixture
+async def postgres_search_tables(postgres_sessions):
+    engine = postgres_sessions.kw["bind"]
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "CREATE TABLE item_search ("
+                "item_id uuid PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,"
+                "document tsvector NOT NULL)"
+            )
+        )
+        await connection.execute(
+            text(
+                "CREATE TABLE revision_search ("
+                "revision_id uuid PRIMARY KEY REFERENCES file_revisions(id) ON DELETE CASCADE,"
+                "item_id uuid NOT NULL, document tsvector NOT NULL)"
+            )
+        )
+    try:
+        yield
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text("DROP TABLE revision_search"))
+            await connection.execute(text("DROP TABLE item_search"))
+
+
+@pytest.fixture
 async def async_session_factory(tmp_path, monkeypatch):
     monkeypatch.setenv("QUIREBASE_DATA_DIR", str(tmp_path / "async-data"))
     get_settings.cache_clear()
     get_object_store.cache_clear()
+    get_object_store()
     engine = make_async_engine(f"sqlite:///{tmp_path / 'async-test.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -184,4 +239,19 @@ async def async_session_factory(tmp_path, monkeypatch):
 @pytest.fixture
 async def async_db(async_session_factory):
     async with async_session_factory() as session:
+        yield session
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def persistence_sessions(request):
+    """Exercise persistence contracts against each supported database."""
+    if request.param == "postgres":
+        request.getfixturevalue("postgres_search_tables")
+        return request.getfixturevalue("postgres_sessions")
+    return request.getfixturevalue("async_session_factory")
+
+
+@pytest.fixture
+async def persistence_db(persistence_sessions):
+    async with persistence_sessions() as session:
         yield session

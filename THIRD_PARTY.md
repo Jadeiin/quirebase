@@ -4,7 +4,8 @@ Quirebase is distributed under AGPL-3.0-only. Binary and source distributions mu
 
 Core PDF components:
 
-- EmbedPDF 2.15.0 — MIT, bundled from the pinned `@embedpdf/snippet` package for browser PDF rendering, search, zoom and annotation interaction.
+- `@embedpdf/svelte-pdf-viewer` 2.15.0 — MIT, the pinned Svelte viewer used for browser PDF rendering, search, zoom and annotation interaction.
+- `@embedpdf/snippet` 2.15.0 — MIT, the viewer's runtime dependency that provides EmbedPDF initialization and API exports.
 - PDFium WebAssembly from `@embedpdf/pdfium` 2.15.0 — EmbedPDF's wrapper is MIT; the bundled PDFium binary carries the PDFium BSD-style license and the additional third-party notices distributed in that package.
 - PyMuPDF — AGPL-3.0-only or commercial license. Quirebase uses it under AGPL-3.0-only.
 - bibtexparser 2.x beta — MIT, used for BibTeX/BibLaTeX parsing, native
@@ -29,8 +30,10 @@ Core PDF components:
 - `@zxcvbn-ts/core` 4.2.0, `@zxcvbn-ts/language-common` 4.1.3, and
   `@zxcvbn-ts/language-en` 4.1.1 — MIT, bundled into the local password-strength estimator.
 - httpx2 — BSD-3-Clause, HTTP transport client for outbound discovery metadata lookup and online search.
-- FastMCP 3.x — Apache-2.0, used to derive the curated MCP tool adapter from Quirebase's OpenAPI
+- FastMCP 4.x — Apache-2.0, used to derive the curated MCP tool adapter from Quirebase's OpenAPI
   contract. Its official MCP SDK dependency is MIT.
+- PyCasbin — Apache-2.0, used as the in-process authorization policy evaluator. Its `simpleeval`
+  dependency is MIT.
 - obstore — Apache-2.0, the native asynchronous Local/S3 object-storage data plane.
 - stream-zip — MIT, used to generate ZIP downloads incrementally without assembling an archive on disk.
 

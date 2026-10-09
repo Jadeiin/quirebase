@@ -10,20 +10,26 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from quirebase.accounts.invitations import InvitationConflict
+from quirebase.accounts.registration import RegistrationClosed, RegistrationInvitationRequired
 from quirebase.accounts.throttling import LoginThrottled
 from quirebase.core.errors import (
     DomainError,
     PermissionDenied,
+    ProjectLifecycleError,
     ResourceNotFound,
     ResourceUnavailable,
     SizeLimitExceeded,
     ValidationFailure,
     VersionConflict,
+    WorkspaceContextRequired,
+    WorkspaceLifecycleError,
+    WorkspaceMembershipRequired,
+    WorkspaceUnavailable,
 )
 from quirebase.documents.annotations import DocumentNotReady
 from quirebase.documents.revisions import UnsupportedMediaType
 from quirebase.library import BatchConflict, TagConflict, UpstreamServiceError
-from quirebase.projects.members import ProjectMemberConflict
+from quirebase.projects.participation import ProjectParticipationConflict
 from quirebase.web.api.common import ApiErrorView, ErrorField
 
 logger = logging.getLogger(__name__)
@@ -65,12 +71,26 @@ def _error_response(
 def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | None]:
     if isinstance(exc, LoginThrottled):
         return 429, "login_throttled", str(exc) or "too many login attempts; try again later", None
+    if isinstance(exc, RegistrationClosed):
+        return 403, "registration_closed", str(exc) or "registration is closed", None
+    if isinstance(exc, RegistrationInvitationRequired):
+        return (
+            403,
+            "registration_invitation_required",
+            str(exc) or "registration requires an invitation",
+            None,
+        )
     if isinstance(exc, InvitationConflict):
         return 409, "invitation_conflict", str(exc) or "invitation conflict", None
     if isinstance(exc, TagConflict):
         return 409, "tag_conflict", str(exc) or "Tag conflict", None
-    if isinstance(exc, ProjectMemberConflict):
-        return 409, "project_member_conflict", str(exc) or "Project member conflict", None
+    if isinstance(exc, ProjectParticipationConflict):
+        return (
+            409,
+            "project_participation_conflict",
+            str(exc) or "Project participation conflict",
+            None,
+        )
     if isinstance(exc, DocumentNotReady):
         return 409, "document_not_ready", str(exc) or "document not ready", None
     if isinstance(exc, BatchConflict):
@@ -81,6 +101,17 @@ def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | Non
         return 502, "upstream_service_error", str(exc) or "upstream service error", None
     if isinstance(exc, ResourceUnavailable):
         return 404, "not_found", "not found", None
+    if isinstance(exc, WorkspaceContextRequired):
+        return 400, "workspace_context_required", str(exc) or "Workspace context required", None
+    if isinstance(exc, (WorkspaceMembershipRequired, WorkspaceUnavailable)):
+        # Ordinary callers must not distinguish a missing Workspace from one
+        # whose membership is absent, suspended or terminated. Keep the domain
+        # exceptions distinct for workflow revocation handling.
+        return 404, "workspace_unavailable", "Workspace not found", None
+    if isinstance(exc, WorkspaceLifecycleError):
+        return 409, "workspace_lifecycle_error", str(exc), None
+    if isinstance(exc, ProjectLifecycleError):
+        return 409, "project_lifecycle_error", str(exc), None
     if isinstance(exc, ResourceNotFound):
         return 404, "not_found", str(exc) or "not found", None
     if isinstance(exc, PermissionDenied):

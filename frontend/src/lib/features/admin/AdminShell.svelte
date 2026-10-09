@@ -3,12 +3,12 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
-	import Button from '$lib/design/Button.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import SectionTab from '$lib/design/SectionTab.svelte';
-	import SectionTabs from '$lib/design/SectionTabs.svelte';
-	import { msg, t, type MessageKey } from '$lib/i18n';
+	import Button from '#lib/design/Button.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import SectionTab from '#lib/design/SectionTab.svelte';
+	import SectionTabs from '#lib/design/SectionTabs.svelte';
+	import { msg, t, type MessageKey } from '#lib/i18n.js';
 	import { setAdminFilters } from './filters';
 	import type { AdminFilters, AdminSection } from './queries';
 
@@ -17,8 +17,7 @@
 	const labels: Record<AdminSection, MessageKey> = {
 		overview: msg('Overview'),
 		users: msg('Users'),
-		projects: msg('Projects'),
-		items: msg('Items'),
+		workspaces: msg('Workspaces'),
 		audit: msg('Audit'),
 		workflows: msg('Workflows'),
 		settings: msg('Settings'),
@@ -68,10 +67,15 @@
 		appliedFilterB = '';
 		adminPage = 1;
 	}
-	beforeNavigate(() => clearFilters());
+
+	beforeNavigate(({ shallow }) => {
+		if (shallow) return;
+
+		return clearFilters();
+	});
 
 	function sectionPath(key: AdminSection) {
-		return key === 'overview' ? ('/admin' as const) : (`/admin/${key}` as const);
+		return key === 'overview' ? ('admin' as const) : (`admin/${key}` as const);
 	}
 </script>
 
@@ -90,7 +94,7 @@
 		>
 	{/each}
 </SectionTabs>
-{#if ['users', 'projects', 'items', 'audit', 'workflows'].includes(section)}
+{#if ['users', 'workspaces', 'audit', 'workflows'].includes(section)}
 	<Panel as="form" class="mb-4 flex flex-wrap items-end gap-2" onsubmit={applyFilters}>
 		{#if section !== 'workflows'}
 			<label class="grow basis-64"
@@ -120,28 +124,6 @@
 				>{$t('Status')}<select class="input w-auto min-w-36" bind:value={filterB}
 					><option value="">{$t('Any status')}</option><option value="true">{$t('Active')}</option
 					><option value="false">{$t('Disabled')}</option></select
-				></label
-			>
-		{:else if section === 'projects'}
-			<label
-				>{$t('State')}<select class="input w-auto min-w-36" bind:value={filterA}
-					><option value="">{$t('Any state')}</option><option value="active">{$t('Active')}</option
-					><option value="archived">{$t('Archived')}</option></select
-				></label
-			>
-			<label
-				>{$t('Visibility')}<select class="input w-auto min-w-36" bind:value={filterB}
-					><option value="">{$t('Any visibility')}</option><option value="private"
-						>{$t('Private')}</option
-					><option value="public">{$t('Public')}</option></select
-				></label
-			>
-		{:else if section === 'items'}
-			<label
-				>{$t('PDF availability')}<select class="input w-auto min-w-36" bind:value={filterA}
-					><option value="">{$t('Any')}</option><option value="true">{$t('Has PDF')}</option><option
-						value="false">{$t('Without PDF')}</option
-					></select
 				></label
 			>
 		{:else if section === 'audit'}

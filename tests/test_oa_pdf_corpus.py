@@ -71,7 +71,7 @@ async def test_real_oa_pdf_web_worker_search_annotation_export(
     try:
         with source.open("rb") as stream:
             uploaded = await client.post(
-                f"/api/v1/items/{item.id}/revisions",
+                f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/revisions",
                 files={"pdf": (source.name, stream, "application/pdf")},
             )
         assert uploaded.status_code == 202

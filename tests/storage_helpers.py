@@ -4,6 +4,8 @@ from io import BytesIO
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from advanced_alchemy.types import FileObject
+
 from quirebase.core.config import get_settings
 from quirebase.core.storage import ObjectSuffix, get_object_store
 
@@ -35,11 +37,15 @@ async def store_ready_pdf_revision(
     key, size = await put_pdf_object(content, max(len(content), 100_000))
     revision = FileRevision(
         item_id=item_id,
-        object_key=key,
-        size=size,
-        original_name=filename,
         processing_state="ready",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=key,
+            size=size,
+            content_type="application/pdf",
+            metadata={"original_name": filename},
+        ),
     )
     db.add(revision)
     await db.flush()

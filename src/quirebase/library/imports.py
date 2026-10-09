@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from advanced_alchemy.types import FileObject
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
     BibliographyRecord,
@@ -13,6 +14,7 @@ from inquiro.bibliography import (
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
+from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
@@ -25,20 +27,22 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.core.storage import ObjectSource, get_object_store
-from quirebase.core.workflows import IMPORT_QUEUE, durable_operations
-from quirebase.documents import enqueue_object_cleanup
+from quirebase.core.workflows import IMPORT_QUEUE, durable_operations, object_reservation_attributes
+from quirebase.documents import delete_unreferenced_objects, enqueue_object_cleanup
 from quirebase.documents.pdf import extract_doi
 from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
-    delete_unreferenced_objects,
     stage_pdf,
 )
 from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
+from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import ImportBatch, Item, ItemAuthor, User
 from quirebase.search import search_index
+
+from .identifiers import _create_items_from_candidates
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -70,21 +74,23 @@ async def _finish_cleanup_despite_cancellation(task: asyncio.Task[None]) -> None
             _consume_current_cancellation()
 
 
-def _pdf_object_keys(records_json: str) -> set[str]:
-    try:
-        records = json.loads(records_json)
-    except (json.JSONDecodeError, TypeError):
-        return set()
-    return {
-        pdf["object_key"]
-        for record in records
-        if isinstance(record, dict)
-        and isinstance((pdf := record.get("_pdf")), dict)
-        and isinstance(pdf.get("object_key"), str)
-    }
+def _pdf_import_inputs(files: list[FileObject]) -> list[dict]:
+    """Snapshot batch-owned file descriptors as serializable durable inputs."""
+    return [
+        {
+            "_row": file.metadata["row"],
+            "_source_id": file.metadata["source_id"],
+            "_pdf": {
+                "object_key": file.path,
+                "size": file.size,
+                "original_name": file.metadata["original_name"],
+            },
+        }
+        for file in files
+    ]
 
 
-def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]:
+def _record_to_item_payload(record: BibliographyRecord) -> dict:
     """Serialize a parsed record into the Item-column dictionary stored on Import Batches."""
     return {
         "title": record.title or None,
@@ -107,15 +113,14 @@ def _record_to_item_payload(record: BibliographyRecord) -> dict[str, str | None]
         "identifiers": json.dumps(dict(record.identifiers), ensure_ascii=False)
         if record.identifiers
         else None,
-        "custom_fields": json.dumps(dict(record.custom_fields), ensure_ascii=False)
-        if record.custom_fields
-        else None,
+        "custom_fields": dict(record.custom_fields) if record.custom_fields else None,
     }
 
 
 async def stage_import_batch(
-    db: AsyncSession, user: User, file_bytes: bytes, file_format: str
+    db: AsyncSession, user: User, workspace_id: UUID, file_bytes: bytes, file_format: str
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     if file_format not in SUPPORTED_FORMATS:
         raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
     if len(file_bytes) > 5 * 1024 * 1024:
@@ -127,12 +132,14 @@ async def stage_import_batch(
     typed_records, errors = parse_bibliography_records(contents, file_format)
     records = [_record_to_item_payload(record) for record in typed_records]
     batch = ImportBatch(
-        owner_id=user.id,
+        workspace_id=workspace_id,
+        actor_id=user.id,
         file_format=file_format,
-        records=json.dumps(records, ensure_ascii=False),
-        errors=json.dumps(errors, ensure_ascii=False),
+        records=records,
+        errors=errors,
     )
     db.add(batch)
+    await db.flush()
     await db.commit()
     return batch, records, errors
 
@@ -140,12 +147,14 @@ async def stage_import_batch(
 async def stage_identifier_import_batch(
     db: AsyncSession,
     user: User,
+    workspace_id: UUID,
     identifier: str,
     provider: str = "auto",
     settings: Settings | None = None,
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_settings_model
 
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     user_id = user.id
     effective_settings = settings or await get_effective_settings_model(db)
     # Settings are a short read; release its transaction before external I/O.
@@ -154,13 +163,16 @@ async def stage_identifier_import_batch(
     reloaded_user = await db.get(User, user_id)
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
-    user = reloaded_user
+    user = (
+        await require_workspace_action(db, reloaded_user, workspace_id, ResourceAction.item_create)
+    ).actor
     rec_dict = candidate_record_values(record)
     batch = ImportBatch(
-        owner_id=user.id,
+        workspace_id=workspace_id,
+        actor_id=user.id,
         file_format=f"metadata:{record.identifier.provider}",
-        records=json.dumps([rec_dict], ensure_ascii=False),
-        errors="[]",
+        records=[rec_dict],
+        errors=[],
     )
     db.add(batch)
     await db.flush()
@@ -171,6 +183,8 @@ async def stage_identifier_import_batch(
         "import_batch",
         batch.id,
         detail={"provider": record.identifier.provider},
+        workspace_id=workspace_id,
+        authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.commit()
     return batch, [rec_dict], []
@@ -179,6 +193,7 @@ async def stage_identifier_import_batch(
 async def stage_pdf_import_batch(
     db: AsyncSession,
     user: User,
+    workspace_id: UUID,
     uploads: Sequence[tuple[ObjectSource, str]],
     *,
     max_bytes: int | None = None,
@@ -186,6 +201,7 @@ async def stage_pdf_import_batch(
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
     from quirebase.operations.settings import get_effective_setting
 
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     if not uploads:
         raise ValidationFailure("at least one PDF is required")
     if len(uploads) > MAX_PDF_IMPORT_FILES:
@@ -200,13 +216,11 @@ async def stage_pdf_import_batch(
     user_id = user.id
     await db.rollback()
     staged_pdfs: list[StagedPdf] = []
-    pending_records: list[dict] = []
+    staged_files: list[FileObject] = []
     errors: list[dict] = []
 
     async def cleanup_staged_pdfs() -> None:
         await db.rollback()
-        for staged_pdf in staged_pdfs:
-            await staged_pdf.release()
         await delete_unreferenced_objects(db, {staged_pdf.object_key for staged_pdf in staged_pdfs})
 
     try:
@@ -214,14 +228,19 @@ async def stage_pdf_import_batch(
             try:
                 staged = await stage_pdf(db, source, filename, max_bytes)
                 staged_pdfs.append(staged)
-                pending_records.append({
-                    "_row": row,
-                    "_pdf": {
-                        "object_key": staged.object_key,
-                        "size": staged.size,
-                        "original_name": staged.original_name,
-                    },
-                })
+                staged_files.append(
+                    FileObject(
+                        backend="documents",
+                        filename=staged.object_key,
+                        content_type="application/pdf",
+                        size=staged.size,
+                        metadata={
+                            "row": row,
+                            "source_id": str(uuid4()),
+                            "original_name": staged.original_name,
+                        },
+                    )
+                )
             except DomainError as error:
                 errors.append({
                     "row": row,
@@ -233,11 +252,18 @@ async def stage_pdf_import_batch(
         reloaded_user = await db.get(User, user_id)
         if reloaded_user is None or not reloaded_user.active:
             raise ResourceUnavailable("user not available")
+        reloaded_user = (
+            await require_workspace_action(
+                db, reloaded_user, workspace_id, ResourceAction.item_create
+            )
+        ).actor
         batch = ImportBatch(
-            owner_id=reloaded_user.id,
+            workspace_id=workspace_id,
+            actor_id=reloaded_user.id,
             file_format="pdf",
-            records=json.dumps(pending_records, ensure_ascii=False),
-            errors=json.dumps(errors, ensure_ascii=False),
+            records=[],
+            staged_files=staged_files,
+            errors=errors,
             status="pending",
         )
         db.add(batch)
@@ -247,17 +273,20 @@ async def stage_pdf_import_batch(
         await durable_operations().enqueue_in_transaction(
             db,
             "library.prepare_pdf_import",
+            reloaded_user.id,
+            workspace_id,
             batch.id,
             workflow_id,
-            pending_records,
+            _pdf_import_inputs(staged_files),
             queue_name=IMPORT_QUEUE,
             workflow_id=workflow_id,
             attributes={
                 "capability": "library",
                 "operation": "prepare_pdf_import",
-                "owner_id": reloaded_user.id,
+                "actor_id": reloaded_user.id,
+                "workspace_id": workspace_id,
                 "batch_id": batch.id,
-                "object_keys": [staged.object_key for staged in staged_pdfs],
+                **object_reservation_attributes(staged.object_key for staged in staged_pdfs),
             },
         )
         record_event(
@@ -267,10 +296,10 @@ async def stage_pdf_import_batch(
             "import_batch",
             batch.id,
             detail={"files": len(uploads), "diagnostics": len(errors)},
+            workspace_id=workspace_id,
+            authorization_resource_action=ResourceAction.item_create.value,
         )
         await db.commit()
-        for staged in staged_pdfs:
-            await staged.release()
         return batch, [], errors
     except asyncio.CancelledError:
         _consume_current_cancellation()
@@ -318,7 +347,7 @@ async def extract_pdf_import_doi(pending: dict) -> dict:
 
 async def check_pdf_import_doi(
     db: AsyncSession,
-    batch_id: str,
+    batch_id: UUID,
     pending: dict,
     detected_doi: str,
 ) -> dict:
@@ -327,12 +356,12 @@ async def check_pdf_import_doi(
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending":
         return {"discarded": True, "object_key": pdf["object_key"]}
-    user = await db.get(User, batch.owner_id)
+    user = await db.get(User, batch.actor_id)
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     normalized_doi = detected_doi.casefold()
     existing = await db.scalar(
-        visible_items_query(user)
+        visible_items_query(batch.workspace_id)
         .with_only_columns(Item.id)
         .where(func.lower(Item.doi) == normalized_doi)
         .limit(1)
@@ -348,7 +377,7 @@ async def check_pdf_import_doi(
 
 async def lookup_pdf_import_candidate(
     db: AsyncSession,
-    batch_id: str,
+    batch_id: UUID,
     pending: dict,
     detected_doi: str,
 ) -> dict:
@@ -359,7 +388,7 @@ async def lookup_pdf_import_candidate(
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending":
         return {"discarded": True, "object_key": pdf["object_key"]}
-    user = await db.get(User, batch.owner_id)
+    user = await db.get(User, batch.actor_id)
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
     effective_settings = await get_effective_settings_model(db)
@@ -369,7 +398,7 @@ async def lookup_pdf_import_candidate(
         record = await lookup_candidate(detected_doi, "doi", effective_settings)
         candidate = candidate_record_values(record)
         candidate.setdefault("doi", detected_doi)
-        candidate["_pdf"] = {**pdf, "detected_doi": detected_doi}
+        candidate["_source_id"] = pending["_source_id"]
         return {
             "record": candidate,
             "normalized_doi": normalized_doi,
@@ -389,7 +418,7 @@ async def lookup_pdf_import_candidate(
 
 async def prepare_pdf_import_candidate(
     db: AsyncSession,
-    batch_id: str,
+    batch_id: UUID,
     pending: dict,
 ) -> dict:
     """Prepare one candidate through the same seams used by the durable workflow."""
@@ -405,48 +434,67 @@ async def prepare_pdf_import_candidate(
 
 async def finalize_pdf_import_batch(
     db: AsyncSession,
-    batch_id: str,
+    actor_id: UUID,
+    workspace_id: UUID,
+    batch_id: UUID,
     workflow_id: str,
     records: list[dict],
     errors: list[dict],
 ) -> bool:
-    batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
+    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    if (
+        batch is None
+        or batch.actor_id != actor_id
+        or batch.workspace_id != workspace_id
+        or batch.status != "pending"
+        or batch.workflow_id != workflow_id
+    ):
         return False
-    owner = await db.get(User, batch.owner_id)
-    if owner is None or not owner.active:
-        batch.records = "[]"
-        batch.errors = json.dumps([
-            {"row": 0, "code": "user_unavailable", "message": "user not available"}
-        ])
+    owner = await db.get(User, actor_id)
+    try:
+        if owner is None:
+            raise ResourceUnavailable("user not available")
+        await require_workspace_action(db, owner, workspace_id, ResourceAction.item_create)
+    except DomainError:
+        # The failed batch still owns its staged PDFs. Reference-aware cleanup
+        # must leave these retry inputs intact until retry or explicit discard.
+        batch.errors = [
+            *batch.errors,
+            {
+                "row": 0,
+                "code": "authorization_revoked",
+                "message": "Workspace authorization is no longer available",
+            },
+        ]
         batch.status = "failed"
         return False
-    initial_errors = json.loads(batch.errors)
-    batch.records = json.dumps(records, ensure_ascii=False)
-    batch.errors = json.dumps([*initial_errors, *errors], ensure_ascii=False)
+    initial_errors = batch.errors
+    retained_sources = {record["_source_id"] for record in records}
+    batch.staged_files = [
+        file for file in batch.staged_files if file.metadata["source_id"] in retained_sources
+    ]
+    batch.records = records
+    batch.errors = [*initial_errors, *errors]
     batch.status = "ready"
     record_event(
         db,
-        batch.owner_id,
+        batch.actor_id,
         "pdf.import.preview",
         "import_batch",
         batch.id,
         detail={"candidates": len(records), "diagnostics": len(initial_errors) + len(errors)},
+        workspace_id=workspace_id,
+        authorization_resource_action=ResourceAction.item_create.value,
     )
     return True
 
 
-async def _create_item_from_record(db: AsyncSession, user: User, record: dict) -> Item:
-    from quirebase.library import create_item_from_metadata_record
-
-    return await create_item_from_metadata_record(db, user, record)
-
-
 async def get_import_batch_preview(
-    db: AsyncSession, user: User, batch_id: str
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
 ) -> tuple[ImportBatch, list[dict], list[dict]]:
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
-    if observed is None or observed.owner_id != user.id:
+    if observed is None or observed.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
     observed_workflow_id = observed.workflow_id
     workflow = None
@@ -460,14 +508,14 @@ async def get_import_batch_preview(
         .execution_options(populate_existing=True)
         .with_for_update(key_share=True)
     )
-    if batch is None or batch.owner_id != user.id:
+    if batch is None or batch.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
     if batch.workflow_id == observed_workflow_id and await _converge_pdf_import_batch_status(
         db, batch, workflow
     ):
         await db.commit()
-    records = json.loads(batch.records) if batch.status in {"ready", "committed"} else []
-    return batch, records, json.loads(batch.errors)
+    records = batch.records if batch.status in {"ready", "committed"} else []
+    return batch, records, batch.errors
 
 
 async def _converge_pdf_import_batch_status(
@@ -498,10 +546,13 @@ async def _converge_pdf_import_batch_status(
     return changed
 
 
-async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) -> ImportBatch:
+async def retry_pdf_import_batch(
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
+) -> ImportBatch:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
-    if observed is None or observed.owner_id != user.id:
+    if observed is None or observed.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
     observed_workflow_id = observed.workflow_id
     workflow = None
@@ -518,25 +569,29 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
         .execution_options(populate_existing=True)
         .with_for_update()
     )
-    if batch is None or batch.owner_id != user.id:
+    if batch is None or batch.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
     if batch.workflow_id == observed_workflow_id:
         await _converge_pdf_import_batch_status(db, batch, workflow)
     if batch.file_format != "pdf" or batch.status != "failed":
         raise BatchConflict("only a failed PDF import batch can be retried")
-    pending_records = json.loads(batch.records)
-    if not isinstance(pending_records, list) or not any(
-        isinstance(record, dict) and isinstance(record.get("_pdf"), dict)
-        for record in pending_records
-    ):
+    pending_records = _pdf_import_inputs(batch.staged_files)
+    if not pending_records:
         raise BatchConflict("the failed import batch has no staged PDFs to retry")
 
     workflow_id = f"prepare-pdf-import:{batch.id}:{uuid4()}"
+    # A retry is a new authorization boundary.  Keep the Import Batch root,
+    # workflow arguments and workflow attributes bound to the same actor so a
+    # Workspace editor can successfully retry another member's failed batch.
+    batch.actor_id = user.id
     batch.status = "pending"
     batch.workflow_id = workflow_id
+    batch.errors = [error for error in batch.errors if error.get("code") != "authorization_revoked"]
     await durable_operations().enqueue_in_transaction(
         db,
         "library.prepare_pdf_import",
+        user.id,
+        workspace_id,
         batch.id,
         workflow_id,
         pending_records,
@@ -545,53 +600,69 @@ async def retry_pdf_import_batch(db: AsyncSession, user: User, batch_id: str) ->
         attributes={
             "capability": "library",
             "operation": "prepare_pdf_import",
-            "owner_id": user.id,
+            "actor_id": user.id,
+            "workspace_id": workspace_id,
             "batch_id": batch.id,
-            "object_keys": [record["_pdf"]["object_key"] for record in pending_records],
+            **object_reservation_attributes(
+                record["_pdf"]["object_key"] for record in pending_records
+            ),
         },
     )
-    record_event(db, user.id, "pdf.import.preview.retry", "import_batch", batch.id)
+    record_event(
+        db,
+        user.id,
+        "pdf.import.preview.retry",
+        "import_batch",
+        batch.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=ResourceAction.item_create.value,
+    )
     await db.commit()
     return batch
 
 
-async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> list[str]:
-    # Revalidate the owner and hold a shared lock while the batch root is
-    # locked.  Account deactivation therefore cannot race a confirmation.
-    owner = await db.scalar(
+async def commit_import_batch(
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
+) -> list[UUID]:
+    # Lock the confirmer before Workspace authorization. Account deactivation
+    # uses the same User-before-Workspace order, so it cannot deadlock a
+    # confirmation while the Import Batch root is being committed.
+    actor = await db.scalar(
         select(User).where(User.id == user.id, User.active.is_(True)).with_for_update(read=True)
     )
-    if owner is None:
+    if actor is None:
         raise ResourceUnavailable("user not available")
+    await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
     # Confirmation mutates the Import Batch root and creates child Items.  A
     # full UPDATE lock serializes concurrent confirmations before either caller
     # can observe ``ready`` and create duplicate Items.
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
-    if batch is None or batch.owner_id != owner.id:
+    if batch is None or batch.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":
-        try:
-            committed_ids = json.loads(batch.committed_item_ids or "[]")
-        except (TypeError, json.JSONDecodeError) as error:
-            raise BatchConflict("the committed batch has invalid results") from error
+        committed_ids = batch.committed_item_ids or []
         if not isinstance(committed_ids, list) or not all(
             isinstance(item_id, str) for item_id in committed_ids
         ):
             raise BatchConflict("the committed batch has invalid results")
+        try:
+            result_ids = [UUID(item_id) for item_id in committed_ids]
+        except ValueError as error:
+            raise BatchConflict("the committed batch has invalid results") from error
         await db.commit()
-        return committed_ids
+        return result_ids
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
-    errors = json.loads(batch.errors)
+    errors = batch.errors
     if errors and batch.file_format != "pdf":
         raise BatchConflict("the preview contains errors")
-    records = json.loads(batch.records)
+    records = batch.records
     if not records:
         raise BatchConflict("the import batch has no candidate records")
     if batch.file_format == "pdf":
         known_dois = {
             value
-            for provider, value in await get_accessible_item_identifiers(db, owner)
+            for provider, value in await get_accessible_item_identifiers(db, actor, workspace_id)
             if provider == "doi"
         }
         candidate_dois: set[str] = set()
@@ -604,58 +675,87 @@ async def commit_import_batch(db: AsyncSession, user: User, batch_id: str) -> li
                 raise BatchConflict("another PDF in this batch has the same DOI")
             if normalized_doi:
                 candidate_dois.add(normalized_doi)
-    committed_item_ids: list[str] = []
+    source_files = {file.metadata["source_id"]: file for file in batch.staged_files}
+    candidates: list[dict] = []
+    selected_files: list[FileObject | None] = []
     for record in records:
         candidate = dict(record)
-        pdf = candidate.pop("_pdf", None)
-        item = await _create_item_from_record(db, owner, candidate)
+        source_id = candidate.pop("_source_id", None)
+        pdf = source_files.get(source_id) if source_id is not None else None
+        if source_id is not None and (pdf is None or pdf.size is None):
+            raise BatchConflict("the candidate has no staged source file")
+        candidates.append(candidate)
+        selected_files.append(pdf)
+    items = await _create_items_from_candidates(db, workspace_id, actor.id, candidates)
+    committed_item_ids: list[UUID] = []
+    for item, pdf in zip(items, selected_files, strict=True):
+        await request_item_tag_recommendation(
+            db, item.id, workspace_id=workspace_id, actor_id=actor.id
+        )
         if pdf is not None:
             await attach_staged_pdf(
                 db,
-                owner,
+                actor,
                 item,
                 (
-                    pdf["object_key"],
-                    pdf["size"],
-                    pdf["original_name"],
+                    pdf.path,
+                    pdf.size if pdf.size is not None else 0,
+                    pdf.metadata["original_name"],
                 ),
             )
         await search_index(db).index_item(db, item.id)
         record_event(
             db,
-            owner.id,
+            actor.id,
             "pdf.import" if pdf is not None else "bibliography.import",
             "item",
             item.id,
-            detail={"format": batch.file_format, "filename": pdf["original_name"] if pdf else None},
+            detail={
+                "format": batch.file_format,
+                "filename": pdf.metadata["original_name"] if pdf else None,
+            },
+            workspace_id=workspace_id,
+            authorization_resource_action=ResourceAction.item_create.value,
         )
         committed_item_ids.append(item.id)
-    batch.committed_item_ids = json.dumps(committed_item_ids)
-    # A committed batch no longer owns staged upload objects.  Drop the PDF
-    # staging payload so cleanup cannot mistake it for a live reservation.
-    batch.records = json.dumps([
-        {key: value for key, value in record.items() if key != "_pdf"}
+    batch.committed_item_ids = [str(item_id) for item_id in committed_item_ids]
+    # Transfer file ownership to File Revisions in the same confirmation transaction.
+    batch.staged_files = []
+    batch.records = [
+        {key: value for key, value in record.items() if key != "_source_id"}
         for record in records
         if isinstance(record, dict)
-    ])
+    ]
     batch.status = "committed"
     await db.commit()
     return committed_item_ids
 
 
-async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> None:
+async def discard_import_batch(
+    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
+) -> None:
+    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
-    if batch is None or batch.owner_id != user.id:
+    if batch is None or batch.workspace_id != workspace_id:
         raise ResourceUnavailable("import batch not found")
     if batch.status == "committed":
         raise BatchConflict("a committed import batch cannot be discarded")
-    object_keys = _pdf_object_keys(batch.records)
-    record_event(db, user.id, "import.batch.discard", "import_batch", batch.id)
+    object_keys = {file.path for file in batch.staged_files}
+    record_event(
+        db,
+        user.id,
+        "import.batch.discard",
+        "import_batch",
+        batch.id,
+        workspace_id=workspace_id,
+        authorization_resource_action=ResourceAction.item_create.value,
+    )
     await db.delete(batch)
     await enqueue_object_cleanup(
         db,
         object_keys,
-        owner_id=user.id,
+        actor_id=user.id,
+        workspace_id=workspace_id,
         operation="import_batch_discard",
         target_id=batch.id,
     )
@@ -665,33 +765,54 @@ async def discard_import_batch(db: AsyncSession, user: User, batch_id: str) -> N
 async def export_accessible_bibliography(
     db: AsyncSession,
     user: User,
+    workspace_id: UUID,
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     items = list(
-        (
-            await db.scalars(
-                visible_items_query(user)
-                .options(selectinload(Item.author_links).selectinload(ItemAuthor.author))
-                .order_by(Item.updated_at.desc())
-            )
-        ).all()
+        await db.scalars(
+            visible_items_query(workspace_id)
+            .options(selectinload(Item.author_links).selectinload(ItemAuthor.author))
+            .order_by(Item.updated_at.desc(), Item.id)
+        )
     )
     if file_format == "csl":
-        return await format_csl_export(db, user, items, style_key=style_key, options=options)
+        return await format_csl_export(
+            db, user, workspace_id, items, style_key=style_key, options=options
+        )
     return format_standard_export(items, file_format, options=options)
 
 
 async def export_selected_bibliography(
     db: AsyncSession,
     user: User,
-    item_ids: list[str],
+    workspace_id: UUID,
+    item_ids: list[UUID],
     file_format: str,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
 ) -> tuple[str, str, str]:
-    items = await require_accessible_items(db, user, item_ids)
+    items = await require_accessible_items(db, user, workspace_id, item_ids)
     if file_format == "csl":
-        return await format_csl_export(db, user, items, style_key=style_key, options=options)
+        return await format_csl_export(
+            db, user, workspace_id, items, style_key=style_key, options=options
+        )
     return format_standard_export(items, file_format, options=options)
+
+
+async def import_staging_object_keys(
+    db: AsyncSession, *, workspace_id: UUID | None = None
+) -> set[str]:
+    """Retained PDF staging ownership, including ready and failed batches awaiting retry.
+
+    Committed batches no longer own staged objects. This read participates in the caller's
+    transaction and does not acquire aggregate locks or complete the transaction.
+    """
+    query = select(ImportBatch.staged_files).where(
+        ImportBatch.file_format == "pdf", ImportBatch.status != "committed"
+    )
+    if workspace_id is not None:
+        query = query.where(ImportBatch.workspace_id == workspace_id)
+    return {file.path for files in await db.scalars(query) for file in files}

@@ -4,6 +4,8 @@ import ast
 import tomllib
 from pathlib import Path
 
+from packaging.requirements import Requirement
+
 SRC_ROOT = Path(__file__).parent.parent / "src" / "quirebase"
 REPO_ROOT = Path(__file__).parent.parent
 STANDALONE_WORKSPACE_PACKAGES = ("inquiro", "rubrica")
@@ -20,51 +22,11 @@ PACKAGE_ROLES = {
     "projects": "business",
     "search": "outbound-adapter",
     "web": "inbound-adapter",
+    "workspaces": "business",
 }
 
-ALLOWED_PACKAGE_DEPENDENCIES = {
-    "access": {"core", "models"},
-    "accounts": {"audit", "core", "models"},
-    "audit": {"core", "models"},
-    "core": set(),
-    "documents": {"access", "audit", "core", "models", "operations", "search"},
-    "library": {
-        "access",
-        "audit",
-        "core",
-        "documents",
-        "models",
-        "operations",
-        "projects",
-        "search",
-    },
-    "mcp": {"accounts", "audit", "core"},
-    "operations": {"audit", "core", "library", "models", "search"},
-    "projects": {"access", "audit", "core", "models"},
-    "search": {"models"},
-    "web": {
-        "access",
-        "accounts",
-        "audit",
-        "core",
-        "documents",
-        "library",
-        "mcp",
-        "models",
-        "operations",
-        "projects",
-        "search",
-    },
-}
-
-ALLOWED_STANDALONE_DEPENDENCIES = {
-    "documents": {"inquiro"},
-    "library": {"inquiro", "rubrica"},
-    "search": {"inquiro"},
-}
 
 BUSINESS_ROLES = {"business", "domain-policy"}
-FORBIDDEN_BUSINESS_IMPORTS = ("fastapi", "mcp", "pydantic_ai", "quirebase.web")
 SESSION_METHODS = {
     "add",
     "commit",
@@ -103,10 +65,13 @@ ORM_MODEL_OWNERS = {
     "PdfAnnotationReply": "documents",
     "Project": "projects",
     "ProjectItem": "projects",
-    "ProjectMember": "projects",
+    "ProjectParticipant": "projects",
     "SystemSetting": "operations",
     "Tag": "library",
     "User": "accounts",
+    "Workspace": "workspaces",
+    "WorkspaceInvitation": "workspaces",
+    "WorkspaceMember": "workspaces",
 }
 
 FORBIDDEN_FACADE_EXPORTS = {
@@ -135,6 +100,96 @@ FORBIDDEN_FACADE_EXPORTS = {
         "SearchIndex",
     },
 }
+
+
+def test_invariant_ownership_and_narrow_reverse_interfaces():
+    """Shared mappings do not grant callers ownership of evolving sibling rules."""
+    forbidden_models = {
+        "accounts/administration.py": {"Workspace", "WorkspaceMember", "WorkspaceRole"},
+        "library/item_sections.py": {
+            "ProjectParticipant",
+            "ProjectParticipation",
+            "PdfAnnotation",
+            "FileRevision",
+            "Attachment",
+            "ItemAuthor",
+        },
+        "library/cross_workspace.py": {"FileRevision", "Attachment"},
+        "library/bulk_items.py": {"FileRevision", "Attachment"},
+        "operations/maintenance.py": {"ExportArtifact", "ImportBatch"},
+        "workspaces/lifecycle.py": {
+            "FileRevision",
+            "Attachment",
+            "ExportArtifact",
+            "ImportBatch",
+            "PdfAnnotation",
+            "PdfAnnotationReply",
+            "PdfAnnotationObject",
+        },
+    }
+    for path, forbidden in forbidden_models.items():
+        tree = ast.parse((SRC_ROOT / path).read_text())
+        imported = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module == "quirebase.models"
+            for alias in node.names
+        }
+        assert not imported & forbidden, (path, imported & forbidden)
+    administration = ast.parse((SRC_ROOT / "library/administration.py").read_text())
+    item_deletion = next(
+        node
+        for node in administration.body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "delete_item"
+    )
+    assert not any(
+        isinstance(node, ast.Name) and node.id in {"FileRevision", "Attachment"}
+        for node in ast.walk(item_deletion)
+    )
+    source = (SRC_ROOT / "workspaces/lifecycle.py").read_text()
+    assert "item_search" not in source and "revision_search" not in source
+    for owner in ("documents", "workspaces"):
+        for path in get_python_files(SRC_ROOT / owner):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module
+                    and node.module.startswith("quirebase.library")
+                ):
+                    assert node.module == "quirebase.library", path
+                    assert {name.name for name in node.names} <= {"import_staging_object_keys"}, (
+                        path
+                    )
+                if (
+                    owner == "documents"
+                    and isinstance(node, ast.ImportFrom)
+                    and node.module
+                    and node.module.startswith("quirebase.operations")
+                ):
+                    assert node.module == "quirebase.operations.settings", path
+                    assert {name.name for name in node.names} <= {"get_effective_setting"}, path
+    maintenance = ast.parse((SRC_ROOT / "operations/maintenance.py").read_text())
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "delete"
+        for node in ast.walk(maintenance)
+    )
+    for path in get_python_files(SRC_ROOT / "operations"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and node.module.startswith("quirebase.documents")
+            ):
+                assert node.module == "quirebase.documents", path
+                assert {name.name for name in node.names} <= {
+                    "delete_unreferenced_objects",
+                    "protected_object_keys",
+                    "list_expired_export_artifacts",
+                    "retire_expired_export_artifacts",
+                }, path
+
 
 LIBRARY_FACADE_OPERATIONS = {
     "BatchConflict",
@@ -177,18 +232,6 @@ def imported_modules(py_file: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             modules.add(node.module)
     return modules
-
-
-def imported_quirebase_packages(package_dir: Path) -> set[str]:
-    packages: set[str] = set()
-    for py_file in get_python_files(package_dir):
-        for module in imported_modules(py_file):
-            if module == "quirebase.models":
-                packages.add("models")
-            elif module.startswith("quirebase."):
-                packages.add(module.split(".", 2)[1])
-    packages.discard(package_dir.name)
-    return packages
 
 
 def exported_names(package: str) -> set[str]:
@@ -286,49 +329,71 @@ def test_every_python_package_has_an_architectural_role():
         "Update PACKAGE_ROLES and docs/architecture/modules.md when adding or removing a package: "
         f"discovered={sorted(discovered)}, classified={sorted(PACKAGE_ROLES)}"
     )
+    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    contracts = {
+        contract["id"]: contract for contract in metadata["tool"]["importlinter"]["contracts"]
+    }
+    for package in discovered:
+        contract = contracts[f"module-{package}"]
+        assert contract["type"] == "protected"
+        assert contract["protected_modules"] == [f"quirebase.{package}"]
 
 
-def test_package_dependencies_match_the_documented_policy():
-    assert set(ALLOWED_PACKAGE_DEPENDENCIES) == set(PACKAGE_ROLES)
-    for package_name in PACKAGE_ROLES:
-        actual = imported_quirebase_packages(SRC_ROOT / package_name)
-        disallowed = actual - ALLOWED_PACKAGE_DEPENDENCIES[package_name]
-        assert not disallowed, (
-            f"quirebase.{package_name} imports undocumented packages {sorted(disallowed)}; "
-            "remove the dependency or document its ownership reason in "
-            "docs/architecture/modules.md and ALLOWED_PACKAGE_DEPENDENCIES"
+def test_casbin_is_the_only_application_authorization_policy_source():
+    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "casbin>=1.43,<2" in metadata["project"]["dependencies"]
+    assert (SRC_ROOT / "access" / "policy" / "model.conf").is_file()
+    assert (SRC_ROOT / "access" / "policy" / "policy.csv").is_file()
+
+    forbidden_names = {"ROLE_CAPABILITIES", "role_has_capability"}
+    system_role_bypasses: list[str] = []
+    workspace_role_bypasses: list[str] = []
+    for py_file in get_python_files(SRC_ROOT):
+        source = py_file.read_text(encoding="utf-8")
+        assert not any(name in source for name in forbidden_names), (
+            f"{py_file} reintroduces a native authorization table or helper"
         )
+        tree = ast.parse(source, filename=str(py_file))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare):
+                continue
+            operands = (node.left, *node.comparators)
+            compares_role = any(
+                isinstance(operand, ast.Attribute) and operand.attr == "role"
+                for operand in operands
+            )
+            compares_administrator = any(
+                (isinstance(operand, ast.Constant) and operand.value == "administrator")
+                or (
+                    isinstance(operand, ast.Attribute)
+                    and operand.attr == "administrator"
+                    and isinstance(operand.value, ast.Name)
+                    and operand.value.id == "SystemRole"
+                )
+                for operand in operands
+            )
+            if compares_role and compares_administrator:
+                system_role_bypasses.append(f"{py_file}:{node.lineno}")
+            if py_file.parent.name == "access":
+                continue
+            if any(
+                isinstance(operand, ast.Attribute)
+                and operand.attr == "role"
+                and isinstance(operand.value, ast.Name)
+                and operand.value.id in {"ctx", "context", "workspace", "workspace_context"}
+                for operand in operands
+            ):
+                workspace_role_bypasses.append(f"{py_file}:{node.lineno}")
 
-
-def test_standalone_dependency_policy_covers_every_application_edge():
-    for package_name in PACKAGE_ROLES:
-        actual: set[str] = set()
-        for py_file in get_python_files(SRC_ROOT / package_name):
-            for module in imported_modules(py_file):
-                root = module.split(".", 1)[0]
-                if root in STANDALONE_WORKSPACE_PACKAGES:
-                    actual.add(root)
-        allowed = ALLOWED_STANDALONE_DEPENDENCIES.get(package_name, set())
-        disallowed = actual - allowed
-        assert not disallowed, (
-            f"quirebase.{package_name} imports undocumented workspace packages "
-            f"{sorted(disallowed)}; update docs/architecture/modules.md and "
-            "ALLOWED_STANDALONE_DEPENDENCIES"
-        )
-
-
-def test_non_library_inquiro_edges_are_restricted_to_rich_text():
-    for package_name in ("documents", "search"):
-        imports = {
-            module
-            for py_file in get_python_files(SRC_ROOT / package_name)
-            for module in imported_modules(py_file)
-            if module == "inquiro" or module.startswith("inquiro.")
-        }
-        assert imports <= {"inquiro.richtext"}, (
-            f"quirebase.{package_name} may use only the neutral Inquiro Rich Text Interface; "
-            f"found {sorted(imports)}"
-        )
+    assert not system_role_bypasses, (
+        "System Role authorization must cross the Casbin-backed Access seam: "
+        f"{system_role_bypasses}"
+    )
+    assert not workspace_role_bypasses, (
+        "WorkspaceContext authority must cross the Casbin-backed Access seam; "
+        "target membership roles and owner invariants remain domain facts: "
+        f"{workspace_role_bypasses}"
+    )
 
 
 def test_standalone_workspace_packages_are_classified():
@@ -343,6 +408,8 @@ def test_standalone_workspace_packages_are_classified():
         f"removing a workspace package: discovered={sorted(discovered)}, "
         f"classified={sorted(STANDALONE_WORKSPACE_PACKAGES)}"
     )
+    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert set(metadata["tool"]["importlinter"]["root_packages"]) == {"quirebase", *discovered}
 
 
 def test_standalone_workspace_packages_own_their_test_surfaces():
@@ -386,8 +453,18 @@ def test_persistence_dependencies_use_sqlalchemy_async_optional_groups():
     dependencies = set(metadata["project"]["dependencies"])
     optional_dependencies = metadata["project"]["optional-dependencies"]
 
-    assert "sqlalchemy[asyncio,aiosqlite]>=2.0,<3" in dependencies
-    assert optional_dependencies["postgres"] == ["sqlalchemy[postgresql-psycopgbinary]>=2.0,<3"]
+    runtime = next(
+        requirement
+        for dependency in dependencies
+        if (requirement := Requirement(dependency)).name == "sqlalchemy"
+    )
+    assert runtime.extras == {"asyncio", "aiosqlite"}
+    assert "2.0.52" in runtime.specifier
+    assert "2.1.0" not in runtime.specifier
+    postgres = [Requirement(dependency) for dependency in optional_dependencies["postgres"]]
+    assert len(postgres) == 1 and postgres[0].name == "sqlalchemy"
+    assert postgres[0].extras == {"postgresql-psycopgbinary"}
+    assert postgres[0].specifier == runtime.specifier
     independently_declared = {
         dependency.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0]
         for dependency in dependencies
@@ -511,17 +588,6 @@ def route(connection: DatabaseSession):
     assert [call.func.attr for call in calls if isinstance(call.func, ast.Attribute)] == ["commit"]
 
 
-def test_business_modules_do_not_import_transport_frameworks_or_vendor_ai_sdks():
-    for package_name, role in PACKAGE_ROLES.items():
-        if role not in BUSINESS_ROLES:
-            continue
-        for py_file in get_python_files(SRC_ROOT / package_name):
-            for module in imported_modules(py_file):
-                assert not module.startswith(FORBIDDEN_BUSINESS_IMPORTS), (
-                    f"{py_file} illegally imports transport or vendor module {module}"
-                )
-
-
 def test_inbound_adapters_do_not_own_transactions_persistence_or_audit():
     for adapter in ("mcp", "web"):
         for py_file in get_python_files(SRC_ROOT / adapter):
@@ -550,17 +616,6 @@ def test_inbound_adapters_do_not_own_transactions_persistence_or_audit():
                     )
 
 
-def test_only_core_storage_imports_obstore():
-    storage_module = SRC_ROOT / "core" / "storage.py"
-    for py_file in get_python_files(SRC_ROOT):
-        if py_file == storage_module:
-            continue
-        for module in imported_modules(py_file):
-            assert not module.startswith("obstore"), (
-                f"{py_file} bypasses the Core ObjectStore facade with {module}"
-            )
-
-
 def test_only_audit_module_constructs_audit_events():
     for package_name, role in PACKAGE_ROLES.items():
         if package_name == "audit" or role not in BUSINESS_ROLES:
@@ -578,11 +633,6 @@ def test_only_audit_module_constructs_audit_events():
                     )
 
 
-def test_multi_item_document_downloads_cross_the_library_bulk_seam():
-    export_routes = SRC_ROOT / "web" / "api" / "library_exports.py"
-    assert "quirebase.documents" not in imported_modules(export_routes)
-
-
 def test_orm_models_have_one_documented_owner():
     models_file = SRC_ROOT / "models.py"
     tree = ast.parse(models_file.read_text(encoding="utf-8"), filename=str(models_file))
@@ -590,7 +640,10 @@ def test_orm_models_have_one_documented_owner():
         node.name
         for node in tree.body
         if isinstance(node, ast.ClassDef)
-        and any(isinstance(base, ast.Name) and base.id == "Base" for base in node.bases)
+        and any(
+            isinstance(base, ast.Name) and base.id in {"Base", "EntityBase", "IdentityBase"}
+            for base in node.bases
+        )
     }
     assert mapped_classes == set(ORM_MODEL_OWNERS)
     assert set(ORM_MODEL_OWNERS.values()) <= set(PACKAGE_ROLES)
@@ -602,28 +655,79 @@ def test_package_facades_do_not_export_internal_persistence_collaborators():
         assert not leaked, f"quirebase.{package} facade leaks internal symbols {sorted(leaked)}"
 
 
+def test_internal_write_helpers_keep_the_callers_transaction():
+    helper_locations = {
+        "projects/workspaces.py": {"_add_missing_project_items"},
+        "library/authors.py": {
+            "_resolve_authors",
+            "_existing_author_identities",
+            "_replace_item_authors_many",
+        },
+        "library/tags.py": {"_assign_item_tags"},
+        "library/item_metadata.py": {"_write_item_links"},
+        "library/identifiers.py": {"_create_items_from_candidates"},
+    }
+    path = "library/_item_identifiers.py"
+    tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
+    helper_locations[path] = {
+        node.name for node in tree.body if isinstance(node, ast.AsyncFunctionDef)
+    }
+    helper_owners = {}
+    for path, names in helper_locations.items():
+        tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
+        helpers = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, ast.AsyncFunctionDef) and node.name in names
+        }
+        assert helpers.keys() == names, path
+        owner = path.split("/", 1)[0]
+        assert not exported_names(owner) & names, path
+        for name, helper in helpers.items():
+            helper_owners[name] = owner
+            assert helper.args.args[0].arg == "db", (path, name)
+            for call in ast.walk(helper):
+                if not isinstance(call, ast.Call):
+                    continue
+                operation = ast.unparse(call.func).rsplit(".", 1)[-1]
+                assert operation not in {
+                    "commit",
+                    "rollback",
+                    "close",
+                    "AsyncSession",
+                    "AsyncSessionLocal",
+                    "async_sessionmaker",
+                    "make_async_engine",
+                    "record_event",
+                    "AuditEvent",
+                    "search_index",
+                    "durable_operations",
+                    "request_item_tag_recommendation",
+                    "enqueue_child_workflow",
+                    "enqueue",
+                    "enqueue_in_transaction",
+                }, f"{path}:{call.lineno} transfers command ownership to {name}"
+                if operation.startswith(("require_", "resolve_workspace_")):
+                    raise AssertionError(f"{path}:{call.lineno} authorizes inside {name}")
+                if operation in {"insert", "update", "delete", "conflict_insert"} and call.args:
+                    target = call.args[1] if operation == "conflict_insert" else call.args[0]
+                    if isinstance(target, ast.Name) and target.id in ORM_MODEL_OWNERS:
+                        assert ORM_MODEL_OWNERS[target.id] == owner, (path, target.id)
+    for py_file in get_python_files(SRC_ROOT):
+        owner = py_file.relative_to(SRC_ROOT).parts[0]
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name in helper_owners:
+                        assert helper_owners[alias.name] == owner, (
+                            f"{py_file} imports another Module's internal {alias.name}"
+                        )
+
+
 def test_library_facade_exposes_owned_import_citation_and_recommendation_operations():
     missing = LIBRARY_FACADE_OPERATIONS - exported_names("library")
     assert not missing, f"quirebase.library facade is missing owned operations {sorted(missing)}"
-
-
-def test_external_callers_use_library_facade_for_owned_operations():
-    for package in ("mcp", "web"):
-        for py_file in get_python_files(SRC_ROOT / package):
-            for module in imported_modules(py_file):
-                assert not module.startswith("quirebase.library."), (
-                    f"{py_file} bypasses the Library facade through {module}"
-                )
-
-
-def test_standalone_workspace_packages_do_not_depend_on_quirebase_or_orm():
-    for package in STANDALONE_WORKSPACE_PACKAGES:
-        package_files = get_python_files(REPO_ROOT / "packages" / package / "src" / package)
-        for py_file in package_files:
-            for module in imported_modules(py_file):
-                assert not module.startswith(("quirebase", "sqlalchemy")), (
-                    f"{py_file} illegally imports {module}"
-                )
 
 
 def test_inquiro_runtime_owns_one_private_provider_catalog():
@@ -633,80 +737,18 @@ def test_inquiro_runtime_owns_one_private_provider_catalog():
     assert "inquiro.providers" not in imported_modules(inquiro_facade)
 
 
-def test_inquiro_providers_are_leaf_implementations():
-    provider_root = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "providers"
-    provider_files = [
-        py_file for py_file in provider_root.glob("*.py") if not py_file.name.startswith("_")
-    ]
-    provider_modules = {f"inquiro.providers.{py_file.stem}" for py_file in provider_files}
-    for py_file in provider_files:
-        dependencies = imported_modules(py_file)
-        peer_dependencies = dependencies & provider_modules
-        assert not peer_dependencies, (
-            f"{py_file} imports peer Providers {sorted(peer_dependencies)}"
-        )
-        assert "inquiro.runtime" not in dependencies
-        assert "inquiro.providers._catalog" not in dependencies
-
-
-def test_bibliography_package_facade_is_the_only_import_surface():
-    inquiro_src = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
-    internal_modules = {
-        f"inquiro.bibliography.{name}"
-        for name in (
-            "records",
-            "options",
-            "keys",
-            "formats",
-            "styles",
-            "engine",
-            "item_dicts",
-        )
-    }
-    outside = [
-        py_file
-        for py_file in get_python_files(REPO_ROOT / "src")
-        + get_python_files(REPO_ROOT / "tests")
-        + get_python_files(REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro")
-        if not py_file.is_relative_to(inquiro_src / "bibliography")
-    ]
-    for py_file in outside:
-        deep_imports = imported_modules(py_file) & internal_modules
+def test_bibliography_integration_tests_use_the_package_facade():
+    # Import Linter analyzes production packages; root tests remain application
+    # integrations and must also respect the Bibliography facade.
+    for py_file in get_python_files(REPO_ROOT / "tests"):
+        deep_imports = {
+            module
+            for module in imported_modules(py_file)
+            if module.startswith("inquiro.bibliography.")
+        }
         assert not deep_imports, (
             f"{py_file} bypasses the inquiro.bibliography facade: {sorted(deep_imports)}"
         )
-
-
-def test_bibliography_package_layers_stay_acyclic():
-    layer_order = {
-        "records": 0,
-        "options": 0,
-        "canonical": 0,
-        "keys": 1,
-        "formats": 2,
-        "styles": 2,
-        "item_dicts": 2,
-        "engine": 3,
-    }
-    package_root = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "bibliography"
-    for py_file in package_root.glob("*.py"):
-        if py_file.name == "__init__.py":
-            continue
-        layer = layer_order[py_file.stem]
-        for module in imported_modules(py_file):
-            if module.startswith("inquiro.bibliography.") and module != "inquiro.bibliography":
-                inner = module.removeprefix("inquiro.bibliography.")
-                assert layer_order.get(inner, layer) <= layer, (
-                    f"{py_file.name} (layer {layer}) imports higher layer {module}"
-                )
-
-
-def test_web_does_not_import_inquiro():
-    for py_file in get_python_files(SRC_ROOT / "web"):
-        dependencies = imported_modules(py_file)
-        assert not any(
-            module == "inquiro" or module.startswith("inquiro.") for module in dependencies
-        ), f"{py_file} imports Inquiro; Web Rich Text projection belongs to the frontend Adapter"
 
 
 def test_inquiro_facade_is_the_narrow_provider_interface():
@@ -754,9 +796,3 @@ def test_inquiro_sources_do_not_embed_quirebase_identity():
     package = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
     for source in package.rglob("*.py"):
         assert "quirebase" not in source.read_text(encoding="utf-8").casefold()
-
-
-def test_search_adapters_do_not_depend_on_each_other():
-    for adapter_name, peer_name in (("sqlite", "postgres"), ("postgres", "sqlite")):
-        py_file = SRC_ROOT / "search" / f"{adapter_name}.py"
-        assert f"quirebase.search.{peer_name}" not in imported_modules(py_file)

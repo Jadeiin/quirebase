@@ -6,9 +6,20 @@ import svelte from 'eslint-plugin-svelte';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
 import ts from 'typescript-eslint';
-import svelteConfig from './svelte.config.js';
+import { loadConfig } from '@sveltejs/load-config';
+
+const loadedConfig = await loadConfig('./', { traverse: false });
+if (!loadedConfig) throw new Error('Svelte configuration not found');
+if ('error' in loadedConfig) throw loadedConfig.error;
+const svelteConfig = loadedConfig.config;
 
 const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
+
+const principalRole =
+	":matches(MemberExpression[property.name='current_role']," +
+	"MemberExpression[property.name='role'][object.name=/^(workspace|workspaceContext)$/]," +
+	"MemberExpression[property.name='role'][object.property.name='user'])";
+const roleDecision = ":matches(BinaryExpression, CallExpression[callee.property.name='includes'])";
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
@@ -34,6 +45,20 @@ export default defineConfig(
 				parser: ts.parser,
 				svelteConfig
 			}
+		}
+	},
+	{
+		files: ['src/**/*.ts', 'src/**/*.svelte'],
+		ignores: ['src/**/*.test.ts', 'src/lib/api/schema.d.ts'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: `${roleDecision} > ${principalRole}, ${roleDecision} > ChainExpression > ${principalRole}`,
+					message:
+						'Use server-authored capabilities or allowed choices for behavior; principal roles are display metadata.'
+				}
+			]
 		}
 	},
 	{

@@ -1,28 +1,42 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from advanced_alchemy.types import FileObject
+from import_helpers import pdf_import_batch_data
+from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core import workflows
-from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
 from quirebase.library import workflows as library_workflows
 from quirebase.models import (
+    Attachment,
     ExportArtifact,
     FileRevision,
     ImportBatch,
     Item,
     ObjectIntegrityScan,
+    Project,
+    ProjectItem,
     User,
 )
 from quirebase.operations import health
 from quirebase.operations import workflows as operation_workflows
+
+
+async def _provisioned_user(db, username: str) -> User:
+    user = User(username=username, password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    return user
 
 
 @pytest.mark.parametrize(
@@ -76,10 +90,22 @@ def test_dbos_unknown_status_is_exposed_as_failed_instead_of_raising():
 
 
 @pytest.mark.anyio
-async def test_transactional_enqueue_records_queue_partition_and_attributes(
-    async_db, fake_durable_operations
-):
-    workflow_id = await fake_durable_operations.enqueue_in_transaction(
+async def test_dbos_adapter_enqueues_in_the_session_transaction_with_queue_metadata(async_db):
+    from sqlalchemy.engine import Connection
+
+    from quirebase.core.workflows import DBOSAdapter
+
+    session_connection = (await async_db.connection()).sync_connection
+    captured = {}
+
+    class Client:
+        def enqueue_in_transaction(self, connection, options, *args):
+            query_value = connection.exec_driver_sql("SELECT 1").scalar_one()
+            captured.update(connection=connection, options=options, args=args)
+            captured["query_value"] = query_value
+            return SimpleNamespace(get_workflow_id=lambda: "workflow-id")
+
+    workflow_id = await DBOSAdapter(Client()).enqueue_in_transaction(
         async_db,
         "documents.inspect_revision",
         "revision-id",
@@ -88,10 +114,21 @@ async def test_transactional_enqueue_records_queue_partition_and_attributes(
         partition_key="revision-id",
         attributes={"capability": "documents"},
     )
-    summary = await fake_durable_operations.get(workflow_id)
-    assert summary is not None
-    assert summary.queue_name == workflows.DOCUMENTS_QUEUE
-    assert summary.attributes == {"capability": "documents"}
+
+    assert workflow_id == "workflow-id"
+    assert isinstance(captured["connection"], Connection)
+    assert captured["connection"] is session_connection
+    assert captured["connection"].in_transaction()
+    assert captured["query_value"] == 1
+    assert captured["options"] == {
+        "workflow_name": "documents.inspect_revision",
+        "queue_name": workflows.DOCUMENTS_QUEUE,
+        "workflow_id": "workflow-id",
+        "application_name": "quirebase",
+        "queue_partition_key": "revision-id",
+        "attributes": {"capability": "documents"},
+    }
+    assert captured["args"] == ("revision-id",)
 
 
 @pytest.mark.anyio
@@ -99,7 +136,8 @@ async def test_object_cleanup_uses_non_partitioned_cleanup_queue(async_db, fake_
     await enqueue_object_cleanup(
         async_db,
         ["aa/bb/object.pdf"],
-        owner_id="owner-id",
+        actor_id="actor-id",
+        workspace_id="workspace-id",
         operation="test_cleanup",
     )
 
@@ -121,8 +159,10 @@ async def test_child_workflow_enqueue_uses_core_options(monkeypatch):
 
     workflow_id = await workflows.enqueue_child_workflow(
         "library.file_revision_changed",
+        "actor-id",
+        "workspace-id",
+        "revision-id",
         "item-id",
-        "owner-id",
         queue_name=workflows.LIBRARY_QUEUE,
         workflow_id="file-revision-changed:revision-id",
         attributes={"capability": "library"},
@@ -138,7 +178,7 @@ async def test_child_workflow_enqueue_uses_core_options(monkeypatch):
                 "application_name": "quirebase",
                 "attributes": {"capability": "library"},
             },
-            ("item-id", "owner-id"),
+            ("actor-id", "workspace-id", "revision-id", "item-id"),
         )
     ]
 
@@ -338,30 +378,37 @@ async def test_system_metrics_use_aggregate_workflow_counts(async_db, monkeypatc
 async def test_imported_revision_inspection_enqueues_derived_state_sync(
     async_db, async_session_factory, monkeypatch
 ):
-    user = User(username="import-workflow-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="Imported PDF", created_by=user.id)
+    user = await _provisioned_user(async_db, "import-workflow-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Imported PDF",
+        created_by=user.id,
+    )
     async_db.add(item)
     await async_db.flush()
     stored = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PDF, b"%PDF-imported", max_bytes=100
     )
     revision = FileRevision(
+        workspace_id=fixture_workspace_id(user),
         item_id=item.id,
-        object_key=stored.key,
-        size=stored.size,
-        original_name="imported.pdf",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=stored.key,
+            size=stored.size,
+            content_type="application/pdf",
+            metadata={"original_name": "imported.pdf"},
+        ),
     )
     async_db.add(revision)
     await async_db.commit()
 
     enqueued = []
 
-    async def enqueue(revision_id, item_id, owner_id):
+    async def enqueue(revision_id, actor_id, workspace_id, item_id):
         await asyncio.sleep(0)
-        enqueued.append((revision_id, item_id, owner_id))
+        enqueued.append((revision_id, item_id, actor_id, workspace_id))
         return f"file-revision-changed:{revision_id}"
 
     monkeypatch.setattr(document_workflows, "AsyncSessionLocal", async_session_factory)
@@ -377,9 +424,15 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     monkeypatch.setattr(document_workflows, "_enqueue_file_revision_changed", enqueue)
 
     workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
-    await workflow_body(revision.id, user.id, stored.key, str(uuid4()))
+    await workflow_body(
+        user.id,
+        fixture_workspace_id(user),
+        revision.id,
+        stored.key,
+        uuid4(),
+    )
 
-    assert enqueued == [(revision.id, item.id, user.id)]
+    assert enqueued == [(revision.id, item.id, user.id, fixture_workspace_id(user))]
 
 
 @pytest.mark.anyio
@@ -390,7 +443,7 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
         await asyncio.sleep(0)
         return {"revision_id": "revision-id"}
 
-    async def commit(_inspected):
+    async def commit(_actor_id, _workspace_id, _inspected):
         await asyncio.sleep(0)
         return {"revision_id": "revision-id", "item_id": "item-id"}
 
@@ -410,10 +463,11 @@ async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypat
 
     with pytest.raises(RuntimeError, match="temporary DBOS failure"):
         await workflow_body(
-            "revision-id",
             "owner-id",
+            "workspace-id",
+            "revision-id",
             "aa/bb/imported.pdf",
-            "00000000-0000-0000-0000-000000000001",
+            uuid4(),
         )
 
     assert removed == []
@@ -472,24 +526,23 @@ async def test_export_cleanup_checkpoints_expired_artifacts_in_bounded_batches(m
         listed += len(page)
         return page
 
-    async def delete_objects(page):
+    async def delete_objects(keys):
         await asyncio.sleep(0)
-        deleted_batches.append(tuple(row["workflow_id"] for row in page))
-        return {
-            "workflow_ids": [row["workflow_id"] for row in page],
-            "removed": len(page),
-        }
+        deleted_batches.append(keys)
+        assert keys in removed_batches  # Descriptor release was checkpointed before I/O.
+        return len(keys)
 
-    async def delete_records(workflow_ids):
+    async def retire_records(page):
         await asyncio.sleep(0)
-        removed_batches.append(tuple(workflow_ids))
-        return len(workflow_ids)
+        keys = tuple(row["object_key"] for row in page)
+        removed_batches.append(keys)
+        return keys
 
     monkeypatch.setattr(operation_workflows, "cleanup_exports_step", cleanup_local)
     monkeypatch.setattr(operation_workflows, "get_export_ttl_step", get_ttl)
     monkeypatch.setattr(operation_workflows, "list_expired_export_artifacts_step", list_expired)
     monkeypatch.setattr(operation_workflows, "delete_export_artifact_objects_step", delete_objects)
-    monkeypatch.setattr(operation_workflows, "delete_export_artifact_records_step", delete_records)
+    monkeypatch.setattr(operation_workflows, "retire_expired_export_artifacts_step", retire_records)
 
     assert await operation_workflows._run_export_cleanup() == 101
     assert [len(page) for page in deleted_batches] == [100, 1]
@@ -504,6 +557,7 @@ async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch)
         "size_bytes": 42,
         "revision_id": "revision-id",
         "project_id": None,
+        "project_item_id": None,
     }
     recorded = []
 
@@ -511,9 +565,9 @@ async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch)
         await asyncio.sleep(0)
         return result
 
-    async def record(workflow_id, artifact):
+    async def record(workflow_id, actor_id, workspace_id, project_id, artifact):
         await asyncio.sleep(0)
-        recorded.append((workflow_id, artifact))
+        recorded.append((workflow_id, actor_id, workspace_id, project_id, artifact))
 
     monkeypatch.setattr(document_workflows, "build_annotation_export", build)
     monkeypatch.setattr(document_workflows, "record_annotation_export_artifact", record)
@@ -521,16 +575,17 @@ async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch)
     workflow_body = document_workflows.annotation_export_workflow.__wrapped__.__wrapped__
 
     output = await workflow_body(
-        "owner-id",
+        "actor-id",
+        "workspace-id",
         "revision-id",
-        "00000000-0000-0000-0000-000000000001",
+        uuid4(),
         None,
         True,
         "UTC",
     )
 
     assert output == result
-    assert recorded == [("workflow-id", result)]
+    assert recorded == [("workflow-id", "actor-id", "workspace-id", None, result)]
 
 
 @pytest.mark.anyio
@@ -540,34 +595,122 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
         return 1
 
     monkeypatch.setattr("quirebase.operations.settings.get_effective_setting", one_hour)
+    user = await _provisioned_user(async_db, "export-artifact-user")
+    item = Item(workspace_id=fixture_workspace_id(user), title="Export item", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+    revision = FileRevision(
+        workspace_id=fixture_workspace_id(user),
+        item_id=item.id,
+        created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename="aa/bb/source.pdf",
+            size=42,
+            content_type="application/pdf",
+            metadata={"original_name": "source.pdf"},
+        ),
+    )
+    async_db.add(revision)
+    await async_db.commit()
     before = datetime.now(UTC)
     await document_workflows.record_annotation_export_artifact(
         "workflow-id",
+        user.id,
+        fixture_workspace_id(user),
+        None,
         {
             "filename": "artifact.pdf",
             "object_key": "aa/bb/artifact.pdf",
             "size_bytes": 42,
-            "revision_id": "revision-id",
+            "revision_id": revision.id,
             "project_id": None,
+            "project_item_id": None,
         },
     )
 
     artifact = await async_db.get(ExportArtifact, "workflow-id")
     assert artifact is not None
-    assert artifact.object_key == "aa/bb/artifact.pdf"
-    assert artifact.filename == "artifact.pdf"
-    assert artifact.size == 42
+    assert artifact.file.path == "aa/bb/artifact.pdf"
+    assert artifact.file.metadata["original_name"] == "artifact.pdf"
+    assert artifact.file.size == 42
     assert artifact.expires_at.replace(tzinfo=UTC) >= before + timedelta(minutes=59)
+
+
+@pytest.mark.anyio
+async def test_project_annotation_export_rejects_replaced_assignment(async_db, monkeypatch):
+    async def one_hour(*_args, **_kwargs):
+        await asyncio.sleep(0)
+        return 1
+
+    monkeypatch.setattr("quirebase.operations.settings.get_effective_setting", one_hour)
+    user = await _provisioned_user(async_db, "stale-project-export-user")
+    workspace_id = fixture_workspace_id(user)
+    item = Item(workspace_id=workspace_id, title="Export item", created_by=user.id)
+    project = Project(workspace_id=workspace_id, name="Export project", created_by=user.id)
+    async_db.add_all([item, project])
+    await async_db.flush()
+    revision = FileRevision(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename="aa/bb/source.pdf",
+            size=42,
+            content_type="application/pdf",
+            metadata={"original_name": "source.pdf"},
+        ),
+    )
+    assignment = ProjectItem(
+        workspace_id=workspace_id,
+        project_id=project.id,
+        item_id=item.id,
+        added_by=user.id,
+    )
+    async_db.add_all([revision, assignment])
+    await async_db.commit()
+    original_assignment_id = assignment.id
+
+    await async_db.delete(assignment)
+    await async_db.commit()
+    async_db.add(
+        ProjectItem(
+            workspace_id=workspace_id,
+            project_id=project.id,
+            item_id=item.id,
+            added_by=user.id,
+        )
+    )
+    await async_db.commit()
+
+    with pytest.raises(PermissionError, match="project assignment no longer exists"):
+        await document_workflows.record_annotation_export_artifact(
+            "stale-project-workflow",
+            user.id,
+            workspace_id,
+            project.id,
+            {
+                "filename": "artifact.pdf",
+                "object_key": "aa/bb/stale-artifact.pdf",
+                "size_bytes": 42,
+                "revision_id": revision.id,
+                "project_id": project.id,
+                "project_item_id": original_assignment_id,
+            },
+        )
 
 
 @pytest.mark.anyio
 async def test_integrity_scan_applies_database_backfills_in_datasource_transaction(
     async_db, async_session_factory, monkeypatch
 ):
-    user = User(username="integrity-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="Integrity transaction", created_by=user.id)
+    user = await _provisioned_user(async_db, "integrity-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Integrity transaction",
+        created_by=user.id,
+    )
     async_db.add(item)
     await async_db.flush()
     pdf = await get_object_store().put_object(
@@ -577,13 +720,23 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
         uuid4(), ObjectSuffix.PNG, b"thumbnail", max_bytes=100
     )
     revision = FileRevision(
+        workspace_id=fixture_workspace_id(user),
         item_id=item.id,
-        object_key=pdf.key,
-        size=pdf.size,
-        thumbnail_object_key=thumbnail.key,
-        thumbnail_size=None,
-        original_name="integrity.pdf",
         created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=pdf.key,
+            size=pdf.size,
+            content_type="application/pdf",
+            metadata={"original_name": "integrity.pdf"},
+        ),
+        thumbnail=(
+            FileObject(
+                backend="documents", filename=thumbnail.key, size=None, content_type="image/png"
+            )
+            if thumbnail.key is not None
+            else None
+        ),
     )
     async_db.add(revision)
     await async_db.commit()
@@ -592,15 +745,22 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
     report = await operation_workflows.scan_objects_step()
 
     await async_db.refresh(revision)
-    assert revision.thumbnail_size is None
-    assert report["thumbnail_sizes"] == {revision.id: thumbnail.size}
+    assert revision.thumbnail.size is None
+    assert report["thumbnail_sizes"] == {
+        str(revision.id): {"path": thumbnail.key, "size": thumbnail.size}
+    }
 
     await operation_workflows.record_integrity_scan_step(
         report["errors"], report["thumbnail_sizes"]
     )
     await async_db.refresh(revision)
-    assert revision.thumbnail_size == thumbnail.size
-    assert await async_db.get(ObjectIntegrityScan, "latest") is not None
+    assert revision.thumbnail.size == thumbnail.size
+    assert (
+        await async_db.scalar(
+            select(ObjectIntegrityScan).order_by(ObjectIntegrityScan.checked_at.desc()).limit(1)
+        )
+        is not None
+    )
 
 
 @pytest.mark.anyio
@@ -672,9 +832,9 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
         captured.append(options)
 
     monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
-    await operation_workflows.list_reindex_item_ids_step(None, 100)
+    await operation_workflows.list_reindex_item_ids_step("actor-id", "workspace-id", None, 100)
+    await operation_workflows.list_reindex_revision_ids_step("actor-id", "workspace-id", None, 100)
     await operation_workflows.record_integrity_scan_step([], {})
-    await operation_workflows.list_items_for_tag_recommendation_step(None, 100)
     await operation_workflows.get_export_ttl_step()
     await library_workflows.item_tag_recommendation_is_current_step("item-id", 1, "workflow-id")
 
@@ -683,14 +843,12 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
 
 @pytest.mark.anyio
 async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
-    user = User(username="upload-tx-user", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="TX Item", created_by=user.id)
+    user = await _provisioned_user(async_db, "upload-tx-user")
+    item = Item(workspace_id=fixture_workspace_id(user), title="TX Item", created_by=user.id)
     async_db.add(item)
     await async_db.commit()
 
-    rev_id = str(uuid4())
+    rev_id = uuid4()
     inspected = {
         "revision_id": rev_id,
         "object_key": "aa/bb/doc.pdf",
@@ -699,55 +857,184 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
         "size": 1024,
         "page_count": 2,
         "full_text": "Extracted text content",
-        "page_geometry": "[]",
+        "page_geometry": [],
     }
     result = await document_workflows.commit_uploaded_revision(
-        item.id, user.id, "my_doc.pdf", inspected
+        user.id, fixture_workspace_id(user), item.id, "my_doc.pdf", inspected
     )
     assert result == {"revision_id": rev_id, "item_id": item.id}
 
     saved = await async_db.get(FileRevision, rev_id)
     assert saved is not None
-    assert saved.object_key == "aa/bb/doc.pdf"
+    assert saved.file.path == "aa/bb/doc.pdf"
     assert saved.page_count == 2
     assert saved.full_text == "Extracted text content"
 
 
 @pytest.mark.anyio
 async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
-    from quirebase.models import Attachment
-
-    user = User(username="att-tx-user", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="Attachment Item", created_by=user.id)
+    user = await _provisioned_user(async_db, "att-tx-user")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Attachment Item",
+        created_by=user.id,
+    )
     async_db.add(item)
     await async_db.commit()
 
-    att_id = str(uuid4())
+    att_id = uuid4()
     receipt = {"object_key": "aa/bb/data.bin", "size": 256}
     result = await document_workflows.commit_uploaded_attachment(
-        item.id, user.id, att_id, "data.bin", "application/octet-stream", None, receipt
+        user.id,
+        fixture_workspace_id(user),
+        item.id,
+        att_id,
+        "data.bin",
+        "application/octet-stream",
+        None,
+        receipt,
     )
     assert result == {"attachment_id": att_id, "item_id": item.id}
 
     saved = await async_db.get(Attachment, att_id)
     assert saved is not None
-    assert saved.object_key == "aa/bb/data.bin"
-    assert saved.size == 256
+    assert saved.file.path == "aa/bb/data.bin"
+    assert saved.file.size == 256
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("content", [b"not really an image", b""])
+async def test_invalid_graphical_abstract_worker_deletes_owned_object_and_writes_no_attachment(
+    async_db, monkeypatch, content
+):
+    user = await _provisioned_user(async_db, "invalid-graphical-upload")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Invalid graphical upload",
+        created_by=user.id,
+    )
+    async_db.add(item)
+    await async_db.commit()
+
+    store = get_object_store()
+    object_id = uuid4()
+    stored = await store.put_object(object_id, ObjectSuffix.BINARY, content, max_bytes=100)
+    receipt = {"status": "complete", "key": stored.key, "size": stored.size}
+
+    async def receive(topic, *, timeout_seconds):
+        await asyncio.sleep(0)
+        assert topic == workflows.UPLOAD_COMPLETE_TOPIC
+        assert timeout_seconds > 0
+        return receipt
+
+    monkeypatch.setattr(
+        document_workflows, "DBOS", SimpleNamespace(recv_async=receive, workflow_id=None)
+    )
+    worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
+
+    with pytest.raises(ValueError, match="graphical abstract content does not match"):
+        await worker_body(
+            user.id,
+            item.workspace_id,
+            item.id,
+            object_id,
+            object_id,
+            "abstract.png",
+            "image/png",
+            "graphical_abstract",
+        )
+
+    assert await store.exists(stored.key) is False
+    assert await async_db.scalar(select(Attachment.id).where(Attachment.item_id == item.id)) is None
+
+
+@pytest.mark.anyio
+async def test_cancelled_graphical_abstract_validation_deletes_owned_object(async_db, monkeypatch):
+    user = await _provisioned_user(async_db, "cancelled-graphical-upload")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Cancelled graphical upload",
+        created_by=user.id,
+    )
+    async_db.add(item)
+    await async_db.commit()
+
+    store = get_object_store()
+    object_id = uuid4()
+    stored = await store.put_object(
+        object_id, ObjectSuffix.BINARY, b"\x89PNG\r\n\x1a\nimage", max_bytes=100
+    )
+    receipt = {"status": "complete", "key": stored.key, "size": stored.size}
+    receipt_delivered = asyncio.Event()
+    read_started = asyncio.Event()
+
+    async def receive(topic, *, timeout_seconds):
+        await asyncio.sleep(0)
+        assert topic == workflows.UPLOAD_COMPLETE_TOPIC
+        assert timeout_seconds > 0
+        receipt_delivered.set()
+        return receipt
+
+    async def blocking_body():
+        read_started.set()
+        await asyncio.Event().wait()
+        yield b""
+
+    class BlockingRangeStore:
+        async def head(self, key):
+            return await store.head(key)
+
+        async def get_range(self, key, start, end):
+            return ObjectResponse(
+                metadata=await store.head(key),
+                byte_range=(start, end),
+                body=blocking_body(),
+            )
+
+        async def delete(self, key):
+            return await store.delete(key)
+
+    monkeypatch.setattr(
+        document_workflows, "DBOS", SimpleNamespace(recv_async=receive, workflow_id=None)
+    )
+    monkeypatch.setattr(document_workflows, "get_object_store", BlockingRangeStore)
+    worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
+    task = asyncio.create_task(
+        worker_body(
+            user.id,
+            item.workspace_id,
+            item.id,
+            object_id,
+            object_id,
+            "abstract.png",
+            "image/png",
+            "graphical_abstract",
+        )
+    )
+
+    await asyncio.wait_for(read_started.wait(), timeout=5)
+    assert receipt_delivered.is_set()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=5)
+
+    assert await store.exists(stored.key) is False
+    assert await async_db.scalar(select(Attachment.id).where(Attachment.item_id == item.id)) is None
 
 
 @pytest.mark.anyio
 async def test_operations_and_library_transaction_steps(async_db):
-    user = User(username="op-tx-user", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
-    item = Item(title="Reindex Item", created_by=user.id)
+    user = await _provisioned_user(async_db, "op-tx-user")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Reindex Item",
+        created_by=user.id,
+    )
     async_db.add(item)
     await async_db.commit()
 
-    reindex_res = await operation_workflows.reindex_all_workflow.__wrapped__.__wrapped__(
-        "workflow-id", "owner-id"
+    reindex_res = await operation_workflows.reindex_workspace_workflow.__wrapped__.__wrapped__(
+        "workflow-id", user.id, fixture_workspace_id(user)
     )
     assert reindex_res["reindexed_items"] >= 1
 
@@ -757,12 +1044,12 @@ async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch
     item_ids = [f"item-{index:03d}" for index in range(101)]
     indexed_batches = []
 
-    async def list_ids(after_id, limit):
+    async def list_ids(_actor_id, _workspace_id, after_id, limit):
         await asyncio.sleep(0)
         start = 0 if after_id is None else item_ids.index(after_id) + 1
         return tuple(item_ids[start : start + limit])
 
-    async def index_ids(batch):
+    async def index_ids(_actor_id, _workspace_id, batch):
         await asyncio.sleep(0)
         indexed_batches.append(tuple(batch))
         return len(batch)
@@ -770,14 +1057,14 @@ async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch
     monkeypatch.setattr(operation_workflows, "list_reindex_item_ids_step", list_ids)
     monkeypatch.setattr(operation_workflows, "reindex_items_step", index_ids)
 
-    async def no_revisions(after_id, limit):
+    async def no_revisions(_actor_id, _workspace_id, after_id, limit):
         await asyncio.sleep(0)
         return ()
 
     monkeypatch.setattr(operation_workflows, "list_reindex_revision_ids_step", no_revisions)
-    workflow_body = operation_workflows.reindex_all_workflow.__wrapped__.__wrapped__
+    workflow_body = operation_workflows.reindex_workspace_workflow.__wrapped__.__wrapped__
 
-    result = await workflow_body("workflow-id", "owner-id")
+    result = await workflow_body("workflow-id", "actor-id", "workspace-id")
 
     assert result == {"reindexed_items": 101, "reindexed_revisions": 0}
     assert [len(batch) for batch in indexed_batches] == [100, 1]
@@ -787,16 +1074,16 @@ async def test_reindex_workflow_checkpoints_bounded_database_batches(monkeypatch
 async def test_file_revision_change_retries_only_the_recommendation_request(monkeypatch):
     calls = []
 
-    async def request(item_id, owner_id):
+    async def request(actor_id, workspace_id, item_id):
         await asyncio.sleep(0)
-        calls.append(("request", item_id, owner_id))
+        calls.append(("request", actor_id, workspace_id, item_id))
 
     monkeypatch.setattr(library_workflows, "request_item_tag_recommendation_step", request)
 
     workflow_body = library_workflows.file_revision_changed_workflow.__wrapped__.__wrapped__
-    await workflow_body("revision-id", "item-id", "owner-id")
+    await workflow_body("actor-id", "workspace-id", "revision-id", "item-id")
 
-    assert calls == [("request", "item-id", "owner-id")]
+    assert calls == [("request", "actor-id", "workspace-id", "item-id")]
 
 
 @pytest.mark.anyio
@@ -809,9 +1096,17 @@ async def test_recommendation_workflow_computes_outside_datasource_transaction(m
         calls.append("generate")
         return candidates
 
-    async def commit(item_id, generation_token, workflow_id, result):
+    async def commit(actor_id, workspace_id, item_id, generation_token, workflow_id, result):
         await asyncio.sleep(0)
-        calls.append(("commit", item_id, generation_token, workflow_id, result))
+        calls.append((
+            "commit",
+            actor_id,
+            workspace_id,
+            item_id,
+            generation_token,
+            workflow_id,
+            result,
+        ))
         return {"single_words": 1, "phrases": 1}
 
     async def is_current(*_args):
@@ -824,7 +1119,7 @@ async def test_recommendation_workflow_computes_outside_datasource_transaction(m
     monkeypatch.setattr(library_workflows, "commit_item_tag_recommendation_step", commit)
 
     workflow_body = library_workflows.recommend_tags_workflow.__wrapped__.__wrapped__
-    result = await workflow_body("item-id", 2, "workflow-id")
+    result = await workflow_body("actor-id", "workspace-id", "item-id", 2, "workflow-id")
 
     assert result == {"single_words": 1, "phrases": 1}
     assert calls == [
@@ -832,6 +1127,8 @@ async def test_recommendation_workflow_computes_outside_datasource_transaction(m
         "generate",
         (
             "commit",
+            "actor-id",
+            "workspace-id",
             "item-id",
             2,
             "workflow-id",
@@ -856,14 +1153,14 @@ async def test_stale_recommendation_workflow_skips_inference(monkeypatch):
     )
 
     workflow_body = library_workflows.recommend_tags_workflow.__wrapped__.__wrapped__
-    assert await workflow_body("item-id", 1, "workflow-id") == {"stale": True}
+    assert await workflow_body("actor-id", "workspace-id", "item-id", 1, "workflow-id") == {
+        "stale": True
+    }
 
 
 @pytest.mark.anyio
 async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db, monkeypatch):
-    user = User(username="failed-import-owner", password_hash="unused")
-    async_db.add(user)
-    await async_db.flush()
+    user = await _provisioned_user(async_db, "failed-import-owner")
     stored = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PDF, b"%PDF-retry", max_bytes=100
     )
@@ -876,10 +1173,11 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
         },
     }
     batch = ImportBatch(
-        owner_id=user.id,
+        workspace_id=fixture_workspace_id(user),
+        actor_id=user.id,
         file_format="pdf",
-        records=json.dumps([pending]),
-        errors="[]",
+        **pdf_import_batch_data([pending]),
+        errors=[],
         status="pending",
         workflow_id="prepare-pdf-import:failed",
     )
@@ -908,7 +1206,13 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
 
     with pytest.raises(RuntimeError, match="provider retries exhausted"):
-        await workflow_body(batch.id, batch.workflow_id, [pending])
+        await workflow_body(
+            user.id,
+            fixture_workspace_id(user),
+            batch.id,
+            batch.workflow_id,
+            [pending],
+        )
 
     await async_db.refresh(batch)
     assert batch.status == "failed"
@@ -920,6 +1224,7 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
     calls = []
     pending = {
         "_row": 1,
+        "_source_id": "checkpointed-source",
         "_pdf": {
             "object_key": "aa/bb/candidate.pdf",
             "size": 10,
@@ -945,7 +1250,7 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
         await asyncio.sleep(0)
         calls.append(("lookup", batch_id, candidate["_row"], detected_doi))
         return {
-            "record": {"title": "Checkpointed", "_pdf": candidate["_pdf"]},
+            "record": {"title": "Checkpointed", "_source_id": candidate["_source_id"]},
             "normalized_doi": detected_doi,
             "object_key": candidate["_pdf"]["object_key"],
         }
@@ -960,7 +1265,7 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
     monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
 
-    result = await workflow_body("batch-id", "workflow-id", [pending])
+    result = await workflow_body("actor-id", "workspace-id", "batch-id", "workflow-id", [pending])
 
     assert result == {"candidates": 1, "diagnostics": 0, "discarded": False}
     assert calls == [
@@ -971,73 +1276,72 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
 
 
 @pytest.mark.anyio
-async def test_recommend_all_uses_one_transaction_per_item(monkeypatch):
-    requested = []
+async def test_tag_recommendation_item_listing_is_workspace_scoped(async_db):
+    user = await _provisioned_user(async_db, "recommendation-list-user")
+    other = await _provisioned_user(async_db, "recommendation-list-other")
+    own = Item(workspace_id=fixture_workspace_id(user), title="Own", created_by=user.id)
+    foreign = Item(
+        workspace_id=fixture_workspace_id(other),
+        title="Foreign",
+        created_by=other.id,
+    )
+    async_db.add_all([own, foreign])
+    await async_db.commit()
 
-    async def list_items(_after_id, _limit):
-        await asyncio.sleep(0)
-        return ("item-a", "item-b")
-
-    async def request(item_id, owner_id):
-        await asyncio.sleep(0)
-        requested.append((item_id, owner_id))
-        return True
-
-    monkeypatch.setattr(operation_workflows, "list_items_for_tag_recommendation_step", list_items)
-    monkeypatch.setattr(operation_workflows, "request_item_tag_recommendation_step", request)
-
-    workflow_body = operation_workflows.recommend_tags_all_workflow.__wrapped__.__wrapped__
-    result = await workflow_body("workflow-id", "owner-id")
-
-    assert result == {"enqueued_items": 2}
-    assert requested == [("item-a", "owner-id"), ("item-b", "owner-id")]
+    listed = await library_workflows.item_ids_for_tag_recommendation(
+        async_db, fixture_workspace_id(user), None, 100
+    )
+    assert listed == (own.id,)
 
 
 @pytest.mark.anyio
-async def test_recommend_all_checkpoints_bounded_keyset_pages(monkeypatch):
-    item_ids = [f"item-{index:03d}" for index in range(101)]
-    requested = []
-    page_sizes = []
-
-    async def list_items(after_id, limit):
-        await asyncio.sleep(0)
-        start = 0 if after_id is None else item_ids.index(after_id) + 1
-        page = tuple(item_ids[start : start + limit])
-        page_sizes.append(len(page))
-        return page
-
-    async def request(item_id, _owner_id):
-        await asyncio.sleep(0)
-        requested.append(item_id)
-        return True
-
-    monkeypatch.setattr(operation_workflows, "list_items_for_tag_recommendation_step", list_items)
-    monkeypatch.setattr(operation_workflows, "request_item_tag_recommendation_step", request)
-    workflow_body = operation_workflows.recommend_tags_all_workflow.__wrapped__.__wrapped__
-
-    result = await workflow_body("workflow-id", "owner-id")
-
-    assert result == {"enqueued_items": 101}
-    assert page_sizes == [100, 1]
-    assert requested == item_ids
-
-
-@pytest.mark.anyio
-async def test_recommend_all_continues_when_snapshot_item_was_deleted(monkeypatch):
-    requested = []
-
-    async def list_items(_after_id, _limit):
-        await asyncio.sleep(0)
-        return ("deleted-item", "live-item")
-
-    async def request(item_id, _owner_id):
-        await asyncio.sleep(0)
-        requested.append(item_id)
-        return item_id == "live-item"
-
-    monkeypatch.setattr(operation_workflows, "list_items_for_tag_recommendation_step", list_items)
-    monkeypatch.setattr(operation_workflows, "request_item_tag_recommendation_step", request)
-
-    workflow_body = operation_workflows.recommend_tags_all_workflow.__wrapped__.__wrapped__
-    assert await workflow_body("workflow-id", "owner-id") == {"enqueued_items": 1}
-    assert requested == ["deleted-item", "live-item"]
+async def test_integrity_backfill_does_not_overwrite_a_replaced_thumbnail(
+    async_db, async_session_factory, monkeypatch
+):
+    user = await _provisioned_user(async_db, "thumbnail-repair-race")
+    item = Item(workspace_id=fixture_workspace_id(user), title="Repair race", created_by=user.id)
+    async_db.add(item)
+    await async_db.flush()
+    pdf = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-repair", max_bytes=100
+    )
+    old_thumbnail = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"old", max_bytes=100
+    )
+    new_thumbnail = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"replacement", max_bytes=100
+    )
+    revision = FileRevision(
+        workspace_id=item.workspace_id,
+        item_id=item.id,
+        created_by=user.id,
+        file=FileObject(
+            backend="documents",
+            filename=pdf.key,
+            size=pdf.size,
+            content_type="application/pdf",
+            metadata={"original_name": "repair.pdf"},
+        ),
+        thumbnail=FileObject(
+            backend="documents", filename=old_thumbnail.key, content_type="image/png"
+        ),
+    )
+    async_db.add(revision)
+    await async_db.commit()
+    monkeypatch.setattr(operation_workflows, "AsyncSessionLocal", async_session_factory)
+    report = await operation_workflows.scan_objects_step()
+    await async_db.refresh(revision)
+    revision.thumbnail = FileObject(
+        backend="documents",
+        filename=new_thumbnail.key,
+        content_type="image/png",
+        metadata={"generation": "new"},
+    )
+    await async_db.commit()
+    await operation_workflows.record_integrity_scan_step(
+        report["errors"], report["thumbnail_sizes"]
+    )
+    await async_db.refresh(revision)
+    assert revision.thumbnail.path == new_thumbnail.key
+    assert revision.thumbnail.size is None
+    assert revision.thumbnail.metadata == {"generation": "new"}

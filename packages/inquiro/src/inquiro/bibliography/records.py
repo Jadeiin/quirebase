@@ -100,11 +100,7 @@ def record_from_item(
             Contributor.parse(part.strip()) for part in (value or "").split(";") if part.strip()
         )
 
-    def mapping(value: str | None) -> tuple[tuple[str, str], ...]:
-        try:
-            parsed = json.loads(value or "{}")
-        except (json.JSONDecodeError, TypeError):
-            return ()
+    def mapping(parsed: dict | None) -> tuple[tuple[str, str], ...]:
         if not isinstance(parsed, dict):
             return ()
         return tuple(
@@ -114,6 +110,12 @@ def record_from_item(
             )
             for key, val in parsed.items()
         )
+
+    def serialized_mapping(value: str | None) -> tuple[tuple[str, str], ...]:
+        try:
+            return mapping(json.loads(value or "{}"))
+        except (json.JSONDecodeError, TypeError):
+            return ()
 
     return BibliographyRecord(
         citation_key=getattr(item, "bibtex_id", None),
@@ -142,6 +144,6 @@ def record_from_item(
             for part in (getattr(item, "urls", None) or "").splitlines()
             if part.strip()
         ),
-        identifiers=mapping(getattr(item, "identifiers", None)),
+        identifiers=serialized_mapping(getattr(item, "identifiers", None)),
         custom_fields=mapping(getattr(item, "custom_fields", None)),
     )

@@ -74,6 +74,7 @@ STYLE = {
 def annotation(kind: str, payload: dict, *, body: str = "Review this") -> PdfAnnotation:
     return PdfAnnotation(
         file_revision_id="revision",
+        item_id="item",
         page_index=0,
         author_id="author",
         kind=kind,

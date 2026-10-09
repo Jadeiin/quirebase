@@ -1,30 +1,39 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import Button from '#lib/design/Button.svelte';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import {
+		createMutation,
+		createInfiniteQuery,
+		createQuery,
+		useQueryClient
+	} from '@tanstack/svelte-query';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
-	import { isDownloadCancelled } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import ConfirmDialog from '$lib/design/ConfirmDialog.svelte';
-	import StatusNotice from '$lib/design/StatusNotice.svelte';
-	import BulkActions from '$lib/features/library/BulkActions.svelte';
-	import LibraryFilters from '$lib/features/library/LibraryFilters.svelte';
-	import LibraryResults from '$lib/features/library/LibraryResults.svelte';
+	import { isDownloadCancelled } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
+	import StatusNotice from '#lib/design/StatusNotice.svelte';
+	import BulkActions from '#lib/features/library/BulkActions.svelte';
+	import LibraryFilters from '#lib/features/library/LibraryFilters.svelte';
+	import LibraryResults from '#lib/features/library/LibraryResults.svelte';
 	import {
 		libraryBulkMutationOptions,
 		type LibraryBulkAction
-	} from '$lib/features/library/mutations';
-	import { libraryListQuery } from '$lib/features/library/queries';
-	import { projectListQuery } from '$lib/features/projects/queries';
-	import { tagsQuery } from '$lib/features/tags/queries';
-	import { getSession } from '$lib/session';
+	} from '#lib/features/library/mutations.js';
+	import { libraryListQuery, librarySort } from '#lib/features/library/queries.js';
+	import { projectDetailQuery, projectOptionsQuery } from '#lib/features/projects/queries.js';
+	import { tagsQuery } from '#lib/features/tags/queries.js';
+	import { getSession } from '#lib/session.js';
 	import {
 		defaultExportPreferences,
 		readExportPreferences,
 		type ExportPreferences
-	} from '$lib/export-preferences';
-	import { t } from '$lib/i18n';
+	} from '#lib/export-preferences.js';
+	import { t } from '#lib/i18n.js';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { canRunBulkAction } from '#lib/workspaces/actions.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	const submitted = $derived({
 		query: page.url.searchParams.get('q')?.trim() ?? '',
@@ -32,7 +41,11 @@
 		project: page.url.searchParams.get('project') ?? '',
 		year: page.url.searchParams.get('year')?.trim() ?? '',
 		keyword: page.url.searchParams.get('keyword')?.trim() ?? '',
-		author: page.url.searchParams.get('author')?.trim() ?? ''
+		author: page.url.searchParams.get('author')?.trim() ?? '',
+		sort: librarySort(page.url.searchParams.get('sort')),
+		has_files: page.url.searchParams.has('has_files')
+			? page.url.searchParams.get('has_files') === 'true'
+			: undefined
 	});
 	const pageNumber = $derived(Math.max(1, Number(page.url.searchParams.get('page') ?? '1') || 1));
 	let query = $state(page.url.searchParams.get('q') ?? '');
@@ -41,6 +54,8 @@
 	let year = $state(page.url.searchParams.get('year') ?? '');
 	let keyword = $state(page.url.searchParams.get('keyword') ?? '');
 	let author = $state(page.url.searchParams.get('author') ?? '');
+	let sort = $state(librarySort(page.url.searchParams.get('sort')));
+	let fileFilter = $state(page.url.searchParams.get('has_files') ?? '');
 	let filtersOpen = $state(false);
 	let selected = new SvelteSet<string>();
 	let bulkAction = $state('');
@@ -52,8 +67,10 @@
 	let confirmDeleteOpen = $state(false);
 	let exportPreferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	const queryClient = useQueryClient();
+	const workspace = getWorkspaceContext();
+	const { workspaceId } = workspace;
 	const { query: session } = getSession();
-	const bulkMutation = createMutation(() => libraryBulkMutationOptions(queryClient));
+	const bulkMutation = createMutation(() => libraryBulkMutationOptions(workspaceId, queryClient));
 	const busy = $derived(bulkMutation.isPending);
 
 	let previousSearch = page.url.search;
@@ -67,14 +84,25 @@
 		year = page.url.searchParams.get('year') ?? '';
 		keyword = page.url.searchParams.get('keyword') ?? '';
 		author = page.url.searchParams.get('author') ?? '';
+		sort = librarySort(page.url.searchParams.get('sort'));
+		fileFilter = page.url.searchParams.get('has_files') ?? '';
 		selected.clear();
 	});
 
-	const library = createQuery(() => libraryListQuery(submitted, pageNumber));
-	const tags = createQuery(() => tagsQuery());
-	const projects = createQuery(() => projectListQuery());
+	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber));
+	const tags = createQuery(() => tagsQuery(workspaceId));
+	const projects = createInfiniteQuery(() => projectOptionsQuery(workspaceId));
+	const selectedProject = createQuery(() => ({
+		...projectDetailQuery(workspaceId, submitted.project),
+		enabled: Boolean(submitted.project) && !projects.data?.some((p) => p.id === submitted.project)
+	}));
+	const projectChoices = $derived(
+		selectedProject.data && !projects.data?.some((p) => p.id === selectedProject.data?.id)
+			? [selectedProject.data, ...(projects.data ?? [])]
+			: (projects.data ?? [])
+	);
 	const totalPages = $derived(
-		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.per_page ?? 25)))
+		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.limit ?? 25)))
 	);
 	const allPageSelected = $derived(
 		((library.data?.items.length ?? 0) > 0 &&
@@ -84,7 +112,7 @@
 
 	$effect(() => {
 		if (session.data?.user) {
-			const loadedPreferences = readExportPreferences(session.data.user.id);
+			const loadedPreferences = readExportPreferences(session.data.user.id, workspaceId);
 			exportPreferences = loadedPreferences;
 			exportFormat = loadedPreferences.citation.format;
 		}
@@ -98,7 +126,9 @@
 			project,
 			year: year.trim(),
 			keyword: keyword.trim(),
-			author: author.trim()
+			author: author.trim(),
+			sort: sort === 'updated' ? '' : sort,
+			has_files: fileFilter
 		})) {
 			if (value) result.set(key, value);
 		}
@@ -109,9 +139,8 @@
 	function updateUrl(nextPage = 1) {
 		const values = parameters(nextPage).toString();
 		selected.clear();
-		void goto(resolve(values ? `/library?${values}` : '/library'), {
-			keepFocus: true,
-			noScroll: true
+		void goto(resolve(workspaceHref(workspaceId, values ? `library?${values}` : 'library')), {
+			reset: false
 		});
 	}
 
@@ -122,6 +151,8 @@
 		year = '';
 		keyword = '';
 		author = '';
+		sort = 'updated';
+		fileFilter = '';
 		updateUrl();
 	}
 
@@ -140,6 +171,7 @@
 
 	function requestBulkAction() {
 		if (!bulkAction || selected.size === 0 || bulkMutation.isPending) return;
+		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
 		if (bulkAction === 'delete') {
 			confirmDeleteOpen = true;
 			return;
@@ -149,6 +181,7 @@
 
 	async function executeBulkAction() {
 		confirmDeleteOpen = false;
+		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
 		error = '';
 		notice = '';
 		try {
@@ -196,9 +229,11 @@
 	bind:year
 	bind:keyword
 	bind:author
+	bind:sort
+	bind:fileFilter
 	bind:filtersOpen
 	tags={tags.data ?? []}
-	projects={projects.data ?? []}
+	projects={projectChoices}
 	onSearch={() => updateUrl()}
 	onClear={clearFilters}
 />
@@ -209,11 +244,16 @@
 	bind:bulkProject
 	bind:bulkTag
 	bind:exportFormat
-	projects={projects.data ?? []}
+	projects={projectChoices}
 	{busy}
 	onApply={requestBulkAction}
 	onClearSelection={() => selected.clear()}
 />
+
+{#if projects.hasNextPage}<Button
+		disabled={projects.isFetchingNextPage}
+		onclick={() => void projects.fetchNextPage()}>{$t('Load more Projects')}</Button
+	>{/if}
 
 <ConfirmDialog
 	bind:open={confirmDeleteOpen}
@@ -227,6 +267,7 @@
 <StatusNotice {error} {notice} />
 
 <LibraryResults
+	{workspaceId}
 	data={library.data}
 	isPending={library.isPending ?? false}
 	isError={library.isError ?? false}

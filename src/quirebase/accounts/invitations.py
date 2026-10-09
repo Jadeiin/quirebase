@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from quirebase.access import SystemAction, require_system_action
 from quirebase.core.crypto import generate_token, token_hash
-from quirebase.core.errors import DomainError, ResourceUnavailable, ValidationFailure
-from quirebase.core.timezones import as_utc
+from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
 from quirebase.models import Invitation, User
 
 if TYPE_CHECKING:
@@ -23,11 +23,7 @@ async def get_valid_invitation(db: AsyncSession, token: str) -> Invitation | Non
     invitation = await db.scalar(
         select(Invitation).where(Invitation.token_hash == token_hash(token))
     )
-    if (
-        invitation
-        and invitation.accepted_at is None
-        and as_utc(invitation.expires_at) > datetime.now(UTC)
-    ):
+    if invitation and invitation.accepted_at is None and invitation.expires_at > datetime.now(UTC):
         return invitation
     return None
 
@@ -39,13 +35,19 @@ async def create_invitation(
     role: str = "member",
     expires_days: int = 7,
 ) -> tuple[Invitation, str]:
-    if creator.role != "administrator":
-        raise ResourceUnavailable("administration resource unavailable")
+    creator = await require_system_action(
+        db,
+        creator,
+        SystemAction.invitations_create,
+        lock="shared",
+        message="resource not found",
+        denied_error=ResourceNotFound,
+    )
     normalized = username.strip()
     if not normalized or len(normalized) > 120 or role not in ("member", "administrator"):
         raise ValidationFailure("invalid username or role")
-    if await db.scalar(select(User).where(User.username == normalized)) or await db.scalar(
-        select(Invitation).where(Invitation.username == normalized)
+    if await db.scalar(select(User.id).where(User.username == normalized)) or await db.scalar(
+        select(Invitation.id).where(Invitation.username == normalized)
     ):
         raise InvitationConflict("username already exists or is invited")
     raw = generate_token(32)
@@ -56,8 +58,9 @@ async def create_invitation(
         created_by=creator.id,
         expires_at=datetime.now(UTC) + timedelta(days=expires_days),
     )
-    db.add(invitation)
     try:
+        db.add(invitation)
+        await db.flush()
         await db.commit()
     except IntegrityError as error:
         await db.rollback()

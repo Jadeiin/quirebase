@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, overload
 
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 from dbos import DBOS, AsyncSQLAlchemyDatasource, DBOSClient, DBOSConfig, EnqueueOptions, error
 
 from quirebase import __version__
@@ -31,6 +32,42 @@ RECOMMENDATION_QUEUE = "library.recommendation"
 IMPORT_QUEUE = "library.import"
 OPERATIONS_QUEUE = "operations"
 UPLOAD_COMPLETE_TOPIC = "upload-complete"
+
+
+def object_reservation_attributes(
+    keys: Iterable[str], *, intent: Literal["reserve", "cleanup"] = "reserve"
+) -> dict[str, Any]:
+    """Encode object ownership or deletion intent on a durable execution.
+
+    Producers reserve preallocated UUID keys before writing them. Cleanup intent never
+    reserves its targets. These attributes contain infrastructure facts only.
+    """
+    return {"object_keys": list(dict.fromkeys(keys)), "object_intent": intent}
+
+
+def workflow_reserved_object_keys(attributes: dict[str, Any] | None) -> set[str]:
+    if not attributes or attributes.get("object_intent") == "cleanup":
+        return set()
+    raw_keys = attributes.get("object_keys")
+    keys = (
+        {key for key in raw_keys if isinstance(key, str)}
+        if isinstance(raw_keys, (list, tuple))
+        else set()
+    )
+    if isinstance((key := attributes.get("object_key")), str):
+        keys.add(key)
+    return keys
+
+
+async def active_object_reservations(*, ignore_workflow_id: str | None = None) -> set[str]:
+    return set().union(
+        *(
+            workflow_reserved_object_keys(workflow.attributes)
+            for workflow in await list_active_workflows()
+            if workflow.id != ignore_workflow_id
+        )
+    )
+
 
 _VISIBLE_STATE: dict[str, WorkflowState] = {
     "ENQUEUED": "pending",
@@ -215,7 +252,7 @@ def _options(
     if partition_key is not None:
         options["queue_partition_key"] = partition_key
     if attributes:
-        options["attributes"] = attributes
+        options["attributes"] = decode_json(encode_json(attributes))
     return cast("EnqueueOptions", options)
 
 
@@ -438,7 +475,7 @@ async def list_active_workflows(*, name: str | None = None) -> tuple[WorkflowSum
 
 
 @lru_cache
-def durable_operations() -> DBOSAdapter:
+def durable_operations() -> DurableOperations:
     return DBOSAdapter.from_settings()
 
 

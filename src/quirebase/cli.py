@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
-from uuid import uuid4
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import] -- Typer resolves annotations at runtime.
+from uuid import UUID, uuid4
 
 import typer
 import uvicorn
-from alembic import command
-from alembic.config import Config
+from advanced_alchemy.alembic.commands import AlembicCommands
 from sqlalchemy import inspect, select, text
 
 from .accounts import (
@@ -19,7 +18,7 @@ from .accounts import (
 )
 from .core.config import get_settings
 from .core.crypto import hash_password_async
-from .core.database import AsyncSessionLocal, engine
+from .core.database import AsyncSessionLocal, database_config, engine
 from .core.logging import configure_logging
 from .core.storage import get_object_store
 from .core.workflows import (
@@ -33,7 +32,9 @@ from .models import User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
 from .operations.object_migration import migrate_legacy_objects
 from .operations.workflows import maintenance_schedules
+from .projects import check_project_integrity
 from .search import reindex_all
+from .workspaces import check_workspace_integrity, provision_initial_workspace
 
 app = typer.Typer(help="Quirebase administration")
 
@@ -42,6 +43,7 @@ def _register_workflows() -> None:
     import quirebase.documents.workflows  # ruff: ignore[unused-import]
     import quirebase.library.workflows  # ruff: ignore[unused-import]
     import quirebase.operations.workflows  # ruff: ignore[unused-import]
+    import quirebase.workspaces.workflows  # ruff: ignore[unused-import]
 
 
 @app.command("serve")
@@ -65,13 +67,7 @@ async def _run_worker() -> None:
 
 @app.command("init-db")
 def init_db():
-    package_dir = Path(__file__).parent
-    migrations = package_dir / "migrations"
-    if not migrations.exists():
-        migrations = package_dir.parents[1] / "migrations"
-    alembic = Config()
-    alembic.set_main_option("script_location", str(migrations))
-    command.upgrade(alembic, "head")
+    AlembicCommands(database_config).upgrade()
     asyncio.run(initialize_durable_operations())
     settings = get_settings()
     if settings.object_store == "local":
@@ -89,13 +85,14 @@ def create_admin(
         async with AsyncSessionLocal() as db:
             if await db.scalar(select(User).where(User.username == username)):
                 raise typer.BadParameter("username already exists")
-            db.add(
-                User(
-                    username=username,
-                    password_hash=await hash_password_async(password),
-                    role="administrator",
-                )
+            user = User(
+                username=username,
+                password_hash=await hash_password_async(password),
+                role="administrator",
             )
+            db.add(user)
+            await db.flush()
+            await provision_initial_workspace(db, user)
             await db.commit()
 
     asyncio.run(create())
@@ -143,7 +140,7 @@ def list_api_tokens_command(username: str = typer.Argument(...)):
 @app.command("revoke-api-token")
 def revoke_api_token_command(
     username: str = typer.Argument(...),
-    token_id: str = typer.Argument(...),
+    token_id: UUID = typer.Argument(...),
 ):
     async def revoke() -> None:
         async with AsyncSessionLocal() as db:
@@ -156,22 +153,27 @@ def revoke_api_token_command(
 
 @app.command("doctor")
 def doctor():
-    async def database_check() -> tuple[str, bool, list[str]]:
+    async def database_check() -> tuple[str, bool, list[str], list[str]]:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
             dialect = connection.dialect.name
             has_users = await connection.run_sync(lambda sync: inspect(sync).has_table("users"))
         object_errors: list[str] = []
+        domain_errors: list[str] = []
         if has_users:
             async with AsyncSessionLocal() as db:
                 object_errors = await check_objects(db)
-        return dialect, has_users, object_errors
+                domain_errors = await check_workspace_integrity(db) + await check_project_integrity(
+                    db
+                )
+        return dialect, has_users, object_errors, domain_errors
 
     failures = 0
     has_users = False
     object_errors: list[str] = []
+    domain_errors: list[str] = []
     try:
-        dialect, has_users, object_errors = asyncio.run(database_check())
+        dialect, has_users, object_errors, domain_errors = asyncio.run(database_check())
         typer.echo(f"[ok] database ({dialect})")
     except Exception as error:
         failures += 1
@@ -231,6 +233,12 @@ def doctor():
                 typer.echo(f"[failed] object {object_error}")
         else:
             typer.echo("[ok] object integrity")
+        if domain_errors:
+            failures += len(domain_errors)
+            for domain_error in domain_errors:
+                typer.echo(f"[failed] domain {domain_error}")
+        else:
+            typer.echo("[ok] domain integrity")
     raise typer.Exit(code=1 if failures else 0)
 
 

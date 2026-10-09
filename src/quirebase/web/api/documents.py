@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Request, UploadFile, status
-from fastapi.responses import Response, StreamingResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 
-from quirebase.access.items import require_editable_item
+from quirebase.access import ResourceAction, require_item_action
 from quirebase.core.config import get_settings
 from quirebase.documents import (
     acquire_remote_attachment,
@@ -19,6 +20,7 @@ from quirebase.documents import (
     get_attachment_file,
     get_item_thumbnail,
     get_pdf_viewer_data,
+    get_revision_download_url,
     get_revision_file,
     get_revision_thumbnail,
     head_attachment_file,
@@ -29,16 +31,16 @@ from quirebase.documents import (
     store_pdf_revision,
 )
 from quirebase.library import (
-    FilesWorkspace,
-    WorkspaceSection,
+    ItemFilesData,
+    ItemSection,
     acquire_remote_pdf,
-    open_item_workspace,
+    open_item_section,
 )
 from quirebase.models import AttachmentRole
 from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
 from quirebase.web.api.annotation_schemas import DocumentListView, document_list_view
 from quirebase.web.api.common import OkView, WriteResult
-from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.item_schemas import (
     PdfViewerView,
     RemoteAttachmentRequest,
@@ -181,11 +183,13 @@ async def ranged_object(request: Request, metadata, filename: str, object_get):
 
 
 @router.get("/items/{item_id}/documents", response_model=DocumentListView)
-async def list_documents(item_id: str, user: ApiUser, db: Database) -> DocumentListView:
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.files)
-    if not isinstance(workspace, FilesWorkspace):  # pragma: no cover
-        raise TypeError("item files workspace mismatch")
-    return document_list_view(item_id, workspace)
+async def list_documents(
+    workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database
+) -> DocumentListView:
+    item_files = await open_item_section(db, context, item_id, ItemSection.files)
+    if not isinstance(item_files, ItemFilesData):  # pragma: no cover
+        raise TypeError("item files section mismatch")
+    return document_list_view(item_id, item_files)
 
 
 @router.get(
@@ -200,7 +204,8 @@ async def list_documents(item_id: str, user: ApiUser, db: Database) -> DocumentL
     },
 )
 async def download_item_archive(
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     revisions: str | None = None,
@@ -208,14 +213,27 @@ async def download_item_archive(
     include_supplements: bool = False,
     timezone: str | None = None,
 ) -> StreamingResponse:
-    revision_ids = (
-        [value.strip() for value in revisions.split(",") if value.strip()] if revisions else None
-    )
+    revision_ids = []
+    for index, value in enumerate(revisions.split(",") if revisions else []):
+        if not value.strip():
+            continue
+        try:
+            revision_ids.append(UUID(value.strip()))
+        except ValueError as exc:
+            raise RequestValidationError([
+                {
+                    "type": "uuid_parsing",
+                    "loc": ("query", "revisions", index),
+                    "msg": "Input should be a valid UUID",
+                    "input": value,
+                }
+            ]) from exc
     bundle = await create_item_document_bundle(
         db,
         user,
+        workspace_id,
         item_id,
-        revision_ids=revision_ids,
+        revision_ids=revision_ids or None,
         include_annotations=include_annotations,
         include_supplements=include_supplements,
         timezone=timezone,
@@ -234,7 +252,8 @@ async def download_item_archive(
     "/items/{item_id}/attachments", response_model=WriteResult, status_code=status.HTTP_202_ACCEPTED
 )
 async def upload_item_attachment(
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     attachment: Annotated[UploadFile, File()],
@@ -243,6 +262,7 @@ async def upload_item_attachment(
     workflow = await create_attachment(
         db,
         user,
+        workspace_id,
         item_id,
         upload_chunks(attachment),
         attachment.filename or "",
@@ -261,17 +281,22 @@ async def upload_item_attachment(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_remote_item_attachment(
-    item_id: str, data: RemoteAttachmentRequest, user: ApiUser, db: Database
+    workspace_id: UUID,
+    item_id: UUID,
+    data: RemoteAttachmentRequest,
+    user: ApiUser,
+    db: Database,
 ) -> WriteResult:
     max_bytes = await get_effective_setting(
         db, "max_attachment_bytes", get_settings().max_attachment_bytes
     )
-    await require_editable_item(db, user, item_id)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
     await db.rollback()
     async with acquire_remote_attachment(data.source, max_bytes) as attachment:
         workflow = await create_attachment(
             db,
             user,
+            workspace_id,
             item_id,
             attachment.content,
             attachment.filename,
@@ -294,15 +319,20 @@ async def upload_remote_item_attachment(
     },
 )
 async def download_item_attachment(
-    request: Request, item_id: str, attachment_id: str, user: ApiUser, db: Database
+    request: Request,
+    workspace_id: UUID,
+    item_id: UUID,
+    attachment_id: UUID,
+    user: ApiUser,
+    db: Database,
 ) -> Response:
     metadata, original_name, media_type = await head_attachment_file(
-        db, user, item_id, attachment_id
+        db, user, workspace_id, item_id, attachment_id
     )
     if (not_modified := _not_modified(request, metadata)) is not None:
         return not_modified
     response, _original_name, _media_type = await get_attachment_file(
-        db, user, item_id, attachment_id
+        db, user, workspace_id, item_id, attachment_id
     )
     return StreamingResponse(
         response.body,
@@ -318,9 +348,9 @@ async def download_item_attachment(
 
 @router.delete("/items/{item_id}/attachments/{attachment_id}", response_model=OkView)
 async def delete_item_attachment(
-    item_id: str, attachment_id: str, user: ApiUser, db: Database
+    workspace_id: UUID, item_id: UUID, attachment_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
-    await delete_attachment(db, user, item_id, attachment_id)
+    await delete_attachment(db, user, workspace_id, item_id, attachment_id)
     return OkView()
 
 
@@ -328,11 +358,16 @@ async def delete_item_attachment(
     "/items/{item_id}/revisions", response_model=WriteResult, status_code=status.HTTP_202_ACCEPTED
 )
 async def upload_item_pdf(
-    item_id: str, user: ApiUser, db: Database, pdf: Annotated[UploadFile, File()]
+    workspace_id: UUID,
+    item_id: UUID,
+    user: ApiUser,
+    db: Database,
+    pdf: Annotated[UploadFile, File()],
 ) -> WriteResult:
     workflow = await store_pdf_revision(
         db,
         user,
+        workspace_id,
         item_id,
         upload_chunks(pdf),
         pdf.filename or "",
@@ -347,44 +382,59 @@ async def upload_item_pdf(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_remote_item_pdf(
-    item_id: str, data: RemoteRevisionRequest, user: ApiUser, db: Database
+    workspace_id: UUID,
+    item_id: UUID,
+    data: RemoteRevisionRequest,
+    user: ApiUser,
+    db: Database,
 ) -> WriteResult:
     settings = await get_effective_settings_model(db)
     max_bytes = await get_effective_setting(db, "max_pdf_bytes", get_settings().max_pdf_bytes)
-    await require_editable_item(db, user, item_id)
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
     await db.rollback()
     async with acquire_remote_pdf(data.source, settings, max_bytes) as document:
         workflow = await store_pdf_revision(
-            db, user, item_id, document.content, document.filename, max_bytes
+            db, user, workspace_id, item_id, document.content, document.filename, max_bytes
         )
     return WriteResult(id=workflow.workflow_id)
 
 
 @router.delete("/items/{item_id}/revisions/{revision_id}", response_model=OkView)
-async def delete_item_pdf(item_id: str, revision_id: str, user: ApiUser, db: Database) -> OkView:
-    await delete_file_revision(db, user, item_id, revision_id)
+async def delete_item_pdf(
+    workspace_id: UUID, item_id: UUID, revision_id: UUID, user: ApiUser, db: Database
+) -> OkView:
+    await delete_file_revision(db, user, workspace_id, item_id, revision_id)
     return OkView()
 
 
 @router.get("/items/{item_id}/revisions/{revision_id}/viewer", response_model=PdfViewerView)
-async def pdf_viewer_configuration(item_id: str, revision_id: str, user: ApiUser, db: Database):
-    data = await get_pdf_viewer_data(db, user, item_id, revision_id)
+async def pdf_viewer_configuration(
+    workspace_id: UUID, item_id: UUID, revision_id: UUID, user: ApiUser, db: Database
+):
+    data = await get_pdf_viewer_data(db, user, workspace_id, item_id, revision_id)
     revision = data["revision"]
     return {
         "item": item_search_view(data["item"]),
-        # Reaching the viewer proves readable revision access. Annotation writes have
-        # their own ownership/scope checks and intentionally do not require Item edits.
-        "editable": True,
+        "editable": data["editable"],
         "annotation_author": user.username,
         "revision": {
             "id": revision.id,
-            "original_name": revision.original_name,
+            "original_name": revision.file.metadata["original_name"],
             "page_count": revision.page_count,
             "processing_state": enum_value(revision.processing_state),
-            "page_geometry": json.loads(revision.page_geometry or "[]"),
-            "content_url": f"/api/v1/items/{item_id}/revisions/{revision_id}/content",
+            "page_geometry": revision.page_geometry or [],
+            "content_url": (
+                f"/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content"
+            ),
         },
-        "projects": [{"id": project.id, "name": project.name} for project in data["projects"]],
+        "projects": [
+            {
+                "id": project.id,
+                "name": project.name,
+                "editable": project.id in data["editable_project_ids"],
+            }
+            for project in data["projects"]
+        ],
     }
 
 
@@ -392,6 +442,7 @@ async def pdf_viewer_configuration(item_id: str, revision_id: str, user: ApiUser
     "/items/{item_id}/revisions/{revision_id}/content",
     response_class=StreamingResponse,
     responses={
+        307: {"description": "Short-lived authorized S3 download; response is not cacheable."},
         200: {
             "content": {
                 "application/pdf": {"schema": {"type": "string", "format": "binary"}},
@@ -406,16 +457,24 @@ async def pdf_viewer_configuration(item_id: str, revision_id: str, user: ApiUser
 )
 async def pdf_content(
     request: Request,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     user: ApiUser,
     db: Database,
 ):
-    metadata, original_name, _media_type = await head_revision_file(db, user, item_id, revision_id)
+    signed = await get_revision_download_url(db, user, workspace_id, item_id, revision_id)
+    if signed is not None:
+        return RedirectResponse(
+            signed.url, status_code=307, headers={"Cache-Control": "private, no-store"}
+        )
+    metadata, original_name, _media_type = await head_revision_file(
+        db, user, workspace_id, item_id, revision_id
+    )
 
     async def object_get(byte_range: tuple[int, int] | None):
         response, _name, _sha = await get_revision_file(
-            db, user, item_id, revision_id, byte_range=byte_range
+            db, user, workspace_id, item_id, revision_id, byte_range=byte_range
         )
         return response
 
@@ -435,15 +494,16 @@ async def pdf_content(
 )
 async def pdf_thumbnail(
     request: Request,
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     user: ApiUser,
     db: Database,
 ):
-    metadata = await head_revision_thumbnail(db, user, item_id, revision_id)
+    metadata = await head_revision_thumbnail(db, user, workspace_id, item_id, revision_id)
     if (not_modified := _not_modified(request, metadata)) is not None:
         return not_modified
-    response = await get_revision_thumbnail(db, user, item_id, revision_id)
+    response = await get_revision_thumbnail(db, user, workspace_id, item_id, revision_id)
     return StreamingResponse(
         response.body,
         media_type="image/png",
@@ -462,11 +522,12 @@ async def pdf_thumbnail(
 )
 async def item_thumbnail(
     request: Request,
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
 ):
-    source = await resolve_item_thumbnail(db, user, item_id)
+    source = await resolve_item_thumbnail(db, user, workspace_id, item_id)
     metadata = await head_item_thumbnail(source)
     if (not_modified := _not_modified(request, metadata)) is not None:
         return not_modified
@@ -495,17 +556,19 @@ async def item_thumbnail(
     },
 )
 async def export_revision_pdf_route(
-    item_id: str,
-    revision_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
     user: ApiUser,
     db: Database,
     include_annotations: bool = True,
-    project_id: str | None = None,
+    project_id: UUID | None = None,
     timezone: str | None = None,
 ):
     exported = await export_revision_pdf(
         db,
         user,
+        workspace_id,
         item_id,
         revision_id,
         include_annotations=include_annotations,

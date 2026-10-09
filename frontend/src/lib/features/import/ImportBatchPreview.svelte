@@ -1,21 +1,22 @@
 <script lang="ts">
-	import type { components } from '$lib/api/schema';
-	import RichText from '$lib/design/RichText.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import type { components } from '#lib/api/schema.js';
+	import RichText from '#lib/design/RichText.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	type ImportBatch = components['schemas']['ImportBatchView'];
 
-	let { batch, page, busy, onDiscard, onRetry, onCommit, onPage } = $props<{
+	let { batch, page, busy, canCommit, onDiscard, onRetry, onCommit, onPage } = $props<{
 		batch: ImportBatch;
 		page: number;
 		busy: boolean;
+		canCommit: boolean;
 		onDiscard: () => void;
 		onRetry: () => void;
 		onCommit: () => void;
@@ -42,15 +43,15 @@
 			</p>
 		</div>
 		{#snippet actions()}
-			<div class="flex flex-wrap gap-2">
-				<Button onclick={onDiscard} disabled={busy}>{$t('Discard')}</Button>
-				{#if batch.status === 'failed'}
-					<Button onclick={onRetry} disabled={busy}>{$t('Retry')}</Button>
-				{/if}
-				<Button variant="filled" onclick={onCommit} disabled={busy || batch.status !== 'ready'}
-					>{$t('Commit')}</Button
-				>
-			</div>
+			{#if canCommit}<div class="flex flex-wrap gap-2">
+					<Button onclick={onDiscard} disabled={busy}>{$t('Discard')}</Button>
+					{#if batch.status === 'failed'}
+						<Button onclick={onRetry} disabled={busy}>{$t('Retry')}</Button>
+					{/if}
+					<Button variant="filled" onclick={onCommit} disabled={busy || batch.status !== 'ready'}
+						>{$t('Commit')}</Button
+					>
+				</div>{/if}
 		{/snippet}
 	</SectionHeader>
 	{#if batch.status === 'pending'}

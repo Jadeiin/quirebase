@@ -1,0 +1,813 @@
+from __future__ import annotations
+
+import json
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import uuid4
+from zipfile import ZipFile
+
+import pytest
+from advanced_alchemy.types import FileObject
+from app_helpers import json_payload
+from sqlalchemy import event, select
+from test_http import authenticated_async_client
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
+
+from quirebase.access import resolve_workspace_context
+from quirebase.core.config import get_settings
+from quirebase.core.crypto import token_hash
+from quirebase.core.errors import ResourceNotFound, WorkspaceMembershipRequired
+from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.library import (
+    Contributor,
+    ItemAnnotationsData,
+    ItemDiscussionData,
+    ItemFilesData,
+    ItemMetadata,
+    ItemMetadataData,
+    ItemOrganizationData,
+    ItemOverviewData,
+    ItemSection,
+    create_item,
+    open_item_section,
+)
+from quirebase.models import (
+    Attachment,
+    AttachmentRole,
+    AuditEvent,
+    Author,
+    DiscussionMessage,
+    FileRevision,
+    Item,
+    ItemIdentifier,
+    ItemRead,
+    ItemTag,
+    LoginSession,
+    PdfAnnotation,
+    Project,
+    ProjectItem,
+    Tag,
+    User,
+    WorkspaceMember,
+    WorkspaceMemberState,
+    WorkspaceRole,
+    WorkspaceState,
+)
+from quirebase.web.api import documents as documents_api
+from quirebase.web.api.annotation_schemas import document_list_view
+from quirebase.web.api.library_schemas import item_detail_view
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("include_valid_revision", [False, True])
+async def test_item_archive_rejects_invalid_revision_ids_before_download(
+    async_db, async_session_factory, tmp_path, monkeypatch, include_valid_revision
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    values = ["not-a-uuid"]
+    if include_valid_revision:
+        values.insert(0, str(revision.id))
+    try:
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/archive",
+            params={"revisions": ",".join(values)},
+        )
+        assert response.status_code == 422
+        error = response.json()
+        assert error["code"] == "validation_failed"
+        assert error["fields"][0]["path"] == ["query", "revisions", int(include_valid_revision)]
+        assert (
+            await async_db.scalar(
+                select(AuditEvent.id).where(AuditEvent.action == "item.download_bundle")
+            )
+            is None
+        )
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_archive_packages_only_selected_revision_ids(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    other_revisions = [
+        FileRevision(
+            workspace_id=item.workspace_id,
+            item_id=item.id,
+            created_by=item.created_by,
+            processing_state="ready",
+            file=revision.file,
+        )
+        for _ in range(2)
+    ]
+    async_db.add_all(other_revisions)
+    await async_db.commit()
+    selected_ids = [revision.id, other_revisions[0].id]
+    try:
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/archive",
+            params={"revisions": ",".join(str(value) for value in selected_ids)},
+        )
+        assert response.status_code == 200
+        with ZipFile(BytesIO(response.content)) as archive:
+            manifest = json.loads(archive.read("manifest.json"))
+            assert {entry["revision_id"] for entry in manifest["pdf_revisions"]} == {
+                str(value) for value in selected_ids
+            }
+            assert sum(name.endswith(".pdf") for name in archive.namelist()) == 2
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_open_item_overview_returns_a_typed_view_and_records_reading(async_db):
+    db = async_db
+    user = User(username="section-reader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    item = Item(
+        workspace_id=fixture_workspace_id(user), title="Typed Item section", created_by=user.id
+    )
+    db.add(item)
+    await db.commit()
+
+    view = await open_item_section(
+        db,
+        await resolve_workspace_context(db, user, fixture_workspace_id(user)),
+        item.id,
+        ItemSection.overview,
+    )
+
+    assert isinstance(view, ItemOverviewData)
+    assert view.item.id == item.id
+    assert view.revision_count == 0
+    assert view.attachment_count == 0
+    assert await db.get(ItemRead, (user.id, item.id)) is not None
+
+
+def test_item_section_rejects_unknown_names_before_query_branching():
+    with pytest.raises(ResourceNotFound, match="unknown item section"):
+        ItemSection.parse("unknown")
+
+
+@pytest.mark.anyio
+async def test_open_item_sections_return_section_specific_views(async_db):
+    db = async_db
+    user = User(username="section-reader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    item = Item(workspace_id=fixture_workspace_id(user), title="Section views", created_by=user.id)
+    db.add(item)
+    await db.commit()
+
+    expected_types = {
+        ItemSection.overview: ItemOverviewData,
+        ItemSection.metadata: ItemMetadataData,
+        ItemSection.files: ItemFilesData,
+        ItemSection.organize: ItemOrganizationData,
+        ItemSection.annotations: ItemAnnotationsData,
+        ItemSection.discussion: ItemDiscussionData,
+    }
+    locks = []
+    authority_reads = []
+
+    def record_queries(execution):
+        if not execution.is_select:
+            return
+        statement = execution.statement
+        if statement._for_update_arg is not None:
+            locks.append(statement)
+        if any(column.get("entity") is WorkspaceMember for column in statement.column_descriptions):
+            authority_reads.append(statement)
+
+    for section, expected_type in expected_types.items():
+        context = await resolve_workspace_context(db, user, fixture_workspace_id(user))
+        event.listen(db.sync_session, "do_orm_execute", record_queries)
+        try:
+            result = await open_item_section(db, context, item.id, section)
+        finally:
+            event.remove(db.sync_session, "do_orm_execute", record_queries)
+        assert isinstance(result, expected_type)
+        assert not locks
+        assert not authority_reads
+        assert await db.get(ItemRead, (user.id, item.id)) is not None
+
+
+@pytest.mark.anyio
+async def test_inaccessible_item_never_records_reading(async_db):
+    db = async_db
+    owner = User(username="section-owner", password_hash="unused")
+    outsider = User(username="section-outsider", password_hash="unused")
+    db.add_all([owner, outsider])
+    await db.flush()
+    await provision_initial_workspace(db, owner)
+    await provision_initial_workspace(db, outsider)
+    item = Item(
+        workspace_id=fixture_workspace_id(owner), title="Private Item section", created_by=owner.id
+    )
+    db.add(item)
+    await db.commit()
+    outsider_id, item_id = outsider.id, item.id
+
+    with pytest.raises(WorkspaceMembershipRequired):
+        await open_item_section(
+            db,
+            await resolve_workspace_context(db, outsider, fixture_workspace_id(owner)),
+            item_id,
+            ItemSection.overview,
+        )
+
+    assert await db.get(ItemRead, (outsider_id, item_id)) is None
+
+
+@pytest.mark.anyio
+async def test_item_sections_separate_page_responsibilities(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        item.urls = (
+            "https://publisher.example/article\n"
+            "https://publisher.example/files/reading-copy.PDF?download=1"
+        )
+        tag = Tag(
+            workspace_id=item.workspace_id,
+            name="User priority",
+            created_by=item.created_by,
+        )
+        db.add(tag)
+        await db.flush()
+        db.add_all([
+            ItemTag(workspace_id=item.workspace_id, item_id=item.id, tag_id=tag.id),
+            ItemIdentifier(item_id=item.id, provider="openalex", value="W123"),
+            ItemIdentifier(item_id=item.id, provider="arxiv", value="2401.00001"),
+        ])
+        await db.commit()
+        workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+        summary = await client.get(f"{workspace_base}/items/{item.id}/overview")
+        assert summary.status_code == 200
+        assert summary.json()["latest_revision"]["id"] == str(revision.id)
+        assert summary.json()["thumbnail"] is None
+        assert summary.json()["tags"] == json_payload([{"id": tag.id, "name": "User priority"}])
+        assert {tuple(row.values()) for row in summary.json()["identifiers"]} == {
+            ("openalex", "W123"),
+            ("arxiv", "2401.00001"),
+        }
+
+        metadata = await client.get(f"{workspace_base}/items/{item.id}")
+        assert metadata.status_code == 200
+        assert "reading-copy.PDF" in metadata.text
+
+        files = await client.get(f"{workspace_base}/items/{item.id}/documents")
+        assert files.status_code == 200
+        assert revision.file.metadata["original_name"] in files.text
+
+        organize = await client.get(f"{workspace_base}/tags")
+        assert organize.status_code == 200
+        assert organize.json()[0]["name"] == "User priority"
+
+        created = await client.post(
+            f"{workspace_base}/items/{item.id}/annotations",
+            headers={"X-CSRF-Token": "test-csrf"},
+            json=json_payload({
+                "id": str(uuid4()),
+                "revision_id": revision.id,
+                "page_index": 0,
+                "kind": "highlight",
+                "scope": "private",
+                "selected_text": "A useful result",
+                "payload": {
+                    "type": "highlight",
+                    "rect": {"x": 10, "y": 10, "width": 20, "height": 10},
+                    "segment_rects": [{"x": 10, "y": 10, "width": 20, "height": 10}],
+                },
+            }),
+        )
+        assert created.status_code == 201
+        annotations = await client.get(
+            f"{workspace_base}/items/{item.id}/annotations", params={"revision_id": revision.id}
+        )
+        assert annotations.status_code == 200
+        assert annotations.json()["annotations"][0]["selected_text"] == "A useful result"
+        assert annotations.json()["annotations"][0]["page_index"] == 0
+
+        discussion = await client.get(f"{workspace_base}/items/{item.id}/discussions")
+        assert discussion.status_code == 200
+        assert discussion.json() == []
+
+        assert (await client.get(f"{workspace_base}/items/{item.id}/unknown")).status_code == 404
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_remote_documents_are_acquired_server_side_before_upload(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    item_id = item.id
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+
+    async def content():  # ruff: ignore[unused-async] - async upload source contract
+        yield b"remote content"
+
+    @asynccontextmanager
+    async def acquire_remote_pdf(source, _settings, _max_bytes):
+        assert source == "https://publisher.example/article.pdf"
+        yield SimpleNamespace(
+            content=content(), filename="article.pdf", media_type="application/pdf"
+        )
+
+    @asynccontextmanager
+    async def acquire_remote_attachment(source, _max_bytes):
+        assert source == "https://publisher.example/supplement.zip"
+        yield SimpleNamespace(
+            content=content(), filename="supplement.zip", media_type="application/zip"
+        )
+
+    store_revision = AsyncMock(return_value=SimpleNamespace(workflow_id="revision-workflow"))
+    store_attachment = AsyncMock(return_value=SimpleNamespace(workflow_id="attachment-workflow"))
+    monkeypatch.setattr(documents_api, "acquire_remote_pdf", acquire_remote_pdf)
+    monkeypatch.setattr(documents_api, "acquire_remote_attachment", acquire_remote_attachment)
+    monkeypatch.setattr(documents_api, "store_pdf_revision", store_revision)
+    monkeypatch.setattr(documents_api, "create_attachment", store_attachment)
+
+    try:
+        revision = await client.post(
+            f"{workspace_base}/items/{item_id}/revisions/remote",
+            json=json_payload({"source": "https://publisher.example/article.pdf"}),
+        )
+        assert revision.status_code == 202
+        assert revision.json() == {"id": "revision-workflow", "version": None}
+        assert store_revision.await_args.args[5] == "article.pdf"
+
+        attachment = await client.post(
+            f"{workspace_base}/items/{item_id}/attachments/remote",
+            json=json_payload({
+                "source": "https://publisher.example/supplement.zip",
+                "graphical_abstract": False,
+            }),
+        )
+        assert attachment.status_code == 202
+        assert attachment.json() == {"id": "attachment-workflow", "version": None}
+        assert store_attachment.await_args.args[5] == "supplement.zip"
+        assert store_attachment.await_args.args[6] == "application/zip"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_project_editor_can_edit_item_without_seeing_permanent_delete(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    owner_client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    editor = User(username="section-editor", password_hash="unused")
+    project = Project(
+        workspace_id=item.workspace_id,
+        name="Shared editing",
+        created_by=item.created_by,
+    )
+    db.add_all([editor, project])
+    await db.flush()
+    db.add_all([
+        WorkspaceMember(
+            workspace_id=item.workspace_id,
+            user_id=editor.id,
+            role=WorkspaceRole.editor,
+            invited_by=item.created_by,
+        ),
+        ProjectItem(
+            workspace_id=item.workspace_id,
+            project_id=project.id,
+            item_id=item.id,
+            added_by=item.created_by,
+        ),
+        LoginSession(
+            token_hash=token_hash("editor-session"),
+            user_id=editor.id,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ),
+    ])
+    await db.commit()
+
+    try:
+        workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+        owner_page = await owner_client.get(f"{workspace_base}/items/{item.id}/overview")
+        assert {"item.update", "item.delete"} <= set(owner_page.json()["authorization"]["allowed"])
+
+        editor_client = owner_client
+        editor_client.cookies.set(get_settings().session_cookie, "editor-session")
+        editor_page = await editor_client.get(f"{workspace_base}/items/{item.id}/overview")
+        assert editor_page.status_code == 200
+        assert "item.update" in editor_page.json()["authorization"]["allowed"]
+        assert "item.delete" not in editor_page.json()["authorization"]["allowed"]
+
+    finally:
+        await owner_client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("blocked_reason", ["archived", "frozen", "viewer", "suspended"])
+async def test_item_overview_offers_only_eligible_copy_targets_and_rechecks_on_copy(
+    async_db, async_session_factory, tmp_path, monkeypatch, blocked_reason
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    actor = await db.get(User, item.created_by)
+    assert actor is not None
+    active_owner = User(username="copy-target-owner", password_hash="unused")
+    archived_owner = User(username="copy-archived-owner", password_hash="unused")
+    db.add_all([active_owner, archived_owner])
+    await db.flush()
+    active_target = await provision_initial_workspace(db, active_owner)
+    archived_target = await provision_initial_workspace(db, archived_owner)
+    if blocked_reason == "archived":
+        archived_target.state = WorkspaceState.archived
+    elif blocked_reason == "frozen":
+        archived_target.governance_frozen_at = datetime.now(UTC)
+    db.add_all([
+        WorkspaceMember(
+            workspace_id=active_target.id,
+            user_id=actor.id,
+            role=WorkspaceRole.editor,
+            invited_by=active_owner.id,
+        ),
+        WorkspaceMember(
+            workspace_id=archived_target.id,
+            user_id=actor.id,
+            role=WorkspaceRole.viewer if blocked_reason == "viewer" else WorkspaceRole.editor,
+            state=(
+                WorkspaceMemberState.suspended
+                if blocked_reason == "suspended"
+                else WorkspaceMemberState.active
+            ),
+            invited_by=archived_owner.id,
+        ),
+    ])
+    await db.commit()
+
+    try:
+        response = await client.get(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/overview"
+        )
+        assert response.status_code == 200
+        assert response.json()["copy_targets"] == json_payload([
+            {"id": active_target.id, "name": active_target.name}
+        ])
+        # Eligibility is a read-model hint, never a durable grant for the command.
+        member = await db.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == active_target.id,
+                WorkspaceMember.user_id == actor.id,
+            )
+        )
+        member.role = WorkspaceRole.viewer
+        await db.commit()
+        denied = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/copy",
+            json=json_payload({"target_workspace_id": active_target.id}),
+        )
+        assert denied.status_code == 403
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_citation_export_and_project_removal(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        project = Project(
+            workspace_id=item.workspace_id,
+            name="Focused review",
+            created_by=item.created_by,
+        )
+        db.add(project)
+        await db.flush()
+        db.add_all([
+            ProjectItem(
+                workspace_id=item.workspace_id,
+                project_id=project.id,
+                item_id=item.id,
+                added_by=item.created_by,
+            ),
+        ])
+        await db.commit()
+
+        workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+        exported = await client.get(
+            f"{workspace_base}/items/{item.id}/bibliography?file_format=bibtex"
+        )
+        assert exported.status_code == 200
+        assert item.title in exported.text
+        assert "quirebase-export.bib" in exported.headers["content-disposition"]
+
+        cited = await client.get(
+            f"{workspace_base}/items/{item.id}/bibliography?file_format=csl&style=apa"
+        )
+        assert cited.status_code == 200
+        assert item.title in cited.text
+        assert "quirebase-citations.txt" in cited.headers["content-disposition"]
+
+        plain_download = await client.get(f"{workspace_base}/items/{item.id}/archive")
+        assert "Paper-pdfs.zip" in plain_download.headers["content-disposition"]
+        annotated_download = await client.get(
+            f"{workspace_base}/items/{item.id}/archive?include_annotations=true"
+        )
+        assert "Paper-annotated-pdfs.zip" in annotated_download.headers["content-disposition"]
+
+        item.title = "中文论文"
+        item.bibtex_id = None
+        await db.commit()
+        unicode_download = await client.get(f"{workspace_base}/items/{item.id}/archive")
+        assert unicode_download.status_code == 200
+        assert "filename*=utf-8''" in unicode_download.headers["content-disposition"]
+
+        workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+        removed = await client.delete(f"{workspace_base}/projects/{project.id}/items/{item.id}")
+        assert removed.status_code == 200
+        assert (
+            await db.scalar(
+                select(ProjectItem).where(
+                    ProjectItem.workspace_id == item.workspace_id,
+                    ProjectItem.project_id == project.id,
+                    ProjectItem.item_id == item.id,
+                )
+            )
+            is None
+        )
+        assert await db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "project.item.remove", AuditEvent.target_id == str(item.id)
+            )
+        )
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_summary_reports_exact_activity_counts(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        user = await db.get(User, item.created_by)
+        assert user is not None
+        db.add_all([
+            Attachment(
+                workspace_id=item.workspace_id,
+                item_id=item.id,
+                file=FileObject(
+                    backend="documents",
+                    filename="attachments/supplement.txt",
+                    size=12,
+                    content_type="text/plain",
+                    metadata={"original_name": "supplement.txt"},
+                ),
+                created_by=user.id,
+            ),
+            DiscussionMessage(
+                workspace_id=item.workspace_id, item_id=item.id, author_id=user.id, body="First"
+            ),
+            DiscussionMessage(
+                workspace_id=item.workspace_id, item_id=item.id, author_id=user.id, body="Second"
+            ),
+            PdfAnnotation(
+                workspace_id=item.workspace_id,
+                file_revision_id=revision.id,
+                item_id=item.id,
+                page_index=0,
+                author_id=user.id,
+                kind="highlight",
+                scope="private",
+                payload={
+                    "type": "highlight",
+                    "rect": {"x": 1, "y": 1, "width": 10, "height": 10},
+                    "style": {},
+                    "segment_rects": [{"x": 1, "y": 1, "width": 10, "height": 10}],
+                },
+            ),
+            PdfAnnotation(
+                workspace_id=item.workspace_id,
+                file_revision_id=revision.id,
+                item_id=item.id,
+                page_index=0,
+                author_id=user.id,
+                kind="note",
+                scope="private",
+                payload={
+                    "type": "note",
+                    "rect": {"x": 20, "y": 20, "width": 24, "height": 24},
+                    "style": {},
+                },
+            ),
+        ])
+        await db.commit()
+
+        data = await open_item_section(
+            db,
+            await resolve_workspace_context(db, user, item.workspace_id),
+            item.id,
+            ItemSection.overview,
+        )
+
+        assert data.revision_count == 1
+        assert data.attachment_count == 1
+        assert data.annotation_count == 2
+        assert data.message_count == 2
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_header_keeps_pdf_link_on_lightweight_sections(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+        response = await client.get(
+            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/viewer"
+        )
+        assert response.status_code == 200
+        assert response.json()["revision"]["content_url"].endswith(f"/{revision.id}/content")
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_item_overview_projection_includes_thumbnail_metadata(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+        response = await client.get(f"{workspace_base}/items/{item.id}/overview")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] is None
+
+        store = get_object_store()
+        thumb = await store.put_object(
+            uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\nthumb", max_bytes=100
+        )
+        revision.thumbnail = FileObject(
+            backend="documents", filename=thumb.key, content_type="image/png"
+        )
+        await db.commit()
+
+        response = await client.get(f"{workspace_base}/items/{item.id}/overview")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] == json_payload({
+            "source_kind": "pdf_thumbnail",
+            "source_id": revision.id,
+        })
+
+        ga_obj = await store.put_object(
+            uuid4(), ObjectSuffix.PNG, b"\x89PNG\r\n\x1a\ngraphical", max_bytes=100
+        )
+        graphical_abstract = Attachment(
+            workspace_id=item.workspace_id,
+            item_id=item.id,
+            file=FileObject(
+                backend="documents",
+                filename=ga_obj.key,
+                size=ga_obj.size,
+                content_type="image/png",
+                metadata={"original_name": "graphical_abstract.png"},
+            ),
+            role=AttachmentRole.graphical_abstract,
+            created_by=revision.created_by,
+        )
+        db.add(graphical_abstract)
+        await db.commit()
+
+        response = await client.get(f"{workspace_base}/items/{item.id}/overview")
+        assert response.status_code == 200
+        assert response.json()["thumbnail"] == {
+            "source_kind": "graphical_abstract",
+            "source_id": str(graphical_abstract.id),
+        }
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_composite_read_values_remain_stable_without_orm_relationships(async_db):
+    db = async_db
+    user = User(username="detached-section-reader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    workspace = await provision_initial_workspace(db, user)
+    result = await create_item(
+        db,
+        user,
+        workspace.id,
+        ItemMetadata(
+            title="Detached read values",
+            authors=(Contributor("Lovelace", "Ada", is_corresponding=True),),
+            editors=(Contributor("Research Council"),),
+        ),
+    )
+    revision = FileRevision(
+        workspace_id=workspace.id,
+        item_id=result.item_id,
+        created_by=user.id,
+        processing_state="ready",
+        page_count=3,
+        file=FileObject(
+            backend="documents",
+            filename="objects/read-value.pdf",
+            size=42,
+            content_type="application/pdf",
+            metadata={"original_name": "paper.pdf"},
+        ),
+    )
+    attachment = Attachment(
+        workspace_id=workspace.id,
+        item_id=result.item_id,
+        created_by=user.id,
+        role=AttachmentRole.graphical_abstract,
+        file=FileObject(
+            backend="documents",
+            filename="objects/read-value.png",
+            size=17,
+            content_type="image/png",
+            metadata={"original_name": "figure.png"},
+        ),
+    )
+    db.add_all([revision, attachment])
+    await db.commit()
+    files = await open_item_section(
+        db,
+        await resolve_workspace_context(db, user, workspace.id),
+        result.item_id,
+        ItemSection.files,
+    )
+    metadata = await open_item_section(
+        db,
+        await resolve_workspace_context(db, user, workspace.id),
+        result.item_id,
+        ItemSection.metadata,
+    )
+    assert isinstance(files, ItemFilesData) and isinstance(metadata, ItemMetadataData)
+    author = await db.scalar(select(Author).where(Author.last_name == "Lovelace"))
+    author.first_name = "Changed"
+    revision.file.metadata["original_name"] = "changed.pdf"
+    attachment.file.metadata["original_name"] = "changed.png"
+    db.expunge_all()
+
+    documents = document_list_view(result.item_id, files)
+    detail = item_detail_view(metadata)
+    assert [(file.original_name, file.mime_type, file.size) for file in documents.files] == [
+        ("paper.pdf", "application/pdf", 42),
+        ("figure.png", "image/png", 17),
+    ]
+    assert documents.files[0].page_count == 3
+    assert documents.files[0].processing_state == "ready"
+    assert files.attachments[0].role == AttachmentRole.graphical_abstract
+    assert detail.structured_authors[0].first_name == "Ada"
+    assert detail.structured_authors[0].is_corresponding
+    assert detail.editors[0].last_name == "Research Council"
+    assert detail.editors[0].first_name is None

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter
 from fastapi.responses import Response
 
@@ -28,7 +30,8 @@ BIBLIOGRAPHY_CONTENT_TYPES = {
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_item_bibliography(
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     file_format: str,
     user: ApiUser,
     db: Database,
@@ -49,6 +52,7 @@ async def export_item_bibliography(
     contents, media_type, filename = await get_item_citation_response(
         db,
         user,
+        workspace_id,
         item_id,
         file_format,
         style_key=style,
@@ -91,7 +95,8 @@ async def export_item_bibliography(
     },
 )
 async def copy_citation(
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     file_format: str = "csl",
@@ -112,6 +117,7 @@ async def copy_citation(
     contents, _media_type, _filename = await get_item_citation_response(
         db,
         user,
+        workspace_id,
         item_id,
         file_format,
         style_key=style,
@@ -148,13 +154,14 @@ async def copy_citation(
     },
 )
 async def citation_text(
-    item_id: str,
+    workspace_id: UUID,
+    item_id: UUID,
     user: ApiUser,
     db: Database,
     style: str = "apa",
     output: str = "text",
 ):
     rendered, media_type = await get_item_citation_text_response(
-        db, user, item_id, style_key=style, output=output
+        db, user, workspace_id, item_id, style_key=style, output=output
     )
     return Response(rendered, media_type=f"{media_type}; charset=utf-8")

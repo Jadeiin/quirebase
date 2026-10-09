@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id
 
 from quirebase.core.crypto import hash_password
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
@@ -97,7 +98,6 @@ async def test_runtime_settings_applied_to_pdf_upload_limit(async_db, tmp_path, 
     db = async_db
 
     from item_helpers import create_item_record as create_item
-    from test_library_ui import pdf_bytes
 
     from quirebase.core.config import get_settings
     from quirebase.core.errors import ValidationFailure
@@ -112,9 +112,16 @@ async def test_runtime_settings_applied_to_pdf_upload_limit(async_db, tmp_path, 
     # Set runtime limit to 10 bytes (smaller than sample PDF)
     await update_runtime_settings(db, admin, {"max_pdf_bytes": 10})
 
-    data = pdf_bytes()
+    data = b"%PDF-" + b"x" * 32
     with pytest.raises(ValidationFailure, match="file exceeds configured size limit"):
-        await store_pdf_revision(db, member, item.id, data, "test.pdf")
+        await store_pdf_revision(
+            db,
+            member,
+            fixture_workspace_id(member),
+            item.id,
+            data,
+            "test.pdf",
+        )
 
 
 @pytest.mark.anyio

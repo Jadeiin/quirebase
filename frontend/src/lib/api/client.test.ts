@@ -3,14 +3,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-	apiDownload,
-	apiDownloadGet,
 	apiRequest,
-	apiText,
+	createWorkspaceApi,
 	DownloadCancelledError,
 	downloadFilename,
-	onAuthenticationRequired
+	onAuthenticationRequired,
+	onWorkspaceUnavailable,
+	onWorkspaceConflict,
+	onWorkspaceContextRequired
 } from './client';
+
+const workspaceApi = createWorkspaceApi('workspace-1');
 
 describe('apiRequest', () => {
 	it('uses the shared API and browser credentials without a CSRF token', async () => {
@@ -20,9 +23,9 @@ describe('apiRequest', () => {
 			return new Response(JSON.stringify({ ok: true }));
 		};
 
-		await apiRequest(
+		await workspaceApi.request(
 			'POST',
-			'/items',
+			'/workspaces/{workspace_id}/items',
 			{
 				body: {
 					title: 'Item',
@@ -37,7 +40,7 @@ describe('apiRequest', () => {
 			fetcher
 		);
 
-		expect(new URL(received!.url).pathname).toBe('/api/v1/items');
+		expect(new URL(received!.url).pathname).toBe('/api/v1/workspaces/workspace-1/items');
 		expect(received?.method).toBe('POST');
 		expect(received?.headers.get('Content-Type')).toBe('application/json');
 		expect(received?.headers.has('X-CSRF-Token')).toBe(false);
@@ -50,34 +53,62 @@ describe('apiRequest', () => {
 			return new Response(JSON.stringify([]));
 		};
 
-		await apiRequest(
+		await workspaceApi.request(
 			'GET',
-			'/items/{item_id}/annotations',
+			'/workspaces/{workspace_id}/items/{item_id}/annotations',
 			{
 				params: {
 					path: { item_id: 'item/with slash' },
-					query: { revision_id: 'revision-1', project_id: 'project-1' }
+					query: { revision_id: 'revision-1', project_id: ['project-1', 'project-2'] }
 				}
 			},
 			fetcher
 		);
 
 		const url = new URL(received!.url);
-		expect(url.pathname).toBe('/api/v1/items/item%2Fwith%20slash/annotations');
+		expect(url.pathname).toBe(
+			'/api/v1/workspaces/workspace-1/items/item%2Fwith%20slash/annotations'
+		);
 		expect(url.searchParams.get('revision_id')).toBe('revision-1');
-		expect(url.searchParams.get('project_id')).toBe('project-1');
+		expect(url.searchParams.getAll('project_id')).toEqual(['project-1', 'project-2']);
 	});
 
 	it('omits empty query values', async () => {
 		let received: Request | undefined;
 		const fetcher: typeof fetch = async (input) => {
 			received = input as Request;
-			return new Response(JSON.stringify({ total: 0, page: 1, per_page: 25, items: [] }));
+			return new Response(JSON.stringify({ total: 0, limit: 25, offset: 0, items: [] }));
 		};
 
-		await apiRequest('GET', '/items', { params: { query: { query: '', author: 'ada' } } }, fetcher);
+		await workspaceApi.request(
+			'GET',
+			'/workspaces/{workspace_id}/items',
+			{ params: { query: { query: '', author: 'ada' } } },
+			fetcher
+		);
 
 		expect(new URL(received!.url).search).toBe('?author=ada');
+	});
+
+	it('uses only the explicitly bound Workspace ID, ignoring the stored default', async () => {
+		let received: Request | undefined;
+		localStorage.setItem('quirebase:default-workspace', 'workspace-from-storage');
+		const fetcher: typeof fetch = async (input) => {
+			received = input as Request;
+			return new Response(JSON.stringify({ id: 'workflow-1', state: 'running', error: null }));
+		};
+
+		await createWorkspaceApi('workspace-from-url').request(
+			'GET',
+			'/workspaces/{workspace_id}/workflows/{workflow_id}',
+			{ params: { path: { workflow_id: 'workflow-1' } } },
+			fetcher
+		);
+
+		expect(new URL(received!.url).pathname).toBe(
+			'/api/v1/workspaces/workspace-from-url/workflows/workflow-1'
+		);
+		localStorage.removeItem('quirebase:default-workspace');
 	});
 
 	it('keeps method, path, parameters, body, and response tied to OpenAPI at compile time', () => {
@@ -141,8 +172,8 @@ describe('GET downloads', () => {
 		vi.stubGlobal('fetch', fetcher);
 		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
 
-		await apiDownloadGet(
-			'/items/{item_id}/attachments/{attachment_id}/content',
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
 			{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
 			{ suggestedName: 'paper.pdf' }
 		);
@@ -172,13 +203,49 @@ describe('GET downloads', () => {
 		vi.stubGlobal('fetch', fetcher);
 		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
 
-		await apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
-			params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
-		});
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
+			{
+				params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
+			}
+		);
 
 		expect(click).toHaveBeenCalledOnce();
 		expect(revokeObjectURL).toHaveBeenCalledWith('blob:fallback');
 	});
+
+	it.each(['unavailable', 'blocked'] as const)(
+		'uses the caller filename when a signed response omits it (%s picker)',
+		async (mode) => {
+			const link = document.createElement('a');
+			const click = vi.spyOn(link, 'click').mockImplementation(() => undefined);
+			vi.spyOn(document, 'createElement').mockReturnValue(link);
+			vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:signed-pdf');
+			vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+			vi.stubGlobal(
+				'showSaveFilePicker',
+				mode === 'blocked'
+					? vi.fn(async () => {
+							throw new DOMException('blocked', 'SecurityError');
+						})
+					: undefined
+			);
+			const fetcher = vi.fn(
+				async () =>
+					new Response('pdf content', {
+						headers: { 'Content-Type': 'application/pdf' }
+					})
+			) as typeof fetch;
+			vi.stubGlobal('fetch', fetcher);
+			await workspaceApi.downloadGet(
+				'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content',
+				{ params: { path: { item_id: 'item-1', revision_id: 'revision-1' } } },
+				{ suggestedName: '原始论文.pdf' }
+			);
+			expect(link.download).toBe('原始论文.pdf');
+			expect(click).toHaveBeenCalledOnce();
+		}
+	);
 
 	it('saves a zero-byte file when a successful response has no body', async () => {
 		const link = document.createElement('a');
@@ -198,9 +265,12 @@ describe('GET downloads', () => {
 		) as typeof fetch;
 		vi.stubGlobal('fetch', fetcher);
 
-		await apiDownloadGet('/items/{item_id}/attachments/{attachment_id}/content', {
-			params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
-		});
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
+			{
+				params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } }
+			}
+		);
 
 		expect(createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ size: 0 }));
 		expect(link.download).toBe('empty.txt');
@@ -221,8 +291,8 @@ describe('GET downloads', () => {
 			});
 		}) as typeof fetch;
 
-		await apiDownloadGet(
-			'/items/{item_id}/attachments/{attachment_id}/content',
+		await workspaceApi.downloadGet(
+			'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
 			{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
 			fetcher
 		);
@@ -244,8 +314,8 @@ describe('GET downloads', () => {
 		) as typeof fetch;
 
 		await expect(
-			apiDownloadGet(
-				'/items/{item_id}/revisions/{revision_id}/export',
+			workspaceApi.downloadGet(
+				'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/export',
 				{ params: { path: { item_id: 'item-1', revision_id: 'revision-1' } } },
 				fetcher
 			)
@@ -266,7 +336,7 @@ describe('POST downloads', () => {
 		vi.stubGlobal('showSaveFilePicker', showSaveFilePicker);
 
 		await expect(
-			apiDownload('/items/documents/archive', {
+			workspaceApi.download('/workspaces/{workspace_id}/items/documents/archive', {
 				body: {
 					item_ids: ['item-1'],
 					include_annotations: false,
@@ -283,8 +353,8 @@ describe('non-JSON API errors', () => {
 		[
 			'download',
 			(fetcher: typeof fetch) =>
-				apiDownloadGet(
-					'/items/{item_id}/attachments/{attachment_id}/content',
+				workspaceApi.downloadGet(
+					'/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content',
 					{ params: { path: { item_id: 'item-1', attachment_id: 'attachment-1' } } },
 					fetcher
 				)
@@ -292,8 +362,8 @@ describe('non-JSON API errors', () => {
 		[
 			'text',
 			(fetcher: typeof fetch) =>
-				apiText(
-					'/items/{item_id}/citation/content',
+				workspaceApi.text(
+					'/workspaces/{workspace_id}/items/{item_id}/citation/content',
 					{ params: { path: { item_id: 'item-1' } } },
 					fetcher
 				)
@@ -315,6 +385,135 @@ describe('non-JSON API errors', () => {
 });
 
 describe('structured API errors', () => {
+	it('reports a missing Workspace context and opens the global recovery hook', async () => {
+		const diagnostic = vi.fn();
+		const event = vi.fn();
+		const unregister = onWorkspaceContextRequired(diagnostic);
+		window.addEventListener('quirebase:api-diagnostic', event);
+		const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const fetcher = (async () =>
+			new Response(JSON.stringify({ code: 'workspace_context_required', message: 'missing' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})) as typeof fetch;
+		await expect(apiRequest('GET', '/workspaces', undefined, fetcher)).rejects.toMatchObject({
+			code: 'workspace_context_required'
+		});
+		expect(diagnostic).toHaveBeenCalledOnce();
+		expect(event).toHaveBeenCalledOnce();
+		expect(logged).toHaveBeenCalledOnce();
+		unregister();
+		window.removeEventListener('quirebase:api-diagnostic', event);
+		logged.mockRestore();
+	});
+
+	it('signals a Workspace lifecycle conflict without affecting another Workspace', async () => {
+		const conflict = vi.fn();
+		const unregister = onWorkspaceConflict(conflict);
+		const fetcher = (async () => {
+			const response = new Response(
+				JSON.stringify({ code: 'workspace_lifecycle_error', message: 'archived' }),
+				{ status: 409, headers: { 'Content-Type': 'application/json' } }
+			);
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items'
+			});
+			return response;
+		}) as typeof fetch;
+		await expect(
+			workspaceApi.request('GET', '/workspaces/{workspace_id}/items', undefined, fetcher)
+		).rejects.toMatchObject({ status: 409 });
+		expect(conflict).toHaveBeenCalledWith('workspace-1');
+		unregister();
+	});
+	it.each([
+		'version_conflict',
+		'project_lifecycle_error',
+		'project_participation_conflict',
+		'tag_conflict',
+		'document_not_ready',
+		'import_batch_conflict'
+	])('leaves %s to the resource surface without refreshing the Workspace', async (code) => {
+		const conflict = vi.fn();
+		const unregister = onWorkspaceConflict(conflict);
+		const fetcher = (async () => {
+			const response = new Response(JSON.stringify({ code, message: 'conflict' }), {
+				status: 409,
+				headers: { 'Content-Type': 'application/json' }
+			});
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items/item-1'
+			});
+			return response;
+		}) as typeof fetch;
+		try {
+			await expect(
+				workspaceApi.request(
+					'GET',
+					'/workspaces/{workspace_id}/items/{item_id}',
+					{ params: { path: { item_id: 'item-1' } } },
+					fetcher
+				)
+			).rejects.toMatchObject({ status: 409, code });
+			expect(conflict).not.toHaveBeenCalled();
+		} finally {
+			unregister();
+		}
+	});
+
+	it('signals Workspace membership loss so the URL owner can recover context', async () => {
+		const unavailable = vi.fn();
+		const unregister = onWorkspaceUnavailable(unavailable);
+		const fetcher = (async () => {
+			const response = new Response(
+				JSON.stringify({ code: 'workspace_unavailable', message: 'Workspace not found' }),
+				{
+					status: 404,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			);
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items'
+			});
+			return response;
+		}) as typeof fetch;
+
+		await expect(
+			workspaceApi.request('GET', '/workspaces/{workspace_id}/items', undefined, fetcher)
+		).rejects.toMatchObject({ code: 'workspace_unavailable' });
+		expect(unavailable).toHaveBeenCalledWith('workspace-1');
+		unregister();
+	});
+
+	it.each([
+		['not_found', 404],
+		['permission_denied', 403]
+	])('does not treat %s as an unavailable Workspace', async (code, status) => {
+		const unavailable = vi.fn();
+		const unregister = onWorkspaceUnavailable(unavailable);
+		const fetcher = (async () => {
+			const response = new Response(JSON.stringify({ code, message: 'Resource action failed' }), {
+				status,
+				headers: { 'Content-Type': 'application/json' }
+			});
+			Object.defineProperty(response, 'url', {
+				value: 'https://quirebase.test/api/v1/workspaces/workspace-1/items/item-1'
+			});
+			return response;
+		}) as typeof fetch;
+
+		await expect(
+			workspaceApi.request(
+				'GET',
+				'/workspaces/{workspace_id}/items/{item_id}',
+				{ params: { path: { item_id: 'item-1' } } },
+				fetcher
+			)
+		).rejects.toMatchObject({ code, status });
+		expect(unavailable).not.toHaveBeenCalled();
+		unregister();
+	});
+
 	it('notifies the session owner for authentication failures', async () => {
 		let notified = 0;
 		const unregister = onAuthenticationRequired(() => {
@@ -326,7 +525,9 @@ describe('structured API errors', () => {
 				headers: { 'Content-Type': 'application/json' }
 			})) as typeof fetch;
 
-		await expect(apiRequest('GET', '/items', undefined, fetcher)).rejects.toMatchObject({
+		await expect(
+			workspaceApi.request('GET', '/workspaces/{workspace_id}/items', undefined, fetcher)
+		).rejects.toMatchObject({
 			status: 401,
 			code: 'authentication_required'
 		});
@@ -347,9 +548,9 @@ describe('structured API errors', () => {
 			)) as typeof fetch;
 
 		await expect(
-			apiRequest(
+			workspaceApi.request(
 				'POST',
-				'/items',
+				'/workspaces/{workspace_id}/items',
 				{
 					body: {
 						title: 'Item',

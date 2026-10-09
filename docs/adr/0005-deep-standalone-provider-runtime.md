@@ -1,6 +1,10 @@
+---
+status: superseded by ADR-0006
+---
+
 # ADR 0005: use a deep standalone runtime for scholarly Providers
 
-Status: superseded by [ADR 0006](0006-async-runtime-and-persistence.md).
+Superseded by [ADR 0006](0006-async-runtime-and-persistence.md).
 
 Inquiro is an independently installable package in the Quirebase monorepo. It is independent of
 Quirebase business policy and persistence, owns several true external Provider dependencies, and

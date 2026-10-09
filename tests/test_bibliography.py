@@ -10,8 +10,18 @@ from inquiro.bibliography import (
     parse_bibliography_records,
     record_from_item,
 )
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.models import Item, User
+
+
+async def _user(db, username: str) -> User:
+    user = User(username=username, password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.flush()
+    return user
 
 
 def _item_payload(record):
@@ -38,9 +48,7 @@ def _item_payload(record):
         "identifiers": _json.dumps(dict(record.identifiers), ensure_ascii=False)
         if record.identifiers
         else None,
-        "custom_fields": _json.dumps(dict(record.custom_fields), ensure_ascii=False)
-        if record.custom_fields
-        else None,
+        "custom_fields": dict(record.custom_fields) if record.custom_fields else None,
     }
 
 
@@ -59,10 +67,8 @@ async def test_bibtex_parse_and_round_trip(async_db):
 
     assert errors == []
     assert records[0]["authors"] == "Doe, Jane; Smith, Alex"
-    user = User(username="bibtex", password_hash="unused")
-    db.add(user)
-    await db.flush()
-    item = Item(created_by=user.id, **records[0])
+    user = await _user(db, "bibtex")
+    item = Item(workspace_id=fixture_workspace_id(user), created_by=user.id, **records[0])
     output = export_bibliography_records([record_from_item(i) for i in [item]], "bibtex")
 
     exported = parse_bibtex_string(output).entries_dict["sample"]
@@ -94,11 +100,10 @@ def test_bibtex_import_projects_literal_and_suffix_contributors_to_first_last():
 @pytest.mark.anyio
 async def test_bibtex_export_can_protect_text_field_capitalization(async_db):
     db = async_db
-    user = User(username="bibtex-case", password_hash="unused")
-    db.add(user)
-    await db.flush()
+    user = await _user(db, "bibtex-case")
     item = Item(
         title="An API for GraphQL and eBPF",
+        workspace_id=fixture_workspace_id(user),
         abstract="Using CUDA with an LLM",
         authors="Doe, Jane; Smith, Alex",
         keywords="API; GraphQL",
@@ -131,11 +136,19 @@ async def test_bibtex_export_can_protect_text_field_capitalization(async_db):
 @pytest.mark.anyio
 async def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(async_db):
     db = async_db
-    user = User(username="duplicate-export-keys", password_hash="unused")
-    db.add(user)
-    await db.flush()
-    first = Item(title="First", bibtex_id="SharedKey", created_by=user.id)
-    second = Item(title="Second", bibtex_id="sharedkey", created_by=user.id)
+    user = await _user(db, "duplicate-export-keys")
+    first = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="First",
+        bibtex_id="SharedKey",
+        created_by=user.id,
+    )
+    second = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="Second",
+        bibtex_id="sharedkey",
+        created_by=user.id,
+    )
     db.add_all([first, second])
     await db.commit()
 
@@ -150,10 +163,12 @@ async def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(
 @pytest.mark.anyio
 async def test_bibtex_case_protection_does_not_add_repeated_outer_braces(async_db):
     db = async_db
-    user = User(username="bibtex-braces", password_hash="unused")
-    db.add(user)
-    await db.flush()
-    item = Item(title="{Already Protected}", created_by=user.id)
+    user = await _user(db, "bibtex-braces")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title="{Already Protected}",
+        created_by=user.id,
+    )
 
     protected = export_bibliography_records(
         [record_from_item(i) for i in [item]],
@@ -167,10 +182,12 @@ async def test_bibtex_case_protection_does_not_add_repeated_outer_braces(async_d
 @pytest.mark.anyio
 async def test_bibtex_case_protection_leaves_latex_commands_intact(async_db):
     db = async_db
-    user = User(username="bibtex-latex", password_hash="unused")
-    db.add(user)
-    await db.flush()
-    item = Item(title=r"Using \LaTeX with {CUDA}", created_by=user.id)
+    user = await _user(db, "bibtex-latex")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        title=r"Using \LaTeX with {CUDA}",
+        created_by=user.id,
+    )
 
     protected = export_bibliography_records(
         [record_from_item(i) for i in [item]],
@@ -190,13 +207,13 @@ async def test_bibtex_export_can_include_identifiers_and_custom_fields(async_db)
     item = Item(
         title="Extra fields",
         identifiers=json.dumps({"openalex": "W123", "arxiv": "2401.00001"}),
-        custom_fields=json.dumps({
+        custom_fields={
             "dataset_id": "DS-42",
             "Study Quality": "High",
             "study_quality": "Medium",
             "foo:bar": "Baz",
             "reviewed": True,
-        }),
+        },
         created_by=user.id,
     )
 
@@ -219,7 +236,7 @@ async def test_bibtex_export_can_include_identifiers_and_custom_fields(async_db)
     typed, errors = parse_bibliography_records(output, "bibtex")
     records = [_item_payload(record) for record in typed]
     assert errors == []
-    assert json.loads(records[0]["custom_fields"]) == {
+    assert records[0]["custom_fields"] == {
         "dataset_id": "DS-42",
         "study_quality": "High",
         "study_quality_2": "Medium",

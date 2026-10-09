@@ -3,45 +3,78 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
-	import Icon from '$lib/design/Icon.svelte';
-	import { t } from '$lib/i18n';
-	import type { ThemePreference } from '$lib/theme';
+	import type { components } from '#lib/api/schema.js';
+	import { hasAllowedAction } from '#lib/authorization/can.js';
+	import Icon from '#lib/design/Icon.svelte';
+	import { t } from '#lib/i18n.js';
+	import type { ThemePreference } from '#lib/theme.js';
 	import { mobileMoreNavigation, mobileNavigation, themeOptions } from './navigation';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	let { routeIsActive, user, readerRoute, themePreference, onThemeChange } = $props<{
+	let { routeIsActive, user, readerRoute, themePreference, onThemeChange, workspaceId } = $props<{
 		routeIsActive: (route: string) => boolean;
-		user?: { role: string } | null;
+		user?: components['schemas']['SessionUserView'] | null;
 		readerRoute: boolean;
+		workspaceId?: string;
 		themePreference: ThemePreference;
 		onThemeChange: (preference: ThemePreference) => void;
 	}>();
+	const mobileItems = $derived(
+		mobileNavigation.map(
+			([section, label, icon]) =>
+				[
+					workspaceId ? resolve(workspaceHref(workspaceId, section)) : resolve('workspace'),
+					label,
+					icon
+				] as const
+		)
+	);
+	const moreItems = $derived(
+		mobileMoreNavigation.map(
+			([section, label, icon]) =>
+				[
+					section === '/account'
+						? resolve('account')
+						: workspaceId
+							? resolve(workspaceHref(workspaceId, section))
+							: resolve('workspace'),
+					label,
+					icon
+				] as const
+		)
+	);
+	const moreActive = $derived(
+		moreItems.some(([route]) =>
+			route === '/account' ? routeIsActive(route) : Boolean(workspaceId) && routeIsActive(route)
+		)
+	);
 </script>
 
 <nav
 	class={`fixed inset-x-0 bottom-0 z-50 overflow-x-auto bg-primary-950 text-surface-300 md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	aria-label={$t('Mobile navigation')}
 >
-	{#each mobileNavigation as [route, label, icon] (route)}
+	{#each mobileItems as [route, label, icon] (label)}
 		<a
 			class="flex min-w-18 flex-1 flex-col items-center gap-1 px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
-			href={resolve(route)}
-			aria-current={route === '/library'
-				? routeIsActive(route) || page.url.pathname.startsWith('/item/')
-					? 'page'
-					: undefined
-				: routeIsActive(route)
-					? 'page'
-					: undefined}><Icon name={icon} size={19} /><span>{$t(label)}</span></a
+			href={route}
+			aria-current={workspaceId &&
+				(route.endsWith('/library')
+					? routeIsActive(route) || page.url.pathname.includes('/item/')
+						? 'page'
+						: undefined
+					: routeIsActive(route)
+						? 'page'
+						: undefined)}
 		>
+			<Icon name={icon} size={19} />
+			<span>{$t(label)}</span>
+		</a>
 	{/each}
 	<Menu positioning={{ placement: 'top-end', gutter: 8 }}>
 		<Menu.Trigger
 			class="flex min-w-18 flex-1 cursor-pointer flex-col items-center gap-1 border-0 bg-transparent px-1.5 py-2 text-xs text-inherit aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
-			aria-current={['/', '/import', '/tools', '/admin', '/account'].some((route) =>
-				routeIsActive(route)
-			)
-				? 'page'
-				: undefined}
+			aria-current={moreActive ? 'page' : undefined}
 		>
 			<Icon name="more" size={19} /><span>{$t('More')}</span>
 		</Menu.Trigger>
@@ -50,11 +83,11 @@
 				<Menu.Content
 					class="min-w-52 rounded-container border border-surface-300-700 bg-surface-50-950 p-1 text-surface-900-100 shadow-xl"
 				>
-					{#each mobileMoreNavigation as [route, label, icon] (route)}
+					{#each moreItems as [route, label, icon] (label)}
 						<Menu.Item
 							value={route}
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
-							onclick={() => goto(resolve(route))}><Icon name={icon} /> {$t(label)}</Menu.Item
+							onclick={() => goto(route)}><Icon name={icon} /> {$t(label)}</Menu.Item
 						>
 					{/each}
 					<Menu.Separator class="m-1 h-px bg-surface-300-700" />
@@ -67,18 +100,21 @@
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[active=true]:bg-primary-50-950 data-[active=true]:text-primary-800-200 data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 							data-active={themePreference === preference}
 							onclick={() => onThemeChange(preference)}
-							><Icon name={icon} /><span>{$t(label)}</span>{#if themePreference === preference}<span
-									class="ml-auto"
-									aria-hidden="true">✓</span
-								>{/if}</Menu.Item
 						>
+							<Icon name={icon} />
+							<span>{$t(label)}</span>
+
+							{#if themePreference === preference}
+								<span class="ml-auto" aria-hidden="true">✓</span>
+							{/if}
+						</Menu.Item>
 					{/each}
-					{#if user?.role === 'administrator'}
+					{#if hasAllowedAction(user?.authorization)}
 						<Menu.Item
 							value="/admin"
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
-							onclick={() => goto(resolve('/admin'))}
-							><Icon name="admin" /> {$t('Administration')}</Menu.Item
+							onclick={() => goto(resolve('admin'))}
+							><Icon name="admin" />{$t('Administration')}</Menu.Item
 						>
 					{/if}
 				</Menu.Content>

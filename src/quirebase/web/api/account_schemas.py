@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves it
-from typing import Literal
+from datetime import datetime
+from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from quirebase.models import SystemRole, WorkspaceInvitationRole
 from quirebase.web.api.session_schemas import LoginSessionView, SessionUserView
 
 
 class InvitationAcceptRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
     password: str = Field(min_length=1)
 
 
@@ -18,7 +25,7 @@ class ApiTokenCreateRequest(BaseModel):
 
 
 class ApiTokenView(BaseModel):
-    id: str
+    id: UUID = Field(validation_alias="token_id")
     name: str
     status: Literal["active", "expired", "revoked"]
     expires_at: datetime
@@ -26,7 +33,7 @@ class ApiTokenView(BaseModel):
 
 
 class ApiTokenGrantView(BaseModel):
-    id: str
+    id: UUID
     token: str
     expires_at: datetime
 
@@ -43,6 +50,20 @@ class AccountSummaryView(BaseModel):
 
 
 class InvitationDetailsView(BaseModel):
+    kind: Literal["account"] = "account"
     username: str
-    role: str
+    role: SystemRole
     expires_at: datetime
+
+
+class WorkspaceInvitationDetailsView(BaseModel):
+    kind: Literal["workspace"] = "workspace"
+    username: str
+    role: WorkspaceInvitationRole
+    workspace_name: str
+    expires_at: datetime
+
+
+PublicInvitationDetailsView = Annotated[
+    InvitationDetailsView | WorkspaceInvitationDetailsView, Field(discriminator="kind")
+]

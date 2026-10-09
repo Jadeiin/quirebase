@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import { domainLabel } from '$lib/domain-labels';
-	import Badge from '$lib/design/Badge.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import ExportPreferences from '$lib/features/account/ExportPreferences.svelte';
-	import { accountQuery } from '$lib/features/account/queries';
-	import { dateFormat, dateTimeFormat } from '$lib/format';
-	import { activeLocale, msg, setLocale, t, type MessageKey } from '$lib/i18n';
-	import { SUPPORTED_LOCALES, type Locale } from '$lib/locale';
-	import Button from '$lib/design/Button.svelte';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import Badge from '#lib/design/Badge.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import ExportPreferences from '#lib/features/account/ExportPreferences.svelte';
+	import { accountQuery } from '#lib/features/account/queries.js';
+	import { dateFormat, dateTimeFormat } from '#lib/format.js';
+	import { activeLocale, msg, setLocale, t, type MessageKey } from '#lib/i18n.js';
+	import { SUPPORTED_LOCALES, type Locale } from '#lib/locale.js';
+	import Button from '#lib/design/Button.svelte';
 
 	const localeLabels: Record<Locale, string> = {
 		'en-US': 'English',

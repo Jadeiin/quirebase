@@ -1,19 +1,20 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import type { components } from '$lib/api/schema';
-	import Badge from '$lib/design/Badge.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { discoveryProvidersQuery } from '$lib/features/discovery/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import type { components } from '#lib/api/schema.js';
+	import Badge from '#lib/design/Badge.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	type Results = components['schemas']['CandidatePageView'];
 	type Candidate = components['schemas']['CandidateView'];
@@ -31,7 +32,8 @@
 	let results = $state<Results | null>(null);
 	let searchAbort: AbortController | null = null;
 
-	const providers = createQuery(() => discoveryProvidersQuery());
+	const workspace = getWorkspaceContext();
+	const providers = createQuery(() => discoveryProvidersQuery(workspace.workspaceId));
 
 	function addClause() {
 		clauses.push({ id: nextClauseId++, field: 'any', operator: 'and', term: '' });
@@ -48,7 +50,7 @@
 		busy = true;
 		error = '';
 		try {
-			results = await apiRequest('POST', '/discovery/search', {
+			results = await workspace.api.request('POST', '/workspaces/{workspace_id}/discovery/search', {
 				body: {
 					provider,
 					clauses: clauses.map(({ field, operator, term }) => ({ field, operator, term })),
@@ -72,14 +74,23 @@
 	}
 
 	async function review(candidate: Candidate) {
+		if (!workspace.can('item.create')) return;
 		const key = `${candidate.identifier_provider}:${candidate.identifier}`;
 		importing = key;
 		error = '';
 		try {
-			const batch = await apiRequest('POST', '/imports/identifier', {
-				body: { identifier: candidate.identifier, provider: candidate.identifier_provider }
-			});
-			await goto(resolve(`/import?batch=${encodeURIComponent(batch.id)}`));
+			const batch = await workspace.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/imports/identifier',
+				{
+					body: { identifier: candidate.identifier, provider: candidate.identifier_provider }
+				}
+			);
+			await goto(
+				resolve(
+					workspaceHref(workspace.workspaceId, `import?batch=${encodeURIComponent(batch.id)}`)
+				)
+			);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Import preview failed'));
 		} finally {
@@ -217,7 +228,7 @@
 						>{candidate.identifier_provider}:{candidate.identifier}</code
 					>
 				</div>
-				{#if !candidate.imported}
+				{#if !candidate.imported && workspace.can('item.create')}
 					<Button variant="filled" disabled={importing !== ''} onclick={() => review(candidate)}
 						>{importing === `${candidate.identifier_provider}:${candidate.identifier}`
 							? $t('Preparing…')

@@ -1,25 +1,40 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { domainLabel } from '$lib/domain-labels';
-	import { kilobytes, numberFormat } from '$lib/format';
-	import Panel from '$lib/design/Panel.svelte';
-	import { t } from '$lib/i18n';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { kilobytes, numberFormat } from '#lib/format.js';
+	import Panel from '#lib/design/Panel.svelte';
+	import { t } from '#lib/i18n.js';
 	import type { FileRow, FilesView, ItemDetail } from '../types';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	let { itemId, data, details, canEdit, busy, onUpload, onUploadFromUrl, onDownload, onDelete } =
-		$props<{
-			itemId: string;
-			data: FilesView;
-			details?: ItemDetail;
-			canEdit: boolean;
-			busy: boolean;
-			onUpload: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
-			onUploadFromUrl: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
-			onDownload: (file: FileRow) => void;
-			onDelete: (file: FileRow) => void;
-		}>();
+	let {
+		itemId,
+		data,
+		details,
+		canEdit,
+		canDelete,
+		busy,
+		onUpload,
+		onUploadFromUrl,
+		onDownload,
+		onDelete
+	} = $props<{
+		itemId: string;
+		data: FilesView;
+		details?: ItemDetail;
+		canEdit: boolean;
+		canDelete: boolean;
+		busy: boolean;
+		onUpload: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
+		onUploadFromUrl: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
+		onDownload: (file: FileRow) => void;
+		onDelete: (file: FileRow) => void;
+	}>();
+	const workspace = getWorkspaceContext();
+	const { workspaceId } = workspace;
 </script>
 
 <div class="grid grid-cols-1 gap-4 min-[800px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
@@ -39,14 +54,14 @@
 					{#if file.kind === 'revision' && file.processing_state === 'ready'}
 						<Button
 							as="a"
-							href={resolve('/(app)/item/[itemId]/pdf/[revisionId]', {
-								itemId,
-								revisionId: file.id
-							})}>{$t('Read')}</Button
+							href={resolve(workspaceHref(workspaceId, `item/${itemId}/pdf/${file.id}`))}
+							>{$t('Read')}</Button
 						>
 					{/if}
-					<Button onclick={() => onDownload(file)}>{$t('Download')}</Button>
-					{#if canEdit}
+					{#if workspace.can('workspace.export')}<Button onclick={() => onDownload(file)}
+							>{$t('Download')}</Button
+						>{/if}
+					{#if canDelete}
 						<Button variant="danger" disabled={busy} onclick={() => onDelete(file)}
 							>{$t('Delete')}</Button
 						>
