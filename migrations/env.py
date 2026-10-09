@@ -1,27 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-from logging.config import fileConfig
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from alembic import context
+from dbos._schemas.datasource_database import DatasourceSchema
+from dbos._schemas.system_database import SystemSchema
 
 import quirebase.models  # ruff: ignore[unused-import]
-from quirebase.core.config import get_settings
-from quirebase.core.database import Base, make_async_engine
+from quirebase.core.database import Base, database_config
 from quirebase.core.storage import get_object_store
 
 if TYPE_CHECKING:
+    from advanced_alchemy.alembic.commands import AlembicCommandConfig
     from sqlalchemy.engine import Connection
 
-config = context.config
-
-# Interpret the config file for Python logging.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-# The application owns the database URL; alembic.ini only carries a placeholder.
-database_url = get_settings().database_url
+config = cast("AlembicCommandConfig", context.config)
+alembic_config = database_config.alembic_config
 
 target_metadata = Base.metadata
 
@@ -40,6 +35,12 @@ FTS5_SHADOW_SUFFIXES = (
     "_segments",
     "_stat",
 )
+# Alembic owns business tables; DBOS owns its system and datasource tables.
+DBOS_TABLES = frozenset(
+    table.name
+    for metadata in (SystemSchema.metadata_obj, DatasourceSchema.metadata_obj)
+    for table in metadata.tables.values()
+) | {"dbos_migrations"}
 
 
 def _is_search_projection(name: str) -> bool:
@@ -51,18 +52,21 @@ def _is_search_projection(name: str) -> bool:
 
 
 def include_object(_object, name, type_, reflected, _compare_to):
-    """Keep database-only search projections out of autogenerate diffs."""
-    return not (type_ == "table" and reflected and _is_search_projection(name))
+    """Keep Search projections and DBOS-owned infrastructure out of business revisions."""
+    return not (
+        type_ == "table" and reflected and (_is_search_projection(name) or name in DBOS_TABLES)
+    )
 
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     context.configure(
-        url=database_url,
+        url=config.db_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=include_object,
+        version_table=config.version_table_name,
     )
 
     with context.begin_transaction():
@@ -73,7 +77,10 @@ def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
-        compare_type=True,
+        compare_type=alembic_config.compare_type,
+        render_as_batch=alembic_config.render_as_batch,
+        user_module_prefix=alembic_config.user_module_prefix,
+        version_table=config.version_table_name,
         include_object=include_object,
     )
     if context.get_context().opts.get("revision_context") is not None:
@@ -86,7 +93,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode against the application's async engine."""
-    connectable = make_async_engine(database_url)
+    connectable = config.engine
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

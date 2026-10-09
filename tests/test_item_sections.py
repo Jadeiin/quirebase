@@ -22,19 +22,23 @@ from quirebase.core.crypto import token_hash
 from quirebase.core.errors import ResourceNotFound, WorkspaceMembershipRequired
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.library import (
+    Contributor,
     ItemAnnotationsData,
     ItemDiscussionData,
     ItemFilesData,
+    ItemMetadata,
     ItemMetadataData,
     ItemOrganizationData,
     ItemOverviewData,
     ItemSection,
+    create_item,
     open_item_section,
 )
 from quirebase.models import (
     Attachment,
     AttachmentRole,
     AuditEvent,
+    Author,
     DiscussionMessage,
     FileRevision,
     Item,
@@ -53,6 +57,8 @@ from quirebase.models import (
     WorkspaceState,
 )
 from quirebase.web.api import documents as documents_api
+from quirebase.web.api.annotation_schemas import document_list_view
+from quirebase.web.api.library_schemas import item_detail_view
 
 
 @pytest.mark.anyio
@@ -725,3 +731,83 @@ async def test_item_overview_projection_includes_thumbnail_metadata(
     finally:
         await client.aclose()
         get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_composite_read_values_remain_stable_without_orm_relationships(async_db):
+    db = async_db
+    user = User(username="detached-section-reader", password_hash="unused")
+    db.add(user)
+    await db.flush()
+    workspace = await provision_initial_workspace(db, user)
+    result = await create_item(
+        db,
+        user,
+        workspace.id,
+        ItemMetadata(
+            title="Detached read values",
+            authors=(Contributor("Lovelace", "Ada", is_corresponding=True),),
+            editors=(Contributor("Research Council"),),
+        ),
+    )
+    revision = FileRevision(
+        workspace_id=workspace.id,
+        item_id=result.item_id,
+        created_by=user.id,
+        processing_state="ready",
+        page_count=3,
+        file=FileObject(
+            backend="documents",
+            filename="objects/read-value.pdf",
+            size=42,
+            content_type="application/pdf",
+            metadata={"original_name": "paper.pdf"},
+        ),
+    )
+    attachment = Attachment(
+        workspace_id=workspace.id,
+        item_id=result.item_id,
+        created_by=user.id,
+        role=AttachmentRole.graphical_abstract,
+        file=FileObject(
+            backend="documents",
+            filename="objects/read-value.png",
+            size=17,
+            content_type="image/png",
+            metadata={"original_name": "figure.png"},
+        ),
+    )
+    db.add_all([revision, attachment])
+    await db.commit()
+    files = await open_item_section(
+        db,
+        await resolve_workspace_context(db, user, workspace.id),
+        result.item_id,
+        ItemSection.files,
+    )
+    metadata = await open_item_section(
+        db,
+        await resolve_workspace_context(db, user, workspace.id),
+        result.item_id,
+        ItemSection.metadata,
+    )
+    assert isinstance(files, ItemFilesData) and isinstance(metadata, ItemMetadataData)
+    author = await db.scalar(select(Author).where(Author.last_name == "Lovelace"))
+    author.first_name = "Changed"
+    revision.file.metadata["original_name"] = "changed.pdf"
+    attachment.file.metadata["original_name"] = "changed.png"
+    db.expunge_all()
+
+    documents = document_list_view(result.item_id, files)
+    detail = item_detail_view(metadata)
+    assert [(file.original_name, file.mime_type, file.size) for file in documents.files] == [
+        ("paper.pdf", "application/pdf", 42),
+        ("figure.png", "image/png", 17),
+    ]
+    assert documents.files[0].page_count == 3
+    assert documents.files[0].processing_state == "ready"
+    assert files.attachments[0].role == AttachmentRole.graphical_abstract
+    assert detail.structured_authors[0].first_name == "Ada"
+    assert detail.structured_authors[0].is_corresponding
+    assert detail.editors[0].last_name == "Research Council"
+    assert detail.editors[0].first_name is None

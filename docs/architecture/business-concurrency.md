@@ -78,6 +78,19 @@ lock is acquired; external I/O and expensive computation never run while holding
 SQLite may map these calls to its ordinary transaction semantics; no SQLite-only writer gate or
 process lock is required.
 
+## Login signing and credential revocation
+
+Each login request verifies its captured password once, outside a database transaction. Before
+signing, Accounts takes the User's `FOR NO KEY UPDATE` lock and reloads active status and the
+password hash. A changed hash or inactive/missing User rejects the request without re-verification
+or retry. A competing opportunistic rehash also invalidates the captured hash.
+
+The same User lock serializes signing with administrator password reset/deactivation. A login
+that signs first is removed by the subsequent revocation; a login waiting behind revocation
+rechecks the committed state before signing. Session creation, any hash upgrade, failure-counter
+clear and success Audit commit together. A failed login's counter and failure Audit also commit
+together. Independent Session/Throttle commands retain their own transaction completion.
+
 ## Search projections
 
 Library Search is derived state, not a business invariant. It has two synchronous projections:

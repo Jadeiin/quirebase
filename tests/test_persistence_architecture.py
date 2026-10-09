@@ -6,9 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from alembic.config import Config
+from advanced_alchemy.alembic.commands import AlembicCommands
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect
+
+from quirebase.core.database import database_config
 
 EXPECTED_TABLES = {
     "api_tokens",
@@ -70,8 +72,8 @@ def test_alembic_upgrades_complete_metadata_without_web(tmp_path: Path):
     database = tmp_path / "migration.db"
     script = """
 import sys
-from alembic import command
-from alembic.config import Config
+from advanced_alchemy.alembic.commands import AlembicCommands
+from quirebase.core.database import database_config
 
 import quirebase.core.storage
 
@@ -79,9 +81,7 @@ def storage_unavailable():
     raise AssertionError("applying migrations must not initialize object storage")
 
 quirebase.core.storage.get_object_store = storage_unavailable
-config = Config()
-config.set_main_option("script_location", "migrations")
-command.upgrade(config, "head")
+AlembicCommands(database_config).upgrade()
 assert not any(name.startswith("quirebase.web") for name in sys.modules)
 """
     environment = os.environ.copy()
@@ -100,8 +100,7 @@ assert not any(name.startswith("quirebase.web") for name in sys.modules)
 
 
 def test_migration_revisions_are_single_head_and_fit_the_version_column():
-    config = Config()
-    config.set_main_option("script_location", "migrations")
+    config = AlembicCommands(database_config).config
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())
     assert revisions

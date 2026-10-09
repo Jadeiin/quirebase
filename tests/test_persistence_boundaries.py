@@ -226,7 +226,7 @@ async def test_copy_rejects_metadata_only_descriptor_changes_and_cleans_copied_o
                 copied_paths.append(copied.key)
                 return copied
 
-        monkeypatch.setattr("quirebase.library.cross_workspace.get_object_store", ChangingStore)
+        monkeypatch.setattr("quirebase.documents.copying.get_object_store", ChangingStore)
         with pytest.raises(ValidationFailure, match="source Item changed"):
             await copy_item_to_workspace(
                 db, actor, source_workspace_id, target_workspace_id, source_id

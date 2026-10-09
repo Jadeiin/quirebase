@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from quirebase.documents import AnnotationKind, AnnotationPayload, AnnotationScope
+from quirebase.library import ItemFilesData
 from quirebase.web.api.common import WorkspaceAuthorizationView
 
 
@@ -68,14 +69,14 @@ class AnnotationModerationRequest(BaseModel):
     version: int = Field(ge=1)
 
 
-def document_list_view(item_id: UUID, item_files: Any) -> DocumentListView:
+def document_list_view(item_id: UUID, item_files: ItemFilesData) -> DocumentListView:
     revisions = [
         FileView(
             id=row.id,
             kind="revision",
-            original_name=row.file.metadata["original_name"],
-            mime_type=row.file.content_type,
-            size=row.file.size,
+            original_name=row.original_name,
+            mime_type=row.mime_type,
+            size=row.size,
             created_at=row.created_at.isoformat(),
             page_count=row.page_count,
             processing_state=row.processing_state,
@@ -86,9 +87,9 @@ def document_list_view(item_id: UUID, item_files: Any) -> DocumentListView:
         FileView(
             id=row.id,
             kind="attachment",
-            original_name=row.file.metadata["original_name"],
-            mime_type=row.file.content_type,
-            size=row.file.size,
+            original_name=row.original_name,
+            mime_type=row.mime_type,
+            size=row.size,
             created_at=row.created_at.isoformat(),
         )
         for row in item_files.attachments

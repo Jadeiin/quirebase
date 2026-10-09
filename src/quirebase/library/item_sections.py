@@ -13,30 +13,31 @@ from sqlalchemy.orm import selectinload
 from quirebase.access import (
     ResourceAction,
     WorkspaceContext,
-    action_allowed,
-    discoverable_project_ids_query,
     get_item,
     require_action,
-    visible_annotation_scope_predicate,
 )
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
 from quirebase.core.persistence import conflict_insert
+from quirebase.documents import (
+    AnnotationView,
+    DocumentInfo,
+    count_item_annotations,
+    count_item_attachments,
+    list_item_annotation_views,
+    list_item_attachments,
+    list_item_revisions,
+)
 from quirebase.library._metadata import ItemMetadata, metadata_from_item
 from quirebase.library.authors import get_item_authors
 from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
 from quirebase.models import (
-    Attachment,
     DiscussionMessage,
-    FileRevision,
     Item,
-    ItemAuthor,
     ItemIdentifier,
     ItemRead,
     ItemTag,
-    PdfAnnotation,
     Project,
     ProjectItem,
-    ProjectState,
     Tag,
     User,
 )
@@ -67,7 +68,7 @@ class ItemSection(StrEnum):
 @dataclass(frozen=True)
 class ItemSectionData:
     item: Item
-    revisions: tuple[FileRevision, ...]
+    revisions: tuple[DocumentInfo, ...]
 
 
 @dataclass(frozen=True)
@@ -83,14 +84,12 @@ class ItemOverviewData(ItemSectionData):
 
 @dataclass(frozen=True)
 class ItemMetadataData(ItemSectionData):
-    authors: tuple[ItemAuthor, ...]
-    editors: tuple[ItemAuthor, ...]
     metadata: ItemMetadata
 
 
 @dataclass(frozen=True)
 class ItemFilesData(ItemSectionData):
-    attachments: tuple[Attachment, ...]
+    attachments: tuple[DocumentInfo, ...]
 
 
 @dataclass(frozen=True)
@@ -105,13 +104,6 @@ class ItemOrganizationData(ItemSectionData):
     projects: tuple[ProjectAssignmentOption, ...]
     assigned_project_ids: frozenset[UUID]
     tag_matrix: TagMatrix
-
-
-@dataclass(frozen=True)
-class AnnotationView:
-    annotation: PdfAnnotation
-    revision: FileRevision
-    author: User
 
 
 @dataclass(frozen=True)
@@ -154,42 +146,8 @@ async def _assigned_tags(db: AsyncSession, item: Item) -> tuple[Tag, ...]:
 async def _open_overview(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemOverviewData:
-    moderator = action_allowed(context, ResourceAction.project_annotation_review)
-    revisions = await _revisions(db, item.workspace_id, item.id, all_revisions=True)
-    visible_project_items = (
-        select(ProjectItem.id)
-        .join(Project, Project.id == ProjectItem.project_id)
-        .where(
-            ProjectItem.workspace_id == item.workspace_id,
-            Project.state != ProjectState.deleted,
-            Project.id.in_(discoverable_project_ids_query(context)),
-        )
-    )
-    revision_ids = [revision.id for revision in revisions]
-    annotation_count = 0
-    if revision_ids:
-        annotation_count = (
-            await db.scalar(
-                select(func.count(PdfAnnotation.id)).where(
-                    PdfAnnotation.file_revision_id.in_(revision_ids),
-                    PdfAnnotation.workspace_id == item.workspace_id,
-                    PdfAnnotation.deleted_at.is_(None),
-                    *(
-                        ()
-                        if moderator
-                        else (
-                            PdfAnnotation.hidden_at.is_(None),
-                            PdfAnnotation.archived_at.is_(None),
-                        )
-                    ),
-                    visible_annotation_scope_predicate(
-                        context,
-                        project_item_ids=visible_project_items,
-                    ),
-                )
-            )
-            or 0
-        )
+    revisions = await list_item_revisions(db, item.workspace_id, item.id, all_revisions=True)
+    annotation_count = await count_item_annotations(db, context, item.id)
     message_count = (
         await db.scalar(
             select(func.count(DiscussionMessage.id)).where(
@@ -199,15 +157,7 @@ async def _open_overview(
         )
         or 0
     )
-    attachment_count = (
-        await db.scalar(
-            select(func.count(Attachment.id)).where(
-                Attachment.workspace_id == item.workspace_id,
-                Attachment.item_id == item.id,
-            )
-        )
-        or 0
-    )
+    attachment_count = await count_item_attachments(db, item.workspace_id, item.id)
     identifiers = tuple(
         (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
     )
@@ -225,19 +175,6 @@ async def _open_overview(
     )
 
 
-async def _revisions(
-    db: AsyncSession, workspace_id: UUID, item_id: UUID, *, all_revisions: bool = False
-) -> tuple[FileRevision, ...]:
-    query = (
-        select(FileRevision)
-        .where(FileRevision.workspace_id == workspace_id, FileRevision.item_id == item_id)
-        .order_by(FileRevision.created_at.desc())
-    )
-    if not all_revisions:
-        query = query.limit(1)
-    return tuple((await db.scalars(query)).all())
-
-
 async def _open_metadata(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemMetadataData:
@@ -248,29 +185,16 @@ async def _open_metadata(
     )
     return ItemMetadataData(
         item=item,
-        revisions=await _revisions(db, item.workspace_id, item.id),
-        authors=authors,
-        editors=editors,
+        revisions=await list_item_revisions(db, item.workspace_id, item.id),
         metadata=metadata_from_item(item, authors, editors, identifiers),
     )
 
 
 async def _open_files(db: AsyncSession, context: WorkspaceContext, item: Item) -> ItemFilesData:
-    attachments = tuple(
-        (
-            await db.scalars(
-                select(Attachment)
-                .where(
-                    Attachment.workspace_id == item.workspace_id,
-                    Attachment.item_id == item.id,
-                )
-                .order_by(Attachment.created_at)
-            )
-        ).all()
-    )
+    attachments = await list_item_attachments(db, item.workspace_id, item.id)
     return ItemFilesData(
         item=item,
-        revisions=await _revisions(db, item.workspace_id, item.id, all_revisions=True),
+        revisions=await list_item_revisions(db, item.workspace_id, item.id, all_revisions=True),
         attachments=attachments,
     )
 
@@ -297,7 +221,7 @@ async def _open_organize(
     )
     return ItemOrganizationData(
         item=item,
-        revisions=await _revisions(db, item.workspace_id, item.id),
+        revisions=await list_item_revisions(db, item.workspace_id, item.id),
         tags=tags,
         projects=project_options,
         assigned_project_ids=assigned_project_ids,
@@ -308,47 +232,8 @@ async def _open_organize(
 async def _open_annotations(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemAnnotationsData:
-    moderator = action_allowed(context, ResourceAction.project_annotation_review)
-    revisions = await _revisions(db, item.workspace_id, item.id, all_revisions=True)
-    annotations: tuple[AnnotationView, ...] = ()
-    if revisions:
-        visible_project_items = (
-            select(ProjectItem.id)
-            .join(Project, Project.id == ProjectItem.project_id)
-            .where(
-                ProjectItem.workspace_id == item.workspace_id,
-                Project.state != ProjectState.deleted,
-                Project.id.in_(discoverable_project_ids_query(context)),
-            )
-        )
-        rows = (
-            await db.execute(
-                select(PdfAnnotation, FileRevision, User)
-                .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
-                .join(User, User.id == PdfAnnotation.author_id)
-                .where(
-                    PdfAnnotation.file_revision_id.in_([revision.id for revision in revisions]),
-                    PdfAnnotation.workspace_id == item.workspace_id,
-                    PdfAnnotation.deleted_at.is_(None),
-                    *(
-                        ()
-                        if moderator
-                        else (
-                            PdfAnnotation.hidden_at.is_(None),
-                            PdfAnnotation.archived_at.is_(None),
-                        )
-                    ),
-                    visible_annotation_scope_predicate(
-                        context,
-                        project_item_ids=visible_project_items,
-                    ),
-                )
-                .order_by(PdfAnnotation.updated_at.desc())
-            )
-        ).all()
-        annotations = tuple(
-            AnnotationView(annotation=row[0], revision=row[1], author=row[2]) for row in rows
-        )
+    revisions = await list_item_revisions(db, item.workspace_id, item.id, all_revisions=True)
+    annotations = await list_item_annotation_views(db, context, item.id)
     return ItemAnnotationsData(
         item=item,
         revisions=revisions,
@@ -374,7 +259,7 @@ async def _open_discussion(
     )
     return ItemDiscussionData(
         item=item,
-        revisions=await _revisions(db, item.workspace_id, item.id),
+        revisions=await list_item_revisions(db, item.workspace_id, item.id),
         messages=messages,
     )
 

@@ -17,6 +17,7 @@ from quirebase.models import (
     PdfAnnotation,
     PdfAnnotationObject,
     PdfAnnotationReply,
+    ProjectItem,
 )
 
 if TYPE_CHECKING:
@@ -150,9 +151,77 @@ async def delete_workspace_annotation_identities(
     db: AsyncSession, snapshot: WorkspaceDocumentSnapshot
 ) -> None:
     """Remove captured identities after the root cascade, in the same caller transaction."""
-    for start in range(0, len(snapshot.annotation_ids), 500):
+    await _delete_annotation_identities(db, snapshot.annotation_ids)
+
+
+async def _delete_annotation_identities(db: AsyncSession, identities: tuple[UUID, ...]) -> None:
+    for start in range(0, len(identities), 500):
         await db.execute(
             delete(PdfAnnotationObject).where(
-                PdfAnnotationObject.id.in_(snapshot.annotation_ids[start : start + 500])
+                PdfAnnotationObject.id.in_(identities[start : start + 500])
             )
         )
+
+
+async def delete_item_documents(
+    db: AsyncSession, workspace_id: UUID, item_ids: tuple[UUID, ...]
+) -> tuple[str, ...]:
+    """Delete Documents and Annotation identities, returning keys for durable cleanup.
+
+    The caller authorizes deletion and holds exclusive Item root locks in stable
+    order. This operation uses its transaction, performs no object-store I/O,
+    and leaves Audit, cleanup enqueue and transaction completion to that caller.
+    """
+    keys: set[str] = set()
+    for start in range(0, len(item_ids), 500):
+        batch = item_ids[start : start + 500]
+        # Project-scoped Reply writes lock ProjectItem before Annotation. Take
+        # the same order before retiring Annotations and the Item cascade,
+        # otherwise a Reply waiting on Annotation can hold up that cascade.
+        await db.execute(
+            select(ProjectItem.id)
+            .where(ProjectItem.workspace_id == workspace_id, ProjectItem.item_id.in_(batch))
+            .order_by(ProjectItem.id)
+            .with_for_update()
+        )
+        for model, descriptor in (
+            (FileRevision, FileRevision.file),
+            (FileRevision, FileRevision.thumbnail),
+            (Attachment, Attachment.file),
+        ):
+            filename = descriptor["filename"].as_string()
+            keys.update(
+                await db.scalars(
+                    select(filename).where(
+                        model.workspace_id == workspace_id,
+                        model.item_id.in_(batch),
+                        filename.is_not(None),
+                    )
+                )
+            )
+        # Item locks fence new Annotations. Annotation locks also fence Reply
+        # inserts through their FK before collecting the identities to retire.
+        annotation_ids = tuple(
+            await db.scalars(
+                select(PdfAnnotation.id)
+                .where(PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.item_id.in_(batch))
+                .order_by(PdfAnnotation.id)
+                .with_for_update()
+            )
+        )
+        reply_ids: list[UUID] = []
+        for offset in range(0, len(annotation_ids), 500):
+            reply_ids.extend(
+                await db.scalars(
+                    select(PdfAnnotationReply.id).where(
+                        PdfAnnotationReply.workspace_id == workspace_id,
+                        PdfAnnotationReply.annotation_id.in_(annotation_ids[offset : offset + 500]),
+                    )
+                )
+            )
+        for model in (FileRevision, Attachment):
+            await db.execute(
+                delete(model).where(model.workspace_id == workspace_id, model.item_id.in_(batch))
+            )
+        await _delete_annotation_identities(db, (*annotation_ids, *reply_ids))
+    return tuple(sorted(keys))

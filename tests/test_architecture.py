@@ -106,7 +106,16 @@ def test_invariant_ownership_and_narrow_reverse_interfaces():
     """Shared mappings do not grant callers ownership of evolving sibling rules."""
     forbidden_models = {
         "accounts/administration.py": {"Workspace", "WorkspaceMember", "WorkspaceRole"},
-        "library/item_sections.py": {"ProjectParticipant", "ProjectParticipation"},
+        "library/item_sections.py": {
+            "ProjectParticipant",
+            "ProjectParticipation",
+            "PdfAnnotation",
+            "FileRevision",
+            "Attachment",
+            "ItemAuthor",
+        },
+        "library/cross_workspace.py": {"FileRevision", "Attachment"},
+        "library/bulk_items.py": {"FileRevision", "Attachment"},
         "operations/maintenance.py": {"ExportArtifact", "ImportBatch"},
         "workspaces/lifecycle.py": {
             "FileRevision",
@@ -127,6 +136,16 @@ def test_invariant_ownership_and_narrow_reverse_interfaces():
             for alias in node.names
         }
         assert not imported & forbidden, (path, imported & forbidden)
+    administration = ast.parse((SRC_ROOT / "library/administration.py").read_text())
+    item_deletion = next(
+        node
+        for node in administration.body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "delete_item"
+    )
+    assert not any(
+        isinstance(node, ast.Name) and node.id in {"FileRevision", "Attachment"}
+        for node in ast.walk(item_deletion)
+    )
     source = (SRC_ROOT / "workspaces/lifecycle.py").read_text()
     assert "item_search" not in source and "revision_search" not in source
     for owner in ("documents", "workspaces"):

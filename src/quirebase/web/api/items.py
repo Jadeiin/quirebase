@@ -36,7 +36,6 @@ from quirebase.web.api.item_schemas import (
     MetadataSyncRequest,
 )
 from quirebase.web.api.library_schemas import AuthorSuggestionView, item_search_view
-from quirebase.web.api.serialization import enum_value
 from quirebase.workspaces import list_workspaces
 
 router = APIRouter(tags=["Items"])
@@ -86,10 +85,10 @@ async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
         "latest_revision": (
             {
                 "id": latest.id,
-                "original_name": latest.file.metadata["original_name"],
-                "size": latest.file.size,
+                "original_name": latest.original_name,
+                "size": latest.size,
                 "page_count": latest.page_count,
-                "processing_state": enum_value(latest.processing_state),
+                "processing_state": latest.processing_state,
             }
             if latest
             else None

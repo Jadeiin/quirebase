@@ -80,7 +80,6 @@ from quirebase.library.item_metadata import (
     revise_item_metadata,
 )
 from quirebase.library.item_sections import (
-    AnnotationView,
     ItemAnnotationsData,
     ItemDiscussionData,
     ItemFilesData,
@@ -115,7 +114,6 @@ from quirebase.library.workflows import (
 
 __all__ = [
     "DEFAULT_CITATION_KEY_FORMULA",
-    "AnnotationView",
     "BatchConflict",
     "BibliographyExportOptions",
     "CandidatePageView",

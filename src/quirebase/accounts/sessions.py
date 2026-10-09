@@ -21,6 +21,15 @@ if TYPE_CHECKING:
 async def create_login_session(
     db: AsyncSession, user: User, session_days: int = 30
 ) -> tuple[LoginSession, str]:
+    login, raw = await _create_login_session(db, user, session_days)
+    await db.commit()
+    return login, raw
+
+
+async def _create_login_session(
+    db: AsyncSession, user: User, session_days: int = 30
+) -> tuple[LoginSession, str]:
+    """Prepare a Session inside the caller's authentication transaction."""
     raw = generate_token(32)
     login = LoginSession(
         token_hash=token_hash(raw),
@@ -28,7 +37,7 @@ async def create_login_session(
         expires_at=datetime.now(UTC) + timedelta(days=session_days),
     )
     db.add(login)
-    await db.commit()
+    await db.flush()
     return login, raw
 
 

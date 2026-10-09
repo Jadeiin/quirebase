@@ -25,7 +25,8 @@ class PreparedPasswordHash(PasswordHash):
         self.impl = Text()
 
     def __repr__(self) -> str:
-        return "PreparedPasswordHash()"
+        # Migrations need the physical column type, not runtime password preparation.
+        return repr(self.impl)
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
         if value is None:

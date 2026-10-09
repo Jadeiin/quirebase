@@ -25,13 +25,19 @@ class LoginThrottled(DomainError):
 
 
 async def check_login_throttle(db: AsyncSession, identity: str) -> None:
+    if await _check_login_throttle(db, identity):
+        await db.commit()
+
+
+async def _check_login_throttle(db: AsyncSession, identity: str) -> bool:
+    """Check the limit and retire an expired window in the caller's transaction."""
     row = await db.scalar(
         select(LoginThrottle)
         .where(LoginThrottle.identity_hash == identity)
         .execution_options(populate_existing=True)
     )
     if row is None:
-        return
+        return False
     cutoff = datetime.now(UTC) - THROTTLE_WINDOW
     if row.window_started_at <= cutoff:
         await db.execute(
@@ -39,12 +45,19 @@ async def check_login_throttle(db: AsyncSession, identity: str) -> None:
                 LoginThrottle.identity_hash == identity, LoginThrottle.window_started_at <= cutoff
             )
         )
-        await db.commit()
-    elif row.failures >= THROTTLE_LIMIT:
+        return True
+    if row.failures >= THROTTLE_LIMIT:
         raise LoginThrottled("too many login attempts; try again later")
+    return False
 
 
 async def record_login_failure(db: AsyncSession, identity: str) -> None:
+    await _record_login_failure(db, identity)
+    await db.commit()
+
+
+async def _record_login_failure(db: AsyncSession, identity: str) -> None:
+    """Update the failure counter without completing the caller's transaction."""
     now = datetime.now(UTC)
     cutoff = now - THROTTLE_WINDOW
     expired = LoginThrottle.window_started_at <= cutoff
@@ -63,14 +76,17 @@ async def record_login_failure(db: AsyncSession, identity: str) -> None:
         .returning(LoginThrottle)
         .execution_options(populate_existing=True)
     )
-    await db.commit()
 
 
 async def clear_login_failures(db: AsyncSession, identity: str) -> None:
+    if await _clear_login_failures(db, identity):
+        await db.commit()
+
+
+async def _clear_login_failures(db: AsyncSession, identity: str) -> bool:
     cleared = await db.scalar(
         delete(LoginThrottle)
         .where(LoginThrottle.identity_hash == identity)
         .returning(LoginThrottle.identity_hash)
     )
-    if cleared is not None:
-        await db.commit()
+    return cleared is not None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import resolve_workspace_context
@@ -215,12 +216,18 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     assert isinstance(item_view, ItemMetadataData)
     assert item_view.item.authors == "Shannon, Claude; Weaver, Warren"
     assert item_view.item.editors is None
-    assert [link.author.last_name for link in item_view.authors] == [
+    assert [contributor.last_name for contributor in item_view.metadata.authors] == [
         "Shannon",
         "Weaver",
     ]
-    assert [link.position for link in item_view.authors] == [1, 2]
-    assert item_view.authors[0].is_corresponding
+    assert list(
+        await db.scalars(
+            select(ItemAuthor.position)
+            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "author")
+            .order_by(ItemAuthor.position)
+        )
+    ) == [1, 2]
+    assert item_view.metadata.authors[0].is_corresponding
     matches, total = await search_library(
         db, owner, fixture_workspace_id(owner), q="Contributor replacement"
     )

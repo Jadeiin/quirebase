@@ -7,7 +7,7 @@ from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
-from quirebase.library import ItemMetadata
+from quirebase.library import ItemMetadata, ItemMetadataData
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
@@ -105,7 +105,7 @@ def item_search_view(item: Any) -> ItemSearchView:
     )
 
 
-def item_detail_view(view: Any) -> ItemDetailView:
+def item_detail_view(view: ItemMetadataData) -> ItemDetailView:
     item = view.item
     return ItemDetailView(
         **item_search_view(item).model_dump(),
@@ -113,19 +113,19 @@ def item_detail_view(view: Any) -> ItemDetailView:
         abstract_html=item.abstract,
         editors=[
             ContributorView(
-                first_name=row.author.first_name,
-                last_name=row.author.last_name,
+                first_name=row.first_name,
+                last_name=row.last_name,
                 is_corresponding=row.is_corresponding,
             )
-            for row in view.editors
+            for row in view.metadata.editors
         ],
         structured_authors=[
             ContributorView(
-                first_name=row.author.first_name,
-                last_name=row.author.last_name,
+                first_name=row.first_name,
+                last_name=row.last_name,
                 is_corresponding=row.is_corresponding,
             )
-            for row in view.authors
+            for row in view.metadata.authors
         ],
         reference_type=item.reference_type,
         volume=item.volume,

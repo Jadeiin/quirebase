@@ -249,6 +249,20 @@ section composition. Effective participation requires an active User and current
 governance discovery of a managed Project does not imply participation. The adapter projects each independent
 Item capability from the resolved context, without metadata-edit or delete boolean mirrors.
 
+Section composition consumes Documents-owned `DocumentInfo` values through
+`list_item_revisions`, `list_item_attachments` and `count_item_attachments`. These frozen summaries
+expose file names, sizes, media types and processing facts without FileObject descriptors or
+storage keys. Metadata sections use Library's immutable `ItemMetadata` and its `Contributor`
+values; Web does not traverse Contributor ORM relationships. HTTP projection functions accept
+the concrete section type. Stable scalar Item, Tag and Project mappings remain shared reads.
+
+Documents owns the complete Annotation browse query. `count_item_annotations`,
+`list_item_annotation_views` and paginated `list_document_annotations` share private-author,
+Project discovery, deletion and moderation rules; each count/data statement rechecks Project
+discovery. The section operations consume an already authorized Workspace context and Item and
+do not complete the caller's transaction. Browsing includes hidden and archived Annotations for
+moderators; PDF export always excludes them. Annotation revision choices also use `DocumentInfo`.
+
 Annotation and Annotation Reply CRUD cross the Documents interface through typed create/update
 commands and shared views. Documents owns the canonical per-page geometry and style schema,
 authorization coordination, optimistic versioning, annotation soft deletion, Audit Events and projection to
@@ -419,6 +433,24 @@ committing or rolling it back. Workspaces enqueues bounded cleanup batches in th
 transaction; cleanup intent does not reserve those keys.
 
 ### Object lifecycle interface contracts
+
+`delete_item_documents` runs under the caller's authorized, exclusive Item root locks in stable
+order. It locks existing ProjectItem rows before their Annotations, matching Reply writes and
+preventing a lock inversion during the Item cascade. It collects File Revision, PDF Thumbnail
+and Attachment keys, fences Reply insertion with Annotation locks, deletes Document children
+and retires Annotation/Reply identities. It returns
+keys without object-store I/O or transaction completion. Single and bulk Library deletion retain
+Item deletion, Search removal, Audit, transactional cleanup enqueue and commit. Independently
+expiring Annotation Export Artifacts retain their own lifecycle.
+
+`prepare_item_document_copy` snapshots source Documents in the caller's read transaction and
+returns an `ItemDocumentCopy` whose descriptors and cleanup receipts remain private to Documents.
+Library ends that transaction before `copy_objects`, then reauthorizes both Workspaces and locks
+the source Item before `install`. Installation locks and revalidates all source descriptors,
+creates independent File Revisions and Attachments and updates revision Search in the caller's
+transaction. Library owns Item metadata and Contributor links, Item Search, Audit and commit.
+On failure Library rolls back before `discard`, which rechecks durable references so an ambiguous
+commit cannot cause deletion of objects already referenced by committed target Documents.
 
 Documents exposes `protected_object_keys` for scan protections and `delete_unreferenced_objects`
 for final cleanup. They require a Session with no pending writes and end their read transactions

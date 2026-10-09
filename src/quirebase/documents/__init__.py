@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from quirebase.documents.annotations import (
     AnnotationPage,
+    AnnotationView,
     DocumentNotReady,
+    count_item_annotations,
     create_annotation_reply,
     create_document_annotation,
     delete_annotation_reply,
     delete_document_annotation,
     delete_project_item_annotations,
     list_document_annotations,
+    list_item_annotation_views,
     moderate_document_annotation,
     restore_annotation_reply,
     restore_document_annotation,
@@ -21,6 +24,7 @@ from quirebase.documents.bundles import (
     create_item_document_bundle,
     export_revision_pdf,
 )
+from quirebase.documents.copying import ItemDocumentCopy, prepare_item_document_copy
 from quirebase.documents.exports import (
     create_export_job,
     get_export_file,
@@ -35,12 +39,19 @@ from quirebase.documents.loaders import (
 )
 from quirebase.documents.objects import (
     WorkspaceDocumentSnapshot,
+    delete_item_documents,
     delete_unreferenced_objects,
     delete_workspace_annotation_identities,
     list_expired_export_artifacts,
     protected_object_keys,
     retire_expired_export_artifacts,
     snapshot_workspace_documents,
+)
+from quirebase.documents.read_models import (
+    DocumentInfo,
+    count_item_attachments,
+    list_item_attachments,
+    list_item_revisions,
 )
 from quirebase.documents.remote import acquire_remote_attachment
 from quirebase.documents.revisions import (
@@ -87,7 +98,10 @@ __all__ = [
     "AnnotationScope",
     "AnnotationStyle",
     "AnnotationUpdate",
+    "AnnotationView",
+    "DocumentInfo",
     "DocumentNotReady",
+    "ItemDocumentCopy",
     "ItemDownloadBundle",
     "ItemThumbnail",
     "ItemThumbnailSource",
@@ -97,6 +111,8 @@ __all__ = [
     "WorkspaceDocumentSnapshot",
     "acquire_remote_attachment",
     "assemble_document_bundle",
+    "count_item_annotations",
+    "count_item_attachments",
     "create_annotation_reply",
     "create_attachment",
     "create_document_annotation",
@@ -106,6 +122,7 @@ __all__ = [
     "delete_attachment",
     "delete_document_annotation",
     "delete_file_revision",
+    "delete_item_documents",
     "delete_project_item_annotations",
     "delete_unreferenced_objects",
     "delete_workspace_annotation_identities",
@@ -130,7 +147,11 @@ __all__ = [
     "head_revision_thumbnail",
     "list_document_annotations",
     "list_expired_export_artifacts",
+    "list_item_annotation_views",
+    "list_item_attachments",
+    "list_item_revisions",
     "moderate_document_annotation",
+    "prepare_item_document_copy",
     "protected_object_keys",
     "resolve_item_thumbnail",
     "restore_annotation_reply",

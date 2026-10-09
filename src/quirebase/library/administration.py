@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 
 from quirebase.access import (
     ResourceAction,
@@ -12,7 +12,7 @@ from quirebase.access import (
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
-from quirebase.documents import enqueue_object_cleanup
+from quirebase.documents import delete_item_documents, enqueue_object_cleanup
 from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
 from quirebase.search import search_index
 
@@ -80,54 +80,7 @@ async def delete_item(db: AsyncSession, actor: User, workspace_id: UUID, item_id
         raise ResourceNotFound("item not found")
 
     title = item.title
-    # Collect keys to clean up from storage
-    cleanup_keys = list(
-        (
-            await db.scalars(
-                select(FileRevision.file["filename"].as_string()).where(
-                    FileRevision.workspace_id == workspace_id,
-                    FileRevision.item_id == item.id,
-                )
-            )
-        ).all()
-    )
-    cleanup_keys.extend(
-        (
-            await db.scalars(
-                select(Attachment.file["filename"].as_string()).where(
-                    Attachment.workspace_id == workspace_id,
-                    Attachment.item_id == item.id,
-                )
-            )
-        ).all()
-    )
-
-    thumbnail_keys = tuple(
-        key
-        for key in (
-            await db.scalars(
-                select(FileRevision.thumbnail["filename"].as_string()).where(
-                    FileRevision.workspace_id == workspace_id,
-                    FileRevision.item_id == item.id,
-                )
-            )
-        ).all()
-        if key
-    )
-
-    # Explicitly delete child relations for cross-dialect foreign key safety
-    await db.execute(
-        delete(FileRevision).where(
-            FileRevision.workspace_id == workspace_id,
-            FileRevision.item_id == item.id,
-        )
-    )
-    await db.execute(
-        delete(Attachment).where(
-            Attachment.workspace_id == workspace_id,
-            Attachment.item_id == item.id,
-        )
-    )
+    cleanup_keys = await delete_item_documents(db, workspace_id, (item.id,))
 
     # Revision projections are owned by FileRevision and cascade on PostgreSQL;
     # the SQLite adapter clears them explicitly.
@@ -149,7 +102,7 @@ async def delete_item(db: AsyncSession, actor: User, workspace_id: UUID, item_id
     )
     await enqueue_object_cleanup(
         db,
-        [*cleanup_keys, *thumbnail_keys],
+        cleanup_keys,
         actor_id=actor.id,
         workspace_id=workspace_id,
         operation="item_delete",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import ResourceAction, require_workspace_action
@@ -17,15 +17,13 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.documents import enqueue_object_cleanup
+from quirebase.documents import delete_item_documents, enqueue_object_cleanup
 from quirebase.documents.bundles import (
     ItemDownloadBundle,
     assemble_document_bundle,
 )
 from quirebase.library.tags import TagConflict, _assign_item_tags, get_or_create_tag
 from quirebase.models import (
-    Attachment,
-    FileRevision,
     Item,
     User,
 )
@@ -50,7 +48,7 @@ async def apply_bulk_item_action(
 ) -> None:
     items = await require_accessible_items(db, user, workspace_id, item_ids)
 
-    cleanup_keys: list[str] = []
+    cleanup_keys: tuple[str, ...] = ()
     if action in ("add_project", "project_add"):
         if project_id is None:
             raise ValidationFailure("Project is required")
@@ -98,51 +96,8 @@ async def apply_bulk_item_action(
         if len(locked_items) != len(requested_ids):
             raise ResourceUnavailable("one or more selected items no longer exist")
         items = locked_items
-        cleanup_keys = list(
-            (
-                await db.scalars(
-                    select(FileRevision.file["filename"].as_string()).where(
-                        FileRevision.workspace_id == workspace_id,
-                        FileRevision.item_id.in_([item.id for item in items]),
-                    )
-                )
-            ).all()
-        )
-        cleanup_keys.extend(
-            (
-                await db.scalars(
-                    select(Attachment.file["filename"].as_string()).where(
-                        Attachment.workspace_id == workspace_id,
-                        Attachment.item_id.in_([item.id for item in items]),
-                    )
-                )
-            ).all()
-        )
-        cleanup_keys.extend(
-            key
-            for key in (
-                await db.scalars(
-                    select(FileRevision.thumbnail["filename"].as_string()).where(
-                        FileRevision.workspace_id == workspace_id,
-                        FileRevision.item_id.in_([item.id for item in items]),
-                    )
-                )
-            ).all()
-            if key
-        )
+        cleanup_keys = await delete_item_documents(db, workspace_id, requested_ids)
         for item in items:
-            await db.execute(
-                delete(FileRevision).where(
-                    FileRevision.workspace_id == workspace_id,
-                    FileRevision.item_id == item.id,
-                )
-            )
-            await db.execute(
-                delete(Attachment).where(
-                    Attachment.workspace_id == workspace_id,
-                    Attachment.item_id == item.id,
-                )
-            )
             await search_index(db).remove_item(db, item.id)
             await db.delete(item)
         audit_action = "library.bulk.delete_items"

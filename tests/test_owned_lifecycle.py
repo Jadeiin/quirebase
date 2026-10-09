@@ -725,3 +725,130 @@ async def test_workspace_teardown_fences_waiting_finalizer_and_releases_its_orph
     async with postgres_race.session("verify") as db:
         assert await db.get(Workspace, workspace_id) is None
         assert await db.scalar(select(FileRevision.id)) is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("bulk", [False, True])
+async def test_item_deletion_retires_document_identities_and_cleanup_is_atomic(
+    persistence_sessions, fake_durable_operations, monkeypatch, bulk
+):
+    from quirebase.library import apply_bulk_item_action, delete_item
+
+    store = get_object_store()
+    stored = [
+        await store.put_object(uuid4(), ObjectSuffix.BINARY, content, max_bytes=100)
+        for content in (b"pdf", b"thumbnail", b"supplement", b"retained-export")
+    ]
+    async with persistence_sessions() as db:
+        owner_id, workspace_id = await _workspace(db)
+        item = Item(workspace_id=workspace_id, title="Retired documents", created_by=owner_id)
+        retained = Item(workspace_id=workspace_id, title="Retained item", created_by=owner_id)
+        artifact = _artifact(stored[3], workspace_id)
+        db.add_all([item, retained, artifact])
+        await db.flush()
+        revision = FileRevision(
+            workspace_id=workspace_id,
+            item_id=item.id,
+            created_by=owner_id,
+            file=_file(stored[0]),
+            thumbnail=_file(stored[1]),
+            full_text="Retired text",
+        )
+        attachment = Attachment(
+            workspace_id=workspace_id,
+            item_id=item.id,
+            created_by=owner_id,
+            file=_file(stored[2]),
+        )
+        retained_revision = FileRevision(
+            workspace_id=workspace_id,
+            item_id=retained.id,
+            created_by=owner_id,
+            file=_file(stored[0]),
+        )
+        db.add_all([revision, attachment, retained_revision])
+        await db.flush()
+        annotation = PdfAnnotation(
+            workspace_id=workspace_id,
+            file_revision_id=revision.id,
+            item_id=item.id,
+            page_index=0,
+            author_id=owner_id,
+            kind="note",
+            scope="private",
+            payload={},
+        )
+        db.add(annotation)
+        await db.flush()
+        reply = PdfAnnotationReply(
+            workspace_id=workspace_id,
+            annotation_id=annotation.id,
+            author_id=owner_id,
+            body="Reply",
+        )
+        db.add(reply)
+        await search_index(db).index_item(db, item.id)
+        await search_index(db).index_revision(db, revision.id)
+        await db.commit()
+        item_id, retained_id = item.id, retained.id
+        revision_id, attachment_id = revision.id, attachment.id
+        annotation_id, reply_id = annotation.id, reply.id
+        artifact_id, retained_revision_id = artifact.workflow_id, retained_revision.id
+
+        async def delete():
+            owner = await db.get(User, owner_id)
+            if bulk:
+                await apply_bulk_item_action(
+                    db, owner, workspace_id, [item_id], "delete_items", confirm_delete="delete"
+                )
+            else:
+                await delete_item(db, owner, workspace_id, item_id)
+
+        enqueue = fake_durable_operations.enqueue_in_transaction
+
+        async def fail_enqueue(*args, **kwargs):
+            await asyncio.sleep(0)
+            raise RuntimeError("cleanup enqueue unavailable")
+
+        monkeypatch.setattr(fake_durable_operations, "enqueue_in_transaction", fail_enqueue)
+        with pytest.raises(RuntimeError, match="cleanup enqueue"):
+            await delete()
+        await db.rollback()
+        for model, identity in (
+            (Item, item_id),
+            (FileRevision, revision_id),
+            (Attachment, attachment_id),
+            (PdfAnnotation, annotation_id),
+            (PdfAnnotationReply, reply_id),
+            (PdfAnnotationObject, annotation_id),
+            (PdfAnnotationObject, reply_id),
+        ):
+            assert await db.get(model, identity) is not None
+        assert await search_index(db).search(db, "Retired") == [item_id]
+        audit_action = "library.bulk.delete_items" if bulk else "item.delete"
+        assert (
+            await db.scalar(select(AuditEvent.id).where(AuditEvent.action == audit_action)) is None
+        )
+        monkeypatch.setattr(fake_durable_operations, "enqueue_in_transaction", enqueue)
+        await delete()
+
+    async with persistence_sessions() as fresh:
+        for model, identity in (
+            (Item, item_id),
+            (FileRevision, revision_id),
+            (Attachment, attachment_id),
+            (PdfAnnotation, annotation_id),
+            (PdfAnnotationReply, reply_id),
+            (PdfAnnotationObject, annotation_id),
+            (PdfAnnotationObject, reply_id),
+        ):
+            assert await fresh.get(model, identity) is None
+        assert await fresh.get(Item, retained_id) is not None
+        assert await fresh.get(FileRevision, retained_revision_id) is not None
+        assert await fresh.get(ExportArtifact, artifact_id) is not None
+        assert await search_index(fresh).search(fresh, "Retired") == []
+        assert await fresh.scalar(select(AuditEvent.id).where(AuditEvent.action == audit_action))
+    cleanup = fake_durable_operations.enqueues[-1]
+    assert set(cleanup["args"][2]) == {receipt.key for receipt in stored[:3]}
+    assert cleanup["attributes"]["object_intent"] == "cleanup"
+    assert all([await store.exists(receipt.key) for receipt in stored])

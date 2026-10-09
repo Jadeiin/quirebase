@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from advanced_alchemy.base import DefaultBase, UUIDv7AuditBase, UUIDv7Base
-from advanced_alchemy.config import AsyncSessionConfig, EngineConfig, SQLAlchemyAsyncConfig
+from advanced_alchemy.config import (
+    AlembicAsyncConfig,
+    AsyncSessionConfig,
+    EngineConfig,
+    SQLAlchemyAsyncConfig,
+)
 from advanced_alchemy.types import GUID
 from sqlalchemy import event
 from sqlalchemy.ext.compiler import compiles
@@ -77,11 +83,21 @@ def is_sqlite_database_url(url: str | None = None) -> bool:
 
 def _make_database_config(url: str | None = None) -> SQLAlchemyAsyncConfig:
     database_url = async_database_url(url)
+    package_dir = Path(__file__).resolve().parents[1]
+    migrations = package_dir / "migrations"
+    if not migrations.is_dir():
+        migrations = package_dir.parents[1] / "migrations"
     config = SQLAlchemyAsyncConfig(
         connection_string=database_url,
         engine_config=EngineConfig(pool_pre_ping=True),
         metadata=Base.metadata,
         session_config=AsyncSessionConfig(expire_on_commit=False),
+        alembic_config=AlembicAsyncConfig(
+            script_location=str(migrations),
+            script_config="",
+            version_table_name="alembic_version",
+            compare_type=True,
+        ),
         enable_file_object_listener=False,
         # AuditColumns supplies onupdate for ORM and SQL DML; keep explicit overrides.
         enable_touch_updated_timestamp_listener=False,

@@ -3,24 +3,16 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from uuid import UUID, uuid4
 
-from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_readable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
-from quirebase.core.storage import ObjectSuffix, get_object_store
-from quirebase.documents import delete_unreferenced_objects
+from quirebase.documents import prepare_item_document_copy
 from quirebase.models import (
-    Attachment,
-    AttachmentRole,
-    FileRevision,
-    FileRevisionProcessingState,
     Item,
     ItemAuthor,
     ItemIdentifier,
@@ -30,6 +22,8 @@ from quirebase.models import (
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -56,60 +50,6 @@ _ITEM_FIELDS = (
     "keywords",
     "custom_fields",
 )
-
-
-@dataclass(frozen=True, slots=True)
-class _RevisionSnapshot:
-    id: UUID
-    file: dict[str, Any]
-    thumbnail: dict[str, Any] | None
-    page_count: int | None
-    full_text: str | None
-    page_geometry: list[list[float]] | None
-    processing_state: FileRevisionProcessingState
-
-
-@dataclass(frozen=True, slots=True)
-class _AttachmentSnapshot:
-    id: UUID
-    file: dict[str, Any]
-    role: AttachmentRole | None
-
-
-def _revision_snapshot(revision: FileRevision) -> _RevisionSnapshot:
-    if revision.file.size is None:
-        raise ValueError("persisted File Revision requires a file size")
-    return _RevisionSnapshot(
-        id=revision.id,
-        file=revision.file.to_dict(),
-        thumbnail=revision.thumbnail.to_dict() if revision.thumbnail else None,
-        page_count=revision.page_count,
-        full_text=revision.full_text,
-        page_geometry=revision.page_geometry,
-        processing_state=revision.processing_state,
-    )
-
-
-def _attachment_snapshot(attachment: Attachment) -> _AttachmentSnapshot:
-    if attachment.file.size is None:
-        raise ValueError("persisted Attachment requires a file size")
-    return _AttachmentSnapshot(
-        id=attachment.id,
-        file=attachment.file.to_dict(),
-        role=attachment.role,
-    )
-
-
-async def _copy_object(source_key: str, suffix: ObjectSuffix) -> tuple[str, int]:
-    store = get_object_store()
-    response = await store.get(source_key)
-    copied = await store.put_object(
-        uuid4(),
-        suffix,
-        response.body,
-        max_bytes=response.metadata.size,
-    )
-    return copied.key, copied.size
 
 
 async def copy_item_to_workspace(
@@ -141,40 +81,7 @@ async def copy_item_to_workspace(
     identifier_links = tuple(
         sorted((link.provider, link.value) for link in source.identifier_links)
     )
-    revisions = tuple(
-        _revision_snapshot(revision)
-        for revision in (
-            (
-                await db.scalars(
-                    select(FileRevision)
-                    .where(
-                        FileRevision.workspace_id == source_workspace_id,
-                        FileRevision.item_id == item_id,
-                    )
-                    .order_by(FileRevision.created_at, FileRevision.id)
-                )
-            ).all()
-        )
-    )
-    if any(
-        revision.processing_state != FileRevisionProcessingState.ready for revision in revisions
-    ):
-        raise ValidationFailure("all File Revisions must be ready before copying the Item")
-    attachments = tuple(
-        _attachment_snapshot(attachment)
-        for attachment in (
-            (
-                await db.scalars(
-                    select(Attachment)
-                    .where(
-                        Attachment.workspace_id == source_workspace_id,
-                        Attachment.item_id == item_id,
-                    )
-                    .order_by(Attachment.created_at, Attachment.id)
-                )
-            ).all()
-        )
-    )
+    documents = await prepare_item_document_copy(db, source_workspace_id, item_id)
     await require_workspace_action(db, actor, target_workspace_id, ResourceAction.item_create)
 
     # Release every authorization/read lock before object-store GET/PUT. The
@@ -182,35 +89,8 @@ async def copy_item_to_workspace(
     # target rows are created.
     await db.commit()
 
-    copied_keys: list[str] = []
     try:
-        copied_revision_objects: list[tuple[str, int, str | None, int | None]] = []
-        for revision in revisions:
-            revision_key, revision_size = await _copy_object(
-                revision.file["filename"], ObjectSuffix.PDF
-            )
-            copied_keys.append(revision_key)
-            thumbnail_key = None
-            thumbnail_size = None
-            if revision.thumbnail is not None:
-                thumbnail_key, thumbnail_size = await _copy_object(
-                    revision.thumbnail["filename"], ObjectSuffix.PNG
-                )
-                copied_keys.append(thumbnail_key)
-            copied_revision_objects.append((
-                revision_key,
-                revision_size,
-                thumbnail_key,
-                thumbnail_size,
-            ))
-
-        copied_attachment_objects: list[tuple[str, int]] = []
-        for attachment in attachments:
-            attachment_key, attachment_size = await _copy_object(
-                attachment.file["filename"], ObjectSuffix.BINARY
-            )
-            copied_keys.append(attachment_key)
-            copied_attachment_objects.append((attachment_key, attachment_size))
+        await documents.copy_objects()
 
         # Account governance locks Users before Workspaces. Use the same order,
         # then freeze both membership paths and the source snapshot only for the
@@ -253,40 +133,6 @@ async def copy_item_to_workspace(
             or any(getattr(current_source, field) != value for field, value in item_fields.items())
         ):
             raise ValidationFailure("source Item changed while its files were copied")
-        current_revisions = tuple(
-            _revision_snapshot(revision)
-            for revision in (
-                (
-                    await db.scalars(
-                        select(FileRevision)
-                        .where(
-                            FileRevision.workspace_id == source_workspace_id,
-                            FileRevision.item_id == item_id,
-                        )
-                        .order_by(FileRevision.created_at, FileRevision.id)
-                        .execution_options(populate_existing=True)
-                        .with_for_update(read=True)
-                    )
-                ).all()
-            )
-        )
-        current_attachments = tuple(
-            _attachment_snapshot(attachment)
-            for attachment in (
-                (
-                    await db.scalars(
-                        select(Attachment)
-                        .where(
-                            Attachment.workspace_id == source_workspace_id,
-                            Attachment.item_id == item_id,
-                        )
-                        .order_by(Attachment.created_at, Attachment.id)
-                        .execution_options(populate_existing=True)
-                        .with_for_update(read=True)
-                    )
-                ).all()
-            )
-        )
         current_author_links = tuple(
             sorted(
                 (link.author_id, link.position, link.role, link.is_corresponding)
@@ -305,12 +151,7 @@ async def copy_item_to_workspace(
                 ).all()
             )
         )
-        if (
-            current_revisions != revisions
-            or current_attachments != attachments
-            or current_author_links != author_links
-            or current_identifier_links != identifier_links
-        ):
+        if current_author_links != author_links or current_identifier_links != identifier_links:
             raise ValidationFailure("source Item changed while its files were copied")
 
         target = Item(
@@ -336,50 +177,8 @@ async def copy_item_to_workspace(
             for provider, value in identifier_links
         ])
 
-        copied_revisions: list[FileRevision] = []
-        for revision, copied_object in zip(revisions, copied_revision_objects, strict=True):
-            revision_key, revision_size, thumbnail_key, thumbnail_size = copied_object
-            copied_revision = FileRevision(
-                workspace_id=target_workspace_id,
-                item_id=target.id,
-                page_count=revision.page_count,
-                full_text=revision.full_text,
-                page_geometry=revision.page_geometry,
-                processing_state=revision.processing_state,
-                created_by=current_actor.id,
-                file=FileObject(
-                    **(revision.file | {"filename": revision_key, "size": revision_size})
-                ),
-                thumbnail=FileObject(
-                    **(revision.thumbnail | {"filename": thumbnail_key, "size": thumbnail_size})
-                )
-                if revision.thumbnail is not None
-                else None,
-            )
-            db.add(copied_revision)
-            copied_revisions.append(copied_revision)
-
-        for attachment, copied_attachment_object in zip(
-            attachments, copied_attachment_objects, strict=True
-        ):
-            attachment_key, attachment_size = copied_attachment_object
-            db.add(
-                Attachment(
-                    workspace_id=target_workspace_id,
-                    item_id=target.id,
-                    file=FileObject(
-                        **(attachment.file | {"filename": attachment_key, "size": attachment_size})
-                    ),
-                    role=attachment.role,
-                    created_by=current_actor.id,
-                )
-            )
-
-        await db.flush()
-        index = search_index(db)
-        await index.index_item(db, target.id)
-        for copied_revision in copied_revisions:
-            await index.index_revision(db, copied_revision.id)
+        await documents.install(db, current_actor.id, target_workspace_id, target.id)
+        await search_index(db).index_item(db, target.id)
         mapping = {"source_item_id": item_id, "target_item_id": target.id}
         record_event(
             db,
@@ -413,5 +212,5 @@ async def copy_item_to_workspace(
         # is lost locally. Recheck durable references before deleting copied
         # objects so an ambiguous commit cannot leave committed rows dangling.
         with suppress(Exception):
-            await delete_unreferenced_objects(db, copied_keys)
+            await documents.discard(db)
         raise

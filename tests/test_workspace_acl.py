@@ -63,6 +63,7 @@ from quirebase.documents.annotations import (
     delete_document_annotation,
     restore_annotation_reply,
     restore_document_annotation,
+    select_visible_annotations,
     update_annotation_reply,
     update_document_annotation,
 )
@@ -3015,6 +3016,21 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
     )
     assert not author_view.annotations
     assert [entry.annotation.id for entry in owner_view.annotations] == [annotation.id]
+    for reader, expected_count in ((author, 0), (owner, 1)):
+        overview = await open_item_section(
+            async_db,
+            await resolve_workspace_context(async_db, reader, fixture_workspace_id(owner)),
+            item.id,
+            ItemSection.overview,
+        )
+        assert overview.annotation_count == expected_count
+        # Moderation affects browsing, while export always excludes hidden marks.
+        assert (
+            await select_visible_annotations(
+                async_db, reader, fixture_workspace_id(owner), revision.id, item.id, project.id
+            )
+            == []
+        )
 
 
 @pytest.mark.anyio
@@ -3768,10 +3784,18 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     stored = await get_object_store().put_object(
         uuid4(), ObjectSuffix.PDF, b"%PDF-independent-copy", max_bytes=1024
     )
+    thumbnail = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PNG, b"thumbnail", max_bytes=1024
+    )
+    supplement = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.BINARY, b"supplement", max_bytes=1024
+    )
     source_revision = FileRevision(
         workspace_id=fixture_workspace_id(actor),
         item_id=source.id,
         full_text="Unique copied PDF search phrase",
+        page_count=1,
+        page_geometry=[[100.0, 200.0]],
         processing_state="ready",
         created_by=actor.id,
         file=FileObject(
@@ -3781,8 +3805,28 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
             content_type="application/pdf",
             metadata={"original_name": "source.pdf"},
         ),
+        thumbnail=FileObject(
+            backend="documents",
+            filename=thumbnail.key,
+            size=thumbnail.size,
+            content_type="image/png",
+            metadata={"original_name": "source-thumbnail.png"},
+        ),
     )
-    async_db.add(source_revision)
+    source_attachment = Attachment(
+        workspace_id=fixture_workspace_id(actor),
+        item_id=source.id,
+        created_by=actor.id,
+        role="graphical_abstract",
+        file=FileObject(
+            backend="documents",
+            filename=supplement.key,
+            size=supplement.size,
+            content_type="image/png",
+            metadata={"original_name": "source-supplement.png"},
+        ),
+    )
+    async_db.add_all([source_revision, source_attachment])
     await async_db.commit()
 
     store = get_object_store()
@@ -3800,7 +3844,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
             return await store.delete(*args, **kwargs)
 
     monkeypatch.setattr(
-        "quirebase.library.cross_workspace.get_object_store",
+        "quirebase.documents.copying.get_object_store",
         TransactionCheckingStore,
     )
 
@@ -3822,6 +3866,23 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     assert copied_revision.file.path != source_revision.file.path
     assert await get_object_store().exists(source_revision.file.path)
     assert await get_object_store().exists(copied_revision.file.path)
+    copied_attachment = await async_db.scalar(
+        select(Attachment).where(Attachment.item_id == copied.id)
+    )
+    assert copied_attachment is not None
+    assert copied_revision.page_count == 1
+    assert copied_revision.page_geometry == [[100.0, 200.0]]
+    assert copied_attachment.role == source_attachment.role
+    for source_file, copied_file in (
+        (source_revision.file, copied_revision.file),
+        (source_revision.thumbnail, copied_revision.thumbnail),
+        (source_attachment.file, copied_attachment.file),
+    ):
+        assert source_file is not None and copied_file is not None
+        assert source_file.path != copied_file.path
+        assert copied_file.to_dict() == source_file.to_dict() | {"filename": copied_file.path}
+        assert await get_object_store().exists(source_file.path)
+        assert await get_object_store().exists(copied_file.path)
     assert await search_index(async_db).search(async_db, "copied PDF search") == [copied.id]
     import_event = await async_db.scalar(
         select(AuditEvent).where(
@@ -4028,6 +4089,22 @@ async def test_annotation_list_filters_multiple_sources_and_revisions_without_wi
     }
     assert {source.id for source in all_sources.projects} == {project.id, second_project.id}
     assert {file.id for file in all_sources.revisions} == {revision.id, old_revision.id}
+    overview = await open_item_section(
+        async_db,
+        await resolve_workspace_context(async_db, viewer, workspace_id),
+        item.id,
+        ItemSection.overview,
+    )
+    section = await open_item_section(
+        async_db,
+        await resolve_workspace_context(async_db, viewer, workspace_id),
+        item.id,
+        ItemSection.annotations,
+    )
+    assert overview.annotation_count == all_sources.total == 4
+    assert {entry.annotation.id for entry in section.annotations} == {
+        entry["id"] for entry in all_sources.annotations
+    }
     both = await list_document_annotations(
         async_db,
         viewer,

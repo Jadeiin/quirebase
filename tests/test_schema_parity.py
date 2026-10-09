@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from alembic import command
-from alembic.config import Config
+from advanced_alchemy.alembic.commands import AlembicCommands
 from sqlalchemy import (
     CheckConstraint,
     UniqueConstraint,
@@ -27,7 +26,7 @@ from sqlalchemy.orm import Session
 
 import quirebase.models  # ruff: ignore[unused-import]
 from quirebase.core.config import get_settings
-from quirebase.core.database import Base, async_database_url
+from quirebase.core.database import Base, _make_database_config, async_database_url
 from quirebase.models import (
     AuditEvent,
     Project,
@@ -42,12 +41,10 @@ if TYPE_CHECKING:
 
 MIGRATION_SCRIPT = """
 import sys
-from alembic import command
-from alembic.config import Config
+from advanced_alchemy.alembic.commands import AlembicCommands
+from quirebase.core.database import database_config
 
-config = Config()
-config.set_main_option("script_location", "migrations")
-getattr(command, sys.argv[1])(config, sys.argv[2])
+getattr(AlembicCommands(database_config), sys.argv[1])(sys.argv[2])
 """
 
 # Autogenerate ignores the dialect-specific search projections (see migrations/env.py), so
@@ -320,27 +317,31 @@ def test_initial_schema_upgrade_downgrade_roundtrip(migration_database):
     _assert_schema_matches_metadata(inspect(engine), engine)
 
 
-def test_autogenerate_has_no_pending_schema_changes(tmp_path: Path, monkeypatch):
-    database = tmp_path / "autogenerate.db"
-    _migrate_database(f"sqlite:///{database}")
-    monkeypatch.setenv("QUIREBASE_DATABASE_URL", f"sqlite:///{database}")
+def test_autogenerate_has_no_pending_schema_changes(
+    migration_database, tmp_path: Path, monkeypatch
+):
+    database_url, _ = migration_database
+    _migrate_database(database_url)
+    monkeypatch.setenv("QUIREBASE_DATABASE_URL", database_url)
     get_settings.cache_clear()
     script_location = tmp_path / "migrations"
     shutil.copytree("migrations", script_location, ignore=shutil.ignore_patterns("__pycache__"))
-    config = Config()
-    config.set_main_option("script_location", str(script_location))
+    commands = AlembicCommands(_make_database_config(database_url))
+    commands.config.set_main_option("script_location", str(script_location))
     try:
-        revision = command.revision(config, message="parity probe", autogenerate=True)
+        revision = commands.revision(message="parity probe", autogenerate=True)
     finally:
         get_settings.cache_clear()
     source = Path(revision.path).read_text(encoding="utf-8")
-    upgrade = source.split("def upgrade()", 1)[1].split("def downgrade()", 1)[0]
+    upgrade = source.split("def schema_upgrades()", 1)[1].split("def schema_downgrades()", 1)[0]
     assert "op." not in upgrade, f"autogenerate produced operations:\n{upgrade}"
     assert "item_search" not in source and "revision_search" not in source
 
 
-def test_native_type_rendering_generates_an_executable_initial_schema(tmp_path: Path, monkeypatch):
-    database_url = f"sqlite:///{tmp_path / 'native-types.db'}"
+def test_native_type_rendering_generates_an_executable_initial_schema(
+    migration_database, tmp_path: Path, monkeypatch
+):
+    database_url, engine = migration_database
     monkeypatch.setenv("QUIREBASE_DATABASE_URL", database_url)
     get_settings.cache_clear()
     script_location = tmp_path / "migrations"
@@ -348,14 +349,13 @@ def test_native_type_rendering_generates_an_executable_initial_schema(tmp_path: 
     (script_location / "versions").mkdir()
     for name in ("env.py", "script.py.mako"):
         shutil.copyfile(Path("migrations") / name, script_location / name)
-    config = Config()
-    config.set_main_option("script_location", str(script_location))
-    engine = create_engine(database_url)
+    commands = AlembicCommands(_make_database_config(database_url))
+    commands.config.set_main_option("script_location", str(script_location))
     try:
-        command.revision(config, message="native AA types", autogenerate=True)
-        command.upgrade(config, "head")
+        commands.revision(message="native AA types", autogenerate=True)
+        commands.upgrade()
         _assert_schema_matches_metadata(inspect(engine), engine)
-        command.downgrade(config, "base")
+        commands.downgrade("base")
         assert inspect(engine).get_table_names() == ["alembic_version"]
     finally:
         engine.dispose()

@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
     ResourceAction,
+    WorkspaceContext,
     action_allowed,
     discoverable_project_ids_query,
     require_project_context,
@@ -37,6 +38,7 @@ from quirebase.core.errors import (
     ValidationFailure,
     VersionConflict,
 )
+from quirebase.documents.read_models import DocumentInfo, document_info, list_item_revisions
 from quirebase.documents.schemas import ArrowPayload, InkPayload, LinePayload, TextMarkupPayload
 from quirebase.models import (
     AnnotationScope,
@@ -55,6 +57,7 @@ if TYPE_CHECKING:
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql import Select
 
     from quirebase.documents.schemas import (
         AnnotationCreate,
@@ -142,7 +145,7 @@ async def delete_project_item_annotations(
 
 @dataclass(frozen=True)
 class AnnotationPage:
-    revisions: tuple[FileRevision, ...]
+    revisions: tuple[DocumentInfo, ...]
     projects: tuple[Project, ...]
     annotations: tuple[dict[str, Any], ...]
     total: int
@@ -530,6 +533,85 @@ async def _require_reply_action(
     )
 
 
+@dataclass(frozen=True)
+class AnnotationView:
+    annotation: PdfAnnotation
+    revision: DocumentInfo
+    author: User
+
+
+def _browsable_annotations(
+    context: WorkspaceContext,
+    item_id: UUID,
+    *,
+    revision_id: UUID | None = None,
+    scope: AnnotationScope | None = None,
+    project_ids: tuple[UUID, ...] | None = None,
+) -> Select[tuple[PdfAnnotation]]:
+    """Complete browse rules, with Project discovery rechecked by each statement.
+
+    Browse includes hidden/archived records for moderators. Export deliberately
+    keeps its separate, stricter selection rules in select_visible_annotations.
+    """
+    project_items = select(ProjectItem.id).where(
+        ProjectItem.workspace_id == context.workspace_id,
+        ProjectItem.item_id == item_id,
+        ProjectItem.project_id.in_(discoverable_project_ids_query(context)),
+    )
+    if project_ids is not None:
+        project_items = project_items.where(ProjectItem.project_id.in_(project_ids))
+    query = select(PdfAnnotation).where(
+        PdfAnnotation.workspace_id == context.workspace_id,
+        PdfAnnotation.item_id == item_id,
+        PdfAnnotation.deleted_at.is_(None),
+        visible_annotation_scope_predicate(
+            context,
+            project_item_ids=project_items,
+            include_private=scope is not AnnotationScope.project,
+            include_project=scope is not AnnotationScope.private,
+        ),
+    )
+    if not action_allowed(context, ResourceAction.project_annotation_review):
+        query = query.where(PdfAnnotation.hidden_at.is_(None), PdfAnnotation.archived_at.is_(None))
+    if revision_id is not None:
+        query = query.where(PdfAnnotation.file_revision_id == revision_id)
+    return query
+
+
+async def count_item_annotations(db: AsyncSession, context: WorkspaceContext, item_id: UUID) -> int:
+    """Count browsable Annotations for an Item already authorized by the caller."""
+    return (
+        await db.execute(
+            _browsable_annotations(context, item_id)
+            .with_only_columns(func.count())
+            .select_from(PdfAnnotation)
+        )
+    ).scalar_one()
+
+
+async def list_item_annotation_views(
+    db: AsyncSession, context: WorkspaceContext, item_id: UUID
+) -> tuple[AnnotationView, ...]:
+    """Build a composite section read without leaking Document descriptors."""
+    rows = (
+        (
+            await db.execute(
+                _browsable_annotations(context, item_id)
+                .add_columns(FileRevision, User)
+                .join(FileRevision, FileRevision.id == PdfAnnotation.file_revision_id)
+                .join(User, User.id == PdfAnnotation.author_id)
+                .order_by(PdfAnnotation.updated_at.desc(), PdfAnnotation.id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    return tuple(
+        AnnotationView(annotation, document_info(revision), author)
+        for annotation, revision, author in rows
+    )
+
+
 async def list_document_annotations(
     db: AsyncSession,
     user: User,
@@ -557,18 +639,7 @@ async def list_document_annotations(
     workspace = await require_workspace_action(
         db, user, workspace_id, ResourceAction.workspace_read
     )
-    revisions = tuple(
-        (
-            await db.scalars(
-                select(FileRevision)
-                .where(
-                    FileRevision.workspace_id == workspace_id,
-                    FileRevision.item_id == item_id,
-                )
-                .order_by(FileRevision.created_at.desc(), FileRevision.id)
-            )
-        ).all()
-    )
+    revisions = await list_item_revisions(db, workspace_id, item_id, all_revisions=True)
     if revision_id is not None and revision_id not in {revision.id for revision in revisions}:
         raise ResourceNotFound("revision not found for item")
     projects = tuple(
@@ -588,45 +659,20 @@ async def list_document_annotations(
     visible_project_ids = {project.id for project in projects}
     if project_ids is not None and not set(project_ids) <= visible_project_ids:
         raise ResourceUnavailable("ProjectItem not found")
-    # Source choices can outlive a concurrent participation change. Count and
-    # data queries must re-evaluate Project visibility in their own SQL statement.
-    project_item_ids = select(ProjectItem.id).where(
-        ProjectItem.workspace_id == workspace_id,
-        ProjectItem.item_id == item_id,
-        ProjectItem.project_id.in_(discoverable_project_ids_query(workspace)),
-        ProjectItem.project_id.in_(project_ids if project_ids is not None else visible_project_ids),
+    visible = _browsable_annotations(
+        workspace,
+        item_id,
+        revision_id=revision_id,
+        scope=scope,
+        project_ids=tuple(visible_project_ids) if project_ids is None else project_ids,
     )
-    moderator = action_allowed(workspace, ResourceAction.project_annotation_review)
-    filters = [
-        PdfAnnotation.item_id == item_id,
-        PdfAnnotation.workspace_id == workspace_id,
-        PdfAnnotation.deleted_at.is_(None),
-        *(
-            ()
-            if moderator
-            else (
-                PdfAnnotation.hidden_at.is_(None),
-                PdfAnnotation.archived_at.is_(None),
-            )
-        ),
-        visible_annotation_scope_predicate(
-            workspace,
-            project_item_ids=project_item_ids,
-            include_private=scope is not AnnotationScope.project,
-            include_project=scope is not AnnotationScope.private,
-        ),
-    ]
-    if revision_id is not None:
-        filters.append(PdfAnnotation.file_revision_id == revision_id)
     total = (
-        await db.execute(select(func.count()).select_from(PdfAnnotation).where(*filters))
+        await db.execute(visible.with_only_columns(func.count()).select_from(PdfAnnotation))
     ).scalar_one()
     # Read names with their annotations: a later statement under READ COMMITTED
     # could see the revision's cascade deletion after these ORM objects are loaded.
-    query = (
-        select(PdfAnnotation, FileRevision.file["metadata"]["original_name"].as_string())
-        .join(FileRevision)
-        .where(*filters)
+    query = visible.add_columns(FileRevision.file["metadata"]["original_name"].as_string()).join(
+        FileRevision
     )
     if pagination == "cursor":
         # IDs never move when content is edited, and a deleted cursor row need

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import] -- Typer resolves annotations at runtime.
 from uuid import UUID, uuid4
 
 import typer
 import uvicorn
-from alembic import command
-from alembic.config import Config
+from advanced_alchemy.alembic.commands import AlembicCommands
 from sqlalchemy import inspect, select, text
 
 from .accounts import (
@@ -19,7 +18,7 @@ from .accounts import (
 )
 from .core.config import get_settings
 from .core.crypto import hash_password_async
-from .core.database import AsyncSessionLocal, engine
+from .core.database import AsyncSessionLocal, database_config, engine
 from .core.logging import configure_logging
 from .core.storage import get_object_store
 from .core.workflows import (
@@ -68,13 +67,7 @@ async def _run_worker() -> None:
 
 @app.command("init-db")
 def init_db():
-    package_dir = Path(__file__).parent
-    migrations = package_dir / "migrations"
-    if not migrations.exists():
-        migrations = package_dir.parents[1] / "migrations"
-    alembic = Config()
-    alembic.set_main_option("script_location", str(migrations))
-    command.upgrade(alembic, "head")
+    AlembicCommands(database_config).upgrade()
     asyncio.run(initialize_durable_operations())
     settings = get_settings()
     if settings.object_store == "local":

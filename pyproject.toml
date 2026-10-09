@@ -10,9 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 dependencies = [
-  "advanced-alchemy[argon2,obstore,uuid]==1.11.0",
-  "alembic>=1.16,<2",
-  "argon2-cffi>=25,<26",
+  "advanced-alchemy[argon2,cli,obstore,uuid]==1.11.0",
   "casbin>=1.43,<2",
   "fastapi>=0.141.1,<1",
   "httpx2>=2.12,<3",
@@ -27,7 +25,6 @@ dependencies = [
   "tzdata>=2025.2; sys_platform == 'win32'",
   "tzlocal>=5.3,<6",
   "fastmcp>=4,<5",
-  "obstore>=0.11.1,<0.12",
   "stream-zip>=0.0.84,<0.1",
   "dbos>=2.31.0,<3",
 ]
@@ -62,24 +59,6 @@ dev = [
 
 [project.scripts]
 quirebase = "quirebase.cli:app"
-
-[tool.alembic]
-# Configured through the Alembic pyproject template; see
-# https://alembic.sqlalchemy.org/en/latest/tutorial.html
-script_location = "%(here)s/migrations"
-prepend_sys_path = [
-    ".",
-]
-# template used to generate migration file names; The default value is %%(rev)s_%%(slug)s
-# file_template = "%%(rev)s_%%(slug)s"
-# timezone =
-# truncate_slug_length = 40
-# revision_environment = false
-# recursive_version_locations = false
-# output_encoding = "utf-8"
-# version_locations = [
-#     "%(here)s/migrations/versions",
-# ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/quirebase"]

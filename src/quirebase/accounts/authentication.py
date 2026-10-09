@@ -3,17 +3,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import require_system_resource_action
 from quirebase.accounts.invitations import InvitationConflict
-from quirebase.accounts.sessions import create_login_session
+from quirebase.accounts.sessions import _create_login_session
 from quirebase.accounts.throttling import (
     LoginThrottled,
-    check_login_throttle,
-    clear_login_failures,
-    record_login_failure,
+    _check_login_throttle,
+    _clear_login_failures,
+    _record_login_failure,
 )
 from quirebase.audit import record_event
 from quirebase.core.crypto import (
@@ -57,7 +57,7 @@ async def authenticate_user(
     session_days: int = 30,
 ) -> tuple[LoginSession, str]:
     try:
-        await check_login_throttle(db, identity)
+        await _check_login_throttle(db, identity)
     except LoginThrottled:
         record_event(
             db,
@@ -70,20 +70,38 @@ async def authenticate_user(
         raise
 
     user = await db.scalar(select(User).where(User.username == username))
-    original_hash = user.password_hash.hash_string if user is not None else None
+    user_id = user.id if user is not None else None
+    encoded = user.password_hash if user is not None and user.active else None
+    # End the initial read/expired-window cleanup before expensive password work.
+    await db.commit()
     password_valid, upgraded = (
-        await verify_and_update_password(user.password_hash, password)
-        if user is not None and user.active
+        await verify_and_update_password(encoded, password)
+        if encoded is not None
         else (False, None)
     )
+    if password_valid:
+        user = await db.scalar(
+            select(User)
+            .where(User.id == user_id)
+            .execution_options(populate_existing=True)
+            # NO KEY UPDATE serializes signing with password/status changes and
+            # allows this transaction to install an opportunistic hash upgrade.
+            .with_for_update(key_share=True)
+        )
+        assert encoded is not None
+        password_valid = (
+            user is not None
+            and user.active
+            and compare_digest(user.password_hash.hash_string, encoded.hash_string)
+        )
     if not password_valid:
-        await record_login_failure(db, identity)
+        await _record_login_failure(db, identity)
         record_event(
             db,
             None,
             "auth.login.failed",
             "user",
-            user.id if user else None,
+            user_id,
             detail={"identity_hash": identity},
         )
         await db.commit()
@@ -91,15 +109,9 @@ async def authenticate_user(
 
     assert user is not None
     if upgraded is not None:
-        # A concurrent password change must never be overwritten by opportunistic rehash.
-        await db.execute(
-            update(User)
-            .where(User.id == user.id, User.password_hash == original_hash)
-            .values(password_hash=upgraded)
-            .execution_options(synchronize_session=False)
-        )
-    await clear_login_failures(db, identity)
-    login_session, raw = await create_login_session(db, user, session_days=session_days)
+        user.password_hash = upgraded
+    await _clear_login_failures(db, identity)
+    login_session, raw = await _create_login_session(db, user, session_days=session_days)
     record_event(
         db,
         user.id,

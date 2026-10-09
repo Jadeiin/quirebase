@@ -413,7 +413,7 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
 
-        # 3. Verify structured relations in DB
+        # 3. Verify persisted structured Contributors through the section interface.
         workspace_id = seed_item.workspace_id
         db.expire_all()
         user = await db.get(User, user_id)
@@ -436,11 +436,11 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
             ItemSection.metadata,
         )
         assert isinstance(metadata, ItemMetadataData)
-        author_links = metadata.authors
-        assert len(author_links) == 2
-        assert author_links[0].author.last_name == "Hasanein"
-        assert author_links[1].author.last_name == "Sobaih"
-        assert author_links[1].author.first_name == "Abu Elnasr E."
+        contributors = metadata.metadata.authors
+        assert len(contributors) == 2
+        assert contributors[0].last_name == "Hasanein"
+        assert contributors[1].last_name == "Sobaih"
+        assert contributors[1].first_name == "Abu Elnasr E."
     finally:
         await client.aclose()
         get_settings.cache_clear()

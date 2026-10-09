@@ -16,12 +16,16 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import ResourceAction, require_workspace_action, resolve_workspace_context
 from quirebase.accounts import (
+    InvalidCredentials,
+    authenticate_user,
+    authentication,
     change_own_password,
     change_user_role,
     reset_user_password,
     throttling,
     update_user_status,
 )
+from quirebase.accounts.sessions import get_login_session_by_token
 from quirebase.accounts.throttling import (
     THROTTLE_WINDOW,
     check_login_throttle,
@@ -29,6 +33,7 @@ from quirebase.accounts.throttling import (
     record_login_failure,
 )
 from quirebase.audit import query_events
+from quirebase.core.crypto import hash_password, verify_password
 from quirebase.core.errors import (
     PermissionDenied,
     ProjectLifecycleError,
@@ -59,6 +64,7 @@ from quirebase.library import (
     apply_bulk_item_action,
     commit_import_batch,
     delete_discussion_message,
+    delete_item,
     item_sections,
     moderate_project_discussion_message,
     open_item_section,
@@ -82,8 +88,10 @@ from quirebase.models import (
     Item,
     ItemRead,
     ItemTag,
+    LoginSession,
     LoginThrottle,
     PdfAnnotation,
+    PdfAnnotationObject,
     PdfAnnotationReply,
     Project,
     ProjectItem,
@@ -138,6 +146,223 @@ async def _user(db: AsyncSession, prefix: str) -> User:
     await provision_initial_workspace(db, user)
     await db.commit()
     return user
+
+
+async def _login_users(db: AsyncSession, *, rehash: bool = False) -> tuple[User, User]:
+    from argon2 import PasswordHasher
+
+    suffix = uuid4().hex
+    admin = User(username=f"login-admin-{suffix}", password_hash="unused", role="administrator")
+    user = User(
+        username=f"login-user-{suffix}",
+        password_hash=(
+            PasswordHasher(time_cost=1).hash("original-password")
+            if rehash
+            else hash_password("original-password")
+        ),
+    )
+    db.add_all([admin, user])
+    await db.commit()
+    return admin, user
+
+
+@pytest.mark.concurrency_case("login-revocation")
+@pytest.mark.parametrize("operation", ["reset", "deactivate"])
+@pytest.mark.parametrize("rehash", [False, True])
+async def test_login_rejects_credentials_revoked_after_password_verification(
+    postgres_sessions, postgres_race, monkeypatch, operation, rehash
+):
+    async with postgres_sessions() as setup:
+        admin, user = await _login_users(setup, rehash=rehash)
+        admin_id, user_id, username = admin.id, user.id, user.username
+    verified, resume = asyncio.Event(), asyncio.Event()
+    verify = authentication.verify_and_update_password
+    transactions = []
+
+    async def login():
+        async with postgres_race.session("login") as db:
+
+            async def paused_verify(encoded, password):
+                transactions.append(db.in_transaction())
+                result = await verify(encoded, password)
+                if result[0]:
+                    verified.set()
+                    postgres_race.note("login.password_verified", actor="login")
+                    await asyncio.wait_for(resume.wait(), timeout=5)
+                return result
+
+            monkeypatch.setattr(authentication, "verify_and_update_password", paused_verify)
+            with pytest.raises(InvalidCredentials):
+                await authenticate_user(db, "revocation-test", username, "original-password")
+
+    postgres_race.start("login", login())
+    await asyncio.wait_for(verified.wait(), timeout=5)
+    try:
+        async with postgres_race.session("revoke") as db:
+            admin = await db.get(User, admin_id)
+            if operation == "reset":
+                await reset_user_password(db, admin, user_id, "replacement-password")
+            else:
+                await update_user_status(db, admin, user_id, False)
+        postgres_race.note("credentials.revocation_committed", actor="revoke")
+    finally:
+        resume.set()
+    await postgres_race.join("login")
+    assert transactions == [False]
+    async with postgres_race.session("verify") as db:
+        assert await db.scalar(select(func.count()).select_from(LoginSession)) == 0
+        current = await db.get(User, user_id)
+        if operation == "reset":
+            assert verify_password(current.password_hash, "replacement-password")
+        else:
+            assert current.active is False
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "auth.login.failed")
+            )
+            == 1
+        )
+
+
+@pytest.mark.concurrency_case("login-revocation")
+@pytest.mark.parametrize("operation", ["reset", "deactivate"])
+async def test_login_waits_for_an_uncommitted_credential_revocation(
+    postgres_sessions, postgres_race, monkeypatch, operation
+):
+    async with postgres_sessions() as setup:
+        admin, user = await _login_users(setup)
+        admin_id, user_id, username = admin.id, user.id, user.username
+    verified, resume = asyncio.Event(), asyncio.Event()
+    verify = authentication.verify_and_update_password
+
+    async def paused_verify(encoded, password):
+        result = await verify(encoded, password)
+        verified.set()
+        await asyncio.wait_for(resume.wait(), timeout=5)
+        return result
+
+    monkeypatch.setattr(authentication, "verify_and_update_password", paused_verify)
+
+    async def login():
+        async with postgres_race.session("login") as db:
+            with pytest.raises(InvalidCredentials):
+                await authenticate_user(db, "waiting-login", username, "original-password")
+
+    postgres_race.start("login", login())
+    await asyncio.wait_for(verified.wait(), timeout=5)
+    async with postgres_race.session("revoke") as db:
+        admin = await db.get(User, admin_id)
+        commit = db.commit
+        monkeypatch.setattr(db, "commit", AsyncMock(side_effect=db.flush))
+        if operation == "reset":
+            await reset_user_password(db, admin, user_id, "replacement-password")
+        else:
+            await update_user_status(db, admin, user_id, False)
+        resume.set()
+        await postgres_race.wait_blocked("login", "revoke")
+        await commit()
+    await postgres_race.join("login")
+
+
+@pytest.mark.concurrency_case("login-revocation")
+@pytest.mark.parametrize("operation", ["reset", "deactivate"])
+async def test_credential_revocation_waits_for_signing_and_removes_the_signed_session(
+    postgres_sessions, postgres_race, monkeypatch, operation
+):
+    async with postgres_sessions() as setup:
+        admin, user = await _login_users(setup)
+        admin_id, user_id, username = admin.id, user.id, user.username
+    prepared, resume = asyncio.Event(), asyncio.Event()
+    create = authentication._create_login_session
+
+    async def paused_create(*args, **kwargs):
+        result = await create(*args, **kwargs)
+        prepared.set()
+        await asyncio.wait_for(resume.wait(), timeout=5)
+        return result
+
+    monkeypatch.setattr(authentication, "_create_login_session", paused_create)
+
+    async def login():
+        async with postgres_race.session("login") as db:
+            return await authenticate_user(db, "signing-login", username, "original-password")
+
+    async def revoke():
+        async with postgres_race.session("revoke") as db:
+            admin = await db.get(User, admin_id)
+            if operation == "reset":
+                await reset_user_password(db, admin, user_id, "replacement-password")
+            else:
+                await update_user_status(db, admin, user_id, False)
+
+    postgres_race.start("login", login())
+    await asyncio.wait_for(prepared.wait(), timeout=5)
+    postgres_race.start("revoke", revoke())
+    try:
+        await postgres_race.wait_blocked("revoke", "login")
+    finally:
+        resume.set()
+    _, raw = await postgres_race.join("login")
+    await postgres_race.join("revoke")
+    async with postgres_race.session("verify") as db:
+        assert await get_login_session_by_token(db, raw) is None
+        assert await db.scalar(select(func.count()).select_from(LoginSession)) == 0
+
+
+@pytest.mark.concurrency_case("login-revocation")
+async def test_competing_rehash_rejects_the_changed_snapshot_without_retry(
+    postgres_sessions, postgres_race, monkeypatch
+):
+    async with postgres_sessions() as setup:
+        _, user = await _login_users(setup, rehash=True)
+        username = user.username
+    both_verified = asyncio.Event()
+    verify = authentication.verify_and_update_password
+    verified_count = 0
+    verification_count = 0
+
+    async def verify_together(encoded, password):
+        nonlocal verified_count, verification_count
+        verification_count += 1
+        result = await verify(encoded, password)
+        if result[1] is not None:
+            verified_count += 1
+            if verified_count == 2:
+                both_verified.set()
+            await asyncio.wait_for(both_verified.wait(), timeout=5)
+        return result
+
+    monkeypatch.setattr(authentication, "verify_and_update_password", verify_together)
+
+    async def login(name):
+        async with postgres_race.session(name) as db:
+            try:
+                _, raw = await authenticate_user(db, name, username, "original-password")
+            except InvalidCredentials:
+                return None
+            return raw
+
+    for name in ("first", "second"):
+        postgres_race.start(name, login(name))
+    tokens = [await postgres_race.join(name) for name in ("first", "second")]
+    assert verified_count == 2
+    assert verification_count == 2
+    assert tokens.count(None) == 1
+    async with postgres_race.session("verify") as db:
+        for token in tokens:
+            if token is not None:
+                assert await get_login_session_by_token(db, token) is not None
+        assert await db.scalar(select(func.count()).select_from(LoginSession)) == 1
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "auth.login.failed")
+            )
+            == 1
+        )
 
 
 @pytest.mark.concurrency_case("login-throttle")
@@ -2586,3 +2811,74 @@ async def test_open_join_reports_conflict_when_leave_wins_before_existing_row_re
         fresh_selection = await join_project(db, actor, workspace_id, project_id)
         assert fresh_selection.id != old_selection_id
         assert await db.scalar(join_events) == 2
+
+
+@pytest.mark.concurrency_case("item-delete-reply")
+async def test_item_delete_waits_for_project_reply_without_annotation_lock_cycle(
+    postgres_sessions, postgres_search_tables, postgres_race, fake_durable_operations, monkeypatch
+):
+    async with postgres_sessions() as setup:
+        workspace_id, owner_id, item_id, _, _, annotation_id = await _project_annotation_context(
+            setup, "item-delete-reply"
+        )
+    reply_id = uuid4()
+    reply_has_assignment = asyncio.Event()
+    resume_reply = asyncio.Event()
+
+    async def reply():
+        async with postgres_race.session("reply") as db:
+            actor = await db.get(User, owner_id)
+            scalar = db.scalar
+
+            async def pause_before_annotation_lock(statement, *args, **kwargs):
+                if (
+                    isinstance(statement, Select)
+                    and statement._for_update_arg is not None
+                    and any(
+                        column.get("entity") is PdfAnnotation
+                        for column in statement.column_descriptions
+                    )
+                    and not reply_has_assignment.is_set()
+                ):
+                    # The real command holds ProjectItem's shared lock, but has
+                    # not yet acquired Annotation's shared lock.
+                    reply_has_assignment.set()
+                    await resume_reply.wait()
+                return await scalar(statement, *args, **kwargs)
+
+            monkeypatch.setattr(db, "scalar", pause_before_annotation_lock)
+            return await create_annotation_reply(
+                db,
+                actor,
+                workspace_id,
+                item_id,
+                annotation_id,
+                AnnotationReplyCreate(id=reply_id, body="Reply admitted before Item deletion"),
+            )
+
+    async def delete():
+        async with postgres_race.session("delete") as db:
+            actor = await db.get(User, owner_id)
+            await delete_item(db, actor, workspace_id, item_id)
+
+    postgres_race.start("reply", reply())
+    await asyncio.wait_for(reply_has_assignment.wait(), timeout=5)
+    postgres_race.start("delete", delete())
+    try:
+        await postgres_race.wait_blocked("delete", "reply")
+    finally:
+        resume_reply.set()
+    assert (await postgres_race.join("reply"))["id"] == reply_id
+    await postgres_race.join("delete")
+    async with postgres_race.session("verify") as db:
+        assert await db.get(Item, item_id) is None
+        assert await db.get(PdfAnnotation, annotation_id) is None
+        assert await db.get(PdfAnnotationReply, reply_id) is None
+        assert await db.get(PdfAnnotationObject, annotation_id) is None
+        assert await db.get(PdfAnnotationObject, reply_id) is None
+        for action in ("annotation_reply.create", "item.delete"):
+            assert (
+                await db.scalar(select(AuditEvent.id).where(AuditEvent.action == action))
+                is not None
+            )
+    assert fake_durable_operations.enqueues[-1]["attributes"]["object_intent"] == "cleanup"
