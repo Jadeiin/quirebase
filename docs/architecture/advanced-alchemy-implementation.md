@@ -211,7 +211,7 @@ Application, workflow, concurrency, browser and schema tests verify these contra
 Dependency characterization tests document the installed AA behavior separately from application
 safety guarantees.
 
-`tests/test_persistence_dependencies.py` characterizes generic bulk writes and descriptor equality.
+`tests/test_persistence_dependencies.py` characterizes persisted file-descriptor equality.
 `tests/test_persistence_boundaries.py` verifies rejected metadata writes, metadata-only copy races,
 cleanup and replayable PDF input snapshots on SQLite and PostgreSQL. Architecture checks verify
 Module dependencies, model ownership and command responsibilities for side effects and transaction
