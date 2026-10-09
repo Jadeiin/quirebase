@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -24,15 +25,13 @@ from quirebase.library import (
     create_item,
     item_sections,
     open_item_section,
+    revise_item_metadata,
 )
-from quirebase.library._persistence import ItemReadRepository, ItemTagRepository
 from quirebase.library.citations import (
-    CitationStyleRepository,
-    CitationStyleService,
     create_custom_citation_style,
     delete_custom_citation_style,
 )
-from quirebase.library.tags import TagRepository, delete_tag, get_or_create_tag, rename_tag
+from quirebase.library.tags import _assign_item_tags, delete_tag, get_or_create_tag, rename_tag
 from quirebase.models import (
     AuditEvent,
     Author,
@@ -48,8 +47,9 @@ from quirebase.models import (
     Tag,
     User,
 )
-from quirebase.operations.settings import RuntimeSettingsService, update_runtime_settings
-from quirebase.projects._persistence import ProjectItemRepository
+from quirebase.operations import settings as runtime_settings
+from quirebase.operations.settings import update_runtime_settings
+from quirebase.projects.workspaces import _add_missing_project_items
 
 pytestmark = pytest.mark.shared_postgres
 
@@ -82,13 +82,9 @@ async def _association_batch(db, actor, kind):
 
     async def add(ids):
         if kind == "tag":
-            created_ids = await ItemTagRepository(session=db).assign_many(
-                workspace_id, ids, root_id
-            )
+            created_ids = await _assign_item_tags(db, workspace_id, ids, root_id)
             return len(created_ids)
-        return await ProjectItemRepository(session=db).add_missing(
-            workspace_id, root_id, ids, actor_id
-        )
+        return await _add_missing_project_items(db, workspace_id, root_id, ids, actor_id)
 
     return item_ids, add, ItemTag if kind == "tag" else ProjectItem, root_id
 
@@ -248,7 +244,7 @@ async def test_item_reading_retains_the_latest_timestamp(
 
 @pytest.mark.anyio
 async def test_item_reading_insert_shares_the_callers_rollback(
-    persistence_db, persistence_sessions, persistence_actor
+    persistence_db, persistence_sessions, persistence_actor, monkeypatch
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
     actor_id = persistence_actor.id
@@ -256,9 +252,9 @@ async def test_item_reading_insert_shares_the_callers_rollback(
     persistence_db.add(item)
     await persistence_db.commit()
     item_id = item.id
-    await ItemReadRepository(session=persistence_db).record_reading(
-        workspace_id, actor_id, item_id, datetime.now(UTC)
-    )
+    context = await resolve_workspace_context(persistence_db, persistence_actor, workspace_id)
+    monkeypatch.setattr(persistence_db, "commit", AsyncMock(side_effect=persistence_db.flush))
+    await open_item_section(persistence_db, context, item_id, ItemSection.metadata)
     async with persistence_sessions() as observer:
         assert await observer.get(ItemRead, (actor_id, item_id)) is None
     await persistence_db.rollback()
@@ -269,7 +265,7 @@ async def test_item_reading_insert_shares_the_callers_rollback(
 @pytest.mark.anyio
 @pytest.mark.parametrize("existing", [False, True])
 async def test_item_reading_propagates_foreign_workspace_constraint_errors(
-    persistence_db, persistence_actor, existing
+    persistence_db, persistence_actor, monkeypatch, existing
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
     actor_id = persistence_actor.id
@@ -278,30 +274,42 @@ async def test_item_reading_propagates_foreign_workspace_constraint_errors(
     await persistence_db.commit()
     item_id = item.id
     read_at = datetime.now(UTC)
-    repository = ItemReadRepository(session=persistence_db)
+    monkeypatch.setattr(item_sections, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
+    context = await resolve_workspace_context(persistence_db, persistence_actor, workspace_id)
     if existing:
-        await repository.record_reading(workspace_id, actor_id, item_id, read_at)
-        await persistence_db.commit()
+        await open_item_section(persistence_db, context, item_id, ItemSection.metadata)
 
+    # Hold outer transaction completion to test the command's savepoint recovery.
+    monkeypatch.setattr(persistence_db, "commit", AsyncMock(side_effect=persistence_db.flush))
+    monkeypatch.setattr(persistence_db, "rollback", AsyncMock())
+    execute = persistence_db.execute
+
+    async def invalid_lineage(statement, *args, **kwargs):
+        if getattr(getattr(statement, "table", None), "name", None) == ItemRead.__tablename__:
+            statement = statement.values(workspace_id=uuid4())
+        return await execute(statement, *args, **kwargs)
+
+    monkeypatch.setattr(persistence_db, "execute", invalid_lineage)
     with pytest.raises(IntegrityError):
-        await repository.record_reading(uuid4(), actor_id, item_id, read_at + timedelta(seconds=1))
-    # The savepoint preserves the caller transaction after invalid lineage,
-    # including when the upsert follows its update path.
-    await repository.record_reading(workspace_id, actor_id, item_id, read_at)
+        await open_item_section(persistence_db, context, item_id, ItemSection.metadata)
+    monkeypatch.setattr(persistence_db, "execute", execute)
+    await open_item_section(persistence_db, context, item_id, ItemSection.metadata)
     read = await persistence_db.get(ItemRead, (actor_id, item_id))
     assert (read.workspace_id, read.last_read_at) == (workspace_id, read_at)
 
 
 @pytest.mark.anyio
 async def test_setting_bulk_writes_refresh_loaded_values_and_share_caller_rollback(
-    persistence_db, persistence_sessions, persistence_actor
+    persistence_db, persistence_sessions, persistence_actor, monkeypatch
 ):
     actor_id = persistence_actor.id
     await update_runtime_settings(persistence_db, persistence_actor, {"session_days": 30})
     loaded = await persistence_db.get(SystemSetting, "session_days")
-    service = RuntimeSettingsService(persistence_db)
-    await service.store(
-        actor_id, {"session_days": 45, "metadata_contact_email": " new@example.org "}
+    monkeypatch.setattr(persistence_db, "commit", AsyncMock(side_effect=persistence_db.flush))
+    await update_runtime_settings(
+        persistence_db,
+        persistence_actor,
+        {"session_days": 45, "metadata_contact_email": " new@example.org "},
     )
     assert loaded.value == "45"
     assert loaded.updated_by == actor_id
@@ -346,19 +354,27 @@ async def test_invalid_setting_batch_changes_neither_existing_keys_nor_audit(
 
 @pytest.mark.anyio
 async def test_setting_savepoint_propagates_unrelated_constraint_errors(
-    persistence_db, persistence_actor
+    persistence_db, persistence_actor, monkeypatch
 ):
     await update_runtime_settings(persistence_db, persistence_actor, {"session_days": 30})
+    # Inject invalid persisted lineage after the independently tested Access gate.
+    monkeypatch.setattr(
+        runtime_settings,
+        "require_system_action",
+        AsyncMock(return_value=SimpleNamespace(id=uuid4())),
+    )
     with pytest.raises(IntegrityError):
-        await RuntimeSettingsService(persistence_db).store(
-            uuid4(), {"session_days": 45, "metadata_contact_email": "new@example.org"}
+        await update_runtime_settings(
+            persistence_db,
+            persistence_actor,
+            {"session_days": 45, "metadata_contact_email": "new@example.org"},
         )
     assert (await persistence_db.get(SystemSetting, "session_days")).value == "30"
     assert await persistence_db.get(SystemSetting, "metadata_contact_email") is None
 
 
 @pytest.mark.anyio
-async def test_item_service_creation_rolls_back_search_and_audit_when_enqueue_fails(
+async def test_item_metadata_creation_rolls_back_search_and_audit_when_enqueue_fails(
     persistence_db, persistence_sessions, persistence_actor, monkeypatch
 ):
     from quirebase.library import item_metadata
@@ -391,7 +407,7 @@ async def test_item_service_creation_rolls_back_search_and_audit_when_enqueue_fa
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("operation", ["rename", "delete"])
-async def test_tag_service_mutation_and_audit_rollback_together(
+async def test_tag_mutation_and_audit_rollback_together(
     persistence_db, persistence_sessions, persistence_actor, monkeypatch, operation
 ):
     from quirebase.library import tags
@@ -424,16 +440,20 @@ async def test_tag_service_mutation_and_audit_rollback_together(
 
 
 @pytest.mark.anyio
-async def test_citation_service_validates_and_installs_inside_caller_transaction(
-    persistence_db, persistence_sessions, persistence_actor
+async def test_citation_style_validates_and_installs_inside_caller_transaction(
+    persistence_db, persistence_sessions, persistence_actor, monkeypatch
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
-    service = CitationStyleService(persistence_db)
+    monkeypatch.setattr(persistence_db, "commit", AsyncMock(side_effect=persistence_db.flush))
     with pytest.raises(ValidationFailure, match="not a valid citation style"):
-        await service.install(workspace_id, persistence_actor.id, "Invalid", "<invalid/>")
+        await create_custom_citation_style(
+            persistence_db, persistence_actor, workspace_id, "Invalid", "<invalid/>"
+        )
     xml = builtin_style_xml("apa")
     assert xml is not None
-    style = await service.install(workspace_id, persistence_actor.id, "  Local Style  ", xml)
+    style = await create_custom_citation_style(
+        persistence_db, persistence_actor, workspace_id, "  Local Style  ", xml
+    )
     style_id = style.id
     assert style.name == "Local Style" and inspect(style).persistent
     async with persistence_sessions() as observer:
@@ -444,7 +464,7 @@ async def test_citation_service_validates_and_installs_inside_caller_transaction
 
 
 @pytest.mark.anyio
-async def test_citation_service_delete_rejects_foreign_workspace_identity(
+async def test_citation_style_delete_rejects_foreign_workspace_identity(
     persistence_db, persistence_actor
 ):
     other = User(username="other-persistence-owner", password_hash="unused")
@@ -466,8 +486,8 @@ async def test_citation_service_delete_rejects_foreign_workspace_identity(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("operation", ["tag_rename", "tag_delete", "citation_delete"])
-async def test_service_mutations_translate_a_missing_root_on_repository_reread(
-    persistence_db, persistence_actor, monkeypatch, operation
+async def test_mutations_translate_a_missing_root_without_success_audit(
+    persistence_db, persistence_actor, operation
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
     if operation == "citation_delete":
@@ -476,35 +496,28 @@ async def test_service_mutations_translate_a_missing_root_on_repository_reread(
         root = await create_custom_citation_style(
             persistence_db, persistence_actor, workspace_id, "Vanishing", xml
         )
-        repository_type, model, domain_error = (
-            CitationStyleRepository,
-            CitationStyle,
-            ResourceNotFound,
-        )
+        model, domain_error = CitationStyle, ResourceNotFound
         mutation = delete_custom_citation_style(
             persistence_db, persistence_actor, workspace_id, root.id
         )
     else:
         root = await get_or_create_tag(persistence_db, persistence_actor, workspace_id, "Vanishing")
         await persistence_db.commit()
-        repository_type, model, domain_error = TagRepository, Tag, ResourceUnavailable
+        model, domain_error = Tag, ResourceUnavailable
         mutation = (
             rename_tag(persistence_db, persistence_actor, workspace_id, root.id, "New Name")
             if operation == "tag_rename"
             else delete_tag(persistence_db, persistence_actor, workspace_id, root.id)
         )
+    # The locked root query now directly decides availability. Concurrent deletion
+    # and locking remain covered by the controlled PostgreSQL schedules.
     root_id = root.id
-    original_get = repository_type.get
-
-    async def delete_before_get(self, *args, **kwargs):
-        # Inject a missing row at the reread boundary. This tests error translation;
-        # concurrent root deletion/locking is covered by controlled PostgreSQL schedules.
-        await persistence_db.execute(delete(model).where(model.id == root_id))
-        return await original_get(self, *args, **kwargs)
-
-    monkeypatch.setattr(repository_type, "get", delete_before_get)
+    await persistence_db.execute(delete(model).where(model.id == root_id))
+    await persistence_db.commit()
+    before = await persistence_db.scalar(select(func.count()).select_from(AuditEvent))
     with pytest.raises(domain_error, match="not found"):
         await mutation
+    assert await persistence_db.scalar(select(func.count()).select_from(AuditEvent)) == before
 
 
 @pytest.mark.anyio
@@ -572,15 +585,15 @@ async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
 
 
 @pytest.mark.anyio
-async def test_item_service_merge_preserves_omissions_and_replacement_clears_links(
+async def test_item_metadata_merge_preserves_omissions_and_replacement_clears_links(
     persistence_db, persistence_actor
 ):
-    from quirebase.library._item_service import ItemService
+    from quirebase.library.identifiers import apply_metadata_record
 
-    service = ItemService(persistence_db)
-    item = await service.create_from_metadata(
+    result = await create_item(
+        persistence_db,
+        persistence_actor,
         fixture_workspace_id(persistence_actor),
-        persistence_actor.id,
         ItemMetadata(
             "Original",
             authors=(Contributor("Shared", "Author"),),
@@ -592,7 +605,10 @@ async def test_item_service_merge_preserves_omissions_and_replacement_clears_lin
             bibtex_key="UserSelectedKey",
         ),
     )
-    await service.merge_candidate(item, {"title": "Merged", "keywords": "new"})
+    item = await persistence_db.get(Item, result.item_id)
+    await apply_metadata_record(
+        persistence_db, persistence_actor, item, {"title": "Merged", "keywords": "new"}, merge=True
+    )
     assert item.title == "Merged"
     assert item.authors == "Shared, Author" and item.editors == "Shared, Author"
     assert item.doi == "10.1000/original" and item.bibtex_id == "UserSelectedKey"
@@ -600,9 +616,10 @@ async def test_item_service_merge_preserves_omissions_and_replacement_clears_lin
     assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == 2
     assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 1
 
-    assert (
-        await service.replace_metadata(item, persistence_actor.id, 1, ItemMetadata("Replaced")) == 2
+    result = await revise_item_metadata(
+        persistence_db, persistence_actor, item.workspace_id, item.id, 1, ItemMetadata("Replaced")
     )
+    assert result.version == 2
     await persistence_db.refresh(item)
     assert item.title == "Replaced" and item.version == 2
     assert item.authors is None and item.editors is None
@@ -616,9 +633,12 @@ async def test_item_service_merge_preserves_omissions_and_replacement_clears_lin
 async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
     persistence_db, persistence_sessions, persistence_actor
 ):
-    from quirebase.library._item_service import ItemService
+    from quirebase.library.identifiers import (
+        _create_items_from_candidates,
+    )
 
-    items = await ItemService(persistence_db).create_many_from_candidates(
+    items = await _create_items_from_candidates(
+        persistence_db,
         fixture_workspace_id(persistence_actor),
         persistence_actor.id,
         [

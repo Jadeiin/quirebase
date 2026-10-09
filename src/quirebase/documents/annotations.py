@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -50,8 +50,6 @@ from quirebase.models import (
     ProjectState,
     User,
 )
-
-from ._persistence import AnnotationReplyRepository, AnnotationRepository
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -620,7 +618,9 @@ async def list_document_annotations(
     ]
     if revision_id is not None:
         filters.append(PdfAnnotation.file_revision_id == revision_id)
-    total = await AnnotationRepository(session=db).count(*filters)
+    total = (
+        await db.execute(select(func.count()).select_from(PdfAnnotation).where(*filters))
+    ).scalar_one()
     # Read names with their annotations: a later statement under READ COMMITTED
     # could see the revision's cascade deletion after these ORM objects are loaded.
     query = (
@@ -713,7 +713,8 @@ async def create_document_annotation(
     )
     try:
         async with db.begin_nested():
-            record = await AnnotationRepository(session=db).add(record)
+            db.add(record)
+            await db.flush()
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
     record_event(
@@ -773,24 +774,33 @@ async def update_document_annotation(
             relation="own",
         )
     validate_payload(data.page_index, data.payload, revision)
-    repository = AnnotationRepository(session=db)
-    new_version = await repository.replace_content(
-        workspace_id,
-        annotation_id,
-        data.version,
-        {
-            "page_index": data.page_index,
-            "kind": data.kind,
-            "scope": data.scope,
-            "project_item_id": project_item.id if project_item else None,
-            "body": data.body,
-            "selected_text": data.selected_text,
-            "payload": data.payload.model_dump(mode="json"),
-        },
-        datetime.now(UTC),
+    new_version = await db.scalar(
+        update(PdfAnnotation)
+        .where(
+            PdfAnnotation.workspace_id == workspace_id,
+            PdfAnnotation.id == annotation_id,
+            PdfAnnotation.version == data.version,
+            PdfAnnotation.deleted_at.is_(None),
+        )
+        .values(
+            page_index=data.page_index,
+            kind=data.kind,
+            scope=data.scope,
+            project_item_id=project_item.id if project_item else None,
+            body=data.body,
+            selected_text=data.selected_text,
+            payload=data.payload.model_dump(mode="json"),
+            version=PdfAnnotation.version + 1,
+            updated_at=datetime.now(UTC),
+        )
+        .returning(PdfAnnotation.version)
     )
     if new_version is None:
-        current_version = await repository.current_version(workspace_id, annotation_id)
+        current_version = await db.scalar(
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
+        )
         raise VersionConflict(current_version)
     await db.refresh(record)
     record_event(
@@ -821,10 +831,28 @@ async def delete_document_annotation(
 ) -> None:
     record = await require_deletable_annotation(db, user, workspace_id, item_id, annotation_id)
     deleted_at = datetime.now(UTC)
-    repository = AnnotationRepository(session=db)
-    new_version = await repository.soft_delete(workspace_id, annotation_id, version, deleted_at)
+    new_version = await db.scalar(
+        update(PdfAnnotation)
+        .where(
+            PdfAnnotation.workspace_id == workspace_id,
+            PdfAnnotation.id == annotation_id,
+            PdfAnnotation.version == version,
+            PdfAnnotation.deleted_at.is_(None),
+        )
+        .values(
+            deleted_at=deleted_at,
+            deleted_by_moderation=False,
+            version=PdfAnnotation.version + 1,
+            updated_at=deleted_at,
+        )
+        .returning(PdfAnnotation.version)
+    )
     if new_version is None:
-        current_version = await repository.current_version(workspace_id, annotation_id)
+        current_version = await db.scalar(
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
+        )
         raise VersionConflict(current_version)
     record_event(
         db,
@@ -852,12 +880,24 @@ async def restore_document_annotation(
 ) -> dict[str, Any]:
     record = await require_restorable_annotation(db, user, workspace_id, item_id, annotation_id)
     restored_at = datetime.now(UTC)
-    repository = AnnotationRepository(session=db)
-    new_version = await repository.restore_deleted(
-        workspace_id, annotation_id, version, restored_at
+    new_version = await db.scalar(
+        update(PdfAnnotation)
+        .where(
+            PdfAnnotation.workspace_id == workspace_id,
+            PdfAnnotation.id == annotation_id,
+            PdfAnnotation.version == version,
+            PdfAnnotation.deleted_at.is_not(None),
+            PdfAnnotation.deleted_by_moderation.is_(False),
+        )
+        .values(deleted_at=None, version=PdfAnnotation.version + 1, updated_at=restored_at)
+        .returning(PdfAnnotation.version)
     )
     if new_version is None:
-        current_version = await repository.current_version(workspace_id, annotation_id)
+        current_version = await db.scalar(
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
+        )
         raise VersionConflict(current_version)
     await db.refresh(record)
     record_event(
@@ -968,12 +1008,23 @@ async def moderate_document_annotation(
     else:  # Pydantic and the guard above keep this branch unreachable.
         raise ValidationFailure("invalid Annotation moderation action")
 
-    repository = AnnotationRepository(session=db)
-    new_version = await repository.apply_moderation(
-        workspace_id, annotation_id, version, values, changed_at
+    new_version = await db.scalar(
+        update(PdfAnnotation)
+        .where(
+            PdfAnnotation.workspace_id == workspace_id,
+            PdfAnnotation.id == annotation_id,
+            PdfAnnotation.version == version,
+            PdfAnnotation.deleted_at.is_(None),
+        )
+        .values(**values, version=PdfAnnotation.version + 1, updated_at=changed_at)
+        .returning(PdfAnnotation.version)
     )
     if new_version is None:
-        current_version = await repository.current_version(workspace_id, annotation_id)
+        current_version = await db.scalar(
+            select(PdfAnnotation.version).where(
+                PdfAnnotation.workspace_id == workspace_id, PdfAnnotation.id == annotation_id
+            )
+        )
         raise VersionConflict(current_version)
     await db.refresh(record)
     record_event(
@@ -1029,7 +1080,8 @@ async def create_annotation_reply(
     )
     try:
         async with db.begin_nested():
-            record = await AnnotationReplyRepository(session=db).add(record)
+            db.add(record)
+            await db.flush()
     except IntegrityError as error:
         raise VersionConflict(message="annotation object ID already exists") from error
     record_event(
@@ -1073,12 +1125,25 @@ async def update_annotation_reply(
         if annotation.scope is AnnotationScope.private
         else "project_annotation_reply.update"
     )
-    repository = AnnotationReplyRepository(session=db)
-    new_version = await repository.replace_body(
-        workspace_id, reply_id, data.version, data.body, datetime.now(UTC)
+    new_version = await db.scalar(
+        update(PdfAnnotationReply)
+        .where(
+            PdfAnnotationReply.workspace_id == workspace_id,
+            PdfAnnotationReply.id == reply_id,
+            PdfAnnotationReply.version == data.version,
+            PdfAnnotationReply.deleted_at.is_(None),
+        )
+        .values(
+            body=data.body, version=PdfAnnotationReply.version + 1, updated_at=datetime.now(UTC)
+        )
+        .returning(PdfAnnotationReply.version)
     )
     if new_version is None:
-        current_version = await repository.current_version(workspace_id, reply_id)
+        current_version = await db.scalar(
+            select(PdfAnnotationReply.version).where(
+                PdfAnnotationReply.workspace_id == workspace_id, PdfAnnotationReply.id == reply_id
+            )
+        )
         raise VersionConflict(current_version)
     await db.refresh(reply)
     record_event(
@@ -1124,10 +1189,25 @@ async def delete_annotation_reply(
         else "project_annotation_reply.delete"
     )
     deleted_at = datetime.now(UTC)
-    repository = AnnotationReplyRepository(session=db)
-    new_version = await repository.soft_delete(workspace_id, reply_id, version, deleted_at)
+    new_version = await db.scalar(
+        update(PdfAnnotationReply)
+        .where(
+            PdfAnnotationReply.workspace_id == workspace_id,
+            PdfAnnotationReply.id == reply_id,
+            PdfAnnotationReply.version == version,
+            PdfAnnotationReply.deleted_at.is_(None),
+        )
+        .values(
+            deleted_at=deleted_at, version=PdfAnnotationReply.version + 1, updated_at=deleted_at
+        )
+        .returning(PdfAnnotationReply.version)
+    )
     if new_version is None:
-        current_version = await repository.current_version(workspace_id, reply_id)
+        current_version = await db.scalar(
+            select(PdfAnnotationReply.version).where(
+                PdfAnnotationReply.workspace_id == workspace_id, PdfAnnotationReply.id == reply_id
+            )
+        )
         raise VersionConflict(current_version)
     record_event(
         db,
@@ -1183,10 +1263,23 @@ async def restore_annotation_reply(
     except PermissionDenied as error:
         raise ResourceUnavailable("annotation reply not found or cannot be restored") from error
     restored_at = datetime.now(UTC)
-    repository = AnnotationReplyRepository(session=db)
-    new_version = await repository.restore_deleted(workspace_id, reply_id, version, restored_at)
+    new_version = await db.scalar(
+        update(PdfAnnotationReply)
+        .where(
+            PdfAnnotationReply.workspace_id == workspace_id,
+            PdfAnnotationReply.id == reply_id,
+            PdfAnnotationReply.version == version,
+            PdfAnnotationReply.deleted_at.is_not(None),
+        )
+        .values(deleted_at=None, version=PdfAnnotationReply.version + 1, updated_at=restored_at)
+        .returning(PdfAnnotationReply.version)
+    )
     if new_version is None:
-        current_version = await repository.current_version(workspace_id, reply_id)
+        current_version = await db.scalar(
+            select(PdfAnnotationReply.version).where(
+                PdfAnnotationReply.workspace_id == workspace_id, PdfAnnotationReply.id == reply_id
+            )
+        )
         raise VersionConflict(current_version)
     await db.refresh(reply)
     record_event(

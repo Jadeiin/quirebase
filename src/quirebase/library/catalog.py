@@ -24,6 +24,7 @@ from quirebase.access import (
 )
 from quirebase.access.scope import workspace_select
 from quirebase.core.errors import ValidationFailure
+from quirebase.core.persistence import select_page
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -37,8 +38,6 @@ from quirebase.models import (
 )
 from quirebase.projects import list_workspace_projects
 from quirebase.search import search_index
-
-from ._item_service import ItemService
 
 if TYPE_CHECKING:
     from advanced_alchemy.filters import StatementFilter
@@ -116,9 +115,7 @@ async def search_library(
         OrderBy(field_name=sort_field, sort_order="asc" if sort == "title" else "desc"),
         OrderBy(field_name="id"),
     ])
-    records, total = await ItemService(session=db, statement=item_query).get_many_and_count(
-        *filters
-    )
+    records, total = await select_page(db, item_query, Item, *filters)
     return list(records), total
 
 

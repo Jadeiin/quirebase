@@ -11,6 +11,7 @@ from quirebase.access import (
     require_action,
     require_workspace_action,
 )
+from quirebase.core.persistence import select_page
 from quirebase.models import (
     User,
     Workspace,
@@ -19,8 +20,6 @@ from quirebase.models import (
     WorkspaceRole,
     WorkspaceState,
 )
-
-from ._persistence import WorkspaceMemberRepository, WorkspaceService
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -56,18 +55,23 @@ async def list_workspaces(
     )
     if search.strip():
         filters.append(SearchFilter(field_name="name", value=search.strip(), ignore_case=True))
-    roots, total = await WorkspaceService(session=db, statement=query).get_many_and_count(
+    roots, total = await select_page(
+        db,
+        query,
+        Workspace,
         *filters,
     )
     if not roots:
         return [], total
     members = {
         member.workspace_id: member
-        for member in await WorkspaceMemberRepository(session=db).get_many(
-            WorkspaceMember.workspace_id.in_([workspace.id for workspace in roots]),
-            user_id=actor.id,
-            state=WorkspaceMemberState.active,
-            terminated_at=None,
+        for member in await db.scalars(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id.in_([workspace.id for workspace in roots]),
+                WorkspaceMember.user_id == actor.id,
+                WorkspaceMember.state == WorkspaceMemberState.active,
+                WorkspaceMember.terminated_at.is_(None),
+            )
         )
     }
     return [
@@ -184,9 +188,10 @@ async def _member_page(
         query = query.where(
             WorkspaceMember.user_id.in_(matching_users.append_to_statement(select(User.id), User))
         )
-    records, total = await WorkspaceMemberRepository(
-        session=db, statement=query
-    ).get_many_and_count(
+    records, total = await select_page(
+        db,
+        query,
+        WorkspaceMember,
         LimitOffset(limit=limit, offset=offset),
         OrderBy(field_name=User.username),
         OrderBy(field_name="id"),

@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from quirebase.core.errors import DomainError
+from sqlalchemy import case, delete, select
 
-from ._persistence import LoginThrottleRepository
+from quirebase.core.errors import DomainError
+from quirebase.core.persistence import conflict_insert
+from quirebase.models import LoginThrottle
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,13 +25,20 @@ class LoginThrottled(DomainError):
 
 
 async def check_login_throttle(db: AsyncSession, identity: str) -> None:
-    repository = LoginThrottleRepository(session=db)
-    row = await repository.current(identity)
+    row = await db.scalar(
+        select(LoginThrottle)
+        .where(LoginThrottle.identity_hash == identity)
+        .execution_options(populate_existing=True)
+    )
     if row is None:
         return
     cutoff = datetime.now(UTC) - THROTTLE_WINDOW
     if row.window_started_at <= cutoff:
-        await repository.delete_expired(identity, cutoff)
+        await db.execute(
+            delete(LoginThrottle).where(
+                LoginThrottle.identity_hash == identity, LoginThrottle.window_started_at <= cutoff
+            )
+        )
         await db.commit()
     elif row.failures >= THROTTLE_LIMIT:
         raise LoginThrottled("too many login attempts; try again later")
@@ -37,10 +46,31 @@ async def check_login_throttle(db: AsyncSession, identity: str) -> None:
 
 async def record_login_failure(db: AsyncSession, identity: str) -> None:
     now = datetime.now(UTC)
-    await LoginThrottleRepository(session=db).record_failure(identity, now, now - THROTTLE_WINDOW)
+    cutoff = now - THROTTLE_WINDOW
+    expired = LoginThrottle.window_started_at <= cutoff
+    statement = conflict_insert(db, LoginThrottle).values(
+        identity_hash=identity, failures=1, window_started_at=now
+    )
+    await db.scalar(
+        statement
+        .on_conflict_do_update(
+            index_elements=[LoginThrottle.identity_hash],
+            set_={
+                "failures": case((expired, 1), else_=LoginThrottle.failures + 1),
+                "window_started_at": case((expired, now), else_=LoginThrottle.window_started_at),
+            },
+        )
+        .returning(LoginThrottle)
+        .execution_options(populate_existing=True)
+    )
     await db.commit()
 
 
 async def clear_login_failures(db: AsyncSession, identity: str) -> None:
-    if await LoginThrottleRepository(session=db).clear(identity):
+    cleared = await db.scalar(
+        delete(LoginThrottle)
+        .where(LoginThrottle.identity_hash == identity)
+        .returning(LoginThrottle.identity_hash)
+    )
+    if cleared is not None:
         await db.commit()

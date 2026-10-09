@@ -4,13 +4,14 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import ResourceAction, require_workspace_action, resolve_workspace_context
@@ -21,7 +22,6 @@ from quirebase.accounts import (
     throttling,
     update_user_status,
 )
-from quirebase.accounts._persistence import LoginThrottleRepository
 from quirebase.accounts.throttling import (
     THROTTLE_WINDOW,
     check_login_throttle,
@@ -67,9 +67,8 @@ from quirebase.library import (
     search_library,
     stage_import_batch,
 )
-from quirebase.library._persistence import ItemTagRepository
-from quirebase.library.authors import AuthorService
-from quirebase.library.citations import CitationStyleService, create_custom_citation_style
+from quirebase.library.authors import _resolve_authors
+from quirebase.library.citations import create_custom_citation_style
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
@@ -99,7 +98,7 @@ from quirebase.models import (
     WorkspaceRole,
     WorkspaceState,
 )
-from quirebase.operations.settings import RuntimeSettingsService, update_runtime_settings
+from quirebase.operations.settings import update_runtime_settings
 from quirebase.projects import (
     ProjectParticipationConflict,
     add_item_to_project,
@@ -122,9 +121,6 @@ from quirebase.workspaces import (
     transfer_workspace_ownership,
     workspace_owner_ids,
 )
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [
     pytest.mark.anyio,
@@ -189,7 +185,7 @@ async def test_login_failure_upsert_increments_or_recreates_a_cleared_counter(
 
 @pytest.mark.concurrency_case("login-throttle")
 async def test_concurrent_first_login_failures_wait_and_preserve_both_counts(
-    postgres_sessions, postgres_race
+    postgres_sessions, postgres_race, monkeypatch
 ):
     identity = "c" * 64
     now = datetime.now(UTC)
@@ -198,13 +194,14 @@ async def test_concurrent_first_login_failures_wait_and_preserve_both_counts(
         async with postgres_race.session("second") as db:
             await record_login_failure(db, identity)
 
+    monkeypatch.setattr(throttling, "datetime", SimpleNamespace(now=lambda _timezone: now))
     async with postgres_race.session("first") as db:
-        await LoginThrottleRepository(session=db).record_failure(
-            identity, now, now - THROTTLE_WINDOW
-        )
+        commit = db.commit
+        monkeypatch.setattr(db, "commit", AsyncMock(side_effect=db.flush))
+        await record_login_failure(db, identity)
         postgres_race.start("second", second_failure())
         await postgres_race.wait_blocked("second", "first")
-        await db.commit()
+        await commit()
         await postgres_race.join("second")
 
     async with postgres_sessions() as db:
@@ -1993,14 +1990,16 @@ async def test_single_tag_add_reports_conflict_if_skipped_link_is_removed_before
         await add_existing_tag_to_item(db, actor, workspace_id, item_id, tag_id)
 
     rereading, resume = asyncio.Event(), asyncio.Event()
-    get_one_or_none = ItemTagRepository.get_one_or_none
 
-    async def paused_read(self, *args, **kwargs):
-        rereading.set()
-        await asyncio.wait_for(resume.wait(), timeout=5)
-        return await get_one_or_none(self, *args, **kwargs)
+    scalar = AsyncSession.scalar
 
-    monkeypatch.setattr(ItemTagRepository, "get_one_or_none", paused_read)
+    async def paused_read(db, statement, *args, **kwargs):
+        if isinstance(statement, Select) and statement.column_descriptions[0]["expr"] is ItemTag:
+            rereading.set()
+            await asyncio.wait_for(resume.wait(), timeout=5)
+        return await scalar(db, statement, *args, **kwargs)
+
+    monkeypatch.setattr(AsyncSession, "scalar", paused_read)
 
     async def add():
         async with postgres_race.session("add") as db:
@@ -2262,7 +2261,9 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
 
 
 @pytest.mark.concurrency_case("settings-install")
-async def test_concurrent_setting_upserts_preserve_whole_batch(postgres_sessions, postgres_race):
+async def test_concurrent_setting_upserts_preserve_whole_batch(
+    postgres_sessions, postgres_race, monkeypatch
+):
     async with postgres_sessions() as db:
         first = User(username="settings-first", password_hash="unused", role="administrator")
         second = User(username="settings-second", password_hash="unused", role="administrator")
@@ -2284,16 +2285,20 @@ async def test_concurrent_setting_upserts_preserve_whole_batch(postgres_sessions
             )
 
     async with postgres_race.session("first") as db:
-        await RuntimeSettingsService(db).store(
-            first_id, {"metadata_contact_email": "first@example.org", "session_days": 45}
+        commit = db.commit
+        monkeypatch.setattr(db, "commit", AsyncMock(side_effect=db.flush))
+        await update_runtime_settings(
+            db,
+            await db.get(User, first_id),
+            {"metadata_contact_email": "first@example.org", "session_days": 45},
         )
         postgres_race.start("second", install_second())
         await postgres_race.wait_blocked("second", "first")
-        await db.commit()
+        await commit()
         await postgres_race.join("second")
 
     async with postgres_race.session("verify") as db:
-        rows = {record.key: record for record in await RuntimeSettingsService(db).get_many()}
+        rows = {record.key: record for record in await db.scalars(select(SystemSetting))}
         assert {key: record.value for key, record in rows.items()} == {
             "metadata_contact_email": "second@example.org",
             "ncbi_api_key": "second-key",
@@ -2302,12 +2307,12 @@ async def test_concurrent_setting_upserts_preserve_whole_batch(postgres_sessions
         assert {record.updated_by for record in rows.values()} == {second_id}
         actor = await db.get(User, second_id)
         events, total = await query_events(db, actor, action="system.settings_update")
-        assert total == 1 and events[0].actor_id == second_id
+        assert total == 2 and {event.actor_id for event in events} == {first_id, second_id}
 
 
 @pytest.mark.concurrency_case("citation-style-install")
 async def test_concurrent_citation_style_install_translates_unique_race_and_keeps_session_usable(
-    postgres_sessions, postgres_race
+    postgres_sessions, postgres_race, monkeypatch
 ):
     from inquiro.bibliography import builtin_style_xml
 
@@ -2326,10 +2331,14 @@ async def test_concurrent_citation_style_install_translates_unique_race_and_keep
             await create_custom_citation_style(db, actor, workspace_id, "Distinct", xml)
 
     async with postgres_race.session("first") as db:
-        await CitationStyleService(db).install(workspace_id, actor_id, "Shared", xml)
+        commit = db.commit
+        monkeypatch.setattr(db, "commit", AsyncMock(side_effect=db.flush))
+        await create_custom_citation_style(
+            db, await db.get(User, actor_id), workspace_id, "Shared", xml
+        )
         postgres_race.start("second", install_second())
         await postgres_race.wait_blocked("second", "first")
-        await db.commit()
+        await commit()
         await postgres_race.join("second")
 
     async with postgres_race.session("verify") as db:
@@ -2347,16 +2356,19 @@ async def test_concurrent_author_batches_recover_conflicts_and_keep_missing_iden
 ):
     async def install_second():
         async with postgres_race.session("second") as db:
-            resolved = await AuthorService(db).resolve_many([
-                ("Shared", "Author"),
-                ("Onlysecond", None),
-                ("SHARED", "AUTHOR"),
-            ])
+            resolved = await _resolve_authors(
+                db,
+                [
+                    ("Shared", "Author"),
+                    ("Onlysecond", None),
+                    ("SHARED", "AUTHOR"),
+                ],
+            )
             await db.commit()
             return {key: author.id for key, author in resolved.items()}
 
     async with postgres_race.session("first") as db:
-        first = await AuthorService(db).resolve_many([("Shared", "Author"), ("Onlyfirst", None)])
+        first = await _resolve_authors(db, [("Shared", "Author"), ("Onlyfirst", None)])
         shared_id = first["shared\x1fauthor"].id
         postgres_race.start("second", install_second())
         await postgres_race.wait_blocked("second", "first")

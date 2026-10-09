@@ -24,8 +24,7 @@ from quirebase.documents.bundles import (
     ItemDownloadBundle,
     assemble_document_bundle,
 )
-from quirebase.library._persistence import ItemTagRepository
-from quirebase.library.tags import TagConflict, get_or_create_tag
+from quirebase.library.tags import TagConflict, _assign_item_tags, get_or_create_tag
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -76,11 +75,9 @@ async def apply_bulk_item_action(
             await require_editable_item(db, user, workspace_id, item.id)
         tag_record = await get_or_create_tag(db, user, workspace_id, tag_name)
         try:
-            await ItemTagRepository(session=db).assign_many(
-                workspace_id, [item.id for item in items], tag_record.id
-            )
+            await _assign_item_tags(db, workspace_id, [item.id for item in items], tag_record.id)
         except IntegrityError as error:
-            # A root may disappear before insertion. The Repository savepoint
+            # A root may disappear before insertion. The association savepoint
             # rolls back every new link and leaves the caller transaction usable.
             raise TagConflict(
                 "tag associations changed concurrently; retry the bulk action"

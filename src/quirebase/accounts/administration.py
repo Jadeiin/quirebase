@@ -16,6 +16,7 @@ from quirebase.core.errors import (
     ResourceNotFound,
     ValidationFailure,
 )
+from quirebase.core.persistence import select_page
 from quirebase.models import (
     Invitation,
     LoginSession,
@@ -27,8 +28,6 @@ from quirebase.models import (
 )
 from quirebase.workspaces import provision_initial_workspace
 
-from ._persistence import InvitationRepository, UserService
-
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
@@ -36,7 +35,7 @@ if TYPE_CHECKING:
 
 async def list_users(db: AsyncSession, admin: User) -> list[User]:
     await require_system_action(db, admin, SystemAction.users_read)
-    return list(await UserService(db).get_many(order_by=[("username", False), ("id", False)]))
+    return list(await db.scalars(select(User).order_by(User.username, User.id)))
 
 
 async def list_users_paginated(
@@ -63,9 +62,10 @@ async def list_users_paginated(
         query = BooleanFilter(field_name="active", value=active).append_to_statement(query, User)
     if filters:
         query = query.where(*filters)
-    records, total = await UserService(
-        session=db, statement=query.order_by(User.username, User.id)
-    ).get_many_and_count(
+    records, total = await select_page(
+        db,
+        query.order_by(User.username, User.id),
+        User,
         LimitOffset(limit=limit, offset=offset),
     )
     return list(records), total
@@ -124,7 +124,8 @@ async def create_user_admin(
         active=True,
     )
     try:
-        user = await UserService(db).create(user)
+        db.add(user)
+        await db.flush()
         await provision_initial_workspace(db, user)
         record_event(
             db,
@@ -280,7 +281,7 @@ async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: UUID) -> 
 async def list_invitations(db: AsyncSession, admin: User) -> list[Invitation]:
     await require_system_action(db, admin, SystemAction.invitations_read)
     return list(
-        await InvitationRepository(session=db).get_many(
-            order_by=[("created_at", True), ("id", True)]
+        await db.scalars(
+            select(Invitation).order_by(Invitation.created_at.desc(), Invitation.id.desc())
         )
     )

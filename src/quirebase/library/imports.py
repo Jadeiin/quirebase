@@ -12,6 +12,7 @@ from inquiro.bibliography import (
     parse_bibliography_records,
 )
 from sqlalchemy import func, select, update
+from sqlalchemy.orm import selectinload
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_accessible_items, visible_items_query
@@ -39,11 +40,10 @@ from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import ImportBatch, Item, User
+from quirebase.models import ImportBatch, Item, ItemAuthor, User
 from quirebase.search import search_index
 
-from ._item_service import ItemService
-from ._persistence import ImportBatchRepository
+from .identifiers import _create_items_from_candidates
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -139,7 +139,8 @@ async def stage_import_batch(
         records=records,
         errors=errors,
     )
-    batch = await ImportBatchRepository(session=db).add(batch)
+    db.add(batch)
+    await db.flush()
     await db.commit()
     return batch, records, errors
 
@@ -174,7 +175,8 @@ async def stage_identifier_import_batch(
         records=[rec_dict],
         errors=[],
     )
-    batch = await ImportBatchRepository(session=db).add(batch)
+    db.add(batch)
+    await db.flush()
     record_event(
         db,
         user.id,
@@ -265,7 +267,8 @@ async def stage_pdf_import_batch(
             errors=errors,
             status="pending",
         )
-        batch = await ImportBatchRepository(session=db).add(batch)
+        db.add(batch)
+        await db.flush()
         workflow_id = f"prepare-pdf-import:{batch.id}"
         batch.workflow_id = workflow_id
         await durable_operations().enqueue_in_transaction(
@@ -682,7 +685,7 @@ async def commit_import_batch(
             raise BatchConflict("the candidate has no staged source file")
         candidates.append(candidate)
         selected_files.append(pdf)
-    items = await ItemService(db).create_many_from_candidates(workspace_id, actor.id, candidates)
+    items = await _create_items_from_candidates(db, workspace_id, actor.id, candidates)
     committed_item_ids: list[UUID] = []
     for item, pdf in zip(items, selected_files, strict=True):
         await request_item_tag_recommendation(
@@ -768,9 +771,11 @@ async def export_accessible_bibliography(
 ) -> tuple[str, str, str]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     items = list(
-        await ItemService(
-            session=db, statement=visible_items_query(workspace_id)
-        ).get_bibliography()
+        await db.scalars(
+            visible_items_query(workspace_id)
+            .options(selectinload(Item.author_links).selectinload(ItemAuthor.author))
+            .order_by(Item.updated_at.desc(), Item.id)
+        )
     )
     if file_format == "csl":
         return await format_csl_export(

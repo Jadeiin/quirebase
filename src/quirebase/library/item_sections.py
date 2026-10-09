@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import selectinload
 
 from quirebase.access import (
@@ -20,8 +20,8 @@ from quirebase.access import (
     visible_annotation_scope_predicate,
 )
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+from quirebase.core.persistence import conflict_insert
 from quirebase.library._metadata import ItemMetadata, metadata_from_item
-from quirebase.library._persistence import ItemReadRepository
 from quirebase.library.authors import get_item_authors
 from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
 from quirebase.models import (
@@ -31,6 +31,7 @@ from quirebase.models import (
     Item,
     ItemAuthor,
     ItemIdentifier,
+    ItemRead,
     ItemTag,
     PdfAnnotation,
     Project,
@@ -132,12 +133,6 @@ type ItemSectionResult = (
     | ItemAnnotationsData
     | ItemDiscussionData
 )
-
-
-async def _record_read(db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID) -> None:
-    await ItemReadRepository(session=db).record_reading(
-        workspace_id, user.id, item_id, datetime.now(UTC)
-    )
 
 
 async def _assigned_tags(db: AsyncSession, item: Item) -> tuple[Tag, ...]:
@@ -428,7 +423,26 @@ async def open_item_section(
                 view = await _open_annotations(db, context, item)
             case ItemSection.discussion:
                 view = await _open_discussion(db, context, item)
-        await _record_read(db, context.actor, context.workspace_id, item.id)
+        read_at = datetime.now(UTC)
+        statement = conflict_insert(db, ItemRead).values(
+            workspace_id=context.workspace_id,
+            user_id=context.actor.id,
+            item_id=item.id,
+            last_read_at=read_at,
+        )
+        async with db.begin_nested():
+            await db.execute(
+                statement.on_conflict_do_update(
+                    index_elements=[ItemRead.user_id, ItemRead.item_id],
+                    set_={
+                        # Validate the supplied lineage on the update path too.
+                        "workspace_id": statement.excluded.workspace_id,
+                        "last_read_at": case(
+                            (ItemRead.last_read_at < read_at, read_at), else_=ItemRead.last_read_at
+                        ),
+                    },
+                )
+            )
         await db.commit()
         return view
     except Exception:

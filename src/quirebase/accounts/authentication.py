@@ -24,10 +24,8 @@ from quirebase.core.crypto import (
     verify_password_async,
 )
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
-from quirebase.models import LoginSession, User
+from quirebase.models import Invitation, LoginSession, User
 from quirebase.workspaces import provision_initial_workspace
-
-from ._persistence import InvitationRepository, UserService
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -125,8 +123,9 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
 
     await ensure_registration_allowed(db, via_invitation=True)
     invitation_token_hash = token_hash(token)
-    invitations = InvitationRepository(session=db)
-    invitation = await invitations.get_one_or_none(token_hash=invitation_token_hash)
+    invitation = await db.scalar(
+        select(Invitation).where(Invitation.token_hash == invitation_token_hash)
+    )
     if (
         invitation is None
         or invitation.accepted_at is not None
@@ -139,10 +138,11 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
         encoded = await hash_password_async(password)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
-    invitation = await invitations.get_one_or_none(
-        token_hash=invitation_token_hash,
-        execution_options={"populate_existing": True},
-        with_for_update=True,
+    invitation = await db.scalar(
+        select(Invitation)
+        .where(Invitation.token_hash == invitation_token_hash)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     if (
         invitation is None
@@ -155,7 +155,8 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
     user = User(username=invitation.username, password_hash=encoded, role=invitation.role)
     invitation.accepted_at = datetime.now(UTC)
     try:
-        user = await UserService(db).create(user)
+        db.add(user)
+        await db.flush()
         await provision_initial_workspace(db, user)
         record_event(db, user.id, "invitation.accept", "user", user.id)
         await db.commit()

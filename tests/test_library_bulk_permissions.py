@@ -26,8 +26,7 @@ from quirebase.core.crypto import hash_password
 from quirebase.core.errors import PermissionDenied, ProjectLifecycleError
 from quirebase.core.storage import ObjectMetadata, ObjectResponse
 from quirebase.documents import create_item_document_bundle
-from quirebase.library import apply_bulk_item_action, download_selected_item_documents
-from quirebase.library._persistence import ItemTagRepository
+from quirebase.library import apply_bulk_item_action, bulk_items, download_selected_item_documents
 from quirebase.models import (
     AuditEvent,
     FileRevision,
@@ -239,8 +238,8 @@ async def test_bulk_tag_integrity_race_returns_http_conflict(
     )
 
     monkeypatch.setattr(
-        ItemTagRepository,
-        "assign_many",
+        bulk_items,
+        "_assign_item_tags",
         AsyncMock(
             side_effect=IntegrityError(
                 "INSERT INTO item_tags", {}, Exception("tag foreign key disappeared")

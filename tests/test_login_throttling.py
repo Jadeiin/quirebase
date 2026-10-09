@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from quirebase.accounts import throttling
-from quirebase.accounts._persistence import LoginThrottleRepository
 from quirebase.accounts.throttling import (
     THROTTLE_WINDOW,
     LoginThrottled,
@@ -21,7 +21,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.shared_postgres]
 
 @pytest.mark.parametrize("existing", [False, True])
 async def test_failure_counter_refreshes_loaded_state_and_shares_caller_rollback(
-    persistence_db, persistence_sessions, existing
+    persistence_db, persistence_sessions, monkeypatch, existing
 ):
     identity = "a" * 64
     now = datetime(2026, 10, 8, tzinfo=UTC)
@@ -29,8 +29,9 @@ async def test_failure_counter_refreshes_loaded_state_and_shares_caller_rollback
         persistence_db.add(LoginThrottle(identity_hash=identity, failures=2, window_started_at=now))
         await persistence_db.commit()
         loaded = await persistence_db.get(LoginThrottle, identity)
-    repository = LoginThrottleRepository(session=persistence_db)
-    await repository.record_failure(identity, now, now - THROTTLE_WINDOW)
+    monkeypatch.setattr(throttling, "datetime", SimpleNamespace(now=lambda _timezone: now))
+    monkeypatch.setattr(persistence_db, "commit", AsyncMock(side_effect=persistence_db.flush))
+    await record_login_failure(persistence_db, identity)
     row = await persistence_db.get(LoginThrottle, identity)
     assert row.failures == (3 if existing else 1)
     if existing:

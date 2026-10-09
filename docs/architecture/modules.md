@@ -133,22 +133,22 @@ lineage primitive and Module-owned aggregate loaders (`get_item`, `get_project`,
 `get_project_item`, and document loaders). The primitive only adds the Workspace lineage
 predicate; one concrete resource-action decision remains an explicit Access gate while Project
 participation contributes fixed domain discovery rules and concrete command facts, and mutation
-statements retain their Workspace and CAS predicates at the linearization point. No generic
-Repository or implicit ORM tenant filter is part of this authorization seam. Module-owned AA
-repositories/services apply model reads, pagination, normalization hooks, ordinary writes and
-bulk persistence after explicit authorization; transaction ownership stays with the use-case
-command or durable datasource transaction. Concrete classes remain internal to their owner,
-including `_persistence` implementation files where several use cases share them. Neither
-inbound adapters nor peer Modules instantiate another Module's repository/service. AA's native
-schema converter may run in Web without a repository or Session; transport DTOs never enter
-business services. Core owns AA configuration, session-neutral persistence defaults and shared
-value types, as described in ADR 0014. CAS predicates, lock order, lineage checks, idempotent
-association SQL and reference-aware cleanup remain explicit rather than becoming generic CRUD.
+statements express their Workspace and CAS predicates at the linearization point. Module-owned
+commands apply pure normalization and directly execute SQLAlchemy reads/writes after authorization;
+transaction ownership stays with the use-case command or durable datasource transaction.
+Only actually reused, independent and sufficiently complex mechanisms are extracted into private
+functions in the owning business modules. Business Module Interfaces expose the owned use cases.
+AA's native schema converter runs in Web, and business operations receive domain values.
+Core owns AA configuration, shared value types, native dialect INSERT
+selection and filtered pagination together in `core.persistence`, as described in ADRs 0006 and 0014.
+Commands express CAS predicates, lock order, lineage checks, idempotent association SQL and
+reference-aware cleanup through their SQLAlchemy operations.
 
-Architecture checks reject command-owned authorization, Audit, Search and durable enqueue calls
-inside persistence collaborators. Generic bulk mutation call locations require an explicit review
-of their target scope and concurrency protection; protected-root association helpers remain valid.
-Application and database tests establish the actual guarantees, as required by ADR 0014.
+Architecture checks verify dependency direction, model ownership and command responsibilities for
+authorization, Audit, Search, durable enqueue and transaction completion.
+Internal write functions derive association targets from protected roots and preserve explicit
+scope/concurrency predicates. Application and database tests establish the actual guarantees,
+as required by ADRs 0006 and 0014.
 
 The Access Module owns one immutable Casbin model and policy bundle packaged with the application.
 Casbin is the sole Workspace/System resource-action capability policy evaluator. System and Workspace requests

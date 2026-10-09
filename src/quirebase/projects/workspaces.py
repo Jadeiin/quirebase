@@ -18,6 +18,7 @@ from quirebase.access import (
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import ProjectLifecycleError, ResourceUnavailable, ValidationFailure
+from quirebase.core.persistence import conflict_insert, select_page
 from quirebase.documents import delete_project_item_annotations
 from quirebase.models import (
     Item,
@@ -32,7 +33,6 @@ from quirebase.models import (
 )
 
 from ._locking import lock_project_root
-from ._persistence import ProjectItemRepository, ProjectParticipantRepository, ProjectService
 from .lifecycle import _validate_description, _validate_name
 from .loaders import require_project
 from .participation import ProjectParticipantInfo
@@ -82,9 +82,10 @@ async def create_project(
         participation=parsed_participation,
         description=normalized_description,
     )
-    project = await ProjectService(db).create(project)
+    db.add(project)
+    await db.flush()
     if parsed_participation is ProjectParticipation.open:
-        await ProjectParticipantRepository(session=db).add(
+        db.add(
             ProjectParticipant(
                 workspace_id=workspace_id,
                 project_id=project.id,
@@ -92,6 +93,7 @@ async def create_project(
                 user_id=user.id,
             )
         )
+    await db.flush()
     record_event(
         db,
         user.id,
@@ -150,7 +152,10 @@ async def list_workspace_projects(
     )
     if search.strip():
         filters.append(SearchFilter(field_name="name", value=search.strip(), ignore_case=True))
-    roots, total = await ProjectService(session=db, statement=query).get_many_and_count(
+    roots, total = await select_page(
+        db,
+        query,
+        Project,
         *filters,
     )
     ids = [project.id for project in roots]
@@ -254,8 +259,8 @@ async def add_item_to_project(
     if item is None:
         raise ResourceUnavailable("Item or Project not found")
     try:
-        inserted = await ProjectItemRepository(session=db).add_missing(
-            workspace_id, project_id, [item_id], user.id
+        inserted = await _add_missing_project_items(
+            db, workspace_id, project_id, [item_id], user.id
         )
     except IntegrityError as error:
         raise ResourceUnavailable("Item or Project not found") from error
@@ -331,8 +336,40 @@ async def add_items_to_project(
     if accessible != set(ids):
         raise ResourceUnavailable("Item or Project not found")
     try:
-        return await ProjectItemRepository(session=db).add_missing(
-            workspace_id, project_id, ids, user.id
-        )
+        return await _add_missing_project_items(db, workspace_id, project_id, ids, user.id)
     except IntegrityError as error:
         raise ResourceUnavailable("Item or Project not found") from error
+
+
+async def _add_missing_project_items(
+    db: AsyncSession, workspace_id: UUID, project_id: UUID, item_ids: Sequence[UUID], actor_id: UUID
+) -> int:
+    """Add authorized Item links under the command's Project root guard."""
+    ordered = sorted(set(item_ids))
+    if not ordered:
+        return 0
+    inserted = 0
+    async with db.begin_nested():
+        for offset in range(0, len(ordered), 500):
+            added = await db.scalars(
+                conflict_insert(db, ProjectItem)
+                .values([
+                    {
+                        "workspace_id": workspace_id,
+                        "project_id": project_id,
+                        "item_id": item_id,
+                        "added_by": actor_id,
+                    }
+                    for item_id in ordered[offset : offset + 500]
+                ])
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        ProjectItem.workspace_id,
+                        ProjectItem.project_id,
+                        ProjectItem.item_id,
+                    ]
+                )
+                .returning(ProjectItem.item_id)
+            )
+            inserted += len(added.all())
+    return inserted

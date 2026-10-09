@@ -3,16 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
+
 from quirebase.access import SystemAction, require_system_action
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ValidationFailure
-from quirebase.core.persistence import Repository, Service, conflict_insert
+from quirebase.core.persistence import conflict_insert
 from quirebase.models import SystemSetting, User
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
 ALLOWED_RUNTIME_KEYS: set[str] = {
@@ -54,43 +54,6 @@ def _setting_value(key: str, value: Any) -> str:
     return normalized
 
 
-class RuntimeSettingRepository(Repository[SystemSetting]):
-    model_type = SystemSetting
-    id_attribute = "key"
-
-    async def store_values(self, actor_id: UUID, settings: dict[str, str], now: datetime) -> None:
-        if not settings:
-            return
-        statement = conflict_insert(self.session, SystemSetting).values([
-            {"key": key, "value": settings[key], "updated_by": actor_id, "updated_at": now}
-            for key in sorted(settings)
-        ])
-        async with self.session.begin_nested():
-            records = await self.session.scalars(
-                statement
-                .on_conflict_do_update(
-                    index_elements=[SystemSetting.key],
-                    set_={
-                        "value": statement.excluded.value,
-                        "updated_by": statement.excluded.updated_by,
-                        "updated_at": statement.excluded.updated_at,
-                    },
-                )
-                .returning(SystemSetting)
-                .execution_options(populate_existing=True)
-            )
-            records.all()
-
-
-class RuntimeSettingsService(Service[SystemSetting]):
-    repository_type = RuntimeSettingRepository
-    repository: RuntimeSettingRepository
-
-    async def store(self, actor_id: UUID, updates: dict[str, Any]) -> None:
-        sanitized = {key: _setting_value(key, value) for key, value in updates.items()}
-        await self.repository.store_values(actor_id, sanitized, datetime.now(UTC))
-
-
 async def get_runtime_settings(db: AsyncSession) -> dict[str, Any]:
     base = get_settings()
     current: dict[str, Any] = {
@@ -108,7 +71,7 @@ async def get_runtime_settings(db: AsyncSession) -> dict[str, Any]:
         "database_url": base.database_url,
         "data_dir": str(base.data_dir),
     }
-    db_settings = await RuntimeSettingsService(db).get_many()
+    db_settings = await db.scalars(select(SystemSetting))
     for item in db_settings:
         if item.key in ALLOWED_RUNTIME_KEYS:
             if item.key in INTEGER_KEYS:
@@ -123,7 +86,7 @@ async def get_runtime_settings(db: AsyncSession) -> dict[str, Any]:
 
 async def get_effective_setting(db: AsyncSession, key: str, default: Any = None) -> Any:
     if key in ALLOWED_RUNTIME_KEYS:
-        record = await RuntimeSettingsService(db).get_one_or_none(key=key)
+        record = await db.scalar(select(SystemSetting).where(SystemSetting.key == key))
         if record is not None and record.value is not None:
             if key in INTEGER_KEYS:
                 try:
@@ -142,7 +105,28 @@ async def get_effective_settings_model(db: AsyncSession) -> Any:
 
 async def update_runtime_settings(db: AsyncSession, admin: User, updates: dict[str, Any]) -> None:
     admin = await require_system_action(db, admin, SystemAction.settings_manage, lock="shared")
-    await RuntimeSettingsService(db).store(admin.id, updates)
+    settings = {key: _setting_value(key, value) for key, value in updates.items()}
+    now = datetime.now(UTC)
+    if settings:
+        statement = conflict_insert(db, SystemSetting).values([
+            {"key": key, "value": settings[key], "updated_by": admin.id, "updated_at": now}
+            for key in sorted(settings)
+        ])
+        async with db.begin_nested():
+            records = await db.scalars(
+                statement
+                .on_conflict_do_update(
+                    index_elements=[SystemSetting.key],
+                    set_={
+                        "value": statement.excluded.value,
+                        "updated_by": statement.excluded.updated_by,
+                        "updated_at": statement.excluded.updated_at,
+                    },
+                )
+                .returning(SystemSetting)
+                .execution_options(populate_existing=True)
+            )
+            records.all()
     record_event(
         db,
         admin.id,

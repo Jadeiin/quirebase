@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
@@ -15,10 +15,18 @@ from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import Item
 from quirebase.search import search_index
 
-from ._item_service import ItemService
-from ._metadata import ItemMetadata, ItemWriteResult, generate_bibtex_key
+from ._item_identifiers import _replace_item_identifiers_many
+from ._metadata import (
+    ItemMetadata,
+    ItemWriteResult,
+    MetadataWrite,
+    generate_bibtex_key,
+    metadata_write,
+)
+from .authors import _replace_item_authors_many
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +41,11 @@ async def _create_item(
     metadata: ItemMetadata,
 ) -> ItemWriteResult:
     context = await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
-    item = await ItemService(db).create_from_metadata(workspace_id, actor.id, metadata)
+    write = metadata_write(metadata)
+    item = Item(**write.values, workspace_id=workspace_id, created_by=actor.id)
+    db.add(item)
+    await db.flush()
+    await _write_item_links(db, [(item, write)], replace=False)
     await search_index(db).index_item(db, item.id)
     await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=actor.id)
     record_event(
@@ -73,11 +85,28 @@ async def _revise_item_metadata(
 ) -> ItemWriteResult:
     actor_id = actor.id
     item = await require_editable_item(db, actor, workspace_id, item_id)
-    version = await ItemService(db).replace_metadata(item, actor_id, expected_version, metadata)
+    write = metadata_write(metadata)
+    version = await db.scalar(
+        update(Item)
+        .where(
+            Item.workspace_id == workspace_id,
+            Item.id == item_id,
+            Item.version == expected_version,
+        )
+        .values(
+            **write.values,
+            updated_by=actor_id,
+            updated_at=datetime.now(UTC),
+            version=Item.version + 1,
+        )
+        .returning(Item.version)
+    )
     if version is None:
         await db.rollback()
         current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
+
+    await _write_item_links(db, [(item, write)])
 
     # The bulk UPDATE does not reliably populate every value used by the search
     # projection. Refresh only the mutated aggregate; expiring the whole session
@@ -171,3 +200,21 @@ async def regenerate_bibtex_key(
     except Exception:
         await db.rollback()
         raise
+
+
+async def _write_item_links(
+    db: AsyncSession, prepared: Sequence[tuple[Item, MetadataWrite]], *, replace: bool = True
+) -> None:
+    contributors: list[tuple[Item, str, list[dict]]] = []
+    for item, write in prepared:
+        if write.authors is not None:
+            contributors.append((item, "author", write.authors))
+        if write.editors is not None:
+            contributors.append((item, "editor", write.editors))
+    if contributors:
+        await _replace_item_authors_many(db, contributors, replace=replace)
+    identifiers = [
+        (item, write.identifiers) for item, write in prepared if write.identifiers is not None
+    ]
+    if identifiers:
+        await _replace_item_identifiers_many(db, identifiers, replace=replace)

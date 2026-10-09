@@ -3,16 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from inquiro.bibliography import Contributor as BibliographyContributor
-from sqlalchemy import or_, select, tuple_
+from sqlalchemy import delete, or_, select, tuple_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
 from quirebase.core.errors import ValidationFailure
-from quirebase.core.persistence import Service
 from quirebase.models import Author, Item, ItemAuthor, User, normalize_author_identity
-
-from ._persistence import AuthorRepository, ItemAuthorRepository
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -54,31 +52,57 @@ def parse_author_list_string(raw: str | None) -> list[dict[str, str | None]]:
     return authors
 
 
-class AuthorService(Service[Author]):
-    repository_type = AuthorRepository
-    repository: AuthorRepository
+async def _resolve_authors(
+    db: AsyncSession, names: Sequence[tuple[str, str | None]]
+) -> dict[str, Author]:
+    """Resolve shared identities in batches without committing the caller's transaction."""
+    candidates: dict[str, tuple[str, str | None]] = {}
+    for last_name, first_name in names:
+        last = " ".join(last_name.split())
+        first = " ".join(first_name.split()) or None if first_name else None
+        if not last:
+            raise ValidationFailure("author last name is required")
+        if len(last) > 120 or (first is not None and len(first) > 120):
+            raise ValidationFailure("author name is too long")
+        candidates.setdefault(normalize_author_identity(last, first), (last, first))
+    if not candidates:
+        return {}
 
-    async def resolve_many(self, names: Sequence[tuple[str, str | None]]) -> dict[str, Author]:
-        """Resolve shared identities in batches without committing the caller's transaction."""
-        candidates: dict[str, tuple[str, str | None]] = {}
-        for last_name, first_name in names:
-            last = " ".join(last_name.split())
-            first = " ".join(first_name.split()) or None if first_name else None
-            if not last:
-                raise ValidationFailure("author last name is required")
-            if len(last) > 120 or (first is not None and len(first) > 120):
-                raise ValidationFailure("author name is too long")
-            candidates.setdefault(normalize_author_identity(last, first), (last, first))
-        if not candidates:
-            return {}
-
-        return await self.repository.resolve_identities(candidates)
+    resolved = await _existing_author_identities(db, set(candidates))
+    pending = set(candidates) - resolved.keys()
+    while pending:
+        try:
+            async with db.begin_nested():
+                created: list[Author] = []
+                ordered = sorted(pending)
+                for offset in range(0, len(ordered), 500):
+                    batch = [
+                        Author(
+                            identity_key=key,
+                            last_name=candidates[key][0],
+                            first_name=candidates[key][1],
+                        )
+                        for key in ordered[offset : offset + 500]
+                    ]
+                    db.add_all(batch)
+                    await db.flush()
+                    created.extend(batch)
+        except IntegrityError:
+            installed = await _existing_author_identities(db, pending)
+            if not installed:
+                raise
+            resolved.update(installed)
+            pending -= installed.keys()
+        else:
+            resolved.update({author.identity_key: author for author in created})
+            break
+    return resolved
 
 
 async def find_or_create_author(
     db: AsyncSession, last_name: str, first_name: str | None = None
 ) -> Author:
-    resolved = await AuthorService(db).resolve_many([(last_name, first_name)])
+    resolved = await _resolve_authors(db, [(last_name, first_name)])
     return resolved[normalize_author_identity(last_name, first_name)]
 
 
@@ -110,14 +134,14 @@ async def _replace_item_authors_many(
     """Maintain links and display caches for roots already authorized by the owning command."""
     prepared = [(item, role, _prepared_contributors(data)) for item, role, data in replacements]
     names = [(last, first) for _, _, entries in prepared for _, last, first, _ in entries]
-    resolved = await AuthorService(db).resolve_many(names)
-    repository = ItemAuthorRepository(session=db)
+    resolved = await _resolve_authors(db, names)
     if replace:
         roots = [(item.id, role) for item, role, _ in prepared]
         for offset in range(0, len(roots), 500):
-            await repository.delete_where(
-                tuple_(ItemAuthor.item_id, ItemAuthor.role).in_(roots[offset : offset + 500]),
-                sanity_check=False,
+            await db.execute(
+                delete(ItemAuthor).where(
+                    tuple_(ItemAuthor.item_id, ItemAuthor.role).in_(roots[offset : offset + 500])
+                )
             )
     links: list[ItemAuthor] = []
     for item, role, entries in prepared:
@@ -139,10 +163,8 @@ async def _replace_item_authors_many(
             item.authors = cached
         elif role == "editor":
             item.editors = cached
-    if links:
-        await repository.add_many(links)
-    else:
-        await db.flush()
+    db.add_all(links)
+    await db.flush()
     return links
 
 
@@ -222,3 +244,16 @@ async def search_authors_typeahead(
         }
         for a in authors
     ]
+
+
+async def _existing_author_identities(db: AsyncSession, keys: set[str]) -> dict[str, Author]:
+    found: dict[str, Author] = {}
+    ordered = sorted(keys)
+    for offset in range(0, len(ordered), 500):
+        found.update({
+            author.identity_key: author
+            for author in await db.scalars(
+                select(Author).where(Author.identity_key.in_(ordered[offset : offset + 500]))
+            )
+        })
+    return found

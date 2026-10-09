@@ -1,125 +1,164 @@
 # Advanced Alchemy implementation
 
-This record describes the current implementation of
-[ADR 0014](../adr/0014-advanced-alchemy-persistence.md). The ADR defines ownership and safety
-boundaries; this record preserves version-specific implementation and product contracts.
+This record describes the persistence tools in
+[ADR 0014](../adr/0014-advanced-alchemy-persistence.md) and the native async runtime in
+[ADR 0006](../adr/0006-async-runtime-and-persistence.md), including Module responsibilities,
+database behavior and product contracts.
+
+## Async runtime integration
+
+`ProviderRuntime` supports `async with`, asynchronous `lookup`, `search` and `acquire_document`,
+and explicit closure through `aclose`. PDF streams use asynchronous iteration and `aclose`.
+
+Core uses `create_async_engine`, `async_sessionmaker` and the `AsyncSession` dependency. Each
+request or Job owns one Session, and concurrent tasks use separate Sessions. SQLAlchemy queries
+use explicit `await`; relationships use eager loading or explicit refresh. Provider access
+completes short read transactions before external I/O, then starts a fresh write transaction and
+rechecks authority and optimistic versions.
+
+SQLite uses `sqlite+aiosqlite`; PostgreSQL uses `postgresql+psycopg` with psycopg's async driver.
+The application depends on `sqlalchemy[asyncio,aiosqlite]`, and the `postgres` extra depends on
+`sqlalchemy[postgresql-psycopgbinary]`. SQLite is the default single-worker deployment; PostgreSQL
+worker claims use `FOR UPDATE SKIP LOCKED`.
+
+Blocking File storage, FileLock, archive, backup, PyMuPDF and optional Rubrica/KeyBERT inference
+run through `asyncio.to_thread`. PostgreSQL dump/restore uses asynchronous subprocesses. Typer
+commands use synchronous shell entry points backed by `asyncio.run`.
+
+Async test bindings are described in [Testing](../TESTING.md).
 
 ## Dependencies, sessions and schema
 
-The adoption baseline is Advanced Alchemy 1.11.0. Both runtime and PostgreSQL extras constrain
-SQLAlchemy to `>=2.0,<2.1`: clean wheel installation exposed AA's use of APIs removed in 2.1.
+Quirebase uses Advanced Alchemy 1.11.0 with SQLAlchemy `>=2.0,<2.1` in the runtime and PostgreSQL extras.
 
 Core uses `SQLAlchemyAsyncConfig`, `EngineConfig`, a shared metadata registry and
-`AsyncSessionConfig(expire_on_commit=False)`. Repository/Service defaults disable automatic
-commit, refresh and expunge, retain raw SQLAlchemy exceptions, and use independent pagination
-counts. No CRUD implementation is duplicated in Core. AA not-found errors from repeated mutation
-reads are translated by their owning Module when a concurrently deleted root becomes unavailable.
-Core's `conflict_insert` selects the supported database's native INSERT builder. Repositories own
-the conflict target and update expressions; business commands use the same Repository interface.
+`AsyncSessionConfig(expire_on_commit=False)`. Commands and durable transactions pass their existing
+Session to direct SQLAlchemy and reused Module mechanisms. Commands own transaction completion;
+shared mechanisms flush prepared values inside the caller's transaction. SQLAlchemy constraint
+errors support savepoint recovery. Locked root queries decide availability, and commands translate
+missing rows into their domain errors.
+`core.persistence` holds `conflict_insert` and `select_page` together. The former selects the
+supported database's native INSERT builder; owning commands supply conflict targets and update
+expressions. The latter applies AA statement filters, reads the filtered query's COUNT result and
+fetches its page.
 
-Core ensures a physical SQLite outer transaction before the first savepoint when sqlite3's legacy
-driver has not begun one. Releasing the savepoint cannot commit independently of caller rollback.
-Ordinary reads retain their statement-level behavior; eagerly beginning read snapshots would turn
-concurrent CAS conflicts into snapshot upgrade errors. Libpq URL validation, foreign-key enforcement
-and WAL remain part of Core database configuration.
+Core establishes a physical SQLite outer transaction before the first savepoint. Savepoint writes
+participate in caller commit and rollback. Ordinary reads use statement-level snapshots. Core also
+configures libpq URL validation, foreign-key enforcement and SQLite WAL.
 
 PostgreSQL application connections explicitly select UTC. AA's `DateTimeUTC` normalizes bound
-values but preserves timezone-aware driver results, so server timezone defaults alone are not
-sufficient to guarantee UTC Python values.
+values and reads timezone-aware driver results in the connection's configured UTC timezone.
 
 Entities use `UUIDv7AuditBase`; immutable identities use `UUIDv7Base`; natural/composite keys use
 `DefaultBase`. PostgreSQL stores native UUIDs. SQLite compiles AA GUID to BLOB so stored UUID bytes
-and reflected schema agree. Object keys retain UUID4 for distributed prefixes, and client-authored
-Annotation IDs retain their UUID4 request protocol. The timestamp listener is disabled:
-`AuditColumns` defaults/onupdate cover ORM and Core writes while preserving explicit timestamps.
+and reflected schema agree. Object keys use UUID4 for distributed prefixes, and client-authored
+Annotation IDs use UUID4. `AuditColumns` defaults/onupdate manage ORM and Core timestamps,
+including explicitly supplied timestamp values.
 
 Structured persistent values use `JsonB`, including Import Batch snapshots/results, Audit detail,
 Item custom fields, recommendation candidates, PDF geometry/payloads and integrity diagnostics.
-JSON UUIDs reload as strings. Commands replace complete values; nested mutation tracking is not
-assumed. Bibliographic text/search caches and canonical Identifier associations retain their roles.
+JSON UUIDs reload as strings. Commands write complete values. Bibliographic text/search caches and
+canonical Identifier associations provide the corresponding projections and relationships.
 
 Argon2 inputs are prepared outside the event loop. The prepared password type provides a
 reconstructable representation for Alembic. Alembic renders AA type representations and dialect
-variants without a custom `render_item`; its revision template imports the required type modules.
-Search DDL remains dialect-specific. This alpha cutover retains one autogenerated initial schema
-and has no previous-schema conversion path.
+variants; its revision template imports the required type modules. Search DDL follows the database
+dialect, and Alembic revisions define the schema.
+
+## Module implementations
+
+| Module | Persistence operations |
+| --- | --- |
+| Accounts | Direct User/Invitation queries and writes; Login Throttle commands own native upsert |
+| Workspaces | Direct Workspace/Member writes; explicit directory queries |
+| Projects | Direct Project writes; shared participation and Item assignment operations |
+| Audit | Explicit filtered Audit Event query |
+| Library | Direct Item/Tag/Citation Style commands; pure metadata plans and shared batch mechanisms |
+| Documents | Direct prepared-value insertion and Annotation/Reply CAS in commands |
+| Operations | Pure runtime-setting validation and native upsert directly in the command |
+
+AA provides models, value types, file descriptors, configuration, filters, pagination DTOs,
+password hashing and serialization/result-conversion utilities. Business Module Interfaces expose
+their use cases, with authorization, integrity and recovery defined by the owning Module.
 
 ## Persistence use cases
 
-Library's Tag service normalizes create/update values; its Repository owns scoped uniqueness
-recovery. Citation Style validation stays in the service, while its Repository inserts under a
-savepoint and reports whether the name is already installed. Operations validates an entire
-runtime-setting batch before its Repository performs one ordered native upsert, refreshing loaded
-values through `RETURNING`. A savepoint preserves the caller transaction on a constraint failure.
-AA 1.11.0's select-then-write upsert is not used as an atomic database upsert.
+Library's `normalize_tag_name` supplies the pure normalization used by `get_or_create_tag`, which
+directly inserts and recovers scoped uniqueness races. Tag rename/delete use the locked root.
+`create_custom_citation_style` validates CSL and inserts under a savepoint, translating an already
+installed name into `ValidationFailure`.
+Operations' `update_runtime_settings` validates an entire runtime-setting batch before one ordered
+native upsert, refreshing loaded values through `RETURNING`. A savepoint preserves the caller
+transaction on a constraint failure.
 
-Library's reading Repository uses one native upsert, retaining the latest reading timestamp on
-conflict. Both insert and update validate the supplied Workspace lineage through the composite
-foreign key. A savepoint preserves the caller transaction on an invalid lineage; there is no
-duplicate-insert retry. The Item section command owns authorization and the outer commit/rollback.
+Library's `open_item_section` directly uses one native upsert, storing the latest reading timestamp
+on conflict. Both insert and update validate the supplied Workspace lineage through the composite
+foreign key. A savepoint preserves the caller transaction on an invalid lineage. The Item section
+command owns authorization and the outer commit/rollback.
 
-Item–Tag and Project–Item repositories share single and bulk association write paths within their
-owning Modules. Native `ON CONFLICT DO NOTHING` inserts use stable identity order and batches of at
-most 500 links. `RETURNING item_id` reports only the current call's new links, without pre-reading
-associations or retrying duplicates. A surrounding savepoint rolls back all inserted chunks on an
-unrelated constraint failure. Bulk insertion returns scalar identities and does not load ORM links
-that could survive a failed later chunk in the Session identity map. Single Item–Tag commands load
-their result after insertion and report a conflict if a skipped duplicate disappears before that
-read. Concurrent removal after a bulk insert skips a duplicate may win normally; the batch does
-not recreate that link. Tag merge uses the same writer after its command locks both Tag roots.
+Library's `_assign_item_tags` and Projects' `_add_missing_project_items` share single and bulk
+association write paths within their owning Modules. Native `ON CONFLICT DO NOTHING` inserts use
+stable identity order and batches of at most 500 links. `RETURNING item_id` reports the current
+call's new links as scalar identities. A surrounding savepoint rolls back all inserted chunks on
+an unrelated constraint failure. Single Item–Tag commands load their result after insertion and
+report a conflict if a skipped duplicate disappears before that
+read. A concurrent delete after a bulk insert skips a duplicate determines that link's final state.
+Tag merge uses the same writer after its command locks both Tag roots.
 
-Projects' Participant Repository owns scoped insertion and removal of explicit selections.
-Insertion uses one savepoint; a duplicate reread returns the existing selection without another
-Audit Event. If a competing Leave removes that selection before the locked reread, the command
-returns `ProjectParticipationConflict` (HTTP 409). It does not automatically reinsert the selection;
-a fresh Join is a new command that rechecks authority and participation policy. Commands retain
-Workspace/Project guards, authorization, Audit and transaction ownership.
+Projects' participation commands directly write explicit selections. The shared
+`_add_participant` operation combines insertion, recovery, Audit and commit for Join and curated Add.
+Insertion uses one savepoint; a duplicate reread returns the existing selection. Audit Events
+represent newly inserted selections. If a competing Leave deletes the selection before the locked
+reread, the command returns `ProjectParticipationConflict` (HTTP 409). Each Join checks authority
+and participation policy. Commands own Workspace/Project guards, authorization, Audit and
+transaction completion.
 
-Accounts' Login Throttle Repository uses one native upsert to increment the counter or reset an
+Accounts' `record_login_failure` directly uses one native upsert to increment the counter or reset an
 expired window atomically, refreshing loaded counter values. A clear committed before the upsert
-allows the failure to start a new window; there is no intermediate insertion-recovery conflict.
-Expiry cleanup uses the observed cutoff in its deletion predicate so it cannot delete a newly
-reset window. Authentication owns credential checks, Audit Events and Login Session creation.
+allows the failure to start a new window. Expiry cleanup targets windows at or before the observed
+cutoff. Authentication owns credential checks, Audit Events and Login Session creation.
 
-Documents' Annotation and Reply repositories own scoped version CAS for editing, soft deletion,
-restoration and Annotation moderation. Restoration retains its distinct deleted-state predicates,
-including the prohibition on author restoration after moderation deletion. Commands keep payload
-validation, authorization, root locking, version-conflict translation, Audit and transaction ownership.
+Documents' Annotation and Reply commands directly execute scoped version CAS for editing, soft
+deletion, restoration and Annotation moderation. Author restoration requires a deleted Annotation
+with `deleted_by_moderation=False`. Commands own payload validation, authorization, root locking,
+version-conflict translation, Audit and transaction completion.
 
-The Item persistence service coordinates manual creation/replacement, Provider merges and Import
-Batch creation. Metadata inputs become explicit write plans: replacement clears omitted
-associations; Provider merges preserve missing fields, merge URLs/keywords and retain citation
-keys. Bounded-column validation is shared without accepting Web DTOs. The named Item replacement
-operation retains Workspace, identity and expected-version predicates in its SQL. `Item.version`
-is an application CAS field; the Item mapper does not configure SQLAlchemy `version_id_col`.
-Provider synchronization advances the version through the same Item Repository CAS predicate;
-external I/O, authority rechecks, merge decisions, conflicts, Audit and Search remain in the command.
+Library's Item metadata commands directly insert roots and replace them through scoped version CAS.
+Provider merge logic lives in `identifiers`; shared relationship writing lives in `item_metadata`,
+and the reused batch candidate mechanism lives in `identifiers`. Metadata inputs become explicit
+write plans: replacement clears omitted associations; Provider merges preserve missing fields,
+merge URLs/keywords and retain citation
+keys. Shared bounded-column validation accepts domain values. The Item replacement command
+uses Workspace, identity and expected-version predicates in its SQL. `Item.version` is an
+application CAS field.
+Provider synchronization directly advances the version through Workspace, identity and version CAS;
+the command owns external I/O, authority rechecks, merge decisions, conflicts, Audit and Search.
 
 Import confirmation batches Item roots and Contributor/Identifier links, resolves shared Authors
-across both roles through the Author Repository in bounded chunks and inserts missing identities
+across both roles through `_resolve_authors` in bounded chunks and inserts missing identities
 in stable order. Uniqueness conflicts roll back only the insertion savepoint, reload installed
-identities and retry the remaining set, removing installed identities on every retry. The locked
-Import Batch preserves result ordering and replay identity. File ownership transfer, Search, Audit
-and enqueue remain in the confirmation command.
-Import Batch creation adds prepared ORM roots through its Repository without an extra Service.
-Bibliography export uses an explicit Contributor relationship-loading profile.
+identities and retry the pending set, progressing on every retry. The locked Import Batch establishes
+result ordering and replay identity. The confirmation command owns File ownership transfer, Search,
+Audit and enqueue.
+Import Batch creation adds and flushes prepared ORM roots directly in the caller Session.
+Bibliography export uses explicit `selectinload` for Contributors and a deterministic Item order.
 
 Documents persists prepared File Revision, Attachment, Export Artifact, Annotation and Reply
-instances directly through private Repositories. These paths need no intermediate Service.
-Client-authored Annotation/Reply UUID4 values remain native UUIDs through insertion and rereads,
-including their shared Annotation Object identity; the request protocol remains UUID4.
+instances directly through the caller Session. Versioned mutations use explicit CAS.
+Client-authored Annotation/Reply UUID4 values use native UUIDs through insertion and rereads,
+including their shared Annotation Object identity.
 
 Web uses native result conversion for attribute-only administrative and API Token DTO fields.
-Computed status, identity, authorization and domain-choice projections remain explicitly authored.
+Business Modules explicitly project computed status, identity, authorization and domain choices.
 
 ## File descriptors and durable ownership
 
 Attachment, File Revision PDF/thumbnail and Annotation Export Artifact columns use AA
 `StoredObject` and `FileObject`. Upload, range/download, copy, statistics, reference scanning and
 cleanup read the persisted descriptor. Cross-Workspace copying snapshots complete descriptor
-values and compares them before finalization; changes at an unchanged path invalidate the copy.
+values and compares them before finalization; descriptor metadata changes invalidate the copy.
 Integrity scanning releases its transaction before object I/O. Thumbnail repair locks the current
-row, checks the scanned path and uses explicit SQL because FileObject equality ignores metadata.
+row, checks the scanned path and compares descriptor metadata through explicit SQL.
 Export download resolves the persisted artifact and checks its expiry independently of cleanup.
 
 PDF Import Batches use `StoredObject(backend="documents", multiple=True)` for staged files.
@@ -128,7 +167,7 @@ the source UUID; durable preparation receives Quirebase-owned serializable recei
 Failed preparation retains reservations for retry, rejected sources release their references, and
 confirmation transfers accepted objects to File Revisions and clears staged ownership atomically.
 Discard, Workspace purge, object migration and maintenance read the same descriptor field.
-File lifecycle listeners remain disabled.
+Commands and durable workflows manage file lifecycle.
 
 ## Signed downloads
 
@@ -140,7 +179,7 @@ recheck authority.
 
 Core delegates signing to `FileObject.sign_async`, with a configurable 60-second default and
 300-second maximum. Export signatures end before artifact expiry. An issued URL remains usable
-until expiry after revocation. Signing supplies transport, not durable object ownership.
+until expiry after revocation. Core supplies signed transport; commands and workflows manage ownership.
 
 ## Directory and product contracts
 
@@ -159,28 +198,32 @@ preserve it. Library Project filters resolve selected identities outside loaded 
 Project governance discovery remains independent of participation and the `mine` view. Dashboard
 loads ten participating Projects and reports the full participating count.
 
-Project detail returns `item_count` instead of all assigned Items, avoiding an unbounded response.
-Its Item section uses Library's authorized Project filter with search and independent pages;
-archived Project reading remains available. Member selectors load more pages and retain selected
-identity independently of search results. Governance tables search usernames and recover after
-removing the last member. Library Search allows updated/created/title sorts and uses native
-`ExistsFilter`/`NotExistsFilter` for file presence without multiplying counts. Annotation cursors
+Project detail returns `item_count` for assigned Items. Its Item section uses Library's authorized
+Project filter with search and independent pages; archived Projects support reading.
+Member selectors load more pages and retain selected
+identity independently of search results. Governance tables search usernames and recover when
+the last row on a page is deleted. Library Search allows updated/created/title sorts and uses native
+`ExistsFilter`/`NotExistsFilter` for file presence while counting Item roots. Annotation cursors
 and external Provider pages keep their purpose-specific protocols. Item read models that need a
-complete choice projection request it explicitly rather than treating a directory page as complete.
+complete choice projection request it explicitly.
 
-Application, workflow, concurrency, browser and schema tests verify these continuing contracts.
+Application, workflow, concurrency, browser and schema tests verify these contracts.
 Dependency characterization tests document the installed AA behavior separately from application
-safety guarantees. Disposable prototype drivers and captured evidence are not retained.
+safety guarantees.
 
 `tests/test_persistence_dependencies.py` characterizes generic bulk writes and descriptor equality.
 `tests/test_persistence_boundaries.py` verifies rejected metadata writes, metadata-only copy races,
-cleanup and replayable PDF input snapshots on SQLite and PostgreSQL. Architecture checks reject
-command-owned side effects in persistence collaborators and flag unreviewed generic bulk calls.
+cleanup and replayable PDF input snapshots on SQLite and PostgreSQL. Architecture checks verify
+Module dependencies, model ownership and command responsibilities for side effects and transaction
+completion. Single-use SQL executes directly in commands; helper extraction requires actual reuse
+and independent complexity.
 
-`tests/test_persistence_services.py` and `tests/test_persistence_values.py` exercise caller rollback,
-constraint recovery, batch/replay semantics, native UUID identity maps, JSON values and timestamps
-on both databases. The missing-root Repository reread test injects row disappearance to verify
-domain error translation; controlled PostgreSQL schedules separately establish concurrency safety.
+`tests/test_persistence_operations.py` and
+`tests/test_persistence_values.py` exercise caller rollback, constraint recovery, batch/replay
+semantics, native UUID identity maps, JSON values and timestamps on both databases. Missing-root
+mutation tests verify domain errors without successful Audit Events; controlled PostgreSQL
+schedules establish concurrent deletion and locking safety. Schedule injection holds Session
+statement execution or commit boundaries.
 
 `tests/test_durable_recovery.py` launches actual DBOS executors in separate processes against
 freshly migrated, isolated SQLite/PostgreSQL databases. It kills an executor after completed PDF

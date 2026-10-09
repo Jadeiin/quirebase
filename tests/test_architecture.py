@@ -680,165 +680,74 @@ def test_package_facades_do_not_export_internal_persistence_collaborators():
         assert not leaked, f"quirebase.{package} facade leaks internal symbols {sorted(leaked)}"
 
 
-def test_alchemy_repositories_and_services_stay_with_their_model_owner():
-    collaborators = {}
-    for py_file in get_python_files(SRC_ROOT):
-        owner = py_file.relative_to(SRC_ROOT).parts[0]
-        tree = ast.parse(py_file.read_text(encoding="utf-8"))
-        aliases = {}
-        for imported in ast.walk(tree):
-            if isinstance(imported, ast.Import):
-                for alias in imported.names:
-                    name = alias.asname or alias.name.split(".")[0]
-                    aliases[name] = alias.name if alias.asname else name
-            elif isinstance(imported, ast.ImportFrom) and imported.module:
-                module = imported.module
-                if imported.level:
-                    package = ("quirebase", *py_file.relative_to(SRC_ROOT).parts[:-1])
-                    module = ".".join((*package[: len(package) - imported.level + 1], module))
-                for alias in imported.names:
-                    aliases[alias.asname or alias.name] = f"{module}.{alias.name}"
-        for node in tree.body:
-            if not isinstance(node, ast.ClassDef):
-                continue
-            bases = {
-                base.value.id
-                for base in node.bases
-                if isinstance(base, ast.Subscript) and isinstance(base.value, ast.Name)
-            }
-            if not bases & {"Repository", "Service", "ReadService"}:
-                continue
-            collaborators[node.name] = owner
-            for statement in node.body:
-                if isinstance(statement, ast.Assign) and any(
-                    isinstance(target, ast.Name) and target.id == "model_type"
-                    for target in statement.targets
-                ):
-                    assert isinstance(statement.value, ast.Name)
-                    assert ORM_MODEL_OWNERS[statement.value.id] == owner, py_file
-            for call in ast.walk(node):
-                if isinstance(call, ast.Call):
-                    name, *attributes = ast.unparse(call.func).split(".")
-                    resolved = ".".join((aliases.get(name, name), *attributes))
-                    operation = resolved.rsplit(".", 1)[-1]
-                    authorization = resolved.startswith("quirebase.access.") and (
-                        operation.startswith(("require_", "resolve_", "can_"))
-                        or operation in {"action_allowed", "effective_resource_actions"}
-                    )
-                    command_operation = operation in {
-                        "record_event",
-                        "AuditEvent",
-                        "search_index",
-                        "durable_operations",
-                        "request_item_tag_recommendation",
-                        "enqueue_child_workflow",
-                        "index_item",
-                        "index_revision",
-                        "delete_item",
-                        "delete_revision",
-                    }
-                    assert not authorization and not command_operation, (
-                        f"{py_file}:{call.lineno} invokes a command-owned operation: {resolved}"
-                    )
-                if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
-                    assert call.func.id not in {
-                        "AsyncSession",
-                        "AsyncSessionLocal",
-                        "async_sessionmaker",
-                        "make_async_engine",
-                    }, f"{py_file}:{call.lineno} creates a Session outside its caller"
-                if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
-                    assert call.func.attr not in {
-                        "commit",
-                        "rollback",
-                        "close",
-                        "enqueue",
-                        "enqueue_in_transaction",
-                    }, (
-                        f"{py_file}:{call.lineno} makes persistence own transaction/durable side effects"
-                    )
-    assert collaborators
-    for owner in set(collaborators.values()):
-        assert not exported_names(owner) & collaborators.keys(), owner
+def test_internal_write_helpers_keep_the_callers_transaction():
+    helper_locations = {
+        "projects/workspaces.py": {"_add_missing_project_items"},
+        "library/authors.py": {
+            "_resolve_authors",
+            "_existing_author_identities",
+            "_replace_item_authors_many",
+        },
+        "library/tags.py": {"_assign_item_tags"},
+        "library/item_metadata.py": {"_write_item_links"},
+        "library/identifiers.py": {"_create_items_from_candidates"},
+    }
+    path = "library/_item_identifiers.py"
+    tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
+    helper_locations[path] = {
+        node.name for node in tree.body if isinstance(node, ast.AsyncFunctionDef)
+    }
+    helper_owners = {}
+    for path, names in helper_locations.items():
+        tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
+        helpers = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, ast.AsyncFunctionDef) and node.name in names
+        }
+        assert helpers.keys() == names, path
+        owner = path.split("/", 1)[0]
+        assert not exported_names(owner) & names, path
+        for name, helper in helpers.items():
+            helper_owners[name] = owner
+            assert helper.args.args[0].arg == "db", (path, name)
+            for call in ast.walk(helper):
+                if not isinstance(call, ast.Call):
+                    continue
+                operation = ast.unparse(call.func).rsplit(".", 1)[-1]
+                assert operation not in {
+                    "commit",
+                    "rollback",
+                    "close",
+                    "AsyncSession",
+                    "AsyncSessionLocal",
+                    "async_sessionmaker",
+                    "make_async_engine",
+                    "record_event",
+                    "AuditEvent",
+                    "search_index",
+                    "durable_operations",
+                    "request_item_tag_recommendation",
+                    "enqueue_child_workflow",
+                    "enqueue",
+                    "enqueue_in_transaction",
+                }, f"{path}:{call.lineno} transfers command ownership to {name}"
+                if operation.startswith(("require_", "resolve_workspace_")):
+                    raise AssertionError(f"{path}:{call.lineno} authorizes inside {name}")
+                if operation in {"insert", "update", "delete", "conflict_insert"} and call.args:
+                    target = call.args[1] if operation == "conflict_insert" else call.args[0]
+                    if isinstance(target, ast.Name) and target.id in ORM_MODEL_OWNERS:
+                        assert ORM_MODEL_OWNERS[target.id] == owner, (path, target.id)
     for py_file in get_python_files(SRC_ROOT):
         owner = py_file.relative_to(SRC_ROOT).parts[0]
         tree = ast.parse(py_file.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 for alias in node.names:
-                    if alias.name in collaborators:
-                        assert collaborators[alias.name] == owner, (
+                    if alias.name in helper_owners:
+                        assert helper_owners[alias.name] == owner, (
                             f"{py_file} imports another Module's internal {alias.name}"
                         )
-            if isinstance(node, ast.Call):
-                for keyword in node.keywords:
-                    if keyword.arg == "auto_commit":
-                        assert (
-                            isinstance(keyword.value, ast.Constant) and keyword.value.value is False
-                        ), f"{py_file}:{node.lineno} enables implicit transaction ownership"
-
-
-def test_association_inserts_and_annotation_cas_stay_in_owned_repositories():
-    # Commands retain authorization, lock order, domain errors and side effects.
-    # These shared write mechanisms have explicit Repository ownership.
-    command_writes = {
-        "library/tags.py": ("insert", {"ItemTag"}),
-        "library/bulk_items.py": ("insert", {"ItemTag"}),
-        "projects/workspaces.py": ("insert", {"ProjectItem"}),
-        "projects/participation.py": ("insert", {"ProjectParticipant"}),
-        "documents/annotations.py": ("update", {"PdfAnnotation", "PdfAnnotationReply"}),
-        "library/identifiers.py": ("update", {"Item"}),
-        "accounts/throttling.py": ("insert", {"LoginThrottle"}),
-    }
-    for path, (operation, models) in command_writes.items():
-        tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
-        constructors = (
-            {"insert", "pg_insert", "sqlite_insert", "conflict_insert"}
-            if operation == "insert"
-            else {operation}
-        )
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not node.args:
-                continue
-            name = ast.unparse(node.func).rsplit(".", 1)[-1]
-            target = (
-                node.args[1] if name == "conflict_insert" and len(node.args) > 1 else node.args[0]
-            )
-            assert not (
-                name in constructors and isinstance(target, ast.Name) and target.id in models
-            ), f"{path}:{node.lineno} constructs {operation} outside its owning Repository"
-
-
-def test_generic_bulk_mutations_stay_at_reviewed_persistence_locations():
-    # Association deletes derive their targets from protected Item roots.
-    # New locations require a scope/concurrency review; inherited AA methods remain available.
-    reviewed = {
-        ("library/authors.py", "_replace_item_authors_many", "delete_where"),
-        ("library/_item_identifiers.py", "_replace_item_identifiers_many", "delete_where"),
-    }
-
-    def calls_with_scope(node, scope=()):
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            scope = (*scope, node.name)
-        if isinstance(node, ast.Call):
-            yield scope, node
-        for child in ast.iter_child_nodes(node):
-            yield from calls_with_scope(child, scope)
-
-    for py_file in get_python_files(SRC_ROOT):
-        tree = ast.parse(py_file.read_text(encoding="utf-8"))
-        for scope, call in calls_with_scope(tree):
-            if not isinstance(call.func, ast.Attribute) or call.func.attr not in {
-                "update_many",
-                "delete_many",
-                "delete_where",
-            }:
-                continue
-            location = (py_file.relative_to(SRC_ROOT).as_posix(), ".".join(scope), call.func.attr)
-            assert location in reviewed, (
-                f"{py_file}:{call.lineno} uses generic {call.func.attr}() at an unreviewed location; "
-                "prove target scope and concurrency protection before adding the location"
-            )
 
 
 def test_library_facade_exposes_owned_import_citation_and_recommendation_operations():

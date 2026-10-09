@@ -6,7 +6,6 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from advanced_alchemy.exceptions import NotFoundError
 from inquiro.bibliography import (
     BIBLIOGRAPHY_EXTENSIONS,
     BIBLIOGRAPHY_MEDIA_TYPES,
@@ -39,55 +38,12 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_readable_item
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.core.persistence import Repository, Service
 from quirebase.models import CitationStyle
 
 if TYPE_CHECKING:
-    from advanced_alchemy.service import ModelDictT
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.models import Item, User
-
-
-class CitationStyleRepository(Repository[CitationStyle]):
-    model_type = CitationStyle
-
-    async def add_if_name_available(self, style: CitationStyle) -> CitationStyle | None:
-        if await self.exists(workspace_id=style.workspace_id, name=style.name):
-            return None
-        try:
-            async with self.session.begin_nested():
-                return await self.add(style)
-        except IntegrityError:
-            if not await self.exists(workspace_id=style.workspace_id, name=style.name):
-                raise
-            return None
-
-
-class CitationStyleService(Service[CitationStyle]):
-    repository_type = CitationStyleRepository
-    repository: CitationStyleRepository
-
-    async def to_model_on_create(self, data: ModelDictT[CitationStyle]) -> CitationStyle:
-        style = await self.to_model(data)
-        style.name = style.name.strip()[:120]
-        if not style.name:
-            raise ValidationFailure("style name is required")
-        if not is_valid_csl(style.csl_xml):
-            raise ValidationFailure("the CSL text is not a valid citation style")
-        return style
-
-    async def install(
-        self, workspace_id: UUID, actor_id: UUID, name: str, csl: str
-    ) -> CitationStyle:
-        style = await self.to_model(
-            {"workspace_id": workspace_id, "created_by": actor_id, "name": name, "csl_xml": csl},
-            "create",
-        )
-        installed = await self.repository.add_if_name_available(style)
-        if installed is None:
-            raise ValidationFailure("citation style name already exists in Workspace") from None
-        return installed
 
 
 def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
@@ -112,7 +68,11 @@ async def resolve_style_xml(
         style_id = UUID(style_key)
     except ValueError:
         return None
-    style = await CitationStyleService(db).get_one_or_none(id=style_id, workspace_id=workspace_id)
+    style = await db.scalar(
+        select(CitationStyle).where(
+            CitationStyle.id == style_id, CitationStyle.workspace_id == workspace_id
+        )
+    )
     if style is None:
         return None
     return style.csl_xml
@@ -122,9 +82,10 @@ async def list_custom_citation_styles(
     db: AsyncSession, user: User, workspace_id: UUID
 ) -> list[CitationStyle]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    styles = await CitationStyleService(db).get_many(
-        CitationStyle.workspace_id == workspace_id,
-        order_by=[("name", False), ("id", False)],
+    styles = await db.scalars(
+        select(CitationStyle)
+        .where(CitationStyle.workspace_id == workspace_id)
+        .order_by(CitationStyle.name, CitationStyle.id)
     )
     return list(styles)
 
@@ -133,7 +94,25 @@ async def create_custom_citation_style(
     db: AsyncSession, user: User, workspace_id: UUID, name: str, csl: str
 ) -> CitationStyle:
     await require_workspace_action(db, user, workspace_id, ResourceAction.citation_style_manage)
-    style = await CitationStyleService(db).install(workspace_id, user.id, name, csl)
+    cleaned = name.strip()[:120]
+    if not cleaned:
+        raise ValidationFailure("style name is required")
+    if not is_valid_csl(csl):
+        raise ValidationFailure("the CSL text is not a valid citation style")
+    query = select(CitationStyle.id).where(
+        CitationStyle.workspace_id == workspace_id, CitationStyle.name == cleaned
+    )
+    if await db.scalar(query) is not None:
+        raise ValidationFailure("citation style name already exists in Workspace")
+    style = CitationStyle(workspace_id=workspace_id, created_by=user.id, name=cleaned, csl_xml=csl)
+    try:
+        async with db.begin_nested():
+            db.add(style)
+            await db.flush()
+    except IntegrityError:
+        if await db.scalar(query) is None:
+            raise
+        raise ValidationFailure("citation style name already exists in Workspace") from None
     await db.commit()
     return style
 
@@ -142,16 +121,15 @@ async def delete_custom_citation_style(
     db: AsyncSession, user: User, workspace_id: UUID, style_id: UUID
 ) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.citation_style_manage)
-    service = CitationStyleService(
-        db, statement=select(CitationStyle).where(CitationStyle.workspace_id == workspace_id)
+    style = await db.scalar(
+        select(CitationStyle)
+        .where(CitationStyle.workspace_id == workspace_id, CitationStyle.id == style_id)
+        .with_for_update()
     )
-    style = await service.get_one_or_none(id=style_id, with_for_update=True)
     if style is None:
         raise ResourceNotFound("citation style not found")
-    try:
-        await service.delete(style.id)
-    except NotFoundError as error:
-        raise ResourceNotFound("citation style not found") from error
+    await db.delete(style)
+    await db.flush()
     await db.commit()
 
 

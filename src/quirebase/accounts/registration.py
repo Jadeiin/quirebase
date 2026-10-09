@@ -12,8 +12,6 @@ from quirebase.models import SystemRole, User
 from quirebase.operations.settings import get_effective_setting
 from quirebase.workspaces import provision_initial_workspace
 
-from ._persistence import UserService
-
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,7 +58,8 @@ async def register_user(db: AsyncSession, username: str, password: str) -> User:
         active=True,
     )
     try:
-        user = await UserService(db).create(user)
+        db.add(user)
+        await db.flush()
         await provision_initial_workspace(db, user)
         record_event(db, user.id, "auth.register", "user", user.id)
         await db.commit()

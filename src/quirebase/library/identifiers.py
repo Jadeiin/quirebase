@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_editable_item
@@ -18,11 +18,11 @@ from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
 from ._item_identifiers import _replace_item_identifiers_many
-from ._item_service import ItemService
-from ._metadata import generate_bibtex_key
-from ._persistence import ItemRepository
+from ._metadata import MetadataWrite, candidate_write, generate_bibtex_key
+from .item_metadata import _write_item_links
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,9 +118,30 @@ async def apply_metadata_record(
 ) -> Item:
     item = await require_editable_item(db, user, item.workspace_id, item.id)
     values = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
-    return await ItemService(db).merge_candidate(
-        item, values, merge=merge, forced_identifiers=forced_identifiers
+    existing = (
+        {
+            link.provider: link.value
+            for link in await db.scalars(
+                select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)
+            )
+        }
+        if merge
+        else {}
     )
+    write = candidate_write(
+        item,
+        values,
+        merge=merge,
+        existing_identifiers=existing,
+        forced_identifiers=forced_identifiers,
+    )
+    for name, value in write.values.items():
+        setattr(item, name, value)
+    await _write_item_links(db, [(item, write)])
+    if not item.bibtex_id:
+        item.bibtex_id = generate_bibtex_key(item)
+    await db.flush()
+    return item
 
 
 async def create_item_from_metadata_record(
@@ -132,7 +153,7 @@ async def create_item_from_metadata_record(
     """Create an imported Item and enqueue its initial Tag recommendation."""
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     values = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
-    items = await ItemService(db).create_many_from_candidates(workspace_id, user.id, [values])
+    items = await _create_items_from_candidates(db, workspace_id, user.id, [values])
     item = items[0]
     await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=user.id)
     return item
@@ -166,8 +187,13 @@ async def _sync_metadata_from_upstream(
         raise ResourceUnavailable("user not available")
     user = reloaded_user
     item = await require_editable_item(db, user, workspace_id, item_id)
-    version = await ItemRepository(session=db).advance_metadata_version(
-        workspace_id, item_id, expected_version, user.id, datetime.now(UTC)
+    version = await db.scalar(
+        update(Item)
+        .where(
+            Item.workspace_id == workspace_id, Item.id == item_id, Item.version == expected_version
+        )
+        .values(updated_by=user.id, updated_at=datetime.now(UTC), version=Item.version + 1)
+        .returning(Item.version)
     )
     if version is None:
         await db.rollback()
@@ -262,3 +288,26 @@ async def sync_metadata_from_upstream(
     except Exception:
         await db.rollback()
         raise
+
+
+async def _create_items_from_candidates(
+    db: AsyncSession, workspace_id: UUID, actor_id: UUID, records: Sequence[dict]
+) -> list[Item]:
+    prepared: list[tuple[Item, MetadataWrite]] = []
+    for record in records:
+        item = Item(title="Untitled", workspace_id=workspace_id, created_by=actor_id)
+        write = candidate_write(item, record, merge=False, existing_identifiers={})
+        for name, value in write.values.items():
+            setattr(item, name, value)
+        prepared.append((item, write))
+    if not prepared:
+        return []
+    items = [item for item, _ in prepared]
+    db.add_all(items)
+    await db.flush()
+    await _write_item_links(db, prepared, replace=False)
+    for item in items:
+        if not item.bibtex_id:
+            item.bibtex_id = generate_bibtex_key(item)
+    await db.flush()
+    return items
