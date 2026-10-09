@@ -47,9 +47,10 @@ from quirebase.core.workflows import (
     UPLOAD_COMPLETE_TOPIC,
     UPLOAD_QUEUE,
     durable_operations,
-    list_active_workflows,
+    object_reservation_attributes,
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
+from quirebase.documents.objects import delete_unreferenced_objects
 from quirebase.documents.pdf import validate_pdf_container
 from quirebase.documents.workflows import (
     ATTACHMENT_UPLOAD_WORKFLOW,
@@ -59,9 +60,7 @@ from quirebase.documents.workflows import (
 from quirebase.models import (
     Attachment,
     AttachmentRole,
-    ExportArtifact,
     FileRevision,
-    ImportBatch,
     Item,
     Project,
     ProjectItem,
@@ -244,7 +243,7 @@ async def attach_staged_pdf(
             "item_id": item.id,
             "revision_id": revision.id,
             "object_key": key,
-            "object_keys": [key, thumbnail_key],
+            **object_reservation_attributes([key, thumbnail_key]),
         },
     )
     record_event(
@@ -257,98 +256,6 @@ async def attach_staged_pdf(
         authorization_resource_action=ResourceAction.file_manage.value,
     )
     return revision
-
-
-async def _referenced_candidates(db: AsyncSession, object_keys: tuple[str, ...]) -> set[str]:
-    referenced = set(
-        (
-            await db.scalars(
-                select(FileRevision.file["filename"].as_string()).where(
-                    FileRevision.file["filename"].as_string().in_(object_keys)
-                )
-            )
-        ).all()
-    )
-    referenced.update(
-        key
-        for key in (
-            await db.scalars(
-                select(FileRevision.thumbnail["filename"].as_string()).where(
-                    FileRevision.thumbnail["filename"].as_string().in_(object_keys)
-                )
-            )
-        ).all()
-        if key
-    )
-    referenced.update(
-        (
-            await db.scalars(
-                select(Attachment.file["filename"].as_string()).where(
-                    Attachment.file["filename"].as_string().in_(object_keys)
-                )
-            )
-        ).all()
-    )
-    referenced.update(
-        (
-            await db.scalars(
-                select(ExportArtifact.file["filename"].as_string()).where(
-                    ExportArtifact.file["filename"].as_string().in_(object_keys)
-                )
-            )
-        ).all()
-    )
-    candidates = set(object_keys)
-    for files in await db.scalars(
-        select(ImportBatch.staged_files).where(
-            ImportBatch.file_format == "pdf", ImportBatch.status != "committed"
-        )
-    ):
-        referenced.update(candidates & {file.path for file in files})
-    return referenced
-
-
-async def _active_object_reservations(
-    object_keys: tuple[str, ...], ignore_workflow_id: str | None
-) -> set[str]:
-    candidates = set(object_keys)
-    reserved: set[str] = set()
-    for workflow in await list_active_workflows():
-        if workflow.id == ignore_workflow_id:
-            continue
-        # Cleanup workflows request deletion; they do not own their targets.
-        if workflow.name == OBJECT_CLEANUP_WORKFLOW:
-            continue
-        attributes = workflow.attributes or {}
-        raw_keys = attributes.get("object_keys")
-        if isinstance(raw_keys, (list, tuple)):
-            reserved.update(candidates & {key for key in raw_keys if isinstance(key, str)})
-        if isinstance((key := attributes.get("object_key")), str) and key in candidates:
-            reserved.add(key)
-    return reserved
-
-
-async def delete_unreferenced_objects(
-    db: AsyncSession,
-    object_keys: Iterable[str],
-    *,
-    ignore_workflow_id: str | None = None,
-) -> tuple[str, ...]:
-    """Delete objects only when no committed, pending, or in-flight record references them."""
-    keys = tuple(dict.fromkeys(key for key in object_keys if key))
-    if not keys:
-        return ()
-    referenced = await _referenced_candidates(db, keys)
-    await db.rollback()
-    referenced.update(await _active_object_reservations(keys, ignore_workflow_id))
-    store = get_object_store()
-    actually_deleted: list[str] = []
-    for key in keys:
-        if key in referenced:
-            continue
-        if await store.delete(key):
-            actually_deleted.append(key)
-    return tuple(actually_deleted)
 
 
 async def enqueue_object_cleanup(
@@ -379,7 +286,7 @@ async def enqueue_object_cleanup(
             "actor_id": actor_id,
             "workspace_id": workspace_id,
             "target_id": target_id,
-            "object_keys": keys,
+            **object_reservation_attributes(keys, intent="cleanup"),
         },
     )
     return workflow_id
@@ -435,7 +342,7 @@ async def store_pdf_revision(
             "item_id": item_id,
             "revision_id": str(revision_id),
             "object_key": revision_key,
-            "object_keys": [revision_key, thumbnail_key],
+            **object_reservation_attributes([revision_key, thumbnail_key]),
         },
     )
     try:
@@ -522,7 +429,7 @@ async def create_attachment(
             "item_id": item_id,
             "attachment_id": str(attachment_id),
             "object_key": attachment_key,
-            "object_keys": [attachment_key],
+            **object_reservation_attributes([attachment_key]),
         },
     )
     try:

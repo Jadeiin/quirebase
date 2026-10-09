@@ -258,6 +258,7 @@ protected_modules = ["quirebase.documents"]
 allowed_importers = [
   "quirebase.cli",
   "quirebase.library",
+  "quirebase.operations",
   "quirebase.projects",
   "quirebase.web",
   "quirebase.workspaces",
@@ -268,7 +269,13 @@ id = "module-library"
 name = "Library has only documented direct callers"
 type = "protected"
 protected_modules = ["quirebase.library"]
-allowed_importers = ["quirebase.cli", "quirebase.operations", "quirebase.web"]
+allowed_importers = [
+  "quirebase.cli",
+  "quirebase.documents",
+  "quirebase.operations",
+  "quirebase.web",
+  "quirebase.workspaces",
+]
 
 [[tool.importlinter.contracts]]
 id = "module-mcp"
@@ -292,6 +299,14 @@ allowed_importers = [
 ]
 
 [[tool.importlinter.contracts]]
+id = "operations-implementation"
+name = "Operations callers share only runtime settings implementation"
+type = "protected"
+protected_modules = ["quirebase.operations.*"]
+allowed_importers = ["quirebase.operations", "quirebase.cli"]
+ignore_imports = ["quirebase.** -> quirebase.operations.settings"]
+
+[[tool.importlinter.contracts]]
 id = "module-projects"
 name = "Projects has only documented direct callers"
 type = "protected"
@@ -309,6 +324,7 @@ allowed_importers = [
   "quirebase.library",
   "quirebase.operations",
   "quirebase.web",
+  "quirebase.workspaces",
 ]
 
 [[tool.importlinter.contracts]]

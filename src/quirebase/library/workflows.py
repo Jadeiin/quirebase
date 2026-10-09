@@ -14,6 +14,7 @@ from quirebase.core.workflows import (
     ads,
     durable_operations,
     enqueue_child_workflow,
+    object_reservation_attributes,
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import ImportBatch, Item, ItemTagRecommendation, User
@@ -320,7 +321,7 @@ async def prepare_pdf_import_workflow(
                     "actor_id": actor_id,
                     "workspace_id": workspace_id,
                     "batch_id": batch_id,
-                    "object_keys": cleanup_keys,
+                    **object_reservation_attributes(cleanup_keys, intent="cleanup"),
                 },
             )
         return {

@@ -1,10 +1,9 @@
+---
+status: accepted
+date: 2026-08-15
+---
+
 # 4. Research Intelligence, Model Context Protocol (MCP), and Agent Architecture
-
-Date: 2026-08-15
-
-## Status
-
-Accepted
 
 Tracking: [#1 Plan staged Research Intelligence and MCP capabilities](https://github.com/Jadeiin/quirebase/issues/1)
 

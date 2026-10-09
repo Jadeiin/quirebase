@@ -12,16 +12,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
 from quirebase.core.storage import get_object_store, is_managed_object_key
-from quirebase.core.workflows import (
-    durable_operations,
-    list_active_workflows,
+from quirebase.core.workflows import durable_operations
+from quirebase.documents import (
+    delete_unreferenced_objects,
+    list_expired_export_artifacts,
+    protected_object_keys,
+    retire_expired_export_artifacts,
 )
-from quirebase.models import Attachment, ExportArtifact, FileRevision, ImportBatch, User
+from quirebase.models import Attachment, FileRevision, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -238,54 +241,16 @@ async def cleanup_exports(db: AsyncSession | None = None, *, batch_size: int = 1
     if db is None:
         return removed
     artifacts = await list_expired_export_artifacts(db, batch_size)
-    await db.rollback()
     if not artifacts:
         return removed
-    result = await delete_export_artifact_objects(artifacts)
-    removed += result["removed"]
-    await delete_export_artifact_records(db, result["workflow_ids"])
+    keys = await retire_expired_export_artifacts(db, artifacts)
     await db.commit()
-    return removed
+    return removed + len(await delete_unreferenced_objects(db, keys))
 
 
 async def cleanup_local_exports(ttl_hours: int) -> int:
     cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
     return await asyncio.to_thread(_cleanup_exports, get_settings().export_dir, cutoff)
-
-
-async def list_expired_export_artifacts(db: AsyncSession, limit: int) -> tuple[dict[str, str], ...]:
-    rows = (
-        await db.execute(
-            select(ExportArtifact.workflow_id, ExportArtifact.file["filename"].as_string())
-            .where(ExportArtifact.expires_at <= datetime.now(UTC))
-            .order_by(ExportArtifact.expires_at, ExportArtifact.workflow_id)
-            .limit(limit)
-        )
-    ).all()
-    return tuple(
-        {"workflow_id": workflow_id, "object_key": object_key} for workflow_id, object_key in rows
-    )
-
-
-async def delete_export_artifact_objects(
-    artifacts: tuple[dict[str, str], ...],
-) -> dict[str, Any]:
-    store = get_object_store()
-    removed = 0
-    for artifact in artifacts:
-        if await store.delete(artifact["object_key"]):
-            removed += 1
-    return {
-        "workflow_ids": [artifact["workflow_id"] for artifact in artifacts],
-        "removed": removed,
-    }
-
-
-async def delete_export_artifact_records(db: AsyncSession, workflow_ids: list[str]) -> int:
-    if not workflow_ids:
-        return 0
-    await db.execute(delete(ExportArtifact).where(ExportArtifact.workflow_id.in_(workflow_ids)))
-    return len(workflow_ids)
 
 
 def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
@@ -323,29 +288,9 @@ async def scan_objects(
             )
         )
     ).all()
-    export_keys = set((await db.scalars(select(ExportArtifact.file["filename"].as_string()))).all())
-    referenced = (
-        {revision.file.path for revision in revisions}
-        | {
-            (revision.thumbnail.path if revision.thumbnail else None)
-            for revision in revisions
-            if (revision.thumbnail.path if revision.thumbnail else None)
-        }
-        | {attachment.object_key for attachment in attachments}
-        | export_keys
-    )
-    for files in (await db.scalars(select(ImportBatch.staged_files))).all():
-        referenced.update(file.path for file in files)
     await db.rollback()
-    active = await list_active_workflows()
-    active_keys = set().union(
-        *(
-            _workflow_owned_object_keys(workflow.attributes)
-            for workflow in active
-            if workflow.name != "documents.cleanup_objects"
-        )
-    )
     stored = {item.key: item async for item in get_object_store().iter_prefix("")}
+    protected = await protected_object_keys(db)
     errors: list[str] = []
     thumbnail_sizes: dict[str, dict] = {}
     for revision in revisions:
@@ -377,37 +322,9 @@ async def scan_objects(
         for item in stored.values()
         if is_managed_object_key(item.key)
         and item.last_modified < cutoff
-        and item.key not in referenced
-        and item.key not in active_keys
+        and item.key not in protected
     )
     return errors, candidates, thumbnail_sizes
-
-
-async def _referenced_object_keys(db: AsyncSession) -> set[str]:
-    keys = set((await db.scalars(select(FileRevision.file["filename"].as_string()))).all())
-    keys.update(
-        key
-        for key in (await db.scalars(select(FileRevision.thumbnail["filename"].as_string()))).all()
-        if key
-    )
-    keys.update((await db.scalars(select(Attachment.file["filename"].as_string()))).all())
-    for files in (await db.scalars(select(ImportBatch.staged_files))).all():
-        keys.update(file.path for file in files)
-    return keys
-
-
-def _workflow_owned_object_keys(attributes: dict[str, Any] | None) -> set[str]:
-    if not attributes:
-        return set()
-    raw_keys = attributes.get("object_keys")
-    keys = (
-        {key for key in raw_keys if isinstance(key, str)}
-        if isinstance(raw_keys, (list, tuple))
-        else set()
-    )
-    if isinstance((key := attributes.get("object_key")), str):
-        keys.add(key)
-    return keys
 
 
 async def reconcile_objects(
@@ -421,27 +338,8 @@ async def reconcile_objects(
 async def delete_orphan_candidates(
     db: AsyncSession, candidates: tuple[str, ...]
 ) -> tuple[str, ...]:
-    """Recheck all candidate protections once, then delete remaining objects."""
-    if not candidates:
-        return ()
-    referenced = await _referenced_object_keys(db)
-    await db.rollback()
-    active = await list_active_workflows()
-    active_keys = set().union(
-        *(
-            _workflow_owned_object_keys(workflow.attributes)
-            for workflow in active
-            if workflow.name != "documents.cleanup_objects"
-        )
-    )
-    deleted: list[str] = []
-    store = get_object_store()
-    for key in candidates:
-        if key in referenced or key in active_keys:
-            continue
-        if await store.delete(key):
-            deleted.append(key)
-    return tuple(deleted)
+    """Let Documents recheck the scan's candidates immediately before physical deletion."""
+    return await delete_unreferenced_objects(db, candidates)
 
 
 async def get_backup_artifact(db: AsyncSession, admin: User, workflow_id: str) -> tuple[Path, str]:

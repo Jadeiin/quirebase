@@ -36,12 +36,11 @@ from quirebase.models import (
     PdfAnnotation,
     Project,
     ProjectItem,
-    ProjectParticipant,
-    ProjectParticipation,
     ProjectState,
     Tag,
     User,
 )
+from quirebase.projects import list_item_organize_projects
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -280,27 +279,9 @@ async def _open_organize(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemOrganizationData:
     tags = await _assigned_tags(db, item)
-    participant_project_ids = select(ProjectParticipant.project_id).where(
-        ProjectParticipant.workspace_id == context.workspace_id,
-        ProjectParticipant.workspace_member_id == context.membership.id,
-    )
-    is_participating = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
-        participant_project_ids
-    )
-    project_rows = (
-        await db.execute(
-            select(Project, is_participating)
-            .where(
-                Project.workspace_id == item.workspace_id,
-                Project.state == ProjectState.active,
-                Project.id.in_(discoverable_project_ids_query(context)),
-            )
-            .order_by(Project.name)
-        )
-    ).all()
     project_options = tuple(
-        ProjectAssignmentOption(project=project, is_participating=bool(participating))
-        for project, participating in project_rows
+        ProjectAssignmentOption(project, participating)
+        for project, participating in await list_item_organize_projects(db, context)
     )
     visible_project_ids = {option.project.id for option in project_options}
     assigned_project_ids = frozenset(

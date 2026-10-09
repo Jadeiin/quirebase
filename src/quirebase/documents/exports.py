@@ -20,7 +20,11 @@ from quirebase.core.storage import (
     get_object_store,
     object_key,
 )
-from quirebase.core.workflows import DOCUMENTS_QUEUE, durable_operations
+from quirebase.core.workflows import (
+    DOCUMENTS_QUEUE,
+    durable_operations,
+    object_reservation_attributes,
+)
 from quirebase.models import ExportArtifact, ProjectItem, User
 
 from .workflows import ANNOTATION_EXPORT_WORKFLOW
@@ -72,7 +76,7 @@ async def create_export_job(
             "workspace_id": workspace_id,
             "item_id": item_id,
             "revision_id": data.revision_id,
-            "object_keys": [export_key],
+            **object_reservation_attributes([export_key]),
         },
     )
     return workflow_id

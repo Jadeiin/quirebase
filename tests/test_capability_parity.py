@@ -33,7 +33,10 @@ from quirebase.documents.workflows import (
 from quirebase.models import (
     Attachment,
     FileRevision,
+    Item,
+    ItemTag,
     Project,
+    ProjectItem,
     ProjectParticipation,
     ProjectState,
     Tag,
@@ -92,6 +95,88 @@ def _context(role, lifecycle="active"):
     )
     member = WorkspaceMember(workspace_id=workspace.id, user_id=actor.id, role=role)
     return WorkspaceContext(actor, workspace, member, role)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("action", "denied", "allowed"),
+    [
+        ("add_project", ResourceAction.item_update, True),
+        ("add_tag", ResourceAction.item_update, True),
+        ("delete_items", ResourceAction.item_update, True),
+        ("add_project", ResourceAction.project_item_manage, False),
+        ("add_tag", ResourceAction.tag_use, False),
+        ("add_tag", ResourceAction.tag_create, False),
+        ("delete_items", ResourceAction.item_delete, False),
+    ],
+)
+async def test_single_and_bulk_actions_evaluate_independent_grants(
+    async_db, async_session_factory, tmp_path, monkeypatch, policy_bundle, action, denied, allowed
+):
+    changes = [(ResourceAction.item_delete, "admin", "editor")]
+    changes.append((denied, "editor", "admin"))
+    policy_bundle(*changes)
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    actor = User(username="bulk-editor", password_hash="unused")
+    async_db.add(actor)
+    await async_db.flush()
+    workspace_id, single_id = item.workspace_id, item.id
+    async_db.add(
+        WorkspaceMember(workspace_id=workspace_id, user_id=actor.id, role=WorkspaceRole.editor)
+    )
+    bulk_item = Item(workspace_id=workspace_id, title="Bulk", created_by=actor.id)
+    project = Project(workspace_id=workspace_id, name="Option", created_by=actor.id)
+    async_db.add_all([bulk_item, project])
+    await async_db.commit()
+    bulk_id, project_id = bulk_item.id, project.id
+    grant = await create_api_token(async_db, actor, "Bulk parity", expires_in_days=1)
+    client.headers["Authorization"] = f"Bearer {grant.raw_token}"
+    base = f"/api/v1/workspaces/{workspace_id}"
+    try:
+        if action == "add_project":
+            single = await client.put(f"{base}/projects/{project_id}/items/{single_id}")
+        elif action == "add_tag":
+            single = await client.put(
+                f"{base}/items/{single_id}/tags",
+                json={"new_names": ["Independent"], "add_tag_ids": [], "remove_tag_ids": []},
+            )
+        else:
+            single = await client.request(
+                "DELETE", f"{base}/items/{single_id}", json={"confirmation": "delete"}
+            )
+        bulk = await client.post(
+            f"{base}/items/bulk",
+            json=json_payload({
+                "item_ids": [bulk_id],
+                "action": action,
+                "project_id": project_id,
+                "tag_name": "Independent",
+                "confirmation": "delete",
+            }),
+        )
+        assert single.status_code == bulk.status_code == (200 if allowed else 403)
+        if action == "add_project":
+            assert (
+                bool(
+                    await async_db.scalar(
+                        select(ProjectItem.id).where(ProjectItem.item_id == bulk_id)
+                    )
+                )
+                is allowed
+            )
+        elif action == "add_tag":
+            assert (
+                bool(
+                    await async_db.scalar(select(ItemTag.item_id).where(ItemTag.item_id == bulk_id))
+                )
+                is allowed
+            )
+        else:
+            assert (await async_db.get(Item, bulk_id, populate_existing=True) is None) is allowed
+    finally:
+        await client.aclose()
 
 
 ITEM_SURFACE_ACTIONS = (

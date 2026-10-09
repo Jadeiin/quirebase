@@ -9,13 +9,11 @@ from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import (
-    can_edit_item,
     require_accessible_items,
-    require_editable_item,
+    require_item_action,
 )
 from quirebase.audit import record_event
 from quirebase.core.errors import (
-    PermissionDenied,
     ResourceUnavailable,
     ValidationFailure,
 )
@@ -52,11 +50,6 @@ async def apply_bulk_item_action(
 ) -> None:
     items = await require_accessible_items(db, user, workspace_id, item_ids)
 
-    # Fail-closed: All selected items must be editable for mutating bulk actions
-    for item in items:
-        if not await can_edit_item(db, user, workspace_id, item.id):
-            raise PermissionDenied("all selected items must be editable")
-
     cleanup_keys: list[str] = []
     if action in ("add_project", "project_add"):
         if project_id is None:
@@ -69,10 +62,10 @@ async def apply_bulk_item_action(
             raise ValidationFailure("choose an editable project") from error
         audit_action = "library.bulk.add_project"
     elif action in ("add_tag", "tag"):
-        # Revalidate each Item's edit authority and existence before adding
+        # Revalidate each Item's Tag-use authority and existence before adding
         # associations. Stable Item ordering keeps these checks deterministic.
         for item in sorted(items, key=lambda candidate: candidate.id):
-            await require_editable_item(db, user, workspace_id, item.id)
+            await require_item_action(db, user, workspace_id, item.id, ResourceAction.tag_use)
         tag_record = await get_or_create_tag(db, user, workspace_id, tag_name)
         try:
             await _assign_item_tags(db, workspace_id, [item.id for item in items], tag_record.id)

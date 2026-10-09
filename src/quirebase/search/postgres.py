@@ -43,6 +43,17 @@ class PostgreSQLSearchIndex:
             {"item_id": item_id},
         )
 
+    async def remove_workspace(self, db: AsyncSession, workspace_id: UUID) -> None:
+        """Purge both projections before the caller deletes the locked Workspace root."""
+        for projection in ("revision_search", "item_search"):
+            await db.execute(
+                text(
+                    f"DELETE FROM {projection} WHERE item_id IN "
+                    "(SELECT id FROM items WHERE workspace_id = :workspace_id)"
+                ).bindparams(bindparam("workspace_id", type_=GUID())),
+                {"workspace_id": workspace_id},
+            )
+
     async def index_revision(self, db: AsyncSession, revision_id: UUID) -> None:
         revision = await db.scalar(
             select(FileRevision).where(FileRevision.id == revision_id).with_for_update(read=True)

@@ -22,11 +22,8 @@ from quirebase.models import (
     LoginSession,
     SystemRole,
     User,
-    Workspace,
-    WorkspaceMember,
-    WorkspaceRole,
 )
-from quirebase.workspaces import provision_initial_workspace
+from quirebase.workspaces import guard_user_deactivation, provision_initial_workspace
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -149,47 +146,8 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: UUID, activ
         raise ResourceNotFound("user not found")
     if user.id == admin.id and not active:
         raise PermissionDenied("administrators cannot deactivate their own account")
-    if not active and await db.scalar(
-        select(Workspace.id)
-        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
-        .where(
-            WorkspaceMember.user_id == user.id,
-            WorkspaceMember.role == WorkspaceRole.owner,
-            WorkspaceMember.terminated_at.is_(None),
-            Workspace.state != "deleted",
-        )
-    ):
-        raise PermissionDenied("transfer Workspace ownership before deactivating this account")
     if not active:
-        # Lock every Workspace where the account is still a member so deactivation cannot race
-        # Workspace ownership transfer or membership termination.
-        workspace_ids = set(
-            (
-                await db.scalars(
-                    select(Workspace.id)
-                    .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
-                    .where(
-                        WorkspaceMember.user_id == user.id,
-                        WorkspaceMember.terminated_at.is_(None),
-                    )
-                )
-            ).all()
-        )
-        for workspace_id in sorted(workspace_ids):
-            await db.scalar(
-                select(Workspace.id).where(Workspace.id == workspace_id).with_for_update()
-            )
-        if await db.scalar(
-            select(Workspace.id)
-            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
-            .where(
-                WorkspaceMember.user_id == user.id,
-                WorkspaceMember.role == WorkspaceRole.owner,
-                WorkspaceMember.terminated_at.is_(None),
-                Workspace.state != "deleted",
-            )
-        ):
-            raise PermissionDenied("transfer Workspace ownership before deactivating this account")
+        await guard_user_deactivation(db, user.id)
     user.active = active
     if not active:
         # Revoke all active sessions upon deactivation

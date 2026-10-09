@@ -41,5 +41,5 @@ See `docs/agents/triage-labels.md`.
 ### Domain and module architecture
 
 Before changing business behaviour, capability ownership, cross-package dependencies or test
-seams, use the root domain glossary, repository decisions and module policy.
+seams, use the root `GLOSSARY.md`, repository decisions and module policy.
 See `docs/agents/domain.md`.

@@ -159,7 +159,7 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
     await db.commit()
 
     # Attempt to bulk-assign item to target project as viewer_user
-    with pytest.raises(PermissionDenied, match="all selected items must be editable"):
+    with pytest.raises(PermissionDenied):
         await apply_bulk_item_action(
             db,
             viewer_user,

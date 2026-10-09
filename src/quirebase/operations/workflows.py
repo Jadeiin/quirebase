@@ -18,15 +18,17 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.core.workflows import OPERATIONS_QUEUE, ads, durable_operations
+from quirebase.documents import (
+    delete_unreferenced_objects,
+    list_expired_export_artifacts,
+    retire_expired_export_artifacts,
+)
 from quirebase.models import FileRevision, Item, ObjectIntegrityScan, User
 from quirebase.search import search_index
 
 from .maintenance import (
     cleanup_local_exports,
-    delete_export_artifact_objects,
-    delete_export_artifact_records,
     delete_orphan_candidates,
-    list_expired_export_artifacts,
     scan_objects,
 )
 
@@ -323,16 +325,17 @@ async def list_expired_export_artifacts_step(
     return await list_expired_export_artifacts(ads.sql_session(), limit)
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
-async def delete_export_artifact_objects_step(
-    artifacts: tuple[dict[str, str], ...],
-) -> dict[str, Any]:
-    return await delete_export_artifact_objects(artifacts)
-
-
 @ads.transaction(isolation_level="READ COMMITTED")
-async def delete_export_artifact_records_step(workflow_ids: list[str]) -> int:
-    return await delete_export_artifact_records(ads.sql_session(), workflow_ids)
+async def retire_expired_export_artifacts_step(
+    artifacts: tuple[dict[str, str], ...],
+) -> tuple[str, ...]:
+    return await retire_expired_export_artifacts(ads.sql_session(), artifacts)
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def delete_export_artifact_objects_step(keys: tuple[str, ...]) -> int:
+    async with AsyncSessionLocal() as db:
+        return len(await delete_unreferenced_objects(db, keys))
 
 
 async def _run_export_cleanup() -> int:
@@ -341,9 +344,8 @@ async def _run_export_cleanup() -> int:
         artifacts = await list_expired_export_artifacts_step(_EXPORT_CLEANUP_BATCH_SIZE)
         if not artifacts:
             break
-        result = await delete_export_artifact_objects_step(artifacts)
-        await delete_export_artifact_records_step(result["workflow_ids"])
-        removed += result["removed"]
+        keys = await retire_expired_export_artifacts_step(artifacts)
+        removed += await delete_export_artifact_objects_step(keys)
     return removed
 
 

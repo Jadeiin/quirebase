@@ -1,6 +1,8 @@
-# ADR 0010: canonical annotations with EmbedPDF as a Web adapter
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0010: canonical annotations with EmbedPDF as a Web adapter
 
 Quirebase stores one canonical, strictly validated Annotation per File Revision page in the
 database, which remains the only writable source of truth. Coordinates use crop-box-local,

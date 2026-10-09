@@ -526,24 +526,23 @@ async def test_export_cleanup_checkpoints_expired_artifacts_in_bounded_batches(m
         listed += len(page)
         return page
 
-    async def delete_objects(page):
+    async def delete_objects(keys):
         await asyncio.sleep(0)
-        deleted_batches.append(tuple(row["workflow_id"] for row in page))
-        return {
-            "workflow_ids": [row["workflow_id"] for row in page],
-            "removed": len(page),
-        }
+        deleted_batches.append(keys)
+        assert keys in removed_batches  # Descriptor release was checkpointed before I/O.
+        return len(keys)
 
-    async def delete_records(workflow_ids):
+    async def retire_records(page):
         await asyncio.sleep(0)
-        removed_batches.append(tuple(workflow_ids))
-        return len(workflow_ids)
+        keys = tuple(row["object_key"] for row in page)
+        removed_batches.append(keys)
+        return keys
 
     monkeypatch.setattr(operation_workflows, "cleanup_exports_step", cleanup_local)
     monkeypatch.setattr(operation_workflows, "get_export_ttl_step", get_ttl)
     monkeypatch.setattr(operation_workflows, "list_expired_export_artifacts_step", list_expired)
     monkeypatch.setattr(operation_workflows, "delete_export_artifact_objects_step", delete_objects)
-    monkeypatch.setattr(operation_workflows, "delete_export_artifact_records_step", delete_records)
+    monkeypatch.setattr(operation_workflows, "retire_expired_export_artifacts_step", retire_records)
 
     assert await operation_workflows._run_export_cleanup() == 101
     assert [len(page) for page in deleted_batches] == [100, 1]
@@ -928,7 +927,9 @@ async def test_invalid_graphical_abstract_worker_deletes_owned_object_and_writes
         assert timeout_seconds > 0
         return receipt
 
-    monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
+    monkeypatch.setattr(
+        document_workflows, "DBOS", SimpleNamespace(recv_async=receive, workflow_id=None)
+    )
     worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
 
     with pytest.raises(ValueError, match="graphical abstract content does not match"):
@@ -993,7 +994,9 @@ async def test_cancelled_graphical_abstract_validation_deletes_owned_object(asyn
         async def delete(self, key):
             return await store.delete(key)
 
-    monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
+    monkeypatch.setattr(
+        document_workflows, "DBOS", SimpleNamespace(recv_async=receive, workflow_id=None)
+    )
     monkeypatch.setattr(document_workflows, "get_object_store", BlockingRangeStore)
     worker_body = document_workflows.upload_attachment_workflow.__wrapped__.__wrapped__
     task = asyncio.create_task(

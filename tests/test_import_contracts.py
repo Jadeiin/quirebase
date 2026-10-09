@@ -68,6 +68,12 @@ def test_import_contracts_are_kept():
             id="facade-bypass",
         ),
         pytest.param(
+            "src/quirebase/documents/objects.py",
+            "from quirebase.operations.maintenance import scan_objects\n",
+            "Operations callers share only runtime settings implementation BROKEN",
+            id="documents-maintenance-cycle",
+        ),
+        pytest.param(
             "packages/inquiro/src/inquiro/providers/crossref.py",
             "from . import openalex\n",
             "Providers are independent leaves below their private catalog BROKEN",

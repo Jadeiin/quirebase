@@ -27,13 +27,12 @@ from quirebase.core.errors import (
     ValidationFailure,
 )
 from quirebase.core.storage import ObjectSource, get_object_store
-from quirebase.core.workflows import IMPORT_QUEUE, durable_operations
-from quirebase.documents import enqueue_object_cleanup
+from quirebase.core.workflows import IMPORT_QUEUE, durable_operations, object_reservation_attributes
+from quirebase.documents import delete_unreferenced_objects, enqueue_object_cleanup
 from quirebase.documents.pdf import extract_doi
 from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
-    delete_unreferenced_objects,
     stage_pdf,
 )
 from quirebase.library.activity import get_accessible_item_identifiers
@@ -287,7 +286,7 @@ async def stage_pdf_import_batch(
                 "actor_id": reloaded_user.id,
                 "workspace_id": workspace_id,
                 "batch_id": batch.id,
-                "object_keys": [staged.object_key for staged in staged_pdfs],
+                **object_reservation_attributes(staged.object_key for staged in staged_pdfs),
             },
         )
         record_event(
@@ -604,7 +603,9 @@ async def retry_pdf_import_batch(
             "actor_id": user.id,
             "workspace_id": workspace_id,
             "batch_id": batch.id,
-            "object_keys": [record["_pdf"]["object_key"] for record in pending_records],
+            **object_reservation_attributes(
+                record["_pdf"]["object_key"] for record in pending_records
+            ),
         },
     )
     record_event(
@@ -799,3 +800,19 @@ async def export_selected_bibliography(
             db, user, workspace_id, items, style_key=style_key, options=options
         )
     return format_standard_export(items, file_format, options=options)
+
+
+async def import_staging_object_keys(
+    db: AsyncSession, *, workspace_id: UUID | None = None
+) -> set[str]:
+    """Retained PDF staging ownership, including ready and failed batches awaiting retry.
+
+    Committed batches no longer own staged objects. This read participates in the caller's
+    transaction and does not acquire aggregate locks or complete the transaction.
+    """
+    query = select(ImportBatch.staged_files).where(
+        ImportBatch.file_format == "pdf", ImportBatch.status != "committed"
+    )
+    if workspace_id is not None:
+        query = query.where(ImportBatch.workspace_id == workspace_id)
+    return {file.path for files in await db.scalars(query) for file in files}

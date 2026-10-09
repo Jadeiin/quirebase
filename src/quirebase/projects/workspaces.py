@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.filters import StatementFilter
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.elements import ColumnElement
 
 
 @dataclass(frozen=True)
@@ -122,15 +123,7 @@ async def list_workspace_projects(
     if view not in {"mine", "joinable", "all"}:
         raise ValidationFailure("invalid Project list view")
     require_action(context, ResourceAction.workspace_read)
-    participant_project_ids = (
-        workspace_select(ProjectParticipant, context)
-        .join(Project, Project.id == ProjectParticipant.project_id)
-        .where(ProjectParticipant.workspace_member_id == context.membership.id)
-        .with_only_columns(ProjectParticipant.project_id)
-    )
-    is_participating = (Project.participation == ProjectParticipation.workspace) | Project.id.in_(
-        participant_project_ids
-    )
+    is_participating = _participation_predicate(context)
     query = (
         workspace_select(Project, context)
         .where(
@@ -173,19 +166,42 @@ async def list_workspace_projects(
         .tuples()
         .all()
     )
-    joined = set(
-        (
-            await db.scalars(participant_project_ids.where(ProjectParticipant.project_id.in_(ids)))
-        ).all()
+    participating = set(
+        await db.scalars(select(Project.id).where(Project.id.in_(ids), is_participating))
     )
     return [
-        (
-            project,
-            counts.get(project.id, 0),
-            project.participation is ProjectParticipation.workspace or project.id in joined,
-        )
-        for project in roots
+        (project, counts.get(project.id, 0), project.id in participating) for project in roots
     ], total
+
+
+def _participation_predicate(context: WorkspaceContext) -> ColumnElement[bool]:
+    selections = (
+        workspace_select(ProjectParticipant, context)
+        .where(ProjectParticipant.workspace_member_id == context.membership.id)
+        .with_only_columns(ProjectParticipant.project_id)
+    )
+    return (Project.participation == ProjectParticipation.workspace) | Project.id.in_(selections)
+
+
+async def list_item_organize_projects(
+    db: AsyncSession, context: WorkspaceContext
+) -> tuple[tuple[Project, bool], ...]:
+    """Return every discoverable active assignment option for this membership generation.
+
+    Discovery and participation are distinct: a governor may discover a managed Project
+    without participating. This query deliberately has no directory pagination.
+    """
+    require_action(context, ResourceAction.workspace_read)
+    rows = await db.execute(
+        workspace_select(Project, context)
+        .with_only_columns(Project, _participation_predicate(context))
+        .where(
+            Project.state == ProjectState.active,
+            Project.id.in_(discoverable_project_ids_query(context)),
+        )
+        .order_by(Project.name, Project.id)
+    )
+    return tuple((project, bool(participating)) for project, participating in rows)
 
 
 async def open_project_workspace(
@@ -194,7 +210,6 @@ async def open_project_workspace(
     context = await require_project(db, workspace, project_id)
     workspace_id = workspace.workspace_id
     participant_users: Sequence[User] = ()
-    is_participating = context.project.participation is ProjectParticipation.workspace
     if context.project.participation is not ProjectParticipation.workspace:
         participant_users = (
             await db.scalars(
@@ -218,16 +233,9 @@ async def open_project_workspace(
                 .order_by(User.username)
             )
         ).all()
-        is_participating = (
-            await db.scalar(
-                select(ProjectParticipant.id).where(
-                    ProjectParticipant.workspace_id == workspace_id,
-                    ProjectParticipant.project_id == project_id,
-                    ProjectParticipant.workspace_member_id == workspace.membership.id,
-                )
-            )
-            is not None
-        )
+    is_participating = bool(
+        await db.scalar(select(_participation_predicate(workspace)).where(Project.id == project_id))
+    )
     item_count = await db.scalar(
         workspace_select(Item, context.workspace)
         .join(ProjectItem, ProjectItem.item_id == Item.id)

@@ -101,6 +101,77 @@ FORBIDDEN_FACADE_EXPORTS = {
     },
 }
 
+
+def test_invariant_ownership_and_narrow_reverse_interfaces():
+    """Shared mappings do not grant callers ownership of evolving sibling rules."""
+    forbidden_models = {
+        "accounts/administration.py": {"Workspace", "WorkspaceMember", "WorkspaceRole"},
+        "library/item_sections.py": {"ProjectParticipant", "ProjectParticipation"},
+        "operations/maintenance.py": {"ExportArtifact", "ImportBatch"},
+        "workspaces/lifecycle.py": {
+            "FileRevision",
+            "Attachment",
+            "ExportArtifact",
+            "ImportBatch",
+            "PdfAnnotation",
+            "PdfAnnotationReply",
+            "PdfAnnotationObject",
+        },
+    }
+    for path, forbidden in forbidden_models.items():
+        tree = ast.parse((SRC_ROOT / path).read_text())
+        imported = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module == "quirebase.models"
+            for alias in node.names
+        }
+        assert not imported & forbidden, (path, imported & forbidden)
+    source = (SRC_ROOT / "workspaces/lifecycle.py").read_text()
+    assert "item_search" not in source and "revision_search" not in source
+    for owner in ("documents", "workspaces"):
+        for path in get_python_files(SRC_ROOT / owner):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module
+                    and node.module.startswith("quirebase.library")
+                ):
+                    assert node.module == "quirebase.library", path
+                    assert {name.name for name in node.names} <= {"import_staging_object_keys"}, (
+                        path
+                    )
+                if (
+                    owner == "documents"
+                    and isinstance(node, ast.ImportFrom)
+                    and node.module
+                    and node.module.startswith("quirebase.operations")
+                ):
+                    assert node.module == "quirebase.operations.settings", path
+                    assert {name.name for name in node.names} <= {"get_effective_setting"}, path
+    maintenance = ast.parse((SRC_ROOT / "operations/maintenance.py").read_text())
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "delete"
+        for node in ast.walk(maintenance)
+    )
+    for path in get_python_files(SRC_ROOT / "operations"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and node.module.startswith("quirebase.documents")
+            ):
+                assert node.module == "quirebase.documents", path
+                assert {name.name for name in node.names} <= {
+                    "delete_unreferenced_objects",
+                    "protected_object_keys",
+                    "list_expired_export_artifacts",
+                    "retire_expired_export_artifacts",
+                }, path
+
+
 LIBRARY_FACADE_OPERATIONS = {
     "BatchConflict",
     "UpstreamServiceError",

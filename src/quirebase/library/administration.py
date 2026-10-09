@@ -10,7 +10,6 @@ from quirebase.access import (
     require_system_action,
     require_workspace_action,
 )
-from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
 from quirebase.documents import enqueue_object_cleanup
@@ -74,7 +73,6 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
 async def delete_item(db: AsyncSession, actor: User, workspace_id: UUID, item_id: UUID) -> None:
     """Permanently delete one Workspace Item after the destructive resource action."""
     await require_workspace_action(db, actor, workspace_id, ResourceAction.item_delete)
-    await require_editable_item(db, actor, workspace_id, item_id)
     item = await db.scalar(
         select(Item).where(Item.id == item_id, Item.workspace_id == workspace_id).with_for_update()
     )

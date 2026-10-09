@@ -154,7 +154,10 @@ def _require_upload_receipt(value: Any, *, description: str) -> UploadReceipt:
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def remove_owned_object(key: str) -> None:
-    await get_object_store().delete(key)
+    from quirebase.documents.objects import delete_unreferenced_objects
+
+    async with AsyncSessionLocal() as db:
+        await delete_unreferenced_objects(db, [key], ignore_workflow_id=DBOS.workflow_id)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
@@ -164,7 +167,7 @@ async def delete_unreferenced_objects_step(
     object_keys: list[str],
     ignore_workflow_id: str | None = None,
 ) -> list[str]:
-    from quirebase.documents.revisions import delete_unreferenced_objects
+    from quirebase.documents.objects import delete_unreferenced_objects
 
     async with AsyncSessionLocal() as db:
         # The resource deletion was authorized in the enqueue transaction. Cleanup

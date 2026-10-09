@@ -24,6 +24,7 @@ from quirebase.models import (
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
+    WorkspaceState,
 )
 
 if TYPE_CHECKING:
@@ -224,3 +225,34 @@ async def transfer_workspace_ownership(
     )
     await db.commit()
     return workspace
+
+
+async def guard_user_deactivation(db: AsyncSession, user_id: UUID) -> None:
+    """Fence current memberships and reject deactivation of a surviving Workspace owner.
+
+    The caller must retain the target User write lock before calling, and owns status,
+    session revocation and transaction completion. Workspace roots are locked in UUID order,
+    following the same User → Workspace order as ownership transfer and admission.
+    """
+    owner_query = (
+        select(Workspace.id)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(
+            WorkspaceMember.user_id == user_id,
+            WorkspaceMember.role == WorkspaceRole.owner,
+            WorkspaceMember.terminated_at.is_(None),
+            Workspace.state != WorkspaceState.deleted,
+        )
+    )
+    if await db.scalar(owner_query):
+        raise PermissionDenied("transfer Workspace ownership before deactivating this account")
+    workspace_ids = await db.scalars(
+        select(Workspace.id)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == user_id, WorkspaceMember.terminated_at.is_(None))
+        .order_by(Workspace.id)
+    )
+    for workspace_id in workspace_ids:
+        await db.scalar(select(Workspace.id).where(Workspace.id == workspace_id).with_for_update())
+    if await db.scalar(owner_query):
+        raise PermissionDenied("transfer Workspace ownership before deactivating this account")

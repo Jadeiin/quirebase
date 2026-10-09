@@ -15,7 +15,11 @@ Workspace commands are implemented by `creation` (including provisioning), `dire
 `workspaces.__init__` exports their owned operations directly. The private `_locking` module
 owns exclusive Workspace-root acquisition and fresh target-member loading; callers recheck
 authority and state while retaining that root lock. Invitation invalidation stays owned by
-`invitations`, and physical cleanup remains in `workflows`. These are implementation files
+`invitations`; `workflows` verifies committed deletion intent before calling Documents for physical
+cleanup. `membership.guard_user_deactivation` owns the surviving-owner predicate and locks current
+membership Workspace roots in stable UUID order after Accounts has locked the target User. It
+rechecks ownership under those locks without committing. Accounts retains account status, session
+revocation, Audit and commit. These are implementation files
 within one Business Module, rather than additional service or repository layers.
 
 Frontend principal-role comparisons cannot select behavior; ESLint guards direct comparisons
@@ -224,8 +228,11 @@ models. HTTP response DTOs and pure projections live beside their capability rou
 second response model or orchestration path.
 
 Operations over a user-selected set of Items live in `library.bulk_items`. This Module owns the
-bulk-operation transaction, all-selected authorization rule, audit event and post-commit file
-cleanup. Multi-Item document download crosses this Library seam; its implementation may call the
+bulk-operation transaction, all-selected existence checks, concrete action authorization, one
+Audit Event and transactional cleanup enqueue. Project assignment uses `project_item.manage`, Tag
+assignment uses `tag.use`, Tag creation independently uses `tag.create`, and deletion uses
+`item.delete`. Neither single nor bulk Item deletion requires metadata-update authority.
+Multi-Item document download crosses this Library seam; its implementation may call the
 Documents assembly interface for archive construction after selection authorization. Library does
 not define single-Item metadata behaviour or Item section queries.
 
@@ -234,7 +241,12 @@ Opening an Item crosses the Library interface through `open_item_section` with a
 section-specific read model; only the Web adapter maps those views to API projections. Access
 validation, section query selection and recent-reading persistence remain coordinated behind the
 same operation seam. The implementation lives in `library.item_sections`, which owns reads for
-one opened Item and no Item mutation or bulk behaviour. The adapter projects each independent
+one opened Item and no Item mutation or bulk behaviour. Its Organize projection calls
+`projects.list_item_organize_projects` for every discoverable active Project and its participation
+fact, without directory pagination. Projects uses one membership-generation participation
+predicate for this query, directory views and detail. Library retains Item assignments, Tags and
+section composition. Effective participation requires an active User and current active membership;
+governance discovery of a managed Project does not imply participation. The adapter projects each independent
 Item capability from the resolved context, without metadata-edit or delete boolean mirrors.
 
 Annotation and Annotation Reply CRUD cross the Documents interface through typed create/update
@@ -361,7 +373,17 @@ durable preparation receives serializable source receipts. Components that requi
 the returned obstore-backed byte stream directly to `StreamingResponse`; streaming ZIP assembly
 uses one unbuffered async-generator bridge and selects `ZIP_AUTO` from each member's known size.
 
-All physical Document deletion crosses the Documents interface. Every logical upload owns one
+All ordinary physical Document deletion crosses the Documents interface.
+`documents.objects` owns the canonical descriptor references, final reservation check, expiration
+retirement and idempotent physical deletion. Library provides `import_staging_object_keys` for
+retained PDF staging, including pending, ready and failed batches; committed batches are excluded.
+Operations owns inventory, age cutoffs, scheduling and reporting, and calls Documents for both
+scan protections and final cleanup. The generic Core object-reservation encoder/parser distinguishes
+reservation from cleanup intent and supports own-workflow exclusion without knowing business tables.
+Documents reads reservations, staging sources and committed Document destinations in that order,
+then rechecks every key immediately before its physical delete. This preserves protection when a
+workflow finishes or Import confirmation atomically transfers staged ownership during the check.
+Every logical upload owns one
 preallocated UUID object, so rollback and terminal workflow cleanup can delete that key without a
 local lock. Pending Import Batches and active workflow attributes are durable object reservations.
 The workflow-first upload interface creates a DBOS execution, streams
@@ -370,7 +392,8 @@ content before a short idempotent database commit. Documents owns the durable
 `FileRevisionChanged` event contract, and the Library workflow that handles it updates derived
 Library state without creating a reverse dependency. Operations
 reconciliation lists the Object Store once and only deletes old managed UUID objects after
-excluding database references and active workflow ownership twice. Item deletion and Import Batch
+using Documents-owned protections at discovery and immediately before deletion. Item deletion and
+Import Batch
 discard transactionally enqueue idempotent Documents cleanup workflows on a non-partitioned cleanup
 queue. Revision work is partitioned by File Revision and bounded independently from synchronous
 Item/Revision Search projection updates and Recommendation inference. Core queries active workflow reservations
@@ -378,11 +401,43 @@ directly instead of scanning terminal history. Storage metrics aggregate recorde
 tables without issuing Object Store HEAD requests; an Operations-owned scheduled integrity workflow
 performs Object Store I/O in retryable steps and commits thumbnail size backfills plus its result in
 a datasource transaction. Successful annotation exports persist lightweight Annotation Export Artifact
-records; scheduled maintenance deletes them in bounded expiration-ordered batches without scanning DBOS
-history. Workspace Search rebuilds use `workspace_maintenance.run` and reauthorize every bounded
+records; scheduled maintenance retires still-expired matching descriptors in bounded
+expiration-ordered datasource transactions. Their returned keys are checkpointed with retirement
+before a retryable Documents deletion step, which still protects other references and reservations.
+DBOS history scanning is unnecessary. Workspace Search rebuilds use `workspace_maintenance.run`
+and reauthorize every bounded
 Item/Revision batch; Workspace renaming remains an independent `workspace.update` decision.
 Global Search rebuilds and bulk Tag Recommendation requests use bounded keyset Item batches
 rather than one large datasource output. Unknown keys and doctor probes are never managed.
+
+Workspace teardown holds the exclusive Workspace root through authorization, retention, snapshots,
+root deletion, Audit, durable enqueue and commit. Search's `remove_workspace` removes both derived
+projections before the cascade, including SQLite FTS rows. Documents supplies its descriptor and
+Annotation/Reply identity snapshot and removes captured identities after the cascade. Library
+supplies retained Import Staging keys. These owner operations use the caller's Session without
+committing or rolling it back. Workspaces enqueues bounded cleanup batches in the deletion
+transaction; cleanup intent does not reserve those keys.
+
+### Object lifecycle interface contracts
+
+Documents exposes `protected_object_keys` for scan protections and `delete_unreferenced_objects`
+for final cleanup. They require a Session with no pending writes and end their read transactions
+with rollback so each final check reads fresh protection facts. Protection includes File Revisions,
+PDF Thumbnails, Attachments, Annotation Export Artifacts, Library staging and active workflow
+reservations. Full scans enumerate facts without inventory-sized SQL parameter lists. Cleanup can
+exclude its current workflow without excluding other owners; absent objects are success. The UUID
+protocol requires reservation before upload and forbids new work from adopting old unreferenced
+keys; the checks do not make database writes atomic with arbitrary Object Store I/O.
+
+`list_expired_export_artifacts` returns bounded expiration-ordered receipts.
+`retire_expired_export_artifacts` rechecks identity, object key and expiration, then returns keys
+for the caller's datasource transaction to checkpoint with descriptor retirement. Neither operation
+completes the caller's transaction. Renewed or replaced descriptors remain protected.
+
+`snapshot_workspace_documents` returns Document object keys and Annotation/Reply identities under
+the caller's exclusive Workspace root lock. `delete_workspace_annotation_identities` consumes the
+snapshot after root deletion has been flushed. Library's `import_staging_object_keys` and Search's
+`remove_workspace` use the same caller transaction without commit or rollback.
 
 An internal helper imported across Modules is an architectural pressure point. Repeated use is
 a signal to move the concept to its owner or deepen the owning interface; it is not a reason to
@@ -400,17 +455,25 @@ directions are:
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
 | `access` | `core`, `models` | Evaluate policies using persisted identities and domain errors |
-| `accounts` | `access`, `audit`, `core`, `models`, `operations`, `workspaces` | Authentication persistence, account-level authorization, Audit Event recording, runtime registration policy and Workspace provisioning for new Users |
+| `accounts` | `access`, `audit`, `core`, `models`, `operations`, `workspaces` | Authentication persistence, account-level authorization, Audit Event recording, runtime registration policy, Workspace provisioning and the Workspace-owned account-deactivation guard |
 | `audit` | `access`, `core`, `models` | Administrative authorization, authorization errors and Audit Event persistence |
 | `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `documents`, `models` | Authorization, Project persistence and audit recording; Documents-owned Annotation cleanup when detaching a ProjectItem |
-| `documents` | `access`, `audit`, `core`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, runtime settings, Documents workflows and revision-owned Search projection |
-| `operations` | `access`, `audit`, `core`, `library`, `models`, `search` | Infrastructure access, operational persistence, Workspace-authorized maintenance workflows, global integrity coordination and audit recording |
+| `documents` | `access`, `audit`, `core`, `library`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, Library-owned staging reference facts, Operations runtime settings, Documents workflows and revision-owned Search projection |
+| `operations` | `access`, `audit`, `core`, `documents`, `library`, `models`, `search` | Infrastructure access, operational persistence, Documents-owned protection/deletion and export retirement, Workspace-authorized maintenance workflows, global integrity coordination and audit recording |
 | `search` | `models` | Build and query the derived search representation |
-| `workspaces` | `access`, `audit`, `core`, `documents`, `models`, `operations` | Workspace authorization, membership/invitation persistence, audit recording, runtime Workspace creation policy and reference-safe physical cleanup after deletion |
+| `workspaces` | `access`, `audit`, `core`, `documents`, `library`, `models`, `operations`, `search` | Workspace authorization, membership/invitation persistence, Audit, runtime creation policy, Documents-owned teardown/cleanup, Library staging facts and Search-owned projection removal |
 | `web` | Business Modules, `access`, `accounts`, `audit`, `core`, `documents`, `library`, `mcp`, `models`, `operations`, `projects`, `search` | Invoke use cases, own capability-local HTTP DTOs and projections, expose `/api/v1` through explicit Bearer or Login Session authentication, enforce cookie-request Origins, format responses, serve the static application and compose the MCP HTTP mount |
 | `mcp` | `accounts`, `audit`, `core` | Verify API Tokens at the MCP transport, select a fixed OpenAPI operation allowlist, bind trusted MCP provenance and invoke the same `/api/v1` handlers through an in-process ASGI client |
 | `core` | Nothing above infrastructure | Infrastructure must not know business concepts |
+
+The reverse Documents → Library edge imports only `import_staging_object_keys` through the Library
+facade, at execution time to avoid facade initialization cycles. Workspaces consumes the same fact.
+Architecture tests restrict those callers to this symbol. Operations → Documents imports only the
+owned object protection, deletion, expiration listing and retirement operations. Documents →
+Operations remains runtime settings only; the `operations-implementation` Import Linter contract
+protects all other Operations implementation modules from business callers. These bounded surfaces
+do not permit cleanup scheduling or business rules to migrate between owners.
 
 Dependencies on standalone workspace packages are also explicit:
 

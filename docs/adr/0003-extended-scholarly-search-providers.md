@@ -1,6 +1,8 @@
-# ADR 0003: extended scholarly metadata and Discovery providers (PMC, NASA ADS, IEEE Xplore)
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0003: extended scholarly metadata and Discovery providers (PMC, NASA ADS, IEEE Xplore)
 
 Following ADR 0001's requirement that deferred external integrations be bounded, credentialed, and documented through dedicated ADRs, Quirebase adds PubMed Central (PMC), NASA Astrophysics Data System (NASA ADS), and IEEE Xplore to its fixed Provider allowlist for metadata lookup and Discovery (online search).
 

@@ -1,6 +1,8 @@
-# ADR 0006: native async runtime and persistence
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0006: native async runtime and persistence
 
 ## Context
 

@@ -139,7 +139,7 @@ async def test_reconciliation_deletes_only_old_unreferenced_managed_objects(
         "documents.cleanup_objects",
         queue_name="documents.cleanup",
         workflow_id="active-cleanup",
-        attributes={"object_keys": [orphan.key]},
+        attributes={"object_keys": [orphan.key], "object_intent": "cleanup"},
     )
     deleted = await reconcile_objects(async_db, retention_hours=1)
 

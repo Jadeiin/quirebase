@@ -4,9 +4,6 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from advanced_alchemy.types import GUID
-from sqlalchemy import bindparam, delete, select, text
-
 from quirebase.access import (
     ResourceAction,
     require_action,
@@ -18,19 +15,14 @@ from quirebase.core.errors import (
     ValidationFailure,
     WorkspaceLifecycleError,
 )
-from quirebase.core.workflows import DOCUMENT_CLEANUP_QUEUE, durable_operations
-from quirebase.models import (
-    Attachment,
-    ExportArtifact,
-    FileRevision,
-    ImportBatch,
-    PdfAnnotation,
-    PdfAnnotationObject,
-    PdfAnnotationReply,
-    User,
-    Workspace,
-    WorkspaceState,
+from quirebase.core.workflows import (
+    DOCUMENT_CLEANUP_QUEUE,
+    durable_operations,
+    object_reservation_attributes,
 )
+from quirebase.documents import delete_workspace_annotation_identities, snapshot_workspace_documents
+from quirebase.models import User, Workspace, WorkspaceState
+from quirebase.search import search_index
 
 from .workflows import WORKSPACE_OBJECT_CLEANUP_WORKFLOW
 
@@ -124,80 +116,12 @@ async def permanently_delete_workspace(
     if archived_at is None or archived_at > now - retention:
         raise WorkspaceLifecycleError("Workspace archive retention period has not elapsed")
 
-    object_keys = set(
-        (
-            await db.scalars(
-                select(FileRevision.file["filename"].as_string()).where(
-                    FileRevision.workspace_id == workspace_id
-                )
-            )
-        ).all()
-    )
-    object_keys.update(
-        key
-        for key in (
-            await db.scalars(
-                select(FileRevision.thumbnail["filename"].as_string()).where(
-                    FileRevision.workspace_id == workspace_id,
-                    FileRevision.thumbnail["filename"].as_string().is_not(None),
-                )
-            )
-        ).all()
-        if key
-    )
-    object_keys.update(
-        (
-            await db.scalars(
-                select(Attachment.file["filename"].as_string()).where(
-                    Attachment.workspace_id == workspace_id
-                )
-            )
-        ).all()
-    )
-    object_keys.update(
-        (
-            await db.scalars(
-                select(ExportArtifact.file["filename"].as_string()).where(
-                    ExportArtifact.workspace_id == workspace_id
-                )
-            )
-        ).all()
-    )
-    for files in await db.scalars(
-        select(ImportBatch.staged_files).where(ImportBatch.workspace_id == workspace_id)
-    ):
-        object_keys.update(file.path for file in files)
+    from quirebase.library import import_staging_object_keys
 
-    annotation_ids = list(
-        (
-            await db.scalars(
-                select(PdfAnnotation.id).where(PdfAnnotation.workspace_id == workspace_id)
-            )
-        ).all()
-    )
-    annotation_ids.extend(
-        (
-            await db.scalars(
-                select(PdfAnnotationReply.id).where(PdfAnnotationReply.workspace_id == workspace_id)
-            )
-        ).all()
-    )
-    # SQLite FTS tables have no foreign keys; PostgreSQL's projections do, but
-    # explicit removal keeps both dialects identical before the root cascade.
-    await db.execute(
-        text(
-            "DELETE FROM revision_search WHERE item_id IN "
-            "(SELECT id FROM items WHERE workspace_id = :workspace_id)"
-        ).bindparams(bindparam("workspace_id", type_=GUID())),
-        {"workspace_id": workspace_id},
-    )
-    await db.execute(
-        text(
-            "DELETE FROM item_search WHERE item_id IN "
-            "(SELECT id FROM items WHERE workspace_id = :workspace_id)"
-        ).bindparams(bindparam("workspace_id", type_=GUID())),
-        {"workspace_id": workspace_id},
-    )
+    documents = await snapshot_workspace_documents(db, workspace_id)
+    object_keys = set(documents.object_keys)
+    object_keys.update(await import_staging_object_keys(db, workspace_id=workspace_id))
+    await search_index(db).remove_workspace(db, workspace_id)
 
     workspace.state = WorkspaceState.deleted
     workspace.deleted_at = now
@@ -229,18 +153,13 @@ async def permanently_delete_workspace(
                 "operation": "workspace_delete_cleanup",
                 "actor_id": actor.id,
                 "workspace_id": workspace_id,
-                "object_keys": batch_keys,
+                **object_reservation_attributes(batch_keys, intent="cleanup"),
             },
         )
     # Deleting the root is the database fence for in-flight stale mutations:
     # every Workspace-owned aggregate is connected by cascading foreign keys.
     await db.delete(workspace)
     await db.flush()
-    for start in range(0, len(annotation_ids), 500):
-        await db.execute(
-            delete(PdfAnnotationObject).where(
-                PdfAnnotationObject.id.in_(annotation_ids[start : start + 500])
-            )
-        )
+    await delete_workspace_annotation_identities(db, documents)
     await db.commit()
     return workspace

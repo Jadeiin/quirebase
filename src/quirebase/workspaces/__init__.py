@@ -32,6 +32,7 @@ from quirebase.workspaces.lifecycle import (
     update_workspace,
 )
 from quirebase.workspaces.membership import (
+    guard_user_deactivation,
     reactivate_workspace_member,
     set_workspace_member_role,
     suspend_workspace_member,
@@ -48,6 +49,7 @@ __all__ = [
     "freeze_workspace_governance",
     "get_workspace",
     "get_workspace_invitation_by_token",
+    "guard_user_deactivation",
     "invite_workspace_member",
     "list_workspace_governance_members",
     "list_workspace_invitations",

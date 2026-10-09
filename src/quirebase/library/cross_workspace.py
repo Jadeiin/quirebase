@@ -15,7 +15,7 @@ from quirebase.access.items import require_readable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.core.storage import ObjectSuffix, get_object_store
-from quirebase.documents.revisions import delete_unreferenced_objects
+from quirebase.documents import delete_unreferenced_objects
 from quirebase.models import (
     Attachment,
     AttachmentRole,
