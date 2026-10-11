@@ -271,7 +271,7 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
             json=json_payload({"name": "Reviewed"}),
         )
         assert tag.status_code == 200
-        assert (await client.get(f"{workspace_base}/tags", headers=headers)).json()[0][
+        assert (await client.get(f"{workspace_base}/tags", headers=headers)).json()["items"][0][
             "name"
         ] == "Reviewed"
         cleared = await client.put(
@@ -817,14 +817,19 @@ async def test_http_api_tags_use_effective_management_action(
         )
 
     assert response.status_code == 200
-    assert response.json() == json_payload([
-        {
-            "id": tag.id,
-            "name": "Read only",
-            "accessible_item_count": 0,
-            "authorization": {"allowed": []},
-        }
-    ])
+    assert response.json() == json_payload({
+        "items": [
+            {
+                "id": tag.id,
+                "name": "Read only",
+                "accessible_item_count": 0,
+                "authorization": {"allowed": []},
+            }
+        ],
+        "total": 1,
+        "limit": 25,
+        "offset": 0,
+    })
 
 
 @pytest.mark.anyio

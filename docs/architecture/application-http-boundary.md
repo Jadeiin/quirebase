@@ -98,6 +98,14 @@ remains isolated under `src/lib/pdf`; its domain-specific viewer controls and UI
 to disable unsupported commands (such as callout annotations) and keep search and page navigation
 integrated with the Svelte workspace, but do not become a second general-purpose design system.
 
+Tag listing uses bounded `limit`/`offset` pages with a filtered total, literal case-folded name
+search and an optional Workspace-scoped `tag_id` filter for restoring a selection. Tools requests
+20 Tags per page; Library and merge selectors request 25 options only when opened, with debounced
+server search and explicit loading of additional pages. A selected Tag is resolved independently
+so deep links and renamed selections remain usable outside the first option page. Library counts
+assignments only for Tags in the requested page, preserving zero counts without aggregating the
+whole taxonomy. Tag mutations invalidate Tag lists, option searches and selected-Tag queries.
+
 ## Deployment and frontend constraints
 
 - A single Quirebase service and artifact still contains the complete application.

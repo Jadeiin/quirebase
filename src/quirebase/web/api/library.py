@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
+from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Query, status
 
 from quirebase.access import (
@@ -179,18 +180,33 @@ async def format_item_citation(
     return CitationView(content=content, media_type=media_type)
 
 
-@router.get("/tags", response_model=list[TagView])
-async def list_tags(workspace_id: UUID, context: WorkspaceAccess, db: Database) -> list[TagView]:
-    rows = await list_accessible_tags_with_counts(db, context)
-    return [
-        TagView(
-            id=tag.id,
-            name=tag.name,
-            accessible_item_count=count,
-            authorization=authorization_view(tag_decisions(context)),
-        )
-        for tag, count in rows
-    ]
+@router.get("/tags", response_model=OffsetPagination[TagView])
+async def list_tags(
+    workspace_id: UUID,
+    context: WorkspaceAccess,
+    db: Database,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: str = "",
+    tag_id: UUID | None = None,
+) -> OffsetPagination[TagView]:
+    rows, total = await list_accessible_tags_with_counts(
+        db, context, limit=limit, offset=offset, search=search, tag_id=tag_id
+    )
+    return OffsetPagination(
+        items=[
+            TagView(
+                id=tag.id,
+                name=tag.name,
+                accessible_item_count=count,
+                authorization=authorization_view(tag_decisions(context)),
+            )
+            for tag, count in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/items/{item_id}/tags", response_model=WriteResult)

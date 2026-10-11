@@ -286,7 +286,7 @@ async def test_item_sections_separate_page_responsibilities(
 
         organize = await client.get(f"{workspace_base}/tags")
         assert organize.status_code == 200
-        assert organize.json()[0]["name"] == "User priority"
+        assert organize.json()["items"][0]["name"] == "User priority"
 
         created = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",

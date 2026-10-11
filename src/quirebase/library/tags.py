@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import and_, delete, func, select
+from advanced_alchemy.filters import LimitOffset
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -24,7 +25,7 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.core.persistence import conflict_insert
+from quirebase.core.persistence import conflict_insert, select_page
 from quirebase.library.tag_recommendations import decoded_candidates
 from quirebase.library.workflows import (
     item_tag_recommendation_status,
@@ -325,31 +326,43 @@ async def delete_tag(db: AsyncSession, user: User, workspace_id: UUID, tag_id: U
 
 
 async def list_accessible_tags_with_counts(
-    db: AsyncSession, context: WorkspaceContext
-) -> list[tuple[Tag, int]]:
+    db: AsyncSession,
+    context: WorkspaceContext,
+    *,
+    limit: int = 25,
+    offset: int = 0,
+    search: str = "",
+    tag_id: UUID | None = None,
+) -> tuple[list[tuple[Tag, int]], int]:
     require_action(context, ResourceAction.workspace_read)
     workspace_id = context.workspace_id
-    accessible_ids = visible_items_query(workspace_id).with_only_columns(Item.id).subquery()
-    rows = (
-        await db.execute(
-            select(Tag, func.count(ItemTag.item_id))
-            .outerjoin(
-                ItemTag,
-                and_(
-                    ItemTag.workspace_id == workspace_id,
-                    ItemTag.tag_id == Tag.id,
-                    ItemTag.item_id.in_(select(accessible_ids.c.id)),
-                ),
-            )
-            .where(
-                Tag.workspace_id == workspace_id,
-                Tag.id.in_(visible_tags_query(workspace_id).with_only_columns(Tag.id)),
-            )
-            .group_by(Tag.id)
-            .order_by(Tag.name)
+    query = visible_tags_query(workspace_id).order_by(Tag.name, Tag.id)
+    if search.strip():
+        query = query.where(
+            Tag.normalized_name.contains(search.strip().casefold(), autoescape=True)
         )
-    ).all()
-    return [(row[0], row[1]) for row in rows]
+    if tag_id is not None:
+        query = query.where(Tag.id == tag_id)
+    tags, total = await select_page(db, query, Tag, LimitOffset(limit=limit, offset=offset))
+    if not tags:
+        return [], total
+    accessible_ids = visible_items_query(workspace_id).with_only_columns(Item.id).subquery()
+    counts = dict(
+        (
+            await db.execute(
+                select(ItemTag.tag_id, func.count(ItemTag.item_id))
+                .where(
+                    ItemTag.workspace_id == workspace_id,
+                    ItemTag.tag_id.in_([tag.id for tag in tags]),
+                    ItemTag.item_id.in_(select(accessible_ids.c.id)),
+                )
+                .group_by(ItemTag.tag_id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    return [(tag, counts.get(tag.id, 0)) for tag in tags], total
 
 
 async def get_tag_matrix_for_item(db: AsyncSession, item: Item) -> TagMatrix:

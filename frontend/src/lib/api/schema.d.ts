@@ -3724,6 +3724,20 @@ export interface components {
 		 * OffsetPagination
 		 * @description Container for data returned using limit/offset pagination.
 		 */
+		OffsetPagination_TagView_: {
+			/** Items */
+			items: components['schemas']['TagView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
 		OffsetPagination_WorkspaceGovernanceMemberView_: {
 			/** Items */
 			items: components['schemas']['WorkspaceGovernanceMemberView'][];
@@ -7179,7 +7193,12 @@ export interface operations {
 	};
 	'library.list_tags': {
 		parameters: {
-			query?: never;
+			query?: {
+				limit?: number;
+				offset?: number;
+				search?: string;
+				tag_id?: string | null;
+			};
 			header?: never;
 			path: {
 				workspace_id: string;
@@ -7194,7 +7213,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['TagView'][];
+					'application/json': components['schemas']['OffsetPagination_TagView_'];
 				};
 			};
 			/** @description Unprocessable Content */

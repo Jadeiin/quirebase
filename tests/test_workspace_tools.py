@@ -173,8 +173,8 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         invalid_mode = await client.get(f"{workspace_base}/duplicates?mode=unknown")
         assert invalid_mode.status_code == 422
         tags = await client.get(f"{workspace_base}/tags")
-        assert tags.json()[0]["name"] == "Old tag"
-        assert tags.json()[0]["accessible_item_count"] == 1
+        assert tags.json()["items"][0]["name"] == "Old tag"
+        assert tags.json()["items"][0]["accessible_item_count"] == 1
 
         # The Library API accepts Tag UUIDs and names.
         filtered_by_id = await client.get(f"{workspace_base}/items", params={"tag": tag.id})
@@ -196,7 +196,7 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         tools_tags = await client.get(f"{workspace_base}/tags")
         assert tools_tags.status_code == 200
         assert (
-            next(row for row in tools_tags.json() if row["name"] == "Orphan tag")[
+            next(row for row in tools_tags.json()["items"] if row["name"] == "Orphan tag")[
                 "accessible_item_count"
             ]
             == 0

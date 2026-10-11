@@ -220,7 +220,7 @@ async def test_tag_list_conceals_tags_without_accessible_items(
         listing = await client.get(f"{workspace_base}/tags")
 
         assert listing.status_code == 200
-        names = [row["name"] for row in listing.json()]
+        names = [row["name"] for row in listing.json()["items"]]
         assert "Foreign private taxonomy" not in names
         assert "Own empty taxonomy" in names
     finally:
