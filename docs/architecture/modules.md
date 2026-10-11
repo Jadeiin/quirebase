@@ -334,6 +334,9 @@ commands and shared views. Documents owns the canonical per-page geometry and st
 authorization coordination, optimistic versioning, annotation soft deletion, Audit Events and projection to
 PDF export. Web, REST and MCP are inbound Adapters over that Interface; EmbedPDF objects are
 translated only inside the Web asset and never enter Documents persistence or API wire contracts.
+Annotation scope and Project binding are fixed at creation. Update commands carry authored content
+and the expected version only; the existing ProjectItem is held through the mutation, and Replies
+continue to inherit the same audience.
 
 Tag selection is presented by the Item Organize section and committed through additive/remove commands
 (`add_tag_to_item` and `remove_tag_from_item`). Existing Tags may be matched case-insensitively

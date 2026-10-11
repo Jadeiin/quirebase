@@ -163,8 +163,12 @@ describe('reader annotation reconciliation', () => {
 		expect(objects.get(replyObjectId)?.inReplyToId).toBe(rootObjectId);
 
 		request.mockResolvedValueOnce({ ...record, body: 'Edited root', version: 2 });
+		sync.setWriteProject('another-project');
 		await event('update', { ...record, body: 'Edited root' });
-		expect(request.mock.calls.at(-1)?.[2].params.path.annotation_id).toBe(record.id);
+		const update = request.mock.calls.at(-1)?.[2];
+		expect(update.params.path.annotation_id).toBe(record.id);
+		expect(update.body).not.toHaveProperty('scope');
+		expect(update.body).not.toHaveProperty('project_id');
 		expect(objects.get(rootObjectId)?.contents).toBe('Edited root');
 		expect(objects.get(replyObjectId)?.contents).toBe('Edited reply');
 	});

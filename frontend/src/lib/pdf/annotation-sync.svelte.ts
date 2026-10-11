@@ -264,8 +264,6 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 							params: { path: { item_id: options.itemId, annotation_id: id } },
 							body: {
 								version: existing.version,
-								scope: existing.scope,
-								project_id: existing.project_id,
 								...adapter.canonicalFromVendor(
 									{ ...event.annotation, ...event.patch } as PdfAnnotationObject,
 									event.pageIndex,

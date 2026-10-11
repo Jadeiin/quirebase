@@ -742,7 +742,6 @@ async def test_annotation_edits_with_one_version_have_one_commit_and_audit(
                         "version": 1,
                         "page_index": 0,
                         "kind": "note",
-                        "scope": "private",
                         "body": name,
                         "payload": {
                             "type": "note",
@@ -1886,24 +1885,23 @@ async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postg
 
 
 @pytest.mark.concurrency_case("annotation-recheck")
-async def test_annotation_scope_update_waits_for_project_item_detachment_and_rechecks(
-    postgres_sessions,
+async def test_annotation_edit_waits_for_project_item_detachment_and_rechecks(
+    postgres_sessions, postgres_race
 ):
     async with postgres_sessions() as db:
         (
             workspace_id,
             owner_id,
             item_id,
-            project_id,
+            _project_id,
             assignment_id,
             annotation_id,
         ) = await _project_annotation_context(
             db,
-            "annotation-scope-detachment",
-            annotation_scope=AnnotationScope.private,
+            "annotation-edit-detachment",
         )
 
-    async with postgres_sessions() as detach_db:
+    async with postgres_race.session("detach") as detach_db:
         assignment = await detach_db.scalar(
             select(ProjectItem).where(ProjectItem.id == assignment_id).with_for_update()
         )
@@ -1911,13 +1909,10 @@ async def test_annotation_scope_update_waits_for_project_item_detachment_and_rec
         await detach_db.delete(assignment)
         await detach_db.flush()
 
-        started = asyncio.Event()
-
-        async def update_scope() -> str:
-            async with postgres_sessions() as db:
+        async def edit() -> str:
+            async with postgres_race.session("edit") as db:
                 actor = await db.get(User, owner_id)
                 assert actor is not None
-                started.set()
                 try:
                     await update_document_annotation(
                         db,
@@ -1929,9 +1924,7 @@ async def test_annotation_scope_update_waits_for_project_item_detachment_and_rec
                             "version": 1,
                             "page_index": 0,
                             "kind": "note",
-                            "scope": "project",
-                            "project_id": project_id,
-                            "body": "Moved to Project scope",
+                            "body": "Edited Project annotation",
                             "payload": {
                                 "type": "note",
                                 "rect": {"x": 1, "y": 1, "width": 1, "height": 1},
@@ -1943,22 +1936,23 @@ async def test_annotation_scope_update_waits_for_project_item_detachment_and_rec
                     return "rejected"
                 return "committed"
 
-        update_task = asyncio.create_task(update_scope())
-        try:
-            await started.wait()
-            await asyncio.sleep(0.05)
-            assert not update_task.done()
-        finally:
-            await detach_db.commit()
-        assert await asyncio.wait_for(update_task, timeout=5) == "rejected"
+        postgres_race.start("edit", edit())
+        await postgres_race.wait_blocked("edit", "detach")
+        await detach_db.commit()
+        assert await postgres_race.join("edit") == "rejected"
 
     async with postgres_sessions() as db:
-        annotation = await db.get(PdfAnnotation, annotation_id)
-        assert annotation is not None
-        assert annotation.scope is AnnotationScope.private
-        assert annotation.project_item_id is None
-        assert annotation.version == 1
+        assert await db.get(PdfAnnotation, annotation_id) is None
         assert await db.get(ProjectItem, assignment_id) is None
+        assert (
+            await db.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.action == "annotation.update",
+                    AuditEvent.target_id == str(annotation_id),
+                )
+            )
+            == 0
+        )
 
 
 @pytest.mark.concurrency_case("assignment-item-delete")

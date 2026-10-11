@@ -648,8 +648,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
                 "version": 99,
                 "page_index": annotation["page_index"],
                 "kind": annotation["kind"],
-                "scope": annotation["scope"],
-                "project_id": annotation["project_id"],
                 "body": annotation["body"],
                 "selected_text": annotation["selected_text"],
                 "payload": annotation["payload"],

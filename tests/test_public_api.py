@@ -454,8 +454,6 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
                 "version": annotation["version"],
                 "page_index": annotation["page_index"],
                 "kind": annotation["kind"],
-                "scope": annotation["scope"],
-                "project_id": annotation["project_id"],
                 "body": "Updated API annotation",
                 "selected_text": annotation["selected_text"],
                 "payload": annotation["payload"],
@@ -464,6 +462,8 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
         assert updated.status_code == 200
         assert updated.json()["body"] == "Updated API annotation"
         assert updated.json()["version"] == 2
+        assert updated.json()["scope"] == annotation["scope"]
+        assert updated.json()["project_id"] == annotation["project_id"]
         assert updated.json()["replies"][0]["id"] == reply_id
         assert updated.json()["replies"][0]["body"] == "Updated API reply"
         deleted_reply = await client.delete(

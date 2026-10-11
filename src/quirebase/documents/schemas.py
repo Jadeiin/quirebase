@@ -174,16 +174,12 @@ class AnnotationUpdate(CanonicalModel):
     version: int = Field(ge=1)
     page_index: int = Field(ge=0)
     kind: AnnotationKind
-    scope: AnnotationScope
-    project_id: UUID | None = None
     body: str | None = Field(default=None, max_length=20_000)
     selected_text: PdfSelectedText | None = Field(default=None, max_length=50_000)
     payload: AnnotationPayload
 
     @model_validator(mode="after")
-    def valid_scope_and_kind(self):
-        if (self.scope is AnnotationScope.project) != (self.project_id is not None):
-            raise ValueError("project_id is required exactly for project scope")
+    def valid_kind(self):
         if self.kind.value != self.payload.type:
             raise ValueError("annotation kind must match payload type")
         return self

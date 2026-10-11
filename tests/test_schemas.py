@@ -79,6 +79,19 @@ def test_project_scope_requires_project():
         AnnotationCreate.model_validate(data)
 
 
+@pytest.mark.parametrize("extra", [{"scope": "private"}, {"project_id": str(uuid4())}])
+def test_annotation_updates_reject_audience_fields(extra):
+    created = base("note", {})
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        AnnotationUpdate.model_validate({
+            "version": 1,
+            "page_index": 0,
+            "kind": "note",
+            "payload": created["payload"],
+            **extra,
+        })
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -126,7 +139,6 @@ def test_pdf_selected_text_drops_nul_characters():
         "version": 1,
         "page_index": 0,
         "kind": "highlight",
-        "scope": "private",
         "selected_text": "C\x00D",
         "payload": data["payload"],
     })

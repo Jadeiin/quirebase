@@ -162,8 +162,6 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "page_index",
         "kind",
         "payload",
-        "scope",
-        "project_id",
         "body",
         "selected_text",
     }

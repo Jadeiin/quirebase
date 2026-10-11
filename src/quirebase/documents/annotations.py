@@ -740,32 +740,21 @@ async def update_document_annotation(
     revision = await db.get(FileRevision, record.file_revision_id)
     if revision is None:
         raise ResourceNotFound("revision not found")
-    project_item: ProjectItem | None = None
-    if data.scope is AnnotationScope.project:
-        assert data.project_id is not None
-        await require_project_context(
-            db,
-            user,
-            workspace_id,
-            data.project_id,
-            ResourceAction.project_annotation_update,
-            relation="own",
-            lock="shared",
+    project_id: UUID | None = None
+    if record.scope is AnnotationScope.project:
+        # Authored content may change, but the audience inherited by Replies is fixed.
+        # Retain the existing ProjectItem through the write to fence detachment.
+        project_id = await db.scalar(
+            select(ProjectItem.project_id)
+            .where(
+                ProjectItem.id == record.project_item_id,
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.item_id == item_id,
+            )
+            .with_for_update(read=True)
         )
-        project_item = await _lock_annotation_project_item(
-            db,
-            workspace_id,
-            data.project_id,
-            item_id,
-        )
-    else:
-        await require_workspace_action(
-            db,
-            user,
-            workspace_id,
-            ResourceAction.private_annotation_update,
-            relation="own",
-        )
+        if project_id is None:
+            raise ResourceUnavailable("ProjectItem not found")
     validate_payload(data.page_index, data.payload, revision)
     new_version = await db.scalar(
         update(PdfAnnotation)
@@ -778,8 +767,6 @@ async def update_document_annotation(
         .values(
             page_index=data.page_index,
             kind=data.kind,
-            scope=data.scope,
-            project_item_id=project_item.id if project_item else None,
             body=data.body,
             selected_text=data.selected_text,
             payload=data.payload.model_dump(mode="json"),
@@ -803,10 +790,10 @@ async def update_document_annotation(
         "pdf_annotation",
         record.id,
         workspace_id=workspace_id,
-        project_id=data.project_id,
+        project_id=project_id,
         authorization_resource_action=(
             ResourceAction.project_annotation_update.value
-            if data.scope is AnnotationScope.project
+            if record.scope is AnnotationScope.project
             else ResourceAction.private_annotation_update.value
         ),
     )

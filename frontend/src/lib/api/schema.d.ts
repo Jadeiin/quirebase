@@ -2488,9 +2488,6 @@ export interface components {
 			/** Page Index */
 			page_index: number;
 			kind: components['schemas']['AnnotationKind'];
-			scope: components['schemas']['AnnotationScope'];
-			/** Project Id */
-			project_id?: string | null;
 			/** Body */
 			body?: string | null;
 			/** Selected Text */

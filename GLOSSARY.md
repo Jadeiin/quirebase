@@ -144,7 +144,8 @@ otherwise the newest ready File Revision with an available PDF Thumbnail is used
 
 **Annotation**:
 A user-authored text mark, note, free text, ink stroke or geometric shape anchored to one page of
-a File Revision and scoped either privately or to a Project.
+a File Revision and scoped either privately or to a Project. Its scope and Project binding are fixed
+at creation; editing authored content does not move the Annotation or its Replies to a new audience.
 _Avoid_: Comment
 
 **Annotation Reply**:

@@ -3357,8 +3357,6 @@ async def test_annotation_reads_return_non_editable_flags_for_viewers_and_archiv
                 "version": annotation.version,
                 "page_index": annotation.page_index,
                 "kind": annotation.kind,
-                "scope": annotation.scope,
-                "project_id": project.id,
                 "body": "Rejected sidebar edit",
                 "payload": annotation.payload,
             }),
@@ -3450,8 +3448,7 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
                 "version": annotation.version,
                 "page_index": 0,
                 "kind": "note",
-                "scope": "private",
-                "body": "Moved to private",
+                "body": "Rejected edit to archived Project annotation",
                 "payload": annotation.payload,
             }),
         )
@@ -4300,7 +4297,7 @@ async def test_annotation_list_survives_revision_deletion_during_response_assemb
 async def test_annotation_update_reports_revision_deleted_after_commit(
     async_db, async_session_factory, monkeypatch
 ):
-    owner, _viewer, item, project, revision, shared, _reply = await _shared_annotation_context(
+    owner, _viewer, item, _project, revision, shared, _reply = await _shared_annotation_context(
         async_db, "annotation-update-revision-race"
     )
     workspace_id = fixture_workspace_id(owner)
@@ -4334,8 +4331,6 @@ async def test_annotation_update_reports_revision_deleted_after_commit(
                     "version": shared.version,
                     "page_index": 0,
                     "kind": "note",
-                    "scope": "project",
-                    "project_id": project.id,
                     "body": "Updated before the revision was deleted",
                     "payload": shared.payload,
                 }),
@@ -4392,8 +4387,6 @@ async def test_annotation_cursor_traversal_survives_changes_between_pages(async_
                 "version": updated.version,
                 "page_index": 0,
                 "kind": "note",
-                "scope": "private",
-                "project_id": None,
                 "body": "Updated between reader pages",
                 "payload": updated.payload,
             }),
