@@ -73,22 +73,24 @@ derived from a Workspace resource-action decision, not from the User who created
 _Avoid_: Item Owner when discussing authorization
 
 **Contributor**:
-A person or organization credited in an Item's bibliographic metadata, with a role such
-as author or editor. Quirebase's persistent identity is deliberately two-part: first name
-and last name; a missing first name represents a single-field/literal name such as an
-organization.
+A person or organization credited in one Item's ordered bibliographic metadata as an author
+or editor. Names belong to that record and do not establish a shared researcher identity;
+source display names, optional family/given names, suffixes and namespaced identifiers describe
+that record's credit. Organization credits retain their literal names.
 _Avoid_: Creator, User
 
 **Affiliation**:
 An institution credited with a Contributor on a particular bibliographic record. It may include
 institution identifiers, country and original credit text. It belongs to that record's authorship,
-not to the Contributor's global identity. Provider metadata and Import previews preserve this
-mapping; current Item storage projects the affiliations into aggregated text.
+not to an independent Contributor identity. Provider metadata, Import previews and Item Contributor snapshots preserve this mapping.
+Item has no separate affiliation field or institution list.
 
 **Project**:
 A collaboration context inside one Workspace that organizes a working set of Items and contains
 Project-scoped annotations, discussions and notes. A Project does not grant access to an Item or
 raise a User's Workspace authority. A Project has no owner; `created_by` is provenance only.
+Archiving preserves the Project for restoration. Deleting physically removes its root and
+Project-owned context while preserving canonical Workspace Items and historical Audit Events.
 _Avoid_: Folder, Group
 
 **Project Participant**:
@@ -226,11 +228,10 @@ identifiers. The `provider` field on a stored Upstream Identifier names its Iden
 ISSN identifies a journal rather than an Item and belongs to bibliographic metadata.
 
 **Upstream Identifier**:
-An identifier for an Item, stored as an Identifier Namespace/value pair when it is not the
-canonical DOI. The pair identifies the upstream record and may support metadata lookup or document
-acquisition; the Provider returning metadata is
-recorded separately as provenance. DOI remains the Item's canonical identifier rather than a
-second provider-specific record. An Item has at most one value per Identifier Namespace, and a
+An external identity for an Item, expressed as an Identifier Namespace/value pair, including DOI.
+The pair identifies the upstream record and may support metadata lookup or document acquisition;
+the Provider returning metadata is recorded separately as provenance. DOI comparison ignores
+ASCII letter case while preserving differences between non-ASCII characters. An Item has at most one value per Identifier Namespace, and a
 Namespace/value pair belongs to at most one Item within a Workspace. Independent copies in
 different Workspaces may retain the same pair. Identifier Lookup inputs are query context;
 only confirmed record identities become Upstream Identifiers.
@@ -315,8 +316,8 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 - An Import Batch holds parsed Candidate Records until confirmed into Items; a committed batch retains
   the confirmation result but is no longer an active staging reservation.
 - Citation Styles format Items during export or citation generation.
-- An Item may have zero or more Upstream Identifiers; DOI is represented by the
-  Item's canonical DOI field and is not duplicated as an Upstream Identifier.
+- An Item may have zero or more Upstream Identifiers, including DOI. Each identity belongs to
+  at most one Item within a Workspace.
 - An Audit Event may reference an actor and a target.
 
 ## Example dialogue

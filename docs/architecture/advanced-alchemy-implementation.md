@@ -56,8 +56,9 @@ Annotation IDs use UUID4. `AuditColumns` defaults/onupdate manage ORM and Core t
 including explicitly supplied timestamp values.
 
 Structured persistent values use `JsonB`, including Import Batch snapshots/results, Audit detail,
-Item custom fields, recommendation candidates, PDF geometry/payloads and integrity diagnostics.
-JSON UUIDs reload as strings. Commands write complete values. Bibliographic text/search caches and
+Item author/editor snapshots, keywords, URLs and custom fields, recommendation candidates,
+PDF geometry/payloads and integrity diagnostics.
+JSON UUIDs reload as strings. Commands replace complete values. Search projections and
 canonical Identifier associations provide the corresponding projections and relationships.
 
 Argon2 inputs are prepared outside the event loop. The prepared password type represents its physical
@@ -132,7 +133,7 @@ with `deleted_by_moderation=False`. Commands own payload validation, authorizati
 version-conflict translation, Audit and transaction completion.
 
 Library's Item metadata commands directly insert roots and replace them through scoped version CAS.
-Provider merge logic lives in `identifiers`; shared relationship writing lives in `item_metadata`,
+Provider merge logic lives in `identifiers`; shared Identifier relationship writing lives in `item_metadata`,
 and the reused batch candidate mechanism lives in `identifiers`. Metadata inputs become explicit
 write plans: replacement clears omitted associations; Provider merges preserve missing fields,
 merge URLs/keywords and retain citation
@@ -142,14 +143,13 @@ application CAS field.
 Provider synchronization directly advances the version through Workspace, identity and version CAS;
 the command owns external I/O, authority rechecks, merge decisions, conflicts, Audit and Search.
 
-Import confirmation batches Item roots and Contributor/Identifier links, resolves shared Authors
-across both roles through `_resolve_authors` in bounded chunks and inserts missing identities
-in stable order. Uniqueness conflicts roll back only the insertion savepoint, reload installed
-identities and retry the pending set, progressing on every retry. The locked Import Batch establishes
+Import confirmation batches Item roots containing Contributor snapshots and separately writes
+Identifier links. Contributor spelling is record-local, and array order represents credit order.
+The locked Import Batch establishes
 result ordering and replay identity. The confirmation command owns File ownership transfer, Search,
 Audit and enqueue.
 Import Batch creation adds and flushes prepared ORM roots directly in the caller Session.
-Bibliography export uses explicit `selectinload` for Contributors and a deterministic Item order.
+Bibliography export directly reads Item Contributor arrays with a deterministic Item order.
 
 Documents persists prepared File Revision, Attachment, Export Artifact, Annotation and Reply
 instances directly through the caller Session. Versioned mutations use explicit CAS.

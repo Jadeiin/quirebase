@@ -41,7 +41,7 @@ database initialization and durable-workflow diagnostics.
 | `workspaces` | Business Module | Workspace provisioning, membership, invitations, ownership and lifecycle governance |
 | `access` | Domain-policy Module | Authorization decisions over Items, Tags, Projects, Documents and Annotations |
 | `audit` | Business Module | Audit Event construction, programmatic invocation provenance, detail serialization and administrative queries |
-| `library` | Business Module | Items, Authors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
+| `library` | Business Module | Items and their Contributors, Identifiers, Tags, Item Tag Recommendations, Discussion Messages, Import Batches and Citation Styles |
 | `projects` | Business Module | Projects, Project participation and Item assignment |
 | `documents` | Business Module | File Revisions, Attachments, Annotations, uploads, PDF inspection, thumbnails, annotation-export workflows and Annotation Export Artifacts |
 | `operations` | Business Module | Runtime settings, health, backup, reconciliation and maintenance workflows |
@@ -201,17 +201,15 @@ export preference; validation is concentrated in `export_bibliography_records`. 
 cleaning lives in `inquiro.canonical`; the neutral `inquiro.reference_types` Module owns one
 CSL-aligned Reference Type enum, with standard values read from citeproc-py's bundled CSL schema, and
 directional Provider/format mappings. Models imports only that neutral vocabulary to define its SQLAlchemy enum constraint; it does not depend on Provider
-execution. Provider-specific payload helpers stay private inside `inquiro.providers`. The structured Candidate Record JSON stored on
-Import Batches belongs to the Library Module; Inquiro exchanges typed records only. Provider
-Contributors retain source name parts, suffixes, identifiers and affiliations for that record, while a
-separate bibliographic-name projection handles sources that only supply display names. Provider
-keywords remain separate terms, and resource links retain declared media type, version, license,
-access status and purpose. Library translates these values once at its Inquiro boundary and
-retains the detailed source metadata in Import previews. Confirmation projects them into the
-current Item/ItemAuthor storage: split or literal names, corresponding-author flags, aggregated
-affiliation text and URL text. Author identifiers, per-author institution mappings and link
-metadata are not persisted on those Item tables. Name suffixes remain separate in Provider metadata
-and join the family name in the current two-part bibliographic and Item storage projection.
+execution. Provider-specific payload helpers stay private inside `inquiro.providers`. Import Batch
+JSON belongs to Library, while source conversion and bibliographic normalization belong to
+`inquiro.metadata`. `inquiro.models` defines Contributor, Affiliation, Identifier, ResourceLink,
+CustomField and BibliographicMetadata once. Candidate Records and Item metadata reuse these nested
+values, preserving display names, family/given names, suffixes, identifiers, per-credit institutions
+and link media type, version, license, access status and purpose through preview and confirmation.
+Item has no affiliation text or top-level institution list. Suffixes stay separate until the
+bibliographic formatting projection. Library maps ORM fields and Identifier rows into the neutral
+metadata interface; Inquiro accepts no Quirebase or SQLAlchemy objects.
 
 Scholarly inline Rich Text crosses the Inquiro Interface through one restricted conversion
 operation. Its canonical application representation is sanitized HTML containing only `i`, `b`,
@@ -226,12 +224,24 @@ types do not cross the Inquiro Interface.
 
 Item metadata mutation crosses the Library interface through `create_item`,
 `revise_item_metadata` and `regenerate_citation_key`. Creation and revision share one flat,
-typed `ItemMetadata` value; Contributor, identifier and custom-field values are parsed before
-crossing the seam. Permission, optimistic concurrency, persistence caches, Search
+typed `ItemMetadata` value (Library's name for Inquiro BibliographicMetadata); Contributor,
+identifier and custom-field values are parsed before
+crossing the seam. Permission, optimistic concurrency, Identifier projections, Search
 synchronization, Audit Event recording and commit order remain in the Library implementation.
 These operations return an immutable Item identity and version, not a mutable ORM aggregate.
 Their implementation lives in `library.item_metadata`; that internal Module owns writes to one
 Item's bibliographic record, not unrelated Item operations.
+
+Item is the canonical source of its ordered author/editor snapshots and keyword/URL arrays.
+Contributor validation, source projection and merge rules live in `inquiro.metadata`.
+`library._metadata` owns ORM adaptation and Library field limits; there is no
+shared Author identity or independently mutable Contributor association. `library.catalog` owns
+the authorized Workspace/Project candidate query reused by Search, Contributor suggestions and
+`library.facets`. `library._json_queries` isolates PostgreSQL and SQLite JSON expressions.
+Facets count distinct Items per stored name or term and do not infer researcher identity.
+Search owns its existing rebuildable full-text projections; an additional facet projection is
+deferred until measured query costs justify it. See the
+[Item metadata query contract](item-metadata-json.md).
 
 Item metadata exposes one controlled Reference Type and one `citation_key` across persistence,
 Library commands and HTTP. Reference Types follow CSL semantics, with the Library preprint
@@ -268,15 +278,19 @@ Identifier row carries Workspace lineage through its composite Item foreign key.
 claim returns a validation conflict after savepoint recovery without retry. Cross-Workspace copies
 retain independent claims and use the same Identifier writer as metadata edits and Import.
 
+All external identities, including DOI, use the ItemIdentifier association with no Item DOI
+column or serialized Item cache. DOI comparison folds only ASCII letters in the stored value.
+CandidateRecord derives its DOI from confirmed identifiers. Discovery and Search query those associations
+explicitly. Contributor/institution identifiers never claim Item identity.
+
 Identifier lookup Import Batches use `metadata` as their input format. Lookup and metadata sync
 Audit Events record the actual metadata source in `provider` and the requested lookup route in
 `lookup_provider`. Query values and search terms are not recorded, following ADR 0003. Lookup
 provenance is not concatenated into the batch's format name.
 
 Metadata limits are business rules shared by manual creation, revision and Import confirmation.
-Contributor name parts contain at most 120 characters after whitespace normalization and Unicode
-case-folding; their persisted identity key therefore needs at most 241 characters including its
-separator. Titles contain at most 1,000 visible text characters; canonical HTML is stored as `Text`
+JSON Contributor snapshots have no former Author-column name length or identity-key limit.
+Titles contain at most 1,000 visible text characters; canonical HTML is stored as `Text`
 without a B-tree index so markup and UTF-8 byte size cannot invalidate an otherwise valid title.
 Full-text Search continues to use its own FTS5/GIN projections. Title pagination and the preliminary
 ordering used by duplicate detection may require an explicit database sort; a future optimization
@@ -371,7 +385,8 @@ Users, while their stored ProjectParticipant selections remain available for rea
 Managed participation uses `POST /projects/{id}/participants` and
 `DELETE /projects/{id}/participants/{user_id}`; these commands do not change Workspace membership.
 
-The Project settings form crosses the Projects interface through `update_project_settings`.
+`update_project_settings` is the single Projects interface operation for changing name, description
+and participation. The Project settings form uses this operation directly.
 The Web adapter sends only changed name, description and participation fields in one partial PATCH;
 omitted fields retain their values from the locked Project. Choices are validated before mutation
 and committed with their Audit Event in one transaction. A transition to Workspace participation
@@ -416,7 +431,8 @@ types, shared parsing and the private Provider contract, but never on a peer Pro
 or catalog. Each Provider definition declares its metadata source name and primary Identifier
 Namespace separately. Both names route explicit identifier requests; Bibliography reads the
 private catalog to derive its supported Item Identifier Namespaces and normalize `eprint` archives.
-DOI retains its dedicated field, while journal-level ISSN remains custom bibliography metadata.
+BibliographyRecord retains its explicit DOI formatting field; Item identities use ItemIdentifier.
+Journal-level ISSN remains custom bibliography metadata.
 One bounded transport Implementation applies timeout, response-size, rate-limit and
 HTTP-error rules before dispatching through the production HTTP Adapter or test Mock Adapter.
 Metadata requests reject redirects; PDF acquisition follows a bounded redirect chain, streams into
@@ -521,7 +537,7 @@ returns an `ItemDocumentCopy` whose descriptors and cleanup receipts remain priv
 Library ends that transaction before `copy_objects`, then reauthorizes both Workspaces and locks
 the source Item before `install`. Installation locks and revalidates all source descriptors,
 creates independent File Revisions and Attachments and updates revision Search in the caller's
-transaction. Library owns Item metadata and Contributor links, Item Search, Audit and commit.
+transaction. Library owns Item metadata and Contributor snapshots, Item Search, Audit and commit.
 On failure Library rolls back before `discard`, which rechecks durable references so an ambiguous
 commit cannot cause deletion of objects already referenced by committed target Documents.
 

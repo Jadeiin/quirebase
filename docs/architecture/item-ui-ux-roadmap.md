@@ -156,7 +156,7 @@ Files 分区仍提供逐文件下载；顶部动作只做高频快捷入口。An
 
 `ItemIdentifier(provider, value)` 是 Provider 级 Upstream Identifier 的唯一展示和
 同步来源。OpenAlex 的值规范化为 `W...`（去掉 URL 前缀、保持大小写约定）；
-DOI 只保留在 Item.canonical DOI 字段，不再额外建立 `provider=doi` 的展示行。
+DOI 与其他标识符统一保存在 `ItemIdentifier(provider="doi")`，仅折叠 ASCII 大小写。
 现有 `identifiers` JSON 与关系表并存会产生双写风险，迁移计划应以关系表为真源，
 完成读取切换后再删除冗余列。
 
@@ -224,6 +224,5 @@ DOI 只保留在 Item.canonical DOI 字段，不再额外建立 `provider=doi` �
 - 已完成：下划线标注（Underline Annotation）类型与迁移 `0015_annotation_underline`，阅读器绘制与导出支持。
 - 已完成：Summary 右栏的动态和关键词改为按需展开，Tools 页不再展示固定的 CSL
   白名单，而是使用动态搜索目录。
-- 已完成：迁移 `0014_canonical_doi` 删除历史 `ItemIdentifier(provider="doi")`，并从
-  `items.identifiers` JSON 清除 DOI；新写入只使用 Item.canonical DOI 字段，不保留
-  旧接口或双写兼容层。
+- 已完成：alpha breaking change 删除 `Item.doi` 与 `items.identifiers` 缓存，DOI 统一
+  保存在 ItemIdentifier；迁移仅保留初始 schema 与搜索投影，不提供旧数据升级层。
