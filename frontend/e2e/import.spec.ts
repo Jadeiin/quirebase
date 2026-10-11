@@ -23,8 +23,8 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 								{
 									title: 'Imported PDF',
 									authors: [
-										{ display_name: 'Ada Lovelace', last_name: 'Lovelace', first_name: 'Ada' },
-										{ last_name: 'World Health Organization', first_name: null }
+										{ display_name: 'Ada Lovelace', family_name: 'Lovelace', given_name: 'Ada' },
+										{ display_name: 'World Health Organization', kind: 'organization' }
 									]
 								}
 							]

@@ -7,7 +7,7 @@ import type { ItemDetail } from '../types';
 
 export type MetadataMutation = {
 	item: ItemDetail;
-	metadata: components['schemas']['ItemMetadata-Input'];
+	metadata: components['schemas']['BibliographicMetadata-Input'];
 	form?: HTMLFormElement;
 };
 

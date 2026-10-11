@@ -1,39 +1,18 @@
 <script lang="ts">
-	import type { components } from '#lib/api/schema.js';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { msg, t, type MessageKey } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
 	import PublicationDateField from './PublicationDateField.svelte';
 	import { referenceTypeLabels } from './reference-types.js';
 
-	type Metadata = components['schemas']['ItemMetadata-Input'];
-	type ContributorRow = {
-		key: number;
-		first_name: string;
-		last_name: string;
-		is_corresponding: boolean;
-	};
-	type IdentifierRow = { key: number; provider: string; value: string };
-	type CustomFieldRow = { key: number; name: string; value: string };
-	type Draft = Omit<
-		Metadata,
-		| 'keywords'
-		| 'urls'
-		| 'authors'
-		| 'editors'
-		| 'identifiers'
-		| 'custom_fields'
-		| 'publication_date'
-	> & {
-		publication_date: string;
-		keywords_text: string;
-		urls_text: string;
-		authors: ContributorRow[];
-		editors: ContributorRow[];
-		identifiers: IdentifierRow[];
-		custom_fields: CustomFieldRow[];
-	};
-
+	import IdentifierRows from './IdentifierRows.svelte';
+	import {
+		createMetadataDraft,
+		metadataFromDraft,
+		newContributor,
+		type Metadata,
+		type ContributorRow
+	} from './metadata-draft.js';
 	let {
 		metadata,
 		busy = false,
@@ -48,7 +27,8 @@
 	let nextKey = 1;
 	// The parent keys this component by Item identity; edits intentionally start from this snapshot.
 	// svelte-ignore state_referenced_locally
-	let draft = $state<Draft>(createDraft(metadata));
+	let draft = $state(createMetadataDraft(metadata, rowKey));
+	let formError = $state('');
 	const contributorGroups = $derived([
 		{ label: msg('Authors'), rows: draft.authors },
 		{ label: msg('Editors'), rows: draft.editors }
@@ -58,108 +38,17 @@
 		return nextKey++;
 	}
 
-	function createDraft(value: Metadata): Draft {
-		return {
-			title: value.title,
-			abstract: value.abstract ?? '',
-			publication_date: value.publication_date ?? '',
-			publication_title: value.publication_title ?? '',
-			reference_type: value.reference_type ?? 'document',
-			volume: value.volume ?? '',
-			issue: value.issue ?? '',
-			pages: value.pages ?? '',
-			affiliation: value.affiliation ?? '',
-			publisher: value.publisher ?? '',
-			place_published: value.place_published ?? '',
-			journal_abbreviation: value.journal_abbreviation ?? '',
-			citation_key: value.citation_key ?? '',
-			doi: value.doi ?? '',
-			keywords_text: value.keywords.join('; '),
-			urls_text: value.urls.join('\n'),
-			authors: value.authors.map((row) => ({
-				key: rowKey(),
-				first_name: row.first_name ?? '',
-				last_name: row.last_name,
-				is_corresponding: row.is_corresponding ?? false
-			})),
-			editors: value.editors.map((row) => ({
-				key: rowKey(),
-				first_name: row.first_name ?? '',
-				last_name: row.last_name,
-				is_corresponding: row.is_corresponding ?? false
-			})),
-			identifiers: value.identifiers.map((row) => ({
-				key: rowKey(),
-				provider: row.provider,
-				value: row.value
-			})),
-			custom_fields: value.custom_fields.map((row) => ({
-				key: rowKey(),
-				name: row.name,
-				value: typeof row.value === 'string' ? row.value : JSON.stringify(row.value)
-			}))
-		};
-	}
-
-	function nullable(value: string) {
-		return value.trim() || null;
-	}
-
-	function customValue(value: string): unknown {
-		const trimmed = value.trim();
-		try {
-			return JSON.parse(trimmed);
-		} catch {
-			return trimmed;
-		}
-	}
-
 	function submit(event: SubmitEvent) {
 		event.preventDefault();
-		onsubmit({
-			title: draft.title.trim(),
-			abstract: nullable(draft.abstract ?? ''),
-			keywords: draft.keywords_text
-				.split(';')
-				.map((value) => value.trim())
-				.filter(Boolean),
-			publication_date: nullable(draft.publication_date ?? ''),
-			publication_title: nullable(draft.publication_title ?? ''),
-			reference_type: draft.reference_type,
-			volume: nullable(draft.volume ?? ''),
-			issue: nullable(draft.issue ?? ''),
-			pages: nullable(draft.pages ?? ''),
-			affiliation: nullable(draft.affiliation ?? ''),
-			publisher: nullable(draft.publisher ?? ''),
-			place_published: nullable(draft.place_published ?? ''),
-			journal_abbreviation: nullable(draft.journal_abbreviation ?? ''),
-			citation_key: nullable(draft.citation_key ?? ''),
-			doi: nullable(draft.doi ?? ''),
-			urls: draft.urls_text
-				.split('\n')
-				.map((value) => value.trim())
-				.filter(Boolean),
-			authors: draft.authors
-				.filter((row) => row.last_name.trim())
-				.map(({ first_name, last_name, is_corresponding }) => ({
-					first_name: nullable(first_name),
-					last_name: last_name.trim(),
-					is_corresponding
-				})),
-			editors: draft.editors
-				.filter((row) => row.last_name.trim())
-				.map(({ first_name, last_name, is_corresponding }) => ({
-					first_name: nullable(first_name),
-					last_name: last_name.trim(),
-					is_corresponding
-				})),
-			identifiers: draft.identifiers
-				.filter((row) => row.provider.trim() && row.value.trim())
-				.map(({ provider, value }) => ({ provider: provider.trim(), value: value.trim() })),
-			custom_fields: draft.custom_fields
-				.filter((row) => row.name.trim())
-				.map(({ name, value }) => ({ name: name.trim(), value: customValue(value) }))
-		});
+		formError = '';
+		let value: Metadata;
+		try {
+			value = metadataFromDraft(draft);
+		} catch {
+			formError = $t('Custom field JSON is invalid.');
+			return;
+		}
+		onsubmit(value);
 	}
 </script>
 
@@ -185,11 +74,9 @@
 				bind:value={draft.journal_abbreviation}
 			/></label
 		>
-		<label>{$t('DOI')}<input class="input" bind:value={draft.doi} /></label>
 		<label>{$t('Volume')}<input class="input" bind:value={draft.volume} /></label>
 		<label>{$t('Issue')}<input class="input" bind:value={draft.issue} /></label>
 		<label>{$t('Pages')}<input class="input" bind:value={draft.pages} /></label>
-		<label>{$t('Affiliation')}<input class="input" bind:value={draft.affiliation} /></label>
 		<label>{$t('Publisher')}<input class="input" bind:value={draft.publisher} /></label>
 		<label>{$t('Place published')}<input class="input" bind:value={draft.place_published} /></label>
 		<label
@@ -198,17 +85,6 @@
 				maxlength="128"
 				bind:value={draft.citation_key}
 			/></label
-		>
-		<label class="lg:col-span-2"
-			>{$t('Keywords')}<input
-				class="input"
-				bind:value={draft.keywords_text}
-				placeholder={$t('Separate Keywords with semicolons')}
-			/></label
-		>
-		<label class="lg:col-span-2"
-			>{$t('URLs')}<textarea class="textarea min-h-24" bind:value={draft.urls_text}
-			></textarea></label
 		>
 		<label class="lg:col-span-2"
 			>{$t('Abstract')}<textarea class="textarea min-h-36" bind:value={draft.abstract}
@@ -221,36 +97,91 @@
 			<SectionHeader spacing="compact">
 				<h3>{$t(group.label)}</h3>
 				{#snippet actions()}
-					<Button
-						type="button"
-						onclick={() =>
-							group.rows.push({
-								key: rowKey(),
-								first_name: '',
-								last_name: '',
-								is_corresponding: false
-							})}>{$t('Add contributor')}</Button
+					<Button type="button" onclick={() => group.rows.push(newContributor(rowKey()))}
+						>{$t('Add contributor')}</Button
 					>
 				{/snippet}
 			</SectionHeader>
 			{#each group.rows as row (row.key)}
-				<div
-					class="grid grid-cols-1 gap-2 border-t border-surface-300-700 py-3 first:border-0 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
-				>
-					<label>{$t('First name')}<input class="input" bind:value={row.first_name} /></label>
-					<label
-						>{$t('Last name or organization')}<input
-							class="input"
-							bind:value={row.last_name}
-						/></label
-					>
-					<label class="flex items-center gap-2 pb-2"
-						><input type="checkbox" bind:checked={row.is_corresponding} />
-						{$t('Corresponding')}</label
-					>
-					<Button type="button" onclick={() => group.rows.splice(group.rows.indexOf(row), 1)}
-						>{$t('Remove')}</Button
-					>
+				<div class="grid grid-cols-1 gap-3 border-t border-surface-300-700 py-3 first:border-0">
+					<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+						<label>{$t('Display name')}<input class="input" bind:value={row.display_name} /></label>
+						<label
+							>{$t('Contributor type')}<select class="select" bind:value={row.kind}>
+								<option value="unknown">{$t('Unknown')}</option><option value="person"
+									>{$t('Person')}</option
+								><option value="organization">{$t('Organization')}</option>
+							</select></label
+						>
+						<label>{$t('First name')}<input class="input" bind:value={row.given_name} /></label>
+						<label
+							>{$t('Last name or organization')}<input
+								class="input"
+								bind:value={row.family_name}
+							/></label
+						>
+						<label>{$t('Name suffix')}<input class="input" bind:value={row.suffix} /></label>
+						{#if group.label === msg('Authors')}
+							<label
+								>{$t('Corresponding')}<select
+									class="select"
+									aria-label={$t('Corresponding')}
+									bind:value={row.is_corresponding}
+									><option value={null}>{$t('Unknown')}</option><option value={true}
+										>{$t('Yes')}</option
+									><option value={false}>{$t('No')}</option></select
+								></label
+							>
+						{/if}
+					</div>
+					<details>
+						<summary>{$t('Contributor identifiers')}</summary>
+						<IdentifierRows bind:rows={row.identifiers} {rowKey} />
+					</details>
+					<details>
+						<summary>{$t('Affiliations')}</summary>
+						<div class="grid grid-cols-1 gap-3 py-2">
+							{#each row.affiliations ?? [] as affiliation (affiliation.key)}
+								<div class="grid grid-cols-1 gap-2 rounded-lg border border-surface-300-700 p-3">
+									<label
+										>{$t('Affiliation')}<input class="input" bind:value={affiliation.name} /></label
+									>
+									<label
+										>{$t('Country code')}<input
+											class="input"
+											bind:value={affiliation.country_code}
+										/></label
+									>
+									<label
+										>{$t('Original affiliation name')}<input
+											class="input"
+											bind:value={affiliation.raw_name}
+										/></label
+									>
+									<IdentifierRows bind:rows={affiliation.identifiers} {rowKey} />
+									<Button
+										type="button"
+										onclick={() =>
+											row.affiliations?.splice(row.affiliations.indexOf(affiliation), 1)}
+										>{$t('Remove')}</Button
+									>
+								</div>
+							{/each}
+							<div>
+								<Button
+									type="button"
+									onclick={() =>
+										(row.affiliations ??= []).push({ key: rowKey(), name: '', identifiers: [] })}
+									>{$t('Add affiliation')}</Button
+								>
+							</div>
+						</div>
+					</details>
+					<div>
+						<Button type="button" onclick={() => group.rows.splice(group.rows.indexOf(row), 1)}
+							>{$t('Remove')}</Button
+						>
+					</div>
 				</div>
 			{:else}<p class="text-surface-600-400">{$t('No contributors.')}</p>{/each}
 		</section>
@@ -259,25 +190,8 @@
 	<section class="rounded-lg border border-surface-300-700 p-3">
 		<SectionHeader spacing="compact">
 			<h3>{$t('Upstream identifiers')}</h3>
-			{#snippet actions()}
-				<Button
-					type="button"
-					onclick={() => draft.identifiers.push({ key: rowKey(), provider: '', value: '' })}
-					>{$t('Add identifier')}</Button
-				>
-			{/snippet}
 		</SectionHeader>
-		{#each draft.identifiers as row (row.key)}<div
-				class="grid grid-cols-1 gap-2 border-t border-surface-300-700 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
-			>
-				<label>{$t('Provider')}<input class="input" bind:value={row.provider} /></label><label
-					>{$t('Identifier')}<input class="input" bind:value={row.value} /></label
-				><Button
-					type="button"
-					onclick={() => draft.identifiers.splice(draft.identifiers.indexOf(row), 1)}
-					>{$t('Remove')}</Button
-				>
-			</div>{:else}<p class="text-surface-600-400">{$t('No upstream identifiers.')}</p>{/each}
+		<IdentifierRows bind:rows={draft.identifiers} {rowKey} />
 	</section>
 
 	<section class="rounded-lg border border-surface-300-700 p-3">
@@ -286,23 +200,91 @@
 			{#snippet actions()}
 				<Button
 					type="button"
-					onclick={() => draft.custom_fields.push({ key: rowKey(), name: '', value: '' })}
+					onclick={() =>
+						draft.custom_fields.push({ key: rowKey(), name: '', value: '', type: 'text' })}
 					>{$t('Add custom field')}</Button
 				>
 			{/snippet}
 		</SectionHeader>
 		{#each draft.custom_fields as row (row.key)}<div
-				class="grid grid-cols-1 gap-2 border-t border-surface-300-700 py-3 first:border-0 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+				class="grid grid-cols-1 gap-2 border-t border-surface-300-700 py-3 first:border-0 sm:grid-cols-[1fr_auto_2fr_auto] sm:items-end"
 			>
 				<label>{$t('Field name')}<input class="input" bind:value={row.name} /></label><label
-					>{$t('JSON or text value')}<input class="input" bind:value={row.value} /></label
-				><Button
+					>{$t('Value type')}<select class="select" bind:value={row.type}
+						><option value="text">{$t('Text')}</option><option value="json">{$t('JSON')}</option
+						></select
+					></label
+				><label>{$t('Value')}<input class="input" bind:value={row.value} /></label><Button
 					type="button"
 					onclick={() => draft.custom_fields.splice(draft.custom_fields.indexOf(row), 1)}
 					>{$t('Remove')}</Button
 				>
 			</div>{:else}<p class="text-surface-600-400">{$t('No custom fields.')}</p>{/each}
 	</section>
+
+	<section class="rounded-lg border border-surface-300-700 p-3">
+		<SectionHeader spacing="compact"
+			><h3>{$t('Keywords')}</h3>
+			{#snippet actions()}<Button
+					type="button"
+					onclick={() => draft.keywords.push({ key: rowKey(), value: '' })}
+					>{$t('Add keyword')}</Button
+				>{/snippet}</SectionHeader
+		>
+		{#each draft.keywords as row (row.key)}<div class="flex items-center gap-2 py-2">
+				<input class="input" aria-label={$t('Keyword')} bind:value={row.value} /><Button
+					type="button"
+					onclick={() => draft.keywords.splice(draft.keywords.indexOf(row), 1)}
+					>{$t('Remove')}</Button
+				>
+			</div>{/each}
+	</section>
+	<section class="rounded-lg border border-surface-300-700 p-3">
+		<SectionHeader spacing="compact"
+			><h3>{$t('URLs')}</h3>
+			{#snippet actions()}<Button
+					type="button"
+					onclick={() =>
+						draft.urls.push({ key: rowKey(), url: '', kind: 'other', is_open_access: null })}
+					>{$t('Add URL')}</Button
+				>{/snippet}</SectionHeader
+		>
+		{#each draft.urls as row (row.key)}
+			<div class="grid grid-cols-1 gap-2 border-t border-surface-300-700 py-3 sm:grid-cols-2">
+				<label class="sm:col-span-2"
+					>{$t('URL')}<input class="input" type="url" bind:value={row.url} /></label
+				>
+				<label
+					>{$t('Link type')}<select class="select" bind:value={row.kind}
+						><option value="other">{$t('Other')}</option><option value="landing_page"
+							>{$t('Landing page')}</option
+						><option value="full_text">{$t('Full text')}</option></select
+					></label
+				>
+				<label>{$t('Media type')}<input class="input" bind:value={row.media_type} /></label>
+				<label>{$t('Version')}<input class="input" bind:value={row.version} /></label>
+				<label>{$t('License')}<input class="input" bind:value={row.license} /></label>
+				<label
+					>{$t('Open access')}<select class="select" bind:value={row.is_open_access}
+						><option value={null}>{$t('Unknown')}</option><option value={true}>{$t('Yes')}</option
+						><option value={false}>{$t('No')}</option></select
+					></label
+				>
+				<label
+					>{$t('Intended application')}<input
+						class="input"
+						bind:value={row.intended_application}
+					/></label
+				>
+				<div>
+					<Button type="button" onclick={() => draft.urls.splice(draft.urls.indexOf(row), 1)}
+						>{$t('Remove')}</Button
+					>
+				</div>
+			</div>
+		{/each}
+	</section>
+	{#if formError}<p role="alert" class="text-error-700-300">{formError}</p>{/if}
 
 	<Button variant="filled" disabled={busy}>{submitLabel}</Button>
 </form>

@@ -5,6 +5,7 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import { t } from '#lib/i18n.js';
+	import { contributorAffiliations } from '../metadata-draft.js';
 	import type { ItemDetail } from '../types';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
@@ -99,7 +100,9 @@
 				</div>
 				<div class="sm:col-span-2">
 					<dt class="text-surface-600-400">{$t('Affiliation')}</dt>
-					<dd class="m-0 mt-1">{details?.metadata.affiliation ?? '—'}</dd>
+					<dd class="m-0 mt-1">
+						{(details ? contributorAffiliations(details.metadata).join('; ') : '') || '—'}
+					</dd>
 				</div>
 			</dl>
 			<div class="grid grid-cols-4 border-t border-surface-300-700 bg-surface-100-900">
@@ -177,22 +180,22 @@
 		<Panel>
 			<h2 class="m-0 mb-4 text-lg">{$t('External links')}</h2>
 			<div class="grid grid-cols-1 gap-2">
-				{#each details?.metadata.urls ?? [] as url, index (url)}
-					{#if isSafeExternalUrl(url)}
+				{#each details?.metadata.urls ?? [] as link, index (link.url)}
+					{#if isSafeExternalUrl(link.url)}
 						<a
 							class="grid min-w-0 grid-cols-1 gap-0.5 rounded-lg border border-surface-300-700 px-3 py-2 text-sm no-underline hover:bg-primary-50-950"
-							href={url}
+							href={link.url}
 							target="_blank"
 							rel="external noreferrer"
 							><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
-								class="truncate text-xs text-surface-600-400">{url}</span
+								class="truncate text-xs text-surface-600-400">{link.url}</span
 							></a
 						>
 					{:else}
 						<span
 							class="grid min-w-0 grid-cols-1 gap-0.5 rounded-lg border border-surface-300-700 px-3 py-2 text-sm"
 							><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
-								class="truncate text-xs text-surface-600-400">{url}</span
+								class="truncate text-xs text-surface-600-400">{link.url}</span
 							></span
 						>
 					{/if}

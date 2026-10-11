@@ -846,6 +846,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workspaces/{workspace_id}/items/facets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Item Facets */
+		get: operations['library.get_item_facets'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workspaces/{workspace_id}/items/{item_id}': {
 		parameters: {
 			query?: never;
@@ -2306,6 +2323,20 @@ export interface components {
 			/** Governance Frozen By */
 			governance_frozen_by?: string | null;
 		};
+		/** Affiliation */
+		Affiliation: {
+			/** Name */
+			name: string;
+			/**
+			 * Identifiers
+			 * @default []
+			 */
+			identifiers: components['schemas']['Identifier'][];
+			/** Country Code */
+			country_code?: string | null;
+			/** Raw Name */
+			raw_name?: string | null;
+		};
 		/** AnnotationCreate */
 		AnnotationCreate: {
 			/**
@@ -2670,19 +2701,151 @@ export interface components {
 				| 'reverse_closed_arrow'
 				| 'slash';
 		};
+		/** AuthorFacet */
+		AuthorFacet: {
+			/** Last Name */
+			last_name: string;
+			/** First Name */
+			first_name: string | null;
+			/** Item Count */
+			item_count: number;
+			/** Suffix */
+			suffix?: string | null;
+		};
 		/** AuthorSuggestionView */
 		AuthorSuggestionView: {
-			/**
-			 * Id
-			 * Format: uuid
-			 */
-			id: string;
 			/** Last Name */
 			last_name: string;
 			/** First Name */
 			first_name?: string | null;
+			/** Suffix */
+			suffix?: string | null;
 			/** Full Name */
 			full_name: string;
+		};
+		/**
+		 * BibliographicMetadata
+		 * @description A complete description, independent of its source and persistence.
+		 */
+		'BibliographicMetadata-Input': {
+			/** Title */
+			title: string;
+			/** Abstract */
+			abstract?: string | null;
+			/**
+			 * Keywords
+			 * @default []
+			 */
+			keywords: string[];
+			/** Publication Date */
+			publication_date?: string | null;
+			/** Publication Title */
+			publication_title?: string | null;
+			/** @default document */
+			reference_type: components['schemas']['ReferenceType'];
+			/** Volume */
+			volume?: string | null;
+			/** Issue */
+			issue?: string | null;
+			/** Pages */
+			pages?: string | null;
+			/** Publisher */
+			publisher?: string | null;
+			/** Place Published */
+			place_published?: string | null;
+			/** Journal Abbreviation */
+			journal_abbreviation?: string | null;
+			/** Citation Key */
+			citation_key?: string | null;
+			/**
+			 * Urls
+			 * @default []
+			 */
+			urls: components['schemas']['ResourceLink'][];
+			/**
+			 * Authors
+			 * @default []
+			 */
+			authors: components['schemas']['Contributor'][];
+			/**
+			 * Editors
+			 * @default []
+			 */
+			editors: components['schemas']['Contributor'][];
+			/** Doi */
+			doi?: string | null;
+			/**
+			 * Identifiers
+			 * @default []
+			 */
+			identifiers: components['schemas']['Identifier'][];
+			/**
+			 * Custom Fields
+			 * @default []
+			 */
+			custom_fields: components['schemas']['CustomField-Input'][];
+		};
+		/**
+		 * BibliographicMetadata
+		 * @description A complete description, independent of its source and persistence.
+		 */
+		'BibliographicMetadata-Output': {
+			/** Title */
+			title: string;
+			/** Abstract */
+			abstract?: string | null;
+			/**
+			 * Keywords
+			 * @default []
+			 */
+			keywords: string[];
+			/** Publication Date */
+			publication_date?: string | null;
+			/** Publication Title */
+			publication_title?: string | null;
+			/** @default document */
+			reference_type: components['schemas']['ReferenceType'];
+			/** Volume */
+			volume?: string | null;
+			/** Issue */
+			issue?: string | null;
+			/** Pages */
+			pages?: string | null;
+			/** Publisher */
+			publisher?: string | null;
+			/** Place Published */
+			place_published?: string | null;
+			/** Journal Abbreviation */
+			journal_abbreviation?: string | null;
+			/** Citation Key */
+			citation_key?: string | null;
+			/**
+			 * Urls
+			 * @default []
+			 */
+			urls: components['schemas']['ResourceLink'][];
+			/**
+			 * Authors
+			 * @default []
+			 */
+			authors: components['schemas']['Contributor'][];
+			/**
+			 * Editors
+			 * @default []
+			 */
+			editors: components['schemas']['Contributor'][];
+			/** Doi */
+			doi?: string | null;
+			/**
+			 * Identifiers
+			 * @default []
+			 */
+			identifiers: components['schemas']['Identifier'][];
+			/**
+			 * Custom Fields
+			 * @default []
+			 */
+			custom_fields: components['schemas']['CustomField-Output'][];
 		};
 		/** BibliographyExportRequest */
 		BibliographyExportRequest: {
@@ -2852,29 +3015,37 @@ export interface components {
 			/** Media Type */
 			media_type: string;
 		};
-		/** Contributor */
+		/**
+		 * Contributor
+		 * @description One credited author, including affiliations on this particular record.
+		 *
+		 *     Name parts describe upstream facts. bibliographic_name provides a separate
+		 *     formatting projection when a source supplies only a display name.
+		 */
 		Contributor: {
-			/** Last Name */
-			last_name: string;
-			/** First Name */
-			first_name?: string | null;
+			/** Display Name */
+			display_name: string;
+			/** Family Name */
+			family_name?: string | null;
+			/** Given Name */
+			given_name?: string | null;
 			/**
-			 * Is Corresponding
-			 * @default false
+			 * Kind
+			 * @default unknown
+			 * @enum {string}
 			 */
-			is_corresponding: boolean;
-		};
-		/** ContributorView */
-		ContributorView: {
-			/** First Name */
-			first_name: string | null;
-			/** Last Name */
-			last_name: string;
+			kind: 'person' | 'organization' | 'unknown';
 			/**
-			 * Is Corresponding
-			 * @default false
+			 * Identifiers
+			 * @default []
 			 */
-			is_corresponding: boolean;
+			identifiers: components['schemas']['Identifier'][];
+			/** Affiliations */
+			affiliations?: components['schemas']['Affiliation'][] | null;
+			/** Is Corresponding */
+			is_corresponding?: boolean | null;
+			/** Suffix */
+			suffix?: string | null;
 		};
 		/** CrossWorkspaceCopyRequest */
 		CrossWorkspaceCopyRequest: {
@@ -3108,13 +3279,6 @@ export interface components {
 			/** Timezone */
 			timezone?: string | null;
 		};
-		/** ExternalIdentifier */
-		ExternalIdentifier: {
-			/** Provider */
-			provider: string;
-			/** Value */
-			value: string;
-		};
 		/** FileView */
 		FileView: {
 			/**
@@ -3176,6 +3340,16 @@ export interface components {
 			 * @default ok
 			 */
 			status: string;
+		};
+		/**
+		 * Identifier
+		 * @description A provider-qualified lookup key or a namespaced confirmed identifier.
+		 */
+		Identifier: {
+			/** Provider */
+			provider: string;
+			/** Value */
+			value: string;
 		};
 		/** IdentifierImportRequest */
 		IdentifierImportRequest: {
@@ -3302,13 +3476,13 @@ export interface components {
 			doi: string | null;
 			/** Version */
 			version: number;
-			metadata: components['schemas']['ItemMetadata-Output'];
+			metadata: components['schemas']['BibliographicMetadata-Output'];
 			/** Abstract Html */
 			abstract_html: string | null;
 			/** Editors */
-			editors: components['schemas']['ContributorView'][];
+			editors: components['schemas']['Contributor'][];
 			/** Structured Authors */
-			structured_authors: components['schemas']['ContributorView'][];
+			structured_authors: components['schemas']['Contributor'][];
 			reference_type: components['schemas']['ReferenceType'];
 			/** Volume */
 			volume: string | null;
@@ -3317,9 +3491,9 @@ export interface components {
 			/** Pages */
 			pages: string | null;
 			/** Keywords */
-			keywords: string | null;
+			keywords: string[];
 			/** Urls */
-			urls: string | null;
+			urls: components['schemas']['ResourceLink'][];
 		};
 		/** ItemIdentifierView */
 		ItemIdentifierView: {
@@ -3343,128 +3517,6 @@ export interface components {
 			page_count?: number | null;
 			/** Processing State */
 			processing_state: string;
-		};
-		/** ItemMetadata */
-		'ItemMetadata-Input': {
-			/** Title */
-			title: string;
-			/** Abstract */
-			abstract?: string | null;
-			/**
-			 * Keywords
-			 * @default []
-			 */
-			keywords: string[];
-			/** Publication Date */
-			publication_date?: string | null;
-			/** Publication Title */
-			publication_title?: string | null;
-			/** @default document */
-			reference_type: components['schemas']['ReferenceType'];
-			/** Volume */
-			volume?: string | null;
-			/** Issue */
-			issue?: string | null;
-			/** Pages */
-			pages?: string | null;
-			/** Affiliation */
-			affiliation?: string | null;
-			/** Publisher */
-			publisher?: string | null;
-			/** Place Published */
-			place_published?: string | null;
-			/** Journal Abbreviation */
-			journal_abbreviation?: string | null;
-			/** Citation Key */
-			citation_key?: string | null;
-			/**
-			 * Urls
-			 * @default []
-			 */
-			urls: string[];
-			/**
-			 * Authors
-			 * @default []
-			 */
-			authors: components['schemas']['Contributor'][];
-			/**
-			 * Editors
-			 * @default []
-			 */
-			editors: components['schemas']['Contributor'][];
-			/** Doi */
-			doi?: string | null;
-			/**
-			 * Identifiers
-			 * @default []
-			 */
-			identifiers: components['schemas']['ExternalIdentifier'][];
-			/**
-			 * Custom Fields
-			 * @default []
-			 */
-			custom_fields: components['schemas']['CustomField-Input'][];
-		};
-		/** ItemMetadata */
-		'ItemMetadata-Output': {
-			/** Title */
-			title: string;
-			/** Abstract */
-			abstract?: string | null;
-			/**
-			 * Keywords
-			 * @default []
-			 */
-			keywords: string[];
-			/** Publication Date */
-			publication_date?: string | null;
-			/** Publication Title */
-			publication_title?: string | null;
-			/** @default document */
-			reference_type: components['schemas']['ReferenceType'];
-			/** Volume */
-			volume?: string | null;
-			/** Issue */
-			issue?: string | null;
-			/** Pages */
-			pages?: string | null;
-			/** Affiliation */
-			affiliation?: string | null;
-			/** Publisher */
-			publisher?: string | null;
-			/** Place Published */
-			place_published?: string | null;
-			/** Journal Abbreviation */
-			journal_abbreviation?: string | null;
-			/** Citation Key */
-			citation_key?: string | null;
-			/**
-			 * Urls
-			 * @default []
-			 */
-			urls: string[];
-			/**
-			 * Authors
-			 * @default []
-			 */
-			authors: components['schemas']['Contributor'][];
-			/**
-			 * Editors
-			 * @default []
-			 */
-			editors: components['schemas']['Contributor'][];
-			/** Doi */
-			doi?: string | null;
-			/**
-			 * Identifiers
-			 * @default []
-			 */
-			identifiers: components['schemas']['ExternalIdentifier'][];
-			/**
-			 * Custom Fields
-			 * @default []
-			 */
-			custom_fields: components['schemas']['CustomField-Output'][];
 		};
 		/** ItemOrganizeProjectView */
 		ItemOrganizeProjectView: {
@@ -3560,7 +3612,7 @@ export interface components {
 		ItemUpdateRequest: {
 			/** Expected Version */
 			expected_version: number;
-			metadata: components['schemas']['ItemMetadata-Input'];
+			metadata: components['schemas']['BibliographicMetadata-Input'];
 		};
 		'JsonValue-Input':
 			| string
@@ -3580,6 +3632,22 @@ export interface components {
 					[key: string]: components['schemas']['JsonValue-Output'];
 			  }
 			| null;
+		/** KeywordFacet */
+		KeywordFacet: {
+			/** Value */
+			value: string;
+			/** Item Count */
+			item_count: number;
+		};
+		/** LibraryFacets */
+		LibraryFacets: {
+			/** Authors */
+			authors: components['schemas']['AuthorFacet'][];
+			/** Keywords */
+			keywords: components['schemas']['KeywordFacet'][];
+			/** Reference Types */
+			reference_types: components['schemas']['ReferenceTypeFacet'][];
+		};
 		/** LinePayload */
 		LinePayload: {
 			rect: components['schemas']['Rect'];
@@ -3928,7 +3996,7 @@ export interface components {
 		 * ProjectState
 		 * @enum {string}
 		 */
-		ProjectState: 'active' | 'archived' | 'deleted';
+		ProjectState: 'active' | 'archived';
 		/** ProjectSummaryView */
 		ProjectSummaryView: {
 			/**
@@ -3996,6 +4064,12 @@ export interface components {
 			| 'manuscript'
 			| 'document'
 			| 'preprint';
+		/** ReferenceTypeFacet */
+		ReferenceTypeFacet: {
+			value: components['schemas']['ReferenceType'];
+			/** Item Count */
+			item_count: number;
+		};
 		/** RegisterRequest */
 		RegisterRequest: {
 			/** Username */
@@ -4087,6 +4161,27 @@ export interface components {
 			| 'project_annotation_reply.update'
 			| 'project_annotation_reply.delete'
 			| 'project_annotation_reply.restore';
+		/** ResourceLink */
+		ResourceLink: {
+			/** Url */
+			url: string;
+			/**
+			 * Kind
+			 * @default other
+			 * @enum {string}
+			 */
+			kind: 'landing_page' | 'full_text' | 'other';
+			/** Media Type */
+			media_type?: string | null;
+			/** Version */
+			version?: string | null;
+			/** License */
+			license?: string | null;
+			/** Is Open Access */
+			is_open_access?: boolean | null;
+			/** Intended Application */
+			intended_application?: string | null;
+		};
 		/** RuntimeSettingsRequest */
 		RuntimeSettingsRequest: {
 			/**
@@ -4543,7 +4638,7 @@ export interface components {
 		 * WorkspaceState
 		 * @enum {string}
 		 */
-		WorkspaceState: 'active' | 'archived' | 'deleted';
+		WorkspaceState: 'active' | 'archived';
 		/** WorkspaceUpdateRequest */
 		WorkspaceUpdateRequest: {
 			/** Name */
@@ -6879,16 +6974,21 @@ export interface operations {
 	'library.search_items': {
 		parameters: {
 			query?: {
+				limit?: number;
+				offset?: number;
+				sort?: 'updated' | 'created' | 'title';
 				query?: string;
 				tag?: string;
 				project?: string | null;
 				year?: string;
 				keyword?: string;
 				author?: string;
-				limit?: number;
-				offset?: number;
-				sort?: 'updated' | 'created' | 'title';
 				has_files?: boolean | null;
+				reference_type?: components['schemas']['ReferenceType'] | null;
+				keyword_exact?: string | null;
+				author_last_name?: string | null;
+				author_first_name?: string | null;
+				author_suffix?: string | null;
 			};
 			header?: never;
 			path: {
@@ -6938,7 +7038,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['ItemMetadata-Input'];
+				'application/json': components['schemas']['BibliographicMetadata-Input'];
 			};
 		};
 		responses: {
@@ -6949,6 +7049,60 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.get_item_facets': {
+		parameters: {
+			query?: {
+				limit?: number;
+				query?: string;
+				tag?: string;
+				project?: string | null;
+				year?: string;
+				keyword?: string;
+				author?: string;
+				has_files?: boolean | null;
+				reference_type?: components['schemas']['ReferenceType'] | null;
+				keyword_exact?: string | null;
+				author_last_name?: string | null;
+				author_first_name?: string | null;
+				author_suffix?: string | null;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LibraryFacets'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -10460,6 +10614,7 @@ export interface operations {
 		parameters: {
 			query?: {
 				query?: string;
+				project?: string | null;
 			};
 			header?: never;
 			path: {

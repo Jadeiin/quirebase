@@ -100,8 +100,10 @@
 					name="url"
 					type="url"
 					disabled={busy}
-					value={details?.metadata.urls.find((url: string) => url.toLowerCase().includes('.pdf')) ??
-						''}
+					value={details?.metadata.urls.find(
+						(link: ItemDetail['metadata']['urls'][number]) =>
+							link.media_type === 'application/pdf' || link.url.toLowerCase().includes('.pdf')
+					)?.url ?? ''}
 					placeholder="https://example.org/article.pdf"
 					required
 				/><Button disabled={busy}>{$t('Download and add PDF')}</Button>

@@ -24,7 +24,10 @@
 		metadataMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 
-	function updateMetadata(item: ItemDetail, metadata: components['schemas']['ItemMetadata-Input']) {
+	function updateMetadata(
+		item: ItemDetail,
+		metadata: components['schemas']['BibliographicMetadata-Input']
+	) {
 		if (!workspace.can('item.update')) return;
 		mutationError = '';
 		void metadataMutation.mutateAsync({ item, metadata }).catch(async (error) => {

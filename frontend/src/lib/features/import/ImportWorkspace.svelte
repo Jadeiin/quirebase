@@ -35,7 +35,7 @@
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	const workflows = getWorkflowCenter();
-	const emptyMetadata: components['schemas']['ItemMetadata-Input'] = {
+	const emptyMetadata: components['schemas']['BibliographicMetadata-Input'] = {
 		title: '',
 		reference_type: 'document',
 		keywords: [],
@@ -272,7 +272,7 @@
 		}
 	}
 
-	async function createItem(metadata: components['schemas']['ItemMetadata-Input']) {
+	async function createItem(metadata: components['schemas']['BibliographicMetadata-Input']) {
 		if (!workspace.can('item.create')) return;
 		busy = true;
 		error = '';

@@ -127,7 +127,6 @@ test('Item overview renders without the deprecated Item Owner projection', async
 					journal_abbreviation: null,
 					publisher: null,
 					place_published: null,
-					affiliation: null,
 					citation_key: null
 				},
 				abstract_html: null,
@@ -182,9 +181,21 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 					abstract: 'Shared abstract',
 					keywords: ['shared'],
 					urls: [],
-					authors: [{ first_name: 'Ada', last_name: 'Reader', is_corresponding: false }],
+					authors: [
+						{
+							display_name: 'Ada Reader',
+							given_name: 'Ada',
+							family_name: 'Reader',
+							kind: 'person',
+							identifiers: [],
+							is_corresponding: false
+						}
+					],
 					editors: [],
-					identifiers: [],
+					identifiers: [
+						{ provider: 'doi', value: '10.1000/shared' },
+						{ provider: 'openalex', value: 'W123' }
+					],
 					custom_fields: []
 				},
 				abstract_html: 'Shared abstract'
@@ -196,6 +207,8 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 
 	await expect(page.getByText('Ada Reader')).toBeVisible();
 	await expect(page.getByText('Shared abstract')).toBeVisible();
+	await expect(page.getByText('10.1000/shared')).toBeVisible();
+	await expect(page.getByRole('listitem').filter({ hasText: 'OPENALEX: W123' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Save metadata' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Record tools' })).toHaveCount(0);
 });
@@ -735,7 +748,13 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 				metadata: {
 					title: 'Remote PDF Item',
 					keywords: [],
-					urls: ['https://papers.example/article.pdf'],
+					urls: [
+						{
+							url: 'https://papers.example/article.pdf',
+							kind: 'full_text',
+							media_type: 'application/pdf'
+						}
+					],
 					authors: [],
 					editors: [],
 					identifiers: [],
@@ -848,9 +867,16 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 				version: 1,
 				metadata: {
 					title: 'Structured record',
-					keywords: ['systems', 'reproducibility'],
+					keywords: ['systems; theory', 'reproducibility'],
 					urls: [],
-					authors: [{ first_name: 'Ada', last_name: 'Lovelace', is_corresponding: true }],
+					authors: [
+						{
+							display_name: 'Ada Lovelace',
+							given_name: 'Ada',
+							family_name: 'Lovelace',
+							is_corresponding: true
+						}
+					],
 					editors: [],
 					identifiers: [],
 					custom_fields: []
@@ -889,23 +915,34 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 	);
 	await page.getByLabel('Citation key').fill('Lovelace2024');
 	await page.getByLabel('Publication title').fill('Journal of Testing');
-	await page.getByLabel('Keywords').fill('systems; reproducibility');
+	await page.getByRole('button', { name: 'Add keyword' }).click();
+	await page.getByLabel('Keyword', { exact: true }).fill('systems; theory');
+	await page.getByRole('button', { name: 'Add keyword' }).click();
+	await page.getByLabel('Keyword', { exact: true }).nth(1).fill('reproducibility');
 	await page
 		.locator('header', { has: page.getByRole('heading', { name: 'Authors' }) })
 		.getByRole('button', { name: 'Add contributor' })
 		.click();
 	await page.getByLabel('First name').fill('Ada');
 	await page.getByLabel('Last name or organization').fill('Lovelace');
-	await page.getByLabel('Corresponding').check();
-	await page.getByRole('button', { name: 'Add identifier' }).click();
-	await page.getByLabel('Provider').fill('openalex');
-	await page.getByLabel('Identifier').fill('W123');
+	await page.getByLabel('Corresponding', { exact: true }).selectOption('true');
+	await expect(page.getByRole('textbox', { name: 'DOI', exact: true })).toHaveCount(0);
+	const identifiers = page
+		.getByRole('heading', { name: 'Upstream identifiers', exact: true })
+		.locator('xpath=ancestor::section[1]');
+	await identifiers.getByRole('button', { name: 'Add identifier' }).click();
+	await identifiers.getByLabel('Provider').fill('openalex');
+	await identifiers.getByLabel('Identifier').fill('W123');
+	await identifiers.getByRole('button', { name: 'Add identifier' }).click();
+	await identifiers.getByLabel('Provider').nth(1).fill('doi');
+	await identifiers.getByLabel('Identifier').nth(1).fill('10.1000/created');
 	await page.getByRole('button', { name: 'Add custom field' }).click();
 	await page.getByLabel('Field name').fill('reviewed');
-	await page.getByLabel('JSON or text value').fill('true');
+	await page.getByLabel('Value type').selectOption('json');
+	await page.getByLabel('Value', { exact: true }).fill('true');
 	await page.getByRole('button', { name: 'Add custom field' }).click();
 	await page.getByLabel('Field name').nth(1).fill('address');
-	await page.getByLabel('JSON or text value').nth(1).fill('123 Main St');
+	await page.getByLabel('Value', { exact: true }).nth(1).fill('123 Main St');
 	await page.getByRole('button', { name: 'Create Item' }).click();
 
 	await expect
@@ -916,14 +953,25 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 			publication_date: '2024',
 			citation_key: 'Lovelace2024',
 			publication_title: 'Journal of Testing',
-			keywords: ['systems', 'reproducibility'],
-			authors: [{ first_name: 'Ada', last_name: 'Lovelace', is_corresponding: true }],
-			identifiers: [{ provider: 'openalex', value: 'W123' }],
+			keywords: ['systems; theory', 'reproducibility'],
+			authors: [
+				{
+					display_name: 'Ada Lovelace',
+					given_name: 'Ada',
+					family_name: 'Lovelace',
+					is_corresponding: true
+				}
+			],
+			identifiers: [
+				{ provider: 'openalex', value: 'W123' },
+				{ provider: 'doi', value: '10.1000/created' }
+			],
 			custom_fields: [
 				{ name: 'reviewed', value: true },
 				{ name: 'address', value: '123 Main St' }
 			]
 		});
+	expect(creation).not.toHaveProperty('doi');
 });
 
 test('Item metadata editor preserves structured contributors and custom fields', async ({
@@ -960,11 +1008,15 @@ test('Item metadata editor preserves structured contributors and custom fields',
 					reference_type: 'paper-conference',
 					publication_date: '2024-02',
 					citation_key: 'Hopper2024',
+					doi: '10.1000/old',
 					keywords: [],
 					urls: [],
 					authors: [],
 					editors: [],
-					identifiers: [],
+					identifiers: [
+						{ provider: 'doi', value: '10.1000/old' },
+						{ provider: 'openalex', value: 'W123' }
+					],
 					custom_fields: []
 				},
 				abstract_html: null
@@ -981,6 +1033,12 @@ test('Item metadata editor preserves structured contributors and custom fields',
 	);
 	await page.getByLabel('Date precision').selectOption('day');
 	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024-02-29');
+	await expect(page.getByRole('textbox', { name: 'DOI', exact: true })).toHaveCount(0);
+	const identifiers = page
+		.getByRole('heading', { name: 'Upstream identifiers', exact: true })
+		.locator('xpath=ancestor::section[1]');
+	await expect(identifiers.getByLabel('Provider').first()).toHaveValue('doi');
+	await identifiers.getByLabel('Identifier').first().fill('10.1000/new');
 	await page
 		.locator('header', { has: page.getByRole('heading', { name: 'Authors' }) })
 		.getByRole('button', { name: 'Add contributor' })
@@ -989,7 +1047,8 @@ test('Item metadata editor preserves structured contributors and custom fields',
 	await page.getByLabel('Last name or organization').fill('Hopper');
 	await page.getByRole('button', { name: 'Add custom field' }).click();
 	await page.getByLabel('Field name').fill('score');
-	await page.getByLabel('JSON or text value').fill('5');
+	await page.getByLabel('Value type').selectOption('json');
+	await page.getByLabel('Value', { exact: true }).fill('5');
 	await page.getByRole('button', { name: 'Save metadata' }).click();
 
 	await expect
@@ -1000,10 +1059,22 @@ test('Item metadata editor preserves structured contributors and custom fields',
 				reference_type: 'software',
 				publication_date: '2024-02-29',
 				citation_key: 'Hopper2024',
-				authors: [{ first_name: 'Grace', last_name: 'Hopper', is_corresponding: false }],
+				identifiers: [
+					{ provider: 'doi', value: '10.1000/new' },
+					{ provider: 'openalex', value: 'W123' }
+				],
+				authors: [
+					{
+						display_name: 'Grace Hopper',
+						given_name: 'Grace',
+						family_name: 'Hopper',
+						is_corresponding: null
+					}
+				],
 				custom_fields: [{ name: 'score', value: 5 }]
 			}
 		});
+	expect(update).not.toHaveProperty('metadata.doi');
 });
 
 test('Metadata synchronization refreshes the editor draft and Overview details', async ({

@@ -19,10 +19,7 @@
 			.map((person: unknown) => {
 				if (!person || typeof person !== 'object') return '';
 				const fields = person as Record<string, unknown>;
-				if (typeof fields.display_name === 'string') return fields.display_name;
-				return [fields.first_name, fields.last_name]
-					.filter((part): part is string => typeof part === 'string' && part.length > 0)
-					.join(' ');
+				return typeof fields.display_name === 'string' ? fields.display_name : '';
 			})
 			.filter(Boolean)
 			.join('; ');
