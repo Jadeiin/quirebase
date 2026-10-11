@@ -27,7 +27,7 @@ from quirebase.workspaces.invitations import (
 )
 from quirebase.workspaces.lifecycle import (
     archive_workspace,
-    permanently_delete_workspace,
+    delete_workspace,
     restore_workspace,
     update_workspace,
 )
@@ -46,6 +46,7 @@ __all__ = [
     "archive_workspace",
     "check_workspace_integrity",
     "create_workspace",
+    "delete_workspace",
     "freeze_workspace_governance",
     "get_workspace",
     "get_workspace_invitation_by_token",
@@ -56,7 +57,6 @@ __all__ = [
     "list_workspace_members",
     "list_workspaces",
     "list_workspaces_for_governance",
-    "permanently_delete_workspace",
     "provision_initial_workspace",
     "reactivate_workspace_member",
     "read_workspace_items_break_glass",

@@ -111,12 +111,12 @@ from quirebase.projects import (
     add_item_to_project,
     add_items_to_project,
     add_project_participant,
+    delete_project,
     create_project,
     join_project,
     leave_project,
     remove_project_participant,
-    rename_project,
-    set_project_participation,
+    update_project_settings,
 )
 from quirebase.workspaces import (
     archive_workspace,
@@ -617,9 +617,13 @@ async def test_project_discussion_moderation_waits_for_root_deletion(
         postgres_race.start("moderate", moderate())
         await postgres_race.wait_blocked("moderate", "delete")
         # The parent's cascade must finish while moderation waits at the root.
-        await delete_db.delete(resource)
-        await delete_db.flush()
-        await delete_db.commit()
+        if root == "project":
+            actor = await delete_db.get(User, owner_id)
+            await delete_project(delete_db, actor, workspace_id, project_id, resource.name)
+        else:
+            await delete_db.delete(resource)
+            await delete_db.flush()
+            await delete_db.commit()
         assert await postgres_race.join("moderate") == "rejected"
 
 
@@ -1636,7 +1640,7 @@ async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
                 if ready == 2:
                     gate.set()
             await gate.wait()
-            await rename_project(db, actor, workspace_id, project_id, name)
+            await update_project_settings(db, actor, workspace_id, project_id, name=name)
 
     await asyncio.wait_for(asyncio.gather(rename("First name"), rename("Second name")), timeout=5)
 
@@ -1688,8 +1692,12 @@ async def test_project_participation_add_races_switch_to_workspace_mode(
                 monkeypatch.setattr(db, "commit", held_commit)
             try:
                 if operation == "settings":
-                    await set_project_participation(
-                        db, actor, workspace_id, project_id, ProjectParticipation.workspace
+                    await update_project_settings(
+                        db,
+                        actor,
+                        workspace_id,
+                        project_id,
+                        participation=ProjectParticipation.workspace,
                     )
                 else:
                     await add_project_participant(

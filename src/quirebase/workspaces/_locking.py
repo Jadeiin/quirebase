@@ -11,7 +11,6 @@ from quirebase.core.errors import (
 from quirebase.models import (
     Workspace,
     WorkspaceMember,
-    WorkspaceState,
 )
 
 if TYPE_CHECKING:
@@ -27,7 +26,7 @@ async def _lock_workspace(db: AsyncSession, workspace_id: UUID) -> Workspace:
         .execution_options(populate_existing=True)
         .with_for_update()
     )
-    if workspace is None or workspace.state is WorkspaceState.deleted:
+    if workspace is None:
         raise WorkspaceUnavailable("Workspace not found")
     return workspace
 

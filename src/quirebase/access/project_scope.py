@@ -47,7 +47,6 @@ def project_discovery_predicate(ctx: WorkspaceContext) -> ColumnElement[bool]:
         )
     return and_(
         Project.workspace_id == ctx.workspace_id,
-        Project.state != ProjectState.deleted,
         discoverable,
     )
 

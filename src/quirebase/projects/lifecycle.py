@@ -133,32 +133,6 @@ async def update_project_settings(
     return project
 
 
-async def rename_project(
-    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, name: str
-) -> Project:
-    return await update_project_settings(db, user, workspace_id, project_id, name=name)
-
-
-async def update_project_description(
-    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, description: str
-) -> Project:
-    return await update_project_settings(
-        db, user, workspace_id, project_id, description=description
-    )
-
-
-async def set_project_participation(
-    db: AsyncSession,
-    user: User,
-    workspace_id: UUID,
-    project_id: UUID,
-    participation: ProjectParticipation | str,
-) -> Project:
-    return await update_project_settings(
-        db, user, workspace_id, project_id, participation=participation
-    )
-
-
 async def set_project_state(
     db: AsyncSession,
     user: User,
@@ -167,8 +141,6 @@ async def set_project_state(
     state: ProjectState | str,
 ) -> Project:
     desired = validate_project_state(state)
-    if desired is ProjectState.deleted:
-        raise ValidationFailure("use Project delete for permanent deletion")
     authorization_resource_action = (
         ResourceAction.project_archive
         if desired is ProjectState.archived
@@ -208,7 +180,6 @@ async def delete_project(
     require_action(context, ResourceAction.project_delete)
     if confirmation.strip() != project.name:
         raise ValidationFailure("Project name confirmation does not match")
-    project.state = ProjectState.deleted
     record_event(
         db,
         user.id,
@@ -221,4 +192,7 @@ async def delete_project(
         authorization_role=context.role.value,
         authorization_resource_action=ResourceAction.project_delete.value,
     )
+    # The root cascade removes Project-owned context and fences stale mutations.
+    await db.delete(project)
+    await db.flush()
     await db.commit()

@@ -38,12 +38,12 @@ from quirebase.workspaces import (
     accept_workspace_invitation_by_token,
     archive_workspace,
     create_workspace,
+    delete_workspace,
     invite_workspace_member,
     list_workspace_governance_members,
     list_workspace_invitations,
     list_workspace_members,
     list_workspaces,
-    permanently_delete_workspace,
     reactivate_workspace_member,
     restore_workspace,
     revoke_workspace_invitation,
@@ -349,7 +349,7 @@ async def restore_user_workspace(workspace_id: UUID, user: ApiUser, db: Database
 
 @workspace_root_router.delete("/workspaces/{workspace_id}", response_model=OkView)
 async def delete_user_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> OkView:
-    await permanently_delete_workspace(db, user, workspace_id)
+    await delete_workspace(db, user, workspace_id)
     return OkView()
 
 

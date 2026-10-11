@@ -86,14 +86,10 @@ async def _assert_discovery_matrix(db, role, lifecycle):
     listed_ids = set((await db.scalars(discoverable_project_ids_query(context))).all())
     for project, participant in cases:
         # Independent domain expectations prevent two equally wrong implementations from passing.
-        expected = (
-            project.workspace_id == workspace.id
-            and project.state is not ProjectState.deleted
-            and (
-                project.participation is not ProjectParticipation.managed
-                or participant
-                or role in {WorkspaceRole.owner, WorkspaceRole.admin}
-            )
+        expected = project.workspace_id == workspace.id and (
+            project.participation is not ProjectParticipation.managed
+            or participant
+            or role in {WorkspaceRole.owner, WorkspaceRole.admin}
         )
         if expected:
             assert (await require_project_discoverable(db, context, project)).project is project
@@ -102,10 +98,11 @@ async def _assert_discovery_matrix(db, role, lifecycle):
                 await require_project_discoverable(db, context, project)
         assert (project.id in listed_ids) is expected, project.name
 
-    workspace.state = WorkspaceState.deleted
+    workspace_id = workspace.id
+    await db.delete(workspace)
     await db.commit()
     with pytest.raises(WorkspaceUnavailable):
-        await resolve_workspace_context(db, actor, workspace.id)
+        await resolve_workspace_context(db, actor, workspace_id)
 
 
 @pytest.mark.anyio

@@ -126,7 +126,6 @@ async def list_workspace_projects(
     query = (
         workspace_select(Project, context)
         .where(
-            Project.state != ProjectState.deleted,
             Project.id.in_(discoverable_project_ids_query(context)),
         )
         .order_by(Project.name, Project.id)

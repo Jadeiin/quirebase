@@ -41,19 +41,20 @@ async def assert_closed_state_constraints(db) -> None:
     workspace = await provision_initial_workspace(db, user)
     await db.commit()
 
-    await _assert_rejected(
-        db,
-        "UPDATE workspaces SET state = :state WHERE id = :id",
-        {"state": "unknown", "id": workspace.id},
-    )
-    await _assert_rejected(
-        db,
-        "INSERT INTO projects "
-        "(id, workspace_id, name, description, created_by, state, participation, created_at, updated_at) "
-        "VALUES (:id, :workspace_id, 'bad', '', :user_id, 'unknown', 'workspace', "
-        "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-        {"id": uuid4(), "workspace_id": workspace.id, "user_id": user.id},
-    )
+    for state in ("unknown", "deleted"):
+        await _assert_rejected(
+            db,
+            "UPDATE workspaces SET state = :state WHERE id = :id",
+            {"state": state, "id": workspace.id},
+        )
+        await _assert_rejected(
+            db,
+            "INSERT INTO projects "
+            "(id, workspace_id, name, description, created_by, state, participation, created_at, updated_at) "
+            "VALUES (:id, :workspace_id, 'bad', '', :user_id, :state, 'workspace', "
+            "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            {"id": uuid4(), "workspace_id": workspace.id, "user_id": user.id, "state": state},
+        )
     await _assert_rejected(
         db,
         "INSERT INTO workspace_members "

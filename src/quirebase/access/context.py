@@ -157,7 +157,7 @@ async def require_workspace_membership(
         )
         .execution_options(populate_existing=True)
     )
-    if workspace is None or workspace.state is WorkspaceState.deleted:
+    if workspace is None:
         raise WorkspaceUnavailable("Workspace not found")
     if membership is None or membership.state is not WorkspaceMemberState.active:
         raise WorkspaceMembershipRequired("active Workspace membership required")

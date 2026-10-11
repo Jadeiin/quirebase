@@ -18,6 +18,7 @@ from quirebase.models import (
     WorkspaceRole,
     WorkspaceState,
 )
+from quirebase.projects import delete_project
 
 
 @pytest.mark.anyio
@@ -49,7 +50,8 @@ async def test_workspace_pages_preserve_access_totals_and_resolve_later_roots(
             )
         roots.append(root)
     roots[26].state = WorkspaceState.archived
-    roots[28].state = WorkspaceState.deleted
+    await async_db.flush()
+    await async_db.delete(roots[28])
     await provision_initial_workspace(async_db, stranger)
     await async_db.commit()
     grant = await create_api_token(async_db, owner, "Workspace directory", expires_in_days=1)
@@ -111,16 +113,12 @@ async def test_project_pages_count_authorized_roots_and_separate_governance_from
         created_by=owner.id,
         participation=ProjectParticipation.workspace,
     )
+    deleted = Project(workspace_id=workspace.id, name="Deleted", created_by=owner.id)
     async_db.add_all([
         *roots,
         managed,
         implicit,
-        Project(
-            workspace_id=workspace.id,
-            name="Deleted",
-            created_by=owner.id,
-            state=ProjectState.deleted,
-        ),
+        deleted,
         Project(workspace_id=other.id, name="Foreign", created_by=editor.id),
     ])
     items = [
@@ -139,6 +137,7 @@ async def test_project_pages_count_authorized_roots_and_separate_governance_from
         for item in items
     ])
     await async_db.commit()
+    await delete_project(async_db, owner, workspace.id, deleted.id, deleted.name)
     owner_grant = await create_api_token(async_db, owner, "Project directory", expires_in_days=1)
     editor_grant = await create_api_token(async_db, editor, "Project directory", expires_in_days=1)
     base = f"/api/v1/workspaces/{workspace.id}/projects"

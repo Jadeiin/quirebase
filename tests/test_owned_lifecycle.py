@@ -17,7 +17,7 @@ from workspace_helpers import provision_initial_workspace
 from quirebase.access import resolve_workspace_context
 from quirebase.accounts import update_user_status
 from quirebase.core.config import get_settings
-from quirebase.core.errors import PermissionDenied
+from quirebase.core.errors import PermissionDenied, ResourceUnavailable, ValidationFailure
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.core.workflows import object_reservation_attributes
 from quirebase.documents import (
@@ -27,8 +27,11 @@ from quirebase.documents import (
 )
 from quirebase.library import ItemSection, open_item_section
 from quirebase.models import (
+    AnnotationKind,
+    AnnotationScope,
     Attachment,
     AuditEvent,
+    DiscussionMessage,
     ExportArtifact,
     FileRevision,
     ImportBatch,
@@ -37,6 +40,7 @@ from quirebase.models import (
     PdfAnnotation,
     PdfAnnotationReply,
     Project,
+    ProjectItem,
     ProjectParticipant,
     ProjectParticipation,
     ProjectState,
@@ -49,12 +53,14 @@ from quirebase.models import (
 )
 from quirebase.operations.maintenance import delete_orphan_candidates, scan_objects
 from quirebase.projects import (
+    delete_project,
     list_item_organize_projects,
     list_workspace_projects,
     open_project_workspace,
+    set_project_state,
 )
 from quirebase.search import search_index
-from quirebase.workspaces import permanently_delete_workspace
+from quirebase.workspaces import delete_workspace
 
 pytestmark = pytest.mark.shared_postgres
 
@@ -85,6 +91,210 @@ def _artifact(stored, workspace_id, *, expired=False):
         expires_at=datetime.now(UTC) + timedelta(hours=-1 if expired else 1),
         file=_file(stored),
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("state", [ProjectState.active, ProjectState.archived])
+async def test_project_delete_cascades_context_and_preserves_workspace_data(
+    persistence_sessions, state
+):
+    store = get_object_store()
+    stored = await store.put_object(uuid4(), ObjectSuffix.PDF, b"preserved PDF", max_bytes=100)
+    async with persistence_sessions() as db:
+        owner_id, workspace_id = await _workspace(db)
+        owner = await db.get(User, owner_id)
+        member_id = await db.scalar(
+            select(WorkspaceMember.id).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == owner_id,
+            )
+        )
+        project = Project(
+            workspace_id=workspace_id, name="Delete context", created_by=owner_id, state=state
+        )
+        other = Project(workspace_id=workspace_id, name="Preserve context", created_by=owner_id)
+        item = Item(workspace_id=workspace_id, title="Shared canonical Item", created_by=owner_id)
+        db.add_all([project, other, item])
+        await db.flush()
+        assignments = [
+            ProjectItem(
+                workspace_id=workspace_id, project_id=root.id, item_id=item.id, added_by=owner_id
+            )
+            for root in (project, other)
+        ]
+        participants = [
+            ProjectParticipant(
+                workspace_id=workspace_id,
+                project_id=root.id,
+                workspace_member_id=member_id,
+                user_id=owner_id,
+            )
+            for root in (project, other)
+        ]
+        discussions = [
+            DiscussionMessage(
+                workspace_id=workspace_id,
+                project_id=root.id,
+                author_id=owner_id,
+                body="Project discussion",
+            )
+            for root in (project, other)
+        ]
+        item_discussion = DiscussionMessage(
+            workspace_id=workspace_id, item_id=item.id, author_id=owner_id, body="Item discussion"
+        )
+        revision = FileRevision(
+            workspace_id=workspace_id, item_id=item.id, created_by=owner_id, file=_file(stored)
+        )
+        attachment = Attachment(
+            workspace_id=workspace_id, item_id=item.id, created_by=owner_id, file=_file(stored)
+        )
+        db.add_all([
+            *assignments,
+            *participants,
+            *discussions,
+            item_discussion,
+            revision,
+            attachment,
+        ])
+        await db.flush()
+        annotations = [
+            PdfAnnotation(
+                workspace_id=workspace_id,
+                file_revision_id=revision.id,
+                item_id=item.id,
+                page_index=0,
+                author_id=owner_id,
+                kind=AnnotationKind.note,
+                scope=AnnotationScope.private if assignment is None else AnnotationScope.project,
+                project_item_id=None if assignment is None else assignment.id,
+                payload={},
+            )
+            for assignment in (*assignments, None)
+        ]
+        db.add_all(annotations)
+        await db.flush()
+        replies = [
+            PdfAnnotationReply(
+                workspace_id=workspace_id,
+                annotation_id=annotation.id,
+                author_id=owner_id,
+                body="Reply",
+            )
+            for annotation in annotations
+        ]
+        db.add_all(replies)
+        await db.commit()
+        removed = (
+            project,
+            assignments[0],
+            participants[0],
+            discussions[0],
+            annotations[0],
+            replies[0],
+        )
+        preserved = (
+            other,
+            item,
+            revision,
+            attachment,
+            item_discussion,
+            assignments[1],
+            participants[1],
+            discussions[1],
+            *annotations[1:],
+            *replies[1:],
+        )
+        removed_ids = [(type(row), row.id) for row in removed]
+        preserved_ids = [(type(row), row.id) for row in preserved]
+        project_id, name = project.id, project.name
+        await delete_project(db, owner, workspace_id, project_id, name)
+
+    async with persistence_sessions() as db:
+        for model, identity in removed_ids:
+            assert await db.get(model, identity) is None
+        for model, identity in preserved_ids:
+            assert await db.get(model, identity) is not None
+        assert await db.get(Workspace, workspace_id) is not None
+        audit = await db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "project.delete", AuditEvent.project_id == project_id
+            )
+        )
+        assert audit is not None
+        assert audit.target_id == str(project_id)
+        assert audit.workspace_id == workspace_id
+        assert audit.detail == {"name": name}
+        assert audit.authorization_resource_action == "project.delete"
+        owner = await db.get(User, owner_id)
+        with pytest.raises(ResourceUnavailable):
+            await set_project_state(db, owner, workspace_id, project_id, ProjectState.active)
+        with pytest.raises(ResourceUnavailable):
+            await delete_project(db, owner, workspace_id, project_id, name)
+    assert await store.exists(stored.key)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("guard", ["authority", "confirmation", "rollback"])
+async def test_project_delete_guards_and_rollback_preserve_context(
+    persistence_sessions, monkeypatch, guard
+):
+    async with persistence_sessions() as db:
+        owner_id, workspace_id = await _workspace(db)
+        owner = await db.get(User, owner_id)
+        editor = User(username=f"editor-{uuid4()}", password_hash="unused")
+        db.add(editor)
+        await db.flush()
+        db.add(
+            WorkspaceMember(workspace_id=workspace_id, user_id=editor.id, role=WorkspaceRole.editor)
+        )
+        project = Project(workspace_id=workspace_id, name="Guarded context", created_by=owner_id)
+        item = Item(workspace_id=workspace_id, title="Guarded Item", created_by=owner_id)
+        db.add_all([project, item])
+        await db.flush()
+        assignment = ProjectItem(
+            workspace_id=workspace_id, project_id=project.id, item_id=item.id, added_by=owner_id
+        )
+        db.add(assignment)
+        await db.commit()
+        project_id, assignment_id, name = project.id, assignment.id, project.name
+        if guard == "rollback":
+
+            async def fail_commit():
+                assert await db.scalar(select(Project.id).where(Project.id == project_id)) is None
+                assert (
+                    await db.scalar(select(ProjectItem.id).where(ProjectItem.id == assignment_id))
+                    is None
+                )
+                raise RuntimeError("commit aborted")
+
+            monkeypatch.setattr(db, "commit", fail_commit)
+        error = {
+            "authority": PermissionDenied,
+            "confirmation": ValidationFailure,
+            "rollback": RuntimeError,
+        }[guard]
+        with pytest.raises(error):
+            await delete_project(
+                db,
+                editor if guard == "authority" else owner,
+                workspace_id,
+                project_id,
+                "Wrong name" if guard == "confirmation" else name,
+            )
+        await db.rollback()
+    async with persistence_sessions() as db:
+        project = await db.get(Project, project_id)
+        assert project is not None and project.state is ProjectState.active
+        assert await db.get(ProjectItem, assignment_id) is not None
+        assert (
+            await db.scalar(
+                select(AuditEvent.id).where(
+                    AuditEvent.action == "project.delete", AuditEvent.project_id == project_id
+                )
+            )
+            is None
+        )
 
 
 @pytest.mark.anyio
@@ -497,10 +707,10 @@ async def test_organize_uses_complete_active_options_and_projects_participation(
             name="Deleted",
             created_by=owner_id,
             participation=ProjectParticipation.workspace,
-            state=ProjectState.deleted,
         )
         db.add_all([*implicit, open_project, managed, archived, deleted])
         await db.commit()
+        await delete_project(db, owner, workspace_id, deleted.id, deleted.name)
         context = await resolve_workspace_context(db, owner, workspace_id)
         options = await list_item_organize_projects(db, context)
         assert len(options) == 32
@@ -641,7 +851,7 @@ async def test_workspace_teardown_cleans_owned_projections_and_rollback_is_atomi
 
         monkeypatch.setattr(fake_durable_operations, "enqueue_in_transaction", fail_enqueue)
         with pytest.raises(RuntimeError, match="durable enqueue"):
-            await permanently_delete_workspace(db, owner, workspace_id)
+            await delete_workspace(db, owner, workspace_id)
         await db.rollback()
         assert await db.get(Item, item_id) is not None
         assert await search_index(db).search(db, "Teardown") == [item_id]
@@ -651,7 +861,7 @@ async def test_workspace_teardown_cleans_owned_projections_and_rollback_is_atomi
         )
         monkeypatch.setattr(fake_durable_operations, "enqueue_in_transaction", original_enqueue)
         owner = await db.get(User, owner_id)
-        await permanently_delete_workspace(db, owner, workspace_id)
+        await delete_workspace(db, owner, workspace_id)
     async with persistence_sessions() as fresh:
         assert await fresh.get(Workspace, workspace_id) is None
         assert await search_index(fresh).search(fresh, "Teardown") == []
@@ -700,7 +910,7 @@ async def test_workspace_teardown_fences_waiting_finalizer_and_releases_its_orph
                 await original_commit()
 
             monkeypatch.setattr(db, "commit", pause_commit)
-            await permanently_delete_workspace(db, owner, workspace_id)
+            await delete_workspace(db, owner, workspace_id)
 
     async def finalize():
         async with postgres_race.session("finalizer") as db:

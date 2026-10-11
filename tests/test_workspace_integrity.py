@@ -26,7 +26,7 @@ from quirebase.projects import add_project_participant, check_project_integrity,
 from quirebase.workspaces import (
     archive_workspace,
     check_workspace_integrity,
-    permanently_delete_workspace,
+    delete_workspace,
     provision_initial_workspace,
     suspend_workspace_member,
     terminate_workspace_member,
@@ -189,7 +189,7 @@ async def test_permanent_workspace_delete_retains_audit_project_history(integrit
         await archive_workspace(db, owner, workspace_id)
         workspace.archived_at = datetime.now(UTC) - timedelta(days=3650)
         await db.commit()
-        await permanently_delete_workspace(db, owner, workspace_id)
+        await delete_workspace(db, owner, workspace_id)
     async with integrity_sessions() as fresh:
         assert await fresh.get(Workspace, workspace_id) is None
         assert await fresh.get(Project, project_id) is None

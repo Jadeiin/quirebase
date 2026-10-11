@@ -14,7 +14,7 @@ from quirebase.access import (
 )
 from quirebase.access.scope import workspace_select
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.models import Project, ProjectItem, ProjectState
+from quirebase.models import Project, ProjectItem
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -26,7 +26,6 @@ async def get_project(db: AsyncSession, ctx: WorkspaceContext, project_id: UUID)
     return await db.scalar(
         workspace_select(Project, ctx).where(
             Project.id == project_id,
-            Project.state != ProjectState.deleted,
             project_discovery_predicate(ctx),
         )
     )
@@ -37,7 +36,7 @@ async def get_project_for_update(
 ) -> Project | None:
     project = await db.scalar(
         workspace_select(Project, ctx)
-        .where(Project.id == project_id, Project.state != ProjectState.deleted)
+        .where(Project.id == project_id)
         .where(project_discovery_predicate(ctx))
         .with_for_update()
     )

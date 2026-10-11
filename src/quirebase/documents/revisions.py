@@ -742,7 +742,6 @@ async def get_pdf_viewer_data(
                 .join(ProjectItem, ProjectItem.project_id == Project.id)
                 .where(
                     Project.workspace_id == workspace_id,
-                    Project.state != ProjectState.deleted,
                     Project.id.in_(discoverable_project_ids_query(context)),
                     ProjectItem.workspace_id == workspace_id,
                     ProjectItem.item_id == item_id,

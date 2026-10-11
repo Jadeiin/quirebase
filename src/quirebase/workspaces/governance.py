@@ -18,7 +18,6 @@ from quirebase.models import (
     Item,
     User,
     Workspace,
-    WorkspaceState,
 )
 
 if TYPE_CHECKING:
@@ -125,7 +124,7 @@ async def read_workspace_items_break_glass(
     if not 1 <= limit <= 100:
         raise ValidationFailure("break-glass inspection limit must be between 1 and 100")
     workspace = await db.get(Workspace, workspace_id)
-    if workspace is None or workspace.state is WorkspaceState.deleted:
+    if workspace is None:
         raise ResourceNotFound("Workspace not found")
     items = list(
         (

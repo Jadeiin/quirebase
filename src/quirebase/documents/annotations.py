@@ -951,7 +951,6 @@ async def moderate_document_annotation(
         select(Project).where(
             Project.id == project_item.project_id,
             Project.workspace_id == workspace_id,
-            Project.state != ProjectState.deleted,
         )
     )
     if project is None:

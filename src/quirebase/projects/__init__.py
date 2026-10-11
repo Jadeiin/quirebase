@@ -3,10 +3,7 @@ from __future__ import annotations
 from quirebase.projects.integrity import check_project_integrity
 from quirebase.projects.lifecycle import (
     delete_project,
-    rename_project,
-    set_project_participation,
     set_project_state,
-    update_project_description,
     update_project_settings,
     validate_project_state,
 )
@@ -56,12 +53,9 @@ __all__ = [
     "open_project_workspace",
     "remove_item_from_project",
     "remove_project_participant",
-    "rename_project",
     "require_project",
     "require_project_item",
-    "set_project_participation",
     "set_project_state",
-    "update_project_description",
     "update_project_settings",
     "validate_project_state",
 ]

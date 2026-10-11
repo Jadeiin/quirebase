@@ -140,7 +140,6 @@ from quirebase.projects import (
     remove_item_from_project,
     remove_project_participant,
     require_project,
-    set_project_participation,
     set_project_state,
     update_project_settings,
 )
@@ -151,11 +150,11 @@ from quirebase.workspaces import (
     accept_workspace_invitation,
     archive_workspace,
     create_workspace,
+    delete_workspace,
     freeze_workspace_governance,
     invite_workspace_member,
     list_workspace_governance_members,
     list_workspace_members,
-    permanently_delete_workspace,
     read_workspace_items_break_glass,
     restore_workspace,
     set_workspace_member_role,
@@ -1074,10 +1073,10 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
     annotation_ids = (annotation.id, reply.id)
 
     with pytest.raises(PermissionDenied):
-        await permanently_delete_workspace(async_db, owner, workspace_id)
+        await delete_workspace(async_db, owner, workspace_id)
     await archive_workspace(async_db, owner, workspace_id)
     with pytest.raises(WorkspaceLifecycleError, match="retention"):
-        await permanently_delete_workspace(async_db, owner, workspace_id)
+        await delete_workspace(async_db, owner, workspace_id)
     assert await async_db.get(Item, item_id) is not None
     await async_db.rollback()
     workspace = await async_db.get(Workspace, workspace_id)
@@ -1088,7 +1087,7 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
     await async_db.commit()
 
     monkeypatch.setattr("quirebase.workspaces.workflows.AsyncSessionLocal", async_session_factory)
-    await permanently_delete_workspace(async_db, owner, workspace_id)
+    await delete_workspace(async_db, owner, workspace_id)
     async with async_session_factory() as check_db:
         assert await check_db.get(Workspace, workspace_id) is None
         assert await check_db.get(Item, item_id) is None
@@ -2645,8 +2644,7 @@ async def test_project_annotation_bundle_hides_managed_content_from_nonmembers(a
         )
         is None
     )
-    project.state = ProjectState.deleted
-    await async_db.commit()
+    await delete_project(async_db, owner, workspace_id, project.id, project.name)
     assert [row.id for row in await _own_annotations(async_db, former_member, revision)] == [
         private.id
     ]
@@ -2777,7 +2775,7 @@ async def test_governance_freeze_is_read_only_and_unfreeze_preserves_lifecycle(a
     with pytest.raises(WorkspaceLifecycleError):
         await restore_workspace(async_db, owner, workspace_id)
     with pytest.raises(WorkspaceLifecycleError):
-        await permanently_delete_workspace(async_db, owner, workspace_id)
+        await delete_workspace(async_db, owner, workspace_id)
     with pytest.raises(WorkspaceMembershipRequired):
         await require_workspace_action(async_db, admin, workspace_id, ResourceAction.workspace_read)
 
@@ -3517,8 +3515,7 @@ async def test_deleted_project_annotations_are_excluded_from_item_review(async_d
     )
     assert [entry["id"] for entry in before.annotations] == [annotation.id]
 
-    project.state = ProjectState.deleted
-    await async_db.commit()
+    await delete_project(async_db, author, workspace_id, project.id, project.name)
     after = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
@@ -4160,13 +4157,13 @@ async def test_annotation_list_rechecks_project_visibility_after_loading_source_
     )
     workspace_id = fixture_workspace_id(owner)
     if change == "remove_member":
-        await set_project_participation(
-            async_db, owner, workspace_id, project.id, ProjectParticipation.managed
+        await update_project_settings(
+            async_db, owner, workspace_id, project.id, participation=ProjectParticipation.managed
         )
         await add_project_participant(async_db, owner, workspace_id, project.id, viewer.username)
     else:
-        await set_project_participation(
-            async_db, owner, workspace_id, project.id, ProjectParticipation.open
+        await update_project_settings(
+            async_db, owner, workspace_id, project.id, participation=ProjectParticipation.open
         )
     private = PdfAnnotation(
         workspace_id=workspace_id,
@@ -4209,8 +4206,12 @@ async def test_annotation_list_rechecks_project_visibility_after_loading_source_
                             writer, admin, workspace_id, project.id, viewer.id
                         )
                     else:
-                        await set_project_participation(
-                            writer, admin, workspace_id, project.id, ProjectParticipation.managed
+                        await update_project_settings(
+                            writer,
+                            admin,
+                            workspace_id,
+                            project.id,
+                            participation=ProjectParticipation.managed,
                         )
                 changed = True
             return result

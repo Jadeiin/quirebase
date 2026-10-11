@@ -98,7 +98,6 @@ class WorkspaceInvitationRole(StrEnum):
 class WorkspaceState(StrEnum):
     active = "active"
     archived = "archived"
-    deleted = "deleted"
 
 
 class WorkspaceMemberState(StrEnum):
@@ -109,7 +108,6 @@ class WorkspaceMemberState(StrEnum):
 class ProjectState(StrEnum):
     active = "active"
     archived = "archived"
-    deleted = "deleted"
 
 
 class ProjectParticipation(StrEnum):
@@ -178,7 +176,6 @@ class Workspace(EntityBase):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
 
 
 class WorkspaceMember(EntityBase):

@@ -24,7 +24,6 @@ from quirebase.models import (
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
-    WorkspaceState,
 )
 
 if TYPE_CHECKING:
@@ -241,7 +240,6 @@ async def guard_user_deactivation(db: AsyncSession, user_id: UUID) -> None:
             WorkspaceMember.user_id == user_id,
             WorkspaceMember.role == WorkspaceRole.owner,
             WorkspaceMember.terminated_at.is_(None),
-            Workspace.state != WorkspaceState.deleted,
         )
     )
     if await db.scalar(owner_query):

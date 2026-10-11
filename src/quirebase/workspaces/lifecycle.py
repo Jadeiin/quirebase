@@ -99,9 +99,7 @@ async def restore_workspace(db: AsyncSession, actor: User, workspace_id: UUID) -
     return workspace
 
 
-async def permanently_delete_workspace(
-    db: AsyncSession, actor: User, workspace_id: UUID
-) -> Workspace:
+async def delete_workspace(db: AsyncSession, actor: User, workspace_id: UUID) -> None:
     # Deletion is permitted only from archived state, so membership and role are checked separately.
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.governance_frozen_at is not None:
@@ -123,8 +121,6 @@ async def permanently_delete_workspace(
     object_keys.update(await import_staging_object_keys(db, workspace_id=workspace_id))
     await search_index(db).remove_workspace(db, workspace_id)
 
-    workspace.state = WorkspaceState.deleted
-    workspace.deleted_at = now
     record_event(
         db,
         actor.id,
@@ -161,4 +157,3 @@ async def permanently_delete_workspace(
     await db.delete(workspace)
     await db.flush()
     await db.commit()
-    return workspace

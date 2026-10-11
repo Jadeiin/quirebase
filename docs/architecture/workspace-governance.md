@@ -315,7 +315,9 @@ hide, archive, lock, restore or delete. Moderation must not rewrite authored con
 
 ### Lifecycle
 
-Workspace and Project have `active`, `archived` and internal `deleted` lifecycle states.
+Workspace and Project have only `active` and `archived` lifecycle states. Deletion physically
+removes the root in the authorized transaction; row existence and foreign keys define the deletion
+boundary.
 
 An archived Workspace remains readable and exportable, including existing file downloads, but
 rejects Item, file, Tag, Project, membership and shared Discussion mutations. Owner/admin may
@@ -323,8 +325,6 @@ restore it. Permanent Workspace deletion is owner-only and requires archive plus
 period (30 days by default). The deletion transaction removes the Workspace root and cascades
 its owned rows; a durable, reference-aware cleanup removes its stored objects. Audit Events keep
 the deleted Workspace and Project IDs as historical metadata, without live-resource foreign keys.
-`deleted` is an internal cleanup state and is
-not exposed as an ordinary business state.
 
 Archived Workspace governance member and invitation lists remain readable to owners/admins;
 their mutations remain disabled.
@@ -349,9 +349,12 @@ deletion is limited to the `item.delete` decision. Instance administrators have 
 authority. The current break-glass inspection grants no mutation authority.
 
 Project deletion has no archive prerequisite: a caller allowed `project.delete` confirms the
-current Project name before an active or archived Project enters internal `deleted` state.
-This removes the Project working context, not its canonical Workspace Items. Workspace permanent
-deletion retains its stronger archive and retention requirements.
+current Project name before physically deleting an active or archived Project. The same transaction
+records the Audit Event and deletes the Project root; cascading foreign keys remove its participants,
+ProjectItem associations, Project Discussions and Project Annotations with their Replies. Canonical
+Workspace Items, their files, private Annotations and other Projects remain. Root deletion fences
+in-flight stale mutations, and Audit Events retain the deleted Project ID without a live-resource
+foreign key. Workspace permanent deletion retains its stronger archive and retention requirements.
 
 Project archive/restore, Workspace-member suspend/reactivate and role setting, invitation revoke,
 and instance governance freeze/unfreeze tolerate retries after reaching the requested state.

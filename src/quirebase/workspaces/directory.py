@@ -18,7 +18,6 @@ from quirebase.models import (
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
-    WorkspaceState,
 )
 
 if TYPE_CHECKING:
@@ -46,7 +45,6 @@ async def list_workspaces(
             WorkspaceMember.user_id == actor.id,
             WorkspaceMember.state == WorkspaceMemberState.active,
             WorkspaceMember.terminated_at.is_(None),
-            Workspace.state != WorkspaceState.deleted,
         )
         .order_by(Workspace.name, Workspace.id)
     )
@@ -103,9 +101,7 @@ def _workspace_owners_query():
         .correlate(Workspace)
         .scalar_subquery()
     )
-    return select(Workspace.id, owner_id.label("owner_id")).where(
-        Workspace.state != WorkspaceState.deleted
-    )
+    return select(Workspace.id, owner_id.label("owner_id"))
 
 
 async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[UUID]) -> dict[UUID, UUID]:
