@@ -190,14 +190,14 @@
 			<Portal>
 				<Menu.Positioner class="z-100">
 					<Menu.Content
-						class="z-1000 w-[min(22rem,calc(100vw-1rem))] rounded-container border border-surface-300-700 bg-surface-50-950 p-1.5 shadow-xl"
+						class="z-1000 w-[min(22rem,calc(100vw-1rem))] border-surface-300-700 p-1.5 shadow-xl"
 					>
 						<div class="px-2.5 py-2 text-xs font-bold tracking-wide text-surface-600-400 uppercase">
 							{$t('Current PDF')}
 						</div>
 						<Menu.Item
 							value="download-original"
-							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+							class="cursor-pointer text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 						>
 							<button
 								type="button"
@@ -226,7 +226,7 @@
 						</label>
 						<Menu.Item
 							value="download-annotated"
-							class="flex cursor-pointer items-center rounded-md text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+							class="cursor-pointer text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 						>
 							<button
 								type="button"

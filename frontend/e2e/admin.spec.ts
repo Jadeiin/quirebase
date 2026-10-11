@@ -1,3 +1,4 @@
+import { chooseSearchOption } from './helpers';
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
 
@@ -211,7 +212,7 @@ test('Workspace governance freezes, unfreezes, and performs reason-bound break-g
 	await expect.poll(() => freezeRequests).toBe(1);
 	await page.getByRole('button', { name: 'Unfreeze writes' }).click();
 	await expect.poll(() => unfreezeRequests).toBe(1);
-	await page.getByLabel('Target Workspace').selectOption('workspace-1');
+	await chooseSearchOption(page, 'Target Workspace', 'Research');
 	await page.getByLabel(/Reason/).fill('Investigating a reported access issue');
 	await page.getByRole('button', { name: 'Inspect Items once' }).click();
 	await expect
@@ -265,11 +266,11 @@ test('break-glass inspection keeps the Workspace that authorized the displayed r
 	});
 
 	await page.goto('/admin/workspaces');
-	await page.getByLabel('Target Workspace').selectOption('workspace-1');
+	await chooseSearchOption(page, 'Target Workspace', 'Research');
 	await page.getByLabel(/Reason/).fill('Investigating a reported access issue');
 	await page.getByRole('button', { name: 'Inspect Items once' }).click();
 	await expect(page.getByText('Inspected workspace-1')).toBeVisible();
-	await page.getByLabel('Target Workspace').selectOption('workspace-2');
+	await chooseSearchOption(page, 'Target Workspace', 'Archive');
 	await expect(page.getByText('Scope: Workspace workspace-1')).toBeVisible();
 	await expect(page.getByText('Scope: Workspace workspace-2')).toHaveCount(0);
 });

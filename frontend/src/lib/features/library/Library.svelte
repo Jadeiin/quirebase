@@ -23,7 +23,6 @@
 	} from '#lib/features/library/mutations.js';
 	import { libraryListQuery, librarySort } from '#lib/features/library/queries.js';
 	import { projectDetailQuery, projectOptionsQuery } from '#lib/features/projects/queries.js';
-	import { tagsQuery } from '#lib/features/tags/queries.js';
 	import { getSession } from '#lib/session.js';
 	import {
 		defaultExportPreferences,
@@ -90,7 +89,6 @@
 	});
 
 	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber));
-	const tags = createQuery(() => tagsQuery(workspaceId));
 	const projects = createInfiniteQuery(() => projectOptionsQuery(workspaceId));
 	const selectedProject = createQuery(() => ({
 		...projectDetailQuery(workspaceId, submitted.project),
@@ -232,7 +230,6 @@
 	bind:sort
 	bind:fileFilter
 	bind:filtersOpen
-	tags={tags.data ?? []}
 	projects={projectChoices}
 	onSearch={() => updateUrl()}
 	onClear={clearFilters}

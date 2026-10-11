@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { can } from '#lib/authorization/can.js';
 	import type { LibraryProject } from '#lib/features/library/queries.js';
 	import { t } from '#lib/i18n.js';
@@ -61,15 +62,19 @@
 					>{$t('Permanently delete')}</option
 				>{/if}
 		</select>
-		{#if bulkAction === 'add_project'}<select
-				class="input w-auto min-w-36"
+		{#if bulkAction === 'add_project'}
+			<SearchSelect
+				class="w-auto min-w-48"
+				label={$t('Select Project')}
+				emptyLabel={$t('Select Project')}
 				bind:value={bulkProject}
-				aria-label={$t('Select Project')}
-				><option value="">{$t('Select Project')}</option
-				>{#each assignableProjects as option (option.id)}<option value={option.id}
-						>{option.name}</option
-					>{/each}</select
-			>{/if}
+				disabled={busy}
+				options={assignableProjects.map((project: LibraryProject) => ({
+					value: project.id,
+					label: project.name
+				}))}
+			/>
+		{/if}
 		{#if bulkAction === 'add_tag'}<input
 				class="input w-auto min-w-36"
 				bind:value={bulkTag}

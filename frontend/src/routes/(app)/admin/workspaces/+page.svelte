@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { apiRequest } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -116,14 +117,16 @@
 				'Each inspection requires a reason and returns at most 100 Items. It grants no continuing access.'
 			)}
 		</p>
-		<label class="grid grid-cols-1 gap-1"
-			>{$t('Target Workspace')}<select class="input" bind:value={targetId}
-				><option value="">{$t('Choose a Workspace')}</option
-				>{#each workspaces.data ?? [] as workspace (workspace.id)}<option value={workspace.id}
-						>{workspace.name}</option
-					>{/each}</select
-			></label
-		>
+		<SearchSelect
+			label={$t('Target Workspace')}
+			emptyLabel={$t('Choose a Workspace')}
+			bind:value={targetId}
+			disabled={busyId !== ''}
+			options={(workspaces.data ?? []).map((workspace) => ({
+				value: workspace.id,
+				label: workspace.name
+			}))}
+		/>
 		<label class="grid grid-cols-1 gap-1"
 			>{$t('Reason (at least 10 characters)')}<textarea
 				class="input"

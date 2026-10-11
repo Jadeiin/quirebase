@@ -1,4 +1,4 @@
-import { directoryPage } from './helpers';
+import { tagPage, directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { mockSession, mockWorkspaces } from './helpers';
 
@@ -22,7 +22,9 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
 		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -184,7 +186,9 @@ test('mobile navigation keeps primary destinations visible and moves utilities i
 	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
 		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -216,4 +220,57 @@ test('desktop sidebar collapse persists across navigation reloads', async ({ pag
 	);
 	await page.reload();
 	await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+});
+
+for (const width of [1280, 390]) {
+	test(`Workspace menu contains long names without horizontal overflow at ${width}px`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width, height: 844 });
+		await mockSession(page);
+		const { workspaceView } = await import('./helpers');
+		const workspace = workspaceView('workspace-1', 'A very long Workspace name '.repeat(8));
+		await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+			route.fulfill({ json: directoryPage([workspace], route) })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+			route.fulfill({ json: workspace })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+			route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+		);
+		await page.goto('/workspace/workspace-1');
+		await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+		const menu = page.getByRole('menu', { name: 'Workspace', exact: true });
+		await expect(menu).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: /A very long Workspace name/ })).toBeVisible();
+		await expect
+			.poll(() => menu.evaluate((element) => element.scrollWidth <= element.clientWidth))
+			.toBe(true);
+		const bounds = await menu.boundingBox();
+		expect(bounds!.x).toBeGreaterThanOrEqual(0);
+		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+	});
+}
+
+test('Appearance labels stay aligned when the selected theme changes', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('quirebase:theme', 'dark'));
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+	);
+	await page.goto('/workspace/workspace-1');
+	for (const active of ['Dark theme', 'Light theme']) {
+		await page.getByRole('button', { name: /reader/i }).click();
+		const positions = [];
+		for (const name of ['Light theme', 'Dark theme', 'System theme']) {
+			const item = page.getByRole('menuitem', { name });
+			const text = item.locator('span').filter({ hasText: new RegExp(`^${name}$`) });
+			positions.push((await text.boundingBox())!.x);
+			await expect(item).toHaveAttribute('data-active', String(name === active));
+			await expect(item.locator('span').last()).toHaveText(name === active ? '✓' : '');
+		}
+		expect(Math.max(...positions) - Math.min(...positions)).toBeLessThan(1);
+		await page.getByRole('menuitem', { name: 'Light theme' }).click();
+	}
 });

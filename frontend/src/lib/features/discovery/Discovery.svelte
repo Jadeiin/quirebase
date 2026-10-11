@@ -1,4 +1,6 @@
 <script lang="ts">
+	import DateField from '#lib/design/DateField.svelte';
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -140,14 +142,8 @@
 				<option value="cited">{$t('Citation count')}</option>
 			</select>
 		</label>
-		<label class="grid grid-cols-1 gap-1">
-			<span class="text-sm font-semibold">{$t('From year')}</span>
-			<input class="input" type="number" min="1000" max="9999" bind:value={yearFrom} />
-		</label>
-		<label class="grid grid-cols-1 gap-1">
-			<span class="text-sm font-semibold">{$t('To year')}</span>
-			<input class="input" type="number" min="1000" max="9999" bind:value={yearTo} />
-		</label>
+		<DateField precision="year" label={$t('From year')} min="1000-01-01" bind:value={yearFrom} />
+		<DateField precision="year" label={$t('To year')} min="1000-01-01" bind:value={yearTo} />
 	</div>
 
 	<div class="grid grid-cols-1 gap-2" aria-label={$t('Search conditions')}>
@@ -203,6 +199,7 @@
 				</p>{/if}
 		</div>
 	</SectionHeader>
+	{#if busy}<LoadingState label={$t('Searching…')} />{/if}
 	{#each results?.results ?? [] as candidate (`${candidate.provider}:${candidate.identifier_provider}:${candidate.identifier}`)}
 		<article class="border-b border-surface-300-700 py-5 last:border-0">
 			<div class="flex flex-wrap items-start justify-between gap-4">

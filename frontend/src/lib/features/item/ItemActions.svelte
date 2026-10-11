@@ -1,7 +1,8 @@
 <script lang="ts">
+	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
-	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
+	import { Dialog, Portal, Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -303,234 +304,263 @@
 		<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
 		<Dialog.Positioner class="fixed inset-0 z-71 grid grid-cols-1 place-items-center p-4">
 			<Dialog.Content
-				class="grid max-h-[min(46rem,calc(100dvh-2rem))] w-full max-w-3xl grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-container border border-surface-300-700 bg-surface-50-950 shadow-2xl"
+				class="grid max-h-[min(46rem,calc(100dvh-2rem))] w-full max-w-3xl grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-container border border-surface-300-700 bg-surface-50-950 shadow-2xl"
 			>
 				<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
 					<Dialog.Title class="text-lg font-bold">{$t('Item actions')}</Dialog.Title>
 					<DialogCloseButton />
 				</header>
-				<nav
-					class="flex gap-1 overflow-x-auto border-b border-surface-300-700 px-3 pt-2"
-					aria-label={$t('Item actions')}
+				<Tabs
+					value={section}
+					onValueChange={(details) => (section = (details.value ?? 'citation') as ActionSection)}
+					class="grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]"
 				>
-					<button
-						class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
-						data-active={section === 'citation'}
-						onclick={() => (section = 'citation')}>{$t('Citation')}</button
-					>
-
-					{#if copyDestinations.length}
-						<button
-							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
-							data-active={section === 'copy'}
-							onclick={() => (section = 'copy')}>{$t('Copy')}</button
+					<Tabs.List class="mb-0 overflow-x-auto px-3 pt-2" aria-label={$t('Item actions')}>
+						<Tabs.Indicator class="bg-primary-700-300" />
+						<Tabs.Trigger
+							class="whitespace-nowrap data-selected:text-primary-700-300"
+							value="citation">{$t('Citation')}</Tabs.Trigger
 						>
-					{/if}
 
-					{#if overview.latest_revision && can(overview.authorization, 'workspace.export')}
-						<button
-							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
-							data-active={section === 'documents'}
-							onclick={() => (section = 'documents')}>{$t('Documents')}</button
-						>
-					{/if}
-
-					{#if can(overview.authorization, 'item.update')}
-						<button
-							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold data-[active=true]:border-primary-700-300 data-[active=true]:text-primary-700-300"
-							data-active={section === 'sources'}
-							onclick={() => (section = 'sources')}>{$t('Metadata sources')}</button
-						>
-					{/if}
-
-					{#if can(overview.authorization, 'item.delete')}
-						<button
-							class="border-0 border-b-2 bg-transparent px-3 py-2 text-sm font-semibold text-error-700-300 data-[active=true]:border-error-700-300"
-							data-active={section === 'danger'}
-							onclick={() => (section = 'danger')}>{$t('Danger zone')}</button
-						>
-					{/if}
-				</nav>
-				<div class="overflow-auto p-5">
-					{#if error}<Notice variant="error">{error}</Notice>{/if}
-					{#if notice}<Notice variant="success">{notice}</Notice>{/if}
-					{#if section === 'citation'}
-						<div class="grid grid-cols-1 gap-3">
-							<div>
-								<h2>{$t('Export bibliography')}</h2>
-								<p class="text-surface-600-400">
-									{$t('Uses the defaults saved in your Account export preferences.')}
-								</p>
-							</div>
-							<label
-								>{$t('Format')}<select class="select" bind:value={format}
-									><option value="csl">CSL citation</option><option value="bibtex">BibTeX</option
-									><option value="biblatex">BibLaTeX</option><option value="ris">RIS</option><option
-										value="endnote">EndNote</option
-									></select
-								></label
+						{#if copyDestinations.length}
+							<Tabs.Trigger
+								class="whitespace-nowrap data-selected:text-primary-700-300"
+								value="copy">{$t('Copy')}</Tabs.Trigger
 							>
-							<div class="flex flex-wrap gap-2">
-								<Button variant="filled" disabled={busy} onclick={downloadBibliography}
-									>{$t('Download file')}</Button
-								>
+						{/if}
 
-								<Button disabled={busy} onclick={copyBibliography}>{$t('Copy to clipboard')}</Button
-								>
-								<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button>
-							</div>
-						</div>
-					{:else if section === 'copy'}
-						<div class="grid max-w-xl grid-cols-1 gap-3">
-							<h2>{$t('Copy to another Workspace')}</h2>
-							<p class="text-surface-600-400">
-								{$t(
-									'A copy creates a new canonical Item. Only Workspaces where you can create Items are offered.'
-								)}
-							</p>
-							<label class="grid grid-cols-1 gap-1"
-								>{$t('Target Workspace')}<select class="select" bind:value={targetWorkspaceId}
-									><option value="">{$t('Choose a Workspace')}</option
-									>{#each copyDestinations as target (target.id)}<option value={target.id}
-											>{target.name}</option
-										>{/each}</select
-								></label
+						{#if overview.latest_revision && can(overview.authorization, 'workspace.export')}
+							<Tabs.Trigger
+								class="whitespace-nowrap data-selected:text-primary-700-300"
+								value="documents">{$t('Documents')}</Tabs.Trigger
 							>
-							<div class="flex flex-wrap gap-2">
-								<Button variant="filled" disabled={busy || !targetWorkspaceId} onclick={copyItem}
-									>{$t('Create copy')}</Button
-								>{#if copiedItemUrl}<Button as="a" href={copiedItemUrl}>{$t('Open copy')}</Button
-									>{/if}
-							</div>
-						</div>
-					{:else if section === 'documents'}
-						<div class="grid grid-cols-1 gap-3">
-							<div>
-								<h2>{$t('Download documents')}</h2>
-								<p class="text-surface-600-400">
-									{$t('Choose PDF revisions to package with saved download preferences.')}
-								</p>
-							</div>
-							{#each revisions as revision (revision.id)}<label
-									class="flex items-center gap-3 rounded-lg border border-surface-300-700 p-3"
-									><input
-										type="checkbox"
-										checked={selectedRevisions.has(revision.id)}
-										onchange={() =>
-											selectedRevisions.has(revision.id)
-												? selectedRevisions.delete(revision.id)
-												: selectedRevisions.add(revision.id)}
-									/><span
-										><strong>{revision.original_name}</strong><small
-											class="block text-surface-600-400"
-											>{$t(domainLabel(revision.processing_state ?? 'pending'))}</small
-										></span
-									></label
-								>{/each}
-							<p class="text-sm text-surface-600-400">
-								{$t('Annotations: {state}', {
-									state: preferences.document.includeAnnotations ? $t('included') : $t('excluded')
-								})}
-								· {$t('Supplements: {state}', {
-									state: preferences.document.includeSupplements ? $t('included') : $t('excluded')
-								})}
-							</p>
-							<div class="flex flex-wrap gap-2">
-								<Button
-									variant="filled"
-									disabled={busy || selectedRevisions.size === 0}
-									onclick={downloadDocuments}>{$t('Download bundle')}</Button
-								>
-								<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button>
-							</div>
-						</div>
-					{:else if section === 'sources'}
-						<div class="grid grid-cols-1 gap-3">
-							<div>
-								<h2>{$t('Metadata sources')}</h2>
-								<p class="text-surface-600-400">
-									{$t('Refresh this record from an upstream identifier.')}
-								</p>
-							</div>
-							{#if overview.item.doi}<div
-									class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
-								>
-									<div>
-										<strong>DOI</strong><span class="block text-sm text-surface-600-400"
-											>{overview.item.doi}</span
-										>
-									</div>
-									<div class="flex flex-wrap items-center gap-2">
-										<select
-											class="input w-auto min-w-36 border border-surface-300-700"
-											bind:value={doiProvider}
-											aria-label={$t('Provider')}
-										>
-											<option value="auto">{$t('Auto detect')}</option>
-											<option value="crossref">Crossref</option>
-											<option value="openalex">OpenAlex</option>
-											<option value="datacite">DataCite</option>
-										</select>
-										<Button
-											disabled={busy}
-											onclick={() => synchronize(doiProvider, overview.item.doi!)}
-											>{$t('Autoupdate')}</Button
-										>
-									</div>
-								</div>{:else if overview.latest_revision}<Button disabled={busy} onclick={rescanDoi}
-									>{$t('Rescan PDF for DOI')}</Button
-								>{/if}
-							{#each externalIdentifiers as identifier (`${identifier.provider}:${identifier.value}`)}<div
-									class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
-								>
-									<div>
-										<strong>{identifier.provider.toUpperCase()}</strong><span
-											class="block text-sm text-surface-600-400">{identifier.value}</span
-										>
-									</div>
-									<Button
-										disabled={busy}
-										onclick={() => synchronize(identifier.provider, identifier.value)}
-										>{$t('Autoupdate')}</Button
-									>
-								</div>{/each}
-							<div class="border-t border-surface-300-700 pt-4">
-								<Button disabled={busy} onclick={regenerateCitationKey}
-									>{$t('Regenerate citation key')}</Button
-								>
-							</div>
-						</div>
-					{:else}
-						<div class="grid grid-cols-1 gap-3">
-							<div>
-								<h2 class="text-error-700-300">{$t('Delete Item')}</h2>
-								<p class="text-surface-600-400">
-									{$t(
-										'Associated files, annotations, and assignments of this Item to Projects will also be removed.'
-									)}
-								</p>
-							</div>
-							{#if deleteArmed}
-								<p class="text-sm text-error-700-300" role="alert">
-									{$t('This cannot be undone. Delete this Item permanently?')}
-								</p>
-								<div class="flex flex-wrap gap-2">
-									<Button disabled={busy} onclick={() => (deleteArmed = false)}
-										>{$t('Cancel')}</Button
-									>
+						{/if}
 
-									<Button variant="danger-filled" disabled={busy} onclick={confirmDeleteItem}
-										>{$t('Delete Item permanently')}</Button
+						{#if can(overview.authorization, 'item.update')}
+							<Tabs.Trigger
+								class="whitespace-nowrap data-selected:text-primary-700-300"
+								value="sources">{$t('Metadata sources')}</Tabs.Trigger
+							>
+						{/if}
+
+						{#if can(overview.authorization, 'item.delete')}
+							<Tabs.Trigger class="whitespace-nowrap text-error-700-300" value="danger"
+								>{$t('Danger zone')}</Tabs.Trigger
+							>
+						{/if}
+					</Tabs.List>
+					<div class="overflow-auto p-5">
+						{#if error}<Notice variant="error">{error}</Notice>{/if}
+						{#if notice}<Notice variant="success">{notice}</Notice>{/if}
+						<Tabs.Content value="citation">
+							{#if open && section === 'citation'}
+								<div class="grid grid-cols-1 gap-3">
+									<div>
+										<h2>{$t('Export bibliography')}</h2>
+										<p class="text-surface-600-400">
+											{$t('Uses the defaults saved in your Account export preferences.')}
+										</p>
+									</div>
+									<label
+										>{$t('Format')}<select class="select" bind:value={format}
+											><option value="csl">CSL citation</option><option value="bibtex"
+												>BibTeX</option
+											><option value="biblatex">BibLaTeX</option><option value="ris">RIS</option
+											><option value="endnote">EndNote</option></select
+										></label
 									>
+									<div class="flex flex-wrap gap-2">
+										<Button variant="filled" disabled={busy} onclick={downloadBibliography}
+											>{$t('Download file')}</Button
+										>
+
+										<Button disabled={busy} onclick={copyBibliography}
+											>{$t('Copy to clipboard')}</Button
+										>
+										<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button
+										>
+									</div>
 								</div>
-							{:else}
-								<Button variant="danger" disabled={busy} onclick={deleteItem}
-									>{$t('Delete Item permanently')}</Button
-								>
 							{/if}
-						</div>
-					{/if}
-				</div>
+						</Tabs.Content>
+						<Tabs.Content value="copy">
+							{#if open && section === 'copy'}
+								<div class="grid max-w-xl grid-cols-1 gap-3">
+									<h2>{$t('Copy to another Workspace')}</h2>
+									<p class="text-surface-600-400">
+										{$t(
+											'A copy creates a new canonical Item. Only Workspaces where you can create Items are offered.'
+										)}
+									</p>
+									<SearchSelect
+										label={$t('Target Workspace')}
+										bind:value={targetWorkspaceId}
+										emptyLabel={$t('Choose a Workspace')}
+										disabled={busy}
+										options={copyDestinations.map(
+											(target: ItemOverviewView['copy_targets'][number]) => ({
+												value: target.id,
+												label: target.name
+											})
+										)}
+									/>
+									<div class="flex flex-wrap gap-2">
+										<Button
+											variant="filled"
+											disabled={busy || !targetWorkspaceId}
+											onclick={copyItem}>{$t('Create copy')}</Button
+										>{#if copiedItemUrl}<Button as="a" href={copiedItemUrl}
+												>{$t('Open copy')}</Button
+											>{/if}
+									</div>
+								</div>
+							{/if}
+						</Tabs.Content>
+						<Tabs.Content value="documents">
+							{#if open && section === 'documents'}
+								<div class="grid grid-cols-1 gap-3">
+									<div>
+										<h2>{$t('Download documents')}</h2>
+										<p class="text-surface-600-400">
+											{$t('Choose PDF revisions to package with saved download preferences.')}
+										</p>
+									</div>
+									{#each revisions as revision (revision.id)}<label
+											class="flex items-center gap-3 rounded-lg border border-surface-300-700 p-3"
+											><input
+												type="checkbox"
+												checked={selectedRevisions.has(revision.id)}
+												onchange={() =>
+													selectedRevisions.has(revision.id)
+														? selectedRevisions.delete(revision.id)
+														: selectedRevisions.add(revision.id)}
+											/><span
+												><strong>{revision.original_name}</strong><small
+													class="block text-surface-600-400"
+													>{$t(domainLabel(revision.processing_state ?? 'pending'))}</small
+												></span
+											></label
+										>{/each}
+									<p class="text-sm text-surface-600-400">
+										{$t('Annotations: {state}', {
+											state: preferences.document.includeAnnotations
+												? $t('included')
+												: $t('excluded')
+										})}
+										· {$t('Supplements: {state}', {
+											state: preferences.document.includeSupplements
+												? $t('included')
+												: $t('excluded')
+										})}
+									</p>
+									<div class="flex flex-wrap gap-2">
+										<Button
+											variant="filled"
+											disabled={busy || selectedRevisions.size === 0}
+											onclick={downloadDocuments}>{$t('Download bundle')}</Button
+										>
+										<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button
+										>
+									</div>
+								</div>
+							{/if}
+						</Tabs.Content>
+						<Tabs.Content value="sources">
+							{#if open && section === 'sources'}
+								<div class="grid grid-cols-1 gap-3">
+									<div>
+										<h2>{$t('Metadata sources')}</h2>
+										<p class="text-surface-600-400">
+											{$t('Refresh this record from an upstream identifier.')}
+										</p>
+									</div>
+									{#if overview.item.doi}<div
+											class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+										>
+											<div>
+												<strong>DOI</strong><span class="block text-sm text-surface-600-400"
+													>{overview.item.doi}</span
+												>
+											</div>
+											<div class="flex flex-wrap items-center gap-2">
+												<select
+													class="input w-auto min-w-36 border border-surface-300-700"
+													bind:value={doiProvider}
+													aria-label={$t('Provider')}
+												>
+													<option value="auto">{$t('Auto detect')}</option>
+													<option value="crossref">Crossref</option>
+													<option value="openalex">OpenAlex</option>
+													<option value="datacite">DataCite</option>
+												</select>
+												<Button
+													disabled={busy}
+													onclick={() => synchronize(doiProvider, overview.item.doi!)}
+													>{$t('Autoupdate')}</Button
+												>
+											</div>
+										</div>{:else if overview.latest_revision}<Button
+											disabled={busy}
+											onclick={rescanDoi}>{$t('Rescan PDF for DOI')}</Button
+										>{/if}
+									{#each externalIdentifiers as identifier (`${identifier.provider}:${identifier.value}`)}<div
+											class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+										>
+											<div>
+												<strong>{identifier.provider.toUpperCase()}</strong><span
+													class="block text-sm text-surface-600-400">{identifier.value}</span
+												>
+											</div>
+											{#if identifier.provider !== 'pmcid'}
+												<Button
+													disabled={busy}
+													onclick={() => synchronize(identifier.provider, identifier.value)}
+													>{$t('Autoupdate')}</Button
+												>
+											{/if}
+										</div>{/each}
+									<div class="border-t border-surface-300-700 pt-4">
+										<Button disabled={busy} onclick={regenerateCitationKey}
+											>{$t('Regenerate citation key')}</Button
+										>
+									</div>
+								</div>
+							{/if}
+						</Tabs.Content>
+						<Tabs.Content value="danger">
+							{#if open && section === 'danger'}
+								<div class="grid grid-cols-1 gap-3">
+									<div>
+										<h2 class="text-error-700-300">{$t('Delete Item')}</h2>
+										<p class="text-surface-600-400">
+											{$t(
+												'Associated files, annotations, and assignments of this Item to Projects will also be removed.'
+											)}
+										</p>
+									</div>
+									{#if deleteArmed}
+										<p class="text-sm text-error-700-300" role="alert">
+											{$t('This cannot be undone. Delete this Item permanently?')}
+										</p>
+										<div class="flex flex-wrap gap-2">
+											<Button disabled={busy} onclick={() => (deleteArmed = false)}
+												>{$t('Cancel')}</Button
+											>
+
+											<Button variant="danger-filled" disabled={busy} onclick={confirmDeleteItem}
+												>{$t('Delete Item permanently')}</Button
+											>
+										</div>
+									{:else}
+										<Button variant="danger" disabled={busy} onclick={deleteItem}
+											>{$t('Delete Item permanently')}</Button
+										>
+									{/if}
+								</div>
+							{/if}
+						</Tabs.Content>
+					</div>
+				</Tabs>
 			</Dialog.Content>
 		</Dialog.Positioner>
 	</Portal>

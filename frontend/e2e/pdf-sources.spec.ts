@@ -189,8 +189,15 @@ test('PDF overlays private and two Projects, while writes keep independent desti
 		.selectOption('project-1');
 	await editOrCreate(page);
 	await expect.poll(() => state.writes.length).toBe(1);
-	expect(state.writes[0]).toMatchObject({ scope: 'project', project_id: 'project-2' });
+	expect(state.writes[0]).toMatchObject({ body: 'Edited original source', version: 1 });
+	expect(state.writes[0]).not.toHaveProperty('scope');
+	expect(state.writes[0]).not.toHaveProperty('project_id');
 	await expect(page.getByText('Saved', { exact: true })).toBeAttached();
+	// Editing an existing annotation preserves its source independently of the creation destination.
+	await setAnnotationSource(page, 'Second Project', false);
+	await expect(page.getByText('2 annotations loaded')).toBeAttached();
+	await setAnnotationSource(page, 'Second Project');
+	await expect(page.getByText('3 annotations loaded')).toBeAttached();
 	await editOrCreate(page, 'new-project-1');
 	await expect.poll(() => state.writes.length).toBe(2);
 	expect(state.writes[1]).toMatchObject({ scope: 'project', project_id: 'project-1' });

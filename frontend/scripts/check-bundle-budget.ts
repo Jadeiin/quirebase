@@ -116,97 +116,114 @@ if (dashboardPdfDependencies.length) {
 	);
 }
 
-// SvelteKit 3 adds about 12.3 KiB raw / 4.6 KiB gzip to the shared client runtime.
-// Directory pagination and localized filters add about 1.1 KiB raw / 0.3 KiB gzip
-// to the shared shell; Library controls add another 1.4 KiB raw / 0.5 KiB gzip.
-// Refresh affected budgets against the locked build, including earlier directory changes.
+// Skeleton's supported component stylesheet adds shared CSS; Progress and Navigation
+// stay in the shell, while DateField/Combobox/Listbox/SegmentedControl remain route-owned.
+// The locked build measures 638.2 KiB raw / 177.4 KiB gzip for the shell (formerly
+// 523.2 / 163.7), including 164.0 KiB CSS / 18.8 KiB gzip. Refresh route budgets
+// against that build with about 2% headroom; never load the calendar in the shell.
+if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
+	throw new Error('DatePicker code leaked into the application shell');
+}
+
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	raw: 536000,
-	gzip: 168000
+	raw: 665000,
+	gzip: 186000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
-	raw: 587000,
-	gzip: 187000
+	raw: 875000,
+	gzip: 250000
+});
+enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
+	raw: 790000,
+	gzip: 222000
+});
+enforce('Account route', routeBundle('/(app)/account'), {
+	raw: 781000,
+	gzip: 220000
+});
+enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
+	raw: 795000,
+	gzip: 227000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
-	raw: 575000,
-	gzip: 183000
+	raw: 811000,
+	gzip: 230000
 });
 enforce(
 	'Item overview route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)'),
 	{
-		raw: 591000,
-		gzip: 187000
+		raw: 783000,
+		gzip: 223000
 	}
 );
 enforce(
 	'Item metadata route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata'),
 	{
-		raw: 598000,
-		gzip: 190000
+		raw: 885000,
+		gzip: 252000
 	}
 );
 enforce(
 	'Item files route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files'),
 	{
-		raw: 597000,
-		gzip: 190000
+		raw: 789000,
+		gzip: 226000
 	}
 );
 enforce(
 	'Item organize route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
-		raw: 597000,
-		gzip: 190000
+		raw: 788000,
+		gzip: 225000
 	}
 );
 enforce(
 	'Item annotations route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
-		raw: 592000,
-		gzip: 189000
+		raw: 797000,
+		gzip: 228000
 	}
 );
 enforce(
 	'Item discussion route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
-		raw: 593000,
-		gzip: 190000
+		raw: 785000,
+		gzip: 226000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
-	raw: 548000,
-	gzip: 175000
+	raw: 677000,
+	gzip: 192000
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
-	raw: 558000,
-	gzip: 179000
+	raw: 699000,
+	gzip: 199000
 });
 enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
-	raw: 568000,
-	gzip: 184000
+	raw: 729000,
+	gzip: 207000
 });
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
-	raw: 549000,
-	gzip: 176000
+	raw: 691000,
+	gzip: 196000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
-	raw: 546000,
-	gzip: 175000
+	raw: 675000,
+	gzip: 191000
 });
 enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
-	raw: 550000,
-	gzip: 177000
+	raw: 681000,
+	gzip: 194000
 });
 enforce('Admin maintenance route', routeBundle('/(app)/admin/maintenance'), {
-	raw: 552000,
-	gzip: 178000
+	raw: 681000,
+	gzip: 194000
 });
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
 	raw: 8_000_000,

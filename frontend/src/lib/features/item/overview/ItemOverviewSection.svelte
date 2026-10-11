@@ -212,7 +212,7 @@
 				</div>
 				<div>
 					<dt class="text-surface-600-400">{$t('Citation key')}</dt>
-					<dd class="m-0"><code>{details?.metadata.bibtex_key ?? '—'}</code></dd>
+					<dd class="m-0"><code>{details?.metadata.citation_key ?? '—'}</code></dd>
 				</div>
 			</dl>
 		</Panel>

@@ -1,9 +1,17 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+	import { Navigation } from '@skeletonlabs/skeleton-svelte';
 	import type { Snippet } from 'svelte';
-
 	let { label, children } = $props<{ label: string; children: Snippet }>();
 </script>
 
-<nav class="mb-4 flex gap-1 overflow-x-auto border-b border-surface-300-700" aria-label={label}>
-	{@render children()}
-</nav>
+<Navigation
+	layout="bar"
+	class="mb-4 overflow-x-auto border-b border-surface-300-700 bg-transparent p-0"
+>
+	{#snippet element(attributes)}
+		<nav {...attributes as HTMLAttributes<HTMLElement>} aria-label={label}>
+			<Navigation.Menu class="gap-1">{@render children()}</Navigation.Menu>
+		</nav>
+	{/snippet}
+</Navigation>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Progress } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Icon from '#lib/design/Icon.svelte';
@@ -46,7 +47,7 @@
 				'size-2.5 shrink-0 rounded-full',
 				state === 'succeeded' && 'bg-success-500-500',
 				(state === 'failed' || state === 'cancelled') && 'bg-error-500-500',
-				!state || !isTerminalWorkflowState(state) ? 'bg-primary-500-500 animate-pulse' : ''
+				!state || !isTerminalWorkflowState(state) ? 'bg-primary-500-500' : ''
 			]}
 			aria-hidden="true"
 		></span>
@@ -57,6 +58,15 @@
 							.error}{/if}{:else if status.data}{status.data.state}{#if status.data.error}:
 						{status.data.error}{/if}{:else}{$t('Starting…')}{/if}
 			</span>
+			{#if !state || !isTerminalWorkflowState(state)}
+				<Progress value={null} aria-label={job.label}>
+					<Progress.Track class="h-1"
+						><Progress.Range
+							class="bg-primary-700-300 motion-reduce:animate-none"
+						/></Progress.Track
+					>
+				</Progress>
+			{/if}
 		</div>
 		<Button
 			variant="icon"

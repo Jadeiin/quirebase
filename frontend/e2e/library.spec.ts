@@ -1,6 +1,6 @@
-import { directoryPage } from './helpers';
+import { tagPage, directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
-import { mockSession } from './helpers';
+import { chooseSearchOption, mockSession } from './helpers';
 
 test('a Project filter outside the first directory page resolves directly and survives search', async ({
 	page
@@ -16,7 +16,9 @@ test('a Project filter outside the first directory page resolves directly and su
 		allowed_participation_changes: [],
 		authorization: { allowed: [] }
 	}));
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage(projects, route) })
 	);
@@ -32,11 +34,15 @@ test('a Project filter outside the first directory page resolves directly and su
 	await page.goto('/workspace/workspace-1/library?project=project-26');
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
 	await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(
-		'project-26'
+		'Project 26'
 	);
+	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
 	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
+	await page.getByRole('combobox', { name: 'Project', exact: true }).press('Escape');
 	await page.getByRole('button', { name: 'Load more Projects' }).click();
+	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
 	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
+	await page.getByRole('combobox', { name: 'Project', exact: true }).press('Escape');
 	await page.getByPlaceholder('Search title, author, Tag, or full text').fill('retained filter');
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
 	await expect(page).toHaveURL(/project=project-26/);
@@ -47,7 +53,9 @@ test('library renders canonical rich titles and exposes later pages', async ({ p
 	await mockSession(page);
 	const requestedPages: number[] = [];
 	const requestedQueries: Array<{ query: string | null; q: string | null }> = [];
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -104,7 +112,9 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 			}
 		})
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -153,7 +163,9 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 
 test('Library history navigation restores filter drafts and clears selection', async ({ page }) => {
 	await mockSession(page);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -204,7 +216,9 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 	await mockSession(page);
 	let added = false;
 	let projectReads = 0;
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
 		route.fulfill({ json: [] })
 	);
@@ -291,7 +305,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
 	await page.getByLabel('Select this page').check();
 	await page.getByLabel('Bulk action').selectOption('add_project');
-	await page.getByLabel('Select Project').selectOption('project-1');
+	await chooseSearchOption(page, 'Select Project', 'Research');
 	await page.getByRole('button', { name: 'Apply' }).click();
 	await expect(page.getByText('Bulk action completed')).toBeVisible();
 	await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
@@ -324,15 +338,16 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 				}
 			})
 		);
-		await page.route('**/api/v1/workspaces/workspace-1/citation-key-preview*', (route) =>
+		await page.route('**/api/v1/account/citation-key-preview*', (route) =>
 			route.fulfill({ json: { key: 'Reader2026' } })
 		);
 
 		await page.goto('/account');
+		await chooseSearchOption(page, 'Workspace for citation style', 'Research');
 		await page
-			.getByLabel('Workspace for citation style and key preview')
-			.selectOption('workspace-1');
-		await page.getByLabel('Default CSL style').selectOption('custom-style-1');
+			.getByLabel('Default CSL style')
+			.getByRole('option', { name: 'Custom style', exact: true })
+			.click();
 		await page.getByLabel('Default citation format').selectOption('bibtex');
 		await page.getByLabel('Include additional identifiers').check();
 		await expect
@@ -366,8 +381,8 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 				}
 			})
 		);
-		await page.route(`**/api/v1/workspaces/${workspaceId}/tags`, (route) =>
-			route.fulfill({ json: [] })
+		await page.route(`**/api/v1/workspaces/${workspaceId}/tags?*`, (route) =>
+			route.fulfill({ json: tagPage([], route) })
 		);
 		await page.route(`**/api/v1/workspaces/${workspaceId}/projects?view=all*`, (route) =>
 			route.fulfill({ json: directoryPage([], route) })
@@ -425,7 +440,9 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 test('library filters do not overflow narrow viewports', async ({ page }) => {
 	await page.setViewportSize({ width: 320, height: 720 });
 	await mockSession(page);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -446,7 +463,9 @@ test('Library sort and file filters persist in navigation and use typed API filt
 	page
 }) => {
 	await mockSession(page);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -467,4 +486,105 @@ test('Library sort and file filters persist in navigation and use typed API filt
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
 	await expect(page.getByRole('combobox', { name: 'Sort', exact: true })).toHaveValue('title');
 	await expect(page.getByRole('combobox', { name: 'Files', exact: true })).toHaveValue('false');
+});
+
+test('Library year calendar keeps numeric year filters and searchable selectors support keyboard selection', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({
+			json: tagPage(
+				[
+					{ id: 'tag-1', name: 'Methods' },
+					{ id: 'tag-2', name: 'Results' }
+				],
+				route
+			)
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	const filters: Array<{ year: string | null; tag: string | null }> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
+		const params = new URL(route.request().url()).searchParams;
+		filters.push({ year: params.get('year'), tag: params.get('tag') });
+		return route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } });
+	});
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	const year = page.getByRole('textbox', { name: 'Year', exact: true });
+	await year.fill('2024');
+	await page.getByRole('button', { name: 'Choose date for Year', exact: true }).click();
+	await page
+		.getByRole('application', { name: 'Calendar for Year', exact: true })
+		.getByRole('button', { name: '2023', exact: true })
+		.click();
+	const tag = page.getByRole('combobox', { name: 'Tag', exact: true });
+	await tag.fill('Meth');
+	await expect(page.getByRole('option', { name: 'Methods', exact: true })).toBeVisible();
+	await tag.press('ArrowDown');
+	await tag.press('Enter');
+	await expect(tag).toHaveValue('Methods');
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect.poll(() => filters.at(-1)).toEqual({ year: '2023', tag: 'tag-1' });
+	await page.getByRole('button', { name: 'Clear filters' }).click();
+	await expect(year).toHaveValue('');
+	await expect(tag).toHaveValue('');
+});
+
+test('Library loads Tag options on demand, searches server pages and resolves a selected Tag outside the first page', async ({
+	page
+}) => {
+	await mockSession(page);
+	const tags = Array.from({ length: 60 }, (_, index) => ({
+		id: `tag-${index + 1}`,
+		name: `Tag ${String(index + 1).padStart(2, '0')}`
+	}));
+	const reads: Array<{ offset: number; search: string | null; tag: string | null; limit: number }> =
+		[];
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) => {
+		const query = new URL(route.request().url()).searchParams;
+		reads.push({
+			offset: Number(query.get('offset') ?? 0),
+			limit: Number(query.get('limit')),
+			search: query.get('search'),
+			tag: query.get('tag_id')
+		});
+		return route.fulfill({ json: tagPage(tags, route) });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+	);
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	expect(reads).toEqual([]);
+	await page.getByRole('button', { name: 'Show options for Tag', exact: true }).click();
+	await expect(page.getByRole('option', { name: 'Tag 25', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Tag 26', exact: true })).toHaveCount(0);
+	expect(reads).toEqual([{ offset: 0, limit: 25, search: null, tag: null }]);
+	await page.getByRole('button', { name: 'Load more Tags', exact: true }).click();
+	await expect(page.getByRole('option', { name: 'Tag 50', exact: true })).toBeVisible();
+	expect(reads[1].offset).toBe(25);
+	const loadMore = page.getByRole('button', { name: 'Load more Tags', exact: true });
+	await loadMore.focus();
+	await loadMore.press('Enter');
+	await expect(page.getByRole('option', { name: 'Tag 60', exact: true })).toBeVisible();
+	expect(reads[2].offset).toBe(50);
+	await chooseSearchOption(page, 'Tag', 'Tag 60');
+	await expect
+		.poll(() => reads.some((read) => read.search === 'Tag 60' && read.offset === 0))
+		.toBe(true);
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect(page).toHaveURL(/tag=tag-60/);
+	await page.reload();
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Tag', exact: true })).toHaveValue('Tag 60');
+	await expect
+		.poll(() => reads.some((read) => read.tag === 'tag-60' && read.limit === 1))
+		.toBe(true);
 });

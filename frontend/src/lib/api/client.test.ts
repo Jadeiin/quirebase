@@ -29,6 +29,7 @@ describe('apiRequest', () => {
 			{
 				body: {
 					title: 'Item',
+					reference_type: 'document',
 					keywords: [],
 					urls: [],
 					authors: [],
@@ -554,6 +555,7 @@ describe('structured API errors', () => {
 				{
 					body: {
 						title: 'Item',
+						reference_type: 'document',
 						keywords: [],
 						urls: [],
 						authors: [],

@@ -1,7 +1,9 @@
 <script lang="ts">
+	import TagSelect from '#lib/features/tags/TagSelect.svelte';
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import { resolve } from '$app/paths';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { Tabs } from '@skeletonlabs/skeleton-svelte';
+	import { SegmentedControl, Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { can, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
@@ -37,6 +39,16 @@
 	let mode = $state('doi');
 	let scannedMode = $state('');
 	let tagFilter = $state('');
+	let submittedTagFilter = $state('');
+	$effect(() => {
+		const filter = tagFilter.trim();
+		if (filter === submittedTagFilter) return;
+		const timeout = setTimeout(() => {
+			submittedTagFilter = filter;
+			tagPage = 1;
+		}, 200);
+		return () => clearTimeout(timeout);
+	});
 	let tagPage = $state(1);
 	let sourceTag = $state('');
 	let targetTag = $state('');
@@ -57,20 +69,18 @@
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 
-	const tags = createQuery(() => tagsQuery(workspaceId));
+	const tags = createQuery(() => ({
+		...tagsQuery(workspaceId, submittedTagFilter, (tagPage - 1) * pageSize, pageSize),
+		enabled: activeTool === 'tags'
+	}));
 	const duplicates = createQuery(() => duplicateScanQuery(workspaceId, scannedMode));
 	const citationStyles = createQuery(() => citationStylesQuery(workspaceId, styleQuery));
 
-	const filteredTags = $derived(
-		(tags.data ?? []).filter((tag) =>
-			tag.name.toLocaleLowerCase().includes(tagFilter.toLocaleLowerCase())
-		)
-	);
-	const tagPageCount = $derived(Math.max(1, Math.ceil(filteredTags.length / pageSize)));
-	const currentTagPage = $derived(Math.min(tagPage, tagPageCount));
-	const visibleTags = $derived(
-		filteredTags.slice((currentTagPage - 1) * pageSize, currentTagPage * pageSize)
-	);
+	const tagPageCount = $derived(Math.max(1, Math.ceil((tags.data?.total ?? 0) / pageSize)));
+	$effect(() => {
+		// Only a completed server response can establish that the current page disappeared.
+		if (tags.isSuccess && !tags.isFetching && tagPage > tagPageCount) tagPage = tagPageCount;
+	});
 
 	async function tagMutation(operation: () => Promise<unknown>, success: string): Promise<boolean> {
 		busy = true;
@@ -217,23 +227,17 @@
 	value={activeTool}
 	onValueChange={(details) => (activeTool = (details.value ?? 'duplicates') as Tool)}
 >
-	<Tabs.List
-		class="mb-5 inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border border-surface-300-700 bg-surface-200-800 p-1"
-		aria-label={$t('Library tools')}
-	>
-		<Tabs.Trigger
-			value="duplicates"
-			class="rounded-md border-0 bg-transparent px-3.5 py-2 text-sm font-semibold whitespace-nowrap text-surface-600-400 transition-colors hover:text-surface-900-100 data-selected:bg-surface-50-950 data-selected:text-primary-800-200 data-selected:shadow-sm"
+	<Tabs.List class="max-w-full overflow-x-auto" aria-label={$t('Library tools')}>
+		<Tabs.Indicator class="bg-primary-700-300" />
+		<Tabs.Trigger value="duplicates" class="whitespace-nowrap data-selected:text-primary-700-300"
 			>{$t('Duplicate review')}</Tabs.Trigger
 		>
-		<Tabs.Trigger
-			value="tags"
-			class="rounded-md border-0 bg-transparent px-3.5 py-2 text-sm font-semibold whitespace-nowrap text-surface-600-400 transition-colors hover:text-surface-900-100 data-selected:bg-surface-50-950 data-selected:text-primary-800-200 data-selected:shadow-sm"
+		<Tabs.Trigger value="tags" class="whitespace-nowrap data-selected:text-primary-700-300"
 			>{$t('Manage Tags')}</Tabs.Trigger
 		>
 		<Tabs.Trigger
 			value="citation-styles"
-			class="rounded-md border-0 bg-transparent px-3.5 py-2 text-sm font-semibold whitespace-nowrap text-surface-600-400 transition-colors hover:text-surface-900-100 data-selected:bg-surface-50-950 data-selected:text-primary-800-200 data-selected:shadow-sm"
+			class="whitespace-nowrap data-selected:text-primary-700-300"
 			>{$t('Citation Styles')}</Tabs.Trigger
 		>
 	</Tabs.List>
@@ -260,24 +264,18 @@
 				>
 			</div>
 			<div class="border-b border-surface-300-700 bg-surface-100-900 px-5 py-3">
-				<p class="mb-2 text-xs font-bold tracking-wide text-surface-600-400 uppercase">
-					{$t('Match criteria')}
-				</p>
-				<div class="flex flex-wrap gap-2" role="group" aria-label={$t('Match criteria')}>
-					{#each [{ value: 'doi', label: $t('Same DOI') }, { value: 'title', label: $t('Same title') }, { value: 'similar', label: $t('Similar title') }] as option (option.value)}
-						<button
-							type="button"
-							class={[
-								'rounded-full border px-3 py-1.5 text-sm font-medium',
-								mode === option.value
-									? 'border-primary-700-300 bg-primary-50-950 text-primary-800-200'
-									: 'border-surface-300-700 bg-surface-50-950 text-surface-600-400 hover:border-surface-400-600'
-							]}
-							aria-pressed={mode === option.value}
-							onclick={() => (mode = option.value)}>{option.label}</button
-						>
-					{/each}
-				</div>
+				<SegmentedControl value={mode} onValueChange={(details) => (mode = details.value ?? 'doi')}>
+					<SegmentedControl.Label>{$t('Match criteria')}</SegmentedControl.Label>
+					<SegmentedControl.Control class="flex-wrap">
+						<SegmentedControl.Indicator />
+						{#each [{ value: 'doi', label: $t('Same DOI') }, { value: 'title', label: $t('Same title') }, { value: 'similar', label: $t('Similar title') }] as option (option.value)}
+							<SegmentedControl.Item value={option.value}>
+								<SegmentedControl.ItemText>{option.label}</SegmentedControl.ItemText>
+								<SegmentedControl.ItemHiddenInput />
+							</SegmentedControl.Item>
+						{/each}
+					</SegmentedControl.Control>
+				</SegmentedControl>
 			</div>
 			<div class="p-5">
 				{#if !scannedMode}
@@ -294,7 +292,7 @@
 						{$t('The match criteria changed. Start a new check to refresh these results.')}
 					</Notice>
 				{:else if duplicates.isPending || duplicates.isFetching}
-					<p class="text-surface-600-400">{$t('Scanning…')}</p>
+					<LoadingState label={$t('Scanning…')} />
 				{:else}{#each duplicates.data?.groups ?? [] as group, index (group
 						.map((item) => item.id)
 						.join(':'))}
@@ -322,7 +320,7 @@
 						<h2>{$t('Manage Tags')}</h2>
 						<p class="text-surface-600-400">
 							{$t('{count, plural, one {# Tag} other {# Tags}}', {
-								count: filteredTags.length
+								count: tags.data?.total ?? 0
 							})}
 						</p>
 					</div>
@@ -330,41 +328,45 @@
 						<input
 							class="input w-auto min-w-36"
 							bind:value={tagFilter}
-							oninput={() => (tagPage = 1)}
 							placeholder={$t('Filter Tags')}
 						/>
 					{/snippet}
 				</SectionHeader>
-				{#each visibleTags as tag (tag.id)}
-					<ItemRow class="grid-cols-[minmax(0,1fr)_auto] items-center">
-						<div>
-							<strong>{tag.name}</strong>
-							<p class="mb-0 text-sm text-surface-600-400">
-								{$t('{count, plural, one {# Item} other {# Items}}', {
-									count: tag.accessible_item_count
-								})}
-							</p>
-						</div>
-						<div class="flex flex-wrap gap-2">
-							<Button
-								as="a"
-								href={resolve(
-									workspaceHref(workspaceId, `library?tag=${encodeURIComponent(tag.id)}`)
-								)}>{$t('View Items')}</Button
-							>
-							{#if can(tag.authorization, 'tag.manage')}<Button
-									disabled={busy}
-									onclick={() => renameTag(tag)}>{$t('Rename')}</Button
-								><Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
-									>{$t('Delete')}</Button
-								>{/if}
-						</div>
-					</ItemRow>
-				{:else}<p class="text-surface-600-400">{$t('No Tags match this filter.')}</p>{/each}
+				{#if tags.isError}<Notice variant="error">
+						{apiErrorMessage(tags.error, $t('Unable to load Tags'))}
+					</Notice>
+				{:else if tags.isPending}<LoadingState label={$t('Loading Tags…')} />
+				{:else}{#each tags.data?.items ?? [] as tag (tag.id)}
+						<ItemRow class="grid-cols-[minmax(0,1fr)_auto] items-center">
+							<div>
+								<strong>{tag.name}</strong>
+								<p class="mb-0 text-sm text-surface-600-400">
+									{$t('{count, plural, one {# Item} other {# Items}}', {
+										count: tag.accessible_item_count
+									})}
+								</p>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								<Button
+									as="a"
+									href={resolve(
+										workspaceHref(workspaceId, `library?tag=${encodeURIComponent(tag.id)}`)
+									)}>{$t('View Items')}</Button
+								>
+								{#if can(tag.authorization, 'tag.manage')}<Button
+										disabled={busy}
+										onclick={() => renameTag(tag)}>{$t('Rename')}</Button
+									><Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
+										>{$t('Delete')}</Button
+									>{/if}
+							</div>
+						</ItemRow>
+					{:else}<p class="text-surface-600-400">{$t('No Tags match this filter.')}</p>{/each}{/if}
 				{#if tagPageCount > 1}
 					<Pagination
-						page={currentTagPage}
+						page={tagPage}
 						pageCount={tagPageCount}
+						busy={tags.isFetching}
 						label={$t('Tag pages')}
 						onPage={(next) => (tagPage = next)}
 					/>
@@ -375,21 +377,19 @@
 				<p class="text-sm text-surface-600-400">
 					{$t('Move every assignment from the source Tag into the target Tag.')}
 				</p>
-				<label
-					>{$t('Source Tag')}<select class="select" bind:value={sourceTag}
-						><option value="">{$t('Select a Tag')}</option
-						>{#each (tags.data ?? []).filter( (tag) => can(tag.authorization, 'tag.manage') ) as tag (tag.id)}<option
-								value={tag.id}>{tag.name}</option
-							>{/each}</select
-					></label
-				>
-				<label
-					>{$t('Target Tag')}<select class="select" bind:value={targetTag}
-						><option value="">{$t('Select a Tag')}</option
-						>{#each tags.data ?? [] as tag (tag.id)}<option value={tag.id}>{tag.name}</option
-							>{/each}</select
-					></label
-				>
+				<TagSelect
+					label={$t('Source Tag')}
+					bind:value={sourceTag}
+					emptyLabel={$t('Select a Tag')}
+					disabled={busy}
+					manageOnly
+				/>
+				<TagSelect
+					label={$t('Target Tag')}
+					bind:value={targetTag}
+					emptyLabel={$t('Select a Tag')}
+					disabled={busy}
+				/>
 				<Button
 					variant="filled"
 					disabled={busy || !sourceTag || !targetTag || sourceTag === targetTag}

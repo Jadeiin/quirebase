@@ -2,6 +2,8 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { components } from '#lib/api/schema.js';
+	import SectionTabs from '#lib/design/SectionTabs.svelte';
+	import SectionTab from '#lib/design/SectionTab.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import ItemActions from '#lib/features/item/ItemActions.svelte';
 	import { msg, t, type MessageKey } from '#lib/i18n.js';
@@ -62,15 +64,8 @@
 				onchanged={onChanged}
 			/>{/key}{/if}
 </div>
-<nav
-	class="mb-6 flex gap-1 overflow-x-auto border-b border-surface-300-700"
-	aria-label={$t('Item sections')}
->
+<SectionTabs label={$t('Item sections')}>
 	{#each Object.entries(labels) as [key, label] (key)}
-		<a
-			class="border-b-2 border-transparent px-3 py-2.5 text-sm font-semibold whitespace-nowrap text-surface-700-300 no-underline transition-colors hover:text-primary-700-300 aria-[current=page]:border-primary-700-300 aria-[current=page]:text-primary-700-300"
-			aria-current={section === key ? 'page' : undefined}
-			href={resolve(sectionPath(key))}>{$t(label)}</a
-		>
+		<SectionTab current={section === key} href={resolve(sectionPath(key))}>{$t(label)}</SectionTab>
 	{/each}
-</nav>
+</SectionTabs>

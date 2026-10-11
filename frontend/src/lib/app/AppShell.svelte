@@ -1,4 +1,5 @@
 <script lang="ts">
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -107,7 +108,7 @@
 
 {#if session.isPending}
 	<main class="mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]">
-		<p class="text-surface-600-400">{$t('Loading Quirebase…')}</p>
+		<LoadingState label={$t('Loading Quirebase…')} />
 	</main>
 {:else if !session.data?.authenticated}
 	<Login />

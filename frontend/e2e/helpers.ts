@@ -170,3 +170,24 @@ export function directoryPage(items: unknown[], route: Route) {
 	const offset = Number(params.get('offset') ?? 0);
 	return { items: items.slice(offset, offset + limit), total: items.length, limit, offset };
 }
+
+export function tagPage<T extends { id: string; name: string }>(items: T[], route: Route) {
+	const params = new URL(route.request().url()).searchParams;
+	const search = params.get('search')?.trim().toLocaleLowerCase() ?? '';
+	const selected = params.get('tag_id');
+	return directoryPage(
+		items.filter(
+			(tag) => (!selected || tag.id === selected) && tag.name.toLocaleLowerCase().includes(search)
+		),
+		route
+	);
+}
+
+export async function chooseSearchOption(page: Page, label: string, optionLabel: string) {
+	const input = page.getByRole('combobox', { name: label, exact: true });
+	await input.fill(optionLabel);
+	await page
+		.getByRole('listbox', { name: label, exact: true })
+		.getByRole('option', { name: optionLabel, exact: true })
+		.click();
+}

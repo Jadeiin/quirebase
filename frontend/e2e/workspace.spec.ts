@@ -1,4 +1,4 @@
-import { directoryPage } from './helpers';
+import { tagPage, directoryPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { mockSession, mockWorkspaces, workspaceView } from './helpers';
 
@@ -87,7 +87,9 @@ test('an explicit Workspace URL wins over the saved default, and switching chang
 			}
 		});
 	});
-	await page.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/*/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/*/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -385,7 +387,9 @@ test('availability recovery releases its guard for a later membership revocation
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -434,7 +438,9 @@ test('membership revoked while a page is open returns the user to the Workspace 
 	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -545,7 +551,9 @@ test('a pending Workspace A response cannot replace Workspace B after switching'
 			}
 		});
 	});
-	await page.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/*/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/*/projects?view=all*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
@@ -760,7 +768,9 @@ test('browser history and two tabs retain their explicit Workspace URLs across r
 				}
 			});
 		});
-		await activePage.route('**/api/v1/workspaces/*/tags', (route) => route.fulfill({ json: [] }));
+		await activePage.route('**/api/v1/workspaces/*/tags?*', (route) =>
+			route.fulfill({ json: tagPage([], route) })
+		);
 		await activePage.route('**/api/v1/workspaces/*/projects?view=all*', (route) =>
 			route.fulfill({ json: directoryPage([], route) })
 		);

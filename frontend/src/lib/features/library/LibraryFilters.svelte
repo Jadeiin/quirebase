@@ -1,7 +1,12 @@
 <script lang="ts">
+	import DateField from '#lib/design/DateField.svelte';
+	import { Collapsible } from '@skeletonlabs/skeleton-svelte';
+	import SearchSelect from '#lib/design/SearchSelect.svelte';
+	import TagSelect from '#lib/features/tags/TagSelect.svelte';
+	import { buttonClass } from '#lib/design/button-classes.js';
 	import Icon from '#lib/design/Icon.svelte';
 	import Panel from '#lib/design/Panel.svelte';
-	import type { LibraryProject, LibraryTag } from '#lib/features/library/queries.js';
+	import type { LibraryProject } from '#lib/features/library/queries.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
 
@@ -15,7 +20,6 @@
 		sort = $bindable<'updated' | 'created' | 'title'>('updated'),
 		fileFilter = $bindable(''),
 		filtersOpen = $bindable(false),
-		tags = [],
 		projects = [],
 		onSearch,
 		onClear
@@ -29,7 +33,6 @@
 		sort: 'updated' | 'created' | 'title';
 		fileFilter: string;
 		filtersOpen: boolean;
-		tags: LibraryTag[];
 		projects: LibraryProject[];
 		onSearch: () => void;
 		onClear: () => void;
@@ -44,67 +47,60 @@
 		onSearch();
 	}}
 >
-	<div class="flex flex-wrap items-center gap-2">
-		<span class="ml-1 text-surface-600-400"><Icon name="search" /></span>
-		<input
-			class="min-w-40 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600-400"
-			bind:value={query}
-			placeholder={$t('Search title, author, Tag, or full text')}
-		/>
-		<Button
-			type="button"
-			class="ml-auto"
-			aria-expanded={filtersOpen}
-			onclick={() => (filtersOpen = !filtersOpen)}>{$t('Filters')}</Button
-		>
-		<Button variant="filled">{$t('Search')}</Button>
-	</div>
-	{#if filtersOpen}
-		<div
-			class="grid grid-cols-1 gap-3 border-t border-surface-300-700 pt-4 sm:grid-cols-2 xl:grid-cols-5"
-		>
-			<label
-				>{$t('Tag')}<select class="select" bind:value={tag}
-					><option value="">{$t('All Tags')}</option>{#each tags as option (option.id)}<option
-							value={option.id}>{option.name}</option
-						>{/each}</select
-				></label
+	<Collapsible
+		open={filtersOpen}
+		onOpenChange={(details) => (filtersOpen = details.open)}
+		class="items-stretch"
+	>
+		<div class="flex flex-wrap items-center gap-2">
+			<span class="ml-1 text-surface-600-400"><Icon name="search" /></span>
+			<input
+				class="min-w-40 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600-400"
+				bind:value={query}
+				placeholder={$t('Search title, author, Tag, or full text')}
+			/>
+			<Collapsible.Trigger class={`ml-auto ${buttonClass('tonal')}`}
+				>{$t('Filters')}</Collapsible.Trigger
 			>
-			<label
-				>{$t('Project')}<select class="select" bind:value={project}
-					><option value="">{$t('All Projects')}</option
-					>{#each projects as option (option.id)}<option value={option.id}>{option.name}</option
-						>{/each}</select
-				></label
-			>
-			<label
-				>{$t('Year')}<input
-					class="input"
-					inputmode="numeric"
-					maxlength="4"
-					bind:value={year}
-				/></label
-			>
-			<label>{$t('Contributor')}<input class="input" bind:value={author} /></label>
-			<label>{$t('Keyword')}<input class="input" bind:value={keyword} /></label>
-			<label
-				>{$t('Files')}<select class="select" bind:value={fileFilter}>
-					<option value="">{$t('All Items')}</option><option value="true">{$t('With files')}</option
-					>
-					<option value="false">{$t('Without files')}</option>
-				</select></label
-			>
-			<label
-				>{$t('Sort')}<select class="select" bind:value={sort}>
-					<option value="updated">{$t('Recently updated')}</option><option value="created"
-						>{$t('Recently added')}</option
-					>
-					<option value="title">{$t('Title')}</option>
-				</select></label
-			>
+			<Button variant="filled">{$t('Search')}</Button>
 		</div>
-		<div class="flex flex-wrap justify-end gap-2">
-			<Button type="button" onclick={onClear}>{$t('Clear filters')}</Button>
-		</div>
-	{/if}
+		<Collapsible.Content class="grid grid-cols-1 gap-3">
+			<div
+				class="grid grid-cols-1 gap-3 border-t border-surface-300-700 pt-4 sm:grid-cols-2 xl:grid-cols-5"
+			>
+				<TagSelect label={$t('Tag')} bind:value={tag} emptyLabel={$t('All Tags')} />
+				<SearchSelect
+					label={$t('Project')}
+					bind:value={project}
+					emptyLabel={$t('All Projects')}
+					options={projects.map((option: LibraryProject) => ({
+						value: option.id,
+						label: option.name
+					}))}
+				/>
+				<DateField precision="year" label={$t('Year')} bind:value={year} />
+				<label>{$t('Contributor')}<input class="input" bind:value={author} /></label>
+				<label>{$t('Keyword')}<input class="input" bind:value={keyword} /></label>
+				<label
+					>{$t('Files')}<select class="select" bind:value={fileFilter}>
+						<option value="">{$t('All Items')}</option><option value="true"
+							>{$t('With files')}</option
+						>
+						<option value="false">{$t('Without files')}</option>
+					</select></label
+				>
+				<label
+					>{$t('Sort')}<select class="select" bind:value={sort}>
+						<option value="updated">{$t('Recently updated')}</option><option value="created"
+							>{$t('Recently added')}</option
+						>
+						<option value="title">{$t('Title')}</option>
+					</select></label
+				>
+			</div>
+			<div class="flex flex-wrap justify-end gap-2">
+				<Button type="button" onclick={onClear}>{$t('Clear filters')}</Button>
+			</div>
+		</Collapsible.Content>
+	</Collapsible>
 </Panel>

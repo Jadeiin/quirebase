@@ -64,7 +64,7 @@
 	<Portal>
 		<Menu.Positioner class="z-100">
 			<Menu.Content
-				class="max-h-[min(70vh,32rem)] min-w-60 overflow-y-auto rounded-container border border-surface-300-700 bg-surface-50-950 p-1 text-surface-900-100 shadow-xl"
+				class="max-h-[min(70vh,32rem)] w-72 max-w-[calc(100vw-2rem)] min-w-0 overflow-y-auto border-surface-300-700 p-1 shadow-xl"
 			>
 				<div class="px-2.5 py-1.5 text-xs font-bold tracking-wide text-surface-600-400 uppercase">
 					{$t('Workspaces')}
@@ -75,7 +75,7 @@
 					{#each workspaces.data as workspace (workspace.id)}
 						<Menu.Item
 							value={`workspace-${workspace.id}`}
-							class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[active=true]:bg-primary-50-950 data-[active=true]:text-primary-800-200 data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+							class="min-w-0 cursor-pointer justify-start gap-2 px-2.5 py-2 text-sm outline-none data-[active=true]:bg-primary-50-950 data-[active=true]:text-primary-800-200 data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 							data-active={workspace.id === workspaceId}
 							onclick={() => openWorkspace(workspace.id)}
 						>
@@ -91,10 +91,10 @@
 				{:else}
 					<p class="px-2.5 py-2 text-sm text-surface-600-400">{$t('No workspaces available')}</p>
 				{/if}
-				<Menu.Separator class="m-1 h-px bg-surface-300-700" />
+				<Menu.Separator class="my-1 h-px bg-surface-300-700" />
 				<Menu.Item
 					value="manage-workspaces"
-					class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+					class="min-w-0 cursor-pointer justify-start gap-2 px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 					onclick={() => goto(resolve('workspace'))}
 					><Icon name="panel" />{$t('Manage workspaces')}</Menu.Item
 				>
@@ -102,7 +102,7 @@
 				{#if workspaceId}
 					<Menu.Item
 						value="workspace-settings"
-						class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+						class="min-w-0 cursor-pointer justify-start gap-2 px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 						onclick={() => goto(resolve(workspaceHref(workspaceId, 'settings')))}
 						><Icon name="settings" /> {$t('Workspace settings')}</Menu.Item
 					>

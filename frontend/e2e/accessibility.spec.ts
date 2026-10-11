@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { mockWorkspaces } from './helpers';
+import { tagPage, mockWorkspaces } from './helpers';
 
 async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
 	await mockWorkspaces(page);
@@ -143,3 +143,46 @@ test('administration overview has no high-impact accessibility violations', asyn
 	await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 	await expectNoHighImpactViolations(page);
 });
+
+for (const theme of ['light', 'dark']) {
+	test(`year calendar and searchable Library filters have no high-impact accessibility violations in ${theme} mode`, async ({
+		page
+	}) => {
+		await page.addInitScript(
+			(preference) => localStorage.setItem('quirebase:theme', preference),
+			theme
+		);
+		await mockSession(page);
+		await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+			route.fulfill({
+				json: tagPage(
+					Array.from({ length: 30 }, (_, index) => ({
+						id: `tag-${index + 1}`,
+						name: index === 0 ? 'Methods' : `Tag ${index + 1}`
+					})),
+					route
+				)
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+			route.fulfill({ json: { entries: [], total: 0, limit: 25, offset: 0 } })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+			route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+		);
+		await page.goto('/workspace/workspace-1/library');
+		await page.getByRole('button', { name: 'Filters', exact: true }).click();
+		await page.getByRole('textbox', { name: 'Year', exact: true }).fill('2024');
+		await page.getByRole('button', { name: 'Choose date for Year', exact: true }).click();
+		const calendar = page.getByRole('application', { name: 'Calendar for Year', exact: true });
+		await expect(calendar).toBeVisible();
+		await expectNoHighImpactViolations(page);
+		await calendar.getByRole('button', { name: '2023', exact: true }).press('Escape');
+		await page.getByRole('button', { name: 'Show options for Tag', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Load more Tags', exact: true })).toBeVisible();
+		await expectNoHighImpactViolations(page);
+		await page.getByRole('combobox', { name: 'Tag', exact: true }).fill('Meth');
+		await expect(page.getByRole('option', { name: 'Methods', exact: true })).toBeVisible();
+		await expectNoHighImpactViolations(page);
+	});
+}

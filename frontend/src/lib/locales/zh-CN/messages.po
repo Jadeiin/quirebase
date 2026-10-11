@@ -398,6 +398,7 @@ msgstr "批注同步失败"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Annotations"
 msgstr "批注"
 
@@ -495,6 +496,11 @@ msgid "Arrow"
 msgstr "箭头"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Article"
+msgstr "文章"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 msgid "as"
 msgstr "作为"
@@ -585,9 +591,14 @@ msgid "BibTeX and BibLaTeX options"
 msgstr "BibTeX 与 BibLaTeX 选项"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "BibTeX type"
-msgstr "BibTeX 类型"
+#: src/lib/features/item/reference-types.ts
+msgid "Book"
+msgstr "书籍"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Book chapter"
+msgstr "书籍章节"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -638,6 +649,11 @@ msgstr "批量操作已完成"
 #: src/lib/features/library/Library.svelte
 msgid "Bulk action failed"
 msgstr "批量操作失败"
+
+#. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Calendar for {label}"
+msgstr "{label}日历"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -738,6 +754,11 @@ msgstr "选择操作"
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
 msgstr "请选择一位活跃用户作为此工作区所有者。实例管理员不会因此自动获得内容访问权限。"
+
+#. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Choose date for {label}"
+msgstr "选择{label}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -889,6 +910,11 @@ msgstr "已提交"
 #: src/lib/features/tools/Tools.svelte
 msgid "Compare likely duplicate Items before deciding what to retain."
 msgstr "比较可能重复的条目，再决定保留哪些。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Conference paper"
+msgstr "会议论文"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1088,9 +1114,19 @@ msgid "Database: {url}"
 msgstr "数据库：{url}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Dataset"
+msgstr "数据集"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Date"
 msgstr "日期"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Date precision"
+msgstr "日期精度"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -1253,6 +1289,11 @@ msgid "Displayed annotation sources"
 msgstr "显示的批注来源"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Document"
+msgstr "一般文献"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Document bundle downloaded"
 msgstr "文档包已下载"
@@ -1261,6 +1302,11 @@ msgstr "文档包已下载"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Document download options"
 msgstr "文档下载选项"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Document downloads"
+msgstr "文档下载"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
@@ -1409,6 +1455,11 @@ msgid "Encoding"
 msgstr "编码"
 
 #. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Enter a valid {format} date."
+msgstr "请输入有效的 {format} 日期。"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Exact username"
 msgstr "精确用户名"
@@ -1469,6 +1520,11 @@ msgstr "导出书目"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Export lifetime in hours"
 msgstr "导出文件保留时长（小时）"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Export preference sections"
+msgstr "导出偏好设置分组"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1556,7 +1612,7 @@ msgid "First name"
 msgstr "名"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "First page"
 msgstr "第一页"
 
@@ -1587,6 +1643,11 @@ msgid "From year"
 msgstr "起始年份"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Full date"
+msgstr "完整日期"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Full title"
 msgstr "完整名称"
@@ -1595,11 +1656,6 @@ msgstr "完整名称"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "General"
 msgstr "常规"
-
-#. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "General citation options"
-msgstr "通用引用选项"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -1899,6 +1955,11 @@ msgid "Journal abbreviation"
 msgstr "期刊缩写"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Journal article"
+msgstr "期刊论文"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Journal title"
 msgstr "期刊名称"
@@ -1936,7 +1997,7 @@ msgid "Last name or organization"
 msgstr "姓或机构名称"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "Last page"
 msgstr "最后一页"
 
@@ -2003,6 +2064,11 @@ msgstr "加载更多成员"
 #: src/lib/features/library/Library.svelte
 msgid "Load more Projects"
 msgstr "加载更多 Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+msgid "Load more Tags"
+msgstr "加载更多标签"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -2079,6 +2145,12 @@ msgid "Loading reader configuration…"
 msgstr "正在加载阅读器配置…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Loading Tags…"
+msgstr "正在加载标签…"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
 msgid "Loading workspace…"
 msgstr "正在加载工作区…"
@@ -2100,6 +2172,11 @@ msgstr "区域语言"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Look up an identifier"
 msgstr "查询标识符"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Magazine article"
+msgstr "杂志文章"
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
@@ -2174,6 +2251,11 @@ msgstr "管理制项目对参与者及工作区所有者/管理员可见；参�
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Manual creation"
 msgstr "手工创建"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Manuscript"
+msgstr "手稿"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -2353,12 +2435,17 @@ msgid "New Tag name"
 msgstr "新标签名称"
 
 #. js-lingui-explicit-id
-#: src/lib/design/Pagination.svelte
-msgid "Next"
-msgstr "后续"
+#: src/lib/features/item/reference-types.ts
+msgid "Newspaper article"
+msgstr "报纸文章"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/DateField.svelte
+msgid "Next calendar period"
+msgstr "下一时段"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
 msgid "Next page"
 msgstr "下一页"
 
@@ -2468,6 +2555,11 @@ msgstr "没有匹配的条目。"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No matching members."
 msgstr "没有匹配的成员。"
+
+#. js-lingui-explicit-id
+#: src/lib/design/SearchSelect.svelte
+msgid "No matching options."
+msgstr "没有匹配的选项。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -2733,7 +2825,6 @@ msgstr "页"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
-#: src/lib/features/library/LibraryResults.svelte
 msgid "Page {page} of {pageCount}"
 msgstr "第 {page} 页，共 {pageCount} 页"
 
@@ -2762,6 +2853,11 @@ msgstr "密码"
 #: src/lib/features/account/Account.svelte
 msgid "Password changed"
 msgstr "密码已更改"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Patent"
+msgstr "专利"
 
 #. File kind for a PDF revision.
 #. js-lingui-explicit-id
@@ -2898,6 +2994,11 @@ msgid "Preparing…"
 msgstr "正在准备…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Preprint"
+msgstr "预印本"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Preserve bibitem case"
 msgstr "保持 bibitem 大小写"
@@ -2918,12 +3019,12 @@ msgid "Preview metadata"
 msgstr "预览元数据"
 
 #. js-lingui-explicit-id
-#: src/lib/design/Pagination.svelte
-msgid "Previous"
-msgstr "上一页"
+#: src/lib/design/DateField.svelte
+msgid "Previous calendar period"
+msgstr "上一时段"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "Previous page"
 msgstr "上一页"
 
@@ -3025,8 +3126,8 @@ msgstr "出版物"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/PublicationDateField.svelte
 msgid "Publication date"
 msgstr "出版日期"
 
@@ -3220,6 +3321,11 @@ msgstr "重命名"
 #: src/lib/features/tools/Tools.svelte
 msgid "Rename Tag"
 msgstr "重命名标签"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Report"
+msgstr "报告"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -3520,11 +3626,6 @@ msgid "Select a Tag"
 msgstr "选择标签"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Select a Workspace to load its citation styles and preview endpoint. The account route does not infer a Workspace from stored preferences."
-msgstr "请选择一个工作区以加载其引文样式和预览接口。账号页面不会从已保存的偏好设置中推断工作区。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Select Project"
 msgstr "选择项目"
@@ -3581,6 +3682,11 @@ msgid "Show members"
 msgstr "显示成员"
 
 #. js-lingui-explicit-id
+#: src/lib/design/SearchSelect.svelte
+msgid "Show options for {label}"
+msgstr "显示{label}选项"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in"
 msgstr "登录"
@@ -3622,6 +3728,11 @@ msgid "Single response; no continuing access is granted"
 msgstr "仅限本次响应，不授予持续访问权限"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Software"
+msgstr "软件"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Something went wrong. Try again."
 msgstr "发生错误，请重试。"
@@ -3646,6 +3757,11 @@ msgstr "从文献管理器的导出文件中暂存多条记录。"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Stage PDFs"
 msgstr "暂存 PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Standard"
+msgstr "标准"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workflows/WorkflowJobRow.svelte
@@ -3858,6 +3974,11 @@ msgstr "未找到请求的资源。"
 #: src/lib/api/errors.ts
 msgid "The uploaded content is too large."
 msgstr "上传的内容过大。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Thesis"
+msgstr "学位论文"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -4127,6 +4248,12 @@ msgid "Unable to load Projects."
 msgstr "无法加载项目。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Unable to load Tags"
+msgstr "无法加载标签"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Unable to load the dashboard."
 msgstr "无法加载概览。"
@@ -4384,6 +4511,11 @@ msgid "Volume / Issue"
 msgstr "卷 / 期"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Web page"
+msgstr "网页"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "With files"
 msgstr "有文件"
@@ -4449,8 +4581,8 @@ msgstr "工作区已删除"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
-msgid "Workspace for citation style and key preview"
-msgstr "用于引文样式和引用键预览的工作区"
+msgid "Workspace for citation style"
+msgstr "引用样式所属工作区"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
@@ -4549,9 +4681,15 @@ msgstr "输入消息"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/item/PublicationDateField.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Year"
 msgstr "年份"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Year and month"
+msgstr "年和月"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte

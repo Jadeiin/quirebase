@@ -3,6 +3,8 @@
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { msg, t, type MessageKey } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
+	import PublicationDateField from './PublicationDateField.svelte';
+	import { referenceTypeLabels } from './reference-types.js';
 
 	type Metadata = components['schemas']['ItemMetadata-Input'];
 	type ContributorRow = {
@@ -15,8 +17,15 @@
 	type CustomFieldRow = { key: number; name: string; value: string };
 	type Draft = Omit<
 		Metadata,
-		'keywords' | 'urls' | 'authors' | 'editors' | 'identifiers' | 'custom_fields'
+		| 'keywords'
+		| 'urls'
+		| 'authors'
+		| 'editors'
+		| 'identifiers'
+		| 'custom_fields'
+		| 'publication_date'
 	> & {
+		publication_date: string;
 		keywords_text: string;
 		urls_text: string;
 		authors: ContributorRow[];
@@ -55,7 +64,7 @@
 			abstract: value.abstract ?? '',
 			publication_date: value.publication_date ?? '',
 			publication_title: value.publication_title ?? '',
-			reference_type: value.reference_type ?? '',
+			reference_type: value.reference_type ?? 'document',
 			volume: value.volume ?? '',
 			issue: value.issue ?? '',
 			pages: value.pages ?? '',
@@ -63,8 +72,7 @@
 			publisher: value.publisher ?? '',
 			place_published: value.place_published ?? '',
 			journal_abbreviation: value.journal_abbreviation ?? '',
-			bibtex_key: value.bibtex_key ?? '',
-			bibtex_type: value.bibtex_type ?? '',
+			citation_key: value.citation_key ?? '',
 			doi: value.doi ?? '',
 			keywords_text: value.keywords.join('; '),
 			urls_text: value.urls.join('\n'),
@@ -117,7 +125,7 @@
 				.filter(Boolean),
 			publication_date: nullable(draft.publication_date ?? ''),
 			publication_title: nullable(draft.publication_title ?? ''),
-			reference_type: nullable(draft.reference_type ?? ''),
+			reference_type: draft.reference_type,
 			volume: nullable(draft.volume ?? ''),
 			issue: nullable(draft.issue ?? ''),
 			pages: nullable(draft.pages ?? ''),
@@ -125,8 +133,7 @@
 			publisher: nullable(draft.publisher ?? ''),
 			place_published: nullable(draft.place_published ?? ''),
 			journal_abbreviation: nullable(draft.journal_abbreviation ?? ''),
-			bibtex_key: nullable(draft.bibtex_key ?? ''),
-			bibtex_type: nullable(draft.bibtex_type ?? ''),
+			citation_key: nullable(draft.citation_key ?? ''),
 			doi: nullable(draft.doi ?? ''),
 			urls: draft.urls_text
 				.split('\n')
@@ -162,19 +169,13 @@
 			>{$t('Title')}<input class="input" bind:value={draft.title} required /></label
 		>
 		<label
-			>{$t('Reference type')}<input
-				class="input"
-				bind:value={draft.reference_type}
-				placeholder="journalArticle"
-			/></label
+			>{$t('Reference type')}<select class="select" bind:value={draft.reference_type}>
+				{#each Object.entries(referenceTypeLabels) as [value, label] (value)}
+					<option {value}>{$t(label)}</option>
+				{/each}
+			</select></label
 		>
-		<label
-			>{$t('Publication date')}<input
-				class="input"
-				bind:value={draft.publication_date}
-				placeholder="2026-09-16"
-			/></label
-		>
+		<PublicationDateField bind:value={draft.publication_date} />
 		<label class="lg:col-span-2"
 			>{$t('Publication title')}<input class="input" bind:value={draft.publication_title} /></label
 		>
@@ -191,8 +192,13 @@
 		<label>{$t('Affiliation')}<input class="input" bind:value={draft.affiliation} /></label>
 		<label>{$t('Publisher')}<input class="input" bind:value={draft.publisher} /></label>
 		<label>{$t('Place published')}<input class="input" bind:value={draft.place_published} /></label>
-		<label>{$t('Citation key')}<input class="input" bind:value={draft.bibtex_key} /></label>
-		<label>{$t('BibTeX type')}<input class="input" bind:value={draft.bibtex_type} /></label>
+		<label
+			>{$t('Citation key')}<input
+				class="input"
+				maxlength="128"
+				bind:value={draft.citation_key}
+			/></label
+		>
 		<label class="lg:col-span-2"
 			>{$t('Keywords')}<input
 				class="input"

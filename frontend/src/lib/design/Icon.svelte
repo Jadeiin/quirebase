@@ -34,6 +34,8 @@
 		/>
 	{:else if name === 'import'}
 		<path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+	{:else if name === 'calendar'}
+		<rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 11h18" />
 	{:else if name === 'search'}
 		<circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
 	{:else if name === 'projects'}

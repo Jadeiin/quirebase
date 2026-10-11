@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { defaultCitationKeyFormula, mockSession } from './helpers';
+import { chooseSearchOption, defaultCitationKeyFormula, mockSession } from './helpers';
 
 async function mockExportPreferences(page: Page) {
 	await mockSession(page);
@@ -30,7 +30,7 @@ async function mockExportPreferences(page: Page) {
 			}
 		});
 	});
-	await page.route('**/api/v1/workspaces/*/citation-key-preview*', (route) =>
+	await page.route('**/api/v1/account/citation-key-preview*', (route) =>
 		route.fulfill({ json: { key: 'Reader2026' } })
 	);
 }
@@ -48,18 +48,19 @@ async function savedCitationStyle(page: Page, workspaceId: string) {
 test('resetting export preferences resets the saved Workspace citation style', async ({ page }) => {
 	await mockExportPreferences(page);
 	await page.goto('/account');
-	const workspace = page.getByLabel('Workspace for citation style and key preview');
 	const style = page.getByLabel('Default CSL style');
-	await workspace.selectOption('workspace-1');
-	await style.selectOption('workspace-1-custom');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await style.focus();
+	await style.press('End');
+	await style.press('Enter');
 	await expect.poll(() => savedCitationStyle(page, 'workspace-1')).toBe('workspace-1-custom');
 
 	await page.getByRole('button', { name: 'Reset to defaults' }).click();
-	await expect(style).toHaveValue('apa');
+	await expect(style.locator('[data-value="apa"]')).toHaveAttribute('aria-selected', 'true');
 	await expect.poll(() => savedCitationStyle(page, 'workspace-1')).toBe('apa');
 	await page.reload();
-	await workspace.selectOption('workspace-1');
-	await expect(style).toHaveValue('apa');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await expect(style.locator('[data-value="apa"]')).toHaveAttribute('aria-selected', 'true');
 });
 
 test('filtered cached catalogs do not overwrite a restored Workspace citation style', async ({
@@ -67,31 +68,39 @@ test('filtered cached catalogs do not overwrite a restored Workspace citation st
 }) => {
 	await mockExportPreferences(page);
 	await page.goto('/account');
-	const workspace = page.getByLabel('Workspace for citation style and key preview');
 	const style = page.getByLabel('Default CSL style');
 	const search = page.getByLabel('Search Citation Styles');
 
 	// Cache the destination catalog for the source's APA style under this search filter.
-	await workspace.selectOption('workspace-2');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Archive');
 	await search.fill('IEEE');
-	await expect(style.locator('option[value="ieee"]')).toHaveCount(1);
-	await expect(style.locator('option[value="workspace-2-custom"]')).toHaveCount(0);
+	await expect(style.locator('[data-value="ieee"]')).toHaveCount(1);
+	await expect(style.locator('[data-value="workspace-2-custom"]')).toHaveCount(0);
 	await search.fill('');
-	await style.selectOption('workspace-2-custom');
+	await style.getByRole('option', { name: 'Custom style', exact: true }).click();
 	await expect.poll(() => savedCitationStyle(page, 'workspace-2')).toBe('workspace-2-custom');
 	await search.fill('IEEE');
-	await expect(style.locator('option[value="ieee"]')).toHaveCount(1);
-	await expect(style).toHaveValue('workspace-2-custom');
+	await expect(style.locator('[data-value="ieee"]')).toHaveCount(1);
+	await expect(style.locator('[data-value="workspace-2-custom"]')).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 
-	await workspace.selectOption('workspace-1');
-	await expect(style).toHaveValue('apa');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await expect(style.locator('[data-value="apa"]')).toHaveAttribute('aria-selected', 'true');
 	await expect.poll(() => savedCitationStyle(page, 'workspace-1')).toBe('apa');
-	await workspace.selectOption('workspace-2');
-	await expect(style).toHaveValue('workspace-2-custom');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Archive');
+	await expect(style.locator('[data-value="workspace-2-custom"]')).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 	await expect.poll(() => savedCitationStyle(page, 'workspace-2')).toBe('workspace-2-custom');
 	await page.reload();
-	await workspace.selectOption('workspace-2');
-	await expect(style).toHaveValue('workspace-2-custom');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Archive');
+	await expect(style.locator('[data-value="workspace-2-custom"]')).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 });
 
 test('a matching catalog resets an unavailable saved style to APA', async ({ page }) => {
@@ -103,8 +112,10 @@ test('a matching catalog resets an unavailable saved style to APA', async ({ pag
 		);
 	});
 	await page.goto('/account');
-	await page.getByLabel('Workspace for citation style and key preview').selectOption('workspace-1');
-	await expect(page.getByLabel('Default CSL style')).toHaveValue('apa');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await expect(
+		page.getByLabel('Default CSL style').getByRole('option', { name: 'APA', selected: true })
+	).toBeVisible();
 	await expect.poll(() => savedCitationStyle(page, 'workspace-1')).toBe('apa');
 });
 
@@ -112,23 +123,34 @@ test('citation style defaults follow the selected Workspace', async ({ page }) =
 	await mockExportPreferences(page);
 
 	await page.goto('/account');
-	const workspace = page.getByLabel('Workspace for citation style and key preview');
 	const style = page.getByLabel('Default CSL style');
-	await workspace.selectOption('workspace-1');
-	await style.selectOption('workspace-1-custom');
-	await workspace.selectOption('workspace-2');
-	await expect(style).toHaveValue('apa');
-	await style.selectOption('workspace-2-custom');
-	await workspace.selectOption('workspace-1');
-	await expect(style).toHaveValue('workspace-1-custom');
-	await workspace.selectOption('workspace-2');
-	await expect(style).toHaveValue('workspace-2-custom');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await style.getByRole('option', { name: 'Custom style', exact: true }).click();
+	await chooseSearchOption(page, 'Workspace for citation style', 'Archive');
+	await expect(style.locator('[data-value="apa"]')).toHaveAttribute('aria-selected', 'true');
+	await style.getByRole('option', { name: 'Custom style', exact: true }).click();
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await expect(style.locator('[data-value="workspace-1-custom"]')).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await chooseSearchOption(page, 'Workspace for citation style', 'Archive');
+	await expect(style.locator('[data-value="workspace-2-custom"]')).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 
 	await page.reload();
-	await workspace.selectOption('workspace-1');
-	await expect(style).toHaveValue('workspace-1-custom');
-	await workspace.selectOption('workspace-2');
-	await expect(style).toHaveValue('workspace-2-custom');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await expect(style.locator('[data-value="workspace-1-custom"]')).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await chooseSearchOption(page, 'Workspace for citation style', 'Archive');
+	await expect(style.locator('[data-value="workspace-2-custom"]')).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 });
 
 test('account settings expose credential and session security controls', async ({ page }) => {
@@ -229,7 +251,7 @@ test('only validated Citation Key formulas replace the saved preference', async 
 		route.fulfill({ json: { styles: [{ key: 'apa', name: 'APA' }] } })
 	);
 	let previewedFormula = '';
-	await page.route('**/api/v1/workspaces/workspace-1/citation-key-preview*', (route) => {
+	await page.route('**/api/v1/account/citation-key-preview*', (route) => {
 		previewedFormula = new URL(route.request().url()).searchParams.get('formula') ?? '';
 		return previewedFormula === 'broken('
 			? route.fulfill({ status: 422, json: { detail: 'invalid Citation Key formula' } })
@@ -237,8 +259,9 @@ test('only validated Citation Key formulas replace the saved preference', async 
 	});
 
 	await page.goto('/account');
-	await page.getByLabel('Workspace for citation style and key preview').selectOption('workspace-1');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
 	const formula = page.getByLabel('Citation Key formula');
+	await page.getByRole('tab', { name: 'BibTeX / BibLaTeX', exact: true }).click();
 	await expect(formula).toHaveValue(defaultCitationKeyFormula);
 	await formula.fill('broken(');
 	await expect.poll(() => previewedFormula).toBe('broken(');
@@ -263,4 +286,29 @@ test('only validated Citation Key formulas replace the saved preference', async 
 			)
 		)
 		.toBe('auth + year');
+});
+
+test('Citation Key preview loads without a Workspace and follows formula and ASCII options', async ({
+	page
+}) => {
+	await mockExportPreferences(page);
+	const requests: Array<{ formula: string; ascii: boolean }> = [];
+	await page.route('**/api/v1/account/citation-key-preview*', (route) => {
+		const params = new URL(route.request().url()).searchParams;
+		const formula = params.get('formula') ?? '';
+		const ascii = params.get('force_ascii') === 'true';
+		requests.push({ formula, ascii });
+		return route.fulfill({ json: { key: `${formula}:${ascii ? 'ascii' : 'unicode'}` } });
+	});
+	await page.goto('/account');
+	await expect.poll(() => requests.length).toBeGreaterThan(0);
+	await page.getByRole('tab', { name: 'BibTeX / BibLaTeX', exact: true }).click();
+	const preview = page.getByLabel('Preview Citation Key');
+	await expect(preview).toHaveText(`${defaultCitationKeyFormula}:ascii`);
+	await page.getByLabel('Citation Key formula').fill('auth + year');
+	await expect(preview).toHaveText('auth + year:ascii');
+	await page.getByLabel('Use ASCII characters only').uncheck();
+	await expect(preview).toHaveText('auth + year:unicode');
+	await expect(page.getByLabel('Encoding')).toBeVisible();
+	await expect(page.getByLabel('Default CSL style')).not.toBeVisible();
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import type { components } from '#lib/api/schema.js';
 	import RichText from '#lib/design/RichText.svelte';
 	import Panel from '#lib/design/Panel.svelte';
@@ -11,6 +12,21 @@
 	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	type ImportBatch = components['schemas']['ImportBatchView'];
+
+	function contributorNames(value: unknown): string {
+		if (!Array.isArray(value)) return '';
+		return value
+			.map((person: unknown) => {
+				if (!person || typeof person !== 'object') return '';
+				const fields = person as Record<string, unknown>;
+				if (typeof fields.display_name === 'string') return fields.display_name;
+				return [fields.first_name, fields.last_name]
+					.filter((part): part is string => typeof part === 'string' && part.length > 0)
+					.join(' ');
+			})
+			.filter(Boolean)
+			.join('; ');
+	}
 
 	let { batch, page, busy, canCommit, onDiscard, onRetry, onCommit, onPage } = $props<{
 		batch: ImportBatch;
@@ -55,14 +71,16 @@
 		{/snippet}
 	</SectionHeader>
 	{#if batch.status === 'pending'}
-		<Notice variant="success">{$t('Preparing uploaded PDFs…')}</Notice>
+		<LoadingState label={$t('Preparing uploaded PDFs…')} />
 	{:else if batch.status === 'committed'}
 		<Notice variant="success">{$t('This Import Batch has already been committed.')}</Notice>
 	{/if}
 	{#each records as record (record)}
 		<ItemRow>
 			<strong><RichText html={String(record.title ?? $t('Untitled'))} /></strong>
-			<span class="text-surface-600-400">{String(record.authors ?? record.doi ?? '')}</span>
+			<span class="text-surface-600-400"
+				>{contributorNames(record.authors) || String(record.doi ?? '')}</span
+			>
 			{#if record.original_name}<span class="text-surface-600-400"
 					>{String(record.original_name)}</span
 				>{/if}
@@ -75,7 +93,11 @@
 		<h3>{$t('Diagnostics')}</h3>
 	{/if}
 	{#each batch.errors as diagnostic (diagnostic)}
-		<div class="grid grid-cols-1 gap-1 text-error-700-300">
+		<div
+			class="grid grid-cols-1 gap-1"
+			class:text-warning-700-300={diagnostic.severity === 'warning'}
+			class:text-error-700-300={diagnostic.severity !== 'warning'}
+		>
 			<strong>{String(diagnostic.message ?? diagnostic.code)}</strong>
 			{#if diagnostic.filename}<span>{String(diagnostic.filename)}</span>{/if}
 			{#if diagnostic.row || diagnostic.code}<small

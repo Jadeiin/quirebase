@@ -17,7 +17,18 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 				id: 'batch-1',
 				status: previewRequests > 1 ? 'ready' : 'pending',
 				workflow_id: 'workflow-1',
-				records: previewRequests > 1 ? [{ title: 'Imported PDF' }] : [],
+				records:
+					previewRequests > 1
+						? [
+								{
+									title: 'Imported PDF',
+									authors: [
+										{ display_name: 'Ada Lovelace', last_name: 'Lovelace', first_name: 'Ada' },
+										{ last_name: 'World Health Organization', first_name: null }
+									]
+								}
+							]
+						: [],
 				errors: []
 			}
 		});
@@ -45,6 +56,7 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 	await expect.poll(() => previewRequests, { timeout: 5_000 }).toBeGreaterThan(1);
 	await expect(page.getByRole('button', { name: 'Commit' })).toBeEnabled();
 	await expect(page.getByText('Imported PDF')).toBeVisible();
+	await expect(page.getByText('Ada Lovelace; World Health Organization')).toBeVisible();
 });
 
 test('shared pending Import previews poll the batch without actor-only workflow access', async ({

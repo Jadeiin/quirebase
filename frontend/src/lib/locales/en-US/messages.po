@@ -398,6 +398,7 @@ msgstr "Annotation sync failed"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Annotations"
 msgstr "Annotations"
 
@@ -495,6 +496,11 @@ msgid "Arrow"
 msgstr "Arrow"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Article"
+msgstr "Article"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 msgid "as"
 msgstr "as"
@@ -585,9 +591,14 @@ msgid "BibTeX and BibLaTeX options"
 msgstr "BibTeX and BibLaTeX options"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "BibTeX type"
-msgstr "BibTeX type"
+#: src/lib/features/item/reference-types.ts
+msgid "Book"
+msgstr "Book"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Book chapter"
+msgstr "Book chapter"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -638,6 +649,11 @@ msgstr "Bulk action completed"
 #: src/lib/features/library/Library.svelte
 msgid "Bulk action failed"
 msgstr "Bulk action failed"
+
+#. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Calendar for {label}"
+msgstr "Calendar for {label}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -738,6 +754,11 @@ msgstr "Choose action"
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
 msgstr "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
+
+#. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Choose date for {label}"
+msgstr "Choose date for {label}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -889,6 +910,11 @@ msgstr "Committed"
 #: src/lib/features/tools/Tools.svelte
 msgid "Compare likely duplicate Items before deciding what to retain."
 msgstr "Compare likely duplicate Items before deciding what to retain."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Conference paper"
+msgstr "Conference paper"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1088,9 +1114,19 @@ msgid "Database: {url}"
 msgstr "Database: {url}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Dataset"
+msgstr "Dataset"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Date"
 msgstr "Date"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Date precision"
+msgstr "Date precision"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -1253,6 +1289,11 @@ msgid "Displayed annotation sources"
 msgstr "Displayed annotation sources"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Document"
+msgstr "Document"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Document bundle downloaded"
 msgstr "Document bundle downloaded"
@@ -1261,6 +1302,11 @@ msgstr "Document bundle downloaded"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Document download options"
 msgstr "Document download options"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Document downloads"
+msgstr "Document downloads"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
@@ -1409,6 +1455,11 @@ msgid "Encoding"
 msgstr "Encoding"
 
 #. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Enter a valid {format} date."
+msgstr "Enter a valid {format} date."
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Exact username"
 msgstr "Exact username"
@@ -1469,6 +1520,11 @@ msgstr "Export bibliography"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Export lifetime in hours"
 msgstr "Export lifetime in hours"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Export preference sections"
+msgstr "Export preference sections"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1556,7 +1612,7 @@ msgid "First name"
 msgstr "First name"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "First page"
 msgstr "First page"
 
@@ -1587,6 +1643,11 @@ msgid "From year"
 msgstr "From year"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Full date"
+msgstr "Full date"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Full title"
 msgstr "Full title"
@@ -1595,11 +1656,6 @@ msgstr "Full title"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "General"
 msgstr "General"
-
-#. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "General citation options"
-msgstr "General citation options"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -1899,6 +1955,11 @@ msgid "Journal abbreviation"
 msgstr "Journal abbreviation"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Journal article"
+msgstr "Journal article"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Journal title"
 msgstr "Journal title"
@@ -1936,7 +1997,7 @@ msgid "Last name or organization"
 msgstr "Last name or organization"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "Last page"
 msgstr "Last page"
 
@@ -2003,6 +2064,11 @@ msgstr "Load more members"
 #: src/lib/features/library/Library.svelte
 msgid "Load more Projects"
 msgstr "Load more Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+msgid "Load more Tags"
+msgstr "Load more Tags"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -2079,6 +2145,12 @@ msgid "Loading reader configuration…"
 msgstr "Loading reader configuration…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Loading Tags…"
+msgstr "Loading Tags…"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
 msgid "Loading workspace…"
 msgstr "Loading workspace…"
@@ -2100,6 +2172,11 @@ msgstr "Locale"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Look up an identifier"
 msgstr "Look up an identifier"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Magazine article"
+msgstr "Magazine article"
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
@@ -2174,6 +2251,11 @@ msgstr "Managed Projects are visible to participants and Workspace owners/admins
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Manual creation"
 msgstr "Manual creation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Manuscript"
+msgstr "Manuscript"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -2353,12 +2435,17 @@ msgid "New Tag name"
 msgstr "New Tag name"
 
 #. js-lingui-explicit-id
-#: src/lib/design/Pagination.svelte
-msgid "Next"
-msgstr "Next"
+#: src/lib/features/item/reference-types.ts
+msgid "Newspaper article"
+msgstr "Newspaper article"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/DateField.svelte
+msgid "Next calendar period"
+msgstr "Next calendar period"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
 msgid "Next page"
 msgstr "Next page"
 
@@ -2468,6 +2555,11 @@ msgstr "No matching Items."
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No matching members."
 msgstr "No matching members."
+
+#. js-lingui-explicit-id
+#: src/lib/design/SearchSelect.svelte
+msgid "No matching options."
+msgstr "No matching options."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -2733,7 +2825,6 @@ msgstr "page"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
-#: src/lib/features/library/LibraryResults.svelte
 msgid "Page {page} of {pageCount}"
 msgstr "Page {page} of {pageCount}"
 
@@ -2762,6 +2853,11 @@ msgstr "Password"
 #: src/lib/features/account/Account.svelte
 msgid "Password changed"
 msgstr "Password changed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Patent"
+msgstr "Patent"
 
 #. File kind for a PDF revision.
 #. js-lingui-explicit-id
@@ -2898,6 +2994,11 @@ msgid "Preparing…"
 msgstr "Preparing…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Preprint"
+msgstr "Preprint"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Preserve bibitem case"
 msgstr "Preserve bibitem case"
@@ -2918,12 +3019,12 @@ msgid "Preview metadata"
 msgstr "Preview metadata"
 
 #. js-lingui-explicit-id
-#: src/lib/design/Pagination.svelte
-msgid "Previous"
-msgstr "Previous"
+#: src/lib/design/DateField.svelte
+msgid "Previous calendar period"
+msgstr "Previous calendar period"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "Previous page"
 msgstr "Previous page"
 
@@ -3025,8 +3126,8 @@ msgstr "Publication"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/PublicationDateField.svelte
 msgid "Publication date"
 msgstr "Publication date"
 
@@ -3220,6 +3321,11 @@ msgstr "Rename"
 #: src/lib/features/tools/Tools.svelte
 msgid "Rename Tag"
 msgstr "Rename Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Report"
+msgstr "Report"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -3520,11 +3626,6 @@ msgid "Select a Tag"
 msgstr "Select a Tag"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Select a Workspace to load its citation styles and preview endpoint. The account route does not infer a Workspace from stored preferences."
-msgstr "Select a Workspace to load its citation styles and preview endpoint. The account route does not infer a Workspace from stored preferences."
-
-#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Select Project"
 msgstr "Select Project"
@@ -3581,6 +3682,11 @@ msgid "Show members"
 msgstr "Show members"
 
 #. js-lingui-explicit-id
+#: src/lib/design/SearchSelect.svelte
+msgid "Show options for {label}"
+msgstr "Show options for {label}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in"
 msgstr "Sign in"
@@ -3622,6 +3728,11 @@ msgid "Single response; no continuing access is granted"
 msgstr "Single response; no continuing access is granted"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Software"
+msgstr "Software"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
@@ -3646,6 +3757,11 @@ msgstr "Stage many records from a reference manager export."
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Stage PDFs"
 msgstr "Stage PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Standard"
+msgstr "Standard"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workflows/WorkflowJobRow.svelte
@@ -3858,6 +3974,11 @@ msgstr "The requested resource was not found."
 #: src/lib/api/errors.ts
 msgid "The uploaded content is too large."
 msgstr "The uploaded content is too large."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Thesis"
+msgstr "Thesis"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -4127,6 +4248,12 @@ msgid "Unable to load Projects."
 msgstr "Unable to load Projects."
 
 #. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Unable to load Tags"
+msgstr "Unable to load Tags"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Unable to load the dashboard."
 msgstr "Unable to load the dashboard."
@@ -4384,6 +4511,11 @@ msgid "Volume / Issue"
 msgstr "Volume / Issue"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/reference-types.ts
+msgid "Web page"
+msgstr "Web page"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "With files"
 msgstr "With files"
@@ -4449,8 +4581,8 @@ msgstr "Workspace deleted"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
-msgid "Workspace for citation style and key preview"
-msgstr "Workspace for citation style and key preview"
+msgid "Workspace for citation style"
+msgstr "Workspace for citation style"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
@@ -4549,9 +4681,15 @@ msgstr "Write a message"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/item/PublicationDateField.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Year"
 msgstr "Year"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Year and month"
+msgstr "Year and month"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { mockSession } from './helpers';
+import { tagPage, chooseSearchOption, mockSession } from './helpers';
 
 test('Tools exposes Tag maintenance and Citation Style installation', async ({ page }) => {
 	await mockSession(page);
@@ -9,16 +9,19 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 		duplicateReads += 1;
 		return route.fulfill({ json: { groups: [] } });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
 		route.fulfill({
-			json: [
-				{
-					id: 'tag-1',
-					name: 'Methods',
-					accessible_item_count: 3,
-					authorization: { allowed: ['tag.manage'] }
-				}
-			]
+			json: tagPage(
+				[
+					{
+						id: 'tag-1',
+						name: 'Methods',
+						accessible_item_count: 3,
+						authorization: { allowed: ['tag.manage'] }
+					}
+				],
+				route
+			)
 		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) => {
@@ -33,7 +36,9 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 	await expect.poll(() => duplicateReads).toBe(0);
 	await page.getByRole('button', { name: 'Check for duplicates' }).click();
 	await expect.poll(() => duplicateReads).toBe(1);
-	await page.getByRole('button', { name: 'Same title' }).click();
+	await page.getByRole('radio', { name: 'Same DOI' }).focus();
+	await page.getByRole('radio', { name: 'Same DOI' }).press('ArrowRight');
+	await expect(page.getByRole('radio', { name: 'Same title' })).toBeChecked();
 	await expect.poll(() => duplicateReads).toBe(1);
 	await expect(page.getByText('The match criteria changed.')).toBeVisible();
 	await page.getByRole('button', { name: 'Check for duplicates' }).click();
@@ -67,7 +72,7 @@ test('Tag page clamps after deleting the last page of Tags', async ({ page }) =>
 			tags = tags.filter((tag) => !request.url().endsWith(tag.id));
 			return route.fulfill({ json: { ok: true } });
 		}
-		return route.fulfill({ json: tags });
+		return route.fulfill({ json: tagPage(tags, route) });
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) =>
 		route.fulfill({ json: { styles: [] } })
@@ -116,9 +121,9 @@ for (const concurrentChange of ['created', 'renamed']) {
 		};
 		const target = { ...source, id: 'tag-2', name: 'Previous name' };
 		let tags = concurrentChange === 'created' ? [source] : [source, target];
-		await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => {
+		await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) => {
 			tagReads++;
-			return route.fulfill({ json: tags });
+			return route.fulfill({ json: tagPage(tags, route) });
 		});
 		await page.route('**/api/v1/workspaces/workspace-1/tags/tag-1', (route) => {
 			expect(route.request().method()).toBe('PATCH');
@@ -144,9 +149,11 @@ for (const concurrentChange of ['created', 'renamed']) {
 		await page.getByRole('tab', { name: 'Manage Tags' }).click();
 		const sourceSelect = page.getByRole('combobox', { name: 'Source Tag', exact: true });
 		const targetSelect = page.getByRole('combobox', { name: 'Target Tag', exact: true });
-		await sourceSelect.selectOption('tag-1');
-		if (concurrentChange === 'renamed') await targetSelect.selectOption('tag-2');
+		await chooseSearchOption(page, 'Source Tag', 'Methods');
+		if (concurrentChange === 'renamed')
+			await chooseSearchOption(page, 'Target Tag', 'Previous name');
 		const initialWorkspaceReads = [...workspaceReads];
+		const initialTagReads = tagReads;
 		const initialStyleReads = styleReads;
 		const initialDuplicateReads = duplicateReads;
 		await page.getByRole('button', { name: 'Rename', exact: true }).first().click();
@@ -158,13 +165,49 @@ for (const concurrentChange of ['created', 'renamed']) {
 		await expect(page.locator('strong').filter({ hasText: /^Results$/ })).toBeVisible();
 		await expect(page.locator('strong').filter({ hasText: /^Methods$/ })).toBeVisible();
 		await expect(page.locator('strong').filter({ hasText: /^Previous name$/ })).toHaveCount(0);
-		await expect(targetSelect.locator('option[value="tag-2"]')).toHaveText('Results');
-		await expect(sourceSelect).toHaveValue('tag-1');
-		await targetSelect.selectOption('tag-2');
+		if (concurrentChange === 'renamed') await expect(targetSelect).toHaveValue('Results');
+		await expect(sourceSelect).toHaveValue('Methods');
+		await chooseSearchOption(page, 'Target Tag', 'Results');
 		await expect(page.getByRole('button', { name: 'Merge Tags', exact: true })).toBeEnabled();
-		expect(tagReads).toBe(2);
+		expect(tagReads).toBeGreaterThan(initialTagReads);
 		expect(workspaceReads).toEqual(initialWorkspaceReads);
 		expect(styleReads).toBe(initialStyleReads);
 		expect(duplicateReads).toBe(initialDuplicateReads);
 	});
 }
+
+test('Tools requests only the visible Tag page and filters on the server', async ({ page }) => {
+	await mockSession(page);
+	const tags = Array.from({ length: 65 }, (_, index) => ({
+		id: `tag-${index + 1}`,
+		name: `Tag ${String(index + 1).padStart(2, '0')}`,
+		accessible_item_count: 1,
+		authorization: { allowed: ['tag.manage'] }
+	}));
+	const reads: Array<{ offset: number; limit: number; search: string | null }> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) => {
+		const query = new URL(route.request().url()).searchParams;
+		reads.push({
+			offset: Number(query.get('offset') ?? 0),
+			limit: Number(query.get('limit')),
+			search: query.get('search')
+		});
+		return route.fulfill({ json: tagPage(tags, route) });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) =>
+		route.fulfill({ json: { styles: [] } })
+	);
+	await page.goto('/workspace/workspace-1/tools');
+	expect(reads).toEqual([]);
+	await page.getByRole('tab', { name: 'Manage Tags' }).click();
+	await expect(page.getByText('65 Tags')).toBeVisible();
+	expect(reads).toEqual([{ offset: 0, limit: 20, search: null }]);
+	await page.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(page.locator('strong').filter({ hasText: /^Tag 21$/ })).toBeVisible();
+	await expect(page.locator('strong').filter({ hasText: /^Tag 20$/ })).toHaveCount(0);
+	expect(reads.at(-1)).toEqual({ offset: 20, limit: 20, search: null });
+	await page.getByPlaceholder('Filter Tags').fill('Tag 65');
+	await expect(page.getByText('1 Tag', { exact: true })).toBeVisible();
+	await expect(page.locator('strong').filter({ hasText: /^Tag 65$/ })).toBeVisible();
+	expect(reads.at(-1)).toEqual({ offset: 0, limit: 20, search: 'Tag 65' });
+});

@@ -92,17 +92,18 @@ checkbox 字段必须是真正的 boolean。忽略未知字段，缺失字段用
 
 `citationKeyFormula` 属于 Citation Key 组，随 BibTeX/BibLaTeX 导出以
 `citation_key_formula` / `citation_key_force_ascii` 提交（批量导出走表单隐藏字段，
-条目导出走查询参数）。公式只对没有存储 `bibtex_id` 的条目生效；已有键的条目保持原键，
+条目导出走查询参数）。公式只对没有存储 `citation_key` 的条目生效；已有键的条目保持原键，
 重复键仍由导出时的 `a`、`b` 后缀消歧。公式语法错误在账户设置页通过
-`/api/citation-key-preview` 即时预览反馈；只有验证成功的公式才写入浏览器缓存。导出入口
+`/api/v1/account/citation-key-preview` 即时预览反馈，无需选择 Workspace；页面加载、
+公式修改和 ASCII 选项变化都会更新预览。只有验证成功的公式和 ASCII 选项才写入浏览器缓存。导出入口
 仍把公式参数视为不可信输入并执行独立语法验证，以 `ValidationFailure` 拒绝无效公式，
-但不会重新计算已有的 `bibtex_id`。
+但不会重新计算已有的 `citation_key`。
 
-设置页按能力分组并只显示当前默认格式实际支持的字段：`style` 只属于 CSL；`encoding`、
+设置页使用 CSL、BibTeX/BibLaTeX、RIS/EndNote 和文档下载标签页：`style` 只属于 CSL；`encoding`、
 `preserveCase`、`includeIdentifiers` 和 `includeCustomFields` 只属于 BibTeX/BibLaTeX；
 `journalMode`、DOI/URL policy、字段排除和排序属于 BibTeX、BibLaTeX、RIS 与 EndNote。
-Citation Key 与文档下载各自独立成组，不伪装成某个现场格式选项。切换默认格式只改变可见
-分组，不清除其他格式已经保存的设置。
+Citation Key 位于 BibTeX/BibLaTeX 标签页。默认格式和 abstract 选项始终可见；
+切换默认格式会选择对应标签页，也可以独立切换标签页，不清除其他格式已经保存的设置。
 
 早期 v1 数据可能包含 boolean `abbreviateJournal`。它保留为读取兼容别名：仅当数据中没有
 合法的 `journalMode` 且该值为 `true` 时，读取为 `prefer_abbreviated`。新 UI 只写入

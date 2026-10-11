@@ -37,6 +37,7 @@
 	const workflows = getWorkflowCenter();
 	const emptyMetadata: components['schemas']['ItemMetadata-Input'] = {
 		title: '',
+		reference_type: 'document',
 		keywords: [],
 		urls: [],
 		authors: [],
@@ -348,12 +349,11 @@
 				>{$t('Data source')}<select class="select" bind:value={provider}>
 					<option value="auto">{$t('Auto detect')}</option><option value="crossref">Crossref</option
 					>
+					<option value="datacite">DataCite</option>
 					<option value="pubmed">PubMed</option><option value="arxiv">arXiv</option>
 					<option value="openalex">OpenAlex</option><option value="openlibrary">Open Library</option
 					>
-					<option value="pmc">PMC</option><option value="nasa">NASA ADS</option><option value="ieee"
-						>IEEE Xplore</option
-					>
+					<option value="nasa_ads">NASA ADS</option><option value="ieee">IEEE Xplore</option>
 				</select></label
 			>
 		</ImportSourceForm>

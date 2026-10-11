@@ -1,3 +1,4 @@
+import { tagPage, chooseSearchOption } from './helpers';
 import { directoryPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import type { AnnotationPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
@@ -196,7 +197,9 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 	const workspaceReads = trackWorkspaceReads(page);
 	let archived = false;
 	const submissions: Array<{ project_id: string; item_ids: string[] }> = [];
-	await page.route('**/api/v1/workspaces/workspace-1/tags', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({
 			json: directoryPage(
@@ -262,25 +265,25 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByLabel('Select this page').check();
 	await page.getByLabel('Bulk action').selectOption('add_project');
-	const target = page.getByLabel('Select Project', { exact: true });
-	await target.selectOption('project-1');
+	const target = page.getByRole('combobox', { name: 'Select Project', exact: true });
+	await chooseSearchOption(page, 'Select Project', 'Reading Project');
 	const initialWorkspaceReads = [...workspaceReads];
 	await page.getByRole('button', { name: 'Apply', exact: true }).click();
 	await expect(page.getByText('This Project is read only in its current state.')).toBeVisible();
-	await expect(target.locator('option[value="project-1"]')).toHaveCount(0);
+	await target.click();
+	await expect(page.getByRole('option', { name: 'Reading Project', exact: true })).toHaveCount(0);
+	await target.press('Escape');
 	await expect(target).toHaveValue('');
 	await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
 	await expect(page.getByText('1 selected')).toBeVisible();
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
-	await expect(
-		page
-			.getByRole('combobox', { name: 'Project', exact: true })
-			.locator('option[value="project-1"]')
-	).toHaveText('Reading Project');
+	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+	await expect(page.getByRole('option', { name: 'Reading Project', exact: true })).toBeVisible();
+	await page.getByRole('combobox', { name: 'Project', exact: true }).press('Escape');
 	// An archived Project remains a read filter, but cannot receive selected Items.
 	expect(workspaceReads).toEqual(initialWorkspaceReads);
 
-	await target.selectOption('project-2');
+	await chooseSearchOption(page, 'Select Project', 'Another Project');
 	await page.getByRole('button', { name: 'Apply', exact: true }).click();
 	await expect(page.getByText('Bulk action completed')).toBeVisible();
 	expect(submissions.map(({ project_id, item_ids }) => ({ project_id, item_ids }))).toEqual([

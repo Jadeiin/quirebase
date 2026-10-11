@@ -98,6 +98,25 @@ remains isolated under `src/lib/pdf`; its domain-specific viewer controls and UI
 to disable unsupported commands (such as callout annotations) and keep search and page navigation
 integrated with the Svelte workspace, but do not become a second general-purpose design system.
 
+Skeleton's Svelte component stylesheet is loaded alongside the core primitives. Navigation owns
+sidebar, mobile and section-link presentation; SvelteKit still owns URL selection and `aria-current`.
+Pagination owns page changes behind the compact first/previous/next/last product pattern. Tabs owns
+local Account, Tools and Item-action sections. Combobox owns searchable Tag, Project and Workspace
+selection, Listbox owns the visible CSL style choices, SegmentedControl owns duplicate criteria,
+Collapsible owns the Library filter disclosure, and Progress owns indeterminate loading feedback.
+Short fixed choices and native form inputs keep Skeleton's CSS primitives. Native details and
+asynchronous Tag assignment actions retain their current product semantics.
+
+`src/lib/design/DateField.svelte` adapts Skeleton DatePicker to ISO strings at year, month or day
+precision. Metadata chooses that precision; Library and Discovery choose only years. Calendar
+anchors never supply missing date components to persisted metadata or search requests. Zag 1.43
+filters typed separators using the locale even with custom format/parse callbacks and repairs an
+invalid blur value using its focused date. The ISO input therefore overrides those input handlers,
+uses DatePicker's focus API for valid drafts, and uses native form validity for invalid drafts;
+calendar navigation and selection remain Skeleton's responsibility. Popups inside a Dialog portal
+to that Dialog with fixed positioning, keeping them within its focus and accessibility boundary
+without being clipped by the action panel.
+
 Tag listing uses bounded `limit`/`offset` pages with a filtered total, literal case-folded name
 search and an optional Workspace-scoped `tag_id` filter for restoring a selection. Tools requests
 20 Tags per page; Library and merge selectors request 25 options only when opened, with debounced
@@ -132,7 +151,8 @@ whole taxonomy. Tag mutations invalidate Tag lists, option searches and selected
   `frontend/scripts/check-bundle-budget.ts` is raised deliberately when a maintained dependency
   replaces hand-rolled code: once for the Toast, Popover and Tabs state machines, once for
   `openapi-fetch`, which replaced the hand-written API client plumbing while keeping the
-  `apiRequest` contract, and once for ICU-capable localization. The same script enforces per-route
+  `apiRequest` contract, once for ICU-capable localization, and once for the supported Skeleton component stylesheet,
+  Progress and the additional route-specific controls. DatePicker remains excluded from the shell. The same script enforces per-route
   budgets for the Library, Import, Item and Admin graphs so section ownership changes are measured
   rather than assumed. Temml is imported only by the lazily loaded `rich-text-math` chunk, so the
   many routes that never render inline math do not eagerly ship it.

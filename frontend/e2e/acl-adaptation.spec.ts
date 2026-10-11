@@ -1,4 +1,4 @@
-import { directoryPage } from './helpers';
+import { tagPage, directoryPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { mockSession } from './helpers';
 
@@ -178,8 +178,8 @@ for (const [role, allowedActions, visible] of [
 	test(`${role} sees only permitted Library bulk actions`, async ({ page }) => {
 		await mockSession(page);
 		await projectActions(page, role, [...allowedActions]);
-		await page.route('**/api/v1/workspaces/workspace-1/tags', (route) =>
-			route.fulfill({ json: [] })
+		await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+			route.fulfill({ json: tagPage([], route) })
 		);
 		await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 			route.fulfill({ json: directoryPage([], route) })
@@ -522,7 +522,7 @@ test('metadata version conflict loads the latest Item before explicit retry', as
 				abstract_html: null,
 				editors: [],
 				structured_authors: [],
-				reference_type: null,
+				reference_type: 'document',
 				volume: null,
 				issue: null,
 				pages: null,

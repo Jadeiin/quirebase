@@ -1,3 +1,4 @@
+import { chooseSearchOption } from './helpers';
 import { directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { minimalPdf, mockSession } from './helpers';
@@ -55,7 +56,7 @@ test('item detail URL selects and loads the metadata section', async ({ page }) 
 				abstract_html: null,
 				editors: [],
 				structured_authors: [],
-				reference_type: null,
+				reference_type: 'document',
 				volume: null,
 				issue: null,
 				pages: null,
@@ -119,7 +120,7 @@ test('Item overview renders without the deprecated Item Owner projection', async
 					editors: [],
 					identifiers: [],
 					custom_fields: [],
-					reference_type: null,
+					reference_type: 'document',
 					volume: null,
 					issue: null,
 					pages: null,
@@ -127,12 +128,12 @@ test('Item overview renders without the deprecated Item Owner projection', async
 					publisher: null,
 					place_published: null,
 					affiliation: null,
-					bibtex_key: null
+					citation_key: null
 				},
 				abstract_html: null,
 				editors: [],
 				structured_authors: [],
-				reference_type: null,
+				reference_type: 'document',
 				volume: null,
 				issue: null,
 				pages: null,
@@ -278,12 +279,14 @@ test('cross-Workspace copy uses the server-provided eligible destinations', asyn
 
 	await page.goto('/workspace/workspace-1/item/item-copy');
 	await page.getByRole('button', { name: 'Copy to Workspace' }).click();
-	const destination = page.getByLabel('Target Workspace');
-	await expect(destination.locator('option')).toHaveText([
-		'Choose a Workspace',
-		'Eligible destination'
-	]);
-	await destination.selectOption('workspace-2');
+	const destination = page.getByRole('combobox', { name: 'Target Workspace', exact: true });
+	await destination.click();
+	await expect(page.getByRole('option')).toHaveCount(2);
+	await expect(page.getByRole('option', { name: 'Choose a Workspace', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('option', { name: 'Eligible destination', exact: true })
+	).toBeVisible();
+	await chooseSearchOption(page, 'Target Workspace', 'Eligible destination');
 	await page.getByRole('button', { name: 'Create copy' }).click();
 	await expect.poll(() => copyBody).toEqual({ target_workspace_id: 'workspace-2' });
 	await expect(page.getByRole('link', { name: 'Open copy' })).toHaveAttribute(
@@ -855,7 +858,7 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 				abstract_html: null,
 				editors: [],
 				structured_authors: [],
-				reference_type: null,
+				reference_type: 'document',
 				volume: null,
 				issue: null,
 				pages: null,
@@ -868,6 +871,23 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 	await page.goto('/workspace/workspace-1/import');
 	await page.getByRole('button', { name: 'Open metadata editor' }).click();
 	await page.getByLabel('Title', { exact: true }).fill('Structured record');
+	await page.getByLabel('Reference type').selectOption('book');
+	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024');
+	await page.getByLabel('Date precision').selectOption('month');
+	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
+		''
+	);
+	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024-02');
+	await page.getByLabel('Date precision').selectOption('day');
+	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
+		''
+	);
+	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024-02-29');
+	await page.getByLabel('Date precision').selectOption('year');
+	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
+		'2024'
+	);
+	await page.getByLabel('Citation key').fill('Lovelace2024');
 	await page.getByLabel('Publication title').fill('Journal of Testing');
 	await page.getByLabel('Keywords').fill('systems; reproducibility');
 	await page
@@ -892,6 +912,9 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 		.poll(() => creation)
 		.toMatchObject({
 			title: 'Structured record',
+			reference_type: 'book',
+			publication_date: '2024',
+			citation_key: 'Lovelace2024',
 			publication_title: 'Journal of Testing',
 			keywords: ['systems', 'reproducibility'],
 			authors: [{ first_name: 'Ada', last_name: 'Lovelace', is_corresponding: true }],
@@ -934,6 +957,9 @@ test('Item metadata editor preserves structured contributors and custom fields',
 				version: 4,
 				metadata: {
 					title: 'Editable',
+					reference_type: 'paper-conference',
+					publication_date: '2024-02',
+					citation_key: 'Hopper2024',
 					keywords: [],
 					urls: [],
 					authors: [],
@@ -947,6 +973,14 @@ test('Item metadata editor preserves structured contributors and custom fields',
 	});
 
 	await page.goto('/workspace/workspace-1/item/item-1/metadata');
+	await expect(page.getByLabel('Reference type')).toHaveValue('paper-conference');
+	await page.getByLabel('Reference type').selectOption('software');
+	await expect(page.getByLabel('Date precision')).toHaveValue('month');
+	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
+		'2024-02'
+	);
+	await page.getByLabel('Date precision').selectOption('day');
+	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024-02-29');
 	await page
 		.locator('header', { has: page.getByRole('heading', { name: 'Authors' }) })
 		.getByRole('button', { name: 'Add contributor' })
@@ -963,6 +997,9 @@ test('Item metadata editor preserves structured contributors and custom fields',
 		.toMatchObject({
 			expected_version: 4,
 			metadata: {
+				reference_type: 'software',
+				publication_date: '2024-02-29',
+				citation_key: 'Hopper2024',
 				authors: [{ first_name: 'Grace', last_name: 'Hopper', is_corresponding: false }],
 				custom_fields: [{ name: 'score', value: 5 }]
 			}
@@ -1175,7 +1212,7 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 	await page.getByLabel('Format').selectOption('bibtex');
 	await page.getByRole('button', { name: 'Download file' }).click();
 	await expect.poll(() => exportQuery).toContain('file_format=bibtex');
-	await page.getByRole('button', { name: 'Metadata sources' }).click();
+	await page.getByRole('tab', { name: 'Metadata sources' }).click();
 	await page.getByLabel('Provider').selectOption('openalex');
 	await page.getByRole('button', { name: 'Autoupdate' }).first().click();
 	await expect
@@ -1185,4 +1222,49 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 			provider: 'openalex',
 			uid: '10.1000/test'
 		});
+});
+
+test('publication calendar preserves precision, supports keyboard selection and validates typed dates', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.goto('/workspace/workspace-1/import');
+	await page.getByRole('button', { name: 'Open metadata editor' }).click();
+	const date = page.getByRole('textbox', { name: 'Publication date', exact: true });
+	const precision = page.getByLabel('Date precision');
+	const calendar = page.getByRole('application', {
+		name: 'Calendar for Publication date',
+		exact: true
+	});
+	const openCalendar = () =>
+		page.getByRole('button', { name: 'Choose date for Publication date', exact: true }).click();
+	await date.fill('2024');
+	await openCalendar();
+	await calendar.getByRole('button', { name: '2023', exact: true }).click();
+	await expect(date).toHaveValue('2023');
+	await expect(calendar).not.toBeVisible();
+	await precision.selectOption('month');
+	await expect(date).toHaveValue('');
+	await date.fill('2024-02');
+	await openCalendar();
+	await calendar.getByRole('button', { name: /March/ }).click();
+	await expect(date).toHaveValue('2024-03');
+	await precision.selectOption('day');
+	await expect(date).toHaveValue('');
+	await date.pressSequentially('2024-02-29');
+	await openCalendar();
+	const selectedDay = calendar.getByRole('button', { name: /Selected date.*February 29/ });
+	await selectedDay.focus();
+	await selectedDay.press('ArrowRight');
+	await page.locator(':focus').press('Enter');
+	await expect(date).toHaveValue('2024-03-01');
+	await expect(calendar).not.toBeVisible();
+	await date.fill('2023-02-29');
+	await date.press('Tab');
+	await expect(date).toHaveValue('2023-02-29');
+	expect(await date.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(false);
+	await date.fill('');
+	await date.press('Tab');
+	await expect(date).toHaveValue('');
+	expect(await date.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(true);
 });

@@ -17,8 +17,8 @@ export const exportPreferenceKeys = {
 	all: ['export-preferences'] as const,
 	citationStyles: (workspaceId: string, query: string, include: string) =>
 		[...exportPreferenceKeys.all, 'citation-styles', workspaceId, query, include] as const,
-	citationKeyPreview: (workspaceId: string, formula: string, forceAscii: boolean) =>
-		[...exportPreferenceKeys.all, 'citation-key-preview', workspaceId, formula, forceAscii] as const
+	citationKeyPreview: (formula: string, forceAscii: boolean) =>
+		[...exportPreferenceKeys.all, 'citation-key-preview', formula, forceAscii] as const
 };
 
 export function exportCitationStylesQuery(workspaceId: string, query: string, include: string) {
@@ -38,18 +38,13 @@ export function exportCitationStylesQuery(workspaceId: string, query: string, in
 	});
 }
 
-export function citationKeyPreviewQuery(
-	workspaceId: string,
-	formula: string,
-	forceAscii: boolean,
-	enabled: boolean
-) {
-	const api = createWorkspaceApi(workspaceId);
+export function citationKeyPreviewQuery(formula: string, forceAscii: boolean, enabled: boolean) {
 	return queryOptions({
-		queryKey: exportPreferenceKeys.citationKeyPreview(workspaceId, formula, forceAscii),
-		enabled: enabled && Boolean(workspaceId),
+		queryKey: exportPreferenceKeys.citationKeyPreview(formula, forceAscii),
+		enabled,
+		retry: false,
 		queryFn: async ({ signal }) => ({
-			...(await api.request('GET', '/workspaces/{workspace_id}/citation-key-preview', {
+			...(await apiRequest('GET', '/account/citation-key-preview', {
 				params: { query: { formula, force_ascii: forceAscii } },
 				signal
 			})),
