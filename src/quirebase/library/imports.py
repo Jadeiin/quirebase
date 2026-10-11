@@ -39,7 +39,7 @@ from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import ImportBatch, Item, ItemAuthor, User
+from quirebase.models import ImportBatch, ImportBatchStatus, Item, ItemAuthor, User
 from quirebase.search import search_index
 
 from .identifiers import _create_items_from_candidates
@@ -95,9 +95,15 @@ def _record_to_item_payload(record: BibliographyRecord) -> dict:
     return {
         "title": record.title or None,
         "abstract": record.abstract,
-        "authors": "; ".join(person.storage_name() for person in record.authors) or None,
-        "editors": "; ".join(person.storage_name() for person in record.editors) or None,
-        "keywords": "; ".join(record.keywords) or None,
+        "authors": [
+            {"last_name": person.family_name, "first_name": person.given_name}
+            for person in record.authors
+        ],
+        "editors": [
+            {"last_name": person.family_name, "first_name": person.given_name}
+            for person in record.editors
+        ],
+        "keywords": list(record.keywords),
         "publication_date": record.publication_date,
         "publication_title": record.publication_title or record.book_title,
         "volume": record.volume,
@@ -107,9 +113,8 @@ def _record_to_item_payload(record: BibliographyRecord) -> dict:
         "place_published": record.location,
         "doi": record.doi,
         "reference_type": record.reference_type,
-        "bibtex_id": record.citation_key,
-        "bibtex_type": record.bibtex_type,
-        "urls": "\n".join(record.urls) or None,
+        "citation_key": record.citation_key,
+        "urls": [{"url": url} for url in record.urls],
         "identifiers": json.dumps(dict(record.identifiers), ensure_ascii=False)
         if record.identifiers
         else None,
@@ -170,7 +175,7 @@ async def stage_identifier_import_batch(
     batch = ImportBatch(
         workspace_id=workspace_id,
         actor_id=user.id,
-        file_format=f"metadata:{record.identifier.provider}",
+        file_format="metadata",
         records=[rec_dict],
         errors=[],
     )
@@ -182,7 +187,7 @@ async def stage_identifier_import_batch(
         "metadata.lookup",
         "import_batch",
         batch.id,
-        detail={"provider": record.identifier.provider},
+        detail={"provider": record.provider, "lookup_provider": provider},
         workspace_id=workspace_id,
         authorization_resource_action=ResourceAction.item_create.value,
     )
@@ -466,7 +471,7 @@ async def finalize_pdf_import_batch(
                 "message": "Workspace authorization is no longer available",
             },
         ]
-        batch.status = "failed"
+        batch.status = ImportBatchStatus.failed
         return False
     initial_errors = batch.errors
     retained_sources = {record["_source_id"] for record in records}
@@ -475,7 +480,7 @@ async def finalize_pdf_import_batch(
     ]
     batch.records = records
     batch.errors = [*initial_errors, *errors]
-    batch.status = "ready"
+    batch.status = ImportBatchStatus.ready
     record_event(
         db,
         batch.actor_id,
@@ -584,7 +589,7 @@ async def retry_pdf_import_batch(
     # workflow arguments and workflow attributes bound to the same actor so a
     # Workspace editor can successfully retry another member's failed batch.
     batch.actor_id = user.id
-    batch.status = "pending"
+    batch.status = ImportBatchStatus.pending
     batch.workflow_id = workflow_id
     batch.errors = [error for error in batch.errors if error.get("code") != "authorization_revoked"]
     await durable_operations().enqueue_in_transaction(
@@ -654,7 +659,7 @@ async def commit_import_batch(
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
     errors = batch.errors
-    if errors and batch.file_format != "pdf":
+    if any(error.get("severity") != "warning" for error in errors) and batch.file_format != "pdf":
         raise BatchConflict("the preview contains errors")
     records = batch.records
     if not records:
@@ -726,7 +731,7 @@ async def commit_import_batch(
         for record in records
         if isinstance(record, dict)
     ]
-    batch.status = "committed"
+    batch.status = ImportBatchStatus.committed
     await db.commit()
     return committed_item_ids
 

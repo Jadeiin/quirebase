@@ -5,6 +5,7 @@ import json
 from typing import Any, Self
 
 import pytest
+from inquiro import Contributor, ProviderRuntime, ResourceLink
 from inquiro.cli import _parser, _run, main
 from inquiro.models import (
     CandidateNotFound,
@@ -14,6 +15,7 @@ from inquiro.models import (
     ProviderConfig,
     SearchQuery,
 )
+from inquiro.transport import MockExchange, TransportResponse
 
 
 class FakeRuntime:
@@ -39,11 +41,49 @@ class FakeRuntime:
         self.closed = True
 
 
+@pytest.mark.parametrize("file_format", ["json", "bibtex"])
+def test_openalex_doi_lookup_keeps_input_separate_from_returned_identities(file_format, capsys):
+    payload = {
+        "id": "https://openalex.org/W123",
+        "display_name": "Resolved Item",
+        "doi": "https://doi.org/10.1000/Canonical",
+    }
+    exchange = MockExchange(lambda request: TransportResponse(200, json.dumps(payload).encode()))
+    args = _parser().parse_args([
+        "lookup",
+        "10.1000/canonical",
+        "--provider",
+        "openalex",
+        "--format",
+        file_format,
+        "--include-identifiers",
+    ])
+
+    asyncio.run(_run(args, lambda config: ProviderRuntime.with_exchange(config, exchange)))
+
+    output = capsys.readouterr().out
+    if file_format == "json":
+        result = json.loads(output)
+        assert result["provider"] == "openalex"
+        assert result["lookup_identifier"] == {
+            "provider": "openalex",
+            "value": "10.1000/canonical",
+        }
+        assert "identifier" not in result
+        assert result["identifiers"] == [
+            {"provider": "openalex", "value": "W123"},
+            {"provider": "doi", "value": "10.1000/Canonical"},
+        ]
+    else:
+        assert "openalex = {W123}" in output
+        assert "doi = {10.1000/Canonical}" in output
+
+
 def test_lookup_outputs_candidate_as_json_and_closes_runtime(capsys, monkeypatch):
     monkeypatch.setenv("INQUIRO_CONTACT_EMAIL", "agent@example.test")
     candidate = CandidateRecord(
         provider="crossref",
-        identifier=Identifier("doi", "10.1000/example"),
+        lookup_identifier=Identifier("doi", "10.1000/example"),
         title="An example",
         identifiers=(Identifier("doi", "10.1000/example"),),
     )
@@ -65,7 +105,7 @@ def test_lookup_outputs_candidate_as_json_and_closes_runtime(capsys, monkeypatch
     asyncio.run(_run(args, factory))
 
     output = json.loads(capsys.readouterr().out)
-    assert output["identifier"] == {"provider": "doi", "value": "10.1000/example"}
+    assert output["lookup_identifier"] == {"provider": "doi", "value": "10.1000/example"}
     assert output["title"] == "An example"
     assert created[0].lookup_call == ("10.1000/example", "doi")
     assert created[0].config.timeout_seconds == pytest.approx(2.5)
@@ -139,19 +179,22 @@ def test_lookup_exports_each_bibliography_format(
 ):
     candidate = CandidateRecord(
         provider="crossref",
-        identifier=Identifier("doi", "10.1000/example"),
+        lookup_identifier=Identifier("doi", "10.1000/example"),
         title="An API Example",
         abstract="Export me",
-        authors="Doe, Jane; de la Cruz, Juan",
+        authors=(
+            Contributor("Doe, Jane"),
+            Contributor("de la Cruz, Juan"),
+        ),
         publication_date="2025-04-03",
         publication_title="Testing Quarterly",
         doi="10.1000/example",
-        urls="https://example.test/article",
+        urls=(ResourceLink("https://example.test/article"),),
         identifiers=(
             Identifier("doi", "10.1000/example"),
             Identifier("openalex", "W123"),
         ),
-        reference_type="article",
+        reference_type="article-journal",
     )
 
     args = _parser().parse_args([
@@ -175,11 +218,11 @@ def test_search_export_disambiguates_duplicate_generated_keys(capsys):
     candidates = tuple(
         CandidateRecord(
             provider="crossref",
-            identifier=Identifier("doi", f"10.1000/{number}"),
+            lookup_identifier=Identifier("doi", f"10.1000/{number}"),
             title="The Same Work",
-            authors="Doe, Jane",
+            authors=(Contributor("Doe, Jane"),),
             publication_date="2025",
-            reference_type="article",
+            reference_type="article-journal",
         )
         for number in range(2)
     )

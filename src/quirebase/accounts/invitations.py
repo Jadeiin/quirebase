@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from quirebase.access import SystemAction, require_system_action
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import DomainError, ResourceNotFound, ValidationFailure
-from quirebase.models import Invitation, User
+from quirebase.models import Invitation, SystemRole, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +44,7 @@ async def create_invitation(
         denied_error=ResourceNotFound,
     )
     normalized = username.strip()
-    if not normalized or len(normalized) > 120 or role not in ("member", "administrator"):
+    if not normalized or len(normalized) > 120 or role not in SystemRole:
         raise ValidationFailure("invalid username or role")
     if await db.scalar(select(User.id).where(User.username == normalized)) or await db.scalar(
         select(Invitation.id).where(Invitation.username == normalized)
@@ -54,7 +54,7 @@ async def create_invitation(
     invitation = Invitation(
         token_hash=token_hash(raw),
         username=normalized,
-        role=role,
+        role=SystemRole(role),
         created_by=creator.id,
         expires_at=datetime.now(UTC) + timedelta(days=expires_days),
     )

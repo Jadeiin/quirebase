@@ -7,10 +7,12 @@ import pytest
 from inquiro import (
     CandidateNotFound,
     CandidateRecord,
+    Contributor,
     Identifier,
     ProviderConfig,
     ProviderRuntime,
     ProviderUnavailable,
+    ResourceLink,
 )
 from inquiro.transport import MockExchange, TransportRequest, TransportResponse
 from inquiro_provider_helpers import provider_runtime
@@ -22,7 +24,7 @@ async def lookup_metadata(value, provider="auto", settings=None, transport=None)
     assert transport is not None
     async with provider_runtime(settings=settings, transport=transport) as runtime:
         record = await runtime.lookup(value, provider=provider)
-    return record.identifier, record
+    return record.lookup_identifier, record
 
 
 async def parse_identifier(value, provider="auto"):
@@ -56,19 +58,16 @@ def response(request: httpx2.Request) -> httpx2.Response:
             },
         )
     if request.url.host == "eutils.ncbi.nlm.nih.gov":
+        assert request.url.path.endswith("efetch.fcgi")
         return httpx2.Response(
             200,
-            json={
-                "result": {
-                    "42": {
-                        "title": "PubMed Example",
-                        "authors": [{"name": "Doe J"}],
-                        "fulljournalname": "Medical Journal",
-                        "pubdate": "2024",
-                        "articleids": [{"idtype": "doi", "value": "10.2/pubmed"}],
-                    }
-                }
-            },
+            text="""<PubmedArticleSet><PubmedArticle>
+        <MedlineCitation><PMID>42</PMID><Article><ArticleTitle>PubMed Example</ArticleTitle>
+        <AuthorList><Author><LastName>Doe</LastName><ForeName>Jane</ForeName></Author></AuthorList>
+        <Journal><Title>Medical Journal</Title><JournalIssue><PubDate><Year>2024</Year></PubDate></JournalIssue></Journal>
+        </Article></MedlineCitation><PubmedData><ArticleIdList>
+        <ArticleId IdType="doi">10.2/pubmed</ArticleId>
+        </ArticleIdList></PubmedData></PubmedArticle></PubmedArticleSet>""",
         )
     if request.url.host == "api.datacite.org":
         return httpx2.Response(
@@ -172,7 +171,10 @@ def response(request: httpx2.Request) -> httpx2.Response:
         ("https://openalex.org/W123", "auto", Identifier("openalex", "W123")),
         ("2025ApJ...123..456A", "bibcode", Identifier("bibcode", "2025ApJ...123..456A")),
         ("bibcode: 2025ApJ...123..456A", "bibcode", Identifier("bibcode", "2025ApJ...123..456A")),
-        ("1234567", "article_number", Identifier("article_number", "1234567")),
+        ("1234567", "ieee", Identifier("ieee", "1234567")),
+        ("ieee: 1234567", "ieee", Identifier("ieee", "1234567")),
+        ("9780131103627", "openlibrary", Identifier("isbn", "9780131103627")),
+        ("2025ApJ...123..456A", "nasa_ads", Identifier("bibcode", "2025ApJ...123..456A")),
     ],
 )
 async def test_identifier_detection(value, provider, expected):
@@ -190,7 +192,7 @@ async def test_identifier_input_cannot_be_used_as_an_arbitrary_url():
 
 
 async def test_pmc_does_not_offer_metadata_lookup():
-    with pytest.raises(ValueError, match="unknown identifier provider: pmc"):
+    with pytest.raises(ValueError, match="unknown identifier provider: pmcid"):
         await lookup_metadata("PMC123", "pmc", transport=httpx2.MockTransport(response))
 
 
@@ -198,7 +200,7 @@ async def test_pmc_does_not_offer_metadata_lookup():
     ("value", "provider", "message"),
     [
         ("2025ApJ...123..456A", "bibcode", "NASA ADS requires INQUIRO_NASA_ADS_TOKEN"),
-        ("1234567", "article_number", "IEEE Xplore requires INQUIRO_IEEE_API_KEY"),
+        ("1234567", "ieee", "IEEE Xplore requires INQUIRO_IEEE_API_KEY"),
     ],
 )
 async def test_credentialed_lookup_errors_remain_provider_specific(value, provider, message):
@@ -213,7 +215,7 @@ async def test_credentialed_lookup_errors_remain_provider_specific(value, provid
         ("invalid", "bibcode"),
         ('" OR 1=1', "bibcode"),
         ("not-a-bibcode", "bibcode"),
-        ("invalid-number", "article_number"),
+        ("invalid-number", "ieee"),
     ],
 )
 async def test_explicit_provider_rejects_malformed_identifiers(value, provider):
@@ -231,7 +233,7 @@ async def test_explicit_provider_rejects_malformed_identifiers(value, provider):
         ("9780131103627", "isbn", "The C Programming Language"),
         ("W123", "openalex", "OpenAlex Example"),
         ("2025ApJ...123..456A", "bibcode", "NASA ADS Example"),
-        ("1234567", "article_number", "IEEE Example"),
+        ("1234567", "ieee", "IEEE Example"),
     ],
 )
 async def test_provider_adapters_map_records(value, provider, title):
@@ -248,6 +250,159 @@ async def test_provider_adapters_map_records(value, provider, title):
     assert parsed.provider == provider
     assert record.title == title
     assert record.identifiers
+
+
+@pytest.mark.parametrize(
+    ("value", "provider", "source", "namespace"),
+    [
+        ("9780131103627", "openlibrary", "openlibrary", "isbn"),
+        ("9780131103627", "isbn", "openlibrary", "isbn"),
+        ("2025ApJ...123..456A", "nasa_ads", "nasa_ads", "bibcode"),
+        ("2025ApJ...123..456A", "bibcode", "nasa_ads", "bibcode"),
+        ("1234567", "ieee", "ieee", "ieee"),
+        ("42", "pubmed", "pubmed", "pmid"),
+        ("42", "pmid", "pubmed", "pmid"),
+        ("10.9999/dataset", "datacite", "datacite", "doi"),
+    ],
+)
+async def test_lookup_routes_source_names_and_namespaces_to_the_correct_adapter(
+    value, provider, source, namespace
+):
+    _parsed, record = await lookup_metadata(
+        value,
+        provider,
+        settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
+        transport=httpx2.MockTransport(response),
+    )
+
+    assert record.provider == source
+    assert Identifier(namespace, value) in record.identifiers
+
+
+@pytest.mark.parametrize(
+    ("provider", "value", "source", "lookup_identifier", "identifiers"),
+    [
+        (
+            "openalex",
+            "10.1000/canonical",
+            "openalex",
+            Identifier("openalex", "10.1000/canonical"),
+            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/Canonical")),
+        ),
+        (
+            "openalex",
+            "W122",
+            "openalex",
+            Identifier("openalex", "W122"),
+            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/Canonical")),
+        ),
+        (
+            "auto",
+            "10.1000/canonical",
+            "crossref",
+            Identifier("doi", "10.1000/canonical"),
+            (Identifier("doi", "10.1000/Canonical"),),
+        ),
+        (
+            "crossref",
+            "10.1000/canonical",
+            "crossref",
+            Identifier("crossref", "10.1000/canonical"),
+            (Identifier("doi", "10.1000/Canonical"),),
+        ),
+        (
+            "datacite",
+            "10.1000/canonical",
+            "datacite",
+            Identifier("datacite", "10.1000/canonical"),
+            (Identifier("doi", "10.1000/Canonical"),),
+        ),
+        (
+            "bibcode",
+            "2025ApJ...123..456A",
+            "nasa_ads",
+            Identifier("bibcode", "2025ApJ...123..456A"),
+            (
+                Identifier("bibcode", "2025ApJ...124..456A"),
+                Identifier("doi", "10.1000/Canonical"),
+            ),
+        ),
+        (
+            "ieee",
+            "1234566",
+            "ieee",
+            Identifier("ieee", "1234566"),
+            (Identifier("ieee", "1234567"), Identifier("doi", "10.1000/Canonical")),
+        ),
+    ],
+)
+async def test_lookup_returns_record_identity_separately_from_request(
+    provider, value, source, lookup_identifier, identifiers
+):
+    def handler(request):
+        if request.url.host == "api.openalex.org":
+            payload = {
+                "id": "https://openalex.org/W123",
+                "display_name": "Resolved Item",
+                "doi": "https://doi.org/10.1000/Canonical",
+            }
+        elif request.url.host == "api.datacite.org":
+            payload = {
+                "data": {
+                    "attributes": {
+                        "doi": "10.1000/Canonical",
+                        "titles": [{"title": "Resolved Item"}],
+                    }
+                }
+            }
+        elif request.url.host == "api.adsabs.harvard.edu":
+            payload = {
+                "response": {
+                    "docs": [
+                        {
+                            "bibcode": "2025ApJ...124..456A",
+                            "title": ["Resolved Item"],
+                            "doi": ["10.1000/Canonical"],
+                        }
+                    ]
+                }
+            }
+        elif request.url.host == "ieeexploreapi.ieee.org":
+            payload = {
+                "articles": [
+                    {
+                        "article_number": "1234567",
+                        "title": "Resolved Item",
+                        "doi": "10.1000/Canonical",
+                    }
+                ]
+            }
+        else:
+            assert request.url.host == "api.crossref.org"
+            payload = {"message": {"DOI": "10.1000/Canonical", "title": ["Resolved Item"]}}
+        return httpx2.Response(200, json=payload)
+
+    async with provider_runtime(
+        settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
+        transport=httpx2.MockTransport(handler),
+    ) as runtime:
+        record = await runtime.lookup(value, provider=provider)
+
+    assert record.provider == source
+    assert record.lookup_identifier == lookup_identifier
+    assert record.identifiers == identifiers
+
+
+@pytest.mark.parametrize("work_id", [None, "https://openalex.org/invalid"])
+async def test_openalex_lookup_requires_a_returned_work_identity(work_id):
+    transport = httpx2.MockTransport(
+        lambda request: httpx2.Response(
+            200,
+            json={"id": work_id, "display_name": "Unidentified Item", "doi": "10.1000/example"},
+        )
+    )
+    with pytest.raises(ProviderUnavailable, match="Work ID"):
+        await lookup_metadata("10.1000/example", "openalex", transport=transport)
 
 
 async def test_crossref_lookup_preserves_rich_candidate_metadata():
@@ -286,10 +441,12 @@ async def test_crossref_lookup_preserves_rich_candidate_metadata():
         transport=httpx2.MockTransport(rich_crossref_response),
     )
 
-    assert record.keywords == "Machine Learning; Research methods"
-    assert record.affiliation == "Example University; Research Lab"
+    assert record.keywords == ("Machine Learning", "Research methods")
+    assert [
+        affiliation.name for author in record.authors for affiliation in author.affiliations
+    ] == ["Example University", "Research Lab"]
     assert record.urls is not None
-    assert record.urls.splitlines() == [
+    assert [link.url for link in record.urls] == [
         "https://doi.org/10.1234/rich",
         "https://api.crossref.org/works/10.1234/rich",
         "https://example.org/article",
@@ -329,7 +486,7 @@ async def test_pubmed_lookup_passes_configured_identity_and_api_key():
         captured.update(request.url.params)
         return httpx2.Response(
             200,
-            json={"result": {"42": {"title": "Configured PubMed", "authors": []}}},
+            text="<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>42</PMID><Article><ArticleTitle>Configured PubMed</ArticleTitle><AuthorList /></Article></MedlineCitation></PubmedArticle></PubmedArticleSet>",
         )
 
     _, record = await lookup_metadata(
@@ -351,17 +508,23 @@ async def test_pubmed_lookup_passes_configured_identity_and_api_key():
 def test_candidate_record_is_an_immutable_normalized_value():
     record = CandidateRecord(
         provider="arxiv",
-        identifier=Identifier("arxiv", "1706.03762"),
+        lookup_identifier=Identifier("arxiv", "1706.03762"),
         title="Attention Is All You Need",
         abstract="The dominant sequence transduction models...",
-        authors="Vaswani, Ashish; Shazeer, Noam",
-        keywords="Machine Learning; Transformer",
+        authors=(
+            Contributor("Vaswani, Ashish"),
+            Contributor("Shazeer, Noam"),
+        ),
+        keywords=("Machine Learning", "Transformer"),
         publication_date="2017-06-12",
         publication_title="NeurIPS 2017",
         volume="30",
         pages="5998-6008",
         doi="10.48550/arXiv.1706.03762",
-        urls="https://arxiv.org/abs/1706.03762\nhttps://arxiv.org/pdf/1706.03762.pdf",
+        urls=(
+            ResourceLink("https://arxiv.org/abs/1706.03762"),
+            ResourceLink("https://arxiv.org/pdf/1706.03762.pdf"),
+        ),
     )
 
     assert record.title == "Attention Is All You Need"
@@ -409,8 +572,8 @@ async def test_openalex_abstract_inverted_index_and_html_cleaning():
 
     assert record.title == "<i>OmniDrones:</i> An Efficient Platform"
     assert record.abstract == "In this work, we introduce OmniDrones."
-    assert record.authors == "Guanqi He; Jordan Key"
-    assert record.keywords == "Robotics"
+    assert [author.display_name for author in record.authors] == ["Guanqi He", "Jordan Key"]
+    assert record.keywords == ("Robotics",)
     assert "https://arxiv.org/abs/2309.12825" in str(record.urls)
 
 

@@ -62,8 +62,6 @@ async def _resolve_authors(
         first = " ".join(first_name.split()) or None if first_name else None
         if not last:
             raise ValidationFailure("author last name is required")
-        if len(last) > 120 or (first is not None and len(first) > 120):
-            raise ValidationFailure("author name is too long")
         candidates.setdefault(normalize_author_identity(last, first), (last, first))
     if not candidates:
         return {}
@@ -110,13 +108,11 @@ def _prepared_contributors(authors_data: list[dict]) -> list[tuple[int, str, str
     identities: set[str] = set()
     prepared: list[tuple[int, str, str | None, bool]] = []
     for position, entry in enumerate(authors_data, start=1):
-        last = str(entry.get("last_name", "")).strip()
+        last = " ".join(str(entry.get("last_name", "")).split())
         raw_first = entry.get("first_name")
-        first = str(raw_first).strip() or None if raw_first else None
+        first = " ".join(str(raw_first).split()) or None if raw_first else None
         if not last:
             continue
-        if len(last) > 120 or (first is not None and len(first) > 120):
-            raise ValidationFailure("author name is too long")
         identity = normalize_author_identity(last, first)
         if identity in identities:
             raise ValidationFailure("contributors must be unique within a role")
@@ -135,6 +131,34 @@ async def _replace_item_authors_many(
     prepared = [(item, role, _prepared_contributors(data)) for item, role, data in replacements]
     names = [(last, first) for _, _, entries in prepared for _, last, first, _ in entries]
     resolved = await _resolve_authors(db, names)
+    unknown_flags = {
+        (
+            item.id,
+            role,
+            resolved[normalize_author_identity(entry["last_name"], entry.get("first_name"))].id,
+        )
+        for item, role, data in replacements
+        for entry in data
+        if entry.get("last_name") and entry.get("is_corresponding") is None
+    }
+    previous_flags = {}
+    unknown_roots = list(unknown_flags)
+    for offset in range(0, len(unknown_roots), 500):
+        rows = await db.execute(
+            select(
+                ItemAuthor.item_id,
+                ItemAuthor.role,
+                ItemAuthor.author_id,
+                ItemAuthor.is_corresponding,
+            ).where(
+                tuple_(ItemAuthor.item_id, ItemAuthor.role, ItemAuthor.author_id).in_(
+                    unknown_roots[offset : offset + 500]
+                )
+            )
+        )
+        previous_flags.update({
+            (item_id, role, author_id): flag for item_id, role, author_id, flag in rows
+        })
     if replace:
         roots = [(item.id, role) for item, role, _ in prepared]
         for offset in range(0, len(roots), 500):
@@ -154,7 +178,7 @@ async def _replace_item_authors_many(
                     author_id=author.id,
                     position=position,
                     role=role,
-                    is_corresponding=corresponding,
+                    is_corresponding=previous_flags.get((item.id, role, author.id), corresponding),
                 )
             )
             formatted_names.append(BibliographyContributor(last, first).display_name())

@@ -1,18 +1,29 @@
-import pytest
 from inquiro.bibliography import (
-    CitationEngineUnavailable,
+    builtin_style_catalog,
     builtin_style_xml,
-    engine,
     is_valid_csl,
     render_bibliography,
+    styles,
 )
 
 
-def test_render_bibliography_reports_unavailable_optional_engine(monkeypatch):
-    monkeypatch.setattr(engine, "CiteProcJSON", None)
-
-    with pytest.raises(CitationEngineUnavailable, match="requires the 'citation' extra"):
-        render_bibliography([{"id": "item-1", "title": "Example"}], "<style/>")
+def test_render_bibliography_with_custom_csl_without_optional_style_catalog(monkeypatch):
+    monkeypatch.setattr(styles, "get_style_filepath", None)
+    monkeypatch.setattr(styles, "get_style_name", None)
+    builtin_style_catalog.cache_clear()
+    xml = """<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+    <info><title>Custom</title><id>https://example.test/custom</id>
+    <updated>2026-10-10T00:00:00+00:00</updated></info>
+    <citation><layout><text variable="title"/></layout></citation></style>"""
+    try:
+        assert builtin_style_catalog() == ()
+        assert builtin_style_xml("apa") is None
+        assert is_valid_csl(xml)
+        assert render_bibliography([{"id": "item-1", "type": "book", "title": "Example"}], xml) == [
+            "Example"
+        ]
+    finally:
+        builtin_style_catalog.cache_clear()
 
 
 def test_is_valid_csl_rejects_garbage():

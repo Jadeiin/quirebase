@@ -13,6 +13,7 @@ from advanced_alchemy.types import (
     JsonB,
     StoredObject,
 )
+from inquiro.reference_types import ReferenceType
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -31,13 +32,21 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .core.database import Base, EntityBase, IdentityBase
+from .core.errors import ValidationFailure
 from .core.passwords import PreparedPasswordHash
+
+MAX_AUTHOR_NAME_LENGTH = 120
+MAX_AUTHOR_IDENTITY_LENGTH = MAX_AUTHOR_NAME_LENGTH * 2 + 1
+MAX_CITATION_KEY_LENGTH = 128
+MAX_RESOURCE_ID_LENGTH = 255
 
 
 def normalize_author_identity(last_name: str, first_name: str | None = None) -> str:
-    """Return the canonical, case-insensitive identity key for an Author."""
+    """Return an identity whose normalized name parts fit the Contributor limit."""
     last = " ".join(last_name.split()).casefold()
     first = " ".join(first_name.split()).casefold() if first_name else ""
+    if len(last) > MAX_AUTHOR_NAME_LENGTH or len(first) > MAX_AUTHOR_NAME_LENGTH:
+        raise ValidationFailure("contributor name is too long after normalization")
     return f"{last}\x1f{first}"
 
 
@@ -141,7 +150,7 @@ def enum_type(enum_class: type[StrEnum], name: str) -> SqlEnum:
         enum_class,
         name=name,
         native_enum=False,
-        create_constraint=False,
+        create_constraint=True,
         validate_strings=True,
         values_callable=lambda members: [member.value for member in members],
     )
@@ -151,13 +160,14 @@ class User(EntityBase):
     __tablename__ = "users"
     username: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     password_hash: Mapped[HashedPassword] = mapped_column(PreparedPasswordHash())
-    role: Mapped[str] = mapped_column(String(32), default=SystemRole.member.value)
+    role: Mapped[SystemRole] = mapped_column(
+        enum_type(SystemRole, "system_role"), default=SystemRole.member
+    )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Workspace(EntityBase):
     __tablename__ = "workspaces"
-    __table_args__ = (CheckConstraint("state IN ('active', 'archived', 'deleted')", name="state"),)
     name: Mapped[str] = mapped_column(String(240))
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     state: Mapped[WorkspaceState] = mapped_column(
@@ -175,11 +185,6 @@ class WorkspaceMember(EntityBase):
     __tablename__ = "workspace_members"
     __table_args__ = (
         UniqueConstraint("workspace_id", "id", "user_id", name="uq_workspace_members_identity"),
-        CheckConstraint(
-            "role IN ('owner', 'admin', 'editor', 'reviewer', 'viewer')",
-            name="role",
-        ),
-        CheckConstraint("state IN ('active', 'suspended')", name="state"),
         CheckConstraint(
             "role <> 'owner' OR (state = 'active' AND terminated_at IS NULL)",
             name="owner_active",
@@ -221,12 +226,6 @@ class WorkspaceMember(EntityBase):
 
 class WorkspaceInvitation(EntityBase):
     __tablename__ = "workspace_invitations"
-    __table_args__ = (
-        CheckConstraint(
-            "role IN ('admin', 'editor', 'reviewer', 'viewer')",
-            name="role",
-        ),
-    )
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
@@ -270,7 +269,9 @@ class Invitation(EntityBase):
     __tablename__ = "invitations"
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     username: Mapped[str] = mapped_column(String(120), unique=True)
-    role: Mapped[str] = mapped_column(String(32), default=SystemRole.member.value)
+    role: Mapped[SystemRole] = mapped_column(
+        enum_type(SystemRole, "system_role"), default=SystemRole.member
+    )
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
@@ -282,9 +283,9 @@ class Item(EntityBase):
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
-    title: Mapped[str] = mapped_column(Text, index=True)
+    title: Mapped[str] = mapped_column(Text)
     abstract: Mapped[str | None] = mapped_column(Text)
-    publication_date: Mapped[str | None] = mapped_column(String(32))
+    publication_date: Mapped[str | None] = mapped_column(String(10))
     publication_title: Mapped[str | None] = mapped_column(Text)
     volume: Mapped[str | None] = mapped_column(String(100))
     issue: Mapped[str | None] = mapped_column(String(100))
@@ -295,11 +296,12 @@ class Item(EntityBase):
     journal_abbreviation: Mapped[str | None] = mapped_column(Text)
     doi: Mapped[str | None] = mapped_column(String(500), index=True)
     identifiers: Mapped[str | None] = mapped_column(Text)
-    reference_type: Mapped[str | None] = mapped_column(String(40))
+    reference_type: Mapped[ReferenceType] = mapped_column(
+        enum_type(ReferenceType, "reference_type"), default=ReferenceType.document
+    )
     authors: Mapped[str | None] = mapped_column(Text)
     editors: Mapped[str | None] = mapped_column(Text)
-    bibtex_id: Mapped[str | None] = mapped_column(String(255), index=True)
-    bibtex_type: Mapped[str | None] = mapped_column(String(40))
+    citation_key: Mapped[str | None] = mapped_column(String(MAX_CITATION_KEY_LENGTH), index=True)
     urls: Mapped[str | None] = mapped_column(Text)
     keywords: Mapped[str | None] = mapped_column(Text)
     custom_fields: Mapped[dict | None] = mapped_column(JsonB)
@@ -327,10 +329,10 @@ class Item(EntityBase):
 class Author(EntityBase):
     __tablename__ = "authors"
     __table_args__ = (UniqueConstraint("identity_key", name="uq_authors_identity"),)
-    first_name: Mapped[str | None] = mapped_column(String(120))
-    last_name: Mapped[str] = mapped_column(String(120), index=True)
+    first_name: Mapped[str | None] = mapped_column(String(MAX_AUTHOR_NAME_LENGTH))
+    last_name: Mapped[str] = mapped_column(String(MAX_AUTHOR_NAME_LENGTH), index=True)
     identity_key: Mapped[str] = mapped_column(
-        String(512), nullable=False, default=_author_identity_default
+        String(MAX_AUTHOR_IDENTITY_LENGTH), nullable=False, default=_author_identity_default
     )
 
 
@@ -351,9 +353,19 @@ class ItemAuthor(EntityBase):
 class ItemIdentifier(EntityBase):
     __tablename__ = "item_identifiers"
     __table_args__ = (
-        UniqueConstraint("item_id", "provider", "value", name="uq_item_provider_value"),
+        UniqueConstraint("item_id", "provider", name="uq_item_identifiers_item_provider"),
+        UniqueConstraint(
+            "workspace_id", "provider", "value", name="uq_item_identifiers_workspace_provider_value"
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "item_id"],
+            ["items.workspace_id", "items.id"],
+            name="fk_item_identifiers_item_workspace",
+            ondelete="CASCADE",
+        ),
     )
-    item_id: Mapped[UUID] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
+    item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     provider: Mapped[str] = mapped_column(String(40), index=True)
     value: Mapped[str] = mapped_column(String(500), index=True)
     item: Mapped[Item] = relationship(back_populates="identifier_links")
@@ -381,11 +393,7 @@ class ItemRead(Base):
 
 class Project(EntityBase):
     __tablename__ = "projects"
-    __table_args__ = (
-        CheckConstraint("state IN ('active', 'archived', 'deleted')", name="state"),
-        CheckConstraint("participation IN ('workspace', 'open', 'managed')", name="participation"),
-        UniqueConstraint("workspace_id", "id", name="uq_projects_workspace_id"),
-    )
+    __table_args__ = (UniqueConstraint("workspace_id", "id", name="uq_projects_workspace_id"),)
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
@@ -507,7 +515,9 @@ class ItemTagRecommendation(EntityBase):
     workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
     item_id: Mapped[UUID] = mapped_column(GUID(), unique=True, index=True)
     generation_token: Mapped[int] = mapped_column(Integer, default=1)
-    workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    workflow_id: Mapped[str | None] = mapped_column(
+        String(MAX_RESOURCE_ID_LENGTH), nullable=True, index=True
+    )
     single_words: Mapped[list[str] | None] = mapped_column(JsonB, nullable=True)
     phrases: Mapped[list[str] | None] = mapped_column(JsonB, nullable=True)
     generated_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
@@ -545,10 +555,6 @@ class DiscussionMessage(EntityBase):
 class FileRevision(EntityBase):
     __tablename__ = "file_revisions"
     __table_args__ = (
-        CheckConstraint(
-            "processing_state IN ('pending', 'ready')",
-            name="processing_state",
-        ),
         UniqueConstraint("workspace_id", "id", name="uq_file_revisions_workspace_id"),
         UniqueConstraint(
             "workspace_id", "id", "item_id", name="uq_file_revisions_workspace_id_item"
@@ -584,10 +590,6 @@ class FileRevision(EntityBase):
 class Attachment(EntityBase):
     __tablename__ = "attachments"
     __table_args__ = (
-        CheckConstraint(
-            "role IS NULL OR role = 'graphical_abstract'",
-            name="role",
-        ),
         UniqueConstraint("item_id", "role", name="uq_attachments_item_role"),
         ForeignKeyConstraint(
             ["workspace_id", "item_id"],
@@ -608,12 +610,6 @@ class Attachment(EntityBase):
 class PdfAnnotation(EntityBase):
     __tablename__ = "pdf_annotations"
     __table_args__ = (
-        CheckConstraint(
-            "kind IN ('highlight', 'underline', 'strikeout', 'note', 'free_text', "
-            "'ink', 'rectangle', 'ellipse', 'line', 'arrow')",
-            name="kind",
-        ),
-        CheckConstraint("scope IN ('private', 'project')", name="scope"),
         CheckConstraint(
             "(scope = 'private' AND project_item_id IS NULL) OR "
             "(scope = 'project' AND project_item_id IS NOT NULL)",
@@ -679,7 +675,7 @@ class PdfAnnotationReply(EntityBase):
 
 class ExportArtifact(Base):
     __tablename__ = "export_artifacts"
-    workflow_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(String(MAX_RESOURCE_ID_LENGTH), primary_key=True)
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
@@ -687,14 +683,15 @@ class ExportArtifact(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
 
 
+class ImportBatchStatus(StrEnum):
+    pending = "pending"
+    ready = "ready"
+    failed = "failed"
+    committed = "committed"
+
+
 class ImportBatch(EntityBase):
     __tablename__ = "import_batches"
-    __table_args__ = (
-        CheckConstraint(
-            "status IN ('pending', 'ready', 'failed', 'committed')",
-            name="status",
-        ),
-    )
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
@@ -705,8 +702,12 @@ class ImportBatch(EntityBase):
         StoredObject(backend="documents", multiple=True), default=list
     )
     errors: Mapped[list[dict]] = mapped_column(JsonB)
-    status: Mapped[str] = mapped_column(String(16), default="ready")
-    workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    status: Mapped[ImportBatchStatus] = mapped_column(
+        enum_type(ImportBatchStatus, "import_batch_status"), default=ImportBatchStatus.ready
+    )
+    workflow_id: Mapped[str | None] = mapped_column(
+        String(MAX_RESOURCE_ID_LENGTH), nullable=True, index=True
+    )
     committed_item_ids: Mapped[list[str] | None] = mapped_column(JsonB, nullable=True)
 
 
@@ -730,7 +731,7 @@ class AuditEvent(IdentityBase):
     project_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(120), index=True)
     target_type: Mapped[str] = mapped_column(String(80))
-    target_id: Mapped[str | None] = mapped_column(String(36))
+    target_id: Mapped[str | None] = mapped_column(String(MAX_RESOURCE_ID_LENGTH))
     detail: Mapped[dict | str | None] = mapped_column(JsonB)
     target_ids: Mapped[list[str] | None] = mapped_column(JsonB)
     authorization_role: Mapped[str | None] = mapped_column(String(32))

@@ -89,7 +89,8 @@ async def search_candidate_records(
         raise ResourceUnavailable("user not available")
     reloaded_user = (await require_workspace_membership(db, reloaded_user, workspace_id)).actor
     candidate_identifiers = {
-        (candidate.identifier.provider, candidate.identifier.value) for candidate in result.results
+        (candidate.lookup_identifier.provider, candidate.lookup_identifier.value)
+        for candidate in result.results
     }
     candidate_identifiers.update(
         ("doi", candidate.doi) for candidate in result.results if candidate.doi
@@ -102,18 +103,19 @@ async def search_candidate_records(
         results=tuple(
             CandidateView(
                 provider=candidate.provider,
-                identifier_provider=candidate.identifier.provider,
-                identifier=candidate.identifier.value,
+                identifier_provider=candidate.lookup_identifier.provider,
+                identifier=candidate.lookup_identifier.value,
                 title=candidate.title,
-                authors=candidate.authors,
+                authors="; ".join(author.display_name for author in candidate.authors or ())
+                or None,
                 publication_title=candidate.publication_title,
                 publication_date=candidate.publication_date,
                 doi=candidate.doi,
                 abstract=candidate.abstract,
                 imported=(
                     (
-                        candidate.identifier.provider.casefold(),
-                        candidate.identifier.value.casefold(),
+                        candidate.lookup_identifier.provider.casefold(),
+                        candidate.lookup_identifier.value.casefold(),
                     )
                     in accessible_identifiers
                     or bool(

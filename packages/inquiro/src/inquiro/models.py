@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import IO, Self
+from typing import IO, TYPE_CHECKING, Literal, Self
+
+from inquiro.names import ContributorName
+
+if TYPE_CHECKING:
+    from inquiro.reference_types import ReferenceType
 
 
 class InquiroError(Exception):
@@ -82,18 +87,73 @@ class AcquiredDocument:
 
 @dataclass(frozen=True)
 class Identifier:
+    """A provider-qualified lookup key or a namespaced confirmed identifier."""
+
     provider: str
     value: str
 
 
 @dataclass(frozen=True)
+class Affiliation:
+    name: str
+    identifiers: tuple[Identifier, ...] = ()
+    country_code: str | None = None
+    raw_name: str | None = None
+
+
+@dataclass(frozen=True)
+class Contributor:
+    """One credited author, including affiliations on this particular record.
+
+    Name parts describe upstream facts. bibliographic_name provides a separate
+    formatting projection when a source supplies only a display name.
+    """
+
+    display_name: str
+    family_name: str | None = None
+    given_name: str | None = None
+    kind: Literal["person", "organization", "unknown"] = "unknown"
+    identifiers: tuple[Identifier, ...] = ()
+    affiliations: tuple[Affiliation, ...] | None = None
+    is_corresponding: bool | None = None
+    suffix: str | None = None
+
+    @property
+    def bibliographic_name(self) -> ContributorName:
+        if self.kind == "organization":
+            return ContributorName(self.display_name)
+        if self.family_name:
+            family = " ".join(part for part in (self.family_name, self.suffix) if part)
+            return ContributorName(family, self.given_name)
+        return ContributorName.parse(self.display_name)
+
+
+@dataclass(frozen=True)
+class ResourceLink:
+    url: str
+    kind: Literal["landing_page", "full_text", "other"] = "other"
+    media_type: str | None = None
+    version: str | None = None
+    license: str | None = None
+    is_open_access: bool | None = None
+    intended_application: str | None = None
+
+
+@dataclass(frozen=True)
 class CandidateRecord:
+    """Provider metadata with a lookup key and confirmed record identities.
+
+    provider names the metadata source. lookup_identifier preserves the parsed
+    lookup input, or supplies the next lookup key for a search result.
+    identifiers contains confirmed identities without injecting that lookup key.
+    """
+
     provider: str
-    identifier: Identifier
+    lookup_identifier: Identifier
     title: str
     abstract: str | None = None
-    authors: str | None = None
-    keywords: str | None = None
+    authors: tuple[Contributor, ...] | None = None
+    keywords: tuple[str, ...] | None = None
     publication_date: str | None = None
     publication_title: str | None = None
     journal_abbreviation: str | None = None
@@ -101,11 +161,10 @@ class CandidateRecord:
     issue: str | None = None
     pages: str | None = None
     publisher: str | None = None
-    affiliation: str | None = None
     doi: str | None = None
-    urls: str | None = None
+    urls: tuple[ResourceLink, ...] | None = None
     identifiers: tuple[Identifier, ...] = ()
-    reference_type: str | None = None
+    reference_type: ReferenceType | None = None
 
 
 @dataclass(frozen=True)
@@ -130,50 +189,6 @@ class SearchQuery:
 class CandidatePage:
     provider: str
     results: tuple[CandidateRecord, ...]
-    total: int
-    page: int
-    per_page: int
-
-
-@dataclass(frozen=True)
-class ProviderRecord:
-    """Normalized provider payload before the runtime attaches its identifier."""
-
-    title: str
-    abstract: str | None = None
-    authors: str | None = None
-    keywords: str | None = None
-    publication_date: str | None = None
-    publication_title: str | None = None
-    journal_abbreviation: str | None = None
-    volume: str | None = None
-    issue: str | None = None
-    pages: str | None = None
-    publisher: str | None = None
-    affiliation: str | None = None
-    doi: str | None = None
-    urls: str | None = None
-    identifiers: str | None = None
-    reference_type: str | None = None
-
-
-@dataclass(frozen=True)
-class ProviderSearchRecord:
-    provider: str
-    identifier_provider: str
-    identifier: str
-    title: str
-    authors: str | None = None
-    publication_title: str | None = None
-    publication_date: str | None = None
-    doi: str | None = None
-    abstract: str | None = None
-
-
-@dataclass(frozen=True)
-class ProviderSearchPage:
-    provider: str
-    results: tuple[ProviderSearchRecord, ...] | list[ProviderSearchRecord]
     total: int
     page: int
     per_page: int

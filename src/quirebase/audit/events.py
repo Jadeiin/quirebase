@@ -7,8 +7,9 @@ from sqlalchemy import Text, cast, or_, select
 
 from quirebase.access.authorization import SystemAction, require_system_action
 from quirebase.audit.invocations import current_programmatic_invocation
+from quirebase.core.errors import ValidationFailure
 from quirebase.core.persistence import select_page
-from quirebase.models import AuditEvent
+from quirebase.models import MAX_RESOURCE_ID_LENGTH, AuditEvent
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -34,6 +35,9 @@ def record_event(
     result: str = "succeeded",
     source: str | None = None,
 ) -> AuditEvent:
+    resource_id = str(target_id) if target_id is not None else None
+    if resource_id is not None and len(resource_id) > MAX_RESOURCE_ID_LENGTH:
+        raise ValidationFailure("audit target ID is too long")
     invocation = current_programmatic_invocation()
     if invocation is not None:
         if isinstance(detail, dict):
@@ -48,7 +52,7 @@ def record_event(
         project_id=project_id,
         action=action,
         target_type=target_type,
-        target_id=str(target_id) if target_id is not None else None,
+        target_id=resource_id,
         detail=detail,
         target_ids=[str(target_id) for target_id in target_ids] if target_ids is not None else None,
         authorization_role=authorization_role,

@@ -21,7 +21,7 @@ alembic_config = database_config.alembic_config
 target_metadata = Base.metadata
 
 # The dialect-specific search projections (FTS5 on SQLite, tsvector tables on PostgreSQL)
-# are created by raw SQL in the initial revision and are deliberately absent from
+# are created by raw SQL in the search revision and are deliberately absent from
 # Base.metadata. Autogenerate would otherwise reflect them, including SQLite's FTS5
 # shadow tables, and emit DROP TABLE operations for them.
 SEARCH_PROJECTION_TABLES = frozenset({"item_search", "revision_search"})

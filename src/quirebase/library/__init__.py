@@ -76,7 +76,7 @@ from quirebase.library.imports import (
 )
 from quirebase.library.item_metadata import (
     create_item,
-    regenerate_bibtex_key,
+    regenerate_citation_key,
     revise_item_metadata,
 )
 from quirebase.library.item_sections import (
@@ -181,7 +181,7 @@ __all__ = [
     "parse_author_list_string",
     "preview_citation_key",
     "record_discovery_search_audit",
-    "regenerate_bibtex_key",
+    "regenerate_citation_key",
     "regenerate_item_tag_recommendation",
     "remove_tag_from_item",
     "rename_tag",

@@ -11,6 +11,7 @@ from uuid import UUID
 
 import pymupdf
 from advanced_alchemy.types import FileObject
+from inquiro import Contributor
 from inquiro.models import CandidateRecord, Identifier
 from sqlalchemy import func, select, update
 from workspace_helpers import provision_initial_workspace
@@ -51,10 +52,10 @@ def instrument_external_provider(directory, *, pause):
             raise ResourceNotFound("no metadata for this PDF")
         return CandidateRecord(
             provider="crossref",
-            identifier=Identifier("doi", identifier),
+            lookup_identifier=Identifier("doi", identifier),
             title="Recovery retained paper",
             doi=identifier,
-            authors="Recovery, Author",
+            authors=(Contributor("Recovery, Author"),),
         )
 
     imports.extract_pdf_import_doi = observed_extract

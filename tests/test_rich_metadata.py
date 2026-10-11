@@ -30,8 +30,8 @@ async def test_item_rich_metadata_fields(async_db):
         publisher="Nature Publishing Group",
         place_published="London",
         journal_abbreviation="Nat. Mach. Intell.",
-        bibtex_id="Smith2026Deep",
-        bibtex_type="article",
+        citation_key="Smith2026Deep",
+        reference_type="article",
         urls="https://nature.com/articles/123\nhttps://arxiv.org/abs/2601.00001",
     )
     db.add(item)
@@ -50,8 +50,8 @@ async def test_item_rich_metadata_fields(async_db):
     assert loaded.publisher == "Nature Publishing Group"
     assert loaded.place_published == "London"
     assert loaded.journal_abbreviation == "Nat. Mach. Intell."
-    assert loaded.bibtex_id == "Smith2026Deep"
-    assert loaded.bibtex_type == "article"
+    assert loaded.citation_key == "Smith2026Deep"
+    assert loaded.reference_type == "article"
     assert loaded.urls == "https://nature.com/articles/123\nhttps://arxiv.org/abs/2601.00001"
     assert loaded.creator.username == "user1"
     assert loaded.updater.username == "user2"
@@ -115,9 +115,15 @@ async def test_item_identifier_relations(async_db):
     db.add(item)
     await db.flush()
 
-    id1 = ItemIdentifier(item_id=item.id, provider="doi", value="10.1038/nature12345")
-    id2 = ItemIdentifier(item_id=item.id, provider="arxiv", value="2401.12345")
-    id3 = ItemIdentifier(item_id=item.id, provider="pmid", value="12345678")
+    id1 = ItemIdentifier(
+        workspace_id=item.workspace_id, item_id=item.id, provider="doi", value="10.1038/nature12345"
+    )
+    id2 = ItemIdentifier(
+        workspace_id=item.workspace_id, item_id=item.id, provider="arxiv", value="2401.12345"
+    )
+    id3 = ItemIdentifier(
+        workspace_id=item.workspace_id, item_id=item.id, provider="pmid", value="12345678"
+    )
     db.add_all([id1, id2, id3])
     await db.flush()
 

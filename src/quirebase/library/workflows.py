@@ -17,7 +17,7 @@ from quirebase.core.workflows import (
     object_reservation_attributes,
 )
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
-from quirebase.models import ImportBatch, Item, ItemTagRecommendation, User
+from quirebase.models import ImportBatch, ImportBatchStatus, Item, ItemTagRecommendation, User
 
 from .tag_recommendations import (
     RecommendationCandidates,
@@ -259,7 +259,7 @@ async def fail_pdf_import_batch_step(batch_id: UUID, workflow_id: str) -> bool:
     batch = await ads.sql_session().get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
         return False
-    batch.status = "failed"
+    batch.status = ImportBatchStatus.failed
     return True
 
 

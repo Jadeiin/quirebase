@@ -28,7 +28,7 @@ from .core.workflows import (
     verify_durable_operations,
 )
 from .library.tag_recommendations import validate_engine_configuration
-from .models import User
+from .models import SystemRole, User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
 from .operations.object_migration import migrate_legacy_objects
 from .operations.workflows import maintenance_schedules
@@ -88,7 +88,7 @@ def create_admin(
             user = User(
                 username=username,
                 password_hash=await hash_password_async(password),
-                role="administrator",
+                role=SystemRole.administrator,
             )
             db.add(user)
             await db.flush()

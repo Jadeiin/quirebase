@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from app_helpers import json_payload
-from inquiro import CandidateRecord, Identifier
+from inquiro import CandidateRecord, Contributor, Identifier
 from sqlalchemy import select
 from test_http import authenticated_async_client
 
@@ -21,15 +21,15 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
     workspace_id = item.workspace_id
     record = CandidateRecord(
         provider="crossref",
-        identifier=Identifier("doi", "10.1/looked-up"),
+        lookup_identifier=Identifier("doi", "10.1/looked-up"),
         title="Looked-up paper",
         abstract="Remote metadata",
-        authors="Doe, Jane",
+        authors=(Contributor("Doe, Jane"),),
         publication_date="2026",
         publication_title="Journal",
         doi="10.1/looked-up",
         identifiers=(Identifier("doi", "10.1/looked-up"),),
-        reference_type="journal-article",
+        reference_type="article-journal",
     )
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
@@ -43,9 +43,7 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
         assert preview.status_code == 201
         assert "Looked-up paper" in preview.text
         assert await db.scalar(select(Item).where(Item.title == "Looked-up paper")) is None
-        batch = await db.scalar(
-            select(ImportBatch).where(ImportBatch.file_format == "metadata:doi")
-        )
+        batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "metadata"))
         assert batch is not None
         batch_id = batch.id
         committed = await client.post(

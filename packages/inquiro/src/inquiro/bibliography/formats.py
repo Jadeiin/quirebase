@@ -31,7 +31,10 @@ from inquiro.bibliography.keys import (
 )
 from inquiro.bibliography.options import BibliographyExportOptions
 from inquiro.bibliography.records import BibliographyRecord, Contributor
-from inquiro.canonical import normalize_reference_type
+from inquiro.canonical import normalize_publication_date
+from inquiro.identifiers import parse_identifier
+from inquiro.providers._catalog import builtin_providers
+from inquiro.reference_types import ReferenceType, export_reference_type, normalize_reference_type
 from inquiro.richtext import convert_rich_text
 
 SUPPORTED_FORMATS = {"bibtex", "biblatex", "ris", "endnote"}
@@ -67,91 +70,19 @@ _BIBTEX_FORMAT = _V2BibtexFormat()
 _BIBTEX_FORMAT.indent = "    "
 _BIBTEX_FORMAT.block_separator = "\n"
 
-REFERENCE_TYPE_TO_BIBTEX: dict[str, str] = {
-    "article": "article",
-    "book": "book",
-    "chapter": "incollection",
-    "conference": "inproceedings",
-    "preprint": "misc",
-    "thesis": "phdthesis",
-    "report": "techreport",
-    "generic": "misc",
-    "unpublished": "unpublished",
-    "webpage": "misc",
-    "dataset": "misc",
-    "patent": "misc",
-}
-REFERENCE_TYPE_TO_BIBLATEX: dict[str, str] = {
-    **REFERENCE_TYPE_TO_BIBTEX,
-    "preprint": "online",
-    "webpage": "online",
-    "dataset": "dataset",
-    "patent": "patent",
-    "report": "report",
-    "thesis": "thesis",
-}
-ENDNOTE_TYPE_TO_REFERENCE = {
-    "Journal Article": "journal-article",
-    "Book": "book",
-    "Book Section": "chapter",
-    "Book Chapter": "chapter",
-    "Conference Proceedings": "conference-paper",
-    "Conference Paper": "conference-paper",
-    "Thesis": "thesis",
-    "Dissertation": "thesis",
-    "Report": "report",
-    "Web Page": "webpage",
-    "Generic": "article",
-}
-REFERENCE_TYPE_TO_ENDNOTE = {
-    "article": "Journal Article",
-    "book": "Book",
-    "chapter": "Book Section",
-    "conference": "Conference Proceedings",
-    "thesis": "Thesis",
-    "report": "Report",
-    "webpage": "Web Page",
-}
-REFERENCE_TYPE_TO_RIS = {
-    "article": "JOUR",
-    "book": "BOOK",
-    "chapter": "CHAP",
-    "conference": "CPAPER",
-    "dataset": "DATA",
-    "generic": "GEN",
-    "patent": "PAT",
-    "preprint": "UNPB",
-    "report": "RPRT",
-    "thesis": "THES",
-    "unpublished": "UNPB",
-    "webpage": "ELEC",
-}
-RIS_TYPE_TO_REFERENCE = {
-    "JOUR": "article",
-    "BOOK": "book",
-    "CHAP": "chapter",
-    "CPAPER": "conference",
-    "DATA": "dataset",
-    "GEN": "generic",
-    "PAT": "patent",
-    "UNPB": "unpublished",
-    "RPRT": "report",
-    "THES": "thesis",
-    "ELEC": "webpage",
-}
-
 _ENDNOTE_TAGS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@"
 _SAFE_FIELD_NAME = re.compile(r"[^A-Za-z0-9_]")
-_BIBLIOGRAPHY_IDENTIFIER_PROVIDERS = (
-    "openalex",
-    "arxiv",
-    "pmid",
-    "pmc",
-    "issn",
-    "isbn",
-    "bibcode",
-    "article_number",
+_BIBLIOGRAPHY_IDENTIFIER_NAMESPACES = frozenset(
+    provider.identifier_namespace
+    for provider in builtin_providers()
+    if provider.identifier_namespace != "doi"
 )
+_EPRINT_ARCHIVES = {
+    name: provider.identifier_namespace
+    for provider in builtin_providers()
+    if provider.identifier_namespace in _BIBLIOGRAPHY_IDENTIFIER_NAMESPACES
+    for name in (provider.name, provider.identifier_namespace)
+}
 
 
 class _BibTeXExpressionError(ValueError):
@@ -410,11 +341,9 @@ def _bib_record(citation_key: str, entry: _V2Entry) -> BibliographyRecord:
     fields = {key: _latex_decode(value) for key, value in raw_fields.items() if value is not None}
     known = {
         "abstract",
-        "archiveprefix",
         "booktitle",
         "date",
         "doi",
-        "eprint",
         "journal",
         "journaltitle",
         "keywords",
@@ -428,23 +357,30 @@ def _bib_record(citation_key: str, entry: _V2Entry) -> BibliographyRecord:
         "year",
         "address",
     }
-    identifiers: list[tuple[str, str]] = []
-    if fields.get("eprint"):
-        identifiers.append(((fields.get("archiveprefix") or "eprint").lower(), fields["eprint"]))
-    identifiers.extend(
-        (name, fields[name]) for name in _BIBLIOGRAPHY_IDENTIFIER_PROVIDERS if fields.get(name)
-    )
-    identifier_names = {name for name, _value in identifiers}
+    identifiers = {
+        name: value
+        for name, value in fields.items()
+        if name in _BIBLIOGRAPHY_IDENTIFIER_NAMESPACES and value
+    }
+    eprint_namespace = _EPRINT_ARCHIVES.get(fields.get("archiveprefix", "").strip().casefold())
+    if fields.get("eprint") and eprint_namespace:
+        value = parse_identifier(
+            fields["eprint"], eprint_namespace, registrations=builtin_providers()
+        ).value
+        if eprint_namespace in identifiers:
+            existing = parse_identifier(
+                identifiers[eprint_namespace], eprint_namespace, registrations=builtin_providers()
+            ).value
+            if existing != value:
+                raise ValueError(f"conflicting {eprint_namespace} identifiers")
+        identifiers[eprint_namespace] = value
+        known.update(("archiveprefix", "eprint"))
     custom = tuple(
-        (key, value)
-        for key, value in fields.items()
-        if key not in known and key not in identifier_names
+        (key, value) for key, value in fields.items() if key not in known and key not in identifiers
     )
-    normalized_type = normalize_reference_type(entry.entry_type) or entry.entry_type
     return BibliographyRecord(
         citation_key=citation_key,
-        reference_type=normalized_type,
-        bibtex_type=entry.entry_type,
+        reference_type=entry.entry_type,
         title=convert_rich_text(raw_fields.get("title"), source="latex", target="html"),
         authors=_contributors(name_fields.get("author")),
         editors=_contributors(name_fields.get("editor")),
@@ -456,7 +392,7 @@ def _bib_record(citation_key: str, entry: _V2Entry) -> BibliographyRecord:
         keywords=tuple(
             part.strip() for part in fields.get("keywords", "").split(";") if part.strip()
         ),
-        publication_date=fields.get("date") or fields.get("year"),
+        publication_date=normalize_publication_date(fields.get("date") or fields.get("year")),
         publication_title=fields.get("journaltitle") or fields.get("journal"),
         book_title=fields.get("booktitle"),
         volume=fields.get("volume"),
@@ -466,7 +402,7 @@ def _bib_record(citation_key: str, entry: _V2Entry) -> BibliographyRecord:
         location=fields.get("location") or fields.get("address"),
         doi=fields.get("doi"),
         urls=(fields["url"],) if fields.get("url") else (),
-        identifiers=tuple(identifiers),
+        identifiers=tuple(identifiers.items()),
         custom_fields=custom,
     )
 
@@ -480,15 +416,17 @@ def _ris_record(entry: dict[str, Any]) -> BibliographyRecord:
     authors = entry.get("authors") or entry.get("first_authors") or []
     if isinstance(authors, str):
         authors = [authors]
-    raw_type = text(entry.get("type_of_reference")) or "JOUR"
+    raw_type = text(entry.get("type_of_reference")) or "GEN"
     return BibliographyRecord(
         citation_key=None,
-        reference_type=RIS_TYPE_TO_REFERENCE.get(raw_type, raw_type),
+        reference_type=raw_type,
         title=text(entry.get("title") or entry.get("primary_title")) or "",
         authors=tuple(Contributor.parse(value) for value in authors),
         abstract=text(entry.get("abstract") or entry.get("notes_abstract")),
         keywords=tuple(entry.get("keywords") or ()),
-        publication_date=text(entry.get("publication_year") or entry.get("year")),
+        publication_date=normalize_publication_date(
+            entry.get("publication_year") or entry.get("year")
+        ),
         publication_title=text(entry.get("journal_name") or entry.get("secondary_title")),
         doi=text(entry.get("doi")),
         urls=tuple(entry.get("urls") or ()),
@@ -529,16 +467,42 @@ def _endnote_record(entry: dict[str, list[str]]) -> BibliographyRecord:
     raw_type = first("0")
     return BibliographyRecord(
         citation_key=None,
-        reference_type=ENDNOTE_TYPE_TO_REFERENCE.get(raw_type or "", raw_type or "article"),
+        reference_type=raw_type or "Generic",
         title=first("T") or "",
         authors=tuple(Contributor.parse(value) for value in entry.get("A", [])),
         editors=tuple(Contributor.parse(value) for value in entry.get("E", [])),
         abstract="\n".join(entry.get("X", [])) or None,
         keywords=tuple(entry.get("K", [])),
-        publication_date=first("D"),
+        publication_date=normalize_publication_date(first("D")),
         publication_title=first("J") or first("B"),
         doi=first("R"),
         urls=tuple(entry.get("U", [])),
+    )
+
+
+def _normalize_import_record(
+    record: BibliographyRecord, source: str, row: int, diagnostics: list[dict[str, Any]]
+) -> BibliographyRecord:
+    reference_type = normalize_reference_type(record.reference_type, source=source, default=None)
+    if reference_type == ReferenceType.chapter:
+        identifiers = dict(record.identifiers)
+        if isbn := identifiers.pop("isbn", None):
+            record = replace(
+                record,
+                identifiers=tuple(identifiers.items()),
+                custom_fields=tuple((dict(record.custom_fields) | {"isbn": isbn}).items()),
+            )
+    if reference_type is not None:
+        return replace(record, reference_type=reference_type)
+    diagnostics.append({
+        "row": row,
+        "severity": "warning",
+        "message": f"Unsupported {source} reference type {record.reference_type!r}; using document",
+    })
+    fields = dict(record.custom_fields)
+    fields.update(source_reference_type=record.reference_type, source_reference_format=source)
+    return replace(
+        record, reference_type=ReferenceType.document, custom_fields=tuple(fields.items())
     )
 
 
@@ -548,23 +512,42 @@ def parse_bibliography_records(
     if file_format not in SUPPORTED_FORMATS:
         raise ValueError("format must be bibtex, biblatex, ris or endnote")
     library = None
-    concatenation_errors: list[dict[str, Any]] = []
+    record_errors: list[dict[str, Any]] = []
     try:
         if file_format in {"bibtex", "biblatex"}:
             library = _parse_bibtex_string(
                 contents,
                 parse_stack=_BIBTEX_PARSE_STACK,
             )
-            invalid_entries, concatenation_errors = _resolve_bibtex_concatenations(library)
-            records = [
-                _bib_record(entry.key, entry)
-                for entry in library.entries
-                if id(entry) not in invalid_entries
-            ]
+            invalid_entries, record_errors = _resolve_bibtex_concatenations(library)
+            records = []
+            for entry in library.entries:
+                if id(entry) in invalid_entries:
+                    continue
+                try:
+                    records.append(
+                        _normalize_import_record(
+                            _bib_record(entry.key, entry),
+                            file_format,
+                            (entry.start_line or 0) + 1,
+                            record_errors,
+                        )
+                    )
+                except ValueError as error:
+                    record_errors.append({
+                        "row": (entry.start_line or 0) + 1,
+                        "message": f"Cannot parse record: {error}",
+                    })
         elif file_format == "ris":
-            records = [_ris_record(entry) for entry in rispy.loads(contents)]
+            records = [
+                _normalize_import_record(_ris_record(entry), file_format, row, record_errors)
+                for row, entry in enumerate(rispy.loads(contents), start=1)
+            ]
         else:
-            records = [_endnote_record(entry) for entry in _parse_endnote_records(contents)]
+            records = [
+                _normalize_import_record(_endnote_record(entry), file_format, row, record_errors)
+                for row, entry in enumerate(_parse_endnote_records(contents), start=1)
+            ]
     except Exception as error:
         return [], [{"row": 0, "message": f"Cannot parse file: {error}"}]
     errors = (
@@ -581,7 +564,7 @@ def parse_bibliography_records(
         if library is not None
         else []
     )
-    errors.extend(concatenation_errors)
+    errors.extend(record_errors)
     errors.extend([
         {"row": row, "message": "Title is required"}
         for row, record in enumerate(records, start=1)
@@ -611,17 +594,14 @@ def _entry_for_record(
     file_format: str,
     options: BibliographyExportOptions,
 ) -> tuple[str, dict[str, str]]:
-    normalized_type = normalize_reference_type(record.reference_type) or "generic"
-    type_map = REFERENCE_TYPE_TO_BIBLATEX if file_format == "biblatex" else REFERENCE_TYPE_TO_BIBTEX
-    entry_type = record.bibtex_type or type_map.get(normalized_type, "misc")
-    entry_type = entry_type.lower()
+    entry_type = export_reference_type(record.reference_type, file_format)
     journal = _export_journal(record, options)
     include_url = _include_url(record, options)
     title = convert_rich_text(
         record.title,
         source="html",
         target="latex",
-        latex_encoding=options.encoding,
+        latex_encoding="latex" if options.encoding == "latex" else "unicode",
     )
     if options.preserve_case:
         title = _protect_case(title)
@@ -631,7 +611,7 @@ def _entry_for_record(
             record.abstract,
             source="html",
             target="latex",
-            latex_encoding=options.encoding,
+            latex_encoding="latex" if options.encoding == "latex" else "unicode",
         )
         if options.include_abstract and record.abstract
         else None
@@ -659,19 +639,19 @@ def _entry_for_record(
     if options.include_identifiers:
         included_identifiers: set[str] = set()
         for name, value in record.identifiers:
-            provider = name.strip().casefold()
+            namespace = name.strip().casefold()
             if (
-                provider not in _BIBLIOGRAPHY_IDENTIFIER_PROVIDERS
-                or provider in included_identifiers
+                namespace not in _BIBLIOGRAPHY_IDENTIFIER_NAMESPACES
+                or namespace in included_identifiers
             ):
                 continue
-            included_identifiers.add(provider)
-            if provider == "arxiv" and file_format == "biblatex":
+            included_identifiers.add(namespace)
+            if namespace == "arxiv" and file_format == "biblatex":
                 fields.update(eprint=value, archiveprefix="arXiv")
                 existing.update(("eprint", "archiveprefix"))
             else:
-                fields[provider] = value
-                existing.add(provider)
+                fields[namespace] = value
+                existing.add(namespace)
     if options.include_custom_fields:
         for name, value in record.custom_fields:
             _add_disambiguated_field(fields, existing, name, value)
@@ -716,9 +696,7 @@ def _export_ris(records: list[BibliographyRecord], options: BibliographyExportOp
     output: list[dict[str, Any]] = []
     for record in records:
         entry: dict[str, Any] = {
-            "type_of_reference": REFERENCE_TYPE_TO_RIS.get(
-                normalize_reference_type(record.reference_type) or "generic", "GEN"
-            ),
+            "type_of_reference": export_reference_type(record.reference_type, "ris"),
         }
         if record.title and not _excluded(options, "title"):
             entry["title"] = convert_rich_text(record.title, source="html", target="text")
@@ -763,9 +741,7 @@ def _export_ris(records: list[BibliographyRecord], options: BibliographyExportOp
 def _export_endnote(records: list[BibliographyRecord], options: BibliographyExportOptions) -> str:
     lines: list[str] = []
     for record in records:
-        reference_type = REFERENCE_TYPE_TO_ENDNOTE.get(
-            normalize_reference_type(record.reference_type) or "article", "Journal Article"
-        )
+        reference_type = export_reference_type(record.reference_type, "endnote")
         lines.append(f"%0 {reference_type}")
         if not _excluded(options, "author", "authors"):
             lines.extend(f"%A {person.display_name()}" for person in record.authors)
@@ -819,7 +795,7 @@ def export_bibliography_records(
         return _export_endnote(records, options)
     if file_format == "ris":
         return _export_ris(records, options)
-    entries: list[_V2Entry] = []
+    library = _V2Library()
     used_keys: set[str] = set()
     for number, record in enumerate(records, start=1):
         base = record.citation_key or f"inquiro-{number}"
@@ -830,7 +806,7 @@ def export_bibliography_records(
             suffix_position += 1
         used_keys.add(unicodedata.normalize("NFKC", key).casefold())
         type_, fields = _entry_for_record(record, file_format, options)
-        entries.append(
+        library.add(
             _V2Entry(
                 entry_type=type_,
                 key=key,
@@ -838,7 +814,7 @@ def export_bibliography_records(
             )
         )
     return _write_bibtex_string(
-        _V2Library(entries),
+        library,
         unparse_stack=_BIBTEX_WRITE_STACK,
         bibtex_format=_BIBTEX_FORMAT,
     )

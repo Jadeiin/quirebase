@@ -602,16 +602,20 @@ async def test_item_metadata_merge_preserves_omissions_and_replacement_clears_li
             identifiers=(ExternalIdentifier("pmid", "original"),),
             urls=("https://example.com/original",),
             keywords=("original",),
-            bibtex_key="UserSelectedKey",
+            citation_key="UserSelectedKey",
         ),
     )
     item = await persistence_db.get(Item, result.item_id)
     await apply_metadata_record(
-        persistence_db, persistence_actor, item, {"title": "Merged", "keywords": "new"}, merge=True
+        persistence_db,
+        persistence_actor,
+        item,
+        {"title": "Merged", "keywords": ["new"]},
+        merge=True,
     )
     assert item.title == "Merged"
     assert item.authors == "Shared, Author" and item.editors == "Shared, Author"
-    assert item.doi == "10.1000/original" and item.bibtex_id == "UserSelectedKey"
+    assert item.doi == "10.1000/original" and item.citation_key == "UserSelectedKey"
     assert item.urls == "https://example.com/original" and item.keywords == "original; new"
     assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == 2
     assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 1
@@ -624,7 +628,7 @@ async def test_item_metadata_merge_preserves_omissions_and_replacement_clears_li
     assert item.title == "Replaced" and item.version == 2
     assert item.authors is None and item.editors is None
     assert item.doi is None and item.identifiers is None
-    assert item.urls is None and item.keywords is None and item.bibtex_id is None
+    assert item.urls is None and item.keywords is None and item.citation_key is None
     assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == 0
     assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 0
 
@@ -642,8 +646,16 @@ async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
         fixture_workspace_id(persistence_actor),
         persistence_actor.id,
         [
-            {"title": "First", "authors": "Shared, Author", "identifiers": {"pmid": "first"}},
-            {"title": "Second", "editors": "Shared, Author", "doi": "10.1000/second"},
+            {
+                "title": "First",
+                "authors": [{"last_name": "Shared", "first_name": "Author"}],
+                "identifiers": {"pmid": "first"},
+            },
+            {
+                "title": "Second",
+                "editors": [{"last_name": "Shared", "first_name": "Author"}],
+                "doi": "10.1000/second",
+            },
         ],
     )
     assert len(items) == 2

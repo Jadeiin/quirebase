@@ -7,11 +7,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from advanced_alchemy.types import FileObject
 from inquiro import (
+    Affiliation,
     CandidateNotFound,
     CandidateRecord,
+    Contributor,
     Identifier,
     InvalidProviderRequest,
     ProviderUnavailable,
+    ResourceLink,
 )
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -20,7 +23,7 @@ from quirebase.core.errors import ResourceNotFound, ValidationFailure, VersionCo
 from quirebase.library import UpstreamServiceError
 from quirebase.library.identifiers import (
     apply_metadata_record,
-    generate_bibtex_key,
+    generate_citation_key,
     get_item_identifiers,
     rescan_pdf_doi,
     set_item_identifiers,
@@ -52,10 +55,12 @@ async def _ignore_async(*_args):
     await asyncio.sleep(0)
 
 
-def candidate(identifier: Identifier, values: dict) -> CandidateRecord:
+def candidate(lookup_identifier: Identifier, values: dict) -> CandidateRecord:
     raw_identifiers = values.get("identifiers") or {}
     if isinstance(raw_identifiers, str):
         raw_identifiers = json.loads(raw_identifiers)
+    if doi := values.get("doi"):
+        raw_identifiers = {**raw_identifiers, "doi": doi}
     identifiers = tuple(
         Identifier(str(provider), str(value)) for provider, value in raw_identifiers.items()
     )
@@ -63,8 +68,6 @@ def candidate(identifier: Identifier, values: dict) -> CandidateRecord:
         name: values.get(name)
         for name in (
             "abstract",
-            "authors",
-            "keywords",
             "publication_date",
             "publication_title",
             "journal_abbreviation",
@@ -72,23 +75,40 @@ def candidate(identifier: Identifier, values: dict) -> CandidateRecord:
             "issue",
             "pages",
             "publisher",
-            "affiliation",
             "doi",
-            "urls",
             "reference_type",
         )
     }
     return CandidateRecord(
-        provider=identifier.provider,
-        identifier=identifier,
+        provider={"doi": "crossref", "pmid": "pubmed"}.get(
+            lookup_identifier.provider, lookup_identifier.provider
+        ),
+        lookup_identifier=lookup_identifier,
         title=values["title"],
         identifiers=identifiers,
+        authors=tuple(
+            Contributor(
+                name.strip(),
+                affiliations=(Affiliation(values["affiliation"]),)
+                if values.get("affiliation")
+                else None,
+            )
+            for name in values["authors"].split(";")
+        )
+        if values.get("authors") is not None
+        else None,
+        keywords=tuple(name.strip() for name in values["keywords"].split(";"))
+        if values.get("keywords") is not None
+        else None,
+        urls=tuple(ResourceLink(url) for url in values["urls"].splitlines())
+        if values.get("urls") is not None
+        else None,
         **fields,
     )
 
 
 @pytest.mark.anyio
-async def test_apply_metadata_record_rejects_overlong_reference_type(async_db):
+async def test_apply_metadata_record_projects_unknown_upstream_type_to_document(async_db):
     user = await _user(async_db, "reference-type-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
@@ -98,13 +118,8 @@ async def test_apply_metadata_record_rejects_overlong_reference_type(async_db):
     async_db.add(item)
     await async_db.flush()
 
-    with pytest.raises(ValidationFailure, match="reference type is too long"):
-        await apply_metadata_record(
-            async_db,
-            user,
-            item,
-            {"reference_type": "x" * 41},
-        )
+    await apply_metadata_record(async_db, user, item, {"reference_type": "x" * 41})
+    assert item.reference_type == "document"
 
 
 @pytest.mark.anyio
@@ -141,7 +156,7 @@ async def test_set_and_get_item_identifiers(async_db):
 
 
 @pytest.mark.anyio
-async def test_generate_bibtex_key(async_db):
+async def test_generate_citation_key(async_db):
     db = async_db
     user = await _user(db, "key_user")
 
@@ -155,12 +170,12 @@ async def test_generate_bibtex_key(async_db):
     db.add(item)
     await db.flush()
 
-    key = generate_bibtex_key(item)
+    key = generate_citation_key(item)
     assert key.startswith("Shannon1948Mathematical")
 
 
 @pytest.mark.anyio
-async def test_generate_bibtex_key_parses_first_last_author_name(async_db):
+async def test_generate_citation_key_parses_first_last_author_name(async_db):
     db = async_db
     user = await _user(db, "first_last_key_user")
     item = Item(
@@ -171,7 +186,7 @@ async def test_generate_bibtex_key_parses_first_last_author_name(async_db):
         created_by=user.id,
     )
 
-    assert generate_bibtex_key(item).startswith("Turing1950Computing")
+    assert generate_citation_key(item).startswith("Turing1950Computing")
 
 
 @pytest.mark.anyio
@@ -299,8 +314,7 @@ async def test_sync_metadata_from_upstream(async_db):
     assert updated_item.issue == "3"
     assert updated_item.pages == "379-423"
     assert updated_item.publisher == "Alcatel-Lucent"
-    assert updated_item.bibtex_type == "article"
-    assert updated_item.bibtex_id is not None
+    assert updated_item.citation_key is not None
     assert "https://bell-labs.com/shannon1948" in updated_item.urls
     assert updated_item.updated_by == user.id
     assert len(updated_item.author_links) == 1
@@ -371,7 +385,7 @@ async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
     record = {"title": "Updated", "doi": "10.1000/canonical"}
     with patch(
         "quirebase.library.identifiers.lookup_candidate",
-        return_value=candidate(Identifier("openalex", "10.1000/canonical"), record),
+        return_value=candidate(Identifier("crossref", "10.1000/canonical"), record),
     ):
         await sync_metadata_from_upstream(
             db,
@@ -379,7 +393,7 @@ async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
             fixture_workspace_id(user),
             item.id,
             item.version,
-            provider="openalex",
+            provider="crossref",
             uid_value="https://doi.org/10.1000/canonical",
         )
 
@@ -400,7 +414,7 @@ async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits
     db.add(item)
     await db.commit()
 
-    record = {"title": "Updated", "identifiers": {"pmid": "12345678"}}
+    record = {"title": "Updated", "identifiers": {"openalex": "W123", "pmid": "12345678"}}
     with patch(
         "quirebase.library.identifiers.lookup_candidate",
         return_value=candidate(Identifier("openalex", "W123"), record),
@@ -425,7 +439,7 @@ async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits
 
 
 @pytest.mark.anyio
-async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
+async def test_sync_metadata_cleans_html_and_syncs_reference_type(async_db):
     db = async_db
     user = await _user(db, "clean_html_user")
 
@@ -447,7 +461,7 @@ async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
         "publisher": "<b>Nature Publishing Group</b>",
         "affiliation": "Google LLC, Santa Barbara, CA, USA",
         "doi": "10.1038/s41586-019-1666-5",
-        "reference_type": "journal-article",
+        "reference_type": "article-journal",
     }
 
     with patch(
@@ -476,9 +490,8 @@ async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
     assert updated.publication_title == "Nature"
     assert updated.journal_abbreviation == "Nat."
     assert updated.publisher == "Nature Publishing Group"
-    assert updated.reference_type == "article"
-    assert updated.bibtex_type == "article"
-    assert updated.bibtex_id.startswith("Arute2019")
+    assert updated.reference_type == "article-journal"
+    assert updated.citation_key.startswith("Arute2019")
 
     event = await db.scalar(
         select(AuditEvent)
@@ -487,9 +500,10 @@ async def test_sync_metadata_cleans_html_and_syncs_bibtex_type(async_db):
     )
     assert event is not None
     detail = event.detail
-    assert detail["provider"] == "doi"
-    assert detail["new_bibtex_key"].startswith("Arute2019")
-    assert detail["bibtex_key_updated"] is True
+    assert detail["provider"] == "crossref"
+    assert detail["lookup_provider"] == "doi"
+    assert detail["new_citation_key"].startswith("Arute2019")
+    assert detail["citation_key_updated"] is True
 
 
 @pytest.mark.anyio
@@ -548,7 +562,7 @@ async def test_sync_metadata_from_upstream_rejects_a_stale_version(async_db, asy
 
 
 @pytest.mark.anyio
-async def test_sync_metadata_uses_normalized_upstream_identifier(async_db):
+async def test_sync_metadata_uses_returned_identity_instead_of_lookup_input(async_db):
     db = async_db
     user = await _user(db, "normalized_upstream_sync")
     item = Item(
@@ -560,10 +574,10 @@ async def test_sync_metadata_uses_normalized_upstream_identifier(async_db):
     db.add(item)
     await db.commit()
 
-    record = {"title": "Updated"}
+    record = {"title": "Updated", "identifiers": {"openalex": "W123"}}
     with patch(
         "quirebase.library.identifiers.lookup_candidate",
-        return_value=candidate(Identifier("openalex", "W123"), record),
+        return_value=candidate(Identifier("openalex", "W122"), record),
     ):
         await sync_metadata_from_upstream(
             db,
@@ -572,7 +586,7 @@ async def test_sync_metadata_uses_normalized_upstream_identifier(async_db):
             item.id,
             item.version,
             provider="openalex",
-            uid_value="https://openalex.org/W123",
+            uid_value="https://openalex.org/W122",
         )
 
     assert item.doi == "10.1000/canonical"

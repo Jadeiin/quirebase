@@ -77,7 +77,14 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
         await db.flush()
         for item in (own, foreign):
             db.add(ItemAuthor(item_id=item.id, author_id=author.id, position=1, role="author"))
-            db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="protected-id"))
+            db.add(
+                ItemIdentifier(
+                    workspace_id=item.workspace_id,
+                    item_id=item.id,
+                    provider="pmid",
+                    value="protected-id",
+                )
+            )
             await search_index(db).index_item(db, item.id)
         await db.commit()
         own_id, foreign_id, author_id = own.id, foreign.id, author.id

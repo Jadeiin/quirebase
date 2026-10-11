@@ -11,6 +11,21 @@ A bibliographic record representing a paper, book, preprint, manuscript or
 other research output.
 _Avoid_: Paper, Work, Document when referring to the stored bibliographic record
 
+**Reference Type**:
+The controlled literature classification of an Item. Its vocabulary follows CSL semantics,
+distinguishing journal, magazine and newspaper articles, conference papers, books, chapters and
+other research outputs; preprint is a separate Library classification. A classification does not
+encode academic degree or publication status. Unrecognized classifications are general documents.
+
+**Publication Date**:
+The publication year, year and month, or complete calendar date, stored as `YYYY`, `YYYY-MM` or
+`YYYY-MM-DD`. Missing month or day values do not imply January or the first day of a month.
+Date ranges retain only a shared year or month; a range spanning years has no single Publication Date.
+
+**Citation Key**:
+The bibliographic key identifying an Item in citation and bibliography output. Database mappings,
+Library commands and HTTP metadata use `citation_key`; it is not specific to BibTeX.
+
 **Item Section**:
 A Web navigation and read-model section for one Item, such as Overview, Metadata, Files,
 Organize, Annotations or Discussion. It is a presentation projection, not a Workspace or a
@@ -63,6 +78,12 @@ as author or editor. Quirebase's persistent identity is deliberately two-part: f
 and last name; a missing first name represents a single-field/literal name such as an
 organization.
 _Avoid_: Creator, User
+
+**Affiliation**:
+An institution credited with a Contributor on a particular bibliographic record. It may include
+institution identifiers, country and original credit text. It belongs to that record's authorship,
+not to the Contributor's global identity. Provider metadata and Import previews preserve this
+mapping; current Item storage projects the affiliations into aggregated text.
 
 **Project**:
 A collaboration context inside one Workspace that organizes a working set of Items and contains
@@ -154,7 +175,10 @@ selects it.
 _Avoid_: Item Keyword, Tag, automatic Tag
 
 **Candidate Record**:
-An uncommitted bibliographic metadata payload retrieved via Discovery or Identifier Lookup, subject to preview before Import.
+An uncommitted bibliographic metadata payload retrieved via Discovery or Identifier Lookup, subject
+to preview before Import. Provider Candidate Records carry structured Contributors, their
+Affiliations, individual Keywords and resource links with source-supplied metadata. Source name
+parts are distinct from inferred names used for bibliography formatting.
 _Avoid_: Staged Item, Provisional Work
 
 **Import Batch**:
@@ -194,11 +218,22 @@ A fixed external scholarly metadata source such as OpenAlex, Crossref or
 PubMed.
 _Avoid_: Plugin
 
+**Identifier Namespace**:
+The kind of scholarly identifier, such as DOI, PMID, PMCID, arXiv ID or OpenAlex Work ID.
+It is distinct from the Provider returning metadata: Crossref and DataCite both return DOI
+identifiers. The `provider` field on a stored Upstream Identifier names its Identifier Namespace.
+ISSN identifies a journal rather than an Item and belongs to bibliographic metadata.
+
 **Upstream Identifier**:
-An identifier issued by a Provider for an Item, stored as a provider/value pair
-when it is not the canonical DOI. The pair is used to refetch metadata and to
-show provenance; DOI remains the Item's canonical identifier rather than a
-second provider-specific record.
+An identifier for an Item, stored as an Identifier Namespace/value pair when it is not the
+canonical DOI. The pair identifies the upstream record and may support metadata lookup or document
+acquisition; the Provider returning metadata is
+recorded separately as provenance. DOI remains the Item's canonical identifier rather than a
+second provider-specific record. An Item has at most one value per Identifier Namespace, and a
+Namespace/value pair belongs to at most one Item within a Workspace. Independent copies in
+different Workspaces may retain the same pair. Identifier Lookup inputs are query context;
+only confirmed record identities become Upstream Identifiers.
+An ISBN on a chapter describes its containing book, not the chapter's identity.
 _Avoid_: Source ID, External ID when the issuing Provider matters
 
 **User**:

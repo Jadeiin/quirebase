@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import httpx2
 import pytest
 from app_helpers import json_payload
-from inquiro import CandidatePage, CandidateRecord, Identifier
+from inquiro import CandidatePage, CandidateRecord, Contributor, Identifier
 from provider_helpers import provider_runtime
 from sqlalchemy import select
 from test_http import authenticated_async_client
@@ -25,9 +25,9 @@ async def test_online_search_page_keeps_search_separate_from_import(
     )
     result = CandidateRecord(
         provider="openalex",
-        identifier=Identifier("openalex", "W99"),
+        lookup_identifier=Identifier("openalex", "W99"),
         title="Candidate paper",
-        authors="Researcher",
+        authors=(Contributor("Researcher"),),
         publication_title="Journal",
         publication_date="2026",
     )
@@ -82,11 +82,15 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     item.identifiers = "not valid JSON"
-    async_db.add(ItemIdentifier(item_id=item.id, provider="openalex", value="W99"))
+    async_db.add(
+        ItemIdentifier(
+            workspace_id=item.workspace_id, item_id=item.id, provider="openalex", value="W99"
+        )
+    )
     await async_db.commit()
     result = CandidateRecord(
         provider="openalex",
-        identifier=Identifier("openalex", "w99"),
+        lookup_identifier=Identifier("openalex", "w99"),
         title="Already imported",
         doi="10.1000/candidate",
     )
@@ -124,20 +128,24 @@ async def test_discovery_search_uses_runtime_provider_settings(
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
-    search_candidates = AsyncMock(return_value=CandidatePage("nasa", (), 0, 1, 10))
+    search_candidates = AsyncMock(return_value=CandidatePage("nasa_ads", (), 0, 1, 10))
     monkeypatch.setattr("quirebase.library.discovery.search_candidates", search_candidates)
     try:
         providers = await client.get(f"/api/v1/workspaces/{item.workspace_id}/discovery/providers")
         searched = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
             json=json_payload({
-                "provider": "nasa",
+                "provider": "nasa_ads",
                 "clauses": [{"operator": "and", "field": "any", "term": "stars"}],
             }),
         )
 
         assert searched.status_code == 200
-        assert {provider["id"] for provider in providers.json()} >= {"nasa", "openlibrary", "pmc"}
+        assert {provider["id"] for provider in providers.json()} >= {
+            "nasa_ads",
+            "openlibrary",
+            "pmc",
+        }
         assert search_candidates.await_args.args[1].nasa_ads_token == "runtime-token"
     finally:
         await client.aclose()
@@ -284,15 +292,15 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     )
     assert errors_nasa == []
     assert len(records_nasa) == 1
-    assert batch_nasa.file_format == "metadata:bibcode"
+    assert batch_nasa.file_format == "metadata"
 
     batch_ieee, records_ieee, errors_ieee = await stage_identifier_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         "9876543",
-        "article_number",
+        "ieee",
     )
     assert errors_ieee == []
     assert len(records_ieee) == 1
-    assert batch_ieee.file_format == "metadata:article_number"
+    assert batch_ieee.file_format == "metadata"

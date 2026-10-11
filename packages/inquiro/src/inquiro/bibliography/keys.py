@@ -7,7 +7,7 @@ import unicodedata
 from dataclasses import replace
 
 from inquiro.bibliography.records import BibliographyRecord, Contributor
-from inquiro.canonical import normalize_reference_type
+from inquiro.reference_types import normalize_reference_type
 from inquiro.richtext import convert_rich_text
 
 DEFAULT_CITATION_KEY_FORMULA = "auth.capitalize + year + shorttitle(1).capitalize"

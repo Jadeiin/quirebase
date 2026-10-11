@@ -13,7 +13,6 @@ from inquiro.bibliography import (
     SUPPORTED_FORMATS,
     BibliographyExportOptions,
     BibliographyRecord,
-    CitationEngineUnavailable,
     CitationKeyFormulaError,
     CitationStyleOption,
     CitationStyleSelection,
@@ -144,18 +143,13 @@ async def format_csl_export(
     style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
-    try:
-        entries = render_bibliography(
-            [
-                record_to_csl_json(
-                    _item_to_bibliography_record(item), options, item_id=str(item.id)
-                )
-                for item in items
-            ],
-            style_xml,
-        )
-    except CitationEngineUnavailable as error:
-        raise ValidationFailure(str(error)) from error
+    entries = render_bibliography(
+        [
+            record_to_csl_json(_item_to_bibliography_record(item), options, item_id=str(item.id))
+            for item in items
+        ],
+        style_xml,
+    )
     return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
 
 
@@ -226,9 +220,8 @@ def _item_contributors(item: Item, role: str) -> tuple[BibliographyContributor, 
 def _item_to_bibliography_record(item: Item) -> BibliographyRecord:
     """Map the Library-owned Item explicitly onto Inquiro's neutral Interface."""
     return BibliographyRecord(
-        citation_key=item.bibtex_id,
-        reference_type=item.reference_type or "article",
-        bibtex_type=item.bibtex_type,
+        citation_key=item.citation_key,
+        reference_type=item.reference_type or "document",
         title=item.title,
         authors=_item_contributors(item, "author"),
         editors=_item_contributors(item, "editor"),
@@ -278,12 +271,7 @@ async def get_item_citation_text_response(
     style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
-    try:
-        rendered = render_citation(
-            _item_to_bibliography_record(item), style_xml, output_format=output
-        )
-    except CitationEngineUnavailable as error:
-        raise ValidationFailure(str(error)) from error
+    rendered = render_citation(_item_to_bibliography_record(item), style_xml, output_format=output)
     media_type = "text/html" if output == "html" else "text/plain"
     return rendered, media_type
 

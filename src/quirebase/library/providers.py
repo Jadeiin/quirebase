@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from inquiro import (
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
+    Contributor,
     DocumentRequest,
     InvalidPdfResponse,
     InvalidProviderRequest,
@@ -21,6 +22,8 @@ from inquiro import (
 )
 
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
+
+from ._metadata import normalize_identifier_pairs
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -106,13 +109,24 @@ async def search_candidates(query: SearchQuery, settings: Settings) -> Candidate
         raise UpstreamServiceError(str(error)) from error
 
 
+def _contributor_value(author: Contributor) -> dict[str, Any]:
+    name = author.bibliographic_name
+    return asdict(author) | {"last_name": name.family_name, "first_name": name.given_name}
+
+
 def candidate_record_values(record: CandidateRecord) -> dict[str, Any]:
-    identifiers = {identifier.provider: identifier.value for identifier in record.identifiers}
+    identifiers = dict(
+        normalize_identifier_pairs([
+            (identifier.provider, identifier.value) for identifier in record.identifiers
+        ])
+    )
     return {
         "title": record.title,
         "abstract": record.abstract,
-        "authors": record.authors,
-        "keywords": record.keywords,
+        "authors": [_contributor_value(author) for author in record.authors]
+        if record.authors is not None
+        else None,
+        "keywords": list(record.keywords) if record.keywords is not None else None,
         "publication_date": record.publication_date,
         "publication_title": record.publication_title,
         "journal_abbreviation": record.journal_abbreviation,
@@ -120,9 +134,16 @@ def candidate_record_values(record: CandidateRecord) -> dict[str, Any]:
         "issue": record.issue,
         "pages": record.pages,
         "publisher": record.publisher,
-        "affiliation": record.affiliation,
+        "affiliation": "; ".join(
+            dict.fromkeys(
+                affiliation.raw_name or affiliation.name
+                for author in record.authors or ()
+                for affiliation in author.affiliations or ()
+            )
+        )
+        or None,
         "doi": record.doi,
-        "urls": record.urls,
+        "urls": [asdict(link) for link in record.urls] if record.urls is not None else None,
         "identifiers": json.dumps(identifiers) if identifiers else None,
         "reference_type": record.reference_type,
     }

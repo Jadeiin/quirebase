@@ -30,7 +30,36 @@ asyncio.run(main())
 ```
 
 The runtime owns the fixed Provider catalog, identifier parsing, credentials and bounded HTTP
-transport. `acquire_document` accepts an HTTP(S) PDF URL or a scholarly identifier supported by a
+transport. Candidate Records separate the metadata source (`provider`), query context
+(`lookup_identifier`), and confirmed record identities (`identifiers`). For lookup,
+`lookup_identifier` preserves the parsed input; for Search, it supplies the identifier to use in
+a subsequent lookup. A DOI lookup against OpenAlex keeps the DOI as its lookup input and returns
+the OpenAlex Work ID and DOI in `identifiers`. Crossref and DataCite return DOI identities while
+retaining their source names in `provider`. Confirmed identities contain at most one value per
+identifier namespace; lookup inputs are not appended to them.
+
+Explicit requests accept metadata source names or their primary Identifier Namespaces:
+`openlibrary`/`isbn`, `nasa_ads`/`bibcode`, `pubmed`/`pmid`, and `ieee`. PMC's Identifier Namespace
+is `pmcid`; it supports Search and document acquisition, but has no metadata lookup adapter.
+
+Candidate Record `authors` contains `Contributor` values with a display name, source-supplied
+family/given names and suffixes, person/organization kind, author identifiers, per-record affiliations and
+nullable corresponding-author status. Each `Affiliation` can retain institution identifiers,
+country code and the original affiliation text. OpenAlex maps authorship affiliation strings to
+its institutions, including ROR identifiers. PubMed Lookup uses EFetch XML for complete author
+names, collective authors and affiliations; its Search adapter still uses ESummary.
+`Contributor.bibliographic_name` provides a separate formatting projection for sources that only
+supply display names, without presenting inferred name parts as upstream facts. The two-part
+bibliographic projection includes a supplied suffix in the family name.
+
+`keywords` is a tuple of terms; delimiters inside one upstream term remain part of that term.
+`urls` contains `ResourceLink` values whose `kind` distinguishes landing pages and full text.
+Where the source provides them, links retain media type, version, license, open-access status and
+intended application. Adapters use the API's link fields instead of guessing from URL suffixes.
+For optional collections, `None` means unavailable and an empty tuple means explicitly empty.
+These structured values are also exposed in CLI JSON; bibliography export consumes them directly.
+
+`acquire_document` accepts an HTTP(S) PDF URL or a scholarly identifier supported by a
 document Provider. Native document Adapters support arXiv IDs, OpenAlex Work IDs and DOI lookup,
 Crossref DOI full-text links, PMCIDs through the current PMC AWS article datasets, and the
 documented PDF URL from open-access IEEE article metadata. It performs bounded streaming GETs,
@@ -44,7 +73,7 @@ neutral records and `record_from_item`, bibliography parse/export across BibTeX,
 and EndNote, the Citation Key formula DSL with `preview_citation_key`, the built-in Citation
 Style catalog and CSL rendering. The package's internal modules are private implementation seams.
 `inquiro.canonical` exposes the shared payload cleaning helpers (`clean_markup`,
-`clean_rich_markup`, `normalize_reference_type`, …) used by Providers and host applications.
+`clean_rich_markup`, `normalize_publication_date`, …) used by Providers and host applications.
 
 ## CLI
 
@@ -72,6 +101,14 @@ collisions within search results. `--encoding latex` selects LaTeX text encoding
 BibLaTeX; `--preserve-case` protects uppercase title text, and `--include-identifiers` adds
 non-DOI identifiers.
 
+BibTeX and BibLaTeX derive supported Item Identifier Namespaces from the fixed Provider
+definitions. ISSN remains a custom field because it identifies a journal.
+Chapter ISBNs remain custom bibliographic fields because they identify the containing book;
+book ISBNs remain Item identifiers. Recognized `eprint`
+archives use canonical namespaces (`PubMed` becomes `pmid`); unspecified or unknown archives
+remain custom fields. The bibliography API exports them with
+`BibliographyExportOptions(include_custom_fields=True)`.
+
 Titles and abstracts use a deliberately restricted rich-text vocabulary. Inquiro canonicalizes
 `i`/`em`, `b`/`strong`, `sup`, and `sub` HTML without attributes, and converts them to and from
 `\emph`/`\mkbibemph`/`\textit`, `\textbf`, `\textsuperscript`, and `\textsubscript`. BibTeX and
@@ -87,3 +124,14 @@ Provider credentials and identity settings are read from `INQUIRO_CONTACT_EMAIL`
 `INQUIRO_OPENALEX_API_KEY`, `INQUIRO_NCBI_API_KEY`, `INQUIRO_NASA_ADS_TOKEN`, and
 `INQUIRO_IEEE_API_KEY`. OpenAlex PDF acquisition requires its API key because the content endpoint
 is metered; ordinary OpenAlex metadata lookup remains available without one.
+
+Reference Type semantics and directional mappings live in `inquiro.reference_types`. One enum
+selects supported types from citeproc-py's bundled CSL schema, followed by the preprint extension.
+The engine is a base dependency; the style catalog remains in the citation extra. Custom CSL
+validation and rendering work without the optional style catalog. Import mappings specify
+the source format or Provider; exporters choose an explicit target format, including CSL.
+Unsupported file types become document with a warning and retained source type in custom fields.
+
+Publication Dates use `python-dateutil` for textual parsing and retain only explicit year, month
+or day precision. Ranges reduce to their shared year or month; cross-year ranges have no single
+Publication Date. Provider, bibliography import and CSL output share this normalization.

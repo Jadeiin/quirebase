@@ -7,16 +7,19 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING
 
-from inquiro.bibliography import REFERENCE_TYPE_TO_BIBTEX, extract_year
-from inquiro.canonical import clean_markup, clean_rich_markup, normalize_reference_type
-from inquiro.identifiers import normalize_doi
+from inquiro.bibliography import extract_year
+from inquiro.canonical import clean_markup, clean_rich_markup
+from inquiro.identifiers import normalize_doi, parse_arxiv, parse_openalex
+from inquiro.reference_types import normalize_reference_type
+from inquiro.richtext import convert_rich_text
 
 from quirebase.core.errors import ValidationFailure
-from quirebase.models import normalize_author_identity
+from quirebase.models import MAX_CITATION_KEY_LENGTH, ReferenceType, normalize_author_identity
 
-from .authors import parse_author_list_string, parse_author_name
+from .authors import parse_author_name
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -41,8 +44,9 @@ STOP_WORDS = {
     "from",
 }
 
+MAX_TITLE_TEXT_LENGTH = 1000
+
 _BOUNDED_METADATA_FIELDS = {
-    "publication_date": 32,
     "volume": 100,
     "issue": 100,
     "pages": 100,
@@ -58,9 +62,29 @@ def _bounded_text(value: str, field: str, limit: int) -> str:
 
 def clean_identifier_value(provider: str, value: str) -> str:
     cleaned = value.strip()
-    if provider.lower() == "doi":
+    provider = provider.strip().lower()
+    if provider == "doi":
         cleaned = normalize_doi(cleaned).rstrip(".,; ")
+    elif provider in {"arxiv", "openalex"}:
+        parser = parse_arxiv if provider == "arxiv" else parse_openalex
+        if identifier := parser(cleaned, provider):
+            cleaned = identifier.value
     return cleaned
+
+
+def normalize_identifier_pairs(pairs: Sequence[tuple[str, str]]) -> list[tuple[str, str]]:
+    normalized: dict[str, str] = {}
+    for provider, value in pairs:
+        provider = provider.strip().lower()
+        value = clean_identifier_value(provider, value)
+        if not provider or not value:
+            continue
+        _bounded_text(provider, "identifier provider", 40)
+        _bounded_text(value, "identifier value", 500)
+        if provider in normalized:
+            raise ValidationFailure("only one identifier per provider is allowed")
+        normalized[provider] = value
+    return list(normalized.items())
 
 
 type JsonValue = str | int | float | bool | tuple[JsonValue, ...] | Mapping[str, JsonValue] | None
@@ -92,7 +116,7 @@ class ItemMetadata:
     keywords: tuple[str, ...] = ()
     publication_date: str | None = None
     publication_title: str | None = None
-    reference_type: str | None = None
+    reference_type: ReferenceType = ReferenceType.document
     volume: str | None = None
     issue: str | None = None
     pages: str | None = None
@@ -100,8 +124,7 @@ class ItemMetadata:
     publisher: str | None = None
     place_published: str | None = None
     journal_abbreviation: str | None = None
-    bibtex_key: str | None = None
-    bibtex_type: str | None = None
+    citation_key: str | None = None
     urls: tuple[str, ...] = ()
     authors: tuple[Contributor, ...] = ()
     editors: tuple[Contributor, ...] = ()
@@ -169,8 +192,7 @@ def metadata_from_item(
         publisher=item.publisher,
         place_published=item.place_published,
         journal_abbreviation=item.journal_abbreviation,
-        bibtex_key=item.bibtex_id,
-        bibtex_type=item.bibtex_type,
+        citation_key=item.citation_key,
         urls=tuple(value.strip() for value in (item.urls or "").splitlines() if value.strip()),
         authors=contributors(authors),
         editors=contributors(editors),
@@ -189,21 +211,42 @@ def _bounded_optional_text(value: str | None, field: str, limit: int) -> str | N
     return _bounded_text(normalized, field, limit) if normalized is not None else None
 
 
-def _bibliographic_values(metadata: ItemMetadata) -> dict[str, object]:
-    title = metadata.title.strip()
-    if not title:
+def _validated_title(value: str) -> str:
+    title = value.strip()
+    plain = convert_rich_text(title, source="html", target="text").strip()
+    if not plain:
         raise ValidationFailure("title is required")
-    reference_type = normalize_reference_type(metadata.reference_type or "")
+    _bounded_text(plain, "title", MAX_TITLE_TEXT_LENGTH)
+    return title
+
+
+def _validated_publication_date(value: str | None) -> str | None:
+    normalized = _optional_text(value)
+    if normalized is None:
+        return None
+    if not re.fullmatch(r"\d{4}(?:-\d{2}(?:-\d{2})?)?", normalized):
+        raise ValidationFailure("publication date must use YYYY, YYYY-MM or YYYY-MM-DD")
+    parts = [int(part) for part in normalized.split("-")]
+    try:
+        date(parts[0], parts[1] if len(parts) > 1 else 1, parts[2] if len(parts) > 2 else 1)
+    except ValueError as error:
+        raise ValidationFailure("publication date is invalid") from error
+    return normalized
+
+
+def _bibliographic_values(metadata: ItemMetadata) -> dict[str, object]:
+    try:
+        reference_type = ReferenceType(metadata.reference_type)
+    except ValueError as error:
+        raise ValidationFailure("reference type must be a supported literature type") from error
     return {
-        "title": title,
+        "title": _validated_title(metadata.title),
         "abstract": _optional_text(metadata.abstract),
         "keywords": "; ".join(value.strip() for value in metadata.keywords if value.strip())
         or None,
-        "publication_date": _bounded_optional_text(
-            metadata.publication_date, "publication date", 32
-        ),
+        "publication_date": _validated_publication_date(metadata.publication_date),
         "publication_title": _optional_text(metadata.publication_title),
-        "reference_type": _bounded_optional_text(reference_type, "reference type", 40),
+        "reference_type": reference_type,
         "volume": _bounded_optional_text(metadata.volume, "volume", 100),
         "issue": _bounded_optional_text(metadata.issue, "issue", 100),
         "pages": _bounded_optional_text(metadata.pages, "pages", 100),
@@ -211,39 +254,37 @@ def _bibliographic_values(metadata: ItemMetadata) -> dict[str, object]:
         "publisher": _optional_text(metadata.publisher),
         "place_published": _bounded_optional_text(metadata.place_published, "place published", 255),
         "journal_abbreviation": _optional_text(metadata.journal_abbreviation),
-        "bibtex_id": _bounded_optional_text(metadata.bibtex_key, "BibTeX key", 255),
-        "bibtex_type": _bounded_optional_text(metadata.bibtex_type, "BibTeX type", 40),
+        "citation_key": _bounded_optional_text(
+            metadata.citation_key, "Citation key", MAX_CITATION_KEY_LENGTH
+        ),
         "urls": "\n".join(value.strip() for value in metadata.urls if value.strip()) or None,
     }
 
 
 def _identifier_pairs(metadata: ItemMetadata) -> list[tuple[str, str]]:
-    pairs: dict[str, str] = {}
-    for identifier in metadata.identifiers:
-        provider = identifier.provider.strip().lower()
-        if not provider or provider == "doi":
-            continue
-        value = clean_identifier_value(provider, identifier.value)
-        if value:
-            pairs[provider] = value
-    if metadata.doi and (doi := clean_identifier_value("doi", metadata.doi)):
-        pairs["doi"] = doi
-    return list(pairs.items())
+    pairs = [
+        (identifier.provider, identifier.value)
+        for identifier in metadata.identifiers
+        if identifier.provider.strip().lower() != "doi"
+    ]
+    if metadata.doi:
+        pairs.append(("doi", metadata.doi))
+    return normalize_identifier_pairs(pairs)
 
 
 def _contributor_payload(contributors: tuple[Contributor, ...], *, editor: bool) -> list[dict]:
     payload: list[dict] = []
     seen: set[str] = set()
     for contributor in contributors:
-        last_name = contributor.last_name.strip()
-        first_name = _optional_text(contributor.first_name)
+        last_name = " ".join(contributor.last_name.split())
+        first_name = (
+            " ".join(contributor.first_name.split()) or None if contributor.first_name else None
+        )
         if not last_name:
             raise ValidationFailure("contributor last name is required")
         if editor and contributor.is_corresponding:
             raise ValidationFailure("editors cannot be corresponding authors")
         identity = normalize_author_identity(last_name, first_name)
-        if len(last_name) > 120 or (first_name is not None and len(first_name) > 120):
-            raise ValidationFailure("contributor name is too long")
         if identity in seen:
             raise ValidationFailure("contributors must be unique within a role")
         seen.add(identity)
@@ -267,7 +308,7 @@ def _custom_field_values(fields: tuple[CustomField, ...]) -> dict | None:
     return values or None
 
 
-def generate_bibtex_key(item: Item) -> str:
+def generate_citation_key(item: Item) -> str:
     author_part = "Unknown"
     if item.authors:
         first_author = item.authors.split(";")[0].strip()
@@ -281,12 +322,16 @@ def generate_bibtex_key(item: Item) -> str:
 
     title_part = "Work"
     if item.title:
-        words = re.findall(r"[A-Za-z0-9]+", item.title)
+        plain_title = convert_rich_text(item.title, source="html", target="text")
+        words = re.findall(r"[A-Za-z0-9]+", plain_title)
         for word in words:
             if word.lower() not in STOP_WORDS and len(word) > 2:
                 title_part = word.capitalize()
                 break
 
+    # Reserve room for both the year and title even when the family name is long.
+    author_part = author_part[: MAX_CITATION_KEY_LENGTH // 2]
+    title_part = title_part[: MAX_CITATION_KEY_LENGTH - len(author_part) - len(year_part)]
     return f"{author_part}{year_part}{title_part}"
 
 
@@ -314,14 +359,13 @@ def candidate_write(
     *,
     merge: bool,
     existing_identifiers: dict[str, str],
-    forced_identifiers: dict[str, str] | None = None,
 ) -> MetadataWrite:
     """Convert a Provider/import candidate while retaining its explicit merge semantics."""
     values: dict[str, object] = {}
     scalar_fields = {
         "title": clean_rich_markup,
         "abstract": clean_rich_markup,
-        "publication_date": lambda value: str(value).strip(),
+        "publication_date": _validated_publication_date,
         "publication_title": clean_markup,
         "journal_abbreviation": clean_markup,
         "volume": lambda value: str(value).strip(),
@@ -334,20 +378,15 @@ def candidate_write(
     for field, transform in scalar_fields.items():
         raw = record.get(field)
         if raw and (value := transform(raw)):
+            if field == "title":
+                value = _validated_title(str(value))
             if (limit := _BOUNDED_METADATA_FIELDS.get(field)) is not None:
                 value = _bounded_text(str(value), field, limit)
             values[field] = value
     if record.get("reference_type") and (
         ref_type := normalize_reference_type(record["reference_type"])
     ):
-        values["reference_type"] = _bounded_text(ref_type, "reference type", 40)
-        bib_type = record.get("bibtex_type") or REFERENCE_TYPE_TO_BIBTEX.get(ref_type, ref_type)
-        if bib_type:
-            values["bibtex_type"] = _bounded_text(str(bib_type).strip().lower(), "BibTeX type", 40)
-    elif record.get("bibtex_type"):
-        values["bibtex_type"] = _bounded_text(
-            str(record["bibtex_type"]).strip().lower(), "BibTeX type", 40
-        )
+        values["reference_type"] = ReferenceType(ref_type)
 
     urls = (
         [value.strip() for value in (item.urls or "").splitlines() if value.strip()]
@@ -359,11 +398,21 @@ def candidate_write(
         if merge
         else []
     )
-    for url in str(record.get("urls") or "").splitlines():
-        url = url.strip()
+    incoming_urls = record.get("urls")
+    if incoming_urls is not None and not isinstance(incoming_urls, (list, tuple)):
+        raise ValidationFailure("candidate URLs must be structured links")
+    for link in incoming_urls or ():
+        if not isinstance(link, dict) or not isinstance(link.get("url"), str):
+            raise ValidationFailure("candidate URL is invalid")
+        url = link["url"].strip()
         if url and url not in urls:
             urls.append(url)
-    for keyword in str(record.get("keywords") or "").split(";"):
+    incoming_keywords = record.get("keywords")
+    if incoming_keywords is not None and not isinstance(incoming_keywords, (list, tuple)):
+        raise ValidationFailure("candidate keywords must be a list")
+    for keyword in incoming_keywords or ():
+        if not isinstance(keyword, str):
+            raise ValidationFailure("candidate keyword is invalid")
         keyword = keyword.strip()
         if keyword and keyword not in keywords:
             keywords.append(keyword)
@@ -376,8 +425,8 @@ def candidate_write(
         if not isinstance(custom_fields, dict):
             raise ValidationFailure("custom fields must be a JSON object")
         values["custom_fields"] = dict(custom_fields)
-    if not item.bibtex_id and (key := str(record.get("bibtex_id") or "").strip()):
-        values["bibtex_id"] = _bounded_text(key, "BibTeX key", 255)
+    if not item.citation_key and (key := str(record.get("citation_key") or "").strip()):
+        values["citation_key"] = _bounded_text(key, "Citation key", MAX_CITATION_KEY_LENGTH)
 
     identifiers = dict(existing_identifiers) if merge else {}
     if merge and item.doi:
@@ -389,17 +438,41 @@ def candidate_write(
                 json.loads(raw_identifiers) if isinstance(raw_identifiers, str) else raw_identifiers
             )
             if isinstance(parsed, dict):
-                for provider, value in parsed.items():
-                    if isinstance(value, str) and value.strip():
-                        identifiers[provider] = clean_identifier_value(provider, value)
+                identifiers.update(
+                    normalize_identifier_pairs([
+                        (provider, value)
+                        for provider, value in parsed.items()
+                        if isinstance(value, str) and value.strip()
+                    ])
+                )
     if record.get("doi") and (doi := clean_identifier_value("doi", record["doi"])):
         identifiers["doi"] = doi
-    for provider, value in (forced_identifiers or {}).items():
-        if cleaned := clean_identifier_value(provider, value):
-            identifiers[provider] = cleaned
+
+    def contributors(role: str) -> list[dict] | None:
+        entries = record.get(role)
+        if entries is None:
+            return None
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+            raise ValidationFailure("candidate contributors must be structured names")
+        payload = _contributor_payload(
+            tuple(
+                Contributor(
+                    last_name=entry.get("last_name", ""),
+                    first_name=entry.get("first_name"),
+                    is_corresponding=bool(entry.get("is_corresponding")),
+                )
+                for entry in entries
+            ),
+            editor=role == "editors",
+        )
+        for entry, contributor in zip(entries, payload, strict=True):
+            if entry.get("is_corresponding") is None:
+                contributor["is_corresponding"] = None
+        return payload
+
     return MetadataWrite(
         values=values,
-        authors=parse_author_list_string(str(record["authors"])) if record.get("authors") else None,
-        editors=parse_author_list_string(str(record["editors"])) if record.get("editors") else None,
+        authors=contributors("authors"),
+        editors=contributors("editors"),
         identifiers=list(identifiers.items()) if identifiers else None,
     )

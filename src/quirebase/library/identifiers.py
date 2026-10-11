@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from inquiro.identifiers import DOI_PATTERN, normalize_doi
 from inquiro.models import CandidateRecord
 from sqlalchemy import select, update
 
@@ -18,7 +17,7 @@ from quirebase.models import FileRevision, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
 from ._item_identifiers import _replace_item_identifiers_many
-from ._metadata import MetadataWrite, candidate_write, generate_bibtex_key
+from ._metadata import MetadataWrite, candidate_write, generate_citation_key
 from .item_metadata import _write_item_links
 
 if TYPE_CHECKING:
@@ -114,7 +113,6 @@ async def apply_metadata_record(
     record: CandidateRecord | dict,
     *,
     merge: bool = False,
-    forced_identifiers: dict[str, str] | None = None,
 ) -> Item:
     item = await require_editable_item(db, user, item.workspace_id, item.id)
     values = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
@@ -133,13 +131,12 @@ async def apply_metadata_record(
         values,
         merge=merge,
         existing_identifiers=existing,
-        forced_identifiers=forced_identifiers,
     )
     for name, value in write.values.items():
         setattr(item, name, value)
     await _write_item_links(db, [(item, write)])
-    if not item.bibtex_id:
-        item.bibtex_id = generate_bibtex_key(item)
+    if not item.citation_key:
+        item.citation_key = generate_citation_key(item)
     await db.flush()
     return item
 
@@ -171,8 +168,8 @@ async def _sync_metadata_from_upstream(
 ) -> Item:
     user_id = user.id
     item = await require_editable_item(db, user, workspace_id, item_id)
-    previous_generated_key = generate_bibtex_key(item)
-    previous_key = item.bibtex_id
+    previous_generated_key = generate_citation_key(item)
+    previous_key = item.citation_key
 
     from quirebase.operations.settings import get_effective_settings_model
 
@@ -181,7 +178,6 @@ async def _sync_metadata_from_upstream(
     # Re-read the item and enforce its expected version after the external call.
     await db.rollback()
     record = await lookup_candidate(uid_value, provider, effective_settings)
-    upstream_identifier = record.identifier
     reloaded_user = await db.get(User, user_id)
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
@@ -201,21 +197,12 @@ async def _sync_metadata_from_upstream(
         raise VersionConflict(current.version if current else None)
 
     await db.refresh(item)
-    normalized_upstream_value = normalize_doi(upstream_identifier.value)
-    forced_identifiers = (
-        {upstream_identifier.provider: upstream_identifier.value}
-        if upstream_identifier.provider
-        and upstream_identifier.value
-        and not DOI_PATTERN.fullmatch(normalized_upstream_value)
-        else None
-    )
     await apply_metadata_record(
         db,
         user,
         item,
         record,
         merge=True,
-        forced_identifiers=forced_identifiers,
     )
     # The item was eagerly loaded before its link rows were replaced. Reload
     # those collections explicitly so callers never observe the stale identity-
@@ -228,9 +215,9 @@ async def _sync_metadata_from_upstream(
     # key that was generated from the previous metadata in sync, while leaving
     # an explicitly edited key untouched.
     if not previous_key or previous_key == previous_generated_key:
-        regenerated_key = generate_bibtex_key(item)
-        if regenerated_key != item.bibtex_id:
-            item.bibtex_id = regenerated_key
+        regenerated_key = generate_citation_key(item)
+        if regenerated_key != item.citation_key:
+            item.citation_key = regenerated_key
 
     await db.flush()
 
@@ -249,11 +236,12 @@ async def _sync_metadata_from_upstream(
         "item",
         item_id,
         detail={
-            "provider": upstream_identifier.provider,
-            "old_bibtex_key": previous_key,
-            "new_bibtex_key": item.bibtex_id,
-            "bibtex_key_updated": bool(
-                previous_key != item.bibtex_id
+            "provider": record.provider,
+            "lookup_provider": provider,
+            "old_citation_key": previous_key,
+            "new_citation_key": item.citation_key,
+            "citation_key_updated": bool(
+                previous_key != item.citation_key
                 and (not previous_key or previous_key == previous_generated_key)
             ),
         },
@@ -307,7 +295,7 @@ async def _create_items_from_candidates(
     await db.flush()
     await _write_item_links(db, prepared, replace=False)
     for item in items:
-        if not item.bibtex_id:
-            item.bibtex_id = generate_bibtex_key(item)
+        if not item.citation_key:
+            item.citation_key = generate_citation_key(item)
     await db.flush()
     return items

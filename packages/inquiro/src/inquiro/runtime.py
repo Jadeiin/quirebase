@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
-from typing import Self
+from dataclasses import replace
+from typing import TYPE_CHECKING, Self
 from urllib.parse import urlsplit
 
+from inquiro.canonical import normalize_publication_date
 from inquiro.identifiers import parse_identifier
 from inquiro.models import (
     AcquiredDocument,
@@ -16,16 +17,41 @@ from inquiro.models import (
     InvalidProviderRequest,
     PdfNotAvailable,
     ProviderConfig,
-    ProviderRecord,
     ProviderUnavailable,
     SearchQuery,
 )
 from inquiro.providers._catalog import builtin_providers
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition
 from inquiro.transport import BoundedTransport, Exchange, HttpExchange, RemoteNotFound
+
+if TYPE_CHECKING:
+    from inquiro.providers._contracts import ProviderDefinition
 
 SEARCH_FIELDS = frozenset({"any", "title", "author", "publication", "abstract"})
 SEARCH_OPERATORS = frozenset({"and", "or", "not"})
+
+
+def _candidate_identifiers(
+    identifiers: tuple[Identifier, ...],
+    doi: str | None = None,
+) -> tuple[Identifier, ...]:
+    confirmed = identifiers
+    if doi:
+        confirmed += (Identifier("doi", doi),)
+    unique: dict[str, Identifier] = {}
+    for identifier in confirmed:
+        previous = unique.get(identifier.provider)
+        if previous is not None and previous != identifier:
+            raise ProviderUnavailable("metadata provider returned conflicting identifiers")
+        unique[identifier.provider] = identifier
+    return tuple(unique.values())
+
+
+def _normalize_candidate(record: CandidateRecord) -> CandidateRecord:
+    return replace(
+        record,
+        publication_date=normalize_publication_date(record.publication_date),
+        identifiers=_candidate_identifiers(record.identifiers, record.doi),
+    )
 
 
 class ProviderRuntime:
@@ -47,7 +73,6 @@ class ProviderRuntime:
         self._config = config
         self._providers = builtin_providers()
         self._transport = BoundedTransport(config, exchange)
-        self._context = ProviderContext(self._transport)
         self._closed = False
 
     @staticmethod
@@ -88,7 +113,7 @@ class ProviderRuntime:
         definition.require_credentials(self._config, "document")
         try:
             return await definition.document_adapter.acquire(
-                self._context,
+                self._transport,
                 identifier.value,
                 self._config,
                 endpoint=definition.document_endpoint or definition.endpoint,
@@ -109,8 +134,8 @@ class ProviderRuntime:
         definition.require_credentials(self._config, "lookup")
         try:
             record = await definition.lookup_adapter.lookup(
-                self._context,
-                identifier.value,
+                self._transport,
+                identifier,
                 self._config,
                 endpoint=definition.endpoint,
             )
@@ -122,7 +147,7 @@ class ProviderRuntime:
             raise ProviderUnavailable("metadata provider returned invalid metadata") from error
         if not record.title:
             raise ProviderUnavailable("metadata provider returned a record without a title")
-        return self._candidate(definition.name, identifier, record)
+        return _normalize_candidate(record)
 
     async def search(self, query: SearchQuery) -> CandidatePage:
         self._require_open()
@@ -143,43 +168,28 @@ class ProviderRuntime:
                 raise InvalidProviderRequest("search clause is invalid")
         if query.year_from and query.year_to and query.year_from > query.year_to:
             raise InvalidProviderRequest("starting year must not be after ending year")
-        page = max(1, min(query.page, 100))
-        per_page = max(1, min(query.per_page, 25))
+        query = replace(
+            query, page=max(1, min(query.page, 100)), per_page=max(1, min(query.per_page, 25))
+        )
         definition.require_credentials(self._config, "search")
         try:
             result = await definition.search_adapter.search(
-                self._context,
-                list(query.clauses),
-                page=page,
-                per_page=per_page,
-                sort=query.sort,
-                year_from=query.year_from,
-                year_to=query.year_to,
+                self._transport,
+                query,
                 settings=self._config,
                 endpoint=definition.endpoint,
             )
         except RemoteNotFound:
-            return CandidatePage(definition.name, (), 0, page, per_page)
+            return CandidatePage(definition.name, (), 0, query.page, query.per_page)
         except InquiroError:
             raise
         except (TypeError, ValueError) as error:
             raise ProviderUnavailable(
                 "metadata provider returned invalid search results"
             ) from error
-        records = tuple(
-            CandidateRecord(
-                provider=record.provider,
-                identifier=Identifier(record.identifier_provider, record.identifier),
-                title=record.title,
-                authors=record.authors,
-                publication_title=record.publication_title,
-                publication_date=record.publication_date,
-                doi=record.doi,
-                abstract=record.abstract,
-            )
-            for record in result.results
+        return replace(
+            result, results=tuple(_normalize_candidate(record) for record in result.results)
         )
-        return CandidatePage(result.provider, records, result.total, page, per_page)
 
     async def aclose(self) -> None:
         if not self._closed:
@@ -195,45 +205,10 @@ class ProviderRuntime:
 
     def _identifier_provider(self, alias: str) -> ProviderDefinition | None:
         return next(
-            (provider for provider in self._providers if alias in provider.identifier_aliases),
+            (provider for provider in self._providers if provider.accepts_identifier(alias)),
             None,
         )
 
     def _require_open(self) -> None:
         if self._closed:
             raise RuntimeError("provider runtime is closed")
-
-    @staticmethod
-    def _candidate(
-        provider: str, identifier: Identifier, record: ProviderRecord
-    ) -> CandidateRecord:
-        identifiers: list[Identifier] = [identifier]
-        if record.identifiers:
-            try:
-                raw_identifiers = json.loads(record.identifiers)
-            except (json.JSONDecodeError, TypeError):
-                raw_identifiers = {}
-            for name, value in raw_identifiers.items():
-                candidate = Identifier(str(name), str(value))
-                if candidate not in identifiers:
-                    identifiers.append(candidate)
-        return CandidateRecord(
-            provider=provider,
-            identifier=identifier,
-            title=record.title,
-            abstract=record.abstract,
-            authors=record.authors,
-            keywords=record.keywords,
-            publication_date=record.publication_date,
-            publication_title=record.publication_title,
-            journal_abbreviation=record.journal_abbreviation,
-            volume=record.volume,
-            issue=record.issue,
-            pages=record.pages,
-            publisher=record.publisher,
-            affiliation=record.affiliation,
-            doi=record.doi,
-            urls=record.urls,
-            identifiers=tuple(identifiers),
-            reference_type=record.reference_type,
-        )

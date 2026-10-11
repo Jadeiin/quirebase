@@ -7,7 +7,6 @@ implementation seams (see ``tests/test_architecture.py``).
 from __future__ import annotations
 
 from inquiro.bibliography.engine import (
-    REFERENCE_TYPE_TO_CSL,
     record_to_csl_json,
     render_bibliography,
     render_citation,
@@ -15,7 +14,6 @@ from inquiro.bibliography.engine import (
 from inquiro.bibliography.formats import (
     BIBLIOGRAPHY_EXTENSIONS,
     BIBLIOGRAPHY_MEDIA_TYPES,
-    REFERENCE_TYPE_TO_BIBTEX,
     SUPPORTED_FORMATS,
     export_bibliography_records,
     first_url,
@@ -40,7 +38,6 @@ from inquiro.bibliography.records import (
     record_from_item,
 )
 from inquiro.bibliography.styles import (
-    CitationEngineUnavailable,
     CitationStyleOption,
     CitationStyleSelection,
     builtin_style_catalog,
@@ -53,12 +50,9 @@ __all__ = [
     "BIBLIOGRAPHY_EXTENSIONS",
     "BIBLIOGRAPHY_MEDIA_TYPES",
     "DEFAULT_CITATION_KEY_FORMULA",
-    "REFERENCE_TYPE_TO_BIBTEX",
-    "REFERENCE_TYPE_TO_CSL",
     "SUPPORTED_FORMATS",
     "BibliographyExportOptions",
     "BibliographyRecord",
-    "CitationEngineUnavailable",
     "CitationKeyFormulaError",
     "CitationStyleOption",
     "CitationStyleSelection",

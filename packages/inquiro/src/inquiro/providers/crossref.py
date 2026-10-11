@@ -1,40 +1,131 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from inquiro.canonical import (
     clean_markup,
     clean_rich_markup,
-    collect_urls,
     first_text,
-    normalize_reference_type,
 )
-from inquiro.identifiers import parse_doi
+from inquiro.identifiers import normalize_doi, parse_doi
 from inquiro.models import (
     AcquiredDocument,
     CandidateNotFound,
+    CandidatePage,
+    CandidateRecord,
+    Contributor,
+    Identifier,
     PdfNotAvailable,
-    ProviderRecord,
-    ProviderSearchPage,
-    ProviderSearchRecord,
+    ProviderConfig,
     ProviderUnavailable,
-    SearchClause,
+    ResourceLink,
+    SearchQuery,
 )
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._contracts import ProviderDefinition
 from inquiro.providers._payload import (
+    affiliation_values,
     date_parts,
+    keyword_values,
+    unique_links,
 )
+from inquiro.reference_types import normalize_reference_type
+
+if TYPE_CHECKING:
+    from inquiro.transport import BoundedTransport
+
+
+def _contributors(message: dict) -> tuple[Contributor, ...] | None:
+    entries = message.get("author")
+    if not isinstance(entries, list):
+        return None
+    contributors = []
+    for author in entries:
+        if not isinstance(author, dict):
+            continue
+        family = clean_markup(first_text(author.get("family")))
+        given = clean_markup(first_text(author.get("given")))
+        display = clean_markup(first_text(author.get("name"))) or ", ".join(
+            part for part in (family, given) if part
+        )
+        if not display:
+            continue
+        orcid = first_text(author.get("ORCID"))
+        contributors.append(
+            Contributor(
+                display_name=display,
+                family_name=family,
+                given_name=given,
+                kind="person" if family or given else "unknown",
+                identifiers=(Identifier("orcid", orcid),) if orcid else (),
+                affiliations=affiliation_values(author.get("affiliation")),
+            )
+        )
+    return tuple(contributors)
+
+
+def _links(message: dict, doi: str) -> tuple[ResourceLink, ...]:
+    links = [ResourceLink(f"https://doi.org/{doi}", kind="landing_page")]
+    resource = (message.get("resource") or {}).get("primary") or {}
+    links.extend(
+        ResourceLink(url, kind="landing_page")
+        for value in (message.get("URL"), resource.get("URL"))
+        if (url := first_text(value))
+    )
+    links.extend(
+        ResourceLink(
+            url,
+            kind="full_text",
+            media_type=first_text(entry.get("content-type")),
+            version=first_text(entry.get("content-version")),
+            intended_application=first_text(entry.get("intended-application")),
+        )
+        for entry in message.get("link", [])
+        if isinstance(entry, dict) and (url := first_text(entry.get("URL")))
+    )
+    return unique_links(*links)
+
+
+def _record(message: dict, identifier: Identifier) -> CandidateRecord:
+    value = identifier.value
+    canonical_doi = normalize_doi(first_text(message.get("DOI")) or value)
+    return CandidateRecord(
+        provider="crossref",
+        lookup_identifier=identifier,
+        title=clean_rich_markup(first_text(message.get("title"))) or "",
+        abstract=clean_rich_markup(first_text(message.get("abstract"))),
+        authors=_contributors(message),
+        keywords=keyword_values(message.get("subject")),
+        publication_date=date_parts(message),
+        publication_title=clean_markup(first_text(message.get("container-title"))),
+        journal_abbreviation=clean_markup(first_text(message.get("short-container-title"))),
+        volume=clean_markup(first_text(message.get("volume"))),
+        issue=clean_markup(
+            first_text(message.get("issue") or (message.get("journal-issue") or {}).get("issue"))
+        ),
+        pages=clean_markup(first_text(message.get("page"))),
+        publisher=clean_markup(first_text(message.get("publisher"))),
+        doi=canonical_doi,
+        urls=_links(message, canonical_doi),
+        identifiers=(Identifier("doi", canonical_doi),),
+        reference_type=normalize_reference_type(message.get("type"), source="crossref"),
+    )
 
 
 class CrossrefLookupAdapter:
     async def lookup(
-        self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
-    ) -> ProviderRecord:
+        self,
+        client: BoundedTransport,
+        identifier: Identifier,
+        settings: ProviderConfig,
+        *,
+        endpoint: str,
+    ) -> CandidateRecord:
+        value = identifier.value
         contact = settings.contact_email
         params = {"mailto": contact} if contact else None
-        body = await client._get(f"{endpoint}/{quote(value, safe='')}", params)
+        body = await client.get(f"{endpoint}/{quote(value, safe='')}", params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -42,94 +133,26 @@ class CrossrefLookupAdapter:
         message = payload.get("message")
         if not message:
             raise CandidateNotFound("Crossref message was missing")
-        authors = "; ".join(
-            ", ".join(
-                part
-                for part in (
-                    clean_markup(first_text(author.get("family"))),
-                    clean_markup(first_text(author.get("given"))),
-                )
-                if part
-            )
-            for author in message.get("author", [])
-            if isinstance(author, dict)
-        )
-        canonical_doi = first_text(message.get("DOI")) or value
-
-        affiliations: list[str] = []
-        for author in message.get("author", []):
-            if not isinstance(author, dict):
-                continue
-            for affiliation in author.get("affiliation", []):
-                if not isinstance(affiliation, dict):
-                    continue
-                name = clean_markup(first_text(affiliation.get("name")))
-                if name and name not in affiliations:
-                    affiliations.append(name)
-
-        resource = message.get("resource") or {}
-        primary_resource = resource.get("primary") or {}
-        urls = collect_urls(
-            f"https://doi.org/{canonical_doi}",
-            first_text(message.get("URL")),
-            first_text(primary_resource.get("URL")),
-            *(
-                first_text(link.get("URL"))
-                for link in message.get("link", [])
-                if isinstance(link, dict)
-            ),
-        )
-        keywords = "; ".join(
-            keyword
-            for subject in message.get("subject", [])
-            if (keyword := clean_markup(first_text(subject)))
-        )
-        return ProviderRecord(
-            title=clean_rich_markup(first_text(message.get("title"))) or "",
-            abstract=clean_rich_markup(first_text(message.get("abstract"))),
-            authors=authors or None,
-            keywords=keywords or None,
-            publication_date=date_parts(message),
-            publication_title=clean_markup(first_text(message.get("container-title"))),
-            journal_abbreviation=clean_markup(first_text(message.get("short-container-title"))),
-            volume=clean_markup(first_text(message.get("volume"))),
-            issue=clean_markup(
-                first_text(
-                    message.get("issue") or (message.get("journal-issue") or {}).get("issue")
-                )
-            ),
-            pages=clean_markup(first_text(message.get("page"))),
-            publisher=clean_markup(first_text(message.get("publisher"))),
-            affiliation="; ".join(affiliations) or None,
-            doi=canonical_doi,
-            urls=urls,
-            identifiers=json.dumps({"doi": canonical_doi}),
-            reference_type=normalize_reference_type(message.get("type")),
-        )
+        return _record(message, identifier)
 
 
 class CrossrefSearchAdapter:
     async def search(
         self,
-        client: ProviderContext,
-        clauses: list[SearchClause],
+        client: BoundedTransport,
+        request: SearchQuery,
         *,
-        page: int,
-        per_page: int,
-        sort: str,
-        year_from: int | None,
-        year_to: int | None,
-        settings: Any,
+        settings: ProviderConfig,
         endpoint: str,
-    ) -> ProviderSearchPage:
+    ) -> CandidatePage:
         params: dict[str, Any] = {
-            "rows": str(per_page),
-            "offset": str((page - 1) * per_page),
+            "rows": str(request.per_page),
+            "offset": str((request.page - 1) * request.per_page),
             "sort": {
                 "published": "published",
                 "updated": "updated",
                 "cited": "is-referenced-by-count",
-            }.get(sort, "score"),
+            }.get(request.sort, "score"),
             "order": "desc",
         }
         contact = settings.contact_email
@@ -142,13 +165,13 @@ class CrossrefSearchAdapter:
             "publication": "query.container-title",
             "abstract": "query.bibliographic",
         }
-        if all(clause.operator == "and" for clause in clauses):
-            for clause in clauses:
+        if all(clause.operator == "and" for clause in request.clauses):
+            for clause in request.clauses:
                 key = field_names[clause.field]
                 params[key] = " ".join(filter(None, [params.get(key), clause.term.strip()]))
         else:
             expressions: list[str] = []
-            for index, clause in enumerate(clauses):
+            for index, clause in enumerate(request.clauses):
                 term = clause.term.replace('"', " ").strip()
                 operator = (
                     "NOT"
@@ -161,63 +184,39 @@ class CrossrefSearchAdapter:
                 expressions.append(f'{prefix}"{term}"')
             params["query.bibliographic"] = " ".join(expressions)
         filters = []
-        if year_from:
-            filters.append(f"from-pub-date:{year_from}-01-01")
-        if year_to:
-            filters.append(f"until-pub-date:{year_to}-12-31")
+        if request.year_from:
+            filters.append(f"from-pub-date:{request.year_from}-01-01")
+        if request.year_to:
+            filters.append(f"until-pub-date:{request.year_to}-12-31")
         if filters:
             params["filter"] = ",".join(filters)
-        body = await client._get(endpoint, params)
+        body = await client.get(endpoint, params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("Crossref returned invalid metadata") from error
         message = payload.get("message", {})
         total = int(message.get("total-results", 0))
-        results: list[ProviderSearchRecord] = []
+        results: list[CandidateRecord] = []
         for item in message.get("items", []):
             doi = first_text(item.get("DOI"))
             if not doi:
                 continue
-            authors = "; ".join(
-                ", ".join(
-                    part
-                    for part in (
-                        clean_markup(first_text(author.get("family"))),
-                        clean_markup(first_text(author.get("given"))),
-                    )
-                    if part
-                )
-                for author in item.get("author", [])
-                if isinstance(author, dict)
-            )
-            results.append(
-                ProviderSearchRecord(
-                    provider="crossref",
-                    identifier_provider="doi",
-                    identifier=doi,
-                    title=clean_rich_markup(first_text(item.get("title"))) or "",
-                    authors=authors or None,
-                    publication_title=clean_markup(first_text(item.get("container-title"))),
-                    publication_date=date_parts(item),
-                    doi=doi,
-                    abstract=clean_rich_markup(first_text(item.get("abstract"))),
-                )
-            )
-        return ProviderSearchPage("crossref", results, total, page, per_page)
+            results.append(_record(item, Identifier("doi", normalize_doi(doi))))
+        return CandidatePage("crossref", tuple(results), total, request.page, request.per_page)
 
 
 class CrossrefDocumentAdapter:
     async def acquire(
         self,
-        client: ProviderContext,
+        client: BoundedTransport,
         value: str,
-        settings: Any,
+        settings: ProviderConfig,
         *,
         endpoint: str,
     ) -> AcquiredDocument:
         params = {"mailto": settings.contact_email} if settings.contact_email else None
-        body = await client._get(f"{endpoint}/{quote(value, safe='')}", params)
+        body = await client.get(f"{endpoint}/{quote(value, safe='')}", params)
         try:
             payload = json.loads(body)
             if not isinstance(payload, dict):
@@ -245,12 +244,12 @@ class CrossrefDocumentAdapter:
         )
         if not pdf_url:
             raise PdfNotAvailable("Crossref does not provide a PDF link for this DOI")
-        return await client._download_pdf(pdf_url, provider="crossref")
+        return await client.download_pdf(pdf_url, provider="crossref")
 
 
 CROSSREF_PROVIDER = ProviderDefinition(
     name="crossref",
-    identifier_aliases=("doi", "crossref"),
+    identifier_namespace="doi",
     identifier_parser=parse_doi,
     auto_detect_identifier=True,
     search_adapter=CrossrefSearchAdapter(),

@@ -94,7 +94,7 @@ async def test_identifier_import_rechecks_create_after_provider_io(
             await governor_db.commit()
         return CandidateRecord(
             provider="crossref",
-            identifier=Identifier("doi", "10.1000/revoked"),
+            lookup_identifier=Identifier("doi", "10.1000/revoked"),
             title="Revoked import",
         )
 
@@ -149,7 +149,7 @@ async def test_discovery_rechecks_membership_before_local_matching(
             await governor_db.commit()
         candidate = CandidateRecord(
             provider="crossref",
-            identifier=Identifier("doi", "10.1000/existing"),
+            lookup_identifier=Identifier("doi", "10.1000/existing"),
             title="Candidate",
         )
         return CandidatePage("crossref", (candidate,), 1, 1, 10)

@@ -9,32 +9,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-try:
-    from citeproc import (
-        Citation,
-        CitationItem,
-        CitationStylesBibliography,
-        CitationStylesStyle,
-        formatter,
-    )
-    from citeproc.source.json import CiteProcJSON
-except ImportError:
-    Citation = None
-    CitationItem = None
-    CitationStylesBibliography = None
-    CitationStylesStyle = None
-    formatter = None
-    CiteProcJSON = None
+from citeproc import CitationStylesStyle
 
 try:
     from citeproc_styles import get_style_filepath, get_style_name
 except ImportError:  # optional `citation` extra is not installed
     get_style_filepath = None
     get_style_name = None
-
-
-class CitationEngineUnavailable(RuntimeError):
-    """The optional CSL formatting engine is not installed."""
 
 
 @dataclass(frozen=True)
@@ -115,8 +96,6 @@ def builtin_style_xml(style_key: str) -> str | None:
 
 
 def _load_style(xml_text: str) -> Any:
-    if CitationStylesStyle is None:
-        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
     return CitationStylesStyle(io.BytesIO(xml_text.encode("utf-8")))
 
 

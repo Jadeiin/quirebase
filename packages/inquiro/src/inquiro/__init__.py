@@ -1,8 +1,10 @@
 from inquiro.models import (
     AcquiredDocument,
+    Affiliation,
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
+    Contributor,
     DocumentRequest,
     Identifier,
     InquiroError,
@@ -12,6 +14,7 @@ from inquiro.models import (
     PdfNotAvailable,
     ProviderConfig,
     ProviderUnavailable,
+    ResourceLink,
     SearchClause,
     SearchQuery,
 )
@@ -19,9 +22,11 @@ from inquiro.runtime import ProviderRuntime
 
 __all__ = [
     "AcquiredDocument",
+    "Affiliation",
     "CandidateNotFound",
     "CandidatePage",
     "CandidateRecord",
+    "Contributor",
     "DocumentRequest",
     "Identifier",
     "InquiroError",
@@ -32,6 +37,7 @@ __all__ = [
     "ProviderConfig",
     "ProviderRuntime",
     "ProviderUnavailable",
+    "ResourceLink",
     "SearchClause",
     "SearchQuery",
 ]

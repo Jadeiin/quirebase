@@ -46,7 +46,6 @@ rubrica = { workspace = true }
 [dependency-groups]
 dev = [
   "commitizen>=4.17,<5",
-  "citeproc-py>=0.10,<0.11",
   "citeproc-py-styles>=0.1.6,<0.2",
   "mypy>=1.17,<2",
   "prek>=0.3,<1",
@@ -375,7 +374,7 @@ id = "inquiro-callers"
 name = "Inquiro has only documented application callers"
 type = "protected"
 protected_modules = ["inquiro"]
-allowed_importers = ["quirebase.documents", "quirebase.library", "quirebase.search"]
+allowed_importers = ["quirebase.documents", "quirebase.library", "quirebase.models", "quirebase.search"]
 
 [[tool.importlinter.contracts]]
 id = "rubrica-callers"
@@ -394,13 +393,13 @@ allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 id = "inquiro-richtext-callers"
-name = "Non-Library Inquiro callers use only Rich Text"
+name = "Non-Library Inquiro callers use only neutral text and Reference Types"
 type = "protected"
 protected_modules = ["inquiro.*"]
 allowed_importers = ["inquiro", "quirebase.library"]
-# Rich Text is the neutral interface shared with Documents and Search. The root
-# Inquiro contract still restricts which application Modules may use it.
-ignore_imports = ["quirebase.** -> inquiro.richtext"]
+# Rich Text is shared with Documents and Search; Models shares only the neutral
+# Reference Type vocabulary. The root contract still restricts all callers.
+ignore_imports = ["quirebase.** -> inquiro.richtext", "quirebase.models -> inquiro.reference_types"]
 
 [[tool.importlinter.contracts]]
 id = "inquiro-provider-facade"

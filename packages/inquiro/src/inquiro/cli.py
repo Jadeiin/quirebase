@@ -13,7 +13,6 @@ from inquiro.bibliography import (
     DEFAULT_CITATION_KEY_FORMULA,
     BibliographyExportOptions,
     BibliographyRecord,
-    Contributor,
     evaluate_citation_key_formula,
     export_bibliography_records,
     suffixed_citation_key,
@@ -183,12 +182,6 @@ def _write_json(value: object, *, stream: TextIO | None = None) -> None:
     stream.write("\n")
 
 
-def _candidate_contributors(value: str | None) -> tuple[Contributor, ...]:
-    return tuple(
-        Contributor.parse(part.strip()) for part in (value or "").split(";") if part.strip()
-    )
-
-
 def _candidate_record(candidate: CandidateRecord) -> BibliographyRecord:
     identifiers = tuple(
         (identifier.provider, identifier.value)
@@ -197,13 +190,11 @@ def _candidate_record(candidate: CandidateRecord) -> BibliographyRecord:
     )
     record = BibliographyRecord(
         citation_key=None,
-        reference_type=candidate.reference_type or "article",
+        reference_type=candidate.reference_type or "document",
         title=candidate.title,
-        authors=_candidate_contributors(candidate.authors),
+        authors=tuple(author.bibliographic_name for author in candidate.authors or ()),
         abstract=candidate.abstract,
-        keywords=tuple(
-            keyword.strip() for keyword in (candidate.keywords or "").split(";") if keyword.strip()
-        ),
+        keywords=candidate.keywords or (),
         publication_date=candidate.publication_date,
         publication_title=candidate.publication_title,
         journal_abbreviation=candidate.journal_abbreviation,
@@ -212,7 +203,7 @@ def _candidate_record(candidate: CandidateRecord) -> BibliographyRecord:
         pages=candidate.pages,
         publisher=candidate.publisher,
         doi=candidate.doi,
-        urls=tuple(url.strip() for url in (candidate.urls or "").splitlines() if url.strip()),
+        urls=tuple(dict.fromkeys(link.url for link in candidate.urls or ())),
         identifiers=identifiers,
     )
     return replace(

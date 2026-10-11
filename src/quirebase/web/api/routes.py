@@ -48,7 +48,6 @@ _WORKSPACE_RESOURCE_ROOTS = frozenset({
     "annotation-exports",
     "authors",
     "bibliography",
-    "citation-key-preview",
     "citation-styles",
     "dashboard",
     "discovery",

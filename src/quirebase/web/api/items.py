@@ -20,7 +20,7 @@ from quirebase.library import (
     ItemSection,
     delete_item,
     open_item_section,
-    regenerate_bibtex_key,
+    regenerate_citation_key,
     regenerate_item_tag_recommendation,
     rescan_pdf_doi,
     search_authors_typeahead,
@@ -183,7 +183,7 @@ async def rescan_item_doi(workspace_id: UUID, item_id: UUID, user: ApiUser, db: 
 async def regenerate_item_citation_key(
     workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database
 ) -> OkView:
-    await regenerate_bibtex_key(db, user, workspace_id, item_id)
+    await regenerate_citation_key(db, user, workspace_id, item_id)
     return OkView()
 
 

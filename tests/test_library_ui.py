@@ -13,7 +13,7 @@ import pymupdf
 import pytest
 from app_helpers import json_payload
 from import_helpers import pdf_import_batch_data
-from inquiro import CandidateRecord, Identifier
+from inquiro import CandidateRecord, Contributor, Identifier
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from storage_helpers import local_object_path
@@ -59,9 +59,11 @@ from quirebase.web.api.imports import import_batch as import_batch_api
 def provider_candidate(identifier: str, title: str, *, authors: str | None = None):
     return CandidateRecord(
         provider="crossref",
-        identifier=Identifier("doi", identifier),
+        lookup_identifier=Identifier("doi", identifier),
         title=title,
-        authors=authors,
+        authors=tuple(Contributor(name.strip()) for name in authors.split(";"))
+        if authors is not None
+        else None,
         doi=identifier,
         identifiers=(Identifier("doi", identifier),),
     )

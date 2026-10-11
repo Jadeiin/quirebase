@@ -68,7 +68,7 @@ def _archive_name(value: str, fallback: str) -> str:
 
 def _item_archive_prefix(item: Item) -> str:
     return _archive_name(
-        item.bibtex_id or convert_rich_text(item.title, source="html", target="text"),
+        item.citation_key or convert_rich_text(item.title, source="html", target="text"),
         str(item.id)[:8],
     )
 

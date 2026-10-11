@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from types import SimpleNamespace
 
 import httpx2
@@ -8,6 +9,102 @@ from inquiro import Identifier, ProviderUnavailable, SearchClause, SearchQuery
 from inquiro_provider_helpers import provider_runtime
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize(
+    ("provider", "value", "entry"),
+    [
+        (
+            "crossref",
+            "10.1000/shared",
+            {
+                "DOI": "https://doi.org/10.1000/shared",
+                "title": ["Shared <i>title</i>"],
+                "abstract": "Uses <sup>2</sup>",
+                "subject": ["Alpha; beta"],
+                "published-print": {"date-parts": [[2025, 2]]},
+                "type": "journal-article",
+            },
+        ),
+        (
+            "openalex",
+            "W123",
+            {
+                "id": "https://openalex.org/W123",
+                "doi": "https://doi.org/10.1000/shared",
+                "display_name": "Shared <i>title</i>",
+                "abstract": "Uses <sup>2</sup>",
+                "keywords": [{"display_name": "Alpha; beta"}],
+                "publication_date": "2025-02",
+                "type": "article",
+            },
+        ),
+        (
+            "ieee",
+            "1234567",
+            {
+                "article_number": "1234567",
+                "doi": "https://doi.org/10.1000/shared",
+                "title": "Shared <i>title</i>",
+                "abstract": "Uses <sup>2</sup>",
+                "index_terms": {"author_terms": {"terms": ["Alpha; beta"]}},
+                "publication_year": "2025",
+            },
+        ),
+        (
+            "nasa_ads",
+            "2025ApJ...123..456A",
+            {
+                "bibcode": "2025ApJ...123..456A",
+                "doi": ["https://doi.org/10.1000/shared"],
+                "title": ["Shared <i>title</i>"],
+                "abstract": "Uses <sup>2</sup>",
+                "keyword": ["Alpha; beta"],
+                "pubdate": "2025-02",
+            },
+        ),
+    ],
+)
+async def test_lookup_and_search_preserve_the_same_upstream_record_metadata(provider, value, entry):
+    def respond(request):
+        if provider == "crossref":
+            payload = (
+                {"message": {"items": [entry], "total-results": 1}}
+                if request.url.path == "/works"
+                else {"message": entry}
+            )
+        elif provider == "openalex":
+            payload = (
+                {"results": [entry], "meta": {"count": 1}}
+                if request.url.path == "/works"
+                else entry
+            )
+        elif provider == "ieee":
+            payload = {"articles": [entry], "total_records": 1}
+        else:
+            payload = {"response": {"docs": [entry], "numFound": 1}}
+        return httpx2.Response(200, json=payload)
+
+    async with provider_runtime(
+        settings=SimpleNamespace(ieee_api_key="test", nasa_ads_token="test"),
+        transport=httpx2.MockTransport(respond),
+    ) as runtime:
+        lookup = await runtime.lookup(value, provider=provider)
+        page = await runtime.search(
+            SearchQuery(provider, (SearchClause("title", "and", "Shared"),))
+        )
+
+    assert len(page.results) == 1
+    searched = page.results[0]
+    assert searched.title == "Shared <i>title</i>"
+    assert searched.abstract == "Uses <sup>2</sup>"
+    assert searched.doi == "10.1000/shared"
+    assert searched.keywords == ("Alpha; beta",)
+    assert searched.reference_type == "article-journal"
+    lookup_metadata, search_metadata = asdict(lookup), asdict(searched)
+    lookup_metadata.pop("lookup_identifier")
+    search_metadata.pop("lookup_identifier")
+    assert search_metadata == lookup_metadata
 
 
 async def search_metadata(
@@ -155,7 +252,11 @@ async def test_search_adapters_normalize_results(provider, title):
     )
     assert page.total == 1
     assert page.results[0].title == title
-    assert page.results[0].identifier
+    assert page.results[0].lookup_identifier
+    record = page.results[0]
+    assert record.lookup_identifier in record.identifiers
+    if record.doi:
+        assert Identifier("doi", record.doi) in record.identifiers
 
 
 async def test_search_rejects_invalid_or_excessive_clauses():
@@ -338,7 +439,7 @@ def extra_search_response(request: httpx2.Request) -> httpx2.Response:
     ("provider", "title", "identifier_provider"),
     [
         ("pmc", "PMC result", "doi"),
-        ("nasa", "NASA ADS result", "doi"),
+        ("nasa_ads", "NASA ADS result", "doi"),
         ("ieee", "IEEE result", "doi"),
     ],
 )
@@ -351,7 +452,7 @@ async def test_extra_search_adapters_normalize_results(provider, title, identifi
     )
     assert page.total == 1
     assert page.results[0].title == title
-    assert page.results[0].identifier.provider == identifier_provider
+    assert page.results[0].lookup_identifier.provider == identifier_provider
 
 
 async def test_pmc_forwards_credentials_to_esearch_and_esummary():
@@ -400,7 +501,7 @@ async def test_pmc_forwards_credentials_to_esearch_and_esummary():
 async def test_credentialed_sources_require_keys():
     with pytest.raises(ProviderUnavailable) as nasa_error:
         await search_metadata(
-            "nasa",
+            "nasa_ads",
             [SearchClause("title", "and", "term")],
             transport=httpx2.MockTransport(extra_search_response),
         )
@@ -454,12 +555,12 @@ async def test_extra_search_fallback_identifiers_without_doi():
         raise NotImplementedError(str(request.url))
 
     nasa_page = await search_metadata(
-        "nasa",
+        "nasa_ads",
         [SearchClause("title", "and", "machine learning")],
         settings=SimpleNamespace(nasa_ads_token="ads-token"),
         transport=httpx2.MockTransport(fallback_response),
     )
-    assert nasa_page.results[0].identifier == Identifier("bibcode", "2025ApJ...123..456A")
+    assert nasa_page.results[0].lookup_identifier == Identifier("bibcode", "2025ApJ...123..456A")
 
     ieee_page = await search_metadata(
         "ieee",
@@ -467,4 +568,4 @@ async def test_extra_search_fallback_identifiers_without_doi():
         settings=SimpleNamespace(ieee_api_key="ieee-key"),
         transport=httpx2.MockTransport(fallback_response),
     )
-    assert ieee_page.results[0].identifier == Identifier("article_number", "9876543")
+    assert ieee_page.results[0].lookup_identifier == Identifier("ieee", "9876543")

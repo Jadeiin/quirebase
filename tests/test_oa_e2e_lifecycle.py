@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import httpx2
 import pytest
 from app_helpers import json_payload
-from inquiro import CandidateRecord, Identifier
+from inquiro import CandidateRecord, Contributor, Identifier, ResourceLink
 from inquiro.bibliography import (
     builtin_style_xml,
     record_from_item,
@@ -37,6 +37,7 @@ from quirebase.models import (
     Item,
     ItemAuthor,
     ItemIdentifier,
+    ReferenceType,
     User,
 )
 
@@ -107,7 +108,7 @@ async def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
 
     async with provider_runtime(transport=httpx2.MockTransport(mock_handler)) as runtime:
         record = await runtime.lookup("10.3390/ejihpe13110181", provider="openalex")
-    identifier = record.identifier
+    identifier = record.lookup_identifier
 
     assert isinstance(identifier, Identifier)
     assert identifier.provider == "openalex"
@@ -124,7 +125,10 @@ async def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
         == "The rapid advancement of artificial intelligence has transformed The landscape of higher education."
     )
     # 3. Authors structured
-    assert record.authors == "Ahmed M. Hasanein; Abu Elnasr E. Sobaih"
+    assert [author.display_name for author in record.authors] == [
+        "Ahmed M. Hasanein",
+        "Abu Elnasr E. Sobaih",
+    ]
     # 4. Keywords from topics
     assert "Artificial Intelligence in Higher Education" in str(record.keywords)
     # 5. Volume, issue, pages, publisher
@@ -236,11 +240,14 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
 
     mock_rec = CandidateRecord(
         provider="crossref",
-        identifier=Identifier("doi", "10.3390/ejihpe13110181"),
+        lookup_identifier=Identifier("doi", "10.3390/ejihpe13110181"),
         title="Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
         abstract="The rapid advancement of artificial intelligence...",
-        authors="Hasanein, Ahmed M.; Sobaih, Abu Elnasr E.",
-        keywords="Artificial Intelligence in Higher Education; Educational Technology",
+        authors=(
+            Contributor("Hasanein, Ahmed M."),
+            Contributor("Sobaih, Abu Elnasr E."),
+        ),
+        keywords=("Artificial Intelligence in Higher Education", "Educational Technology"),
         publication_date="2023-11-09",
         publication_title="European Journal of Investigation in Health, Psychology and Education",
         journal_abbreviation="Eur J Investig Health Psychol Educ",
@@ -249,12 +256,15 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
         pages="2599-2614",
         publisher="MDPI",
         doi="10.3390/ejihpe13110181",
-        urls="https://doi.org/10.3390/ejihpe13110181\nhttps://www.mdpi.com/2254-9625/13/11/181/pdf",
+        urls=(
+            ResourceLink("https://doi.org/10.3390/ejihpe13110181"),
+            ResourceLink("https://www.mdpi.com/2254-9625/13/11/181/pdf"),
+        ),
         identifiers=(
             Identifier("openalex", "W4388656112"),
             Identifier("doi", "10.3390/ejihpe13110181"),
         ),
-        reference_type="journal-article",
+        reference_type="article-journal",
     )
 
     with patch(
@@ -317,7 +327,7 @@ async def test_seam4_oa_corpus_citation_generation_and_csl_export(async_db):
         publisher="MDPI",
         doi="10.3390/ejihpe13110181",
         urls="https://doi.org/10.3390/ejihpe13110181",
-        reference_type="journal-article",
+        reference_type=ReferenceType.article,
         created_by=user.id,
     )
     db.add(item)

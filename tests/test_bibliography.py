@@ -10,8 +10,10 @@ from inquiro.bibliography import (
     parse_bibliography_records,
     record_from_item,
 )
+from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.library import BatchConflict, commit_import_batch, stage_import_batch
 from quirebase.models import Item, User
 
 
@@ -22,6 +24,33 @@ async def _user(db, username: str) -> User:
     await provision_initial_workspace(db, user)
     await db.flush()
     return user
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("valid_title", [True, False])
+async def test_unknown_type_warning_allows_import_but_validation_errors_still_block(
+    async_db, valid_title
+):
+    owner = await _user(async_db, "type-warning-owner")
+    workspace_id = fixture_workspace_id(owner)
+    title = "Preserved source type" if valid_title else ""
+    batch, records, diagnostics = await stage_import_batch(
+        async_db,
+        owner,
+        workspace_id,
+        f"@unknown{{record, title = {{{title}}}}}".encode(),
+        "bibtex",
+    )
+    assert records[0]["reference_type"] == "document"
+    assert diagnostics[0]["severity"] == "warning"
+    if not valid_title:
+        with pytest.raises(BatchConflict, match="preview contains errors"):
+            await commit_import_batch(async_db, owner, workspace_id, batch.id)
+        return
+    item_ids = await commit_import_batch(async_db, owner, workspace_id, batch.id)
+    item = await async_db.scalar(select(Item).where(Item.id == item_ids[0]))
+    assert item.reference_type == "document"
+    assert item.custom_fields["source_reference_type"] == "unknown"
 
 
 def _item_payload(record):
@@ -42,8 +71,7 @@ def _item_payload(record):
         "place_published": record.location,
         "doi": record.doi,
         "reference_type": record.reference_type,
-        "bibtex_id": record.citation_key,
-        "bibtex_type": record.bibtex_type,
+        "citation_key": record.citation_key,
         "urls": "\n".join(record.urls) or None,
         "identifiers": _json.dumps(dict(record.identifiers), ensure_ascii=False)
         if record.identifiers
@@ -109,7 +137,7 @@ async def test_bibtex_export_can_protect_text_field_capitalization(async_db):
         keywords="API; GraphQL",
         publication_title="Journal of eBPF Research",
         publisher="ACM Press",
-        bibtex_id="case-protection",
+        citation_key="case-protection",
         created_by=user.id,
     )
 
@@ -140,13 +168,13 @@ async def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(
     first = Item(
         workspace_id=fixture_workspace_id(user),
         title="First",
-        bibtex_id="SharedKey",
+        citation_key="SharedKey",
         created_by=user.id,
     )
     second = Item(
         workspace_id=fixture_workspace_id(user),
         title="Second",
-        bibtex_id="sharedkey",
+        citation_key="sharedkey",
         created_by=user.id,
     )
     db.add_all([first, second])
@@ -155,8 +183,8 @@ async def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(
     output = export_bibliography_records([record_from_item(i) for i in [first, second]], "bibtex")
     entries = parse_bibtex_string(output).entries_dict
 
-    assert first.bibtex_id == "SharedKey"
-    assert second.bibtex_id == "sharedkey"
+    assert first.citation_key == "SharedKey"
+    assert second.citation_key == "sharedkey"
     assert list(entries) == ["SharedKey", "sharedkeya"]
 
 
@@ -290,7 +318,7 @@ async def test_endnote_parse_and_round_trip(async_db):
     assert records[0]["title"] == "An EndNote Paper"
     assert records[0]["authors"] == "Doe, Jane; Smith, Alex"
     assert records[0]["doi"] == "10.1234/endnote"
-    assert records[0]["reference_type"] == "journal-article"
+    assert records[0]["reference_type"] == "article-journal"
 
     user = User(username="endnote", password_hash="unused")
     db.add(user)

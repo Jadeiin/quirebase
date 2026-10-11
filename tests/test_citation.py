@@ -4,7 +4,6 @@ import pytest
 from app_helpers import json_payload
 from inquiro.bibliography import (
     BibliographyExportOptions,
-    CitationEngineUnavailable,
     builtin_style_xml,
     record_from_item,
     record_to_csl_json,
@@ -52,7 +51,7 @@ async def _async_item(db, **overrides) -> Item:
         "doi": "10.1234/example",
         "keywords": "search; testing",
         "abstract": "A full abstract.",
-        "reference_type": "journal-article",
+        "reference_type": "article-journal",
     }
     fields.update(overrides)
     item = Item(workspace_id=fixture_workspace_id(user), created_by=user.id, **fields)
@@ -199,7 +198,7 @@ def test_citation_key_preview_rejects_invalid_formulas():
 @pytest.mark.anyio
 async def test_standard_export_applies_citation_key_formula_to_keyless_items(async_db):
     item = await _async_item(async_db, title="An Example Paper")
-    item.bibtex_id = None
+    item.citation_key = None
 
     contents, _media_type, _filename = format_standard_export(
         [item],
@@ -363,9 +362,9 @@ async def test_item_to_csl_json_maps_reference_types(async_db):
     )["type"]
     assert (
         record_to_csl_json(
-            record_from_item(await _async_item(async_db, reference_type="unknown-type"))
+            record_from_item(await _async_item(async_db, reference_type="document"))
         )["type"]
-        == "article"
+        == "document"
     )
 
 
@@ -431,7 +430,7 @@ async def test_resolve_style_xml_scoped_to_owner(async_db):
 
 
 @pytest.mark.anyio
-async def test_csl_export_translates_unavailable_engine_at_library_interface(async_db, monkeypatch):
+async def test_csl_export_preserves_unexpected_rendering_errors(async_db, monkeypatch):
     from quirebase.library import citations
 
     db = async_db
@@ -447,19 +446,17 @@ async def test_csl_export_translates_unavailable_engine_at_library_interface(asy
     db.add(style)
     await db.flush()
 
-    def unavailable(*_args, **_kwargs):
-        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
+    def rendering_failure(*_args, **_kwargs):
+        raise RuntimeError("rendering failed")
 
-    monkeypatch.setattr(citations, "render_bibliography", unavailable)
+    monkeypatch.setattr(citations, "render_bibliography", rendering_failure)
 
-    with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
+    with pytest.raises(RuntimeError, match="rendering failed"):
         await format_csl_export(db, user, item.workspace_id, [item], style_key=str(style.id))
 
 
 @pytest.mark.anyio
-async def test_citation_text_translates_unavailable_engine_at_library_interface(
-    async_db, monkeypatch
-):
+async def test_citation_text_preserves_unexpected_rendering_errors(async_db, monkeypatch):
     from quirebase.library import citations
 
     db = async_db
@@ -475,12 +472,12 @@ async def test_citation_text_translates_unavailable_engine_at_library_interface(
     db.add(style)
     await db.flush()
 
-    def unavailable(*_args, **_kwargs):
-        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
+    def rendering_failure(*_args, **_kwargs):
+        raise RuntimeError("rendering failed")
 
-    monkeypatch.setattr(citations, "render_citation", unavailable)
+    monkeypatch.setattr(citations, "render_citation", rendering_failure)
 
-    with pytest.raises(ValidationFailure, match="requires the 'citation' extra"):
+    with pytest.raises(RuntimeError, match="rendering failed"):
         await get_item_citation_text_response(
             db, user, item.workspace_id, item.id, style_key=str(style.id)
         )

@@ -7,6 +7,7 @@ from inquiro.bibliography import (
     evaluate_citation_key_formula,
     export_bibliography_records,
     parse_bibliography_records,
+    record_to_csl_json,
 )
 
 
@@ -29,6 +30,158 @@ def test_bibtex_import_preserves_braced_case_identifiers_and_custom_fields():
         "arxiv": "2401.00001",
     }
     assert dict(records[0].custom_fields) == {"dataset_id": "DS-42"}
+
+
+@pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
+def test_item_identifier_namespaces_and_journal_metadata_round_trip(file_format):
+    identifiers = {
+        "openalex": "W123",
+        "arxiv": "2401.00001",
+        "pmid": "42",
+        "pmcid": "PMC123",
+        "isbn": "9780131103627",
+        "bibcode": "2025ApJ...123..456A",
+        "ieee": "1234567",
+    }
+    fields = ",\n".join(f"{name} = {{{value}}}" for name, value in identifiers.items())
+    source = f"@article{{namespaces, title = {{Identity}}, {fields}, issn = {{1234-5678}}}}"
+
+    records, errors = parse_bibliography_records(source, file_format)
+
+    assert errors == []
+    assert dict(records[0].identifiers) == identifiers
+    assert dict(records[0].custom_fields) == {"issn": "1234-5678"}
+    output = export_bibliography_records(
+        records,
+        file_format,
+        options=BibliographyExportOptions(include_identifiers=True, include_custom_fields=True),
+    )
+    round_trip, errors = parse_bibliography_records(output, file_format)
+    assert errors == []
+    assert dict(round_trip[0].identifiers) == identifiers
+    assert dict(round_trip[0].custom_fields) == {"issn": "1234-5678"}
+
+
+@pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
+@pytest.mark.parametrize("entry_type", ["incollection", "inbook"])
+def test_chapter_isbn_is_container_metadata_and_round_trips(file_format, entry_type):
+    source = f"@{entry_type}{{chapter, title={{A chapter}}, isbn={{9780131103627}}}}"
+    records, errors = parse_bibliography_records(source, file_format)
+    assert errors == []
+    assert records[0].reference_type == "chapter"
+    assert records[0].identifiers == ()
+    assert dict(records[0].custom_fields) == {"isbn": "9780131103627"}
+
+    output = export_bibliography_records(
+        records,
+        file_format,
+        options=BibliographyExportOptions(include_identifiers=True, include_custom_fields=True),
+    )
+    round_trip, errors = parse_bibliography_records(output, file_format)
+    assert errors == []
+    assert round_trip[0].identifiers == ()
+    assert dict(round_trip[0].custom_fields) == {"isbn": "9780131103627"}
+
+
+@pytest.mark.parametrize(
+    ("source_date", "expected", "parts"),
+    [
+        ("2024/01/02/", "2024-01-02", [2024, 1, 2]),
+        ("2024/01//", "2024-01", [2024, 1]),
+        ("2024///", "2024", [2024]),
+    ],
+)
+def test_ris_terminal_date_separator_preserves_explicit_precision(source_date, expected, parts):
+    source = f"TY  - JOUR\nTI  - RIS publication date\nPY  - {source_date}\nER  -\n"
+    records, errors = parse_bibliography_records(source, "ris")
+    assert errors == []
+    assert records[0].publication_date == expected
+    assert record_to_csl_json(records[0])["issued"]["date-parts"] == [parts]
+
+
+@pytest.mark.parametrize(
+    ("archive", "value", "namespace"),
+    [("PubMed", "42", "pmid"), ("PMC", "PMC123", "pmcid"), ("arXiv", "2401.00001", "arxiv")],
+)
+def test_eprint_archive_uses_its_canonical_identifier_namespace(archive, value, namespace):
+    source = (
+        f"@article{{archive, title = {{Archive}}, archiveprefix = {{{archive}}}, "
+        f"eprint = {{{value}}}, {namespace} = {{{value}}}}}"
+    )
+
+    records, errors = parse_bibliography_records(source, "biblatex")
+
+    assert errors == []
+    assert records[0].identifiers == ((namespace, value),)
+    assert records[0].custom_fields == ()
+
+
+@pytest.mark.parametrize("archive", [None, "UnknownArchive", "Crossref"])
+def test_eprint_without_a_supported_item_namespace_remains_metadata(archive):
+    archive_field = f", archiveprefix = {{{archive}}}" if archive else ""
+    source = f"@article{{unknown, title = {{Unknown}}, eprint = {{42}}{archive_field}}}"
+
+    records, errors = parse_bibliography_records(source, "biblatex")
+
+    assert errors == []
+    assert records[0].identifiers == ()
+    expected = {"eprint": "42"}
+    if archive:
+        expected["archiveprefix"] = archive
+    assert dict(records[0].custom_fields) == expected
+
+
+def test_conflicting_eprint_and_namespace_field_are_reported():
+    source = (
+        "@article{conflict, title = {Conflict}, archiveprefix = {PubMed}, "
+        "eprint = {42}, pmid = {43}}"
+    )
+
+    records, errors = parse_bibliography_records(source, "biblatex")
+
+    assert records == []
+    assert any("conflicting pmid identifiers" in error["message"] for error in errors)
+
+
+@pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
+@pytest.mark.parametrize(
+    ("archive", "namespace", "identity", "eprint", "expected"),
+    [
+        ("arXiv", "arxiv", "https://arxiv.org/abs/2401.00001", "2401.00001", "2401.00001"),
+        ("arXiv", "arxiv", "2401.00001", "https://arxiv.org/pdf/2401.00001.pdf", "2401.00001"),
+        ("PubMed", "pmid", "pmid:42", "42", "42"),
+        ("PMC", "pmcid", "pmc123", "PMC123", "PMC123"),
+    ],
+)
+def test_eprint_conflict_checks_use_normalized_record_identities(
+    file_format, archive, namespace, identity, eprint, expected
+):
+    source = (
+        f"@article{{same, title = {{Same identity}}, archiveprefix = {{{archive}}}, "
+        f"eprint = {{{eprint}}}, {namespace} = {{{identity}}}}}"
+    )
+
+    records, errors = parse_bibliography_records(source, file_format)
+
+    assert errors == []
+    assert records[0].identifiers == ((namespace, expected),)
+
+
+@pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
+def test_identifier_conflicts_do_not_discard_other_bibliography_records(file_format):
+    source = """@article{first, title = {First valid record}}
+@article{conflict,
+  title = {Conflicting identifiers},
+  archiveprefix = {PubMed}, eprint = {42}, pmid = {43}
+}
+@article{last, title = {Last valid record}, pmid = {44}}
+"""
+
+    records, errors = parse_bibliography_records(source, file_format)
+
+    assert [record.citation_key for record in records] == ["first", "last"]
+    assert records[1].identifiers == (("pmid", "44"),)
+    assert errors == [{"row": 2, "message": "Cannot parse record: conflicting pmid identifiers"}]
 
 
 def test_bibtex_import_decodes_protected_accents_alongside_unicode():
@@ -237,8 +390,11 @@ def test_biblatex_import_preserves_standard_item_metadata():
     assert record.location == "Shanghai"
 
 
-@pytest.mark.parametrize("biblatex_type", ["online", "dataset", "report"])
-def test_biblatex_entry_types_survive_cross_format_export(biblatex_type):
+@pytest.mark.parametrize(
+    ("biblatex_type", "bibtex_type"),
+    [("online", "misc"), ("dataset", "misc"), ("report", "techreport")],
+)
+def test_entry_types_are_mapped_for_the_target_export_format(biblatex_type, bibtex_type):
     records, errors = parse_bibliography_records(
         f"@{biblatex_type}{{cross-format, title = {{Cross-format export}}}}",
         "biblatex",
@@ -247,14 +403,14 @@ def test_biblatex_entry_types_survive_cross_format_export(biblatex_type):
     output = export_bibliography_records(records, "bibtex")
 
     assert errors == []
-    assert output.startswith(f"@{biblatex_type}{{cross-format")
+    assert output.startswith(f"@{bibtex_type}{{cross-format")
 
 
 @pytest.mark.parametrize(
     ("entry_type", "expected"),
     [
         ("online", "webpage"),
-        ("inproceedings", "conference"),
+        ("inproceedings", "paper-conference"),
         ("incollection", "chapter"),
     ],
 )
@@ -266,6 +422,44 @@ def test_biblatex_import_normalizes_native_entry_types(entry_type, expected):
 
     assert errors == []
     assert records[0].reference_type == expected
+
+
+@pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
+@pytest.mark.parametrize(
+    ("entry_type", "reference_type", "export_type"),
+    [
+        ("article", "article-journal", "article"),
+        ("book", "book", "book"),
+        ("booklet", "book", "book"),
+        ("conference", "paper-conference", "inproceedings"),
+        ("inbook", "chapter", "incollection"),
+        ("incollection", "chapter", "incollection"),
+        ("inproceedings", "paper-conference", "inproceedings"),
+        ("manual", "report", "techreport"),
+        ("mastersthesis", "thesis", "misc"),
+        ("misc", "document", "misc"),
+        ("phdthesis", "thesis", "misc"),
+        ("proceedings", "book", "book"),
+        ("techreport", "report", "techreport"),
+        ("unpublished", "manuscript", "unpublished"),
+    ],
+)
+def test_standard_bibtex_types_preserve_canonical_classification(
+    file_format, entry_type, reference_type, export_type
+):
+    records, errors = parse_bibliography_records(
+        f"@{entry_type}{{standard, title = {{Standard classification}}}}", file_format
+    )
+
+    assert errors == []
+    assert records[0].reference_type == reference_type
+    output = export_bibliography_records(records, "bibtex")
+    assert output.startswith(f"@{export_type}{{standard")
+    round_trip, errors = parse_bibliography_records(output, "bibtex")
+    assert errors == []
+    assert round_trip[0].reference_type == (
+        "document" if reference_type == "thesis" else reference_type
+    )
 
 
 @pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
@@ -325,7 +519,7 @@ def test_bib_export_doi_omit_policy_overrides_included_identifiers(file_format):
 
 
 @pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
-def test_bib_export_only_includes_supported_identifier_providers(file_format):
+def test_bib_export_only_includes_supported_identifier_namespaces(file_format):
     record = BibliographyRecord(
         citation_key="doe2026",
         reference_type="article",
@@ -339,6 +533,13 @@ def test_bib_export_only_includes_supported_identifier_providers(file_format):
             ("openalex", "W1"),
             ("OPENALEX", "W2"),
             ("arxiv", "2608.00001"),
+            ("crossref", "source-crossref"),
+            ("datacite", "source-datacite"),
+            ("pubmed", "source-pubmed"),
+            ("pmc", "source-pmc"),
+            ("nasa_ads", "source-nasa-ads"),
+            ("openlibrary", "source-openlibrary"),
+            ("issn", "1234-5678"),
         ),
     )
 
@@ -354,6 +555,8 @@ def test_bib_export_only_includes_supported_identifier_providers(file_format):
     assert "invalid-provider-spelling" not in output
     assert "openalex = {W1}" in output
     assert "W2" not in output
+    assert "source-" not in output
+    assert "1234-5678" not in output
     if file_format == "biblatex":
         assert "eprint = {2608.00001}" in output
     else:
@@ -509,17 +712,16 @@ def test_export_preserves_escaped_unmatched_braces():
     assert round_trip[0].title == records[0].title
 
 
-def test_manual_bibtex_entry_type_is_preserved():
+def test_export_entry_type_is_derived_from_the_reference_type():
     record = BibliographyRecord(
         citation_key="manual",
         reference_type="article",
-        bibtex_type="misc",
         title="Manual type",
     )
 
     output = export_bibliography_records([record], "bibtex")
 
-    assert "@misc{manual" in output
+    assert "@article{manual" in output
 
 
 def test_citation_key_formula_dsl_and_validation():
@@ -641,7 +843,7 @@ def test_non_bibtex_url_exports_round_trip(file_format):
 
 @pytest.mark.parametrize(
     "reference_type",
-    ["chapter", "conference", "dataset", "report", "thesis"],
+    ["chapter", "paper-conference", "dataset", "report", "thesis"],
 )
 def test_ris_reference_types_round_trip(reference_type):
     record = BibliographyRecord("type", reference_type, "Type round trip")

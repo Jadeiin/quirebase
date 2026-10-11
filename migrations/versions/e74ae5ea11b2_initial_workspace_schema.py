@@ -1,8 +1,8 @@
 """initial workspace schema
 
-Revision ID: b95c5411567d
+Revision ID: e74ae5ea11b2
 Revises:
-Create Date: 2026-10-09 20:08:03.974700
+Create Date: 2026-10-10 17:13:33.415553
 
 """
 
@@ -42,7 +42,7 @@ sa.TOTPSecret = TOTPSecret
 sa.OneTimeCode = OneTimeCode
 
 # revision identifiers, used by Alembic.
-revision = 'b95c5411567d'
+revision = 'e74ae5ea11b2'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -69,7 +69,7 @@ def schema_upgrades() -> None:
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('first_name', sa.String(length=120), nullable=True),
     sa.Column('last_name', sa.String(length=120), nullable=False),
-    sa.Column('identity_key', sa.String(length=512), nullable=False),
+    sa.Column('identity_key', sa.String(length=241), nullable=False),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
@@ -104,7 +104,7 @@ def schema_upgrades() -> None:
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('username', sa.String(length=120), nullable=False),
     sa.Column('password_hash', sa.Text(), nullable=False),
-    sa.Column('role', sa.String(length=32), nullable=False),
+    sa.Column('role', sa.Enum('administrator', 'member', name='system_role', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('active', sa.Boolean(), nullable=False),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
@@ -139,7 +139,7 @@ def schema_upgrades() -> None:
     sa.Column('project_id', sa.GUID(length=16), nullable=True),
     sa.Column('action', sa.String(length=120), nullable=False),
     sa.Column('target_type', sa.String(length=80), nullable=False),
-    sa.Column('target_id', sa.String(length=36), nullable=True),
+    sa.Column('target_id', sa.String(length=255), nullable=True),
     sa.Column('detail', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
     sa.Column('target_ids', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
     sa.Column('authorization_role', sa.String(length=32), nullable=True),
@@ -160,7 +160,7 @@ def schema_upgrades() -> None:
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('token_hash', sa.String(length=64), nullable=False),
     sa.Column('username', sa.String(length=120), nullable=False),
-    sa.Column('role', sa.String(length=32), nullable=False),
+    sa.Column('role', sa.Enum('administrator', 'member', name='system_role', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
     sa.Column('expires_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('accepted_at', sa.DateTimeUTC(timezone=True), nullable=True),
@@ -202,7 +202,7 @@ def schema_upgrades() -> None:
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('name', sa.String(length=240), nullable=False),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
-    sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='workspace_state', native_enum=False), nullable=False),
+    sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='workspace_state', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('governance_frozen_at', sa.DateTimeUTC(timezone=True), nullable=True),
     sa.Column('governance_frozen_by', sa.GUID(length=16), nullable=True),
     sa.Column('archived_at', sa.DateTimeUTC(timezone=True), nullable=True),
@@ -210,7 +210,6 @@ def schema_upgrades() -> None:
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.CheckConstraint("state IN ('active', 'archived', 'deleted')", name=op.f('ck_workspaces_state')),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], name=op.f('fk_workspaces_created_by_users')),
     sa.ForeignKeyConstraint(['governance_frozen_by'], ['users.id'], name=op.f('fk_workspaces_governance_frozen_by_users'), ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_workspaces'))
@@ -253,13 +252,12 @@ def schema_upgrades() -> None:
     sa.Column('records', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
     sa.Column('staged_files', sa.StoredObject(backend='documents', multiple=True), nullable=False),
     sa.Column('errors', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
-    sa.Column('status', sa.String(length=16), nullable=False),
+    sa.Column('status', sa.Enum('pending', 'ready', 'failed', 'committed', name='import_batch_status', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('workflow_id', sa.String(length=255), nullable=True),
     sa.Column('committed_item_ids', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.CheckConstraint("status IN ('pending', 'ready', 'failed', 'committed')", name=op.f('ck_import_batches_status')),
     sa.ForeignKeyConstraint(['actor_id'], ['users.id'], name=op.f('fk_import_batches_actor_id_users'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], name=op.f('fk_import_batches_workspace_id_workspaces'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_import_batches'))
@@ -274,7 +272,7 @@ def schema_upgrades() -> None:
     sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
     sa.Column('title', sa.Text(), nullable=False),
     sa.Column('abstract', sa.Text(), nullable=True),
-    sa.Column('publication_date', sa.String(length=32), nullable=True),
+    sa.Column('publication_date', sa.String(length=10), nullable=True),
     sa.Column('publication_title', sa.Text(), nullable=True),
     sa.Column('volume', sa.String(length=100), nullable=True),
     sa.Column('issue', sa.String(length=100), nullable=True),
@@ -285,11 +283,10 @@ def schema_upgrades() -> None:
     sa.Column('journal_abbreviation', sa.Text(), nullable=True),
     sa.Column('doi', sa.String(length=500), nullable=True),
     sa.Column('identifiers', sa.Text(), nullable=True),
-    sa.Column('reference_type', sa.String(length=40), nullable=True),
+    sa.Column('reference_type', sa.Enum('article', 'article-journal', 'article-magazine', 'article-newspaper', 'book', 'chapter', 'paper-conference', 'thesis', 'report', 'webpage', 'dataset', 'software', 'patent', 'standard', 'manuscript', 'document', 'preprint', name='reference_type', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('authors', sa.Text(), nullable=True),
     sa.Column('editors', sa.Text(), nullable=True),
-    sa.Column('bibtex_id', sa.String(length=255), nullable=True),
-    sa.Column('bibtex_type', sa.String(length=40), nullable=True),
+    sa.Column('citation_key', sa.String(length=128), nullable=True),
     sa.Column('urls', sa.Text(), nullable=True),
     sa.Column('keywords', sa.Text(), nullable=True),
     sa.Column('custom_fields', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
@@ -306,9 +303,8 @@ def schema_upgrades() -> None:
     sa.UniqueConstraint('workspace_id', 'id', name='uq_items_workspace_id')
     )
     with op.batch_alter_table('items', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_items_bibtex_id'), ['bibtex_id'], unique=False)
+        batch_op.create_index(batch_op.f('ix_items_citation_key'), ['citation_key'], unique=False)
         batch_op.create_index(batch_op.f('ix_items_doi'), ['doi'], unique=False)
-        batch_op.create_index(batch_op.f('ix_items_title'), ['title'], unique=False)
         batch_op.create_index(batch_op.f('ix_items_workspace_id'), ['workspace_id'], unique=False)
 
     op.create_table('projects',
@@ -317,13 +313,11 @@ def schema_upgrades() -> None:
     sa.Column('name', sa.String(length=240), nullable=False),
     sa.Column('description', sa.Text(), nullable=False),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
-    sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='project_state', native_enum=False), nullable=False),
-    sa.Column('participation', sa.Enum('workspace', 'open', 'managed', name='project_participation', native_enum=False), nullable=False),
+    sa.Column('state', sa.Enum('active', 'archived', 'deleted', name='project_state', native_enum=False, create_constraint=True), nullable=False),
+    sa.Column('participation', sa.Enum('workspace', 'open', 'managed', name='project_participation', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.CheckConstraint("participation IN ('workspace', 'open', 'managed')", name=op.f('ck_projects_participation')),
-    sa.CheckConstraint("state IN ('active', 'archived', 'deleted')", name=op.f('ck_projects_state')),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], name=op.f('fk_projects_created_by_users')),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], name=op.f('fk_projects_workspace_id_workspaces'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_projects')),
@@ -356,7 +350,7 @@ def schema_upgrades() -> None:
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
     sa.Column('user_id', sa.GUID(length=16), nullable=False),
-    sa.Column('role', sa.Enum('admin', 'editor', 'reviewer', 'viewer', name='workspace_invitation_role', native_enum=False), nullable=False),
+    sa.Column('role', sa.Enum('admin', 'editor', 'reviewer', 'viewer', name='workspace_invitation_role', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('token_hash', sa.String(length=64), nullable=False),
     sa.Column('invited_by', sa.GUID(length=16), nullable=False),
     sa.Column('expires_at', sa.DateTimeUTC(timezone=True), nullable=False),
@@ -365,7 +359,6 @@ def schema_upgrades() -> None:
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.CheckConstraint("role IN ('admin', 'editor', 'reviewer', 'viewer')", name=op.f('ck_workspace_invitations_role')),
     sa.ForeignKeyConstraint(['invited_by'], ['users.id'], name=op.f('fk_workspace_invitations_invited_by_users'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name=op.f('fk_workspace_invitations_user_id_users'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], name=op.f('fk_workspace_invitations_workspace_id_workspaces'), ondelete='CASCADE'),
@@ -381,8 +374,8 @@ def schema_upgrades() -> None:
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
     sa.Column('user_id', sa.GUID(length=16), nullable=False),
-    sa.Column('role', sa.Enum('owner', 'admin', 'editor', 'reviewer', 'viewer', name='workspace_role', native_enum=False), nullable=False),
-    sa.Column('state', sa.Enum('active', 'suspended', name='workspace_member_state', native_enum=False), nullable=False),
+    sa.Column('role', sa.Enum('owner', 'admin', 'editor', 'reviewer', 'viewer', name='workspace_role', native_enum=False, create_constraint=True), nullable=False),
+    sa.Column('state', sa.Enum('active', 'suspended', name='workspace_member_state', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('invited_by', sa.GUID(length=16), nullable=True),
     sa.Column('suspended_at', sa.DateTimeUTC(timezone=True), nullable=True),
     sa.Column('terminated_at', sa.DateTimeUTC(timezone=True), nullable=True),
@@ -390,8 +383,6 @@ def schema_upgrades() -> None:
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.CheckConstraint("role <> 'owner' OR (state = 'active' AND terminated_at IS NULL)", name=op.f('ck_workspace_members_owner_active')),
-    sa.CheckConstraint("role IN ('owner', 'admin', 'editor', 'reviewer', 'viewer')", name=op.f('ck_workspace_members_role')),
-    sa.CheckConstraint("state IN ('active', 'suspended')", name=op.f('ck_workspace_members_state')),
     sa.ForeignKeyConstraint(['invited_by'], ['users.id'], name=op.f('fk_workspace_members_invited_by_users'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name=op.f('fk_workspace_members_user_id_users'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], name=op.f('fk_workspace_members_workspace_id_workspaces'), ondelete='CASCADE'),
@@ -409,12 +400,11 @@ def schema_upgrades() -> None:
     sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
     sa.Column('item_id', sa.GUID(length=16), nullable=False),
     sa.Column('file', sa.StoredObject(backend='documents'), nullable=False),
-    sa.Column('role', sa.Enum('graphical_abstract', name='attachment_role', native_enum=False), nullable=True),
+    sa.Column('role', sa.Enum('graphical_abstract', name='attachment_role', native_enum=False, create_constraint=True), nullable=True),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.CheckConstraint("role IS NULL OR role = 'graphical_abstract'", name=op.f('ck_attachments_role')),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], name=op.f('fk_attachments_created_by_users')),
     sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_attachments_item_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_attachments')),
@@ -455,12 +445,11 @@ def schema_upgrades() -> None:
     sa.Column('page_count', sa.Integer(), nullable=True),
     sa.Column('page_geometry', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
     sa.Column('full_text', sa.Text(), nullable=True),
-    sa.Column('processing_state', sa.Enum('pending', 'ready', name='file_revision_processing_state', native_enum=False), nullable=False),
+    sa.Column('processing_state', sa.Enum('pending', 'ready', name='file_revision_processing_state', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.CheckConstraint("processing_state IN ('pending', 'ready')", name=op.f('ck_file_revisions_processing_state')),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], name=op.f('fk_file_revisions_created_by_users')),
     sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_file_revisions_item_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_file_revisions')),
@@ -492,20 +481,23 @@ def schema_upgrades() -> None:
 
     op.create_table('item_identifiers',
     sa.Column('id', sa.GUID(length=16), nullable=False),
+    sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
     sa.Column('item_id', sa.GUID(length=16), nullable=False),
     sa.Column('provider', sa.String(length=40), nullable=False),
     sa.Column('value', sa.String(length=500), nullable=False),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['item_id'], ['items.id'], name=op.f('fk_item_identifiers_item_id_items'), ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_item_identifiers_item_workspace', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_item_identifiers')),
-    sa.UniqueConstraint('item_id', 'provider', 'value', name='uq_item_provider_value')
+    sa.UniqueConstraint('item_id', 'provider', name='uq_item_identifiers_item_provider'),
+    sa.UniqueConstraint('workspace_id', 'provider', 'value', name='uq_item_identifiers_workspace_provider_value')
     )
     with op.batch_alter_table('item_identifiers', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_item_identifiers_item_id'), ['item_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_item_identifiers_provider'), ['provider'], unique=False)
         batch_op.create_index(batch_op.f('ix_item_identifiers_value'), ['value'], unique=False)
+        batch_op.create_index(batch_op.f('ix_item_identifiers_workspace_id'), ['workspace_id'], unique=False)
 
     op.create_table('item_reads',
     sa.Column('user_id', sa.GUID(length=16), nullable=False),
@@ -601,8 +593,8 @@ def schema_upgrades() -> None:
     sa.Column('item_id', sa.GUID(length=16), nullable=False),
     sa.Column('page_index', sa.Integer(), nullable=False),
     sa.Column('author_id', sa.GUID(length=16), nullable=False),
-    sa.Column('kind', sa.Enum('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow', name='annotation_kind', native_enum=False), nullable=False),
-    sa.Column('scope', sa.Enum('private', 'project', name='annotation_scope', native_enum=False), nullable=False),
+    sa.Column('kind', sa.Enum('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow', name='annotation_kind', native_enum=False, create_constraint=True), nullable=False),
+    sa.Column('scope', sa.Enum('private', 'project', name='annotation_scope', native_enum=False, create_constraint=True), nullable=False),
     sa.Column('project_item_id', sa.GUID(length=16), nullable=True),
     sa.Column('body', sa.Text(), nullable=True),
     sa.Column('selected_text', sa.Text(), nullable=True),
@@ -618,8 +610,6 @@ def schema_upgrades() -> None:
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.CheckConstraint("(scope = 'private' AND project_item_id IS NULL) OR (scope = 'project' AND project_item_id IS NOT NULL)", name=op.f('ck_pdf_annotations_project_scope')),
-    sa.CheckConstraint("kind IN ('highlight', 'underline', 'strikeout', 'note', 'free_text', 'ink', 'rectangle', 'ellipse', 'line', 'arrow')", name=op.f('ck_pdf_annotations_kind')),
-    sa.CheckConstraint("scope IN ('private', 'project')", name=op.f('ck_pdf_annotations_scope')),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], name=op.f('fk_pdf_annotations_author_id_users'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['moderated_by'], ['users.id'], name=op.f('fk_pdf_annotations_moderated_by_users'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['workspace_id', 'file_revision_id', 'item_id'], ['file_revisions.workspace_id', 'file_revisions.id', 'file_revisions.item_id'], name='fk_pdf_annotations_revision_item_workspace', ondelete='CASCADE'),
@@ -702,6 +692,7 @@ def schema_downgrades() -> None:
 
     op.drop_table('item_reads')
     with op.batch_alter_table('item_identifiers', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_item_identifiers_workspace_id'))
         batch_op.drop_index(batch_op.f('ix_item_identifiers_value'))
         batch_op.drop_index(batch_op.f('ix_item_identifiers_provider'))
         batch_op.drop_index(batch_op.f('ix_item_identifiers_item_id'))
@@ -755,9 +746,8 @@ def schema_downgrades() -> None:
     op.drop_table('projects')
     with op.batch_alter_table('items', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_items_workspace_id'))
-        batch_op.drop_index(batch_op.f('ix_items_title'))
         batch_op.drop_index(batch_op.f('ix_items_doi'))
-        batch_op.drop_index(batch_op.f('ix_items_bibtex_id'))
+        batch_op.drop_index(batch_op.f('ix_items_citation_key'))
 
     op.drop_table('items')
     with op.batch_alter_table('import_batches', schema=None) as batch_op:

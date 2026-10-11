@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
@@ -13,131 +13,75 @@ from inquiro.canonical import (
 from inquiro.identifiers import parse_pmcid
 from inquiro.models import (
     AcquiredDocument,
+    CandidatePage,
+    CandidateRecord,
+    Identifier,
     PdfNotAvailable,
-    ProviderSearchPage,
-    ProviderSearchRecord,
+    ProviderConfig,
     ProviderUnavailable,
-    SearchClause,
+    SearchQuery,
 )
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition, RemoteNotFound
+from inquiro.providers._contracts import ProviderDefinition, RemoteNotFound
 from inquiro.providers._payload import (
-    boolean_query,
+    ncbi_contributors,
+    ncbi_summaries,
 )
+
+if TYPE_CHECKING:
+    from inquiro.transport import BoundedTransport
 
 
 class PmcSearchAdapter:
     async def search(
         self,
-        client: ProviderContext,
-        clauses: list[SearchClause],
+        client: BoundedTransport,
+        request: SearchQuery,
         *,
-        page: int,
-        per_page: int,
-        sort: str,
-        year_from: int | None,
-        year_to: int | None,
-        settings: Any,
+        settings: ProviderConfig,
         endpoint: str,
-    ) -> ProviderSearchPage:
-        query = boolean_query(
-            clauses,
-            {
-                "any": "[All Fields]",
-                "title": "[Title]",
-                "author": "[Author]",
-                "publication": "[Journal]",
-                "abstract": "[Title/Abstract]",
-            },
-        )
-        if year_from or year_to:
-            query += f" AND {year_from or 1000}:{year_to or 3000}[Publication Date]"
-        params = {
-            "db": "pmc",
-            "term": query,
-            "retmode": "json",
-            "retstart": str((page - 1) * per_page),
-            "retmax": str(per_page),
-            "sort": "pub date" if sort == "published" else "relevance",
-            "tool": "inquiro",
-        }
-        contact = settings.contact_email
-        if contact:
-            params["email"] = contact
-        api_key = getattr(settings, "ncbi_api_key", None)
-        if api_key:
-            params["api_key"] = api_key
-        try:
-            found = json.loads(await client._get(f"{endpoint}/esearch.fcgi", params)).get(
-                "esearchresult", {}
-            )
-            identifiers = found.get("idlist", [])
-            if not identifiers:
-                return ProviderSearchPage("pmc", [], int(found.get("count", 0)), page, per_page)
-            summary_params = {
-                "db": "pmc",
-                "id": ",".join(identifiers),
-                "retmode": "json",
-                "tool": "inquiro",
-            }
-            if contact:
-                summary_params["email"] = contact
-            if api_key:
-                summary_params["api_key"] = api_key
-            payload = json.loads(
-                await client._get(f"{endpoint}/esummary.fcgi", summary_params)
-            ).get("result", {})
-        except (json.JSONDecodeError, TypeError) as error:
-            raise ProviderUnavailable("PMC returned invalid search results") from error
+    ) -> CandidatePage:
+        total, summaries = await ncbi_summaries(client, request, settings, endpoint, "pmc")
         results = []
-        for identifier in identifiers:
-            record = payload.get(identifier, {})
-            title = clean_rich_markup(record.get("title"))
+        for _uid, summary in summaries:
+            title = clean_rich_markup(summary.get("title"))
             if not title:
                 continue
-            doi = None
-            pmid = None
-            for article_id in record.get("articleids", []):
-                if article_id.get("idtype") == "doi" and article_id.get("value"):
-                    doi = article_id["value"]
-                elif article_id.get("idtype") == "pmid" and article_id.get("value"):
-                    pmid = article_id["value"]
-            if doi:
-                result_provider, result_identifier = "doi", doi
-            elif pmid:
-                result_provider, result_identifier = "pmid", pmid
-            else:
+            identities = {
+                entry["idtype"]: entry["value"]
+                for entry in summary.get("articleids", [])
+                if entry.get("idtype") in {"doi", "pmid"} and entry.get("value")
+            }
+            if not identities:
                 continue
+            namespace = "doi" if "doi" in identities else "pmid"
+            identity = Identifier(namespace, identities[namespace])
             results.append(
-                ProviderSearchRecord(
+                CandidateRecord(
                     provider="pmc",
-                    identifier_provider=result_provider,
-                    identifier=result_identifier,
+                    lookup_identifier=identity,
+                    identifiers=(identity,),
                     title=title,
-                    authors="; ".join(
-                        author["name"] for author in record.get("authors", []) if author.get("name")
-                    )
-                    or None,
+                    authors=ncbi_contributors(summary),
                     publication_title=first_text(
-                        record.get("fulljournalname") or record.get("source")
+                        summary.get("fulljournalname") or summary.get("source")
                     ),
-                    publication_date=first_text(record.get("pubdate")),
+                    publication_date=first_text(summary.get("pubdate")),
+                    doi=identities.get("doi"),
                 )
             )
-        return ProviderSearchPage(
-            "pmc", results, int(found.get("count", len(results))), page, per_page
-        )
+        return CandidatePage("pmc", tuple(results), total, request.page, request.per_page)
 
 
 class PmcDocumentAdapter:
     async def acquire(
         self,
-        client: ProviderContext,
+        client: BoundedTransport,
         value: str,
-        settings: Any,
+        settings: ProviderConfig,
         *,
         endpoint: str,
     ) -> AcquiredDocument:
-        listing = await client._get(
+        listing = await client.get(
             endpoint,
             {
                 "list-type": "2",
@@ -162,7 +106,7 @@ class PmcDocumentAdapter:
         _version, prefix = max(versions)
         version_key = prefix.removesuffix("/")
         try:
-            metadata = json.loads(await client._get(f"{endpoint}/metadata/{version_key}.json"))
+            metadata = json.loads(await client.get(f"{endpoint}/metadata/{version_key}.json"))
             if not isinstance(metadata, dict):
                 raise TypeError
         except RemoteNotFound as error:
@@ -175,7 +119,7 @@ class PmcDocumentAdapter:
         parsed = urlsplit(pdf_url)
         if parsed.scheme != "s3" or parsed.netloc != "pmc-oa-opendata":
             raise ProviderUnavailable("PMC returned an invalid PDF location")
-        return await client._download_pdf(
+        return await client.download_pdf(
             f"https://{parsed.netloc}.s3.amazonaws.com{parsed.path}",
             filename=f"{version_key}.pdf",
             provider="pmc",
@@ -184,7 +128,7 @@ class PmcDocumentAdapter:
 
 PMC_PROVIDER = ProviderDefinition(
     name="pmc",
-    identifier_aliases=("pmc", "pmcid"),
+    identifier_namespace="pmcid",
     identifier_parser=parse_pmcid,
     auto_detect_identifier=True,
     search_adapter=PmcSearchAdapter(),

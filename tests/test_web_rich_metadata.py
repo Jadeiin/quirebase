@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from app_helpers import json_payload
-from inquiro import CandidateRecord, Identifier
+from inquiro import CandidateRecord, Contributor, Identifier
 from sqlalchemy import func, select
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -24,6 +24,52 @@ from quirebase.models import (
     Tag,
     User,
 )
+
+
+@pytest.mark.anyio
+async def test_citation_key_preview_is_an_authenticated_account_capability(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, _item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        response = await client.get(
+            "/api/v1/account/citation-key-preview", params={"formula": "auth + year"}
+        )
+        assert response.status_code == 200
+        assert response.json()["key"]
+        invalid = await client.get(
+            "/api/v1/account/citation-key-preview", params={"formula": "broken("}
+        )
+        assert invalid.status_code == 422
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"reference_type": "journal-article"},
+        {"reference_type": "unrecognized"},
+        {"publication_date": "2023-02-29"},
+        {"publication_date": "Spring 2024"},
+    ],
+)
+async def test_http_metadata_rejects_unsupported_types_and_invalid_dates(
+    async_db, async_session_factory, tmp_path, monkeypatch, fields
+):
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        response = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/items", json={"title": "Rejected", **fields}
+        )
+        assert response.status_code == 422
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio
@@ -52,8 +98,7 @@ async def test_http_api_creates_complete_metadata(
             "publisher": "Example Press",
             "place_published": "Shanghai",
             "doi": "https://doi.org/10.1000/complete",
-            "bibtex_key": "complete2026record",
-            "bibtex_type": "article",
+            "citation_key": "complete2026record",
             "urls": ["https://example.test/record", "https://example.test/pdf"],
             "keywords": ["forms", "metadata"],
             "identifiers": [{"provider": "pmid", "value": "12345"}],
@@ -97,7 +142,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
             "metadata": {
                 "title": "Attention Is All You Need",
                 "abstract": "The dominant sequence transduction models are based on complex recurrent networks.",
-                "reference_type": "conference",
+                "reference_type": "paper-conference",
                 "publication_date": "2017-06-12",
                 "publication_title": "Advances in Neural Information Processing Systems",
                 "journal_abbreviation": "NeurIPS",
@@ -108,8 +153,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
                 "publisher": "Curran Associates, Inc.",
                 "place_published": "Long Beach, CA",
                 "doi": "10.5555/3295222.3295349",
-                "bibtex_key": "vaswani2017attention",
-                "bibtex_type": "inproceedings",
+                "citation_key": "vaswani2017attention",
                 "urls": [
                     "https://arxiv.org/abs/1706.03762",
                     "https://proceedings.neurips.cc/paper/7181",
@@ -141,7 +185,7 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
     assert updated.volume == "30"
     assert updated.pages == "5998-6008"
     assert updated.affiliation == "Google Brain"
-    assert updated.bibtex_id == "vaswani2017attention"
+    assert updated.citation_key == "vaswani2017attention"
     assert (updated.custom_fields or {}) == {
         "rating": 5,
         "flags": ["reviewed"],
@@ -287,7 +331,7 @@ async def test_http_api_tag_recommendation_pending_failed_and_retry_states(
 
 
 @pytest.mark.anyio
-async def test_http_api_syncs_metadata_and_updates_bibtex_key(
+async def test_http_api_syncs_metadata_and_updates_citation_key(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
@@ -310,12 +354,12 @@ async def test_http_api_syncs_metadata_and_updates_bibtex_key(
     db.expire_all()
     item = await db.get(Item, item_id)
     assert item is not None
-    assert item.bibtex_id == "Smith2020Temporary"
+    assert item.citation_key == "Smith2020Temporary"
 
     # Test sync metadata upstream
     mock_payload = {
         "title": "Quantum Supremacy Using a Programmable Superconducting Processor",
-        "authors": "Arute, Frank; Arya, Kunal",
+        "authors": (Contributor("Arute, Frank"), Contributor("Arya, Kunal")),
         "publication_title": "Nature",
         "publication_date": "2019-10-23",
         "doi": "10.1038/s41586-019-1666-5",
@@ -331,7 +375,7 @@ async def test_http_api_syncs_metadata_and_updates_bibtex_key(
         new=AsyncMock(
             return_value=CandidateRecord(
                 provider="crossref",
-                identifier=Identifier("doi", "10.1038/s41586-019-1666-5"),
+                lookup_identifier=Identifier("doi", "10.1038/s41586-019-1666-5"),
                 **mock_payload,
             )
         ),
@@ -371,8 +415,8 @@ async def test_http_api_sync_metadata_uses_effective_runtime_provider_settings(
         "quirebase.library.identifiers.lookup_candidate",
         new=AsyncMock(
             return_value=CandidateRecord(
-                provider="nasa",
-                identifier=Identifier("bibcode", "2024ApJ...123A...1X"),
+                provider="nasa_ads",
+                lookup_identifier=Identifier("bibcode", "2024ApJ...123A...1X"),
                 title="Runtime-configured metadata",
             )
         ),
@@ -479,7 +523,11 @@ async def test_http_api_edit_synchronizes_identifier_rows(
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
-    db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"))
+    db.add(
+        ItemIdentifier(
+            workspace_id=item.workspace_id, item_id=item.id, provider="pmid", value="old-pmid"
+        )
+    )
     item.doi = "10.1000/old"
     item.identifiers = '{"doi": "10.1000/old", "pmid": "old-pmid"}'
     await db.commit()

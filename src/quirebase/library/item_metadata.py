@@ -20,7 +20,7 @@ from ._metadata import (
     ItemMetadata,
     ItemWriteResult,
     MetadataWrite,
-    generate_bibtex_key,
+    generate_citation_key,
     metadata_write,
 )
 from .authors import _replace_item_authors_many
@@ -151,7 +151,7 @@ async def revise_item_metadata(
         raise
 
 
-async def _regenerate_bibtex_key(
+async def _regenerate_citation_key(
     db: AsyncSession,
     actor: User,
     workspace_id: UUID,
@@ -167,8 +167,8 @@ async def _regenerate_bibtex_key(
     )
     if item is None:
         raise ResourceUnavailable("item not found")
-    key = generate_bibtex_key(item)
-    item.bibtex_id = key
+    key = generate_citation_key(item)
+    item.citation_key = key
     item.updated_by = actor_id
     item.updated_at = datetime.now(UTC)
     item.version += 1
@@ -178,7 +178,7 @@ async def _regenerate_bibtex_key(
     record_event(
         db,
         actor_id,
-        "item.bibtex_key.regenerate",
+        "item.citation_key.regenerate",
         "item",
         item_id,
         detail={"version": version},
@@ -189,14 +189,14 @@ async def _regenerate_bibtex_key(
     return ItemWriteResult(item_id=item_id, version=version)
 
 
-async def regenerate_bibtex_key(
+async def regenerate_citation_key(
     db: AsyncSession,
     actor: User,
     workspace_id: UUID,
     item_id: UUID,
 ) -> ItemWriteResult:
     try:
-        return await _regenerate_bibtex_key(db, actor, workspace_id, item_id)
+        return await _regenerate_citation_key(db, actor, workspace_id, item_id)
     except Exception:
         await db.rollback()
         raise

@@ -53,7 +53,7 @@ async def list_users_paginated(
         with contextlib.suppress(ValueError):
             matches.append(User.id == UUID(search.strip()))
         filters.append(or_(*matches))
-    if role.strip() and role in ("administrator", "member"):
+    if role.strip() and role in SystemRole:
         filters.append(User.role == role)
     if active is not None:
         query = BooleanFilter(field_name="active", value=active).append_to_statement(query, User)
@@ -104,7 +104,7 @@ async def create_user_admin(
         raise ValidationFailure("username must contain 1 to 120 characters")
     if len(password) < 12:
         raise ValidationFailure("password must contain at least 12 characters")
-    if role not in (SystemRole.administrator.value, SystemRole.member.value):
+    if role not in SystemRole:
         raise ValidationFailure("invalid user role")
     existing = await db.scalar(select(User).where(User.username == cleaned_name))
     if existing is not None:
@@ -117,7 +117,7 @@ async def create_user_admin(
     user = User(
         username=cleaned_name,
         password_hash=password_hash,
-        role=role,
+        role=SystemRole(role),
         active=True,
     )
     try:
@@ -166,14 +166,14 @@ async def update_user_status(db: AsyncSession, admin: User, user_id: UUID, activ
 
 
 async def change_user_role(db: AsyncSession, admin: User, user_id: UUID, new_role: str) -> User:
-    if new_role not in (SystemRole.administrator.value, SystemRole.member.value):
+    if new_role not in SystemRole:
         raise ValidationFailure("invalid user role")
     admin, user = await _lock_admin_and_target(db, admin, user_id, SystemAction.users_roles_manage)
     if user is None:
         raise ResourceNotFound("user not found")
     if user.id == admin.id and new_role != SystemRole.administrator.value:
         raise PermissionDenied("administrators cannot demote their own account")
-    user.role = new_role
+    user.role = SystemRole(new_role)
     record_event(
         db,
         admin.id,

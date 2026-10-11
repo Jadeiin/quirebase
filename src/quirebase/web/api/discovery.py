@@ -47,7 +47,7 @@ async def discovery_providers(user: ApiUser, db: Database):
         {"id": "pmc", "name": "PMC"},
     ]
     if settings.nasa_ads_token:
-        providers.append({"id": "nasa", "name": "NASA ADS"})
+        providers.append({"id": "nasa_ads", "name": "NASA ADS"})
     if settings.ieee_api_key:
         providers.append({"id": "ieee", "name": "IEEE Xplore"})
     return providers

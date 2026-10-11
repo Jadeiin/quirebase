@@ -16,7 +16,7 @@ from quirebase.library import (
     ItemSection,
     create_item,
     open_item_section,
-    regenerate_bibtex_key,
+    regenerate_citation_key,
     revise_item_metadata,
     search_library,
 )
@@ -41,7 +41,7 @@ async def _user(db, username: str, *, role: str = "member") -> User:
 
 
 @pytest.mark.anyio
-async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
+async def test_regenerate_citation_key_is_a_narrow_atomic_item_mutation(async_db):
     db = async_db
     owner = await _user(db, "item-mutation-owner", role="administrator")
     item = Item(
@@ -58,7 +58,7 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     owner_id = owner.id
     item_id = item.id
 
-    result = await regenerate_bibtex_key(db, owner, fixture_workspace_id(owner), item_id)
+    result = await regenerate_citation_key(db, owner, fixture_workspace_id(owner), item_id)
 
     item_view = await open_item_section(
         db,
@@ -68,10 +68,10 @@ async def test_regenerate_bibtex_key_is_a_narrow_atomic_item_mutation(async_db):
     )
     assert isinstance(item_view, ItemMetadataData)
     updated = item_view.item
-    events, total = await query_events(db, owner, action="item.bibtex_key.regenerate")
+    events, total = await query_events(db, owner, action="item.citation_key.regenerate")
     assert result.item_id == item_id
     assert result.version == 2
-    assert updated.bibtex_id == "Turing1950Computing"
+    assert updated.citation_key == "Turing1950Computing"
     assert updated.abstract == "Can machines think?"
     assert updated.doi == "10.1093/mind/lix.236.433"
     assert total == 1
@@ -85,7 +85,7 @@ async def test_item_metadata_rejects_values_longer_than_bounded_columns(async_db
     owner = await _user(db, "bounded-item-owner")
     workspace_id = fixture_workspace_id(owner)
 
-    with pytest.raises(ValidationFailure, match="publication date is too long"):
+    with pytest.raises(ValidationFailure, match="publication date must use"):
         await create_item(
             db,
             owner,
@@ -93,7 +93,7 @@ async def test_item_metadata_rejects_values_longer_than_bounded_columns(async_db
             ItemMetadata(title="Bounded", publication_date="x" * 33),
         )
 
-    with pytest.raises(ValidationFailure, match="reference type is too long"):
+    with pytest.raises(ValidationFailure, match="reference type must be a supported"):
         await create_item(
             db,
             owner,
@@ -134,7 +134,11 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
     )
     db.add(item)
     await db.flush()
-    db.add(ItemIdentifier(item_id=item.id, provider="pmid", value="old-pmid"))
+    db.add(
+        ItemIdentifier(
+            workspace_id=item.workspace_id, item_id=item.id, provider="pmid", value="old-pmid"
+        )
+    )
     await db.commit()
     item_id = item.id
     item_version = item.version

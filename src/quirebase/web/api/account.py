@@ -20,6 +20,7 @@ from quirebase.accounts import (
     revoke_session,
 )
 from quirebase.core.config import get_settings
+from quirebase.library import preview_citation_key
 from quirebase.models import User, Workspace
 from quirebase.web.api.account_schemas import (
     AccountSummaryView,
@@ -35,11 +36,17 @@ from quirebase.web.api.account_schemas import (
 from quirebase.web.api.auth import require_same_origin
 from quirebase.web.api.common import OkView, system_authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.export_schemas import CitationKeyPreviewView
 from quirebase.web.api.session_schemas import LoginSessionView
 from quirebase.web.errors import ApiHTTPException
 from quirebase.workspaces import get_workspace_invitation_by_token
 
 router = APIRouter(tags=["Accounts and invitations"])
+
+
+@router.get("/account/citation-key-preview", response_model=CitationKeyPreviewView)
+async def citation_key_preview(formula: str, _user: ApiUser, force_ascii: bool = False):
+    return {"key": preview_citation_key(formula, force_ascii=force_ascii)}
 
 
 @router.get("/invitations/{token}", response_model=PublicInvitationDetailsView)

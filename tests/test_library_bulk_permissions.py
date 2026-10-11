@@ -640,7 +640,7 @@ async def test_bulk_archive_roots_are_unique_for_uuid7_and_adversarial_titles(
             workspace_id=original.workspace_id,
             created_by=owner.id,
             title="Same title",
-            bibtex_id=(f"Same-{ids[2]}" if i == 0 else "Same"),
+            citation_key=(f"Same-{ids[2]}" if i == 0 else "Same"),
         )
         for i, item_id in enumerate(ids)
     ]

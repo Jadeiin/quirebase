@@ -31,6 +31,7 @@ from quirebase.core.database import Base, _make_database_config, async_database_
 from quirebase.models import (
     AuditEvent,
     Project,
+    SystemRole,
     User,
     Workspace,
     WorkspaceMember,
@@ -239,6 +240,24 @@ def test_schema_matches_metadata(migration_database):
     database_url, engine = migration_database
     _migrate_database(database_url)
     _assert_schema_matches_metadata(inspect(engine), engine)
+
+
+def test_migrated_enum_rejects_invalid_raw_sql_values(migration_database):
+    database_url, engine = migration_database
+    _migrate_database(database_url)
+    with Session(engine) as db:
+        user = User(username="enum-member", password_hash="unused")
+        db.add(user)
+        db.commit()
+        user_id = user.id
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE users SET role = 'administrator'"))
+    with Session(engine) as db:
+        assert db.get(User, user_id).role is SystemRole.administrator
+    with pytest.raises(IntegrityError), engine.begin() as connection:
+        connection.execute(text("UPDATE users SET role = 'unknown'"))
+    with Session(engine) as db:
+        assert db.get(User, user_id).role is SystemRole.administrator
 
 
 def test_initial_schema_retains_audit_history_and_rejects_inactive_owners(migration_database):

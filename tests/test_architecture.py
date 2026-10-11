@@ -77,7 +77,7 @@ FORBIDDEN_FACADE_EXPORTS = {
     "documents": {"attach_staged_pdf", "stage_pdf"},
     "library": {
         "find_or_create_author",
-        "generate_bibtex_key",
+        "generate_citation_key",
         "get_item_authors",
         "get_item_identifiers",
         "get_tag_matrix_for_item",
@@ -548,7 +548,7 @@ def test_provider_runtime_and_contracts_expose_async_operations():
         "LookupImplementation": {"lookup"},
         "SearchImplementation": {"search"},
         "DocumentImplementation": {"acquire"},
-        "ProviderContext": {"_get", "_download_pdf"},
+        "BoundedTransport": {"get", "download_pdf"},
         "Exchange": {"send", "aclose"},
     }
     files = (
@@ -752,9 +752,11 @@ def test_bibliography_integration_tests_use_the_package_facade():
 def test_inquiro_facade_is_the_narrow_provider_interface():
     expected = {
         "AcquiredDocument",
+        "Affiliation",
         "CandidateNotFound",
         "CandidatePage",
         "CandidateRecord",
+        "Contributor",
         "DocumentRequest",
         "Identifier",
         "InquiroError",
@@ -765,6 +767,7 @@ def test_inquiro_facade_is_the_narrow_provider_interface():
         "ProviderConfig",
         "ProviderRuntime",
         "ProviderUnavailable",
+        "ResourceLink",
         "SearchClause",
         "SearchQuery",
     }

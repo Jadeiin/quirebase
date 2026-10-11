@@ -128,6 +128,23 @@ export interface paths {
 		patch: operations['workspaces.update_user_workspace'];
 		trace?: never;
 	};
+	'/api/v1/account/citation-key-preview': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Citation Key Preview */
+		get: operations['account.citation_key_preview'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/invitations/{token}': {
 		parameters: {
 			query?: never;
@@ -1990,23 +2007,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/citation-key-preview': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Citation Key Preview */
-		get: operations['tools.citation_key_preview'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/workspaces/{workspace_id}/citation-styles': {
 		parameters: {
 			query?: never;
@@ -3312,8 +3312,7 @@ export interface components {
 			editors: components['schemas']['ContributorView'][];
 			/** Structured Authors */
 			structured_authors: components['schemas']['ContributorView'][];
-			/** Reference Type */
-			reference_type: string | null;
+			reference_type: components['schemas']['ReferenceType'];
 			/** Volume */
 			volume: string | null;
 			/** Issue */
@@ -3363,8 +3362,8 @@ export interface components {
 			publication_date?: string | null;
 			/** Publication Title */
 			publication_title?: string | null;
-			/** Reference Type */
-			reference_type?: string | null;
+			/** @default document */
+			reference_type: components['schemas']['ReferenceType'];
 			/** Volume */
 			volume?: string | null;
 			/** Issue */
@@ -3379,10 +3378,8 @@ export interface components {
 			place_published?: string | null;
 			/** Journal Abbreviation */
 			journal_abbreviation?: string | null;
-			/** Bibtex Key */
-			bibtex_key?: string | null;
-			/** Bibtex Type */
-			bibtex_type?: string | null;
+			/** Citation Key */
+			citation_key?: string | null;
 			/**
 			 * Urls
 			 * @default []
@@ -3426,8 +3423,8 @@ export interface components {
 			publication_date?: string | null;
 			/** Publication Title */
 			publication_title?: string | null;
-			/** Reference Type */
-			reference_type?: string | null;
+			/** @default document */
+			reference_type: components['schemas']['ReferenceType'];
 			/** Volume */
 			volume?: string | null;
 			/** Issue */
@@ -3442,10 +3439,8 @@ export interface components {
 			place_published?: string | null;
 			/** Journal Abbreviation */
 			journal_abbreviation?: string | null;
-			/** Bibtex Key */
-			bibtex_key?: string | null;
-			/** Bibtex Type */
-			bibtex_type?: string | null;
+			/** Citation Key */
+			citation_key?: string | null;
 			/**
 			 * Urls
 			 * @default []
@@ -3968,6 +3963,28 @@ export interface components {
 			 */
 			type: 'rectangle';
 		};
+		/**
+		 * ReferenceType
+		 * @enum {string}
+		 */
+		ReferenceType:
+			| 'article'
+			| 'article-journal'
+			| 'article-magazine'
+			| 'article-newspaper'
+			| 'book'
+			| 'chapter'
+			| 'paper-conference'
+			| 'thesis'
+			| 'report'
+			| 'webpage'
+			| 'dataset'
+			| 'software'
+			| 'patent'
+			| 'standard'
+			| 'manuscript'
+			| 'document'
+			| 'preprint';
 		/** RegisterRequest */
 		RegisterRequest: {
 			/** Username */
@@ -5008,6 +5025,47 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'account.citation_key_preview': {
+		parameters: {
+			query: {
+				formula: string;
+				force_ascii?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CitationKeyPreviewView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -10402,49 +10460,6 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AuthorSuggestionView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'tools.citation_key_preview': {
-		parameters: {
-			query: {
-				formula: string;
-				force_ascii?: boolean;
-			};
-			header?: never;
-			path: {
-				workspace_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['CitationKeyPreviewView'];
 				};
 			};
 			/** @description Unprocessable Content */

@@ -21,6 +21,8 @@ from quirebase.models import (
 )
 from quirebase.search import search_index
 
+from ._item_identifiers import _replace_item_identifiers_many
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -44,8 +46,7 @@ _ITEM_FIELDS = (
     "reference_type",
     "authors",
     "editors",
-    "bibtex_id",
-    "bibtex_type",
+    "citation_key",
     "urls",
     "keywords",
     "custom_fields",
@@ -172,10 +173,10 @@ async def copy_item_to_workspace(
             )
             for author_id, position, role, is_corresponding in author_links
         ])
-        db.add_all([
-            ItemIdentifier(item_id=target.id, provider=provider, value=value)
-            for provider, value in identifier_links
-        ])
+        pairs = list(identifier_links)
+        if target.doi:
+            pairs.append(("doi", target.doi))
+        await _replace_item_identifiers_many(db, [(target, pairs)], replace=False)
 
         await documents.install(db, current_actor.id, target_workspace_id, target.id)
         await search_index(db).index_item(db, target.id)

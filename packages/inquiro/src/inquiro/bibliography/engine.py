@@ -1,60 +1,23 @@
-"""CSL-JSON projection and rendering over the optional citeproc engine."""
+"""CSL-JSON projection and rendering over the citeproc engine."""
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Any
+
+from citeproc import Citation, CitationItem, CitationStylesBibliography, formatter
+from citeproc.source.json import CiteProcJSON
 
 if TYPE_CHECKING:
     from inquiro.bibliography.records import BibliographyRecord, Contributor
-from inquiro.bibliography.styles import (
-    Citation,
-    CitationEngineUnavailable,
-    CitationItem,
-    CitationStylesBibliography,
-    CiteProcJSON,
-    _load_style,
-    formatter,
-)
-from inquiro.canonical import normalize_reference_type
+from inquiro.bibliography.styles import _load_style
+from inquiro.canonical import normalize_publication_date
+from inquiro.reference_types import export_reference_type
 from inquiro.richtext import convert_rich_text
-
-REFERENCE_TYPE_TO_CSL: dict[str, str] = {
-    "article": "article-journal",
-    "book": "book",
-    "chapter": "chapter",
-    "preprint": "article",
-    "conference": "paper-conference",
-    "thesis": "thesis",
-    "report": "report",
-    "webpage": "webpage",
-    "dataset": "dataset",
-}
-
-_DATE_PATTERN = re.compile(r"(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2}))?)?")
 
 
 def _date_parts(value: str | None) -> list[list[int]] | None:
-    if not value:
-        return None
-    match = _DATE_PATTERN.search(value.strip())
-    if not match:
-        return None
-    year = int(match.group(1))
-    if not 0 <= year <= 9999:
-        return None
-    month = int(match.group(2)) if match.group(2) else None
-    day = int(match.group(3)) if match.group(3) else None
-    if month and not 1 <= month <= 12:
-        month = None
-        day = None
-    if day and not 1 <= day <= 31:
-        day = None
-    if day and month:
-        return [[year, month, day]]
-    if month:
-        return [[year, month]]
-    return [[year]]
+    normalized = normalize_publication_date(value)
+    return [[int(part) for part in normalized.split("-")]] if normalized else None
 
 
 def _names(contributors: tuple[Contributor, ...]) -> list[dict[str, str]]:
@@ -79,9 +42,7 @@ def record_to_csl_json(
     include_abstract = getattr(options, "include_abstract", True) if options else True
     journal_mode = getattr(options, "journal_mode", "full") if options else "full"
     prefer_abbreviation = journal_mode in {"abbreviated", "prefer_abbreviated"}
-    csl_type = REFERENCE_TYPE_TO_CSL.get(
-        normalize_reference_type(record.reference_type) or "", "article"
-    )
+    csl_type = export_reference_type(record.reference_type, "csl")
     entry: dict[str, Any] = {
         "id": item_id or record.citation_key or "item-1",
         "type": csl_type,
@@ -126,14 +87,6 @@ def render_bibliography(
     """Render CSL-JSON records to styled bibliography entries."""
     if not csl_json:
         return []
-    if (
-        CiteProcJSON is None
-        or CitationStylesBibliography is None
-        or Citation is None
-        or CitationItem is None
-        or formatter is None
-    ):
-        raise CitationEngineUnavailable("CSL formatting requires the 'citation' extra")
     source = CiteProcJSON(csl_json)
     style = _load_style(style_xml)
     output = formatter.html if output_format == "html" else formatter.plain

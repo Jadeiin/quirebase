@@ -17,7 +17,7 @@ ARXIV_PATTERN = re.compile(
 )
 OPENALEX_PATTERN = re.compile(r"W\d+", re.IGNORECASE)
 BIBCODE_PATTERN = re.compile(r"\d{4}[A-Za-z0-9.&]{5,20}")
-ARTICLE_NUMBER_PATTERN = re.compile(r"\d{1,12}")
+IEEE_PATTERN = re.compile(r"\d{1,12}")
 
 
 def normalize_doi(value: str) -> str:
@@ -42,7 +42,7 @@ def parse_pmcid(candidate: str, alias: str) -> Identifier | None:
     value = re.sub(r"^pmcid?:\s*", "", candidate, flags=re.IGNORECASE)
     if value.isdigit() and alias in {"pmc", "pmcid"}:
         value = f"PMC{value}"
-    return Identifier("pmc", value.upper()) if PMCID_PATTERN.fullmatch(value) else None
+    return Identifier("pmcid", value.upper()) if PMCID_PATTERN.fullmatch(value) else None
 
 
 def parse_arxiv(candidate: str, _alias: str) -> Identifier | None:
@@ -75,9 +75,9 @@ def parse_bibcode(candidate: str, _alias: str) -> Identifier | None:
     return Identifier("bibcode", value) if BIBCODE_PATTERN.fullmatch(value) else None
 
 
-def parse_article_number(candidate: str, _alias: str) -> Identifier | None:
-    value = re.sub(r"^(?:article_number|ieee):\s*", "", candidate, flags=re.IGNORECASE)
-    return Identifier("article_number", value) if ARTICLE_NUMBER_PATTERN.fullmatch(value) else None
+def parse_ieee(candidate: str, _alias: str) -> Identifier | None:
+    value = re.sub(r"^ieee:\s*", "", candidate, flags=re.IGNORECASE)
+    return Identifier("ieee", value) if IEEE_PATTERN.fullmatch(value) else None
 
 
 def parse_identifier(
@@ -87,7 +87,11 @@ def parse_identifier(
     registrations: tuple[ProviderDefinition, ...],
 ) -> Identifier:
     aliases = tuple(
-        alias for registration in registrations for alias in registration.identifier_aliases
+        dict.fromkeys(
+            alias
+            for registration in registrations
+            for alias in (registration.name, registration.identifier_namespace)
+        )
     )
     if provider != "auto" and provider not in aliases:
         choices = ", ".join(aliases[:-1]) + f" or {aliases[-1]}"
@@ -101,7 +105,7 @@ def parse_identifier(
         else tuple(
             registration
             for registration in registrations
-            if provider in registration.identifier_aliases
+            if registration.accepts_identifier(provider)
         )
     )
     for registration in selected:

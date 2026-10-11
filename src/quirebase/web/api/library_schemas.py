@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
 from quirebase.library import ItemMetadata, ItemMetadataData
+from quirebase.models import ReferenceType
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
@@ -43,7 +44,7 @@ class ItemDetailView(ItemSearchView):
     abstract_html: str | None
     editors: list[ContributorView]
     structured_authors: list[ContributorView]
-    reference_type: str | None
+    reference_type: ReferenceType
     volume: str | None
     issue: str | None
     pages: str | None

@@ -2,14 +2,68 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from inquiro.canonical import clean_markup, first_text
+from inquiro.models import Affiliation, Contributor, Identifier, ProviderUnavailable, ResourceLink
 
 if TYPE_CHECKING:
-    from inquiro.models import SearchClause
+    from collections.abc import Sequence
+
+    from inquiro.models import ProviderConfig, SearchClause, SearchQuery
+    from inquiro.transport import BoundedTransport
 
 __all__: list[str] = []
+
+
+def text_contributors(values: Any) -> tuple[Contributor, ...] | None:
+    if not isinstance(values, (list, tuple)):
+        return None
+    return tuple(
+        Contributor(display_name=name)
+        for value in values
+        if (name := clean_markup(first_text(value)))
+    )
+
+
+def keyword_values(values: Any) -> tuple[str, ...] | None:
+    if not isinstance(values, (list, tuple)):
+        return None
+    return tuple(
+        dict.fromkeys(name for value in values if (name := clean_markup(first_text(value))))
+    )
+
+
+def unique_links(*links: ResourceLink | None) -> tuple[ResourceLink, ...]:
+    return tuple(dict.fromkeys(link for link in links if link is not None))
+
+
+def affiliation_values(values: Any) -> tuple[Affiliation, ...] | None:
+    if not isinstance(values, (list, tuple)):
+        return None
+    affiliations = []
+    for entry in values:
+        if isinstance(entry, str):
+            if name := clean_markup(entry):
+                affiliations.append(Affiliation(name))
+            continue
+        if not isinstance(entry, dict) or not (name := clean_markup(first_text(entry.get("name")))):
+            continue
+        identifiers = []
+        if (value := first_text(entry.get("affiliationIdentifier"))) and (
+            scheme := first_text(entry.get("affiliationIdentifierScheme"))
+        ):
+            identifiers.append(Identifier(scheme.casefold(), value))
+        identifiers.extend(
+            Identifier(scheme.casefold(), value)
+            for identity in entry.get("id", [])
+            if isinstance(identity, dict)
+            and (value := first_text(identity.get("id")))
+            and (scheme := first_text(identity.get("id-type")))
+        )
+        affiliations.append(Affiliation(name, identifiers=tuple(identifiers)))
+    return tuple(dict.fromkeys(affiliations))
 
 
 def reconstruct_openalex_abstract(inverted_index: Any) -> str | None:
@@ -54,7 +108,7 @@ def date_parts(message: dict) -> str | None:
 
 
 def boolean_query(
-    clauses: list[SearchClause], fields: dict[str, str], *, field_prefix: bool = False
+    clauses: Sequence[SearchClause], fields: dict[str, str], *, field_prefix: bool = False
 ) -> str:
     parts: list[str] = []
     for index, clause in enumerate(clauses):
@@ -68,3 +122,71 @@ def boolean_query(
         else:
             parts.append(("AND " if index else "") + tagged)
     return " ".join(parts)
+
+
+async def ncbi_summaries(
+    client: BoundedTransport,
+    request: SearchQuery,
+    settings: ProviderConfig,
+    endpoint: str,
+    database: str,
+) -> tuple[int, list[tuple[str, dict]]]:
+    query = boolean_query(
+        request.clauses,
+        {
+            "any": "[All Fields]",
+            "title": "[Title]",
+            "author": "[Author]",
+            "publication": "[Journal]",
+            "abstract": "[Title/Abstract]",
+        },
+    )
+    if request.year_from or request.year_to:
+        query += f" AND {request.year_from or 1000}:{request.year_to or 3000}[Publication Date]"
+    common = {"db": database, "retmode": "json", "tool": "inquiro"}
+    if settings.contact_email:
+        common["email"] = settings.contact_email
+    if settings.ncbi_api_key:
+        common["api_key"] = settings.ncbi_api_key
+    try:
+        found = json.loads(
+            await client.get(
+                f"{endpoint}/esearch.fcgi",
+                common
+                | {
+                    "term": query,
+                    "retstart": str((request.page - 1) * request.per_page),
+                    "retmax": str(request.per_page),
+                    "sort": "pub date" if request.sort == "published" else "relevance",
+                },
+            )
+        ).get("esearchresult", {})
+        identifiers = found.get("idlist", [])
+        total = int(found.get("count", 0))
+        if not identifiers:
+            return total, []
+        summaries = json.loads(
+            await client.get(
+                f"{endpoint}/esummary.fcgi",
+                common
+                | {
+                    "id": ",".join(identifiers),
+                },
+            )
+        ).get("result", {})
+    except (TypeError, ValueError) as error:
+        raise ProviderUnavailable("NCBI returned invalid search results") from error
+    return total, [(identifier, summaries.get(identifier, {})) for identifier in identifiers]
+
+
+def ncbi_contributors(summary: dict) -> tuple[Contributor, ...] | None:
+    if "authors" not in summary:
+        return None
+    return tuple(
+        Contributor(
+            author["name"],
+            kind="organization" if author.get("authtype") == "CollectiveName" else "unknown",
+        )
+        for author in summary["authors"]
+        if author.get("name")
+    )

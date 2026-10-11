@@ -254,8 +254,15 @@ async def test_item_sections_separate_page_responsibilities(
         await db.flush()
         db.add_all([
             ItemTag(workspace_id=item.workspace_id, item_id=item.id, tag_id=tag.id),
-            ItemIdentifier(item_id=item.id, provider="openalex", value="W123"),
-            ItemIdentifier(item_id=item.id, provider="arxiv", value="2401.00001"),
+            ItemIdentifier(
+                workspace_id=item.workspace_id, item_id=item.id, provider="openalex", value="W123"
+            ),
+            ItemIdentifier(
+                workspace_id=item.workspace_id,
+                item_id=item.id,
+                provider="arxiv",
+                value="2401.00001",
+            ),
         ])
         await db.commit()
         workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
@@ -547,7 +554,7 @@ async def test_item_citation_export_and_project_removal(
         assert "Paper-annotated-pdfs.zip" in annotated_download.headers["content-disposition"]
 
         item.title = "中文论文"
-        item.bibtex_id = None
+        item.citation_key = None
         await db.commit()
         unicode_download = await client.get(f"{workspace_base}/items/{item.id}/archive")
         assert unicode_download.status_code == 200

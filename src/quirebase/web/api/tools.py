@@ -11,13 +11,11 @@ from quirebase.library import (
     find_duplicates,
     list_custom_citation_styles,
     merge_tags,
-    preview_citation_key,
     rename_tag,
     select_builtin_citation_styles,
 )
 from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.export_schemas import CitationKeyPreviewView
 from quirebase.web.api.library_schemas import (
     CitationStylesResponseView,
     NameRequest,
@@ -30,15 +28,6 @@ from quirebase.web.api.tool_schemas import (
 )
 
 router = APIRouter(tags=["Library tools"])
-
-
-@router.get("/citation-key-preview", response_model=CitationKeyPreviewView)
-async def citation_key_preview(
-    formula: str,
-    _user: ApiUser,
-    force_ascii: bool = False,
-):
-    return {"key": preview_citation_key(formula, force_ascii=force_ascii)}
 
 
 @router.get("/citation-styles", response_model=CitationStylesResponseView)

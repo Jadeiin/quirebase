@@ -54,7 +54,7 @@ async def register_user(db: AsyncSession, username: str, password: str) -> User:
     user = User(
         username=cleaned_name,
         password_hash=encoded,
-        role=SystemRole.member.value,
+        role=SystemRole.member,
         active=True,
     )
     try:
