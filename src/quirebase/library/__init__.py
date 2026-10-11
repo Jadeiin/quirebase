@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from quirebase.core.errors import UpstreamServiceError
 from quirebase.library._metadata import (
+    Affiliation,
     Contributor,
     CustomField,
     ExternalIdentifier,
     ItemMetadata,
     ItemWriteResult,
     JsonValue,
+    ResourceLink,
 )
 from quirebase.library.activity import (
     get_accessible_item_identifiers,
@@ -18,14 +20,18 @@ from quirebase.library.administration import (
     get_storage_metrics,
 )
 from quirebase.library.authors import (
-    parse_author_list_string,
     search_authors_typeahead,
 )
 from quirebase.library.bulk_items import (
     apply_bulk_item_action,
     download_selected_item_documents,
 )
-from quirebase.library.catalog import find_duplicates, get_dashboard_data, search_library
+from quirebase.library.catalog import (
+    LibraryFilter,
+    find_duplicates,
+    get_dashboard_data,
+    search_library,
+)
 from quirebase.library.citations import (
     DEFAULT_CITATION_KEY_FORMULA,
     BibliographyExportOptions,
@@ -56,6 +62,7 @@ from quirebase.library.discussions import (
     moderate_discussion_message,
     moderate_project_discussion_message,
 )
+from quirebase.library.facets import LibraryFacets, get_library_facets
 from quirebase.library.identifiers import (
     create_item_from_metadata_record,
     rescan_pdf_doi,
@@ -114,6 +121,7 @@ from quirebase.library.workflows import (
 
 __all__ = [
     "DEFAULT_CITATION_KEY_FORMULA",
+    "Affiliation",
     "BatchConflict",
     "BibliographyExportOptions",
     "CandidatePageView",
@@ -134,7 +142,10 @@ __all__ = [
     "ItemSectionResult",
     "ItemWriteResult",
     "JsonValue",
+    "LibraryFacets",
+    "LibraryFilter",
     "ProjectAssignmentOption",
+    "ResourceLink",
     "TagConflict",
     "TagGroup",
     "TagMatrix",
@@ -168,6 +179,7 @@ __all__ = [
     "get_import_batch_preview",
     "get_item_citation_response",
     "get_item_citation_text_response",
+    "get_library_facets",
     "get_storage_metrics",
     "import_staging_object_keys",
     "item_ids_for_tag_recommendation",
@@ -178,7 +190,6 @@ __all__ = [
     "moderate_discussion_message",
     "moderate_project_discussion_message",
     "open_item_section",
-    "parse_author_list_string",
     "preview_citation_key",
     "record_discovery_search_audit",
     "regenerate_citation_key",

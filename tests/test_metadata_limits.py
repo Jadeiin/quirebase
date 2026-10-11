@@ -3,13 +3,13 @@ from __future__ import annotations
 import random
 
 import pytest
+from item_helpers import contributor
 from sqlalchemy import func, select
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.library import (
-    Contributor,
     ItemMetadata,
     commit_import_batch,
     create_item,
@@ -18,8 +18,7 @@ from quirebase.library import (
     revise_item_metadata,
     search_library,
 )
-from quirebase.library.authors import find_or_create_author
-from quirebase.models import AuditEvent, Author, ImportBatch, Item, User
+from quirebase.models import AuditEvent, ImportBatch, Item, User
 from quirebase.operations.workflows import dispatch_maintenance_workflow, dispatch_workspace_reindex
 
 pytestmark = [pytest.mark.anyio, pytest.mark.shared_postgres]
@@ -54,39 +53,29 @@ async def test_manual_publication_date_rejects_invalid_or_free_text_values(persi
     assert await persistence_db.scalar(select(func.count()).select_from(Item)) == 0
 
 
-async def test_contributor_limit_counts_normalized_name_parts(persistence_db):
+async def test_json_contributors_preserve_long_unicode_names(persistence_db):
     db = persistence_db
     actor, workspace_id = await _owner(db)
     result = await create_item(
         db,
         actor,
         workspace_id,
-        ItemMetadata(title="Boundary", authors=(Contributor("ﬃ" * 40, "X" * 120),)),
+        ItemMetadata(title="Long name", authors=(contributor("ﬃ" * 150, "研究者" * 100),)),
     )
-    author = await db.scalar(select(Author))
-    assert author.last_name == "ﬃ" * 40
-    assert author.first_name == "X" * 120
-    assert author.identity_key == "ffi" * 40 + "\x1f" + "x" * 120
-
-    with pytest.raises(ValidationFailure, match="name is too long after normalization"):
-        await revise_item_metadata(
-            db,
-            actor,
-            workspace_id,
-            result.item_id,
-            result.version,
-            ItemMetadata(title="Rejected", authors=(Contributor("ﬃ" * 41, "Alice"),)),
-        )
     item = await db.get(Item, result.item_id)
-    assert (item.title, item.version) == ("Boundary", 1)
-    assert await db.scalar(select(func.count()).select_from(Author)) == 1
-
-
-@pytest.mark.parametrize("name_parts", [("ﬃ" * 41, "Alice"), ("Smith", "ﬃ" * 41)])
-async def test_author_resolution_rejects_expanded_names_before_writing(persistence_db, name_parts):
-    with pytest.raises(ValidationFailure, match="name is too long after normalization"):
-        await find_or_create_author(persistence_db, *name_parts)
-    assert await persistence_db.scalar(select(func.count()).select_from(Author)) == 0
+    assert item.authors[0]["family_name"] == "ﬃ" * 150
+    assert item.authors[0]["given_name"] == "研究者" * 100
+    result = await revise_item_metadata(
+        db,
+        actor,
+        workspace_id,
+        result.item_id,
+        result.version,
+        ItemMetadata(title="Updated", authors=(contributor("ﬃ" * 151, "研究者" * 100),)),
+    )
+    await db.refresh(item)
+    assert item.version == 2
+    assert item.authors[0]["family_name"] == "ﬃ" * 151
 
 
 @pytest.mark.parametrize("entities", [False, True], ids=["unicode", "html-entities"])
@@ -119,19 +108,17 @@ async def test_title_limit_counts_visible_text_and_allows_rich_storage(persisten
 
 
 @pytest.mark.parametrize("origin", ["manual", "import"])
-@pytest.mark.parametrize("field", ["title", "citation_key", "authors"])
+@pytest.mark.parametrize("field", ["title", "citation_key"])
 async def test_metadata_limits_apply_to_creation_and_import(persistence_db, origin, field):
     db = persistence_db
     actor, workspace_id = await _owner(db)
     values = {
         "title": {"title": "X" * 1001},
         "citation_key": {"citation_key": "K" * 129},
-        "authors": {"authors": (Contributor("Smith", "ﬃ" * 41),)},
     }[field]
     expected = {
         "title": "title is too long",
         "citation_key": "Citation key is too long",
-        "authors": "name is too long after normalization",
     }[field]
     if origin == "manual":
         with pytest.raises(ValidationFailure, match=expected):
@@ -144,7 +131,6 @@ async def test_metadata_limits_apply_to_creation_and_import(persistence_db, orig
             {
                 "title": {"title": "X" * 1001},
                 "citation_key": {"citation_key": "K" * 129},
-                "authors": {"authors": [{"last_name": "Smith", "first_name": "ﬃ" * 41}]},
             }[field]
         )
         batch = ImportBatch(
@@ -209,7 +195,7 @@ async def test_generated_citation_key_preserves_year_and_title_with_long_names(
             db,
             actor,
             workspace_id,
-            ItemMetadata(title=title, publication_date="2026", authors=(Contributor("L" * 120),)),
+            ItemMetadata(title=title, publication_date="2026", authors=(contributor("L" * 120),)),
         )
         await regenerate_citation_key(db, actor, workspace_id, result.item_id)
         item = await db.get(Item, result.item_id)
@@ -219,7 +205,16 @@ async def test_generated_citation_key_preserves_year_and_title_with_long_names(
             actor_id=actor.id,
             file_format="bibtex",
             records=[
-                {"title": title, "publication_date": "2026", "authors": [{"last_name": "L" * 120}]}
+                {
+                    "title": title,
+                    "publication_date": "2026",
+                    "authors": [
+                        {
+                            "display_name": str("L" * 120) + (""),
+                            "family_name": "L" * 120,
+                        }
+                    ],
+                }
             ],
             errors=[],
         )

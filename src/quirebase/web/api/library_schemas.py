@@ -7,7 +7,7 @@ from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
-from quirebase.library import ItemMetadata, ItemMetadataData
+from quirebase.library import Contributor, ItemMetadata, ItemMetadataData, ResourceLink
 from quirebase.models import ReferenceType
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
@@ -33,23 +33,17 @@ class BulkActionRequest(BaseModel):
     confirmation: str = ""
 
 
-class ContributorView(BaseModel):
-    first_name: str | None
-    last_name: str
-    is_corresponding: bool = False
-
-
 class ItemDetailView(ItemSearchView):
     metadata: ItemMetadata
     abstract_html: str | None
-    editors: list[ContributorView]
-    structured_authors: list[ContributorView]
+    editors: list[Contributor]
+    structured_authors: list[Contributor]
     reference_type: ReferenceType
     volume: str | None
     issue: str | None
     pages: str | None
-    keywords: str | None
-    urls: str | None
+    keywords: list[str]
+    urls: list[ResourceLink]
 
 
 class TagView(BaseModel):
@@ -78,9 +72,9 @@ class CitationView(BaseModel):
 
 
 class AuthorSuggestionView(BaseModel):
-    id: UUID
     last_name: str
     first_name: str | None = None
+    suffix: str | None = None
     full_name: str
 
 
@@ -98,10 +92,10 @@ def item_search_view(item: Any) -> ItemSearchView:
     return ItemSearchView(
         id=item.id,
         title_html=item.title,
-        authors=item.authors,
+        authors="; ".join(row["display_name"] for row in item.authors) or None,
         publication_date=item.publication_date,
         publication_title=item.publication_title,
-        doi=item.doi,
+        doi=next((row.value for row in item.identifier_links if row.provider == "doi"), None),
         version=item.version,
     )
 
@@ -112,28 +106,14 @@ def item_detail_view(view: ItemMetadataData) -> ItemDetailView:
         **item_search_view(item).model_dump(),
         metadata=view.metadata,
         abstract_html=item.abstract,
-        editors=[
-            ContributorView(
-                first_name=row.first_name,
-                last_name=row.last_name,
-                is_corresponding=row.is_corresponding,
-            )
-            for row in view.metadata.editors
-        ],
-        structured_authors=[
-            ContributorView(
-                first_name=row.first_name,
-                last_name=row.last_name,
-                is_corresponding=row.is_corresponding,
-            )
-            for row in view.metadata.authors
-        ],
+        editors=list(view.metadata.editors),
+        structured_authors=list(view.metadata.authors),
         reference_type=item.reference_type,
         volume=item.volume,
         issue=item.issue,
         pages=item.pages,
         keywords=item.keywords,
-        urls=item.urls,
+        urls=list(view.metadata.urls),
     )
 
 

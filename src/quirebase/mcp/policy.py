@@ -29,6 +29,11 @@ _DEFINITIONS = (
         ToolEffect.READ,
     ),
     McpToolDefinition(
+        "library.get_item_facets",
+        "Count author-name, keyword and Reference Type facets over filtered Items in the explicitly specified Workspace.",
+        ToolEffect.READ,
+    ),
+    McpToolDefinition(
         "library.get_library_item",
         "Get bibliographic metadata for one Item in the explicitly specified Workspace; never returns file content.",
         ToolEffect.READ,

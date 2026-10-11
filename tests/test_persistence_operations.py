@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from inquiro.bibliography import builtin_style_xml
+from item_helpers import contributor, contributor_values, metadata_list_values, stored_doi
 from sqlalchemy import delete, event, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -16,12 +17,12 @@ from quirebase.access import resolve_workspace_context
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, ValidationFailure
 from quirebase.library import (
-    Contributor,
     ExternalIdentifier,
     ItemMetadata,
     ItemMetadataData,
     ItemOverviewData,
     ItemSection,
+    ResourceLink,
     create_item,
     item_sections,
     open_item_section,
@@ -34,10 +35,8 @@ from quirebase.library.citations import (
 from quirebase.library.tags import _assign_item_tags, delete_tag, get_or_create_tag, rename_tag
 from quirebase.models import (
     AuditEvent,
-    Author,
     CitationStyle,
     Item,
-    ItemAuthor,
     ItemIdentifier,
     ItemRead,
     ItemTag,
@@ -391,12 +390,12 @@ async def test_item_metadata_creation_rolls_back_search_and_audit_when_enqueue_f
             fixture_workspace_id(persistence_actor),
             ItemMetadata(
                 "Uncommitted Item",
-                authors=(Contributor("Uncommitted", "Author"),),
+                authors=(contributor("Uncommitted", "Author"),),
                 identifiers=(ExternalIdentifier("pmid", "uncommitted"),),
             ),
         )
     async with persistence_sessions() as observer:
-        for model in (Item, Author, ItemAuthor, ItemIdentifier):
+        for model in (Item, ItemIdentifier):
             assert await observer.scalar(select(func.count()).select_from(model)) == 0
         assert await observer.scalar(text("SELECT count(*) FROM item_search")) == 0
         assert (
@@ -522,11 +521,9 @@ async def test_mutations_translate_a_missing_root_without_success_audit(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("size", [2, 50])
-async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
+async def test_import_batch_embeds_record_local_contributors_and_preserves_replay(
     persistence_db, persistence_actor, size
 ):
-    from sqlalchemy import event
-
     from quirebase.library import commit_import_batch, stage_import_batch
 
     workspace_id = fixture_workspace_id(persistence_actor)
@@ -541,35 +538,15 @@ async def test_import_batch_resolves_shared_authors_once_and_preserves_replay(
     )
     assert len(records) == size and errors == []
     batch_id = batch.id
-    author_reads: list[str] = []
-
-    def track_author_reads(_connection, _cursor, statement, _parameters, _context, _many):
-        if statement.lstrip().upper().startswith("SELECT") and "FROM authors" in statement:
-            author_reads.append(statement)
-
-    engine = persistence_db.bind.sync_engine
-    event.listen(engine, "before_cursor_execute", track_author_reads)
-    try:
-        item_ids = await commit_import_batch(
-            persistence_db, persistence_actor, workspace_id, batch_id
-        )
-    finally:
-        event.remove(engine, "before_cursor_execute", track_author_reads)
-    assert len(author_reads) == 1
+    item_ids = await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
     items = [await persistence_db.get(Item, item_id) for item_id in item_ids]
     assert [item.title for item in items] == [f"Batch item {index}" for index in range(size)]
-    assert [item.doi for item in items] == [f"10.1000/{index}" for index in range(size)]
-    assert await persistence_db.scalar(select(func.count()).select_from(Author)) == size + 1
-    assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == size * 3
-    shared = await persistence_db.scalar(
-        select(Author).where(Author.identity_key == "shared\x1fauthor")
-    )
-    assert (
-        await persistence_db.scalar(
-            select(func.count()).select_from(ItemAuthor).where(ItemAuthor.author_id == shared.id)
-        )
-        == size * 2
-    )
+    assert [(await stored_doi(persistence_db, item)) for item in items] == [
+        f"10.1000/{index}" for index in range(size)
+    ]
+    assert all(item.authors[0]["family_name"] == "Shared" for item in items)
+    assert all(item.editors[0]["family_name"] == "SHARED" for item in items)
+    assert all(len(item.authors) == 2 and len(item.editors) == 1 for item in items)
     assert (
         await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
         == item_ids
@@ -596,11 +573,11 @@ async def test_item_metadata_merge_preserves_omissions_and_replacement_clears_li
         fixture_workspace_id(persistence_actor),
         ItemMetadata(
             "Original",
-            authors=(Contributor("Shared", "Author"),),
-            editors=(Contributor("Shared", "Author"),),
+            authors=(contributor("Shared", "Author"),),
+            editors=(contributor("Shared", "Author"),),
             doi="10.1000/original",
             identifiers=(ExternalIdentifier("pmid", "original"),),
-            urls=("https://example.com/original",),
+            urls=(ResourceLink("https://example.com/original"),),
             keywords=("original",),
             citation_key="UserSelectedKey",
         ),
@@ -614,11 +591,16 @@ async def test_item_metadata_merge_preserves_omissions_and_replacement_clears_li
         merge=True,
     )
     assert item.title == "Merged"
-    assert item.authors == "Shared, Author" and item.editors == "Shared, Author"
-    assert item.doi == "10.1000/original" and item.citation_key == "UserSelectedKey"
-    assert item.urls == "https://example.com/original" and item.keywords == "original; new"
-    assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == 2
-    assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 1
+    assert item.authors == contributor_values(
+        "Shared, Author"
+    ) and item.editors == contributor_values("Shared, Author")
+    assert (
+        await stored_doi(persistence_db, item)
+    ) == "10.1000/original" and item.citation_key == "UserSelectedKey"
+    assert item.urls == metadata_list_values(
+        "https://example.com/original", urls=True
+    ) and item.keywords == metadata_list_values("original; new")
+    assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 2
 
     result = await revise_item_metadata(
         persistence_db, persistence_actor, item.workspace_id, item.id, 1, ItemMetadata("Replaced")
@@ -626,10 +608,9 @@ async def test_item_metadata_merge_preserves_omissions_and_replacement_clears_li
     assert result.version == 2
     await persistence_db.refresh(item)
     assert item.title == "Replaced" and item.version == 2
-    assert item.authors is None and item.editors is None
-    assert item.doi is None and item.identifiers is None
-    assert item.urls is None and item.keywords is None and item.citation_key is None
-    assert await persistence_db.scalar(select(func.count()).select_from(ItemAuthor)) == 0
+    assert item.authors == [] and item.editors == []
+    assert (await stored_doi(persistence_db, item)) is None
+    assert item.urls == [] and item.keywords == [] and item.citation_key is None
     assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 0
 
 
@@ -648,12 +629,24 @@ async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
         [
             {
                 "title": "First",
-                "authors": [{"last_name": "Shared", "first_name": "Author"}],
+                "authors": [
+                    {
+                        "display_name": "Shared, Author",
+                        "family_name": "Shared",
+                        "given_name": "Author",
+                    }
+                ],
                 "identifiers": {"pmid": "first"},
             },
             {
                 "title": "Second",
-                "editors": [{"last_name": "Shared", "first_name": "Author"}],
+                "editors": [
+                    {
+                        "display_name": "Shared, Author",
+                        "family_name": "Shared",
+                        "given_name": "Author",
+                    }
+                ],
                 "doi": "10.1000/second",
             },
         ],
@@ -665,7 +658,7 @@ async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
     await persistence_db.flush()
     await persistence_db.rollback()
     async with persistence_sessions() as observer:
-        for model in (Item, Author, ItemAuthor, ItemIdentifier):
+        for model in (Item, ItemIdentifier):
             assert await observer.scalar(select(func.count()).select_from(model)) == 0
         assert (
             await observer.scalar(select(AuditEvent).where(AuditEvent.action == "test.bulk"))

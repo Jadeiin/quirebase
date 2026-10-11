@@ -54,7 +54,7 @@ def instrument_external_provider(directory, *, pause):
             provider="crossref",
             lookup_identifier=Identifier("doi", identifier),
             title="Recovery retained paper",
-            doi=identifier,
+            identifiers=(Identifier("doi", identifier),),
             authors=(Contributor("Recovery, Author"),),
         )
 

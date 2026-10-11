@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from advanced_alchemy.types import FileObject
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
-    BibliographyRecord,
     parse_bibliography_records,
 )
-from sqlalchemy import func, select, update
+from inquiro.identifiers import canonical_doi
+from inquiro.metadata import record_metadata_values as _record_to_item_payload
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
 from quirebase.access import ResourceAction, require_workspace_action
@@ -39,7 +39,7 @@ from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import candidate_record_values, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import ImportBatch, ImportBatchStatus, Item, ItemAuthor, User
+from quirebase.models import ImportBatch, ImportBatchStatus, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
 from .identifiers import _create_items_from_candidates
@@ -88,38 +88,6 @@ def _pdf_import_inputs(files: list[FileObject]) -> list[dict]:
         }
         for file in files
     ]
-
-
-def _record_to_item_payload(record: BibliographyRecord) -> dict:
-    """Serialize a parsed record into the Item-column dictionary stored on Import Batches."""
-    return {
-        "title": record.title or None,
-        "abstract": record.abstract,
-        "authors": [
-            {"last_name": person.family_name, "first_name": person.given_name}
-            for person in record.authors
-        ],
-        "editors": [
-            {"last_name": person.family_name, "first_name": person.given_name}
-            for person in record.editors
-        ],
-        "keywords": list(record.keywords),
-        "publication_date": record.publication_date,
-        "publication_title": record.publication_title or record.book_title,
-        "volume": record.volume,
-        "issue": record.issue,
-        "pages": record.pages,
-        "publisher": record.publisher,
-        "place_published": record.location,
-        "doi": record.doi,
-        "reference_type": record.reference_type,
-        "citation_key": record.citation_key,
-        "urls": [{"url": url} for url in record.urls],
-        "identifiers": json.dumps(dict(record.identifiers), ensure_ascii=False)
-        if record.identifiers
-        else None,
-        "custom_fields": dict(record.custom_fields) if record.custom_fields else None,
-    }
 
 
 async def stage_import_batch(
@@ -345,7 +313,7 @@ async def extract_pdf_import_doi(pending: dict) -> dict:
         )
     return {
         "detected_doi": detected_doi,
-        "normalized_doi": detected_doi.casefold(),
+        "normalized_doi": canonical_doi(detected_doi),
         "object_key": pdf["object_key"],
     }
 
@@ -364,11 +332,12 @@ async def check_pdf_import_doi(
     user = await db.get(User, batch.actor_id)
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
-    normalized_doi = detected_doi.casefold()
+    normalized_doi = canonical_doi(detected_doi)
     existing = await db.scalar(
         visible_items_query(batch.workspace_id)
         .with_only_columns(Item.id)
-        .where(func.lower(Item.doi) == normalized_doi)
+        .join(ItemIdentifier, ItemIdentifier.item_id == Item.id)
+        .where(ItemIdentifier.provider == "doi", ItemIdentifier.value == normalized_doi)
         .limit(1)
     )
     if existing is not None:
@@ -399,10 +368,9 @@ async def lookup_pdf_import_candidate(
     effective_settings = await get_effective_settings_model(db)
     await db.rollback()
     try:
-        normalized_doi = detected_doi.casefold()
+        normalized_doi = canonical_doi(detected_doi)
         record = await lookup_candidate(detected_doi, "doi", effective_settings)
         candidate = candidate_record_values(record)
-        candidate.setdefault("doi", detected_doi)
         candidate["_source_id"] = pending["_source_id"]
         return {
             "record": candidate,
@@ -672,8 +640,12 @@ async def commit_import_batch(
         }
         candidate_dois: set[str] = set()
         for record in records:
-            doi = record.get("doi") if isinstance(record, dict) else None
-            normalized_doi = doi.strip().casefold() if isinstance(doi, str) else ""
+            doi = (
+                (record.get("doi") or (record.get("identifiers") or {}).get("doi"))
+                if isinstance(record, dict)
+                else None
+            )
+            normalized_doi = canonical_doi(doi) if isinstance(doi, str) else ""
             if normalized_doi in known_dois:
                 raise BatchConflict("an accessible Item already has this DOI")
             if normalized_doi and normalized_doi in candidate_dois:
@@ -779,7 +751,7 @@ async def export_accessible_bibliography(
     items = list(
         await db.scalars(
             visible_items_query(workspace_id)
-            .options(selectinload(Item.author_links).selectinload(ItemAuthor.author))
+            .options(selectinload(Item.identifier_links))
             .order_by(Item.updated_at.desc(), Item.id)
         )
     )

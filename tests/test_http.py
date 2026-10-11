@@ -46,7 +46,7 @@ from quirebase.models import (
 from quirebase.search import search_index
 from quirebase.web.api import admin as admin_api
 from quirebase.web.api import workspaces as workspace_api
-from quirebase.workspaces import permanently_delete_workspace
+from quirebase.workspaces import delete_workspace
 
 
 async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch):
@@ -146,7 +146,7 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
         assert workspace_id in workspace_ids
         async with async_session_factory() as delete_db:
             owner = await delete_db.get(User, owner_id)
-            await permanently_delete_workspace(delete_db, owner, workspace_id)
+            await delete_workspace(delete_db, owner, workspace_id)
         return await owner_lookup(db, workspace_ids)
 
     try:
@@ -264,7 +264,7 @@ async def test_inaccessible_workspace_responses_do_not_expose_existence(
         workspace = await provision_initial_workspace(async_db, owner)
         workspace_id = workspace.id
         if availability == "deleted":
-            workspace.state = WorkspaceState.deleted
+            await async_db.delete(workspace)
         if availability in {"suspended", "terminated"}:
             async_db.add(
                 WorkspaceMember(

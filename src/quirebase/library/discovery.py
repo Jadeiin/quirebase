@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from inquiro import SearchClause, SearchQuery
+from inquiro.metadata import clean_identifier_value
 
 from quirebase.access import require_workspace_membership
 from quirebase.core.errors import ResourceUnavailable
@@ -89,12 +90,10 @@ async def search_candidate_records(
         raise ResourceUnavailable("user not available")
     reloaded_user = (await require_workspace_membership(db, reloaded_user, workspace_id)).actor
     candidate_identifiers = {
-        (candidate.lookup_identifier.provider, candidate.lookup_identifier.value)
+        (identifier.provider, identifier.value)
         for candidate in result.results
+        for identifier in candidate.identifiers
     }
-    candidate_identifiers.update(
-        ("doi", candidate.doi) for candidate in result.results if candidate.doi
-    )
     accessible_identifiers = await get_matching_accessible_item_identifiers(
         db, reloaded_user, workspace_id, candidate_identifiers
     )
@@ -112,16 +111,13 @@ async def search_candidate_records(
                 publication_date=candidate.publication_date,
                 doi=candidate.doi,
                 abstract=candidate.abstract,
-                imported=(
+                imported=any(
                     (
-                        candidate.lookup_identifier.provider.casefold(),
-                        candidate.lookup_identifier.value.casefold(),
+                        identifier.provider.strip().lower(),
+                        clean_identifier_value(identifier.provider, identifier.value),
                     )
                     in accessible_identifiers
-                    or bool(
-                        candidate.doi
-                        and ("doi", candidate.doi.casefold()) in accessible_identifiers
-                    )
+                    for identifier in candidate.identifiers
                 ),
             )
             for candidate in result.results

@@ -196,5 +196,7 @@ async def regenerate_tag_recommendations(
 
 
 @router.get("/authors", response_model=list[AuthorSuggestionView])
-async def suggest_authors(workspace_id: UUID, user: ApiUser, db: Database, query: str = ""):
-    return await search_authors_typeahead(db, user, workspace_id, query=query)
+async def suggest_authors(
+    workspace_id: UUID, user: ApiUser, db: Database, query: str = "", project: UUID | None = None
+):
+    return await search_authors_typeahead(db, user, workspace_id, query=query, project=project)

@@ -44,7 +44,6 @@ ORM_MODEL_OWNERS = {
     "ApiToken": "accounts",
     "Attachment": "documents",
     "AuditEvent": "audit",
-    "Author": "library",
     "CitationStyle": "library",
     "DiscussionMessage": "library",
     "FileRevision": "documents",
@@ -53,7 +52,6 @@ ORM_MODEL_OWNERS = {
     "ObjectIntegrityScan": "operations",
     "Invitation": "accounts",
     "Item": "library",
-    "ItemAuthor": "library",
     "ItemIdentifier": "library",
     "ItemRead": "library",
     "ItemTag": "library",
@@ -111,7 +109,6 @@ def test_invariant_ownership_and_narrow_reverse_interfaces():
             "PdfAnnotation",
             "FileRevision",
             "Attachment",
-            "ItemAuthor",
         },
         "library/cross_workspace.py": {"FileRevision", "Attachment"},
         "library/bulk_items.py": {"FileRevision", "Attachment"},
@@ -656,13 +653,8 @@ def test_package_facades_do_not_export_internal_persistence_collaborators():
 def test_internal_write_helpers_keep_the_callers_transaction():
     helper_locations = {
         "projects/workspaces.py": {"_add_missing_project_items"},
-        "library/authors.py": {
-            "_resolve_authors",
-            "_existing_author_identities",
-            "_replace_item_authors_many",
-        },
         "library/tags.py": {"_assign_item_tags"},
-        "library/item_metadata.py": {"_write_item_links"},
+        "library/item_metadata.py": {"_write_item_identifiers"},
         "library/identifiers.py": {"_create_items_from_candidates"},
     }
     path = "library/_item_identifiers.py"
@@ -749,19 +741,22 @@ def test_bibliography_integration_tests_use_the_package_facade():
         )
 
 
-def test_inquiro_facade_is_the_narrow_provider_interface():
+def test_inquiro_facade_exposes_provider_operations_and_bibliographic_value_types():
     expected = {
         "AcquiredDocument",
         "Affiliation",
+        "BibliographicMetadata",
         "CandidateNotFound",
         "CandidatePage",
         "CandidateRecord",
         "Contributor",
+        "CustomField",
         "DocumentRequest",
         "Identifier",
         "InquiroError",
         "InvalidPdfResponse",
         "InvalidProviderRequest",
+        "JsonValue",
         "PdfAccessDenied",
         "PdfNotAvailable",
         "ProviderConfig",

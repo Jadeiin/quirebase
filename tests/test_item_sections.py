@@ -12,6 +12,7 @@ from zipfile import ZipFile
 import pytest
 from advanced_alchemy.types import FileObject
 from app_helpers import json_payload
+from item_helpers import contributor, metadata_list_values
 from sqlalchemy import event, select
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -22,7 +23,6 @@ from quirebase.core.crypto import token_hash
 from quirebase.core.errors import ResourceNotFound, WorkspaceMembershipRequired
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.library import (
-    Contributor,
     ItemAnnotationsData,
     ItemDiscussionData,
     ItemFilesData,
@@ -38,7 +38,6 @@ from quirebase.models import (
     Attachment,
     AttachmentRole,
     AuditEvent,
-    Author,
     DiscussionMessage,
     FileRevision,
     Item,
@@ -241,9 +240,10 @@ async def test_item_sections_separate_page_responsibilities(
         db, async_session_factory, tmp_path, monkeypatch
     )
     try:
-        item.urls = (
+        item.urls = metadata_list_values(
             "https://publisher.example/article\n"
-            "https://publisher.example/files/reading-copy.PDF?download=1"
+            "https://publisher.example/files/reading-copy.PDF?download=1",
+            urls=True,
         )
         tag = Tag(
             workspace_id=item.workspace_id,
@@ -753,8 +753,8 @@ async def test_composite_read_values_remain_stable_without_orm_relationships(asy
         workspace.id,
         ItemMetadata(
             title="Detached read values",
-            authors=(Contributor("Lovelace", "Ada", is_corresponding=True),),
-            editors=(Contributor("Research Council"),),
+            authors=(contributor("Lovelace", "Ada", is_corresponding=True),),
+            editors=(contributor("Research Council"),),
         ),
     )
     revision = FileRevision(
@@ -799,8 +799,7 @@ async def test_composite_read_values_remain_stable_without_orm_relationships(asy
         ItemSection.metadata,
     )
     assert isinstance(files, ItemFilesData) and isinstance(metadata, ItemMetadataData)
-    author = await db.scalar(select(Author).where(Author.last_name == "Lovelace"))
-    author.first_name = "Changed"
+    metadata.item.authors[0]["given_name"] = "Changed"
     revision.file.metadata["original_name"] = "changed.pdf"
     attachment.file.metadata["original_name"] = "changed.png"
     db.expunge_all()
@@ -814,7 +813,7 @@ async def test_composite_read_values_remain_stable_without_orm_relationships(asy
     assert documents.files[0].page_count == 3
     assert documents.files[0].processing_state == "ready"
     assert files.attachments[0].role == AttachmentRole.graphical_abstract
-    assert detail.structured_authors[0].first_name == "Ada"
+    assert detail.structured_authors[0].given_name == "Ada"
     assert detail.structured_authors[0].is_corresponding
-    assert detail.editors[0].last_name == "Research Council"
-    assert detail.editors[0].first_name is None
+    assert detail.editors[0].family_name == "Research Council"
+    assert detail.editors[0].given_name is None

@@ -5,10 +5,11 @@ from app_helpers import json_payload
 from inquiro.bibliography import (
     BibliographyExportOptions,
     builtin_style_xml,
-    record_from_item,
     record_to_csl_json,
     render_citation,
 )
+from item_helpers import bibliography_record_from_item as record_from_item
+from item_helpers import contributor_values, metadata_list_values
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import (
@@ -28,7 +29,14 @@ from quirebase.library.citations import (
     resolve_style_xml,
     select_builtin_citation_styles,
 )
-from quirebase.models import CitationStyle, Item, User, WorkspaceMember, WorkspaceRole
+from quirebase.models import (
+    CitationStyle,
+    Item,
+    ItemIdentifier,
+    User,
+    WorkspaceMember,
+    WorkspaceRole,
+)
 from quirebase.workspaces import archive_workspace
 
 _counter = 0
@@ -54,10 +62,22 @@ async def _async_item(db, **overrides) -> Item:
         "reference_type": "article-journal",
     }
     fields.update(overrides)
-    item = Item(workspace_id=fixture_workspace_id(user), created_by=user.id, **fields)
+    for role in ("authors", "editors"):
+        fields[role] = contributor_values(fields[role])
+    fields["keywords"] = metadata_list_values(fields["keywords"])
+    doi = fields.pop("doi", None)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        identifier_links=[
+            ItemIdentifier(workspace_id=fixture_workspace_id(user), provider="doi", value=doi)
+        ]
+        if doi
+        else [],
+        **fields,
+    )
     db.add(item)
     await db.flush()
-    await db.refresh(item, ["author_links"])
     return item
 
 

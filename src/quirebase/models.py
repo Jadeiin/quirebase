@@ -32,43 +32,22 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .core.database import Base, EntityBase, IdentityBase
-from .core.errors import ValidationFailure
 from .core.passwords import PreparedPasswordHash
 
-MAX_AUTHOR_NAME_LENGTH = 120
-MAX_AUTHOR_IDENTITY_LENGTH = MAX_AUTHOR_NAME_LENGTH * 2 + 1
 MAX_CITATION_KEY_LENGTH = 128
 MAX_RESOURCE_ID_LENGTH = 255
-
-
-def normalize_author_identity(last_name: str, first_name: str | None = None) -> str:
-    """Return an identity whose normalized name parts fit the Contributor limit."""
-    last = " ".join(last_name.split()).casefold()
-    first = " ".join(first_name.split()).casefold() if first_name else ""
-    if len(last) > MAX_AUTHOR_NAME_LENGTH or len(first) > MAX_AUTHOR_NAME_LENGTH:
-        raise ValidationFailure("contributor name is too long after normalization")
-    return f"{last}\x1f{first}"
 
 
 def normalize_tag_name(name: str) -> str:
     return " ".join(name.split()).casefold()
 
 
-def _tag_name_default(context: _AuthorDefaultContext) -> str:
+def _tag_name_default(context: _ColumnDefaultContext) -> str:
     return normalize_tag_name(str(context.get_current_parameters().get("name") or ""))
 
 
-class _AuthorDefaultContext(Protocol):
+class _ColumnDefaultContext(Protocol):
     def get_current_parameters(self) -> dict[str, Any]: ...
-
-
-def _author_identity_default(context: _AuthorDefaultContext) -> str:
-    parameters = context.get_current_parameters()
-    first_name = parameters.get("first_name")
-    return normalize_author_identity(
-        str(parameters.get("last_name") or ""),
-        first_name if isinstance(first_name, str) else None,
-    )
 
 
 def now() -> datetime:
@@ -276,7 +255,10 @@ class Invitation(EntityBase):
 
 class Item(EntityBase):
     __tablename__ = "items"
-    __table_args__ = (UniqueConstraint("workspace_id", "id", name="uq_items_workspace_id"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_items_workspace_id"),
+        Index("ix_items_workspace_reference_type", "workspace_id", "reference_type"),
+    )
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
@@ -287,20 +269,17 @@ class Item(EntityBase):
     volume: Mapped[str | None] = mapped_column(String(100))
     issue: Mapped[str | None] = mapped_column(String(100))
     pages: Mapped[str | None] = mapped_column(String(100))
-    affiliation: Mapped[str | None] = mapped_column(Text)
     publisher: Mapped[str | None] = mapped_column(Text)
     place_published: Mapped[str | None] = mapped_column(String(255))
     journal_abbreviation: Mapped[str | None] = mapped_column(Text)
-    doi: Mapped[str | None] = mapped_column(String(500), index=True)
-    identifiers: Mapped[str | None] = mapped_column(Text)
     reference_type: Mapped[ReferenceType] = mapped_column(
         enum_type(ReferenceType, "reference_type"), default=ReferenceType.document
     )
-    authors: Mapped[str | None] = mapped_column(Text)
-    editors: Mapped[str | None] = mapped_column(Text)
+    authors: Mapped[list[dict[str, Any]]] = mapped_column(JsonB, default=list)
+    editors: Mapped[list[dict[str, Any]]] = mapped_column(JsonB, default=list)
     citation_key: Mapped[str | None] = mapped_column(String(MAX_CITATION_KEY_LENGTH), index=True)
-    urls: Mapped[str | None] = mapped_column(Text)
-    keywords: Mapped[str | None] = mapped_column(Text)
+    urls: Mapped[list[dict[str, Any]]] = mapped_column(JsonB, default=list)
+    keywords: Mapped[list[str]] = mapped_column(JsonB, default=list)
     custom_fields: Mapped[dict | None] = mapped_column(JsonB)
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     updated_by: Mapped[UUID | None] = mapped_column(
@@ -310,41 +289,11 @@ class Item(EntityBase):
     revisions: Mapped[list[FileRevision]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
-    author_links: Mapped[list[ItemAuthor]] = relationship(
-        back_populates="item",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-        order_by="ItemAuthor.position",
-    )
     identifier_links: Mapped[list[ItemIdentifier]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
     creator: Mapped[User] = relationship(foreign_keys=[created_by])
     updater: Mapped[User | None] = relationship(foreign_keys=[updated_by])
-
-
-class Author(EntityBase):
-    __tablename__ = "authors"
-    __table_args__ = (UniqueConstraint("identity_key", name="uq_authors_identity"),)
-    first_name: Mapped[str | None] = mapped_column(String(MAX_AUTHOR_NAME_LENGTH))
-    last_name: Mapped[str] = mapped_column(String(MAX_AUTHOR_NAME_LENGTH), index=True)
-    identity_key: Mapped[str] = mapped_column(
-        String(MAX_AUTHOR_IDENTITY_LENGTH), nullable=False, default=_author_identity_default
-    )
-
-
-class ItemAuthor(EntityBase):
-    __tablename__ = "item_authors"
-    __table_args__ = (UniqueConstraint("item_id", "author_id", "role", name="uq_item_author_role"),)
-    item_id: Mapped[UUID] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
-    author_id: Mapped[UUID] = mapped_column(
-        ForeignKey("authors.id", ondelete="RESTRICT"), index=True
-    )
-    position: Mapped[int] = mapped_column(Integer, default=1)
-    role: Mapped[str] = mapped_column(String(20), default="author")
-    is_corresponding: Mapped[bool] = mapped_column(Boolean, default=False)
-    item: Mapped[Item] = relationship(back_populates="author_links")
-    author: Mapped[Author] = relationship()
 
 
 class ItemIdentifier(EntityBase):

@@ -8,6 +8,7 @@ from uuid import uuid4
 import pymupdf
 import pytest
 from advanced_alchemy.types import FileObject
+from item_helpers import contributor
 from sqlalchemy import func, select, update
 from workspace_helpers import provision_initial_workspace
 
@@ -19,7 +20,6 @@ from quirebase.core.errors import (
 )
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.library import (
-    Contributor,
     ExternalIdentifier,
     ItemMetadata,
     copy_item_to_workspace,
@@ -30,11 +30,9 @@ from quirebase.library.imports import extract_pdf_import_doi
 from quirebase.models import (
     Attachment,
     AuditEvent,
-    Author,
     FileRevision,
     ImportBatch,
     Item,
-    ItemAuthor,
     ItemIdentifier,
     User,
     WorkspaceMember,
@@ -72,11 +70,17 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
         foreign = Item(
             workspace_id=foreign_workspace_id, created_by=other.id, title="Protected foreign"
         )
-        author = Author(last_name="Protected", first_name="Contributor")
-        db.add_all([own, foreign, author])
+        db.add_all([own, foreign])
         await db.flush()
         for item in (own, foreign):
-            db.add(ItemAuthor(item_id=item.id, author_id=author.id, position=1, role="author"))
+            item.authors = [
+                {
+                    "display_name": "Protected, Contributor",
+                    "family_name": "Protected",
+                    "given_name": "Contributor",
+                    "is_corresponding": False,
+                }
+            ]
             db.add(
                 ItemIdentifier(
                     workspace_id=item.workspace_id,
@@ -87,7 +91,7 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
             )
             await search_index(db).index_item(db, item.id)
         await db.commit()
-        own_id, foreign_id, author_id = own.id, foreign.id, author.id
+        own_id, foreign_id = own.id, foreign.id
         enqueues_before = list(fake_durable_operations.enqueues)
 
         target_workspace_id, target_id, expected_version, error = (
@@ -109,7 +113,7 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
                 expected_version,
                 ItemMetadata(
                     title="Mutation candidate",
-                    authors=(Contributor("Replacement", "Contributor"),),
+                    authors=(contributor("Replacement", "Contributor"),),
                     identifiers=(ExternalIdentifier("pmid", "replacement-id"),),
                 ),
             )
@@ -120,19 +124,18 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
             for item_id, title in ((own_id, "Protected local"), (foreign_id, "Protected foreign")):
                 persisted = await observer.get(Item, item_id)
                 assert (persisted.title, persisted.version) == (title, 1)
-                contributor = await observer.scalar(
-                    select(ItemAuthor).where(ItemAuthor.item_id == item_id)
-                )
-                assert (contributor.author_id, contributor.position, contributor.role) == (
-                    author_id,
-                    1,
-                    "author",
-                )
+                assert persisted.authors == [
+                    {
+                        "display_name": "Protected, Contributor",
+                        "family_name": "Protected",
+                        "given_name": "Contributor",
+                        "is_corresponding": False,
+                    }
+                ]
                 identifier = await observer.scalar(
                     select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)
                 )
                 assert (identifier.provider, identifier.value) == ("pmid", "protected-id")
-            assert await observer.scalar(select(func.count()).select_from(Author)) == 1
             assert (
                 await observer.scalar(
                     select(func.count())

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from app_helpers import json_payload
+from item_helpers import metadata_list_values
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -122,7 +123,7 @@ async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
         workspace_id=workspace_id,
         title="Compiler Optimization Algorithms",
         abstract="Efficient algorithms for compiler backend.",
-        keywords="Compiler; New Optimizer",
+        keywords=metadata_list_values("Compiler; New Optimizer"),
         created_by=user.id,
     )
     async_db.add_all([*tags, item])

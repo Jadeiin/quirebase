@@ -16,11 +16,22 @@ def search_text_for_item(item: Item) -> str:
         for value in (
             convert_rich_text(item.title, source="html", target="text"),
             convert_rich_text(item.abstract, source="html", target="text"),
-            item.authors,
-            item.editors,
-            item.keywords,
+            "\n".join(
+                " ".join(
+                    part
+                    for part in (
+                        row["display_name"],
+                        row.get("family_name"),
+                        row.get("given_name"),
+                        row.get("suffix"),
+                    )
+                    if part
+                )
+                for row in (*item.authors, *item.editors)
+            ),
+            "\n".join(item.keywords),
             json.dumps(item.custom_fields, ensure_ascii=False) if item.custom_fields else None,
-            item.identifiers,
+            "\n".join(row.value for row in item.identifier_links),
         )
         if value
     )

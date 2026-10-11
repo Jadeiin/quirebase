@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import httpx2
 import pytest
+from item_helpers import stored_doi
 from provider_helpers import provider_runtime
 from sqlalchemy import select
 from workspace_helpers import provision_initial_workspace
@@ -104,8 +105,10 @@ async def test_provider_lookup_aliases_preserve_canonical_identifiers(
         assert event.detail["lookup_provider"] == provider
 
     assert item.title == "Resolved Item"
-    assert item.doi == RETURNED_DOI
-    expected = {"arxiv": "2401.00001"} if operation == "sync" else {}
+    assert (await stored_doi(db, item)) == RETURNED_DOI.lower()
+    expected = {"doi": RETURNED_DOI.lower()}
+    if operation == "sync":
+        expected["arxiv"] = "2401.00001"
     if provider == "openalex":
         expected["openalex"] = "W123"
     rows = (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()

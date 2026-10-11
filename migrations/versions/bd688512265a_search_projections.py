@@ -1,7 +1,7 @@
 """search projections
 
 Revision ID: bd688512265a
-Revises: e74ae5ea11b2
+Revises: cde8b41cfa2d
 Create Date: 2026-10-09 20:08:04.445451
 
 """
@@ -43,7 +43,7 @@ sa.OneTimeCode = OneTimeCode
 
 # revision identifiers, used by Alembic.
 revision = 'bd688512265a'
-down_revision = 'e74ae5ea11b2'
+down_revision = 'cde8b41cfa2d'
 branch_labels = None
 depends_on = None
 

@@ -8,14 +8,14 @@ from app_helpers import json_payload
 from inquiro import CandidateRecord, Contributor, Identifier, ResourceLink
 from inquiro.bibliography import (
     builtin_style_xml,
-    record_from_item,
     record_to_csl_json,
     render_bibliography,
 )
+from item_helpers import bibliography_record_from_item as record_from_item
+from item_helpers import contributor_values, metadata_list_values, stored_doi
 from item_helpers import create_item_record as create_item
 from provider_helpers import provider_runtime
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -35,7 +35,6 @@ from quirebase.library.imports import (
 from quirebase.models import (
     AuditEvent,
     Item,
-    ItemAuthor,
     ItemIdentifier,
     ReferenceType,
     User,
@@ -143,7 +142,7 @@ async def test_seam1_oa_corpus_metadata_lookup_and_reconstruction():
 
 @pytest.mark.anyio
 async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, monkeypatch):
-    """Seam 2: Ingesting an OA record creates Item, Author links, Tags, and ItemIdentifiers."""
+    """Seam 2: Ingesting an OA record creates Item metadata, Tags, and ItemIdentifiers."""
     db = async_db
     user = User(username="oa_corpus_tester", password_hash="secret")
     db.add(user)
@@ -189,20 +188,9 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
     assert item.pages == "2599-2614"
     assert "mdpi.com" in str(item.urls)
 
-    # Verify structured ItemAuthor relations
-    author_links = list(
-        (
-            await db.scalars(
-                select(ItemAuthor)
-                .options(selectinload(ItemAuthor.author))
-                .where(ItemAuthor.item_id == item.id)
-                .order_by(ItemAuthor.position)
-            )
-        ).all()
-    )
-    assert len(author_links) == 2
-    assert author_links[0].author.last_name == "Hasanein"
-    assert author_links[1].author.last_name == "Sobaih"
+    assert len(item.authors) == 2
+    assert item.authors[0]["display_name"] == "Ahmed M. Hasanein"
+    assert item.authors[1]["display_name"] == "Abu Elnasr E. Sobaih"
 
     # Verify Keywords populated on Item metadata
     assert item.keywords is not None
@@ -215,8 +203,8 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
     )
     ident_dict = {i.provider: i.value for i in idents}
     assert ident_dict.get("openalex") == "W4388656112"
-    assert "doi" not in ident_dict
-    assert item.doi == "10.3390/ejihpe13110181"
+    assert ident_dict["doi"] == "10.3390/ejihpe13110181"
+    assert (await stored_doi(db, item)) == "10.3390/ejihpe13110181"
 
 
 @pytest.mark.anyio
@@ -235,7 +223,7 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
         title="Drivers and Consequences of ChatGPT Use (Draft)",
         authors="Hasanein, Ahmed M.",
     )
-    assert item.doi is None
+    assert (await stored_doi(db, item)) is None
     assert item.volume is None
 
     mock_rec = CandidateRecord(
@@ -255,7 +243,6 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
         issue="11",
         pages="2599-2614",
         publisher="MDPI",
-        doi="10.3390/ejihpe13110181",
         urls=(
             ResourceLink("https://doi.org/10.3390/ejihpe13110181"),
             ResourceLink("https://www.mdpi.com/2254-9625/13/11/181/pdf"),
@@ -292,9 +279,9 @@ async def test_seam3_oa_corpus_upstream_sync_and_reconciliation(async_db):
     assert "https://www.mdpi.com/2254-9625/13/11/181/pdf" in str(updated.urls)
 
     # Authors enriched
-    assert len(updated.author_links) == 2
-    assert updated.author_links[0].author.last_name == "Hasanein"
-    assert updated.author_links[1].author.last_name == "Sobaih"
+    assert len(updated.authors) == 2
+    assert updated.authors[0]["display_name"] == "Hasanein, Ahmed M."
+    assert updated.authors[1]["display_name"] == "Sobaih, Abu Elnasr E."
 
     # Audit event recorded
     audit = await db.scalar(
@@ -317,7 +304,7 @@ async def test_seam4_oa_corpus_citation_generation_and_csl_export(async_db):
     item = Item(
         workspace_id=fixture_workspace_id(user),
         title="Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
-        authors="Hasanein, Ahmed M.; Sobaih, Abu Elnasr E.",
+        authors=contributor_values("Hasanein, Ahmed M.; Sobaih, Abu Elnasr E."),
         publication_title="European Journal of Investigation in Health, Psychology and Education",
         journal_abbreviation="Eur J Investig Health Psychol Educ",
         publication_date="2023",
@@ -325,8 +312,14 @@ async def test_seam4_oa_corpus_citation_generation_and_csl_export(async_db):
         issue="11",
         pages="2599-2614",
         publisher="MDPI",
-        doi="10.3390/ejihpe13110181",
-        urls="https://doi.org/10.3390/ejihpe13110181",
+        identifier_links=[
+            ItemIdentifier(
+                workspace_id=fixture_workspace_id(user),
+                provider="doi",
+                value="10.3390/ejihpe13110181",
+            )
+        ],
+        urls=metadata_list_values("https://doi.org/10.3390/ejihpe13110181", urls=True),
         reference_type=ReferenceType.article,
         created_by=user.id,
     )
@@ -377,12 +370,18 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         item = Item(
             workspace_id=seed_item.workspace_id,
             title="Drivers and Consequences of ChatGPT Use in Higher Education",
-            authors="Hasanein, Ahmed M.",
+            authors=contributor_values("Hasanein, Ahmed M."),
             publication_title="European Journal of Investigation in Health, Psychology and Education",
             volume="13",
             issue="11",
             pages="2599-2614",
-            doi="10.3390/ejihpe13110181",
+            identifier_links=[
+                ItemIdentifier(
+                    workspace_id=seed_item.workspace_id,
+                    provider="doi",
+                    value="10.3390/ejihpe13110181",
+                )
+            ],
             created_by=user_id,
             updated_by=user_id,
         )
@@ -405,8 +404,16 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
                 "metadata": {
                     "title": "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives",
                     "authors": [
-                        {"last_name": "Hasanein", "first_name": "Ahmed M."},
-                        {"last_name": "Sobaih", "first_name": "Abu Elnasr E."},
+                        {
+                            "display_name": "Hasanein, Ahmed M.",
+                            "family_name": "Hasanein",
+                            "given_name": "Ahmed M.",
+                        },
+                        {
+                            "display_name": "Sobaih, Abu Elnasr E.",
+                            "family_name": "Sobaih",
+                            "given_name": "Abu Elnasr E.",
+                        },
                     ],
                     "publication_title": item.publication_title,
                     "volume": "13",
@@ -448,9 +455,9 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         assert isinstance(metadata, ItemMetadataData)
         contributors = metadata.metadata.authors
         assert len(contributors) == 2
-        assert contributors[0].last_name == "Hasanein"
-        assert contributors[1].last_name == "Sobaih"
-        assert contributors[1].first_name == "Abu Elnasr E."
+        assert contributors[0].family_name == "Hasanein"
+        assert contributors[1].family_name == "Sobaih"
+        assert contributors[1].given_name == "Abu Elnasr E."
     finally:
         await client.aclose()
         get_settings.cache_clear()

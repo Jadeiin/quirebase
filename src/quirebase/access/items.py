@@ -16,7 +16,7 @@ from quirebase.core.errors import (
     WorkspaceMembershipRequired,
     WorkspaceUnavailable,
 )
-from quirebase.models import Item, ItemAuthor, User
+from quirebase.models import Item, User
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -40,7 +40,6 @@ async def get_item(db: AsyncSession, ctx: WorkspaceContext, item_id: UUID) -> It
     return await db.scalar(
         workspace_select(Item, ctx)
         .options(
-            selectinload(Item.author_links).selectinload(ItemAuthor.author),
             selectinload(Item.identifier_links),
         )
         .where(Item.id == item_id)
@@ -55,7 +54,6 @@ async def get_item_for_update(
     return await db.scalar(
         workspace_select(Item, ctx)
         .options(
-            selectinload(Item.author_links).selectinload(ItemAuthor.author),
             selectinload(Item.identifier_links),
         )
         .where(Item.id == item_id)
@@ -145,7 +143,6 @@ async def require_accessible_items(
             await db.scalars(
                 select(Item)
                 .options(
-                    selectinload(Item.author_links).selectinload(ItemAuthor.author),
                     selectinload(Item.identifier_links),
                 )
                 .where(Item.workspace_id == workspace_id, Item.id.in_(requested))

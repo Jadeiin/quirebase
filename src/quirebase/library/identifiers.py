@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from inquiro.identifiers import canonical_doi
 from inquiro.models import CandidateRecord
 from sqlalchemy import select, update
 
@@ -18,7 +19,7 @@ from quirebase.search import search_index
 
 from ._item_identifiers import _replace_item_identifiers_many
 from ._metadata import MetadataWrite, candidate_write, generate_citation_key
-from .item_metadata import _write_item_links
+from .item_metadata import _write_item_identifiers
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -78,13 +79,11 @@ async def rescan_pdf_doi(
                 if item is None:
                     raise ResourceUnavailable("item not found")
                 # A manually supplied DOI takes precedence over scanner output.
-                if item.doi:
-                    return item.doi
-                existing_pairs = [
-                    (ident.provider, ident.value)
-                    for ident in await get_item_identifiers(db, item_id)
-                    if ident.provider != "doi"
-                ]
+                existing = await get_item_identifiers(db, item_id)
+                if doi := next((row.value for row in existing if row.provider == "doi"), None):
+                    return doi
+                found_doi = canonical_doi(found_doi)
+                existing_pairs = [(ident.provider, ident.value) for ident in existing]
                 existing_pairs.append(("doi", found_doi))
                 await _replace_item_identifiers_many(db, [(item, existing_pairs)])
                 item.updated_by = user.id
@@ -134,7 +133,7 @@ async def apply_metadata_record(
     )
     for name, value in write.values.items():
         setattr(item, name, value)
-    await _write_item_links(db, [(item, write)])
+    await _write_item_identifiers(db, [(item, write)])
     if not item.citation_key:
         item.citation_key = generate_citation_key(item)
     await db.flush()
@@ -204,12 +203,7 @@ async def _sync_metadata_from_upstream(
         record,
         merge=True,
     )
-    # The item was eagerly loaded before its link rows were replaced. Reload
-    # those collections explicitly so callers never observe the stale identity-
-    # map snapshot or trigger lazy I/O after this async operation returns.
-    await db.refresh(item, ["author_links", "identifier_links"])
-    for link in item.author_links:
-        await db.refresh(link, ["author"])
+    await db.refresh(item, ["identifier_links"])
 
     # Upstream changes commonly alter the title, first author or year. Keep a
     # key that was generated from the previous metadata in sync, while leaving
@@ -293,7 +287,7 @@ async def _create_items_from_candidates(
     items = [item for item, _ in prepared]
     db.add_all(items)
     await db.flush()
-    await _write_item_links(db, prepared, replace=False)
+    await _write_item_identifiers(db, prepared, replace=False)
     for item in items:
         if not item.citation_key:
             item.citation_key = generate_citation_key(item)

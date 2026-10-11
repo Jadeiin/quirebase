@@ -81,7 +81,6 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
-    item.identifiers = "not valid JSON"
     async_db.add(
         ItemIdentifier(
             workspace_id=item.workspace_id, item_id=item.id, provider="openalex", value="W99"
@@ -92,7 +91,7 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
         provider="openalex",
         lookup_identifier=Identifier("openalex", "w99"),
         title="Already imported",
-        doi="10.1000/candidate",
+        identifiers=(Identifier("openalex", "W99"), Identifier("doi", "10.1000/candidate")),
     )
     monkeypatch.setattr(
         "quirebase.library.discovery.search_candidates",
@@ -109,6 +108,57 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
 
         assert searched.status_code == 200
         assert searched.json()["results"][0]["imported"] is True
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "stored_isbn, candidate_isbn",
+    [("080442957x", "080442957X"), ("080442957X", "080442957x")],
+)
+async def test_discovery_recognizes_created_isbn_with_different_checksum_case(
+    async_db, async_session_factory, tmp_path, monkeypatch, stored_isbn, candidate_isbn
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+    candidate = CandidateRecord(
+        provider="openlibrary",
+        lookup_identifier=Identifier("isbn", candidate_isbn),
+        title="ISBN record",
+        identifiers=(Identifier("isbn", candidate_isbn),),
+    )
+    monkeypatch.setattr(
+        "quirebase.library.discovery.search_candidates",
+        AsyncMock(return_value=CandidatePage("openlibrary", (candidate,), 1, 1, 10)),
+    )
+    try:
+        created = await client.post(
+            f"{workspace_base}/items",
+            json={
+                "title": candidate.title,
+                "identifiers": [{"provider": "isbn", "value": stored_isbn}],
+            },
+        )
+        assert created.status_code == 201
+        searched = await client.post(
+            f"{workspace_base}/discovery/search",
+            json={
+                "provider": "openlibrary",
+                "clauses": [{"operator": "and", "field": "title", "term": "ISBN"}],
+            },
+        )
+
+        assert searched.status_code == 200
+        assert searched.json()["results"][0]["imported"] is True
+        identifier = await async_db.scalar(
+            select(ItemIdentifier).where(ItemIdentifier.provider == "isbn")
+        )
+        assert identifier is not None
+        assert identifier.value == "080442957X"
     finally:
         await client.aclose()
         get_settings.cache_clear()

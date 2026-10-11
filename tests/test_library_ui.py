@@ -14,6 +14,7 @@ import pytest
 from app_helpers import json_payload
 from import_helpers import pdf_import_batch_data
 from inquiro import CandidateRecord, Contributor, Identifier
+from item_helpers import contributor_values, metadata_list_values
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from storage_helpers import local_object_path
@@ -42,6 +43,7 @@ from quirebase.models import (
     AuditEvent,
     ImportBatch,
     Item,
+    ItemIdentifier,
     ItemRead,
     ItemTag,
     Project,
@@ -64,7 +66,6 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
         authors=tuple(Contributor(name.strip()) for name in authors.split(";"))
         if authors is not None
         else None,
-        doi=identifier,
         identifiers=(Identifier("doi", identifier),),
     )
 
@@ -761,8 +762,10 @@ async def test_library_pagination_filters_and_bulk_actions(
                 workspace_id=original.workspace_id,
                 title=f"Library paper {number:02d}",
                 abstract="This abstract should be optional." if number == 0 else None,
-                authors="Alice Researcher" if number % 2 == 0 else "Bob Scientist",
-                keywords="imaging" if number % 3 == 0 else "simulation",
+                authors=contributor_values(
+                    "Alice Researcher" if number % 2 == 0 else "Bob Scientist"
+                ),
+                keywords=metadata_list_values("imaging" if number % 3 == 0 else "simulation"),
                 publication_date="2025" if number % 2 == 0 else "2024",
                 created_by=original.created_by,
                 updated_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=number),
@@ -977,10 +980,14 @@ async def test_pdf_import_batch_previews_before_creating_items(
         )
         assert committed.status_code == 200
         first = await db.scalar(
-            select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/first")
+            select(Item)
+            .options(selectinload(Item.revisions))
+            .where(Item.identifier_links.any(provider="doi", value="10.1000/first"))
         )
         second = await db.scalar(
-            select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/second")
+            select(Item)
+            .options(selectinload(Item.revisions))
+            .where(Item.identifier_links.any(provider="doi", value="10.1000/second"))
         )
         assert first is not None and second is not None
         assert first.revisions[0].file.metadata["original_name"] == "first.pdf"
@@ -1038,7 +1045,9 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
         )
         assert committed.status_code == 200
         article = await db.scalar(
-            select(Item).options(selectinload(Item.revisions)).where(Item.doi == "10.1000/valid")
+            select(Item)
+            .options(selectinload(Item.revisions))
+            .where(Item.identifier_links.any(provider="doi", value="10.1000/valid"))
         )
         assert article is not None
         assert article.revisions[0].file.metadata["original_name"] == "valid.pdf"
@@ -1056,7 +1065,14 @@ async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
         db, async_session_factory, tmp_path, monkeypatch
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-    item.doi = "10.1000/existing"
+    db.add(
+        ItemIdentifier(
+            workspace_id=item.workspace_id,
+            item_id=item.id,
+            provider="doi",
+            value="10.1000/existing",
+        )
+    )
     await db.commit()
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     try:
@@ -1210,7 +1226,7 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         imported = await db.scalar(
             select(Item)
             .options(selectinload(Item.revisions))
-            .where(Item.doi == "10.1000/shared-staged")
+            .where(Item.identifier_links.any(provider="doi", value="10.1000/shared-staged"))
         )
         assert imported is not None
         assert local_object_path(imported.revisions[0].file.path).is_file()
@@ -1368,7 +1384,9 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
         assert stale.status_code == 409
         assert (
             await db.scalar(
-                select(func.count()).select_from(Item).where(Item.doi == "10.1000/stale-preview")
+                select(func.count())
+                .select_from(Item)
+                .where(Item.identifier_links.any(provider="doi", value="10.1000/stale-preview"))
             )
             == 1
         )

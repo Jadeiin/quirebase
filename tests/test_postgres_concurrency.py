@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
+from item_helpers import contributor
 from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,14 +74,12 @@ from quirebase.library import (
     search_library,
     stage_import_batch,
 )
-from quirebase.library.authors import _resolve_authors
 from quirebase.library.citations import create_custom_citation_style
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
     AttachmentRole,
     AuditEvent,
-    Author,
     CitationStyle,
     DiscussionMessage,
     FileRevision,
@@ -111,8 +110,8 @@ from quirebase.projects import (
     add_item_to_project,
     add_items_to_project,
     add_project_participant,
-    delete_project,
     create_project,
+    delete_project,
     join_project,
     leave_project,
     remove_project_participant,
@@ -2458,7 +2457,14 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
         async with postgres_race.session("second") as db:
             actor = await db.get(User, owner_id)
             with pytest.raises(VersionConflict) as conflict:
-                await revise_item_metadata(db, actor, workspace_id, item_id, 1, ItemMetadata(loser))
+                await revise_item_metadata(
+                    db,
+                    actor,
+                    workspace_id,
+                    item_id,
+                    1,
+                    ItemMetadata(loser, authors=(contributor(loser, "Author"),), keywords=(loser,)),
+                )
             assert conflict.value.current_version == 2
 
     async with postgres_race.session("first") as db:
@@ -2468,7 +2474,14 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
         postgres_race.start("second", replace_second())
         await postgres_race.wait_blocked("second", "first")
         result = await revise_item_metadata(
-            db, actor, workspace_id, item_id, 1, ItemMetadata(winner)
+            db,
+            actor,
+            workspace_id,
+            item_id,
+            1,
+            ItemMetadata(
+                winner, authors=(contributor(winner, "Author", True),), keywords=(winner,)
+            ),
         )
         assert result.version == 2
         await postgres_race.join("second")
@@ -2479,6 +2492,8 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
         view = await open_item_section(db, context, item_id, ItemSection.metadata)
         assert isinstance(view, ItemMetadataData)
         assert view.metadata.title == winner and view.item.version == 2
+        assert view.metadata.authors == (contributor(winner, "Author", True),)
+        assert view.metadata.keywords == (winner,)
         items, total, *_ = await search_library(db, actor, workspace_id, q=winner)
         assert total == 1 and items[0].id == item_id
         assert (await search_library(db, actor, workspace_id, q=loser))[1] == 0
@@ -2574,41 +2589,6 @@ async def test_concurrent_citation_style_install_translates_unique_race_and_keep
             )
         )
         assert names == {"Shared", "Distinct"}
-
-
-@pytest.mark.concurrency_case("author-install")
-async def test_concurrent_author_batches_recover_conflicts_and_keep_missing_identities(
-    postgres_sessions, postgres_race
-):
-    async def install_second():
-        async with postgres_race.session("second") as db:
-            resolved = await _resolve_authors(
-                db,
-                [
-                    ("Shared", "Author"),
-                    ("Onlysecond", None),
-                    ("SHARED", "AUTHOR"),
-                ],
-            )
-            await db.commit()
-            return {key: author.id for key, author in resolved.items()}
-
-    async with postgres_race.session("first") as db:
-        first = await _resolve_authors(db, [("Shared", "Author"), ("Onlyfirst", None)])
-        shared_id = first["shared\x1fauthor"].id
-        postgres_race.start("second", install_second())
-        await postgres_race.wait_blocked("second", "first")
-        await db.commit()
-        second = await postgres_race.join("second")
-        assert second["shared\x1fauthor"] == shared_id
-        assert "onlysecond\x1f" in second
-
-    async with postgres_race.session("verify") as db:
-        assert set(await db.scalars(select(Author.identity_key))) == {
-            "shared\x1fauthor",
-            "onlyfirst\x1f",
-            "onlysecond\x1f",
-        }
 
 
 @pytest.mark.concurrency_case("participation-recheck")

@@ -286,6 +286,15 @@ def test_initial_schema_retains_audit_history_and_rejects_inactive_owners(migrat
         db.add(event)
         db.commit()
         workspace_id, project_id, event_id, owner_id = workspace.id, project.id, event.id, owner.id
+        for model, identity in ((Workspace, workspace_id), (Project, project_id)):
+            # Bypass enum validation to exercise the migrated database CHECK constraints.
+            with pytest.raises(IntegrityError), db.begin_nested():
+                db.execute(
+                    model.__table__
+                    .update()
+                    .where(model.id == identity)
+                    .values(state=text("'deleted'"))
+                )
         for values in (
             {"state": "suspended"},
             {"terminated_at": datetime.now(UTC)},

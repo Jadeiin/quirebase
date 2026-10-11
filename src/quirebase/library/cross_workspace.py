@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
@@ -14,7 +15,6 @@ from quirebase.core.errors import ValidationFailure
 from quirebase.documents import prepare_item_document_copy
 from quirebase.models import (
     Item,
-    ItemAuthor,
     ItemIdentifier,
     User,
     Workspace,
@@ -37,12 +37,9 @@ _ITEM_FIELDS = (
     "volume",
     "issue",
     "pages",
-    "affiliation",
     "publisher",
     "place_published",
     "journal_abbreviation",
-    "doi",
-    "identifiers",
     "reference_type",
     "authors",
     "editors",
@@ -67,18 +64,9 @@ async def copy_item_to_workspace(
     await require_workspace_action(db, actor, source_workspace_id, ResourceAction.workspace_export)
     source = await require_readable_item(db, actor, source_workspace_id, item_id)
     source_version = source.version
-    item_fields: dict[str, Any] = {field: getattr(source, field) for field in _ITEM_FIELDS}
-    author_links = tuple(
-        sorted(
-            (
-                link.author_id,
-                link.position,
-                link.role,
-                link.is_corresponding,
-            )
-            for link in source.author_links
-        )
-    )
+    item_fields: dict[str, Any] = deepcopy({
+        field: getattr(source, field) for field in _ITEM_FIELDS
+    })
     identifier_links = tuple(
         sorted((link.provider, link.value) for link in source.identifier_links)
     )
@@ -134,14 +122,6 @@ async def copy_item_to_workspace(
             or any(getattr(current_source, field) != value for field, value in item_fields.items())
         ):
             raise ValidationFailure("source Item changed while its files were copied")
-        current_author_links = tuple(
-            sorted(
-                (link.author_id, link.position, link.role, link.is_corresponding)
-                for link in (
-                    await db.scalars(select(ItemAuthor).where(ItemAuthor.item_id == item_id))
-                ).all()
-            )
-        )
         current_identifier_links = tuple(
             sorted(
                 (link.provider, link.value)
@@ -152,7 +132,7 @@ async def copy_item_to_workspace(
                 ).all()
             )
         )
-        if current_author_links != author_links or current_identifier_links != identifier_links:
+        if current_identifier_links != identifier_links:
             raise ValidationFailure("source Item changed while its files were copied")
 
         target = Item(
@@ -163,20 +143,7 @@ async def copy_item_to_workspace(
         db.add(target)
         await db.flush()
 
-        db.add_all([
-            ItemAuthor(
-                item_id=target.id,
-                author_id=author_id,
-                position=position,
-                role=role,
-                is_corresponding=is_corresponding,
-            )
-            for author_id, position, role, is_corresponding in author_links
-        ])
-        pairs = list(identifier_links)
-        if target.doi:
-            pairs.append(("doi", target.doi))
-        await _replace_item_identifiers_many(db, [(target, pairs)], replace=False)
+        await _replace_item_identifiers_many(db, [(target, list(identifier_links))], replace=False)
 
         await documents.install(db, current_actor.id, target_workspace_id, target.id)
         await search_index(db).index_item(db, target.id)

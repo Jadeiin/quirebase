@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
@@ -8,15 +7,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from app_helpers import json_payload
 from inquiro import CandidateRecord, Contributor, Identifier
-from sqlalchemy import func, select
+from item_helpers import contributor_values, metadata_list_values, stored_doi
+from sqlalchemy import select
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
 from quirebase.models import (
-    Author,
     Item,
-    ItemAuthor,
     ItemIdentifier,
     ItemTag,
     ItemTagRecommendation,
@@ -73,6 +71,94 @@ async def test_http_metadata_rejects_unsupported_types_and_invalid_dates(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("role", ["authors", "editors"])
+@pytest.mark.parametrize("operation", ["create", "update"])
+async def test_http_metadata_rejects_duplicates_after_name_normalization(
+    async_db, async_session_factory, tmp_path, monkeypatch, role, operation
+):
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    base = f"/api/v1/workspaces/{item.workspace_id}/items"
+    original_title, original_version = item.title, item.version
+    metadata = {
+        "title": "Duplicate credits",
+        role: [
+            {"display_name": "John Smith", "family_name": " "},
+            {"display_name": "John Smith"},
+        ],
+    }
+    try:
+        if operation == "create":
+            response = await client.post(base, json=metadata)
+        else:
+            response = await client.put(
+                f"{base}/{item.id}",
+                json={"expected_version": original_version, "metadata": metadata},
+            )
+
+        assert response.status_code == 422
+        assert await async_db.scalar(select(Item).where(Item.title == metadata["title"])) is None
+        await async_db.refresh(item)
+        assert item.title == original_title and item.version == original_version
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("role", ["authors", "editors"])
+async def test_http_normalized_contributor_metadata_can_be_read_and_saved_again(
+    async_db, async_session_factory, tmp_path, monkeypatch, role
+):
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    base = f"/api/v1/workspaces/{item.workspace_id}/items"
+    try:
+        created = await client.post(
+            base,
+            json={
+                "title": "Distinct suffixes",
+                role: [
+                    {
+                        "display_name": " John  Smith ",
+                        "family_name": " ",
+                        "given_name": "\t",
+                        "suffix": suffix,
+                    }
+                    for suffix in (" Jr ", " Sr ")
+                ],
+            },
+        )
+        assert created.status_code == 201
+        item_url = f"{base}/{created.json()['id']}"
+        read = await client.get(item_url)
+        assert read.status_code == 200
+        original = read.json()
+        credits = original["metadata"][role]
+        assert [credit["display_name"] for credit in credits] == ["John Smith", "John Smith"]
+        assert all(
+            credit["family_name"] is None and credit["given_name"] is None for credit in credits
+        )
+        assert [credit["suffix"] for credit in credits] == ["Jr", "Sr"]
+
+        for title in (original["metadata"]["title"], "Title-only change"):
+            metadata = original["metadata"] | {"title": title}
+            updated = await client.put(
+                item_url,
+                json={"expected_version": original["version"], "metadata": metadata},
+            )
+            assert updated.status_code == 200
+            read = await client.get(item_url)
+            assert read.status_code == 200
+            original = read.json()
+            assert original["metadata"] == metadata
+            assert original["metadata"][role] == credits
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_http_api_creates_complete_metadata(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -94,20 +180,34 @@ async def test_http_api_creates_complete_metadata(
             "volume": "12",
             "issue": "3",
             "pages": "10-20",
-            "affiliation": "Quirebase Lab",
             "publisher": "Example Press",
             "place_published": "Shanghai",
             "doi": "https://doi.org/10.1000/complete",
             "citation_key": "complete2026record",
-            "urls": ["https://example.test/record", "https://example.test/pdf"],
+            "urls": [{"url": "https://example.test/record"}, {"url": "https://example.test/pdf"}],
             "keywords": ["forms", "metadata"],
             "identifiers": [{"provider": "pmid", "value": "12345"}],
             "custom_fields": [{"name": "rating", "value": 5}],
             "authors": [
-                {"last_name": "Lovelace", "first_name": "Ada", "is_corresponding": True},
-                {"last_name": "Turing", "first_name": "Alan"},
+                {
+                    "display_name": "Lovelace, Ada",
+                    "family_name": "Lovelace",
+                    "given_name": "Ada",
+                    "is_corresponding": True,
+                },
+                {
+                    "display_name": "Turing, Alan",
+                    "family_name": "Turing",
+                    "given_name": "Alan",
+                },
             ],
-            "editors": [{"last_name": "Hopper", "first_name": "Grace"}],
+            "editors": [
+                {
+                    "display_name": "Hopper, Grace",
+                    "family_name": "Hopper",
+                    "given_name": "Grace",
+                }
+            ],
         }),
     )
 
@@ -115,12 +215,32 @@ async def test_http_api_creates_complete_metadata(
     created = await db.scalar(select(Item).where(Item.title == "Complete manual record"))
     assert created is not None
     assert response.json() == json_payload({"id": created.id, "version": 1})
-    assert created.authors == "Lovelace, Ada; Turing, Alan"
-    assert created.editors == "Hopper, Grace"
-    assert created.doi == "10.1000/complete"
-    assert json.loads(created.identifiers or "") == {"pmid": "12345"}
-    assert created.keywords == "forms; metadata"
-    assert created.urls == "https://example.test/record\nhttps://example.test/pdf"
+    assert created.authors == [
+        {
+            "display_name": "Lovelace, Ada",
+            "family_name": "Lovelace",
+            "given_name": "Ada",
+            "is_corresponding": True,
+        },
+        {
+            "display_name": "Turing, Alan",
+            "family_name": "Turing",
+            "given_name": "Alan",
+            "is_corresponding": None,
+        },
+    ]
+    assert created.editors == contributor_values("Hopper, Grace", is_corresponding=None)
+    assert (await stored_doi(db, created)) == "10.1000/complete"
+    assert {
+        row.provider: row.value
+        for row in await db.scalars(
+            select(ItemIdentifier).where(ItemIdentifier.item_id == created.id)
+        )
+    } == {"doi": "10.1000/complete", "pmid": "12345"}
+    assert created.keywords == metadata_list_values("forms; metadata")
+    assert created.urls == metadata_list_values(
+        "https://example.test/record\nhttps://example.test/pdf", urls=True
+    )
     assert (created.custom_fields or {}) == {"rating": 5}
     await client.aclose()
 
@@ -149,14 +269,13 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
                 "volume": "30",
                 "issue": "1",
                 "pages": "5998-6008",
-                "affiliation": "Google Brain",
                 "publisher": "Curran Associates, Inc.",
                 "place_published": "Long Beach, CA",
                 "doi": "10.5555/3295222.3295349",
                 "citation_key": "vaswani2017attention",
                 "urls": [
-                    "https://arxiv.org/abs/1706.03762",
-                    "https://proceedings.neurips.cc/paper/7181",
+                    {"url": "https://arxiv.org/abs/1706.03762"},
+                    {"url": "https://proceedings.neurips.cc/paper/7181"},
                 ],
                 "custom_fields": [
                     {"name": "rating", "value": 5},
@@ -164,13 +283,34 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
                     {"name": "meta", "value": {"source": "manual"}},
                 ],
                 "authors": [
-                    {"last_name": "Vaswani", "first_name": "Ashish", "is_corresponding": True},
-                    {"last_name": "Shazeer", "first_name": "Noam"},
-                    {"last_name": "Parmar", "first_name": "Niki"},
+                    {
+                        "display_name": "Vaswani, Ashish",
+                        "family_name": "Vaswani",
+                        "given_name": "Ashish",
+                        "is_corresponding": True,
+                    },
+                    {
+                        "display_name": "Shazeer, Noam",
+                        "family_name": "Shazeer",
+                        "given_name": "Noam",
+                    },
+                    {
+                        "display_name": "Parmar, Niki",
+                        "family_name": "Parmar",
+                        "given_name": "Niki",
+                    },
                 ],
                 "editors": [
-                    {"last_name": "Guyon", "first_name": "Isabelle"},
-                    {"last_name": "von Luxburg", "first_name": "Ulrike"},
+                    {
+                        "display_name": "Guyon, Isabelle",
+                        "family_name": "Guyon",
+                        "given_name": "Isabelle",
+                    },
+                    {
+                        "display_name": "von Luxburg, Ulrike",
+                        "family_name": "von Luxburg",
+                        "given_name": "Ulrike",
+                    },
                 ],
             },
         }),
@@ -184,7 +324,6 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
     assert updated.journal_abbreviation == "NeurIPS"
     assert updated.volume == "30"
     assert updated.pages == "5998-6008"
-    assert updated.affiliation == "Google Brain"
     assert updated.citation_key == "vaswani2017attention"
     assert (updated.custom_fields or {}) == {
         "rating": 5,
@@ -192,20 +331,14 @@ async def test_http_api_edits_rich_metadata_and_structured_contributors(
         "meta": {"source": "manual"},
     }
     assert updated.updated_by is not None
-    assert updated.authors == "Vaswani, Ashish; Shazeer, Noam; Parmar, Niki"
-    assert updated.editors == "Guyon, Isabelle; von Luxburg, Ulrike"
-
-    # Verify ItemAuthor links
-    authors = list(
-        await db.scalars(
-            select(ItemAuthor)
-            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "author")
-            .order_by(ItemAuthor.position)
-        )
+    assert [row["family_name"] for row in updated.authors] == ["Vaswani", "Shazeer", "Parmar"]
+    assert updated.editors == contributor_values(
+        "Guyon, Isabelle; von Luxburg, Ulrike", is_corresponding=None
     )
-    assert len(authors) == 3
-    assert authors[0].is_corresponding is True
-    assert authors[1].is_corresponding is False
+
+    assert len(updated.authors) == 3
+    assert updated.authors[0]["is_corresponding"] is True
+    assert updated.authors[1]["is_corresponding"] is None
     await client.aclose()
 
 
@@ -219,7 +352,7 @@ async def test_http_api_tag_matrix_and_selection(
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
-    item.keywords = "Natural Language Processing; New Research Direction"
+    item.keywords = metadata_list_values("Natural Language Processing; New Research Direction")
 
     tag1 = Tag(workspace_id=item.workspace_id, name="Machine Learning", created_by=item.created_by)
     tag2 = Tag(workspace_id=item.workspace_id, name="Transformers", created_by=item.created_by)
@@ -342,7 +475,7 @@ async def test_http_api_syncs_metadata_and_updates_citation_key(
     item_id = item.id
 
     item.title = "Temporary Title"
-    item.authors = "Smith, John"
+    item.authors = contributor_values("Smith, John")
     item.publication_date = "2020-01-01"
     await db.commit()
 
@@ -376,7 +509,8 @@ async def test_http_api_syncs_metadata_and_updates_citation_key(
             return_value=CandidateRecord(
                 provider="crossref",
                 lookup_identifier=Identifier("doi", "10.1038/s41586-019-1666-5"),
-                **mock_payload,
+                identifiers=(Identifier("doi", mock_payload["doi"]),),
+                **{key: value for key, value in mock_payload.items() if key != "doi"},
             )
         ),
     ):
@@ -395,7 +529,7 @@ async def test_http_api_syncs_metadata_and_updates_citation_key(
     assert item is not None
     assert item.title == "Quantum Supremacy Using a Programmable Superconducting Processor"
     assert item.volume == "574"
-    assert item.doi == "10.1038/s41586-019-1666-5"
+    assert (await stored_doi(db, item)) == "10.1038/s41586-019-1666-5"
     await client.aclose()
 
 
@@ -474,21 +608,18 @@ async def test_http_api_suggests_authors(async_db, async_session_factory, tmp_pa
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
 
-    a1 = Author(last_name="LeCun", first_name="Yann")
-    a2 = Author(last_name="Bengio", first_name="Yoshua")
-    a3 = Author(last_name="Hinton", first_name="Geoffrey")
-    remote = Author(last_name="Leibniz", first_name="Gottfried")
     other = User(username="author-suggestion-other", password_hash="unused")
-    db.add_all([a1, a2, a3, remote, other])
+    db.add(other)
     await db.flush()
     await provision_initial_workspace(db, other)
-    other_item = Item(workspace_id=fixture_workspace_id(other), title="Other", created_by=other.id)
+    other_item = Item(
+        workspace_id=fixture_workspace_id(other),
+        title="Other",
+        created_by=other.id,
+        authors=contributor_values("Leibniz, Gottfried"),
+    )
     db.add(other_item)
-    await db.flush()
-    db.add_all([
-        ItemAuthor(item_id=item.id, author_id=a1.id),
-        ItemAuthor(item_id=other_item.id, author_id=remote.id),
-    ])
+    item.authors = contributor_values("LeCun, Yann")
     await db.commit()
 
     response = await client.get(f"{workspace_base}/authors?query=le")
@@ -497,7 +628,7 @@ async def test_http_api_suggests_authors(async_db, async_session_factory, tmp_pa
     assert len(data) == 1
     assert data[0]["last_name"] == "LeCun"
     assert data[0]["first_name"] == "Yann"
-    assert data[0]["id"] == str(a1.id)
+    assert "id" not in data[0]
 
     forbidden = await client.get(
         f"/api/v1/workspaces/{fixture_workspace_id(other)}/authors?query=le"
@@ -514,8 +645,9 @@ async def test_http_api_suggests_authors(async_db, async_session_factory, tmp_pa
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("include_doi_alias", [False, True], ids=["identifiers-only", "doi-alias"])
 async def test_http_api_edit_synchronizes_identifier_rows(
-    async_db, async_session_factory, tmp_path, monkeypatch
+    async_db, async_session_factory, tmp_path, monkeypatch, include_doi_alias
 ):
     db = async_db
     client, item, _ = await authenticated_async_client(
@@ -528,8 +660,11 @@ async def test_http_api_edit_synchronizes_identifier_rows(
             workspace_id=item.workspace_id, item_id=item.id, provider="pmid", value="old-pmid"
         )
     )
-    item.doi = "10.1000/old"
-    item.identifiers = '{"doi": "10.1000/old", "pmid": "old-pmid"}'
+    db.add(
+        ItemIdentifier(
+            workspace_id=item.workspace_id, item_id=item.id, provider="doi", value="10.1000/old"
+        )
+    )
     await db.commit()
 
     response = await client.put(
@@ -538,9 +673,9 @@ async def test_http_api_edit_synchronizes_identifier_rows(
             "expected_version": item.version,
             "metadata": {
                 "title": item.title,
-                "doi": "https://doi.org/10.1000/new",
+                **({"doi": "https://doi.org/10.1000/new"} if include_doi_alias else {}),
                 "identifiers": [
-                    {"provider": "doi", "value": "10.1000/stale"},
+                    {"provider": "doi", "value": "10.1000/NEW"},
                     {"provider": "arxiv", "value": "2401.12345"},
                 ],
             },
@@ -551,12 +686,28 @@ async def test_http_api_edit_synchronizes_identifier_rows(
     db.expire_all()
     updated = await db.get(Item, item_id)
     assert updated is not None
-    assert updated.doi == "10.1000/new"
-    assert updated.identifiers == '{"arxiv": "2401.12345"}'
+    assert (await stored_doi(db, updated)) == "10.1000/new"
     links = list(await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)))
     assert {(link.provider, link.value) for link in links} == {
+        ("doi", "10.1000/new"),
         ("arxiv", "2401.12345"),
     }
+    response = await client.put(
+        f"{workspace_base}/items/{item_id}",
+        json=json_payload({
+            "expected_version": updated.version,
+            "metadata": {
+                "title": updated.title,
+                "identifiers": [{"provider": "arxiv", "value": "2401.12345"}],
+            },
+        }),
+    )
+    assert response.status_code == 200
+    db.expire_all()
+    updated = await db.get(Item, item_id)
+    assert (await stored_doi(db, updated)) is None
+    links = list(await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)))
+    assert [(link.provider, link.value) for link in links] == [("arxiv", "2401.12345")]
     await client.aclose()
 
 
@@ -570,11 +721,7 @@ async def test_http_api_edit_can_clear_all_structured_editors(
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
-    editor = Author(last_name="Knuth", first_name="Donald")
-    db.add(editor)
-    await db.flush()
-    db.add(ItemAuthor(item_id=item.id, author_id=editor.id, position=1, role="editor"))
-    item.editors = "Knuth, Donald"
+    item.editors = contributor_values("Knuth, Donald")
     await db.commit()
 
     response = await client.put(
@@ -589,15 +736,7 @@ async def test_http_api_edit_can_clear_all_structured_editors(
     db.expire_all()
     updated = await db.get(Item, item_id)
     assert updated is not None
-    assert updated.editors is None
-    assert (
-        await db.scalar(
-            select(func.count())
-            .select_from(ItemAuthor)
-            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "editor")
-        )
-        == 0
-    )
+    assert updated.editors == []
     await client.aclose()
 
 
@@ -610,25 +749,19 @@ async def test_http_api_serializes_structured_people_as_json(
         db, async_session_factory, tmp_path, monkeypatch
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-    author = Author(last_name='O"Connor & Co\\', first_name='Ada "A"')
-    editor = Author(last_name="D'Angelo", first_name="Luca")
-    db.add_all([author, editor])
-    await db.flush()
-    db.add_all([
-        ItemAuthor(
-            item_id=item.id,
-            author_id=author.id,
-            position=1,
-            role="author",
-            is_corresponding=True,
-        ),
-        ItemAuthor(
-            item_id=item.id,
-            author_id=editor.id,
-            position=1,
-            role="editor",
-        ),
-    ])
+    item.authors = [
+        {
+            "display_name": 'O"Connor & Co\\, Ada "A"',
+            "family_name": 'O"Connor & Co\\',
+            "given_name": 'Ada "A"',
+            "is_corresponding": True,
+            "kind": "unknown",
+            "identifiers": [],
+            "affiliations": None,
+            "suffix": None,
+        }
+    ]
+    item.editors = contributor_values("D'Angelo, Luca")
     await db.commit()
 
     response = await client.get(f"{workspace_base}/items/{item.id}")
@@ -636,16 +769,26 @@ async def test_http_api_serializes_structured_people_as_json(
     assert response.status_code == 200
     assert response.json()["structured_authors"] == [
         {
-            "last_name": 'O"Connor & Co\\',
-            "first_name": 'Ada "A"',
+            "display_name": 'O"Connor & Co\\, Ada "A"',
+            "family_name": 'O"Connor & Co\\',
+            "given_name": 'Ada "A"',
             "is_corresponding": True,
+            "kind": "unknown",
+            "identifiers": [],
+            "affiliations": None,
+            "suffix": None,
         }
     ]
     assert response.json()["editors"] == [
         {
-            "last_name": "D'Angelo",
-            "first_name": "Luca",
+            "display_name": "D'Angelo, Luca",
+            "family_name": "D'Angelo",
+            "given_name": "Luca",
             "is_corresponding": False,
+            "kind": "unknown",
+            "identifiers": [],
+            "affiliations": None,
+            "suffix": None,
         }
     ]
     await client.aclose()

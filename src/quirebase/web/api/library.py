@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from advanced_alchemy.service import OffsetPagination
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
 from quirebase.access import (
     tag_decisions,
@@ -14,6 +14,8 @@ from quirebase.library import (
     ItemMetadata,
     ItemMetadataData,
     ItemSection,
+    LibraryFacets,
+    LibraryFilter,
     add_discussion_message,
     add_tag_to_item,
     apply_bulk_item_action,
@@ -22,6 +24,7 @@ from quirebase.library import (
     create_item,
     delete_discussion_message,
     get_item_citation_text_response,
+    get_library_facets,
     list_accessible_tags_with_counts,
     moderate_discussion_message,
     open_item_section,
@@ -29,6 +32,7 @@ from quirebase.library import (
     revise_item_metadata,
     search_library,
 )
+from quirebase.models import ReferenceType
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.library_schemas import (
@@ -53,6 +57,39 @@ from quirebase.web.api.library_schemas import (
 router = APIRouter(tags=["Library"])
 
 
+def library_filters(
+    query: str = "",
+    tag: str = "",
+    project: UUID | None = None,
+    year: str = "",
+    keyword: str = "",
+    author: str = "",
+    has_files: bool | None = None,
+    reference_type: ReferenceType | None = None,
+    keyword_exact: str | None = None,
+    author_last_name: str | None = None,
+    author_first_name: str | None = None,
+    author_suffix: str | None = None,
+) -> LibraryFilter:
+    return LibraryFilter(
+        q=query,
+        tag=tag,
+        project=project,
+        year=year,
+        keyword=keyword,
+        author=author,
+        has_files=has_files,
+        reference_type=reference_type,
+        keyword_exact=keyword_exact,
+        author_last_name=author_last_name,
+        author_first_name=author_first_name,
+        author_suffix=author_suffix,
+    )
+
+
+LibraryFilters = Annotated[LibraryFilter, Depends(library_filters)]
+
+
 @router.post("/items/bulk", response_model=OkView)
 async def apply_item_bulk_action(
     workspace_id: UUID, data: BulkActionRequest, user: ApiUser, db: Database
@@ -75,31 +112,30 @@ async def search_items(
     workspace_id: UUID,
     user: ApiUser,
     db: Database,
-    query: str = "",
-    tag: str = "",
-    project: UUID | None = None,
-    year: str = "",
-    keyword: str = "",
-    author: str = "",
+    filters: LibraryFilters,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: Literal["updated", "created", "title"] = "updated",
-    has_files: bool | None = None,
 ) -> LibrarySearchView:
     items, total = await search_library(
         db,
         user,
         workspace_id,
-        q=query,
-        tag=tag,
-        project=project,
-        year=year,
-        keyword=keyword,
-        author=author,
+        q=filters.q,
+        tag=filters.tag,
+        project=filters.project,
+        year=filters.year,
+        keyword=filters.keyword,
+        author=filters.author,
         limit=limit,
         offset=offset,
         sort=sort,
-        has_files=has_files,
+        has_files=filters.has_files,
+        reference_type=filters.reference_type,
+        keyword_exact=filters.keyword_exact,
+        author_last_name=filters.author_last_name,
+        author_first_name=filters.author_first_name,
+        author_suffix=filters.author_suffix,
     )
     return LibrarySearchView(
         items=[item_search_view(item) for item in items],
@@ -107,6 +143,17 @@ async def search_items(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/items/facets", response_model=LibraryFacets)
+async def get_item_facets(
+    workspace_id: UUID,
+    user: ApiUser,
+    db: Database,
+    filters: LibraryFilters,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> LibraryFacets:
+    return await get_library_facets(db, user, workspace_id, filters, limit=limit)
 
 
 @router.post(

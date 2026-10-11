@@ -12,6 +12,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.models import (
     Item,
+    ItemIdentifier,
     ItemTag,
     LoginSession,
     Project,
@@ -138,7 +139,7 @@ async def test_participant_directory_tracks_account_activation(
 
 
 @pytest.mark.anyio
-async def test_tools_detect_duplicates_and_manage_owned_tags(
+async def test_tools_detect_title_duplicates_and_manage_owned_tags(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
@@ -150,10 +151,16 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         duplicate = Item(
             workspace_id=item.workspace_id,
             title="Paper!",
-            doi="10.1/same",
+            identifier_links=[
+                ItemIdentifier(workspace_id=item.workspace_id, provider="doi", value="10.1/same")
+            ],
             created_by=item.created_by,
         )
-        item.doi = "10.1/same"
+        db.add(
+            ItemIdentifier(
+                workspace_id=item.workspace_id, item_id=item.id, provider="doi", value="10.1/first"
+            )
+        )
         tag = Tag(
             workspace_id=item.workspace_id,
             name="Old tag",
@@ -164,7 +171,7 @@ async def test_tools_detect_duplicates_and_manage_owned_tags(
         db.add(ItemTag(workspace_id=item.workspace_id, item_id=item.id, tag_id=tag.id))
         await db.commit()
 
-        tools = await client.get(f"{workspace_base}/duplicates?mode=doi")
+        tools = await client.get(f"{workspace_base}/duplicates?mode=similar")
         assert tools.status_code == 200
         assert len(tools.json()["groups"]) == 1
         assert {row["id"] for row in tools.json()["groups"][0]} == set(

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from inquiro import CandidateRecord, Identifier
+from item_helpers import stored_doi
 from sqlalchemy import func, insert, select
 from sqlalchemy.exc import IntegrityError
 from workspace_helpers import provision_initial_workspace
@@ -49,9 +50,16 @@ async def test_articles_in_the_same_journal_do_not_claim_issn_item_identity(pers
     assert all(not record["identifiers"] for record in records)
     await commit_import_batch(db, actor, workspace_id, batch.id)
     items = (await db.scalars(select(Item).where(Item.workspace_id == workspace_id))).all()
-    assert {item.doi for item in items} == {"10.1000/first", "10.1000/second"}
+    assert {(await stored_doi(db, item)) for item in items} == {"10.1000/first", "10.1000/second"}
     assert all(item.custom_fields == {"issn": "1234-5678"} for item in items)
-    assert await db.scalar(select(func.count()).select_from(ItemIdentifier)) == 0
+    assert (
+        await db.scalar(
+            select(func.count())
+            .select_from(ItemIdentifier)
+            .where(ItemIdentifier.provider == "issn")
+        )
+        == 0
+    )
 
 
 @pytest.mark.parametrize("file_format", ["bibtex", "biblatex"])
@@ -76,9 +84,14 @@ async def test_book_and_chapters_can_share_container_isbn(persistence_db, file_f
     items = (await db.scalars(select(Item).where(Item.workspace_id == workspace_id))).all()
     assert len(items) == 3
     chapters = [item for item in items if item.reference_type == "chapter"]
-    assert {item.doi for item in chapters} == {"10.1000/first", "10.1000/second"}
+    assert {(await stored_doi(db, item)) for item in chapters} == {
+        "10.1000/first",
+        "10.1000/second",
+    }
     assert all(item.custom_fields == {"isbn": "9780131103627"} for item in chapters)
-    identities = (await db.scalars(select(ItemIdentifier))).all()
+    identities = (
+        await db.scalars(select(ItemIdentifier).where(ItemIdentifier.provider == "isbn"))
+    ).all()
     assert len(identities) == 1
     assert (identities[0].provider, identities[0].value) == ("isbn", "9780131103627")
     assert (await db.get(Item, identities[0].item_id)).reference_type == "book"
@@ -193,6 +206,7 @@ async def test_provider_identifier_conflict_preserves_the_existing_item(persiste
     [
         ("openalex", "W123", "https://openalex.org/w123"),
         ("arxiv", "2401.00001", "https://arxiv.org/abs/2401.00001"),
+        ("doi", "10.1000/example", "HTTPS://DOI.ORG/10.1000/EXAMPLE"),
     ],
 )
 async def test_equivalent_provider_id_spellings_share_one_workspace_claim(
@@ -270,7 +284,7 @@ async def test_cross_workspace_copy_preserves_independent_identifier_claims(pers
         (source_workspace, source.item_id),
         (target_workspace_id, copied_id),
     }
-    assert copied.doi == "10.1000/source"
+    assert (await stored_doi(db, copied)) == "10.1000/source"
     with pytest.raises(ValidationFailure, match="already assigned to another Item"):
         await copy_item_to_workspace(
             db, actor, source_workspace, target_workspace_id, source.item_id
@@ -307,17 +321,16 @@ async def test_import_batch_cannot_claim_the_same_provider_identifier_twice(pers
 
 
 @pytest.mark.concurrency_case("identifier-claim")
+@pytest.mark.parametrize(("provider", "value"), [("openalex", "W123"), ("doi", "10.1000/example")])
 async def test_concurrent_items_cannot_claim_the_same_identifier(
-    postgres_sessions, postgres_search_tables, postgres_race, monkeypatch
+    postgres_sessions, postgres_search_tables, postgres_race, monkeypatch, provider, value
 ):
     async with postgres_sessions() as db:
         actor, workspace_id = await _owner(db)
         first = await create_item(db, actor, workspace_id, ItemMetadata(title="First"))
         second = await create_item(db, actor, workspace_id, ItemMetadata(title="Second"))
         actor_id = actor.id
-    replacement = ItemMetadata(
-        title="Claimed", identifiers=(ExternalIdentifier("openalex", "W123"),)
-    )
+    replacement = ItemMetadata(title="Claimed", identifiers=(ExternalIdentifier(provider, value),))
 
     async def claim_second():
         async with postgres_race.session("second") as db:
@@ -340,7 +353,7 @@ async def test_concurrent_items_cannot_claim_the_same_identifier(
         rows = (await db.scalars(select(ItemIdentifier))).all()
         assert len(rows) == 1 and rows[0].item_id == first.item_id
         loser = await db.get(Item, second.item_id)
-        assert (loser.title, loser.version, loser.identifiers) == ("Second", 1, None)
+        assert (loser.title, loser.version) == ("Second", 1)
         assert (
             await db.scalar(
                 select(func.count())
@@ -349,3 +362,59 @@ async def test_concurrent_items_cannot_claim_the_same_identifier(
             )
             == 1
         )
+
+
+async def test_doi_unicode_characters_remain_distinct_workspace_claims(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await _owner(db)
+    values = ("10.1000/AßÉ", "10.1000/ASSÉ", "10.1000/Aßé")
+    for value in values:
+        await create_item(db, actor, workspace_id, ItemMetadata(title=value, doi=value))
+    rows = (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.provider == "doi"))).all()
+    assert {row.value for row in rows} == {"10.1000/aßÉ", "10.1000/assÉ", "10.1000/aßé"}
+    assert "doi" not in Item.__table__.columns
+
+
+async def test_copy_rejects_a_doi_already_claimed_in_the_target_workspace(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await _owner(db)
+    target = await create_workspace(db, actor, "Target", owner_username=actor.username)
+    await db.commit()
+    target_id = target.id
+    source = await create_item(
+        db, actor, workspace_id, ItemMetadata(title="Source", doi="10.1000/COPY")
+    )
+    await create_item(
+        db, actor, target_id, ItemMetadata(title="Existing", doi="https://doi.org/10.1000/copy")
+    )
+    with pytest.raises(ValidationFailure, match="already assigned"):
+        await copy_item_to_workspace(db, actor, workspace_id, target_id, source.item_id)
+    assert (
+        await db.scalar(
+            select(func.count()).select_from(Item).where(Item.workspace_id == target_id)
+        )
+        == 1
+    )
+
+
+async def test_import_batch_cannot_claim_equivalent_dois_twice(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await _owner(db)
+    batch = ImportBatch(
+        workspace_id=workspace_id,
+        actor_id=actor.id,
+        file_format="bibtex",
+        records=[
+            {"title": "First", "doi": "10.1000/SAME"},
+            {"title": "Second", "identifiers": {"doi": "https://doi.org/10.1000/same"}},
+        ],
+        errors=[],
+    )
+    db.add(batch)
+    await db.commit()
+    batch_id = batch.id
+    with pytest.raises(ValidationFailure, match="already assigned"):
+        await commit_import_batch(db, actor, workspace_id, batch_id)
+    await db.rollback()
+    assert await db.scalar(select(func.count()).select_from(Item)) == 0
+    assert (await db.get(ImportBatch, batch_id)).status == "ready"

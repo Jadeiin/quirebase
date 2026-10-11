@@ -1,5 +1,3 @@
-import json
-
 import pytest
 import rispy
 from bibtexparser import parse_string as parse_bibtex_string
@@ -8,13 +6,20 @@ from inquiro.bibliography import (
     Contributor,
     export_bibliography_records,
     parse_bibliography_records,
-    record_from_item,
 )
+from item_helpers import bibliography_record_from_item as record_from_item
+from item_helpers import contributor_values, metadata_list_values
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.library import BatchConflict, commit_import_batch, stage_import_batch
-from quirebase.models import Item, User
+from quirebase.library import (
+    BatchConflict,
+    commit_import_batch,
+    export_accessible_bibliography,
+    stage_import_batch,
+)
+from quirebase.models import CitationStyle, Item, ItemIdentifier, User
 
 
 async def _user(db, username: str) -> User:
@@ -24,6 +29,54 @@ async def _user(db, username: str) -> User:
     await provision_initial_workspace(db, user)
     await db.flush()
     return user
+
+
+@pytest.mark.anyio
+@pytest.mark.shared_postgres
+@pytest.mark.parametrize("file_format", ["bibtex", "csl"])
+@pytest.mark.parametrize("has_identifier", [False, True], ids=["no-identifiers", "with-doi"])
+async def test_whole_workspace_export_loads_identifiers_in_a_fresh_session(
+    persistence_db, file_format, has_identifier
+):
+    db = persistence_db
+    owner = await _user(db, "fresh-export")
+    workspace_id = fixture_workspace_id(owner)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        title="Fresh export",
+        citation_key="fresh",
+        identifier_links=[
+            ItemIdentifier(workspace_id=workspace_id, provider="doi", value="10.1000/fresh")
+        ]
+        if has_identifier
+        else [],
+    )
+    style = CitationStyle(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        name="Export identifiers",
+        csl_xml=(
+            '<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">'
+            "<info><title>Export identifiers</title><id>https://example.test/style</id>"
+            "<updated>2026-10-11T00:00:00+00:00</updated></info>"
+            '<citation><layout><text variable="title"/></layout></citation>'
+            '<bibliography><layout><group delimiter=" "><text variable="title"/>'
+            '<text variable="DOI"/></group></layout></bibliography></style>'
+        ),
+    )
+    db.add_all([item, style])
+    await db.commit()
+
+    async with AsyncSession(bind=db.bind, expire_on_commit=False) as request_db:
+        request_user = await request_db.get(User, owner.id)
+        assert request_user is not None
+        contents, _media_type, _filename = await export_accessible_bibliography(
+            request_db, request_user, workspace_id, file_format, style_key=str(style.id)
+        )
+
+    assert "Fresh export" in contents
+    assert ("10.1000/fresh" in contents) is has_identifier
 
 
 @pytest.mark.anyio
@@ -54,29 +107,15 @@ async def test_unknown_type_warning_allows_import_but_validation_errors_still_bl
 
 
 def _item_payload(record):
-    import json as _json
+    from inquiro.metadata import metadata_from_values, metadata_values, record_metadata_values
 
-    return {
-        "title": record.title or None,
-        "abstract": record.abstract,
-        "authors": "; ".join(p.storage_name() for p in record.authors) or None,
-        "editors": "; ".join(p.storage_name() for p in record.editors) or None,
-        "keywords": "; ".join(record.keywords) or None,
-        "publication_date": record.publication_date,
-        "publication_title": record.publication_title or record.book_title,
-        "volume": record.volume,
-        "issue": record.issue,
-        "pages": record.pages,
-        "publisher": record.publisher,
-        "place_published": record.location,
-        "doi": record.doi,
-        "reference_type": record.reference_type,
-        "citation_key": record.citation_key,
-        "urls": "\n".join(record.urls) or None,
-        "identifiers": _json.dumps(dict(record.identifiers), ensure_ascii=False)
-        if record.identifiers
-        else None,
-        "custom_fields": dict(record.custom_fields) if record.custom_fields else None,
+    from quirebase.models import ItemIdentifier
+
+    metadata = metadata_from_values(record_metadata_values(record))
+    return metadata_values(metadata).values | {
+        "identifier_links": [
+            ItemIdentifier(provider=row.provider, value=row.value) for row in metadata.identifiers
+        ],
     }
 
 
@@ -94,7 +133,9 @@ async def test_bibtex_parse_and_round_trip(async_db):
     records = [_item_payload(record) for record in typed]
 
     assert errors == []
-    assert records[0]["authors"] == "Doe, Jane; Smith, Alex"
+    assert records[0]["authors"] == contributor_values(
+        "Doe, Jane; Smith, Alex", is_corresponding=None
+    )
     user = await _user(db, "bibtex")
     item = Item(workspace_id=fixture_workspace_id(user), created_by=user.id, **records[0])
     output = export_bibliography_records([record_from_item(i) for i in [item]], "bibtex")
@@ -118,7 +159,9 @@ def test_bibtex_import_projects_literal_and_suffix_contributors_to_first_last():
         Contributor("World Health Organization"),
         Contributor("de la Cruz Jr.", "Juan"),
     )
-    assert stored["authors"] == "{World Health Organization}; de la Cruz Jr., Juan"
+    assert stored["authors"] == contributor_values(
+        "{World Health Organization}; de la Cruz Jr., Juan", is_corresponding=None
+    )
     output = export_bibliography_records(records, "bibtex")
     round_trip, round_trip_errors = parse_bibliography_records(output, "bibtex")
     assert round_trip_errors == []
@@ -133,8 +176,8 @@ async def test_bibtex_export_can_protect_text_field_capitalization(async_db):
         title="An API for GraphQL and eBPF",
         workspace_id=fixture_workspace_id(user),
         abstract="Using CUDA with an LLM",
-        authors="Doe, Jane; Smith, Alex",
-        keywords="API; GraphQL",
+        authors=contributor_values("Doe, Jane; Smith, Alex", is_corresponding=None),
+        keywords=metadata_list_values("API; GraphQL"),
         publication_title="Journal of eBPF Research",
         publisher="ACM Press",
         citation_key="case-protection",
@@ -168,12 +211,14 @@ async def test_duplicate_stored_citation_keys_are_disambiguated_only_for_export(
     first = Item(
         workspace_id=fixture_workspace_id(user),
         title="First",
+        identifier_links=[],
         citation_key="SharedKey",
         created_by=user.id,
     )
     second = Item(
         workspace_id=fixture_workspace_id(user),
         title="Second",
+        identifier_links=[],
         citation_key="sharedkey",
         created_by=user.id,
     )
@@ -234,7 +279,10 @@ async def test_bibtex_export_can_include_identifiers_and_custom_fields(async_db)
     await db.flush()
     item = Item(
         title="Extra fields",
-        identifiers=json.dumps({"openalex": "W123", "arxiv": "2401.00001"}),
+        identifier_links=[
+            ItemIdentifier(provider="openalex", value="W123"),
+            ItemIdentifier(provider="arxiv", value="2401.00001"),
+        ],
         custom_fields={
             "dataset_id": "DS-42",
             "Study Quality": "High",
@@ -316,8 +364,12 @@ async def test_endnote_parse_and_round_trip(async_db):
 
     assert errors == []
     assert records[0]["title"] == "An EndNote Paper"
-    assert records[0]["authors"] == "Doe, Jane; Smith, Alex"
-    assert records[0]["doi"] == "10.1234/endnote"
+    assert records[0]["authors"] == contributor_values(
+        "Doe, Jane; Smith, Alex", is_corresponding=None
+    )
+    assert [(row.provider, row.value) for row in records[0]["identifier_links"]] == [
+        ("doi", "10.1234/endnote")
+    ]
     assert records[0]["reference_type"] == "article-journal"
 
     user = User(username="endnote", password_hash="unused")

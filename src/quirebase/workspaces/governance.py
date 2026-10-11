@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from quirebase.access import (
     SystemAction,
@@ -130,6 +131,7 @@ async def read_workspace_items_break_glass(
         (
             await db.scalars(
                 select(Item)
+                .options(selectinload(Item.identifier_links))
                 .where(Item.workspace_id == workspace_id)
                 .order_by(Item.updated_at.desc())
                 .limit(limit)

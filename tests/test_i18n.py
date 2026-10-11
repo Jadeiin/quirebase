@@ -44,7 +44,7 @@ def test_translated_catalog_does_not_leave_english_copy():
         text,
         re.MULTILINE,
     )
-    exempt = {"CSL XML", "DOI", "OpenAPI", "PDF", "{kind} · {size} KB", "{size} MB"}
+    exempt = {"CSL XML", "DOI", "JSON", "OpenAPI", "PDF", "{kind} · {size} KB", "{size} MB"}
     untranslated = [
         msgid
         for msgid, msgstr in entries

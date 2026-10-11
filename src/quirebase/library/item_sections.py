@@ -28,7 +28,6 @@ from quirebase.documents import (
     list_item_revisions,
 )
 from quirebase.library._metadata import ItemMetadata, metadata_from_item
-from quirebase.library.authors import get_item_authors
 from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
 from quirebase.models import (
     DiscussionMessage,
@@ -178,15 +177,13 @@ async def _open_overview(
 async def _open_metadata(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemMetadataData:
-    authors = tuple(await get_item_authors(db, item.id, role="author"))
-    editors = tuple(await get_item_authors(db, item.id, role="editor"))
     identifiers = tuple(
         (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
     )
     return ItemMetadataData(
         item=item,
         revisions=await list_item_revisions(db, item.workspace_id, item.id),
-        metadata=metadata_from_item(item, authors, editors, identifiers),
+        metadata=metadata_from_item(item, identifiers),
     )
 
 

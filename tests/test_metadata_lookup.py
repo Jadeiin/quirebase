@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 from app_helpers import json_payload
 from inquiro import CandidateRecord, Contributor, Identifier
+from item_helpers import stored_doi
 from sqlalchemy import select
 from test_http import authenticated_async_client
 
@@ -27,7 +28,6 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
         authors=(Contributor("Doe, Jane"),),
         publication_date="2026",
         publication_title="Journal",
-        doi="10.1/looked-up",
         identifiers=(Identifier("doi", "10.1/looked-up"),),
         reference_type="article-journal",
     )
@@ -53,7 +53,7 @@ async def test_online_preview_uses_existing_confirmed_import_flow(
         assert committed.status_code == 200
         imported = await db.scalar(select(Item).where(Item.title == "Looked-up paper"))
         assert imported is not None
-        assert imported.doi == "10.1/looked-up"
+        assert (await stored_doi(db, imported)) == "10.1/looked-up"
         recommendation = await db.scalar(
             select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == imported.id)
         )

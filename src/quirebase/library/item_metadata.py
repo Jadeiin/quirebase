@@ -23,7 +23,6 @@ from ._metadata import (
     generate_citation_key,
     metadata_write,
 )
-from .authors import _replace_item_authors_many
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -45,7 +44,7 @@ async def _create_item(
     item = Item(**write.values, workspace_id=workspace_id, created_by=actor.id)
     db.add(item)
     await db.flush()
-    await _write_item_links(db, [(item, write)], replace=False)
+    await _write_item_identifiers(db, [(item, write)], replace=False)
     await search_index(db).index_item(db, item.id)
     await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=actor.id)
     record_event(
@@ -106,7 +105,7 @@ async def _revise_item_metadata(
         current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
 
-    await _write_item_links(db, [(item, write)])
+    await _write_item_identifiers(db, [(item, write)])
 
     # The bulk UPDATE does not reliably populate every value used by the search
     # projection. Refresh only the mutated aggregate; expiring the whole session
@@ -202,17 +201,9 @@ async def regenerate_citation_key(
         raise
 
 
-async def _write_item_links(
+async def _write_item_identifiers(
     db: AsyncSession, prepared: Sequence[tuple[Item, MetadataWrite]], *, replace: bool = True
 ) -> None:
-    contributors: list[tuple[Item, str, list[dict]]] = []
-    for item, write in prepared:
-        if write.authors is not None:
-            contributors.append((item, "author", write.authors))
-        if write.editors is not None:
-            contributors.append((item, "editor", write.editors))
-    if contributors:
-        await _replace_item_authors_many(db, contributors, replace=replace)
     identifiers = [
         (item, write.identifiers) for item, write in prepared if write.identifiers is not None
     ]

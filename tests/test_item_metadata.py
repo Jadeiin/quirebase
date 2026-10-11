@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
+from item_helpers import contributor, contributor_values, metadata_list_values, stored_doi
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import resolve_workspace_context
 from quirebase.audit import query_events
 from quirebase.core.errors import PermissionDenied, ValidationFailure
 from quirebase.library import (
-    Contributor,
     ExternalIdentifier,
     ItemMetadata,
     ItemMetadataData,
@@ -21,9 +20,7 @@ from quirebase.library import (
     search_library,
 )
 from quirebase.models import (
-    Author,
     Item,
-    ItemAuthor,
     ItemIdentifier,
     User,
     WorkspaceMember,
@@ -48,9 +45,15 @@ async def test_regenerate_citation_key_is_a_narrow_atomic_item_mutation(async_db
         title="Computing Machinery and Intelligence",
         workspace_id=fixture_workspace_id(owner),
         abstract="Can machines think?",
-        authors="Turing, Alan",
+        authors=contributor_values("Turing, Alan"),
         publication_date="1950",
-        doi="10.1093/mind/lix.236.433",
+        identifier_links=[
+            ItemIdentifier(
+                workspace_id=fixture_workspace_id(owner),
+                provider="doi",
+                value="10.1093/mind/lix.236.433",
+            )
+        ],
         created_by=owner.id,
     )
     db.add(item)
@@ -73,7 +76,7 @@ async def test_regenerate_citation_key_is_a_narrow_atomic_item_mutation(async_db
     assert result.version == 2
     assert updated.citation_key == "Turing1950Computing"
     assert updated.abstract == "Can machines think?"
-    assert updated.doi == "10.1093/mind/lix.236.433"
+    assert (await stored_doi(db, updated)) == "10.1093/mind/lix.236.433"
     assert total == 1
     assert events[0].target_id == str(item_id)
     assert updated.updated_by == owner_id
@@ -101,14 +104,6 @@ async def test_item_metadata_rejects_values_longer_than_bounded_columns(async_db
             ItemMetadata(title="Bounded", reference_type="x" * 41),
         )
 
-    with pytest.raises(ValidationFailure, match="contributor name is too long"):
-        await create_item(
-            db,
-            owner,
-            workspace_id,
-            ItemMetadata(title="Bounded", authors=(Contributor("x" * 121),)),
-        )
-
     with pytest.raises(ValidationFailure, match="identifier value is too long"):
         await create_item(
             db,
@@ -122,14 +117,17 @@ async def test_item_metadata_rejects_values_longer_than_bounded_columns(async_db
 
 
 @pytest.mark.anyio
-async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_db):
+async def test_revise_item_metadata_unifies_equivalent_doi_inputs(async_db):
     db = async_db
     owner = await _user(db, "identifier-owner")
     item = Item(
         title="Identifier precedence",
         workspace_id=fixture_workspace_id(owner),
-        doi="10.1000/old",
-        identifiers='{"doi": "10.1000/old", "pmid": "old-pmid"}',
+        identifier_links=[
+            ItemIdentifier(
+                workspace_id=fixture_workspace_id(owner), provider="doi", value="10.1000/old"
+            )
+        ],
         created_by=owner.id,
     )
     db.add(item)
@@ -154,7 +152,7 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
             title=item_title,
             doi="https://doi.org/10.1000/new",
             identifiers=(
-                ExternalIdentifier("doi", "10.1000/stale"),
+                ExternalIdentifier("doi", "10.1000/NEW"),
                 ExternalIdentifier("arxiv", "2401.12345"),
             ),
         ),
@@ -170,26 +168,22 @@ async def test_revise_item_metadata_makes_the_dedicated_doi_authoritative(async_
     updated = item_view.item
     identifiers = {link.provider: link.value for link in item_view.identifiers}
     assert result.version == 2
-    assert updated.doi == "10.1000/new"
-    assert identifiers == {"arxiv": "2401.12345"}
+    assert (await stored_doi(db, updated)) == "10.1000/new"
+    assert identifiers == {"arxiv": "2401.12345", "doi": "10.1000/new"}
 
 
 @pytest.mark.anyio
 async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     db = async_db
     owner = await _user(db, "contributor-owner")
-    old_author = Author(last_name="Old", first_name="Author")
-    db.add(old_author)
-    await db.flush()
     item = Item(
         workspace_id=fixture_workspace_id(owner),
         title="Contributor replacement",
-        authors="Old, Author",
+        authors=contributor_values("Old, Author"),
         created_by=owner.id,
     )
     db.add(item)
     await db.flush()
-    db.add(ItemAuthor(item_id=item.id, author_id=old_author.id, position=1, role="author"))
     await db.commit()
     item_id = item.id
     item_version = item.version
@@ -204,8 +198,8 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
         ItemMetadata(
             title=item_title,
             authors=(
-                Contributor("Shannon", "Claude", is_corresponding=True),
-                Contributor("Weaver", "Warren"),
+                contributor("Shannon", "Claude", is_corresponding=True),
+                contributor("Weaver", "Warren"),
             ),
             editors=(),
         ),
@@ -218,19 +212,12 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
         ItemSection.metadata,
     )
     assert isinstance(item_view, ItemMetadataData)
-    assert item_view.item.authors == "Shannon, Claude; Weaver, Warren"
-    assert item_view.item.editors is None
-    assert [contributor.last_name for contributor in item_view.metadata.authors] == [
+    assert [row["family_name"] for row in item_view.item.authors] == ["Shannon", "Weaver"]
+    assert item_view.item.editors == []
+    assert [contributor.family_name for contributor in item_view.metadata.authors] == [
         "Shannon",
         "Weaver",
     ]
-    assert list(
-        await db.scalars(
-            select(ItemAuthor.position)
-            .where(ItemAuthor.item_id == item_id, ItemAuthor.role == "author")
-            .order_by(ItemAuthor.position)
-        )
-    ) == [1, 2]
     assert item_view.metadata.authors[0].is_corresponding
     matches, total = await search_library(
         db, owner, fixture_workspace_id(owner), q="Contributor replacement"
@@ -259,7 +246,7 @@ async def test_revise_item_metadata_rejects_canonically_duplicate_contributors(a
             item.version,
             ItemMetadata(
                 title=item.title,
-                authors=(Contributor("Van  Rossum", "Guido"), Contributor("Van Rossum", "Guido")),
+                authors=(contributor("Van  Rossum", "Guido"), contributor("Van Rossum", "Guido")),
             ),
         )
 
@@ -278,7 +265,7 @@ async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(
             abstract="The fundamental problem of communication.",
             publication_date="1948",
             keywords=("Information Theory", "Communication"),
-            authors=(Contributor("Shannon", "Claude"),),
+            authors=(contributor("Shannon", "Claude"),),
             doi="10.1002/j.1538-7305.1948.tb01338.x",
         ),
     )
@@ -294,9 +281,9 @@ async def test_create_item_accepts_typed_metadata_and_returns_a_mutation_result(
     assert result.version == 1
     assert created.title == "A Mathematical Theory of Communication"
     assert created.created_by == owner.id
-    assert created.authors == "Shannon, Claude"
-    assert created.doi == "10.1002/j.1538-7305.1948.tb01338.x"
-    assert created.keywords == "Information Theory; Communication"
+    assert created.authors == contributor_values("Shannon, Claude")
+    assert (await stored_doi(db, created)) == "10.1002/j.1538-7305.1948.tb01338.x"
+    assert created.keywords == metadata_list_values("Information Theory; Communication")
 
 
 @pytest.mark.anyio
@@ -322,7 +309,7 @@ async def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_inva
             item_version,
             ItemMetadata(
                 title="Partially updated title",
-                editors=(Contributor("Invalid", is_corresponding=True),),
+                editors=(contributor("Invalid", is_corresponding=True),),
                 doi="10.1000/should-not-persist",
             ),
         )
@@ -332,7 +319,7 @@ async def test_revise_item_metadata_rolls_back_every_change_when_a_group_is_inva
     assert unchanged is not None
     assert unchanged.title == "Original title"
     assert unchanged.version == 1
-    assert unchanged.doi is None
+    assert (await stored_doi(db, unchanged)) is None
 
 
 @pytest.mark.anyio

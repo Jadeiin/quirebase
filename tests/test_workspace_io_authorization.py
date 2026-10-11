@@ -16,6 +16,7 @@ from quirebase.library.imports import stage_identifier_import_batch, stage_pdf_i
 from quirebase.models import (
     ImportBatch,
     Item,
+    ItemIdentifier,
     User,
     WorkspaceMember,
     WorkspaceMemberState,
@@ -70,7 +71,9 @@ async def test_workspace_identifier_enumeration_requires_membership(async_db):
         Item(
             workspace_id=workspace_id,
             title="Private identifiers",
-            doi="10.1000/private",
+            identifier_links=[
+                ItemIdentifier(workspace_id=workspace_id, provider="doi", value="10.1000/private")
+            ],
             created_by=owner.id,
         )
     )

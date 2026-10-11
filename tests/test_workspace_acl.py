@@ -3755,6 +3755,25 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
         workspace_id=fixture_workspace_id(actor),
         title="Detached source",
         abstract="metadata copy",
+        authors=[
+            {
+                "display_name": "Research; Council",
+                "family_name": "Research; Council",
+                "given_name": None,
+                "is_corresponding": False,
+            }
+        ],
+        editors=[
+            {
+                "display_name": "Wang, Wei",
+                "family_name": "Wang",
+                "given_name": "Wei",
+                "is_corresponding": False,
+            }
+        ],
+        keywords=["Alpha; beta"],
+        urls=["https://example.test/source"],
+        custom_fields={"nested": {"names": ["original"]}},
         created_by=actor.id,
     )
     async_db.add(source)
@@ -3840,6 +3859,11 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     assert copied.id != source.id
     assert copied.workspace_id == fixture_workspace_id(target_owner)
     assert copied.title == source.title
+    for field in ("authors", "editors", "keywords", "urls", "custom_fields"):
+        assert getattr(copied, field) == getattr(source, field)
+        assert getattr(copied, field) is not getattr(source, field)
+    assert copied.authors[0] is not source.authors[0]
+    assert copied.custom_fields["nested"] is not source.custom_fields["nested"]
     assert copied_revision is not None
     assert copied_revision.file.path != source_revision.file.path
     assert await get_object_store().exists(source_revision.file.path)

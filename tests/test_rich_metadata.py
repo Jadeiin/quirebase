@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from item_helpers import metadata_list_values
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.models import Author, Item, ItemAuthor, ItemIdentifier, User
+from quirebase.models import Item, ItemIdentifier, User
 
 
 @pytest.mark.anyio
@@ -26,13 +27,14 @@ async def test_item_rich_metadata_fields(async_db):
         volume="12",
         issue="4",
         pages="100-110",
-        affiliation="MIT AI Lab",
         publisher="Nature Publishing Group",
         place_published="London",
         journal_abbreviation="Nat. Mach. Intell.",
         citation_key="Smith2026Deep",
         reference_type="article",
-        urls="https://nature.com/articles/123\nhttps://arxiv.org/abs/2601.00001",
+        urls=metadata_list_values(
+            "https://nature.com/articles/123\nhttps://arxiv.org/abs/2601.00001", urls=True
+        ),
     )
     db.add(item)
     await db.flush()
@@ -46,19 +48,22 @@ async def test_item_rich_metadata_fields(async_db):
     assert loaded.volume == "12"
     assert loaded.issue == "4"
     assert loaded.pages == "100-110"
-    assert loaded.affiliation == "MIT AI Lab"
+    assert "affiliation" not in Item.__table__.columns
+    assert "affiliations" not in Item.__table__.columns
     assert loaded.publisher == "Nature Publishing Group"
     assert loaded.place_published == "London"
     assert loaded.journal_abbreviation == "Nat. Mach. Intell."
     assert loaded.citation_key == "Smith2026Deep"
     assert loaded.reference_type == "article"
-    assert loaded.urls == "https://nature.com/articles/123\nhttps://arxiv.org/abs/2601.00001"
+    assert loaded.urls == metadata_list_values(
+        "https://nature.com/articles/123\nhttps://arxiv.org/abs/2601.00001", urls=True
+    )
     assert loaded.creator.username == "user1"
     assert loaded.updater.username == "user2"
 
 
 @pytest.mark.anyio
-async def test_author_and_item_author_relations(async_db):
+async def test_item_contributors_preserve_order_and_corresponding_status(async_db):
     db = async_db
     user = User(username="author_user", password_hash="hash")
     db.add(user)
@@ -70,33 +75,26 @@ async def test_author_and_item_author_relations(async_db):
         title="Graph Neural Networks",
         created_by=user.id,
     )
-    author1 = Author(first_name="Alice", last_name="Smith")
-    author2 = Author(first_name="Bob", last_name="Jones")
-    db.add_all([item, author1, author2])
+    item.authors = [
+        {
+            "display_name": "Smith, Alice",
+            "family_name": "Smith",
+            "given_name": "Alice",
+            "is_corresponding": False,
+        },
+        {
+            "display_name": "Jones, Bob",
+            "family_name": "Jones",
+            "given_name": "Bob",
+            "is_corresponding": True,
+        },
+    ]
+    db.add(item)
     await db.flush()
-
-    link1 = ItemAuthor(
-        item_id=item.id, author_id=author1.id, position=1, role="author", is_corresponding=False
-    )
-    link2 = ItemAuthor(
-        item_id=item.id, author_id=author2.id, position=2, role="author", is_corresponding=True
-    )
-    db.add_all([link1, link2])
-    await db.flush()
-
-    loaded_item = await db.scalar(
-        select(Item)
-        .options(selectinload(Item.author_links).selectinload(ItemAuthor.author))
-        .where(Item.id == item.id)
-    )
-    assert loaded_item is not None
-    assert len(loaded_item.author_links) == 2
-    assert loaded_item.author_links[0].author.last_name == "Smith"
-    assert loaded_item.author_links[0].position == 1
-    assert not loaded_item.author_links[0].is_corresponding
-    assert loaded_item.author_links[1].author.last_name == "Jones"
-    assert loaded_item.author_links[1].position == 2
-    assert loaded_item.author_links[1].is_corresponding
+    await db.refresh(item)
+    assert [row["family_name"] for row in item.authors] == ["Smith", "Jones"]
+    assert not item.authors[0]["is_corresponding"]
+    assert item.authors[1]["is_corresponding"]
 
 
 @pytest.mark.anyio

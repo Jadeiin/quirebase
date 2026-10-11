@@ -16,6 +16,7 @@ from inquiro import (
     ProviderUnavailable,
     ResourceLink,
 )
+from item_helpers import contributor_values, stored_doi
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -29,7 +30,7 @@ from quirebase.library.identifiers import (
     set_item_identifiers,
     sync_metadata_from_upstream,
 )
-from quirebase.models import AuditEvent, FileRevision, Item, User
+from quirebase.models import AuditEvent, FileRevision, Item, ItemIdentifier, User
 
 
 async def _user(db, username: str) -> User:
@@ -75,10 +76,14 @@ def candidate(lookup_identifier: Identifier, values: dict) -> CandidateRecord:
             "issue",
             "pages",
             "publisher",
-            "doi",
             "reference_type",
         )
     }
+    if values.get("doi"):
+        identifiers = (
+            *(row for row in identifiers if row.provider != "doi"),
+            Identifier("doi", values["doi"]),
+        )
     return CandidateRecord(
         provider={"doi": "crossref", "pmid": "pubmed"}.get(
             lookup_identifier.provider, lookup_identifier.provider
@@ -142,16 +147,16 @@ async def test_set_and_get_item_identifiers(async_db):
     await db.commit()
 
     loaded_ids = await get_item_identifiers(db, item.id)
-    assert len(loaded_ids) == 2
+    assert len(loaded_ids) == 3
     providers = {link.provider: link.value for link in loaded_ids}
     assert providers["arxiv"] == "2401.00001"
 
-    # Check cache on Item
+    # DOI and other identifiers live only in the association table.
     loaded_item = await db.get(Item, item.id)
     assert loaded_item is not None
-    assert loaded_item.doi == "10.1002/j.1538-7305.1948.tb01338.x"
-    idents_dict = json.loads(loaded_item.identifiers)
-    assert "doi" not in idents_dict
+    assert (await stored_doi(db, loaded_item)) == "10.1002/j.1538-7305.1948.tb01338.x"
+    idents_dict = {link.provider: link.value for link in await get_item_identifiers(db, item.id)}
+    assert idents_dict["doi"] == "10.1002/j.1538-7305.1948.tb01338.x"
     assert idents_dict["arxiv"] == "2401.00001"
 
 
@@ -163,7 +168,7 @@ async def test_generate_citation_key(async_db):
     item = Item(
         workspace_id=fixture_workspace_id(user),
         title="A Mathematical Theory of Communication",
-        authors="Shannon, Claude; Weaver, Warren",
+        authors=contributor_values("Shannon, Claude; Weaver, Warren"),
         publication_date="1948-07-01",
         created_by=user.id,
     )
@@ -181,7 +186,7 @@ async def test_generate_citation_key_parses_first_last_author_name(async_db):
     item = Item(
         workspace_id=fixture_workspace_id(user),
         title="Computing Machinery and Intelligence",
-        authors="Alan Turing",
+        authors=contributor_values("Alan Turing"),
         publication_date="1950",
         created_by=user.id,
     )
@@ -222,7 +227,7 @@ async def test_rescan_pdf_doi(async_db):
 
     loaded_item = await db.get(Item, item.id)
     assert loaded_item is not None
-    assert loaded_item.doi == "10.1038/s41586-020-2649-2"
+    assert (await stored_doi(db, loaded_item)) == "10.1038/s41586-020-2649-2"
     assert loaded_item.version == initial_version + 1
     assert loaded_item.updated_by == user.id
     search_index_factory.return_value.index_item.assert_awaited_once_with(db, item.id)
@@ -235,7 +240,11 @@ async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
     item = Item(
         workspace_id=fixture_workspace_id(user),
         title="Manual DOI",
-        doi="10.1000/manual",
+        identifier_links=[
+            ItemIdentifier(
+                workspace_id=fixture_workspace_id(user), provider="doi", value="10.1000/manual"
+            )
+        ],
         created_by=user.id,
     )
     db.add(item)
@@ -262,7 +271,7 @@ async def test_rescan_pdf_doi_does_not_replace_manual_doi(async_db):
 
     assert found_doi == "10.1000/manual"
     await db.refresh(item)
-    assert item.doi == "10.1000/manual"
+    assert (await stored_doi(db, item)) == "10.1000/manual"
     assert item.version == initial_version
 
 
@@ -315,10 +324,11 @@ async def test_sync_metadata_from_upstream(async_db):
     assert updated_item.pages == "379-423"
     assert updated_item.publisher == "Alcatel-Lucent"
     assert updated_item.citation_key is not None
-    assert "https://bell-labs.com/shannon1948" in updated_item.urls
+    assert {"url": "https://bell-labs.com/shannon1948"} in updated_item.urls
     assert updated_item.updated_by == user.id
-    assert len(updated_item.author_links) == 1
-    assert updated_item.author_links[0].author.last_name == "Shannon"
+    assert len(updated_item.authors) == 1
+    assert updated_item.authors[0]["display_name"] == "Shannon, Claude"
+    assert updated_item.authors[0]["family_name"] is None
 
 
 @pytest.mark.parametrize(
@@ -375,7 +385,7 @@ async def test_sync_metadata_translates_inquiro_errors_at_library_interface(
 
 
 @pytest.mark.anyio
-async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
+async def test_sync_by_doi_stores_a_confirmed_doi_identifier(async_db):
     db = async_db
     user = await _user(db, "canonical_doi_sync")
     item = Item(workspace_id=fixture_workspace_id(user), title="Initial", created_by=user.id)
@@ -397,8 +407,10 @@ async def test_sync_by_doi_does_not_store_doi_as_provider_identifier(async_db):
             uid_value="https://doi.org/10.1000/canonical",
         )
 
-    assert item.doi == "10.1000/canonical"
-    assert await get_item_identifiers(db, item.id) == []
+    assert (await stored_doi(db, item)) == "10.1000/canonical"
+    assert [(row.provider, row.value) for row in await get_item_identifiers(db, item.id)] == [
+        ("doi", "10.1000/canonical")
+    ]
 
 
 @pytest.mark.anyio
@@ -408,7 +420,11 @@ async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits
     item = Item(
         workspace_id=fixture_workspace_id(user),
         title="Initial",
-        doi="10.1000/existing",
+        identifier_links=[
+            ItemIdentifier(
+                workspace_id=fixture_workspace_id(user), provider="doi", value="10.1000/existing"
+            )
+        ],
         created_by=user.id,
     )
     db.add(item)
@@ -429,10 +445,11 @@ async def test_non_doi_sync_preserves_existing_canonical_doi_when_upstream_omits
             uid_value="W123",
         )
 
-    assert item.doi == "10.1000/existing"
+    assert (await stored_doi(db, item)) == "10.1000/existing"
     assert {
         record.provider: record.value for record in await get_item_identifiers(db, item.id)
     } == {
+        "doi": "10.1000/existing",
         "openalex": "W123",
         "pmid": "12345678",
     }
@@ -568,7 +585,11 @@ async def test_sync_metadata_uses_returned_identity_instead_of_lookup_input(asyn
     item = Item(
         workspace_id=fixture_workspace_id(user),
         title="Initial",
-        doi="10.1000/canonical",
+        identifier_links=[
+            ItemIdentifier(
+                workspace_id=fixture_workspace_id(user), provider="doi", value="10.1000/canonical"
+            )
+        ],
         created_by=user.id,
     )
     db.add(item)
@@ -589,8 +610,8 @@ async def test_sync_metadata_uses_returned_identity_instead_of_lookup_input(asyn
             uid_value="https://openalex.org/W122",
         )
 
-    assert item.doi == "10.1000/canonical"
+    assert (await stored_doi(db, item)) == "10.1000/canonical"
     assert [
         (identifier.provider, identifier.value)
         for identifier in await get_item_identifiers(db, item.id)
-    ] == [("openalex", "W123")]
+    ] == [("doi", "10.1000/canonical"), ("openalex", "W123")]

@@ -215,7 +215,13 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
             json=json_payload({
                 "title": "HTTP API Item",
                 "abstract": "Shared contract",
-                "authors": [{"last_name": "Li", "first_name": "Ming"}],
+                "authors": [
+                    {
+                        "display_name": "Li, Ming",
+                        "family_name": "Li",
+                        "given_name": "Ming",
+                    }
+                ],
                 "custom_fields": [{"name": "rating", "value": 5}],
             }),
         )

@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 from advanced_alchemy.types import FileObject
+from item_helpers import metadata_list_values
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -34,7 +35,7 @@ async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_
         title="Graph representation learning for molecules",
         workspace_id=fixture_workspace_id(user),
         abstract="A robust neural method for molecular prediction.",
-        keywords="provider supplied keyword",
+        keywords=metadata_list_values("provider supplied keyword"),
         created_by=user.id,
     )
     db.add(item)
@@ -43,7 +44,7 @@ async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_
         db, item.id, workspace_id=fixture_workspace_id(user), actor_id=user.id
     )
     first_workflow_id = first.workflow_id
-    item.keywords = "entirely different upstream keywords"
+    item.keywords = metadata_list_values("entirely different upstream keywords")
     second = await request_item_tag_recommendation(
         db, item.id, workspace_id=fixture_workspace_id(user), actor_id=user.id
     )

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from contextlib import suppress
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from inquiro.bibliography import (
@@ -26,11 +24,9 @@ from inquiro.bibliography import (
     select_builtin_citation_styles,
 )
 from inquiro.bibliography import (
-    Contributor as BibliographyContributor,
-)
-from inquiro.bibliography import (
     preview_citation_key as preview_formula,
 )
+from inquiro.metadata import metadata_bibliography_record
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -39,10 +35,14 @@ from quirebase.access.items import require_readable_item
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.models import CitationStyle
 
+from ._metadata import metadata_from_item
+
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.models import Item, User
+    from quirebase.models import Item, ItemIdentifier, User
 
 
 def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
@@ -145,7 +145,11 @@ async def format_csl_export(
         raise ValidationFailure("unknown citation style")
     entries = render_bibliography(
         [
-            record_to_csl_json(_item_to_bibliography_record(item), options, item_id=str(item.id))
+            record_to_csl_json(
+                _item_to_bibliography_record(item, item.identifier_links),
+                options,
+                item_id=str(item.id),
+            )
             for item in items
         ],
         style_xml,
@@ -160,7 +164,7 @@ def format_standard_export(
         raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
     try:
         contents = export_bibliography_records(
-            [_item_to_bibliography_record(item) for item in items],
+            [_item_to_bibliography_record(item, item.identifier_links) for item in items],
             file_format,
             options=options,
         )
@@ -170,76 +174,6 @@ def format_standard_export(
     extension = BIBLIOGRAPHY_EXTENSIONS[file_format]
     filename = f"quirebase-export.{extension}"
     return contents, media_type, filename
-
-
-def _json_fields(value: str | None) -> tuple[tuple[str, str], ...]:
-    parsed: Any = None
-    with suppress(json.JSONDecodeError, TypeError):
-        parsed = json.loads(value or "{}")
-    if not isinstance(parsed, dict):
-        return ()
-    return _field_pairs(parsed)
-
-
-def _field_pairs(parsed: dict | None) -> tuple[tuple[str, str], ...]:
-    return tuple(
-        (
-            str(key),
-            json.dumps(field_value, ensure_ascii=False)
-            if isinstance(field_value, (dict, list))
-            else str(field_value),
-        )
-        for key, field_value in (parsed or {}).items()
-        if field_value not in (None, "")
-    )
-
-
-def _contributors(value: str | None) -> tuple[BibliographyContributor, ...]:
-    return tuple(
-        BibliographyContributor.parse(part.strip())
-        for part in (value or "").split(";")
-        if part.strip()
-    )
-
-
-def _item_contributors(item: Item, role: str) -> tuple[BibliographyContributor, ...]:
-    linked = tuple(
-        BibliographyContributor(
-            family_name=link.author.last_name,
-            given_name=link.author.first_name,
-        )
-        for link in item.author_links
-        if link.role == role
-    )
-    if linked:
-        return linked
-    cached = item.authors if role == "author" else item.editors
-    return _contributors(cached)
-
-
-def _item_to_bibliography_record(item: Item) -> BibliographyRecord:
-    """Map the Library-owned Item explicitly onto Inquiro's neutral Interface."""
-    return BibliographyRecord(
-        citation_key=item.citation_key,
-        reference_type=item.reference_type or "document",
-        title=item.title,
-        authors=_item_contributors(item, "author"),
-        editors=_item_contributors(item, "editor"),
-        abstract=item.abstract,
-        keywords=tuple(part.strip() for part in (item.keywords or "").split(";") if part.strip()),
-        publication_date=item.publication_date,
-        publication_title=item.publication_title,
-        journal_abbreviation=item.journal_abbreviation,
-        volume=item.volume,
-        issue=item.issue,
-        pages=item.pages,
-        publisher=item.publisher,
-        location=item.place_published,
-        doi=item.doi,
-        urls=tuple(part.strip() for part in (item.urls or "").splitlines() if part.strip()),
-        identifiers=_json_fields(item.identifiers),
-        custom_fields=_field_pairs(item.custom_fields),
-    )
 
 
 async def get_item_citation_response(
@@ -271,7 +205,9 @@ async def get_item_citation_text_response(
     style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
-    rendered = render_citation(_item_to_bibliography_record(item), style_xml, output_format=output)
+    rendered = render_citation(
+        _item_to_bibliography_record(item, item.identifier_links), style_xml, output_format=output
+    )
     media_type = "text/html" if output == "html" else "text/plain"
     return rendered, media_type
 
@@ -294,3 +230,9 @@ __all__ = [
     "resolve_style_xml",
     "select_builtin_citation_styles",
 ]
+
+
+def _item_to_bibliography_record(
+    item: Item, identifiers: Sequence[ItemIdentifier]
+) -> BibliographyRecord:
+    return metadata_bibliography_record(metadata_from_item(item, identifiers))

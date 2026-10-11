@@ -1,8 +1,7 @@
-"""Persist canonical Identifier associations and their Item display cache."""
+"""Persist canonical Identifier associations, including DOI."""
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select, tuple_
@@ -33,8 +32,6 @@ async def _replace_item_identifiers_many(
     for item, pairs in replacements:
         normalized = normalize_identifier_pairs(pairs)
         for provider, value in normalized:
-            if provider == "doi":
-                continue
             identity = (item.workspace_id, provider, value)
             previous = claims.setdefault(identity, item.id)
             if previous != item.id:
@@ -56,23 +53,15 @@ async def _replace_item_identifiers_many(
                         )
                     )
             for item, pairs in prepared:
-                identifiers: dict[str, str] = {}
-                doi: str | None = None
                 for provider, value in pairs:
-                    if provider == "doi":
-                        doi = value
-                    else:
-                        links.append(
-                            ItemIdentifier(
-                                workspace_id=item.workspace_id,
-                                item_id=item.id,
-                                provider=provider,
-                                value=value,
-                            )
+                    links.append(
+                        ItemIdentifier(
+                            workspace_id=item.workspace_id,
+                            item_id=item.id,
+                            provider=provider,
+                            value=value,
                         )
-                        identifiers[provider] = value
-                item.doi = doi
-                item.identifiers = json.dumps(identifiers) if identifiers else None
+                    )
             db.add_all(links)
             await db.flush()
     except IntegrityError:
