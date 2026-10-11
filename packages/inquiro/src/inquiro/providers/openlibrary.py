@@ -104,7 +104,6 @@ class OpenLibraryLookupAdapter:
             publisher=first_text([
                 publisher.get("name") for publisher in record.get("publishers", [])
             ]),
-            doi=None,
             urls=_links(record, value),
             identifiers=(Identifier("isbn", value),),
             reference_type=ReferenceType.book,

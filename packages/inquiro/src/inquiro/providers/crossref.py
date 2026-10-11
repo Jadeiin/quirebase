@@ -106,7 +106,6 @@ def _record(message: dict, identifier: Identifier) -> CandidateRecord:
         ),
         pages=clean_markup(first_text(message.get("page"))),
         publisher=clean_markup(first_text(message.get("publisher"))),
-        doi=canonical_doi,
         urls=_links(message, canonical_doi),
         identifiers=(Identifier("doi", canonical_doi),),
         reference_type=normalize_reference_type(message.get("type"), source="crossref"),

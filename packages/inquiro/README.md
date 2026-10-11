@@ -36,7 +36,9 @@ transport. Candidate Records separate the metadata source (`provider`), query co
 a subsequent lookup. A DOI lookup against OpenAlex keeps the DOI as its lookup input and returns
 the OpenAlex Work ID and DOI in `identifiers`. Crossref and DataCite return DOI identities while
 retaining their source names in `provider`. Confirmed identities contain at most one value per
-identifier namespace; lookup inputs are not appended to them.
+identifier namespace, including DOI; lookup inputs are not appended to them. `CandidateRecord.doi`
+is a read-only property derived from identifiers and is no longer a constructor argument. Confirmed
+DOI values use ASCII-only case folding; non-ASCII differences remain significant.
 
 Explicit requests accept metadata source names or their primary Identifier Namespaces:
 `openlibrary`/`isbn`, `nasa_ads`/`bibcode`, `pubmed`/`pmid`, and `ieee`. PMC's Identifier Namespace
@@ -135,3 +137,13 @@ Unsupported file types become document with a warning and retained source type i
 Publication Dates use `python-dateutil` for textual parsing and retain only explicit year, month
 or day precision. Ranges reduce to their shared year or month; cross-year ranges have no single
 Publication Date. Provider, bibliography import and CSL output share this normalization.
+
+### Neutral metadata snapshots
+
+`inquiro.models.BibliographicMetadata` describes a complete bibliography independently of a
+Provider or application database. It reuses the same `Contributor`, `Affiliation`, `Identifier`
+and `ResourceLink` types as `CandidateRecord`; no second Contributor model is maintained.
+`inquiro.metadata` validates and serializes snapshots, converts Provider/bibliography records,
+merges partial source facts, and projects descriptions for bibliography formatting. Omitted facts
+remain distinct from explicit empty lists and false flags. Persistence, permissions, database
+constraints, versioning and transaction boundaries belong to the application.

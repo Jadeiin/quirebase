@@ -59,14 +59,13 @@ class PmcSearchAdapter:
                 CandidateRecord(
                     provider="pmc",
                     lookup_identifier=identity,
-                    identifiers=(identity,),
+                    identifiers=tuple(Identifier(key, value) for key, value in identities.items()),
                     title=title,
                     authors=ncbi_contributors(summary),
                     publication_title=first_text(
                         summary.get("fulljournalname") or summary.get("source")
                     ),
                     publication_date=first_text(summary.get("pubdate")),
-                    doi=identities.get("doi"),
                 )
             )
         return CandidatePage("pmc", tuple(results), total, request.page, request.per_page)

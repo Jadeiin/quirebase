@@ -25,6 +25,7 @@ from inquiro.bibliography.keys import (
     citation_key_suffix,
     evaluate_citation_key_formula,
     extract_year,
+    generate_default_citation_key,
     preview_citation_key,
     suffixed_citation_key,
 )
@@ -65,6 +66,7 @@ __all__ = [
     "export_bibliography_records",
     "extract_year",
     "first_url",
+    "generate_default_citation_key",
     "is_valid_csl",
     "parse_bibliography_records",
     "preview_citation_key",

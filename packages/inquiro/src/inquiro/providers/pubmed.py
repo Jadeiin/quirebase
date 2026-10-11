@@ -231,7 +231,6 @@ class PubMedLookupAdapter:
             issue=issue,
             pages=_xml_text(article.find("Pagination/MedlinePgn")),
             publisher=publisher,
-            doi=doi,
             urls=tuple(links),
             identifiers=tuple(dict.fromkeys(identifiers)),
             reference_type=reference_type,
@@ -257,19 +256,23 @@ class PubMedSearchAdapter:
                 CandidateRecord(
                     provider="pubmed",
                     lookup_identifier=Identifier("pmid", pmid),
-                    identifiers=(Identifier("pmid", pmid),),
+                    identifiers=(
+                        Identifier("pmid", pmid),
+                        *(
+                            Identifier(namespace, entry["value"])
+                            for entry in item.get("articleids", [])
+                            if (
+                                namespace := {"doi": "doi", "pmc": "pmcid", "pmcid": "pmcid"}.get(
+                                    entry.get("idtype")
+                                )
+                            )
+                            and entry.get("value")
+                        ),
+                    ),
                     title=title,
                     authors=ncbi_contributors(item),
                     publication_title=item.get("source"),
                     publication_date=item.get("pubdate"),
-                    doi=next(
-                        (
-                            entry.get("value")
-                            for entry in item.get("articleids", [])
-                            if entry.get("idtype") == "doi"
-                        ),
-                        None,
-                    ),
                 )
             )
         return CandidatePage("pubmed", tuple(results), total, request.page, request.per_page)

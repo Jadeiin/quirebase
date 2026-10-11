@@ -69,7 +69,6 @@ def _record(doc: dict, identifier: Identifier) -> CandidateRecord:
         keywords=keyword_values(doc.get("keyword")),
         publication_date=first_text(doc.get("pubdate")),
         publication_title=first_text(doc.get("pub")),
-        doi=doi,
         urls=(
             ResourceLink(
                 f"https://ui.adsabs.harvard.edu/abs/{bibcode}/abstract", kind="landing_page"

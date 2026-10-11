@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from inquiro.canonical import normalize_publication_date
 from inquiro.identifiers import parse_identifier
+from inquiro.metadata import clean_identifier_value
 from inquiro.models import (
     AcquiredDocument,
     CandidateNotFound,
@@ -32,13 +33,11 @@ SEARCH_OPERATORS = frozenset({"and", "or", "not"})
 
 def _candidate_identifiers(
     identifiers: tuple[Identifier, ...],
-    doi: str | None = None,
 ) -> tuple[Identifier, ...]:
-    confirmed = identifiers
-    if doi:
-        confirmed += (Identifier("doi", doi),)
     unique: dict[str, Identifier] = {}
-    for identifier in confirmed:
+    for identifier in identifiers:
+        namespace = identifier.provider.strip().lower()
+        identifier = Identifier(namespace, clean_identifier_value(namespace, identifier.value))
         previous = unique.get(identifier.provider)
         if previous is not None and previous != identifier:
             raise ProviderUnavailable("metadata provider returned conflicting identifiers")
@@ -50,7 +49,7 @@ def _normalize_candidate(record: CandidateRecord) -> CandidateRecord:
     return replace(
         record,
         publication_date=normalize_publication_date(record.publication_date),
-        identifiers=_candidate_identifiers(record.identifiers, record.doi),
+        identifiers=_candidate_identifiers(record.identifiers),
     )
 
 

@@ -109,7 +109,6 @@ def _record(entry: ElementTree.Element, identifier: Identifier) -> CandidateReco
         publication_title=first_text(
             entry.findtext("arxiv:journal_ref", default="", namespaces=_NAMESPACE)
         ),
-        doi=doi,
         urls=_links(entry, value, doi),
         identifiers=tuple(Identifier(key, value) for key, value in identifiers.items()),
         reference_type=ReferenceType.preprint,

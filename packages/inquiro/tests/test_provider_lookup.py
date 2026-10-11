@@ -287,35 +287,35 @@ async def test_lookup_routes_source_names_and_namespaces_to_the_correct_adapter(
             "10.1000/canonical",
             "openalex",
             Identifier("openalex", "10.1000/canonical"),
-            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/Canonical")),
+            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/canonical")),
         ),
         (
             "openalex",
             "W122",
             "openalex",
             Identifier("openalex", "W122"),
-            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/Canonical")),
+            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/canonical")),
         ),
         (
             "auto",
             "10.1000/canonical",
             "crossref",
             Identifier("doi", "10.1000/canonical"),
-            (Identifier("doi", "10.1000/Canonical"),),
+            (Identifier("doi", "10.1000/canonical"),),
         ),
         (
             "crossref",
             "10.1000/canonical",
             "crossref",
             Identifier("crossref", "10.1000/canonical"),
-            (Identifier("doi", "10.1000/Canonical"),),
+            (Identifier("doi", "10.1000/canonical"),),
         ),
         (
             "datacite",
             "10.1000/canonical",
             "datacite",
             Identifier("datacite", "10.1000/canonical"),
-            (Identifier("doi", "10.1000/Canonical"),),
+            (Identifier("doi", "10.1000/canonical"),),
         ),
         (
             "bibcode",
@@ -324,7 +324,7 @@ async def test_lookup_routes_source_names_and_namespaces_to_the_correct_adapter(
             Identifier("bibcode", "2025ApJ...123..456A"),
             (
                 Identifier("bibcode", "2025ApJ...124..456A"),
-                Identifier("doi", "10.1000/Canonical"),
+                Identifier("doi", "10.1000/canonical"),
             ),
         ),
         (
@@ -332,7 +332,7 @@ async def test_lookup_routes_source_names_and_namespaces_to_the_correct_adapter(
             "1234566",
             "ieee",
             Identifier("ieee", "1234566"),
-            (Identifier("ieee", "1234567"), Identifier("doi", "10.1000/Canonical")),
+            (Identifier("ieee", "1234567"), Identifier("doi", "10.1000/canonical")),
         ),
     ],
 )
@@ -520,7 +520,7 @@ def test_candidate_record_is_an_immutable_normalized_value():
         publication_title="NeurIPS 2017",
         volume="30",
         pages="5998-6008",
-        doi="10.48550/arXiv.1706.03762",
+        identifiers=(Identifier("doi", "10.48550/arXiv.1706.03762"),),
         urls=(
             ResourceLink("https://arxiv.org/abs/1706.03762"),
             ResourceLink("https://arxiv.org/pdf/1706.03762.pdf"),

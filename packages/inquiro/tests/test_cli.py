@@ -72,11 +72,11 @@ def test_openalex_doi_lookup_keeps_input_separate_from_returned_identities(file_
         assert "identifier" not in result
         assert result["identifiers"] == [
             {"provider": "openalex", "value": "W123"},
-            {"provider": "doi", "value": "10.1000/Canonical"},
+            {"provider": "doi", "value": "10.1000/canonical"},
         ]
     else:
         assert "openalex = {W123}" in output
-        assert "doi = {10.1000/Canonical}" in output
+        assert "doi = {10.1000/canonical}" in output
 
 
 def test_lookup_outputs_candidate_as_json_and_closes_runtime(capsys, monkeypatch):
@@ -188,7 +188,6 @@ def test_lookup_exports_each_bibliography_format(
         ),
         publication_date="2025-04-03",
         publication_title="Testing Quarterly",
-        doi="10.1000/example",
         urls=(ResourceLink("https://example.test/article"),),
         identifiers=(
             Identifier("doi", "10.1000/example"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import string
 from typing import TYPE_CHECKING
 
 from inquiro.models import Identifier, InvalidProviderRequest
@@ -21,9 +22,17 @@ IEEE_PATTERN = re.compile(r"\d{1,12}")
 
 
 def normalize_doi(value: str) -> str:
+    """Strip DOI resolver prefixes without changing other identifier namespaces."""
     cleaned = value.strip()
     cleaned = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", cleaned, flags=re.IGNORECASE)
     return re.sub(r"^doi:\s*", "", cleaned, flags=re.IGNORECASE)
+
+
+def canonical_doi(value: str) -> str:
+    """Return the comparison value, folding ASCII letters only (DOI Handbook)."""
+    return normalize_doi(value).translate(
+        str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
+    )
 
 
 def parse_doi(candidate: str, alias: str) -> Identifier | None:

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import IO, TYPE_CHECKING, Literal, Self
+from typing import IO, Literal, Self
 
 from inquiro.names import ContributorName
-
-if TYPE_CHECKING:
-    from inquiro.reference_types import ReferenceType
+from inquiro.reference_types import ReferenceType
 
 
 class InquiroError(Exception):
@@ -121,11 +120,13 @@ class Contributor:
     @property
     def bibliographic_name(self) -> ContributorName:
         if self.kind == "organization":
-            return ContributorName(self.display_name)
-        if self.family_name:
-            family = " ".join(part for part in (self.family_name, self.suffix) if part)
-            return ContributorName(family, self.given_name)
-        return ContributorName.parse(self.display_name)
+            name = ContributorName(self.display_name)
+        elif self.family_name:
+            name = ContributorName(self.family_name, self.given_name)
+        else:
+            name = ContributorName.parse(self.display_name)
+        family = " ".join(part for part in (name.family_name, self.suffix) if part)
+        return ContributorName(family, name.given_name)
 
 
 @dataclass(frozen=True)
@@ -137,6 +138,40 @@ class ResourceLink:
     license: str | None = None
     is_open_access: bool | None = None
     intended_application: str | None = None
+
+
+type JsonValue = str | int | float | bool | tuple[JsonValue, ...] | Mapping[str, JsonValue] | None
+
+
+@dataclass(frozen=True)
+class CustomField:
+    name: str
+    value: JsonValue
+
+
+@dataclass(frozen=True)
+class BibliographicMetadata:
+    """A complete description, independent of its source and persistence."""
+
+    title: str
+    abstract: str | None = None
+    keywords: tuple[str, ...] = ()
+    publication_date: str | None = None
+    publication_title: str | None = None
+    reference_type: ReferenceType = ReferenceType.document
+    volume: str | None = None
+    issue: str | None = None
+    pages: str | None = None
+    publisher: str | None = None
+    place_published: str | None = None
+    journal_abbreviation: str | None = None
+    citation_key: str | None = None
+    urls: tuple[ResourceLink, ...] = ()
+    authors: tuple[Contributor, ...] = ()
+    editors: tuple[Contributor, ...] = ()
+    doi: str | None = None
+    identifiers: tuple[Identifier, ...] = ()
+    custom_fields: tuple[CustomField, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -161,10 +196,13 @@ class CandidateRecord:
     issue: str | None = None
     pages: str | None = None
     publisher: str | None = None
-    doi: str | None = None
     urls: tuple[ResourceLink, ...] | None = None
     identifiers: tuple[Identifier, ...] = ()
     reference_type: ReferenceType | None = None
+
+    @property
+    def doi(self) -> str | None:
+        return next((row.value for row in self.identifiers if row.provider == "doi"), None)
 
 
 @dataclass(frozen=True)

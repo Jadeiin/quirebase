@@ -200,7 +200,6 @@ def _record(payload: dict, identifier: Identifier) -> CandidateRecord:
         issue=first_text(biblio.get("issue")),
         pages=pages,
         publisher=first_text(source.get("host_organization_name")),
-        doi=doi,
         urls=_links(payload, doi),
         identifiers=tuple(
             Identifier(key, val)

@@ -45,6 +45,32 @@ def extract_year(publication_date: str | None) -> str | None:
     return match.group(1) if match else None
 
 
+def generate_default_citation_key(item: BibliographyRecord, *, max_length: int = 255) -> str:
+    author_part = "Unknown"
+    if item.authors:
+        last_name = item.authors[0].family_name
+        # Clean non-alphanumeric
+        last_clean = re.sub(r"[^A-Za-z0-9]", "", last_name)
+        if last_clean:
+            author_part = last_clean.capitalize()
+
+    year_part = extract_year(item.publication_date) or "XXXX"
+
+    title_part = "Work"
+    if item.title:
+        plain_title = convert_rich_text(item.title, source="html", target="text")
+        words = re.findall(r"[A-Za-z0-9]+", plain_title)
+        for word in words:
+            if word.lower() not in _STOP_WORDS and len(word) > 2:
+                title_part = word.capitalize()
+                break
+
+    # Reserve room for both the year and title even when the family name is long.
+    author_part = author_part[: max_length // 2]
+    title_part = title_part[: max_length - len(author_part) - len(year_part)]
+    return f"{author_part}{year_part}{title_part}"
+
+
 def _split_formula(formula: str) -> list[str]:
     parts: list[str] = []
     start = 0

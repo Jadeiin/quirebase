@@ -569,3 +569,37 @@ async def test_extra_search_fallback_identifiers_without_doi():
         transport=httpx2.MockTransport(fallback_response),
     )
     assert ieee_page.results[0].lookup_identifier == Identifier("ieee", "9876543")
+
+
+@pytest.mark.parametrize("provider", ["pubmed", "pmc"])
+async def test_ncbi_search_retains_all_confirmed_identifiers_including_doi(provider):
+    def respond(request):
+        if request.url.path.endswith("esearch.fcgi"):
+            return httpx2.Response(200, json={"esearchresult": {"count": "1", "idlist": ["42"]}})
+        return httpx2.Response(
+            200,
+            json={
+                "result": {
+                    "42": {
+                        "title": "Confirmed identities",
+                        "articleids": [
+                            {"idtype": "doi", "value": "https://doi.org/10.1000/EXAMPLE"},
+                            {"idtype": "pmid", "value": "42"},
+                        ],
+                    }
+                }
+            },
+        )
+
+    page = await search_metadata(
+        provider,
+        [SearchClause("title", "and", "Confirmed")],
+        transport=httpx2.MockTransport(respond),
+    )
+    record = page.results[0]
+    assert {row.provider: row.value for row in record.identifiers} == {
+        "pmid": "42",
+        "doi": "10.1000/example",
+    }
+    assert record.doi == "10.1000/example"
+    assert "doi" not in asdict(record)

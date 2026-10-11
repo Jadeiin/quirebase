@@ -127,7 +127,6 @@ def _record(article: dict, identifier: Identifier) -> CandidateRecord:
         keywords=_keywords(article),
         publication_date=first_text(article.get("publication_year")),
         publication_title=first_text(article.get("publication_title")),
-        doi=doi,
         urls=_links(article, article_number) if article_number else None,
         identifiers=tuple(Identifier(key, value) for key, value in identifiers.items() if value),
         reference_type=normalize_reference_type(

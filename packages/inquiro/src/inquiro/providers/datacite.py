@@ -108,7 +108,6 @@ class DataCiteLookupAdapter:
                 attributes.get("published") or attributes.get("publicationYear")
             ),
             publisher=publisher,
-            doi=canonical_doi,
             urls=unique_links(*urls),
             identifiers=(Identifier("doi", canonical_doi),),
             reference_type=normalize_reference_type(
