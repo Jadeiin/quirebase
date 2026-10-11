@@ -21,11 +21,14 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 					previewRequests > 1
 						? [
 								{
-									title: 'Imported PDF',
-									authors: [
-										{ display_name: 'Ada Lovelace', family_name: 'Lovelace', given_name: 'Ada' },
-										{ display_name: 'World Health Organization', kind: 'organization' }
-									]
+									metadata: {
+										title: 'Imported PDF',
+										authors: [
+											{ display_name: 'Ada Lovelace', family_name: 'Lovelace', given_name: 'Ada' },
+											{ display_name: 'World Health Organization', kind: 'organization' }
+										]
+									},
+									source: { original_name: 'paper.pdf', size: 9 }
 								}
 							]
 						: [],
@@ -57,6 +60,7 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 	await expect(page.getByRole('button', { name: 'Commit' })).toBeEnabled();
 	await expect(page.getByText('Imported PDF')).toBeVisible();
 	await expect(page.getByText('Ada Lovelace; World Health Organization')).toBeVisible();
+	await expect(page.getByText('paper.pdf', { exact: true })).toBeVisible();
 });
 
 test('shared pending Import previews poll the batch without actor-only workflow access', async ({
@@ -73,7 +77,8 @@ test('shared pending Import previews poll the batch without actor-only workflow 
 				file_format: 'pdf',
 				status: previewRequests > 1 ? 'ready' : 'pending',
 				workflow_id: null,
-				records: previewRequests > 1 ? [{ title: 'Shared imported PDF' }] : [],
+				records:
+					previewRequests > 1 ? [{ metadata: { title: 'Shared imported PDF', authors: [] } }] : [],
 				errors: []
 			}
 		});
@@ -128,7 +133,9 @@ test('Import preview paginates restored batches', async ({ page }) => {
 				id: 'batch-many',
 				status: 'ready',
 				workflow_id: null,
-				records: Array.from({ length: 21 }, (_, index) => ({ title: `Record ${index + 1}` })),
+				records: Array.from({ length: 21 }, (_, index) => ({
+					metadata: { title: `Record ${index + 1}`, authors: [] }
+				})),
 				errors: []
 			}
 		})

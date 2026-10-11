@@ -43,11 +43,17 @@ async def test_articles_in_the_same_journal_do_not_claim_issn_item_identity(pers
     source = b"""@article{first, title={First Article}, doi={10.1000/first}, issn={1234-5678}}
     @article{second, title={Second Article}, doi={10.1000/second}, issn={1234-5678}}"""
 
-    batch, records, errors = await stage_import_batch(db, actor, workspace_id, source, "bibtex")
+    batch = await stage_import_batch(db, actor, workspace_id, source, "bibtex")
+    records = batch.records
+    errors = batch.errors
 
-    assert errors == []
+    assert not errors
     assert len(records) == 2
-    assert all(not record["identifiers"] for record in records)
+    assert all(
+        identifier.provider != "issn"
+        for record in records
+        for identifier in record.metadata.identifiers
+    )
     await commit_import_batch(db, actor, workspace_id, batch.id)
     items = (await db.scalars(select(Item).where(Item.workspace_id == workspace_id))).all()
     assert {(await stored_doi(db, item)) for item in items} == {"10.1000/first", "10.1000/second"}
@@ -75,11 +81,17 @@ async def test_book_and_chapters_can_share_container_isbn(persistence_db, file_f
         "isbn={9780131103627}}"
     ).encode()
 
-    batch, records, errors = await stage_import_batch(db, actor, workspace_id, source, file_format)
+    batch = await stage_import_batch(db, actor, workspace_id, source, file_format)
+    records = batch.records
+    errors = batch.errors
 
-    assert errors == []
+    assert not errors
     assert len(records) == 3
-    assert all(not record["identifiers"] for record in records[1:])
+    assert all(
+        identifier.provider != "isbn"
+        for record in records[1:]
+        for identifier in record.metadata.identifiers
+    )
     await commit_import_batch(db, actor, workspace_id, batch.id)
     items = (await db.scalars(select(Item).where(Item.workspace_id == workspace_id))).all()
     assert len(items) == 3

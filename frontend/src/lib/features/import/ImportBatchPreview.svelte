@@ -11,19 +11,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 
-	type ImportBatch = components['schemas']['ImportBatchView'];
-
-	function contributorNames(value: unknown): string {
-		if (!Array.isArray(value)) return '';
-		return value
-			.map((person: unknown) => {
-				if (!person || typeof person !== 'object') return '';
-				const fields = person as Record<string, unknown>;
-				return typeof fields.display_name === 'string' ? fields.display_name : '';
-			})
-			.filter(Boolean)
-			.join('; ');
-	}
+	type ImportBatch = components['schemas']['ImportBatchPreview'];
 
 	let { batch, page, busy, canCommit, onDiscard, onRetry, onCommit, onPage } = $props<{
 		batch: ImportBatch;
@@ -74,12 +62,15 @@
 	{/if}
 	{#each records as record (record)}
 		<ItemRow>
-			<strong><RichText html={String(record.title ?? $t('Untitled'))} /></strong>
+			<strong><RichText html={record.metadata.title || $t('Untitled')} /></strong>
 			<span class="text-surface-600-400"
-				>{contributorNames(record.authors) || String(record.doi ?? '')}</span
+				>{record.metadata.authors
+					.map((person: components['schemas']['Contributor']) => person.display_name)
+					.join('; ') ||
+					record.metadata.doi ||
+					''}</span
 			>
-			{#if record.original_name}<span class="text-surface-600-400"
-					>{String(record.original_name)}</span
+			{#if record.source}<span class="text-surface-600-400">{record.source.original_name}</span
 				>{/if}
 		</ItemRow>
 	{/each}
@@ -95,7 +86,7 @@
 			class:text-warning-700-300={diagnostic.severity === 'warning'}
 			class:text-error-700-300={diagnostic.severity !== 'warning'}
 		>
-			<strong>{String(diagnostic.message ?? diagnostic.code)}</strong>
+			<strong>{diagnostic.message}</strong>
 			{#if diagnostic.filename}<span>{String(diagnostic.filename)}</span>{/if}
 			{#if diagnostic.row || diagnostic.code}<small
 					>{diagnostic.row ? `${$t('Row {row}', { row: String(diagnostic.row) })} · ` : ''}{String(

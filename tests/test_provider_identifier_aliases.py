@@ -73,10 +73,11 @@ async def test_provider_lookup_aliases_preserve_canonical_identifiers(
     )
 
     if operation == "import":
-        batch, _records, errors = await stage_identifier_import_batch(
+        batch = await stage_identifier_import_batch(
             db, actor, workspace_id, lookup_value, provider=provider
         )
-        assert errors == []
+        errors = batch.errors
+        assert not errors
         assert batch.file_format == "metadata"
         event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.lookup"))
         assert event.detail == {

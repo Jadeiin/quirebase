@@ -25,7 +25,7 @@ from quirebase.library import (
     stage_identifier_import_batch,
     sync_metadata_from_upstream,
 )
-from quirebase.models import Item, User
+from quirebase.models import ImportBatch, Item, User
 
 pytestmark = [pytest.mark.anyio, pytest.mark.shared_postgres]
 
@@ -82,10 +82,10 @@ async def test_import_preserves_structured_preview_and_projects_names_without_re
         "quirebase.library.imports.lookup_candidate", AsyncMock(return_value=record)
     )
 
-    batch, _preview, errors = await stage_identifier_import_batch(
-        db, actor, workspace_id, "W123", "openalex"
-    )
-    assert errors == []
+    preview = await stage_identifier_import_batch(db, actor, workspace_id, "W123", "openalex")
+    errors = preview.errors
+    batch = await db.get(ImportBatch, preview.id)
+    assert not errors
     # Read the persisted JSON rather than only inspecting the in-memory value.
     await db.refresh(batch)
     staged = batch.records[0]
@@ -132,10 +132,10 @@ async def test_pubmed_suffixes_survive_lookup_preview_and_import_confirmation(
             return await runtime.lookup(value, provider=provider)
 
     monkeypatch.setattr("quirebase.library.imports.lookup_candidate", lookup)
-    batch, _preview, errors = await stage_identifier_import_batch(
-        db, actor, workspace_id, "42", "pubmed"
-    )
-    assert errors == []
+    preview = await stage_identifier_import_batch(db, actor, workspace_id, "42", "pubmed")
+    errors = preview.errors
+    batch = await db.get(ImportBatch, preview.id)
+    assert not errors
     await db.refresh(batch)
     authors = batch.records[0]["authors"]
     assert [author["family_name"] for author in authors] == ["Smith", "Smith"]

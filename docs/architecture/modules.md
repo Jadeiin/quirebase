@@ -447,6 +447,10 @@ real ecosystem consumer demonstrates one.
 Quirebase owns the business behaviour around Inquiro results. For lookup and Search, Library
 constructs and closes the runtime within each operation, explicitly maps Candidate Records to its
 write/read models, translates package failures to typed domain errors and owns Discovery auditing.
+Import staging and preview operations return an immutable `ImportBatchPreview`, reusing the shared
+bibliographic metadata values. Library joins staged source descriptors to candidates and returns
+typed source summaries and diagnostics; storage keys and source association IDs stay internal.
+Only the batch's current actor receives its workflow identity. Web serializes that result directly.
 Document acquisition is currently a standalone Inquiro capability; any Quirebase workflow that
 adopts it must cross the Library Interface rather than importing Inquiro from Web.
 

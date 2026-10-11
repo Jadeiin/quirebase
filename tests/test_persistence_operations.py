@@ -533,10 +533,12 @@ async def test_import_batch_embeds_record_local_contributors_and_preserves_repla
         f"editor={{SHARED, AUTHOR}}, year={{2026}}, doi={{10.1000/{index}}}}}"
         for index in range(size)
     ).encode()
-    batch, records, errors = await stage_import_batch(
+    batch = await stage_import_batch(
         persistence_db, persistence_actor, workspace_id, contents, "bibtex"
     )
-    assert len(records) == size and errors == []
+    records = batch.records
+    errors = batch.errors
+    assert len(records) == size and not errors
     batch_id = batch.id
     item_ids = await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
     items = [await persistence_db.get(Item, item_id) for item_id in item_ids]

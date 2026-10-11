@@ -87,15 +87,17 @@ async def test_unknown_type_warning_allows_import_but_validation_errors_still_bl
     owner = await _user(async_db, "type-warning-owner")
     workspace_id = fixture_workspace_id(owner)
     title = "Preserved source type" if valid_title else ""
-    batch, records, diagnostics = await stage_import_batch(
+    batch = await stage_import_batch(
         async_db,
         owner,
         workspace_id,
         f"@unknown{{record, title = {{{title}}}}}".encode(),
         "bibtex",
     )
-    assert records[0]["reference_type"] == "document"
-    assert diagnostics[0]["severity"] == "warning"
+    records = batch.records
+    diagnostics = batch.errors
+    assert records[0].metadata.reference_type == "document"
+    assert diagnostics[0].severity == "warning"
     if not valid_title:
         with pytest.raises(BatchConflict, match="preview contains errors"):
             await commit_import_batch(async_db, owner, workspace_id, batch.id)

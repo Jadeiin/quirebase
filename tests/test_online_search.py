@@ -333,24 +333,28 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     await provision_initial_workspace(db, user)
     await db.commit()
 
-    batch_nasa, records_nasa, errors_nasa = await stage_identifier_import_batch(
+    batch_nasa = await stage_identifier_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         "2025ApJ...123..456A",
         "bibcode",
     )
-    assert errors_nasa == []
+    records_nasa = batch_nasa.records
+    errors_nasa = batch_nasa.errors
+    assert not errors_nasa
     assert len(records_nasa) == 1
     assert batch_nasa.file_format == "metadata"
 
-    batch_ieee, records_ieee, errors_ieee = await stage_identifier_import_batch(
+    batch_ieee = await stage_identifier_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         "9876543",
         "ieee",
     )
-    assert errors_ieee == []
+    records_ieee = batch_ieee.records
+    errors_ieee = batch_ieee.errors
+    assert not errors_ieee
     assert len(records_ieee) == 1
     assert batch_ieee.file_format == "metadata"

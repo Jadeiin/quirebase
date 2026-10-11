@@ -3361,20 +3361,8 @@ export interface components {
 			 */
 			provider: string;
 		};
-		/** ImportBatchRetryView */
-		ImportBatchRetryView: {
-			/**
-			 * Id
-			 * Format: uuid
-			 */
-			id: string;
-			/** Status */
-			status: string;
-			/** Workflow Id */
-			workflow_id?: string | null;
-		};
-		/** ImportBatchView */
-		ImportBatchView: {
+		/** ImportBatchPreview */
+		ImportBatchPreview: {
 			/**
 			 * Id
 			 * Format: uuid
@@ -3382,23 +3370,52 @@ export interface components {
 			id: string;
 			/** File Format */
 			file_format: string;
-			/** Status */
-			status: string;
+			status: components['schemas']['ImportBatchStatus'];
 			/** Workflow Id */
-			workflow_id?: string | null;
+			workflow_id: string | null;
 			/** Records */
-			records: {
-				[key: string]: unknown;
-			}[];
+			records: components['schemas']['ImportCandidatePreview'][];
 			/** Errors */
-			errors: {
-				[key: string]: unknown;
-			}[];
+			errors: components['schemas']['ImportDiagnostic'][];
 			/**
 			 * Created At
 			 * Format: date-time
 			 */
 			created_at: string;
+		};
+		/**
+		 * ImportBatchStatus
+		 * @enum {string}
+		 */
+		ImportBatchStatus: 'pending' | 'ready' | 'failed' | 'committed';
+		/** ImportCandidatePreview */
+		ImportCandidatePreview: {
+			metadata: components['schemas']['BibliographicMetadata-Output'];
+			source?: components['schemas']['ImportSource'] | null;
+		};
+		/** ImportDiagnostic */
+		ImportDiagnostic: {
+			/** Message */
+			message: string;
+			/**
+			 * Severity
+			 * @default error
+			 * @enum {string}
+			 */
+			severity: 'warning' | 'error';
+			/** Row */
+			row?: number | null;
+			/** Filename */
+			filename?: string | null;
+			/** Code */
+			code?: string | null;
+		};
+		/** ImportSource */
+		ImportSource: {
+			/** Original Name */
+			original_name: string;
+			/** Size */
+			size: number | null;
 		};
 		/** InkPayload */
 		InkPayload: {
@@ -7854,7 +7871,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ImportBatchView'];
+					'application/json': components['schemas']['ImportBatchPreview'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7898,7 +7915,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ImportBatchView'];
+					'application/json': components['schemas']['ImportBatchPreview'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7942,7 +7959,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ImportBatchView'];
+					'application/json': components['schemas']['ImportBatchPreview'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7983,7 +8000,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ImportBatchView'];
+					'application/json': components['schemas']['ImportBatchPreview'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8065,7 +8082,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ImportBatchRetryView'];
+					'application/json': components['schemas']['ImportBatchPreview'];
 				};
 			};
 			/** @description Unprocessable Content */

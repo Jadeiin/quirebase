@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, File, Form, UploadFile, status
 
 from quirebase.library import (
+    ImportBatchPreview,
     commit_import_batch,
     discard_import_batch,
     get_import_batch_preview,
@@ -17,47 +18,15 @@ from quirebase.library import (
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.common import OkView
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.import_schemas import (
-    IdentifierImportRequest,
-    ImportBatchRetryView,
-    ImportBatchView,
-)
+from quirebase.web.api.import_schemas import IdentifierImportRequest
 from quirebase.web.uploads import upload_chunks
 
 router = APIRouter(tags=["Imports"])
 
 
-def _import_batch_view(
-    batch, records: list[dict], errors: list[dict], *, include_workflow: bool = True
-) -> dict:
-    sources = {file.metadata["source_id"]: file for file in batch.staged_files}
-    projected_records = []
-    for record in records:
-        source = sources.get(record.get("_source_id"))
-        projected = {key: value for key, value in record.items() if key != "_source_id"}
-        if source is not None:
-            projected["source"] = {
-                "original_name": source.metadata["original_name"],
-                "size": source.size,
-            }
-        projected_records.append(projected)
-    return {
-        "id": batch.id,
-        "file_format": batch.file_format,
-        "status": batch.status,
-        # Workflow status remains visible only to the actor recorded in its
-        # durable attributes. Other Workspace members poll this shared Import
-        # Batch resource instead of receiving an actor-only workflow identity.
-        "workflow_id": batch.workflow_id if include_workflow else None,
-        "records": projected_records,
-        "errors": errors,
-        "created_at": batch.created_at,
-    }
-
-
 @router.post(
     "/imports/bibliography",
-    response_model=ImportBatchView,
+    response_model=ImportBatchPreview,
     status_code=status.HTTP_201_CREATED,
 )
 async def stage_bibliography_import(
@@ -68,18 +37,18 @@ async def stage_bibliography_import(
     file_format: Annotated[str, Form()],
 ):
     raw = await bibliography.read(5 * 1024 * 1024 + 1)
-    return _import_batch_view(*(await stage_import_batch(db, user, workspace_id, raw, file_format)))
+    return await stage_import_batch(db, user, workspace_id, raw, file_format)
 
 
 @router.post(
     "/imports/identifier",
-    response_model=ImportBatchView,
+    response_model=ImportBatchPreview,
     status_code=status.HTTP_201_CREATED,
 )
 async def stage_identifier_import(
     workspace_id: UUID, data: IdentifierImportRequest, user: ApiUser, db: Database
 ):
-    result = await stage_identifier_import_batch(
+    return await stage_identifier_import_batch(
         db,
         user,
         workspace_id,
@@ -87,12 +56,11 @@ async def stage_identifier_import(
         data.provider,
         settings=await get_effective_settings_model(db),
     )
-    return _import_batch_view(*result)
 
 
 @router.post(
     "/imports/pdfs",
-    response_model=ImportBatchView,
+    response_model=ImportBatchPreview,
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def stage_pdf_import(
@@ -101,26 +69,23 @@ async def stage_pdf_import(
     db: Database,
     pdfs: Annotated[list[UploadFile], File()],
 ):
-    result = await stage_pdf_import_batch(
+    return await stage_pdf_import_batch(
         db,
         user,
         workspace_id,
         [(upload_chunks(pdf), pdf.filename or "") for pdf in pdfs],
         settings=await get_effective_settings_model(db),
     )
-    return _import_batch_view(*result)
 
 
-@router.get("/imports/{batch_id}", response_model=ImportBatchView)
+@router.get("/imports/{batch_id}", response_model=ImportBatchPreview)
 async def import_batch(workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database):
-    result = await get_import_batch_preview(db, user, workspace_id, batch_id)
-    return _import_batch_view(*result, include_workflow=result[0].actor_id == user.id)
+    return await get_import_batch_preview(db, user, workspace_id, batch_id)
 
 
-@router.post("/imports/{batch_id}/retry", response_model=ImportBatchRetryView)
+@router.post("/imports/{batch_id}/retry", response_model=ImportBatchPreview)
 async def retry_import_batch(workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database):
-    batch = await retry_pdf_import_batch(db, user, workspace_id, batch_id)
-    return {"id": batch.id, "status": batch.status, "workflow_id": batch.workflow_id}
+    return await retry_pdf_import_batch(db, user, workspace_id, batch_id)
 
 
 @router.post("/imports/{batch_id}/commit", response_model=OkView)

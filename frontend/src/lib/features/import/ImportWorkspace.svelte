@@ -19,7 +19,7 @@
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	type ImportBatch = components['schemas']['ImportBatchView'];
+	type ImportBatch = components['schemas']['ImportBatchPreview'];
 
 	let identifier = $state('');
 	let provider = $state('auto');
@@ -229,7 +229,7 @@
 					params: { path: { batch_id: batch.id } }
 				}
 			);
-			acceptBatch({ ...batch, ...result, errors: [] });
+			acceptBatch(result);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to retry Import'));
 		} finally {

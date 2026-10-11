@@ -2396,13 +2396,15 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
         owner.role = "administrator"
         await db.commit()
         workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-        batch, records, errors = await stage_import_batch(
+        batch = await stage_import_batch(
             db,
             owner,
             workspace_id,
             b"@article{a, title={Alphaconfirm}}\n@article{b, title={Betaconfirm}}",
             "bibtex",
         )
+        records = batch.records
+        errors = batch.errors
         assert len(records) == 2 and not errors
         batch_id = batch.id
 

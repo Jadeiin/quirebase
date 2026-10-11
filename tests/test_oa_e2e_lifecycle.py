@@ -162,13 +162,15 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
         ),
     )
 
-    batch, records, errors = await stage_identifier_import_batch(
+    batch = await stage_identifier_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         identifier="10.3390/ejihpe13110181",
         provider="openalex",
     )
+    records = batch.records
+    errors = batch.errors
     assert not errors
     assert len(records) == 1
 

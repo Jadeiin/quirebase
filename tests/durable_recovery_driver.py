@@ -74,7 +74,8 @@ async def stage(directory):
         await db.flush()
         workspace = await provision_initial_workspace(db, actor)
         await db.commit()
-        batch, _, _ = await stage_pdf_import_batch(db, actor, workspace.id, uploads)
+        preview = await stage_pdf_import_batch(db, actor, workspace.id, uploads)
+        batch = await db.get(ImportBatch, preview.id)
         write_json(
             directory / "state.json",
             {
@@ -140,14 +141,17 @@ async def inspect_contract(directory, state, *, committed):
     assert status.state == "succeeded"
     async with AsyncSessionLocal() as db:
         actor = await db.get(User, UUID(state["actor_id"]))
-        batch, records, diagnostics = await get_import_batch_preview(
+        preview = await get_import_batch_preview(
             db, actor, UUID(state["workspace_id"]), UUID(state["batch_id"])
         )
+        records = preview.records
+        diagnostics = preview.errors
+        batch = await db.get(ImportBatch, preview.id)
         assert batch.status == ("committed" if committed else "ready")
-        assert len(records) == 1 and records[0]["title"] == "Recovery retained paper"
+        assert len(records) == 1 and records[0].metadata.title == "Recovery retained paper"
         assert len(diagnostics) == 1
-        assert diagnostics[0]["filename"] == "uploaded-rejected.pdf"
-        assert diagnostics[0]["code"] == "metadata_not_found"
+        assert diagnostics[0].filename == "uploaded-rejected.pdf"
+        assert diagnostics[0].code == "metadata_not_found"
         events = list(await db.scalars(select(AuditEvent)))
         assert sum(event.action == "pdf.import.preview.request" for event in events) == 1
         assert sum(event.action == "pdf.import.preview" for event in events) == 1

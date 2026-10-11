@@ -70,6 +70,7 @@ from quirebase.library.identifiers import (
 )
 from quirebase.library.imports import (
     BatchConflict,
+    ImportBatchPreview,
     commit_import_batch,
     discard_import_batch,
     export_accessible_bibliography,
@@ -130,6 +131,7 @@ __all__ = [
     "CustomField",
     "DiscoveryClause",
     "ExternalIdentifier",
+    "ImportBatchPreview",
     "ItemAnnotationsData",
     "ItemDiscussionData",
     "ItemFilesData",

@@ -71,7 +71,7 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 				id: 'batch-discovery',
 				status: 'ready',
 				workflow_id: null,
-				records: [{ title: 'Candidate' }],
+				records: [{ metadata: { title: 'Candidate', authors: [] } }],
 				errors: []
 			}
 		})

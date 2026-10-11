@@ -282,9 +282,10 @@ async def test_pdf_durable_inputs_remain_replayable_after_live_descriptor_metada
     async with persistence_sessions() as db:
         actor, workspace_id = await provision_actor(db, "snapshot-actor")
         await db.commit()
-        batch, _, _ = await stage_pdf_import_batch(
+        preview = await stage_pdf_import_batch(
             db, actor, workspace_id, [(contents, "uploaded.pdf")], max_bytes=100_000
         )
+        batch = await db.get(ImportBatch, preview.id)
         message = next(
             entry
             for entry in fake_durable_operations.enqueues

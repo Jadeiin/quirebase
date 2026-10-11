@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves preview values
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
 from advanced_alchemy.types import FileObject
@@ -10,6 +12,7 @@ from inquiro.bibliography import (
     parse_bibliography_records,
 )
 from inquiro.identifiers import canonical_doi
+from inquiro.metadata import MetadataValidationError, metadata_from_values
 from inquiro.metadata import record_metadata_values as _record_to_item_payload
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
@@ -42,6 +45,7 @@ from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import ImportBatch, ImportBatchStatus, Item, ItemIdentifier, User
 from quirebase.search import search_index
 
+from ._metadata import ItemMetadata  # ruff: ignore[typing-only-first-party-import] - Pydantic resolves preview values
 from .identifiers import _create_items_from_candidates
 
 if TYPE_CHECKING:
@@ -53,6 +57,68 @@ if TYPE_CHECKING:
 
 class BatchConflict(DomainError):
     pass
+
+
+@dataclass(frozen=True)
+class ImportSource:
+    original_name: str
+    size: int | None
+
+
+@dataclass(frozen=True)
+class ImportCandidatePreview:
+    metadata: ItemMetadata
+    source: ImportSource | None = None
+
+
+@dataclass(frozen=True)
+class ImportDiagnostic:
+    message: str
+    severity: Literal["warning", "error"] = "error"
+    row: int | None = None
+    filename: str | None = None
+    code: str | None = None
+
+
+@dataclass(frozen=True)
+class ImportBatchPreview:
+    id: UUID
+    file_format: str
+    status: ImportBatchStatus
+    workflow_id: str | None
+    records: tuple[ImportCandidatePreview, ...]
+    errors: tuple[ImportDiagnostic, ...]
+    created_at: datetime
+
+
+def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPreview:
+    """Keep staging joins and actor-only workflow identities inside Library."""
+    sources = {file.metadata["source_id"]: file for file in batch.staged_files}
+    records = batch.records if batch.status in {"ready", "committed"} else []
+    previews = []
+    for record in records:
+        source = sources.get(record.get("_source_id"))
+        try:
+            metadata = metadata_from_values(record)
+        except MetadataValidationError as error:
+            raise ValidationFailure(str(error)) from error
+        previews.append(
+            ImportCandidatePreview(
+                metadata=metadata,
+                source=ImportSource(source.metadata["original_name"], source.size)
+                if source is not None
+                else None,
+            )
+        )
+    return ImportBatchPreview(
+        id=batch.id,
+        file_format=batch.file_format,
+        status=ImportBatchStatus(batch.status),
+        workflow_id=batch.workflow_id if batch.actor_id == actor_id else None,
+        records=tuple(previews),
+        errors=tuple(ImportDiagnostic(**error) for error in batch.errors),
+        created_at=batch.created_at,
+    )
 
 
 MAX_PDF_IMPORT_FILES = 50
@@ -92,7 +158,7 @@ def _pdf_import_inputs(files: list[FileObject]) -> list[dict]:
 
 async def stage_import_batch(
     db: AsyncSession, user: User, workspace_id: UUID, file_bytes: bytes, file_format: str
-) -> tuple[ImportBatch, list[dict], list[dict]]:
+) -> ImportBatchPreview:
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     if file_format not in SUPPORTED_FORMATS:
         raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
@@ -114,7 +180,7 @@ async def stage_import_batch(
     db.add(batch)
     await db.flush()
     await db.commit()
-    return batch, records, errors
+    return _import_batch_preview(batch, user.id)
 
 
 async def stage_identifier_import_batch(
@@ -124,7 +190,7 @@ async def stage_identifier_import_batch(
     identifier: str,
     provider: str = "auto",
     settings: Settings | None = None,
-) -> tuple[ImportBatch, list[dict], list[dict]]:
+) -> ImportBatchPreview:
     from quirebase.operations.settings import get_effective_settings_model
 
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
@@ -160,7 +226,7 @@ async def stage_identifier_import_batch(
         authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.commit()
-    return batch, [rec_dict], []
+    return _import_batch_preview(batch, user.id)
 
 
 async def stage_pdf_import_batch(
@@ -171,7 +237,7 @@ async def stage_pdf_import_batch(
     *,
     max_bytes: int | None = None,
     settings: Settings | None = None,
-) -> tuple[ImportBatch, list[dict], list[dict]]:
+) -> ImportBatchPreview:
     from quirebase.operations.settings import get_effective_setting
 
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
@@ -273,7 +339,7 @@ async def stage_pdf_import_batch(
             authorization_resource_action=ResourceAction.item_create.value,
         )
         await db.commit()
-        return batch, [], errors
+        return _import_batch_preview(batch, reloaded_user.id)
     except asyncio.CancelledError:
         _consume_current_cancellation()
         cleanup_task = asyncio.create_task(cleanup_staged_pdfs())
@@ -464,7 +530,7 @@ async def finalize_pdf_import_batch(
 
 async def get_import_batch_preview(
     db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
-) -> tuple[ImportBatch, list[dict], list[dict]]:
+) -> ImportBatchPreview:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.workspace_id != workspace_id:
@@ -487,8 +553,7 @@ async def get_import_batch_preview(
         db, batch, workflow
     ):
         await db.commit()
-    records = batch.records if batch.status in {"ready", "committed"} else []
-    return batch, records, batch.errors
+    return _import_batch_preview(batch, user.id)
 
 
 async def _converge_pdf_import_batch_status(
@@ -521,7 +586,7 @@ async def _converge_pdf_import_batch_status(
 
 async def retry_pdf_import_batch(
     db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
-) -> ImportBatch:
+) -> ImportBatchPreview:
     """Retry a failed PDF Import Batch without relinquishing its staged objects."""
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
@@ -591,7 +656,7 @@ async def retry_pdf_import_batch(
         authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.commit()
-    return batch
+    return _import_batch_preview(batch, user.id)
 
 
 async def commit_import_batch(

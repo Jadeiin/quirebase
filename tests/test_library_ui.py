@@ -174,13 +174,14 @@ async def test_pdf_import_revalidates_user_after_provider_io(
         deactivate_during_lookup,
     )
 
-    batch, _records, _errors = await stage_pdf_import_batch(
+    preview = await stage_pdf_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/deactivated"), "deactivated.pdf")],
         max_bytes=100_000,
     )
+    batch = await db.get(ImportBatch, preview.id)
     await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
     failed_batch = await db.get(ImportBatch, batch.id)
     assert failed_batch is not None
@@ -245,7 +246,7 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
         return provider_candidate(identifier, "Retryable PDF")
 
     monkeypatch.setattr("quirebase.library.imports.lookup_candidate", revoke_during_lookup)
-    batch, _records, _errors = await stage_pdf_import_batch(
+    preview = await stage_pdf_import_batch(
         async_db,
         importer,
         workspace_id,
@@ -255,6 +256,7 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
         ],
         max_bytes=100_000,
     )
+    batch = await async_db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)
     keys = [record["_pdf"]["object_key"] for record in pending]
     await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
@@ -292,13 +294,14 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
     await db.flush()
     await provision_initial_workspace(db, user)
     await db.commit()
-    batch, _records, _errors = await stage_pdf_import_batch(
+    preview = await stage_pdf_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/retry"), "retry.pdf")],
         max_bytes=100_000,
     )
+    batch = await db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)[0]
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate",
@@ -424,10 +427,10 @@ async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow
     assert batch.actor_id == editor.id
     assert enqueue["args"][0] == editor.id
     assert enqueue["attributes"]["actor_id"] == str(editor.id)
-    assert (await import_batch_api(workspace_id, batch.id, owner, async_db))["workflow_id"] is None
-    assert (await import_batch_api(workspace_id, batch.id, editor, async_db))[
-        "workflow_id"
-    ] == batch.workflow_id
+    assert (await import_batch_api(workspace_id, batch.id, owner, async_db)).workflow_id is None
+    assert (
+        await import_batch_api(workspace_id, batch.id, editor, async_db)
+    ).workflow_id == batch.workflow_id
     assert await finalize_pdf_import_batch(
         async_db,
         editor.id,
@@ -627,13 +630,14 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
         return provider_candidate(identifier, "Cancelled candidate")
 
     monkeypatch.setattr("quirebase.library.imports.lookup_candidate", delayed_lookup)
-    batch, _records, _errors = await stage_pdf_import_batch(
+    preview = await stage_pdf_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/cancelled"), "cancelled.pdf")],
         max_bytes=100_000,
     )
+    batch = await db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)[0]
     async with async_session_factory() as worker_db:
         importing = asyncio.create_task(prepare_pdf_import_candidate(worker_db, batch.id, pending))
@@ -971,8 +975,21 @@ async def test_pdf_import_batch_previews_before_creating_items(
         assert batch is not None
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
-        assert "first.pdf" in preview.text
-        assert "second.pdf" in preview.text
+        assert preview.status_code == 200
+        candidates = preview.json()["records"]
+        assert [candidate["source"]["original_name"] for candidate in candidates] == [
+            "first.pdf",
+            "second.pdf",
+        ]
+        assert [candidate["metadata"]["title"] for candidate in candidates] == [
+            "Article first",
+            "Article second",
+        ]
+        assert all(
+            candidate["metadata"]["authors"][0]["display_name"] == "P. Author"
+            for candidate in candidates
+        )
+        assert "_source_id" not in preview.text and "object_key" not in preview.text
 
         committed = await client.post(
             f"{workspace_base}/imports/{batch.id}/commit",
@@ -1305,13 +1322,14 @@ async def test_cleanup_preserves_object_reserved_by_active_pdf_import_workflow(
     await db.flush()
     await provision_initial_workspace(db, user)
     await db.commit()
-    batch, _records, _errors = await stage_pdf_import_batch(
+    preview = await stage_pdf_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/active-reservation"), "reserved.pdf")],
         max_bytes=100_000,
     )
+    batch = await db.get(ImportBatch, preview.id)
     workflow_id = batch.workflow_id
     object_key = batch.staged_files[0].path
     object_path = local_object_path(object_key)
