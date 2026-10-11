@@ -273,6 +273,7 @@ IEEE_PROVIDER = ProviderDefinition(
     identifier_namespace="ieee",
     identifier_parser=parse_ieee,
     search_adapter=IeeeSearchAdapter(),
+    search_sorts=("relevance", "published", "cited"),
     lookup_adapter=IeeeLookupAdapter(),
     document_adapter=IeeeDocumentAdapter(),
     endpoint="https://ieeexploreapi.ieee.org/api/v1/search/articles",

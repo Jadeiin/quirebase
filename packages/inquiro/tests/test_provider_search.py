@@ -5,10 +5,66 @@ from types import SimpleNamespace
 
 import httpx2
 import pytest
-from inquiro import Identifier, ProviderUnavailable, SearchClause, SearchQuery
+from inquiro import (
+    Identifier,
+    InvalidProviderRequest,
+    ProviderConfig,
+    ProviderUnavailable,
+    SearchClause,
+    SearchQuery,
+    metadata_provider_choices,
+)
 from inquiro_provider_helpers import provider_runtime
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_provider_options_follow_capabilities_and_configured_credentials(configured):
+    options = metadata_provider_choices(
+        ProviderConfig(
+            nasa_ads_token="configured-token" if configured else None,
+            ieee_api_key="configured-key" if configured else None,
+        )
+    )
+    search = {choice.id: choice for choice in options.search}
+    lookup = {choice.id for choice in options.lookup}
+    assert ("nasa_ads" in search) is configured
+    assert ("ieee" in lookup) is configured
+    assert "datacite" in lookup and "datacite" not in search
+    assert "pmc" not in lookup and "pmc" in search
+    # The OpenAlex key is required for documents, not metadata.
+    assert "openalex" in search and "openalex" in lookup
+    assert "cited" not in search["arxiv"].sorts
+    assert "configured-token" not in repr(asdict(options))
+    assert "configured-key" not in repr(asdict(options))
+
+
+@pytest.mark.parametrize("provider", ["arxiv", "pubmed", "pmc", "openlibrary"])
+async def test_unsupported_citation_sort_is_rejected_before_request(provider):
+    with pytest.raises(InvalidProviderRequest, match="sort is not supported"):
+        await search_metadata(provider, [SearchClause("any", "and", "test")], sort="cited")
+
+
+@pytest.mark.parametrize(
+    ("sort", "expected"),
+    [
+        ("relevance", "relevance_score:desc"),
+        ("published", "publication_date:desc"),
+        ("cited", "cited_by_count:desc"),
+    ],
+)
+async def test_openalex_transmits_the_selected_sort(sort, expected):
+    def respond(request):
+        assert request.url.params["sort"] == expected
+        return httpx2.Response(200, json={"results": [], "meta": {"count": 0}})
+
+    await search_metadata(
+        "openalex",
+        [SearchClause("any", "and", "test")],
+        sort=sort,
+        transport=httpx2.MockTransport(respond),
+    )
 
 
 @pytest.mark.parametrize(
@@ -264,7 +320,7 @@ async def test_search_rejects_invalid_or_excessive_clauses():
         await search_metadata("other", [SearchClause("any", "and", "term")])
     with pytest.raises(ValueError, match="unknown search provider"):
         await search_metadata("datacite", [SearchClause("any", "and", "term")])
-    with pytest.raises(ValueError, match="one to five"):
+    with pytest.raises(ValueError, match="one to 5"):
         await search_metadata("openalex", [SearchClause("any", "and", "term")] * 6)
     with pytest.raises(ValueError, match="clause is invalid"):
         await search_metadata("openalex", [SearchClause("private-field", "and", "term")])

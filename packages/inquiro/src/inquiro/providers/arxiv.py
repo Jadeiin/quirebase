@@ -209,6 +209,7 @@ class ArxivDocumentAdapter:
 
 ARXIV_PROVIDER = ProviderDefinition(
     name="arxiv",
+    display_name="arXiv",
     identifier_namespace="arxiv",
     identifier_parser=parse_arxiv,
     auto_detect_identifier=True,

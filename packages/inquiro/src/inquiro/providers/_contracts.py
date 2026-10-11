@@ -12,6 +12,7 @@ from inquiro.models import (
     ProviderConfig,
     ProviderUnavailable,
     SearchQuery,
+    SearchSort,
 )
 from inquiro.transport import RemoteNotFound
 
@@ -65,6 +66,7 @@ class ProviderDefinition:
     identifier_parser: IdentifierParser | None = None
     auto_detect_identifier: bool = False
     search_adapter: SearchImplementation | None = None
+    search_sorts: tuple[SearchSort, ...] = ("relevance", "published")
     lookup_adapter: LookupImplementation | None = None
     document_adapter: DocumentImplementation | None = None
     endpoint: str = ""
@@ -81,12 +83,15 @@ class ProviderDefinition:
         config: ProviderConfig,
         capability: ProviderCapability,
     ) -> None:
-        if (
-            capability in self.credential_capabilities
-            and self.credential_setting
-            and not getattr(config, self.credential_setting)
-        ):
+        if not self.has_credentials(config, capability):
             raise ProviderUnavailable(
                 f"{self.display_name or self.name} requires "
                 f"{self.credential_environment or self.credential_setting}"
             )
+
+    def has_credentials(self, config: ProviderConfig, capability: ProviderCapability) -> bool:
+        return not (
+            capability in self.credential_capabilities
+            and self.credential_setting
+            and not getattr(config, self.credential_setting)
+        )

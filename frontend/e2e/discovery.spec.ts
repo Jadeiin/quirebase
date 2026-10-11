@@ -1,10 +1,51 @@
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
 
+test('Discovery follows provider sorts and the server clause limit', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+		route.fulfill({
+			json: {
+				search: [
+					{ id: 'openalex', name: 'OpenAlex', sorts: ['relevance', 'published', 'cited'] },
+					{ id: 'arxiv', name: 'arXiv', sorts: ['relevance', 'published'] }
+				],
+				lookup: [],
+				max_search_clauses: 2
+			}
+		})
+	);
+	let searchBody: Record<string, unknown> | null = null;
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/search', (route) => {
+		searchBody = route.request().postDataJSON();
+		return route.fulfill({
+			json: { provider: 'arxiv', results: [], total: 0, page: 1, per_page: 20 }
+		});
+	});
+	await page.goto('/workspace/workspace-1/discovery');
+	const sort = page.getByRole('combobox', { name: 'Sort', exact: true });
+	await sort.selectOption('cited');
+	await page.getByRole('combobox', { name: 'Provider', exact: true }).selectOption('arxiv');
+	await expect(sort).toHaveValue('relevance');
+	await expect(sort.locator('option[value="cited"]')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Add condition' }).click();
+	await expect(page.getByRole('button', { name: 'Add condition' })).toBeDisabled();
+	await page.getByPlaceholder('Title, author, DOI, or topic').fill('systems');
+	await page.getByPlaceholder('Another condition').fill('review');
+	await page.getByRole('button', { name: 'Search Discovery' }).click();
+	await expect.poll(() => searchBody).toMatchObject({ provider: 'arxiv', sort: 'relevance' });
+});
+
 test('discovery renders the flat results response contract', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
-		route.fulfill({ json: [{ id: 'crossref', name: 'Crossref' }] })
+		route.fulfill({
+			json: {
+				search: [{ id: 'crossref', name: 'Crossref', sorts: ['relevance', 'published', 'cited'] }],
+				lookup: [{ id: 'crossref', name: 'Crossref' }],
+				max_search_clauses: 5
+			}
+		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/search', (route) =>
 		route.fulfill({
@@ -40,7 +81,13 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 	await mockSession(page);
 	let searchBody: Record<string, unknown> | null = null;
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
-		route.fulfill({ json: [{ id: 'openalex', name: 'OpenAlex' }] })
+		route.fulfill({
+			json: {
+				search: [{ id: 'openalex', name: 'OpenAlex', sorts: ['relevance', 'published', 'cited'] }],
+				lookup: [{ id: 'openalex', name: 'OpenAlex' }],
+				max_search_clauses: 5
+			}
+		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/search', async (route) => {
 		searchBody = route.request().postDataJSON();
@@ -95,7 +142,13 @@ test('discovery year calendars submit years and allow clearing an open-ended ran
 }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
-		route.fulfill({ json: [{ id: 'openalex', name: 'OpenAlex' }] })
+		route.fulfill({
+			json: {
+				search: [{ id: 'openalex', name: 'OpenAlex', sorts: ['relevance', 'published', 'cited'] }],
+				lookup: [{ id: 'openalex', name: 'OpenAlex' }],
+				max_search_clauses: 5
+			}
+		})
 	);
 	const requests: Array<Record<string, unknown>> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/search', (route) => {

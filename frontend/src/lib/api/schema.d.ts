@@ -3137,13 +3137,6 @@ export interface components {
 			/** Term */
 			term: string;
 		};
-		/** DiscoveryProviderView */
-		DiscoveryProviderView: {
-			/** Id */
-			id: string;
-			/** Name */
-			name: string;
-		};
 		/** DiscoverySearchRequest */
 		DiscoverySearchRequest: {
 			/** Provider */
@@ -3739,6 +3732,18 @@ export interface components {
 			 */
 			created_at: string;
 		};
+		/** MetadataProviderChoices */
+		MetadataProviderChoices: {
+			/** Search */
+			search: components['schemas']['ProviderChoice'][];
+			/** Lookup */
+			lookup: components['schemas']['ProviderChoice'][];
+			/**
+			 * Max Search Clauses
+			 * @default 5
+			 */
+			max_search_clauses: number;
+		};
 		/** MetadataSyncRequest */
 		MetadataSyncRequest: {
 			/** Expected Version */
@@ -4038,6 +4043,18 @@ export interface components {
 			allowed_participation_changes: components['schemas']['ProjectParticipation'][];
 			authorization: components['schemas']['WorkspaceAuthorizationView'];
 		};
+		/** ProviderChoice */
+		ProviderChoice: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/**
+			 * Sorts
+			 * @default []
+			 */
+			sorts: components['schemas']['SearchSort'][];
+		};
 		/** Rect */
 		Rect: {
 			/** X */
@@ -4259,6 +4276,8 @@ export interface components {
 			 */
 			export_ttl_hours: number;
 		};
+		/** @enum {string} */
+		SearchSort: 'relevance' | 'published' | 'cited' | 'updated';
 		/** SessionUserView */
 		SessionUserView: {
 			/**
@@ -9394,7 +9413,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['DiscoveryProviderView'][];
+					'application/json': components['schemas']['MetadataProviderChoices'];
 				};
 			};
 			/** @description Unprocessable Content */

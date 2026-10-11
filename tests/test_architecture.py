@@ -757,14 +757,17 @@ def test_inquiro_facade_exposes_provider_operations_and_bibliographic_value_type
         "InvalidPdfResponse",
         "InvalidProviderRequest",
         "JsonValue",
+        "MetadataProviderChoices",
         "PdfAccessDenied",
         "PdfNotAvailable",
         "ProviderConfig",
+        "ProviderChoice",
         "ProviderRuntime",
         "ProviderUnavailable",
         "ResourceLink",
         "SearchClause",
         "SearchQuery",
+        "metadata_provider_choices",
     }
     facade = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "__init__.py"
     tree = ast.parse(facade.read_text(encoding="utf-8"), filename=str(facade))

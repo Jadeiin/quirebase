@@ -1374,11 +1374,6 @@ msgid "Documents"
 msgstr "Documents"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "DOI"
-msgstr "DOI"
-
-#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "DOI policy"
 msgstr "DOI policy"
@@ -4325,6 +4320,11 @@ msgstr "Unable to load annotations."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to load Import options"
+msgstr "Unable to load Import options"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import preview"
 msgstr "Unable to load Import preview"
 
@@ -4470,6 +4470,11 @@ msgid "Update the name members see across this workspace."
 msgstr "Update the name members see across this workspace."
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Updated"
+msgstr "Updated"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Upload a bibliography"
 msgstr "Upload a bibliography"
@@ -4491,6 +4496,7 @@ msgstr "Upload PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Upstream identifiers"
 msgstr "Upstream identifiers"
 

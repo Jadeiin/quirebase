@@ -439,10 +439,12 @@ Metadata requests reject redirects; PDF acquisition follows a bounded redirect c
 a managed temporary file, enforces the document-size limit and validates the PDF header. Lookup
 maps an upstream 404 to Candidate-not-found; Search maps it to an empty page.
 
-Provider discovery and dynamic registration are not part of the Interface. The fixed catalog is
-private because Quirebase's Provider allowlist, automatic-detection order and credential policy
-are product and security invariants. A public extension seam may be extracted only after a second
-real ecosystem consumer demonstrates one.
+Inquiro owns the fixed Provider catalog, display names, credential requirements and supported
+search sorts. `metadata_provider_choices(config)` returns immutable Search/Lookup choices available for its
+configuration and the shared search-clause limit, without exposing credentials or adapters.
+Quirebase Library maps runtime settings and returns this description; Web and browser clients do
+not maintain their own Provider lists or credential rules. The catalog, automatic-detection order
+and dynamic registration remain private; the description does not create a plugin extension seam.
 
 Quirebase owns the business behaviour around Inquiro results. For lookup and Search, Library
 constructs and closes the runtime within each operation, explicitly maps Candidate Records to its

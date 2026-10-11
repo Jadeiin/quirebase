@@ -8,6 +8,23 @@ from typing import IO, Literal, Self
 from inquiro.names import ContributorName
 from inquiro.reference_types import ReferenceType
 
+MAX_SEARCH_CLAUSES = 5
+type SearchSort = Literal["relevance", "published", "cited", "updated"]
+
+
+@dataclass(frozen=True)
+class ProviderChoice:
+    id: str
+    name: str
+    sorts: tuple[SearchSort, ...] = ()
+
+
+@dataclass(frozen=True)
+class MetadataProviderChoices:
+    search: tuple[ProviderChoice, ...]
+    lookup: tuple[ProviderChoice, ...]
+    max_search_clauses: int = MAX_SEARCH_CLAUSES
+
 
 class InquiroError(Exception):
     """Base error exposed by the Inquiro Interface."""

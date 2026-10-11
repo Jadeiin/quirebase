@@ -1374,11 +1374,6 @@ msgid "Documents"
 msgstr "文档"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "DOI"
-msgstr "DOI"
-
-#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "DOI policy"
 msgstr "DOI 策略"
@@ -4325,6 +4320,11 @@ msgstr "无法加载批注。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to load Import options"
+msgstr "无法加载导入选项"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import preview"
 msgstr "无法加载导入预览"
 
@@ -4470,6 +4470,11 @@ msgid "Update the name members see across this workspace."
 msgstr "更新成员在此工作区看到的名称。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Updated"
+msgstr "更新时间"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Upload a bibliography"
 msgstr "上传文献目录"
@@ -4491,6 +4496,7 @@ msgstr "上传 PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Upstream identifiers"
 msgstr "上游标识符"
 

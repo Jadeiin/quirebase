@@ -168,6 +168,7 @@ class OpenLibrarySearchAdapter:
 
 OPENLIBRARY_PROVIDER = ProviderDefinition(
     name="openlibrary",
+    display_name="Open Library",
     identifier_namespace="isbn",
     identifier_parser=parse_isbn,
     auto_detect_identifier=True,

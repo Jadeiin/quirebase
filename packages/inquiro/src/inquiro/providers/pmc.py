@@ -127,6 +127,7 @@ class PmcDocumentAdapter:
 
 PMC_PROVIDER = ProviderDefinition(
     name="pmc",
+    display_name="PMC",
     identifier_namespace="pmcid",
     identifier_parser=parse_pmcid,
     auto_detect_identifier=True,

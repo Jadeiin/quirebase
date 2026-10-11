@@ -74,6 +74,15 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 }
 
 export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	await page.route('**/api/v1/workspaces/*/discovery/providers', (route) =>
+		route.fulfill({
+			json: {
+				search: [{ id: 'crossref', name: 'Crossref', sorts: ['relevance', 'published', 'cited'] }],
+				lookup: [{ id: 'crossref', name: 'Crossref' }],
+				max_search_clauses: 5
+			}
+		})
+	);
 	// EmbedPDF waits for its default stamp pack during initialization. Keep the
 	// mocked browser suite independent of CDN latency with a valid local pack.
 	await page.route('https://cdn.jsdelivr.net/npm/@embedpdf/default-stamps/**', (route) => {

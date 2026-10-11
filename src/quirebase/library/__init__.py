@@ -100,7 +100,11 @@ from quirebase.library.item_sections import (
     ProjectAssignmentOption,
     open_item_section,
 )
-from quirebase.library.providers import acquire_remote_pdf
+from quirebase.library.providers import (
+    MetadataProviderChoices,
+    acquire_remote_pdf,
+    get_metadata_provider_choices,
+)
 from quirebase.library.tags import (
     TagConflict,
     TagGroup,
@@ -146,6 +150,7 @@ __all__ = [
     "JsonValue",
     "LibraryFacets",
     "LibraryFilter",
+    "MetadataProviderChoices",
     "ProjectAssignmentOption",
     "ResourceLink",
     "TagConflict",
@@ -182,6 +187,7 @@ __all__ = [
     "get_item_citation_response",
     "get_item_citation_text_response",
     "get_library_facets",
+    "get_metadata_provider_choices",
     "get_storage_metrics",
     "import_staging_object_keys",
     "item_ids_for_tag_recommendation",

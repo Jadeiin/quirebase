@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { useQueryClient } from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onDestroy, onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -11,6 +11,7 @@
 	import Notice from '#lib/design/Notice.svelte';
 	import ImportBatchPreview from '#lib/features/import/ImportBatchPreview.svelte';
 	import ImportSourceForm from '#lib/features/import/ImportSourceForm.svelte';
+	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
 	import ItemMetadataForm from '#lib/features/item/ItemMetadataForm.svelte';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import { invalidateLibrary } from '#lib/query/invalidation.js';
@@ -34,6 +35,16 @@
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
+	const providers = createQuery(() => discoveryProvidersQuery(workspaceId));
+	$effect(() => {
+		if (
+			providers.data &&
+			provider !== 'auto' &&
+			!providers.data.lookup.some((option) => option.id === provider)
+		) {
+			provider = 'auto';
+		}
+	});
 	const workflows = getWorkflowCenter();
 	const emptyMetadata: components['schemas']['BibliographicMetadata-Input'] = {
 		title: '',
@@ -156,7 +167,7 @@
 	}
 
 	async function importIdentifier() {
-		if (!workspace.can('item.create')) return;
+		if (!workspace.can('item.create') || !providers.data) return;
 		busy = true;
 		error = '';
 		try {
@@ -330,7 +341,7 @@
 			icon="search"
 			title={$t('Look up an identifier')}
 			description={$t('Fetch one record from DOI, PubMed, arXiv, and other scholarly providers.')}
-			{busy}
+			busy={busy || providers.isPending || providers.isError}
 			submitLabel={$t('Preview metadata')}
 			onsubmit={(event) => {
 				event.preventDefault();
@@ -346,16 +357,20 @@
 				/></label
 			>
 			<label
-				>{$t('Data source')}<select class="select" bind:value={provider}>
-					<option value="auto">{$t('Auto detect')}</option><option value="crossref">Crossref</option
-					>
-					<option value="datacite">DataCite</option>
-					<option value="pubmed">PubMed</option><option value="arxiv">arXiv</option>
-					<option value="openalex">OpenAlex</option><option value="openlibrary">Open Library</option
-					>
-					<option value="nasa_ads">NASA ADS</option><option value="ieee">IEEE Xplore</option>
+				>{$t('Data source')}<select
+					class="select"
+					bind:value={provider}
+					disabled={providers.isPending || providers.isError}
+				>
+					<option value="auto">{$t('Auto detect')}</option>
+					{#each providers.data?.lookup ?? [] as option (option.id)}
+						<option value={option.id}>{option.name}</option>
+					{/each}
 				</select></label
 			>
+			{#if providers.isError}<Notice variant="error"
+					>{apiErrorMessage(providers.error, $t('Unable to load Import options'))}</Notice
+				>{/if}
 		</ImportSourceForm>
 		<ImportSourceForm
 			icon="library"

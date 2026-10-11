@@ -21,10 +21,11 @@
 	type Results = components['schemas']['CandidatePageView'];
 	type Candidate = components['schemas']['CandidateView'];
 	type Clause = { id: number; field: string; operator: string; term: string };
+	type Sort = components['schemas']['ProviderChoice']['sorts'][number];
 
 	let nextClauseId = 2;
 	let provider = $state('openalex');
-	let sort = $state('relevance');
+	let sort = $state<Sort>('relevance');
 	let yearFrom = $state('');
 	let yearTo = $state('');
 	let clauses = $state<Clause[]>([{ id: 1, field: 'any', operator: 'and', term: '' }]);
@@ -36,8 +37,26 @@
 
 	const workspace = getWorkspaceContext();
 	const providers = createQuery(() => discoveryProvidersQuery(workspace.workspaceId));
+	const selectedProvider = $derived(
+		providers.data?.search.find((option) => option.id === provider)
+	);
+	const sortLabels = $derived({
+		relevance: $t('Relevance'),
+		published: $t('Publication date'),
+		cited: $t('Citation count'),
+		updated: $t('Updated')
+	});
+	$effect(() => {
+		if (!providers.data) return;
+		if (!selectedProvider) {
+			provider = providers.data.search[0]?.id ?? '';
+		} else if (!selectedProvider.sorts.includes(sort)) {
+			sort = selectedProvider.sorts[0];
+		}
+	});
 
 	function addClause() {
+		if (!providers.data || clauses.length >= providers.data.max_search_clauses) return;
 		clauses.push({ id: nextClauseId++, field: 'any', operator: 'and', term: '' });
 	}
 
@@ -46,6 +65,7 @@
 	}
 
 	async function search(page = 1) {
+		if (!selectedProvider) return;
 		searchAbort?.abort();
 		const controller = new AbortController();
 		searchAbort = controller;
@@ -129,7 +149,7 @@
 		<label class="grid grid-cols-1 gap-1">
 			<span class="text-sm font-semibold">{$t('Provider')}</span>
 			<select class="select" bind:value={provider}>
-				{#each providers.data ?? [] as option (option.id)}
+				{#each providers.data?.search ?? [] as option (option.id)}
 					<option value={option.id}>{option.name}</option>
 				{/each}
 			</select>
@@ -137,9 +157,9 @@
 		<label class="grid grid-cols-1 gap-1">
 			<span class="text-sm font-semibold">{$t('Sort')}</span>
 			<select class="select" bind:value={sort}>
-				<option value="relevance">{$t('Relevance')}</option>
-				<option value="published">{$t('Publication date')}</option>
-				<option value="cited">{$t('Citation count')}</option>
+				{#each selectedProvider?.sorts ?? [] as option (option)}
+					<option value={option}>{sortLabels[option]}</option>
+				{/each}
 			</select>
 		</label>
 		<DateField precision="year" label={$t('From year')} min="1000-01-01" bind:value={yearFrom} />
@@ -176,11 +196,13 @@
 		{/each}
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
-		<Button type="button" disabled={clauses.length >= 5} onclick={addClause}
-			>{$t('Add condition')}</Button
+		<Button
+			type="button"
+			disabled={!providers.data || clauses.length >= providers.data.max_search_clauses}
+			onclick={addClause}>{$t('Add condition')}</Button
 		>
 		<span class="grow basis-64"></span>
-		<Button variant="filled" disabled={busy || providers.isPending}
+		<Button variant="filled" disabled={busy || !selectedProvider}
 			>{busy ? $t('Searching…') : $t('Search Discovery')}</Button
 		>
 	</div>

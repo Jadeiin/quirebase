@@ -225,7 +225,13 @@ test('viewer can search Discovery but cannot stage Import or use write shortcuts
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
-		route.fulfill({ json: [{ id: 'openalex', name: 'OpenAlex' }] })
+		route.fulfill({
+			json: {
+				search: [{ id: 'openalex', name: 'OpenAlex', sorts: ['relevance', 'published', 'cited'] }],
+				lookup: [{ id: 'openalex', name: 'OpenAlex' }],
+				max_search_clauses: 5
+			}
+		})
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/search', (route) =>
 		route.fulfill({

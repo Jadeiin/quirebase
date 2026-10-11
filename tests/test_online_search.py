@@ -191,12 +191,46 @@ async def test_discovery_search_uses_runtime_provider_settings(
         )
 
         assert searched.status_code == 200
-        assert {provider["id"] for provider in providers.json()} >= {
+        assert {provider["id"] for provider in providers.json()["search"]} >= {
             "nasa_ads",
             "openlibrary",
             "pmc",
         }
+        assert "nasa_ads" in {provider["id"] for provider in providers.json()["lookup"]}
+        assert "runtime-token" not in providers.text
         assert search_candidates.await_args.args[1].nasa_ads_token == "runtime-token"
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_discovery_rejects_unsupported_sort_instead_of_silently_falling_back(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    monkeypatch.setattr(
+        "quirebase.library.providers.provider_runtime",
+        lambda settings: provider_runtime(
+            settings=settings,
+            transport=httpx2.MockTransport(
+                lambda request: pytest.fail("unsupported sort must not make requests")
+            ),
+        ),
+    )
+    try:
+        response = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
+            json={
+                "provider": "arxiv",
+                "sort": "cited",
+                "clauses": [{"operator": "and", "field": "any", "term": "stars"}],
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["code"] == "validation_failed"
     finally:
         await client.aclose()
         get_settings.cache_clear()

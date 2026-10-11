@@ -248,10 +248,12 @@ class CrossrefDocumentAdapter:
 
 CROSSREF_PROVIDER = ProviderDefinition(
     name="crossref",
+    display_name="Crossref",
     identifier_namespace="doi",
     identifier_parser=parse_doi,
     auto_detect_identifier=True,
     search_adapter=CrossrefSearchAdapter(),
+    search_sorts=("relevance", "published", "cited", "updated"),
     lookup_adapter=CrossrefLookupAdapter(),
     document_adapter=CrossrefDocumentAdapter(),
     endpoint="https://api.crossref.org/works",

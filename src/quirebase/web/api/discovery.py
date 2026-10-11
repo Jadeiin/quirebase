@@ -4,10 +4,15 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from quirebase.library import CandidatePageView, search_candidate_records
+from quirebase.library import (
+    CandidatePageView,
+    MetadataProviderChoices,
+    get_metadata_provider_choices,
+    search_candidate_records,
+)
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.discovery_schemas import DiscoveryProviderView, DiscoverySearchRequest
+from quirebase.web.api.discovery_schemas import DiscoverySearchRequest
 
 router = APIRouter(tags=["Discovery"])
 
@@ -34,20 +39,7 @@ async def search_discovery(
     )
 
 
-@router.get("/discovery/providers", response_model=list[DiscoveryProviderView])
+@router.get("/discovery/providers", response_model=MetadataProviderChoices)
 async def discovery_providers(user: ApiUser, db: Database):
     del user
-    settings = await get_effective_settings_model(db)
-    providers = [
-        {"id": "openalex", "name": "OpenAlex"},
-        {"id": "crossref", "name": "Crossref"},
-        {"id": "pubmed", "name": "PubMed"},
-        {"id": "arxiv", "name": "arXiv"},
-        {"id": "openlibrary", "name": "Open Library"},
-        {"id": "pmc", "name": "PMC"},
-    ]
-    if settings.nasa_ads_token:
-        providers.append({"id": "nasa_ads", "name": "NASA ADS"})
-    if settings.ieee_api_key:
-        providers.append({"id": "ieee", "name": "IEEE Xplore"})
-    return providers
+    return get_metadata_provider_choices(await get_effective_settings_model(db))

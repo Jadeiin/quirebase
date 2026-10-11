@@ -11,12 +11,14 @@ from inquiro import (
     DocumentRequest,
     InvalidPdfResponse,
     InvalidProviderRequest,
+    MetadataProviderChoices,
     PdfAccessDenied,
     PdfNotAvailable,
     ProviderConfig,
     ProviderRuntime,
     ProviderUnavailable,
     SearchQuery,
+    metadata_provider_choices,
 )
 from inquiro.metadata import MetadataValidationError, record_metadata_values
 
@@ -33,6 +35,10 @@ class RemotePdf:
     content: AsyncIterator[bytes]
     filename: str
     media_type: str
+
+
+def get_metadata_provider_choices(settings: Settings) -> MetadataProviderChoices:
+    return metadata_provider_choices(provider_config(settings))
 
 
 def candidate_record_values(record: CandidateRecord) -> dict:

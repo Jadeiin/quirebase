@@ -8,6 +8,7 @@ from inquiro.canonical import normalize_publication_date
 from inquiro.identifiers import parse_identifier
 from inquiro.metadata import clean_identifier_value
 from inquiro.models import (
+    MAX_SEARCH_CLAUSES,
     AcquiredDocument,
     CandidateNotFound,
     CandidatePage,
@@ -16,7 +17,9 @@ from inquiro.models import (
     Identifier,
     InquiroError,
     InvalidProviderRequest,
+    MetadataProviderChoices,
     PdfNotAvailable,
+    ProviderChoice,
     ProviderConfig,
     ProviderUnavailable,
     SearchQuery,
@@ -50,6 +53,24 @@ def _normalize_candidate(record: CandidateRecord) -> CandidateRecord:
         record,
         publication_date=normalize_publication_date(record.publication_date),
         identifiers=_candidate_identifiers(record.identifiers),
+    )
+
+
+def metadata_provider_choices(config: ProviderConfig = ProviderConfig()) -> MetadataProviderChoices:
+    """Describe configured metadata capabilities without exposing the private catalog."""
+    return MetadataProviderChoices(
+        search=tuple(
+            ProviderChoice(
+                provider.name, provider.display_name or provider.name, provider.search_sorts
+            )
+            for provider in builtin_providers()
+            if provider.search_adapter is not None and provider.has_credentials(config, "search")
+        ),
+        lookup=tuple(
+            ProviderChoice(provider.name, provider.display_name or provider.name)
+            for provider in builtin_providers()
+            if provider.lookup_adapter is not None and provider.has_credentials(config, "lookup")
+        ),
     )
 
 
@@ -155,8 +176,10 @@ class ProviderRuntime:
         )
         if definition is None or definition.search_adapter is None:
             raise InvalidProviderRequest(f"unknown search provider: {query.provider}")
-        if not query.clauses or len(query.clauses) > 5:
-            raise InvalidProviderRequest("one to five search clauses required")
+        if query.sort not in definition.search_sorts:
+            raise InvalidProviderRequest("sort is not supported by this search provider")
+        if not query.clauses or len(query.clauses) > MAX_SEARCH_CLAUSES:
+            raise InvalidProviderRequest(f"one to {MAX_SEARCH_CLAUSES} search clauses required")
         for clause in query.clauses:
             if (
                 clause.field not in SEARCH_FIELDS

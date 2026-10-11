@@ -13,15 +13,17 @@ from inquiro.models import (
     InvalidPdfResponse,
     InvalidProviderRequest,
     JsonValue,
+    MetadataProviderChoices,
     PdfAccessDenied,
     PdfNotAvailable,
+    ProviderChoice,
     ProviderConfig,
     ProviderUnavailable,
     ResourceLink,
     SearchClause,
     SearchQuery,
 )
-from inquiro.runtime import ProviderRuntime
+from inquiro.runtime import ProviderRuntime, metadata_provider_choices
 
 __all__ = [
     "AcquiredDocument",
@@ -38,12 +40,15 @@ __all__ = [
     "InvalidPdfResponse",
     "InvalidProviderRequest",
     "JsonValue",
+    "MetadataProviderChoices",
     "PdfAccessDenied",
     "PdfNotAvailable",
+    "ProviderChoice",
     "ProviderConfig",
     "ProviderRuntime",
     "ProviderUnavailable",
     "ResourceLink",
     "SearchClause",
     "SearchQuery",
+    "metadata_provider_choices",
 ]

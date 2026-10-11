@@ -13,8 +13,3 @@ class DiscoverySearchRequest(BaseModel):
     sort: str = "relevance"
     year_from: int | None = Field(default=None, ge=1000, le=9999)
     year_to: int | None = Field(default=None, ge=1000, le=9999)
-
-
-class DiscoveryProviderView(BaseModel):
-    id: str
-    name: str

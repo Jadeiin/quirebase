@@ -280,6 +280,7 @@ class PubMedSearchAdapter:
 
 PUBMED_PROVIDER = ProviderDefinition(
     name="pubmed",
+    display_name="PubMed",
     identifier_namespace="pmid",
     identifier_parser=parse_pmid,
     auto_detect_identifier=True,

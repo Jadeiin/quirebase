@@ -186,6 +186,7 @@ NASA_ADS_PROVIDER = ProviderDefinition(
     identifier_namespace="bibcode",
     identifier_parser=parse_bibcode,
     search_adapter=NasaAdsSearchAdapter(),
+    search_sorts=("relevance", "published", "cited"),
     lookup_adapter=NasaAdsLookupAdapter(),
     endpoint="https://api.adsabs.harvard.edu/v1/search/query",
     credential_setting="nasa_ads_token",

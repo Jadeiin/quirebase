@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
 
+test('identifier Import uses configured provider choices', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+		route.fulfill({
+			json: { search: [], lookup: [{ id: 'datacite', name: 'DataCite' }], max_search_clauses: 5 }
+		})
+	);
+	await page.goto('/workspace/workspace-1/import');
+	const source = page.getByRole('combobox', { name: 'Data source' });
+	await expect(source.locator('option')).toHaveText(['Auto detect', 'DataCite']);
+	await expect(source).toBeEnabled();
+});
+
 test('pending PDF imports refresh until they can be committed', async ({ page }) => {
 	await mockSession(page);
 	let previewRequests = 0;

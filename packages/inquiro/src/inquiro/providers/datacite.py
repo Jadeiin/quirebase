@@ -121,6 +121,7 @@ class DataCiteLookupAdapter:
 
 DATACITE_PROVIDER = ProviderDefinition(
     name="datacite",
+    display_name="DataCite",
     identifier_namespace="doi",
     identifier_parser=parse_doi,
     lookup_adapter=DataCiteLookupAdapter(),

@@ -255,9 +255,10 @@ class OpenAlexSearchAdapter:
         params: dict[str, Any] = {
             "page": request.page,
             "per_page": request.per_page,
-            "sort": "publication_date:desc"
-            if request.sort == "published"
-            else "relevance_score:desc",
+            "sort": {
+                "published": "publication_date:desc",
+                "cited": "cited_by_count:desc",
+            }.get(request.sort, "relevance_score:desc"),
         }
         api_key = settings.openalex_api_key
         if api_key:
@@ -384,10 +385,12 @@ class OpenAlexDocumentAdapter:
 
 OPENALEX_PROVIDER = ProviderDefinition(
     name="openalex",
+    display_name="OpenAlex",
     identifier_namespace="openalex",
     identifier_parser=parse_openalex,
     auto_detect_identifier=True,
     search_adapter=OpenAlexSearchAdapter(),
+    search_sorts=("relevance", "published", "cited"),
     lookup_adapter=OpenAlexLookupAdapter(),
     document_adapter=OpenAlexDocumentAdapter(),
     endpoint="https://api.openalex.org",
