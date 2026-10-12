@@ -45,11 +45,14 @@ from quirebase.core.errors import (
     WorkspaceMembershipRequired,
     WorkspaceUnavailable,
 )
+from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.core.workflows import object_reservation_attributes
 from quirebase.documents import (
     AnnotationReplyCreate,
     AnnotationReplyUpdate,
     AnnotationUpdate,
     create_annotation_reply,
+    delete_unreferenced_objects,
     update_annotation_reply,
     update_document_annotation,
 )
@@ -122,6 +125,7 @@ from quirebase.projects import (
 )
 from quirebase.workspaces import (
     archive_workspace,
+    delete_workspace,
     freeze_workspace_governance,
     invite_workspace_member,
     list_workspaces,
@@ -1547,6 +1551,64 @@ async def test_upload_finalizers_for_different_items_share_workspace_guard(
     async with postgres_race.session("rejected") as db:
         with pytest.raises(ValueError, match="no longer writable"):
             await _lock_upload_authority(db, actor_id, workspace_id, item_ids[1], role=role)
+
+
+@pytest.mark.concurrency_case("upload-finalization")
+async def test_workspace_teardown_fences_waiting_finalizer_and_releases_its_orphan(
+    postgres_sessions, postgres_search_tables, postgres_race, fake_durable_operations, monkeypatch
+):
+    store = get_object_store()
+    pending = await store.put_object(uuid4(), ObjectSuffix.PDF, b"pending", max_bytes=100)
+    async with postgres_sessions() as db:
+        owner = await _user(db, "teardown-upload-owner")
+        owner_id, workspace_id = owner.id, fixture_workspace_id(owner)
+        item = Item(workspace_id=workspace_id, title="Deleted during upload", created_by=owner_id)
+        db.add(item)
+        workspace = await db.get(Workspace, workspace_id)
+        workspace.state = WorkspaceState.archived
+        workspace.archived_at = datetime.now(UTC) - timedelta(days=3650)
+        await db.commit()
+        item_id = item.id
+    await fake_durable_operations.enqueue(
+        "documents.upload_revision",
+        queue_name="documents.upload",
+        workflow_id="late-upload",
+        attributes=object_reservation_attributes([pending.key]),
+    )
+    ready, release = asyncio.Event(), asyncio.Event()
+
+    async def teardown():
+        async with postgres_race.session("teardown") as db:
+            owner = await db.get(User, owner_id)
+            original_commit = db.commit
+
+            async def pause_commit():
+                ready.set()
+                await release.wait()
+                await original_commit()
+
+            monkeypatch.setattr(db, "commit", pause_commit)
+            await delete_workspace(db, owner, workspace_id)
+
+    async def finalize():
+        async with postgres_race.session("finalizer") as db:
+            with pytest.raises(ValueError, match="Workspace is no longer writable"):
+                await _lock_upload_authority(db, owner_id, workspace_id, item_id)
+            return await delete_unreferenced_objects(
+                db, [pending.key], ignore_workflow_id="late-upload"
+            )
+
+    postgres_race.start("teardown", teardown())
+    await asyncio.wait_for(ready.wait(), timeout=5)
+    postgres_race.start("finalizer", finalize())
+    await postgres_race.wait_blocked("finalizer", "teardown")
+    release.set()
+    await postgres_race.join("teardown")
+    assert await postgres_race.join("finalizer") == (pending.key,)
+    assert not await store.exists(pending.key)
+    async with postgres_race.session("verify") as db:
+        assert await db.get(Workspace, workspace_id) is None
+        assert await db.scalar(select(FileRevision.id)) is None
 
 
 @pytest.mark.concurrency_case("actor-revocation")

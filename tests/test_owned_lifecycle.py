@@ -874,66 +874,6 @@ async def test_workspace_teardown_cleans_owned_projections_and_rollback_is_atomi
 
 
 @pytest.mark.anyio
-@pytest.mark.concurrency_case("upload-finalization")
-async def test_workspace_teardown_fences_waiting_finalizer_and_releases_its_orphan(
-    postgres_sessions, postgres_search_tables, postgres_race, fake_durable_operations, monkeypatch
-):
-    from quirebase.documents.workflows import _lock_upload_authority
-
-    store = get_object_store()
-    pending = await store.put_object(uuid4(), ObjectSuffix.PDF, b"pending", max_bytes=100)
-    async with postgres_sessions() as db:
-        owner_id, workspace_id = await _workspace(db)
-        item = Item(workspace_id=workspace_id, title="Deleted during upload", created_by=owner_id)
-        db.add(item)
-        workspace = await db.get(Workspace, workspace_id)
-        workspace.state = WorkspaceState.archived
-        workspace.archived_at = datetime.now(UTC) - timedelta(days=3650)
-        await db.commit()
-        item_id = item.id
-    await fake_durable_operations.enqueue(
-        "documents.upload_revision",
-        queue_name="documents.upload",
-        workflow_id="late-upload",
-        attributes=object_reservation_attributes([pending.key]),
-    )
-    ready, release = asyncio.Event(), asyncio.Event()
-
-    async def teardown():
-        async with postgres_race.session("teardown") as db:
-            owner = await db.get(User, owner_id)
-            original_commit = db.commit
-
-            async def pause_commit():
-                ready.set()
-                await release.wait()
-                await original_commit()
-
-            monkeypatch.setattr(db, "commit", pause_commit)
-            await delete_workspace(db, owner, workspace_id)
-
-    async def finalize():
-        async with postgres_race.session("finalizer") as db:
-            with pytest.raises(ValueError, match="Workspace is no longer writable"):
-                await _lock_upload_authority(db, owner_id, workspace_id, item_id)
-            return await delete_unreferenced_objects(
-                db, [pending.key], ignore_workflow_id="late-upload"
-            )
-
-    postgres_race.start("teardown", teardown())
-    await asyncio.wait_for(ready.wait(), timeout=5)
-    postgres_race.start("finalizer", finalize())
-    await postgres_race.wait_blocked("finalizer", "teardown")
-    release.set()
-    await postgres_race.join("teardown")
-    assert await postgres_race.join("finalizer") == (pending.key,)
-    assert not await store.exists(pending.key)
-    async with postgres_race.session("verify") as db:
-        assert await db.get(Workspace, workspace_id) is None
-        assert await db.scalar(select(FileRevision.id)) is None
-
-
-@pytest.mark.anyio
 @pytest.mark.parametrize("bulk", [False, True])
 async def test_item_deletion_retires_document_identities_and_cleanup_is_atomic(
     persistence_sessions, fake_durable_operations, monkeypatch, bulk
