@@ -19,7 +19,12 @@ from quirebase.core.database import async_database_url
 DRIVER = Path(__file__).with_name("durable_recovery_driver.py")
 
 
-@pytest.fixture(params=["sqlite", "postgres"])
+@pytest.fixture(
+    params=[
+        "sqlite",
+        pytest.param("postgres", marks=pytest.mark.shared_postgres),
+    ]
+)
 def recovery_database(request, tmp_path):
     if request.param == "sqlite":
         yield f"sqlite:///{tmp_path / 'recovery.db'}"

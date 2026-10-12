@@ -242,7 +242,12 @@ async def async_db(async_session_factory):
         yield session
 
 
-@pytest.fixture(params=["sqlite", "postgres"])
+@pytest.fixture(
+    params=[
+        "sqlite",
+        pytest.param("postgres", marks=pytest.mark.shared_postgres),
+    ]
+)
 def persistence_sessions(request):
     """Exercise persistence contracts against each supported database."""
     if request.param == "postgres":

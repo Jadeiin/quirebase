@@ -70,6 +70,47 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
     )
 
 
+@pytest.mark.anyio
+async def test_http_facets_share_search_filters_and_serialize_counts(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, item, _ = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    base = f"/api/v1/workspaces/{item.workspace_id}"
+    item.authors = [
+        {
+            "display_name": "Smith, John",
+            "family_name": "Smith",
+            "given_name": "John",
+            "is_corresponding": True,
+        }
+    ]
+    item.keywords = ["Alpha; beta", "Robotics", "Robotics"]
+    await db.commit()
+    try:
+        response = await client.get(f"{base}/items/facets", params={"keyword_exact": "Alpha; beta"})
+        assert response.status_code == 200
+        assert response.json() == {
+            "authors": [
+                {"last_name": "Smith", "first_name": "John", "item_count": 1, "suffix": None}
+            ],
+            "keywords": [
+                {"value": "Alpha; beta", "item_count": 1},
+                {"value": "Robotics", "item_count": 1},
+            ],
+            "reference_types": [{"value": item.reference_type.value, "item_count": 1}],
+        }
+        matches = await client.get(
+            f"{base}/items", params={"author_last_name": "Smith", "author_first_name": "John"}
+        )
+        assert matches.status_code == 200 and matches.json()["total"] == 1
+        assert (await client.get(f"{base}/items/facets", params={"limit": 0})).status_code == 422
+    finally:
+        await client.aclose()
+
+
 async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, monkeypatch) -> None:
     pending = _pdf_import_inputs(batch.staged_files)
 

@@ -101,10 +101,13 @@ parameter omission and a real deadlock's SQLSTATE `40P01`.
 
 ## CI and follow-up coverage
 
-The mandatory PostgreSQL CI job runs the contracts, invariant scenarios and harness/report tests on
-PostgreSQL 18, alongside fresh migrations and doctor checks. It uploads coverage JSON/Markdown,
-JUnit and any failure snapshots, including when tests fail. The separate nightly/manual replay
-workflow runs five rounds on five isolated databases and retains each round's artifacts for 14 days.
+The mandatory PostgreSQL CI job runs database contracts, JSON query contracts and controlled
+concurrency scenarios on PostgreSQL 18. A separate step checks PostgreSQL migrations and durable
+recovery, followed by fresh initialization and doctor checks. SQLite variants, general business
+tests and HTTP tests run in the SQLite matrix; the PostgreSQL job does not build the frontend.
+It uploads coverage JSON/Markdown, JUnit and any failure snapshots, including when tests fail.
+The separate nightly/manual replay workflow runs five rounds on five isolated databases and retains
+each round's artifacts for 14 days.
 The nightly schedule becomes active when that workflow reaches the default branch. These are repeat
 runs of controlled schedules, not generated random interleavings.
 

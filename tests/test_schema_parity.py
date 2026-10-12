@@ -190,9 +190,13 @@ def _assert_schema_matches_metadata(inspector: Inspector, engine: Engine) -> Non
         "sqlite",
         pytest.param(
             "postgres",
-            marks=pytest.mark.skipif(
-                not os.getenv("QUIREBASE_TEST_POSTGRES_URL"), reason="PostgreSQL is not configured"
-            ),
+            marks=[
+                pytest.mark.shared_postgres,
+                pytest.mark.skipif(
+                    not os.getenv("QUIREBASE_TEST_POSTGRES_URL"),
+                    reason="PostgreSQL is not configured",
+                ),
+            ],
         ),
     ]
 )

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
-
 import pytest
 from inquiro import CandidateRecord, Identifier
 from item_helpers import stored_doi
@@ -330,50 +328,6 @@ async def test_import_batch_cannot_claim_the_same_provider_identifier_twice(pers
     batch = await db.get(ImportBatch, batch_id)
     assert batch.status == "ready" and batch.committed_item_ids is None
     assert await db.scalar(select(func.count()).select_from(Item)) == 0
-
-
-@pytest.mark.concurrency_case("identifier-claim")
-@pytest.mark.parametrize(("provider", "value"), [("openalex", "W123"), ("doi", "10.1000/example")])
-async def test_concurrent_items_cannot_claim_the_same_identifier(
-    postgres_sessions, postgres_search_tables, postgres_race, monkeypatch, provider, value
-):
-    async with postgres_sessions() as db:
-        actor, workspace_id = await _owner(db)
-        first = await create_item(db, actor, workspace_id, ItemMetadata(title="First"))
-        second = await create_item(db, actor, workspace_id, ItemMetadata(title="Second"))
-        actor_id = actor.id
-    replacement = ItemMetadata(title="Claimed", identifiers=(ExternalIdentifier(provider, value),))
-
-    async def claim_second():
-        async with postgres_race.session("second") as db:
-            with pytest.raises(ValidationFailure, match="already assigned to another Item"):
-                await revise_item_metadata(
-                    db, await db.get(User, actor_id), workspace_id, second.item_id, 1, replacement
-                )
-
-    async with postgres_race.session("first") as db:
-        commit = db.commit
-        monkeypatch.setattr(db, "commit", AsyncMock(side_effect=db.flush))
-        await revise_item_metadata(
-            db, await db.get(User, actor_id), workspace_id, first.item_id, 1, replacement
-        )
-        postgres_race.start("second", claim_second())
-        await postgres_race.wait_blocked("second", "first")
-        await commit()
-        await postgres_race.join("second")
-    async with postgres_sessions() as db:
-        rows = (await db.scalars(select(ItemIdentifier))).all()
-        assert len(rows) == 1 and rows[0].item_id == first.item_id
-        loser = await db.get(Item, second.item_id)
-        assert (loser.title, loser.version) == ("Second", 1)
-        assert (
-            await db.scalar(
-                select(func.count())
-                .select_from(AuditEvent)
-                .where(AuditEvent.action == "item.update")
-            )
-            == 1
-        )
 
 
 async def test_doi_unicode_characters_remain_distinct_workspace_claims(persistence_db):

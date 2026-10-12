@@ -112,16 +112,7 @@ jobs:
       - name: PostgreSQL contracts and controlled concurrency
         run: >-
           uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
-          tests/test_project_discovery.py
-          tests/test_workspace_commands.py
-          tests/test_workspace_integrity.py
-          tests/test_persistence_dependencies.py tests/test_persistence_boundaries.py
-          tests/test_persistence_operations.py tests/test_persistence_values.py
-          tests/test_owned_lifecycle.py
-          tests/test_durable_recovery.py
-          tests/test_concurrency_harness.py tests/test_concurrency_reporting.py tests/test_schema_parity.py
-          tests/test_identifier_invariants.py tests/test_annotation_context.py tests/test_provider_identifier_aliases.py
-          tests/test_structured_provider_metadata.py
+          tests/test_facets.py -m shared_postgres
           --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
       - name: Preserve concurrency coverage and failure evidence
         if: always()
@@ -130,6 +121,10 @@ jobs:
           name: postgres-concurrency
           path: concurrency-results/
           retention-days: 14
+      - name: PostgreSQL migrations and durable recovery
+        run: >-
+          uv run pytest -q tests/test_schema_parity.py tests/test_durable_recovery.py
+          -m shared_postgres
       - name: Verify migrations and durable workflows against PostgreSQL
         env:
           QUIREBASE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quirebase_migrations

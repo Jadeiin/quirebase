@@ -32,8 +32,8 @@ reviewable without maintaining another grant table.
 
 The [`main` PostgreSQL merge gate](https://github.com/Jadeiin/quirebase/rules/24554596) requires
 the GitHub Actions `postgres` check against the current base branch. That job runs database
-contracts, controlled concurrency, discovery and state-command retries, followed by fresh
-database initialization and durable-workflow diagnostics.
+and JSON query contracts, controlled concurrency, migrations and durable recovery, followed by
+fresh database initialization and durable-workflow diagnostics.
 
 | Package | Role | Owns |
 | --- | --- | --- |
