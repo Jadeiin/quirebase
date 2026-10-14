@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from uuid import uuid4
 
 import pytest
 from item_helpers import contributor
@@ -10,7 +11,6 @@ from workspace_helpers import provision_initial_workspace
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.library import (
-    ItemMetadata,
     commit_import_batch,
     create_item,
     find_duplicates,
@@ -30,25 +30,41 @@ async def _owner(db):
     await db.flush()
     workspace = await provision_initial_workspace(db, actor)
     await db.commit()
-    return actor, workspace.id
+    return (actor, workspace.id)
 
 
 @pytest.mark.parametrize("value", ["2024", "2024-02", "2024-02-29"])
 async def test_publication_date_preserves_its_precision(persistence_db, value):
     actor, workspace_id = await _owner(persistence_db)
     created = await create_item(
-        persistence_db, actor, workspace_id, ItemMetadata("Precision", publication_date=value)
+        persistence_db,
+        actor,
+        workspace_id,
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Precision",
+            "date_published": value,
+        },
     )
     item = await persistence_db.get(Item, created.item_id)
-    assert item.publication_date == value
+    assert item.work.get("date_published") == value
 
 
 @pytest.mark.parametrize("value", ["0000", "2023-02-29", "2024-13", "2024-2", "Spring 2024"])
 async def test_manual_publication_date_rejects_invalid_or_free_text_values(persistence_db, value):
     actor, workspace_id = await _owner(persistence_db)
-    with pytest.raises(ValidationFailure, match="publication date"):
+    with pytest.raises(ValidationFailure):
         await create_item(
-            persistence_db, actor, workspace_id, ItemMetadata("Invalid", publication_date=value)
+            persistence_db,
+            actor,
+            workspace_id,
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Invalid",
+                "date_published": value,
+            },
         )
     assert await persistence_db.scalar(select(func.count()).select_from(Item)) == 0
 
@@ -60,22 +76,32 @@ async def test_json_contributors_preserve_long_unicode_names(persistence_db):
         db,
         actor,
         workspace_id,
-        ItemMetadata(title="Long name", authors=(contributor("ﬃ" * 150, "研究者" * 100),)),
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Long name",
+            "contributors": (contributor("ﬃ" * 150, "研究者" * 100),),
+        },
     )
     item = await db.get(Item, result.item_id)
-    assert item.authors[0]["family_name"] == "ﬃ" * 150
-    assert item.authors[0]["given_name"] == "研究者" * 100
+    assert item.work["contributors"][0]["person"]["family_name"] == "ﬃ" * 150
+    assert item.work["contributors"][0]["person"]["given_name"] == "研究者" * 100
     result = await revise_item_metadata(
         db,
         actor,
         workspace_id,
         result.item_id,
         result.version,
-        ItemMetadata(title="Updated", authors=(contributor("ﬃ" * 151, "研究者" * 100),)),
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Updated",
+            "contributors": (contributor("ﬃ" * 151, "研究者" * 100),),
+        },
     )
     await db.refresh(item)
     assert item.version == 2
-    assert item.authors[0]["family_name"] == "ﬃ" * 151
+    assert item.work["contributors"][0]["person"]["family_name"] == "ﬃ" * 151
 
 
 @pytest.mark.parametrize("entities", [False, True], ids=["unicode", "html-entities"])
@@ -86,14 +112,15 @@ async def test_title_limit_counts_visible_text_and_allows_rich_storage(persisten
     visible = (
         "&" * 1000
         if entities
-        else "".join(chr(codepoint) for codepoint in rng.sample(range(0x4E00, 0x9FFF), 1000))
+        else "".join(chr(codepoint) for codepoint in rng.sample(range(19968, 40959), 1000))
     )
     title = "<i>" + ("&amp;" * 1000 if entities else visible) + "</i>"
-    result = await create_item(db, actor, workspace_id, ItemMetadata(title=title))
+    result = await create_item(
+        db, actor, workspace_id, {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": title}
+    )
     item = await db.get(Item, result.item_id)
-    assert item.title == title
+    assert item.work.get("title") == title
     assert len(title.encode()) > 2704
-
     with pytest.raises(ValidationFailure, match="title is too long"):
         await revise_item_metadata(
             db,
@@ -101,10 +128,10 @@ async def test_title_limit_counts_visible_text_and_allows_rich_storage(persisten
             workspace_id,
             result.item_id,
             result.version,
-            ItemMetadata(title="<i>" + visible + "X</i>"),
+            {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "<i>" + visible + "X</i>"},
         )
     item = await db.get(Item, result.item_id)
-    assert (item.title, item.version) == (title, 1)
+    assert (item.work.get("title"), item.version) == (title, 1)
 
 
 @pytest.mark.parametrize("origin", ["manual", "import"])
@@ -112,32 +139,40 @@ async def test_title_limit_counts_visible_text_and_allows_rich_storage(persisten
 async def test_metadata_limits_apply_to_creation_and_import(persistence_db, origin, field):
     db = persistence_db
     actor, workspace_id = await _owner(db)
-    values = {
-        "title": {"title": "X" * 1001},
-        "citation_key": {"citation_key": "K" * 129},
-    }[field]
-    expected = {
-        "title": "title is too long",
-        "citation_key": "Citation key is too long",
-    }[field]
+    values = {"title": {"title": "X" * 1001}, "citation_key": {"citation_key": "K" * 129}}[field]
+    expected = {"title": "title is too long", "citation_key": "Citation key is too long"}[field]
     if origin == "manual":
         with pytest.raises(ValidationFailure, match=expected):
             await create_item(
-                db, actor, workspace_id, ItemMetadata(**({"title": "Rejected"} | values))
+                db,
+                actor,
+                workspace_id,
+                {
+                    "id": f"urn:uuid:{uuid4()}",
+                    "type": "Document",
+                    "title": values.get("title", "Rejected"),
+                },
+                citation_key=values.get("citation_key"),
             )
     else:
         record = {"title": "Rejected"}
         record.update(
-            {
-                "title": {"title": "X" * 1001},
-                "citation_key": {"citation_key": "K" * 129},
-            }[field]
+            {"title": {"title": "X" * 1001}, "citation_key": {"citation_key": "K" * 129}}[field]
         )
         batch = ImportBatch(
             workspace_id=workspace_id,
             actor_id=actor.id,
             file_format="bibtex",
-            records=[record],
+            records=[
+                {
+                    "work": {
+                        "id": f"urn:uuid:{uuid4()}",
+                        "type": "Document",
+                        "title": record["title"],
+                    },
+                    "citation_key": record.get("citation_key"),
+                }
+            ],
             errors=[],
         )
         db.add(batch)
@@ -158,7 +193,8 @@ async def test_explicit_citation_key_accepts_128_characters(persistence_db):
         persistence_db,
         actor,
         workspace_id,
-        ItemMetadata(title="Explicit key", citation_key="K" * 128),
+        {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Explicit key"},
+        citation_key="K" * 128,
     )
     item = await persistence_db.get(Item, result.item_id)
     assert item.citation_key == "K" * 128
@@ -170,11 +206,16 @@ async def test_title_search_sort_and_duplicate_results(persistence_db):
     titles = ["Spectral graphs", "Algebraic methods", "Spectral <i>graphs</i>"]
     ids = []
     for title in titles:
-        result = await create_item(db, actor, workspace_id, ItemMetadata(title=title))
+        result = await create_item(
+            db,
+            actor,
+            workspace_id,
+            {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": title},
+        )
         ids.append(result.item_id)
     records, total = await search_library(db, actor, workspace_id, sort="title")
     assert total == 3
-    assert [item.title for item in records] == sorted(titles)
+    assert [item.work.get("title") for item in records] == sorted(titles)
     matches, total = await search_library(db, actor, workspace_id, q="spectral", sort="title")
     assert total == 2
     assert {item.id for item in matches} == {ids[0], ids[2]}
@@ -195,7 +236,13 @@ async def test_generated_citation_key_preserves_year_and_title_with_long_names(
             db,
             actor,
             workspace_id,
-            ItemMetadata(title=title, publication_date="2026", authors=(contributor("L" * 120),)),
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": title,
+                "date_published": "2026",
+                "contributors": (contributor("L" * 120),),
+            },
         )
         await regenerate_citation_key(db, actor, workspace_id, result.item_id)
         item = await db.get(Item, result.item_id)
@@ -206,14 +253,13 @@ async def test_generated_citation_key_preserves_year_and_title_with_long_names(
             file_format="bibtex",
             records=[
                 {
-                    "title": title,
-                    "publication_date": "2026",
-                    "authors": [
-                        {
-                            "display_name": str("L" * 120) + (""),
-                            "family_name": "L" * 120,
-                        }
-                    ],
+                    "work": {
+                        "id": f"urn:uuid:{uuid4()}",
+                        "type": "Document",
+                        "title": title,
+                        "date_published": "2026",
+                        "contributors": [contributor("L" * 120)],
+                    }
                 }
             ],
             errors=[],

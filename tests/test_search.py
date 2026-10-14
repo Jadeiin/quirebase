@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 from advanced_alchemy.types import FileObject
 from sqlalchemy import select
@@ -13,9 +15,13 @@ async def add_item(db, user, *, title, abstract=None, full_text=None):
         await db.flush()
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title=title,
-        abstract=abstract,
         created_by=user.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": title,
+            "description": abstract,
+        },
     )
     db.add(item)
     await db.flush()
@@ -69,7 +75,7 @@ async def test_reindex_replaces_stale_content(async_db):
     item = await add_item(db, user, title="Old terminology")
     index = search_index(db)
     await index.index_item(db, item.id)
-    item.title = "New vocabulary"
+    item.work = {**item.work, "title": "New vocabulary"}
     await index.index_item(db, item.id)
 
     assert await index.search(db, "old") == []
@@ -88,7 +94,7 @@ async def test_metadata_reindex_preserves_revision_projection(async_db):
     index = search_index(async_db)
     revision = await async_db.scalar(select(FileRevision).where(FileRevision.item_id == item.id))
     await index.index_revision(async_db, revision.id)
-    item.title = "Updated title"
+    item.work = {**item.work, "title": "Updated title"}
     await index.index_item(async_db, item.id)
 
     assert await index.search(async_db, "phrase") == [item.id]

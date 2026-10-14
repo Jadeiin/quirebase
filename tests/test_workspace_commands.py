@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 """State-setting retries must retain authority checks and record only actual transitions."""
 
 from datetime import UTC, datetime, timedelta
@@ -245,7 +247,11 @@ async def test_break_glass_inspection_is_bounded_and_audits_only_successful_read
         admin = User(username="inspection-admin", password_hash="unused", role="administrator")
         db.add(admin)
         db.add_all([
-            Item(workspace_id=workspace.id, title=f"Item {index}", created_by=owner.id)
+            Item(
+                workspace_id=workspace.id,
+                created_by=owner.id,
+                work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": f"Item {index}"},
+            )
             for index in range(101)
         ])
         await db.commit()

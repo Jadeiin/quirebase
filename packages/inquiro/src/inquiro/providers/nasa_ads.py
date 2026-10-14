@@ -3,21 +3,17 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from inquiro.canonical import (
-    clean_markup,
-    clean_rich_markup,
-    first_text,
-)
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import clean_markup, clean_rich_markup, first_text
 from inquiro.identifiers import normalize_doi, parse_bibcode
 from inquiro.models import (
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
-    Contributor,
     Identifier,
     ProviderConfig,
     ProviderUnavailable,
-    ResourceLink,
     SearchQuery,
 )
 from inquiro.providers._contracts import ProviderDefinition
@@ -25,26 +21,37 @@ from inquiro.providers._payload import (
     affiliation_values,
     boolean_query,
     keyword_values,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
     text_contributors,
 )
-from inquiro.reference_types import ReferenceType, normalize_reference_type
 
 if TYPE_CHECKING:
     from inquiro.transport import BoundedTransport
 
 
-def _contributors(document: dict) -> tuple[Contributor, ...] | None:
+def _contributors(document: dict) -> tuple[dict, ...] | None:
     names = document.get("author")
     affiliations = document.get("aff")
     if (
         isinstance(names, list)
         and isinstance(affiliations, list)
-        and len(affiliations) == len(names)
+        and (len(affiliations) == len(names))
     ):
-        return tuple(
-            Contributor(name, affiliations=affiliation_values([affiliation]))
-            for raw_name, affiliation in zip(names, affiliations, strict=True)
-            if (name := clean_markup(first_text(raw_name)))
+        return (
+            tuple(
+                (
+                    source_credit(name, affiliations=affiliation_values([affiliation]))
+                    for raw_name, affiliation in zip(names, affiliations, strict=True)
+                    if (name := clean_markup(first_text(raw_name)))
+                )
+            )
+            or None
         )
     return text_contributors(names)
 
@@ -54,31 +61,46 @@ def _record(doc: dict, identifier: Identifier) -> CandidateRecord:
     if not title:
         raise CandidateNotFound("NASA ADS record was not found")
     doi = normalize_doi(first_text(doc.get("doi")) or "") or None
-    bibcode = first_text(doc.get("bibcode")) or (
-        identifier.value if identifier.provider == "bibcode" else None
-    )
+    bibcode = first_text(doc.get("bibcode"))
     identifiers = {"bibcode": bibcode}
     if doi:
         identifiers["doi"] = doi
     return CandidateRecord(
         provider="nasa_ads",
         lookup_identifier=identifier,
-        title=title,
-        abstract=clean_rich_markup(first_text(doc.get("abstract"))),
-        authors=_contributors(doc),
-        keywords=keyword_values(doc.get("keyword")),
-        publication_date=first_text(doc.get("pubdate")),
-        publication_title=first_text(doc.get("pub")),
-        urls=(
-            ResourceLink(
-                f"https://ui.adsabs.harvard.edu/abs/{bibcode}/abstract", kind="landing_page"
+        work=compact({
+            "id": source_work_id(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
             ),
-        )
-        if bibcode
-        else None,
-        identifiers=tuple(Identifier(key, value) for key, value in identifiers.items() if value),
-        reference_type=normalize_reference_type(first_text(doc.get("doctype")), source="nasa_ads")
-        or ReferenceType.article_journal,
+            "type": "Other",
+            "title": title,
+            "description": clean_rich_markup(first_text(doc.get("abstract"))),
+            "contributors": _contributors(doc),
+            "date_published": first_text(doc.get("pubdate")),
+            "identifiers": source_identifiers(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
+            ),
+            "subjects": source_subjects(keyword_values(doc.get("keyword")) or ()),
+            "container": compact({"title": first_text(doc.get("pub"))}),
+            "url": source_landing_url(
+                (
+                    source_link(
+                        f"https://ui.adsabs.harvard.edu/abs/{bibcode}/abstract", kind="landing_page"
+                    ),
+                )
+                if bibcode
+                else None
+            ),
+            "files": source_files(
+                (
+                    source_link(
+                        f"https://ui.adsabs.harvard.edu/abs/{bibcode}/abstract", kind="landing_page"
+                    ),
+                )
+                if bibcode
+                else None
+            ),
+        }),
     )
 
 

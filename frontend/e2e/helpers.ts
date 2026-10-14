@@ -1,4 +1,19 @@
 import type { Page, Route } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+
+const workSchema = JSON.parse(
+	execFileSync(
+		'uv',
+		[
+			'run',
+			'--offline',
+			'python',
+			'-c',
+			'from commonmeta_schema import schema_path; print(schema_path("1.0").read_text())'
+		],
+		{ encoding: 'utf8' }
+	)
+);
 
 export const defaultCitationKeyFormula = 'auth.capitalize + year + shorttitle(1).capitalize';
 export const WORKSPACE_ID = 'workspace-1';
@@ -74,11 +89,14 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 }
 
 export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	await page.route('**/api/v1/workspaces/*/metadata/schema', (route) =>
+		route.fulfill({ json: workSchema })
+	);
 	await page.route('**/api/v1/workspaces/*/discovery/providers', (route) =>
 		route.fulfill({
 			json: {
 				search: [{ id: 'crossref', name: 'Crossref', sorts: ['relevance', 'published', 'cited'] }],
-				lookup: [{ id: 'crossref', name: 'Crossref' }],
+				lookup: [{ id: 'crossref', name: 'Crossref', identifier_namespace: 'doi' }],
 				max_search_clauses: 5
 			}
 		})
@@ -194,9 +212,21 @@ export function tagPage<T extends { id: string; name: string }>(items: T[], rout
 
 export async function chooseSearchOption(page: Page, label: string, optionLabel: string) {
 	const input = page.getByRole('combobox', { name: label, exact: true });
+	// Zag restores focus/caret on an animation frame when the popup opens or closes.
+	// Let that finish before filling or moving on to another control.
+	const settleFocus = () =>
+		input.evaluate(
+			() =>
+				new Promise<void>((resolve) =>
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+				)
+		);
+	await input.focus();
+	await settleFocus();
 	await input.fill(optionLabel);
 	await page
 		.getByRole('listbox', { name: label, exact: true })
 		.getByRole('option', { name: optionLabel, exact: true })
 		.click();
+	await settleFocus();
 }

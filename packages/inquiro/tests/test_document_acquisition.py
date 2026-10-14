@@ -94,10 +94,10 @@ async def test_arxiv_identifier_uses_the_native_pdf_adapter(source: str) -> None
         assert document.provider == "arxiv"
 
 
-@pytest.mark.parametrize("source", ("W123", "https://openalex.org/W123"))
+@pytest.mark.parametrize("source", ("W1230000000", "https://openalex.org/W1230000000"))
 async def test_openalex_work_uses_the_content_endpoint(source: str) -> None:
     def response(request: httpx2.Request) -> httpx2.Response:
-        assert request.url.path == "/works/W123.pdf"
+        assert request.url.path == "/works/W1230000000.pdf"
         assert request.url.params["api_key"] == "openalex-key"
         return httpx2.Response(200, content=PDF)
 
@@ -106,7 +106,7 @@ async def test_openalex_work_uses_the_content_endpoint(source: str) -> None:
         provider_runtime(settings=settings, transport=httpx2.MockTransport(response)) as runtime,
         await runtime.acquire_document(DocumentRequest(source)) as document,
     ):
-        assert document.filename == "W123.pdf"
+        assert document.filename == "W1230000000.pdf"
         assert document.provider == "openalex"
 
 
@@ -137,7 +137,7 @@ async def test_openalex_doi_resolves_the_work_before_download() -> None:
 async def test_openalex_pdf_requires_its_content_credential() -> None:
     async with provider_runtime(transport=httpx2.MockTransport(lambda _request: None)) as runtime:
         with pytest.raises(ProviderUnavailable, match="INQUIRO_OPENALEX_API_KEY"):
-            await runtime.acquire_document(DocumentRequest("W123", provider="openalex"))
+            await runtime.acquire_document(DocumentRequest("W1230000000", provider="openalex"))
 
 
 @pytest.mark.parametrize("source", ("10.1234/example", "https://doi.org/10.1234/example"))

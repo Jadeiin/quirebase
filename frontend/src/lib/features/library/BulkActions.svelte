@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { bibliographyFormats } from '#lib/export-preferences.js';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { can } from '#lib/authorization/can.js';
 	import type { LibraryProject } from '#lib/features/library/queries.js';
@@ -83,10 +84,11 @@
 		{#if bulkAction === 'bibliography'}<select
 				class="input w-auto min-w-36"
 				bind:value={exportFormat}
-				><option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option><option
-					value="ris">RIS</option
-				><option value="endnote">EndNote</option><option value="csl">CSL</option></select
-			>{/if}
+			>
+				{#each bibliographyFormats as choice (choice.value)}
+					<option value={choice.value}>{$t(choice.label)}</option>
+				{/each}
+			</select>{/if}
 		<Button
 			variant="filled"
 			disabled={busy ||

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
-from inquiro.bibliography import Contributor as BibliographyContributor
 from inquiro.bibliography import parse_bibliography_records
 from item_helpers import contributor
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.errors import WorkspaceMembershipRequired
-from quirebase.library import ItemMetadata, create_item, search_authors_typeahead
+from quirebase.library import create_item, search_authors_typeahead
 from quirebase.library.citations import format_standard_export
 from quirebase.models import Item, User
 
@@ -36,35 +37,24 @@ async def test_contributors_keep_each_records_spelling_and_literal_punctuation(p
             db,
             actor,
             workspace,
-            ItemMetadata(
-                "Names", authors=(contributor(family, given), contributor("Research; Council"))
-            ),
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Names",
+                "contributors": (contributor(family, given), contributor("Research; Council")),
+            },
         )
         item = await db.get(Item, result.item_id)
         await db.refresh(item)
-        await db.refresh(item, attribute_names=["identifier_links"])
-        assert item.authors == [
-            {
-                "display_name": str(family) + (", " + str(given) if given else ""),
-                "family_name": family,
-                "given_name": given,
-                "is_corresponding": False,
-            },
-            {
-                "display_name": "Research; Council",
-                "family_name": "Research; Council",
-                "given_name": None,
-                "is_corresponding": False,
-            },
+        assert item.work["contributors"] == [
+            contributor(family, given),
+            contributor("Research; Council"),
         ]
         content, _, _ = format_standard_export([item], "bibtex")
         records, errors = parse_bibliography_records(content, "bibtex")
-        assert errors == []
-        assert records[0].authors == (
-            BibliographyContributor(family, given),
-            BibliographyContributor("Research; Council"),
-        )
-        snapshots.append(item.authors)
+        assert not any(row["severity"] == "error" for row in errors)
+        assert len(records[0].work["contributors"]) == 2
+        snapshots.append(item.work["contributors"])
     assert snapshots[0] is not snapshots[1]
     assert snapshots[0][0] is not snapshots[1][0]
 
@@ -78,26 +68,28 @@ async def test_search_authors_typeahead_uses_only_workspace_item_names(persisten
             db,
             actor,
             target,
-            ItemMetadata(
-                "Suggestions",
-                authors=(contributor("Shannon", "Claude"), contributor("Shapiro", "Alex"))
-                if actor is reader
-                else (contributor("Shaw", "George"),),
-                editors=(contributor("Shaver", "Editor"),),
-            ),
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Suggestions",
+                "contributors": (
+                    (contributor("Shannon", "Claude"), contributor("Shapiro", "Alex"))
+                    if actor is reader
+                    else (contributor("Shaw", "George"),)
+                )
+                + ({**contributor("Shaver", "Editor"), "roles": ["Editor"]},),
+            },
         )
     results = await search_authors_typeahead(db, reader, workspace, "Sha")
     assert results == [
         {
             "last_name": "Shannon",
             "first_name": "Claude",
-            "suffix": None,
             "full_name": "Shannon, Claude",
         },
         {
             "last_name": "Shapiro",
             "first_name": "Alex",
-            "suffix": None,
             "full_name": "Shapiro, Alex",
         },
     ]

@@ -255,23 +255,8 @@ def schema_upgrades() -> None:
     op.create_table('items',
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
-    sa.Column('title', sa.Text(), nullable=False),
-    sa.Column('abstract', sa.Text(), nullable=True),
-    sa.Column('publication_date', sa.String(length=10), nullable=True),
-    sa.Column('publication_title', sa.Text(), nullable=True),
-    sa.Column('volume', sa.String(length=100), nullable=True),
-    sa.Column('issue', sa.String(length=100), nullable=True),
-    sa.Column('pages', sa.String(length=100), nullable=True),
-    sa.Column('publisher', sa.Text(), nullable=True),
-    sa.Column('place_published', sa.String(length=255), nullable=True),
-    sa.Column('journal_abbreviation', sa.Text(), nullable=True),
-    sa.Column('reference_type', sa.Enum('article', 'article-journal', 'article-magazine', 'article-newspaper', 'book', 'chapter', 'paper-conference', 'thesis', 'report', 'webpage', 'dataset', 'software', 'patent', 'standard', 'manuscript', 'document', 'preprint', name='reference_type', native_enum=False, create_constraint=True), nullable=False),
-    sa.Column('authors', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
-    sa.Column('editors', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
+    sa.Column('work', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
     sa.Column('citation_key', sa.String(length=128), nullable=True),
-    sa.Column('urls', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
-    sa.Column('keywords', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
-    sa.Column('custom_fields', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
     sa.Column('updated_by', sa.GUID(length=16), nullable=True),
     sa.Column('version', sa.Integer(), nullable=False),
@@ -287,7 +272,6 @@ def schema_upgrades() -> None:
     with op.batch_alter_table('items', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_items_citation_key'), ['citation_key'], unique=False)
         batch_op.create_index(batch_op.f('ix_items_workspace_id'), ['workspace_id'], unique=False)
-        batch_op.create_index('ix_items_workspace_reference_type', ['workspace_id', 'reference_type'], unique=False)
 
     op.create_table('projects',
     sa.Column('id', sa.GUID(length=16), nullable=False),
@@ -441,26 +425,6 @@ def schema_upgrades() -> None:
     with op.batch_alter_table('file_revisions', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_file_revisions_item_id'), ['item_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_file_revisions_workspace_id'), ['workspace_id'], unique=False)
-
-    op.create_table('item_identifiers',
-    sa.Column('id', sa.GUID(length=16), nullable=False),
-    sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
-    sa.Column('item_id', sa.GUID(length=16), nullable=False),
-    sa.Column('provider', sa.String(length=40), nullable=False),
-    sa.Column('value', sa.String(length=500), nullable=False),
-    sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
-    sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['workspace_id', 'item_id'], ['items.workspace_id', 'items.id'], name='fk_item_identifiers_item_workspace', ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_item_identifiers')),
-    sa.UniqueConstraint('item_id', 'provider', name='uq_item_identifiers_item_provider'),
-    sa.UniqueConstraint('workspace_id', 'provider', 'value', name='uq_item_identifiers_workspace_provider_value')
-    )
-    with op.batch_alter_table('item_identifiers', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_item_identifiers_item_id'), ['item_id'], unique=False)
-        batch_op.create_index(batch_op.f('ix_item_identifiers_provider'), ['provider'], unique=False)
-        batch_op.create_index(batch_op.f('ix_item_identifiers_value'), ['value'], unique=False)
-        batch_op.create_index(batch_op.f('ix_item_identifiers_workspace_id'), ['workspace_id'], unique=False)
 
     op.create_table('item_reads',
     sa.Column('user_id', sa.GUID(length=16), nullable=False),
@@ -654,13 +618,6 @@ def schema_downgrades() -> None:
         batch_op.drop_index(batch_op.f('ix_item_reads_last_read_at'))
 
     op.drop_table('item_reads')
-    with op.batch_alter_table('item_identifiers', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_item_identifiers_workspace_id'))
-        batch_op.drop_index(batch_op.f('ix_item_identifiers_value'))
-        batch_op.drop_index(batch_op.f('ix_item_identifiers_provider'))
-        batch_op.drop_index(batch_op.f('ix_item_identifiers_item_id'))
-
-    op.drop_table('item_identifiers')
     with op.batch_alter_table('file_revisions', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_file_revisions_workspace_id'))
         batch_op.drop_index(batch_op.f('ix_file_revisions_item_id'))
@@ -703,7 +660,6 @@ def schema_downgrades() -> None:
 
     op.drop_table('projects')
     with op.batch_alter_table('items', schema=None) as batch_op:
-        batch_op.drop_index('ix_items_workspace_reference_type')
         batch_op.drop_index(batch_op.f('ix_items_workspace_id'))
         batch_op.drop_index(batch_op.f('ix_items_citation_key'))
 

@@ -115,8 +115,8 @@ async def _item_text(db: AsyncSession, item: Item, settings: Settings) -> str:
         .limit(1)
     )
     return clean_recommendation_text(
-        convert_rich_text(item.title, source="html", target="text"),
-        convert_rich_text(item.abstract, source="html", target="text"),
+        convert_rich_text(item.work.get("title", ""), source="html", target="text"),
+        convert_rich_text(item.work.get("description"), source="html", target="text"),
         full_text,
         settings.recommendation_max_chars,
     )

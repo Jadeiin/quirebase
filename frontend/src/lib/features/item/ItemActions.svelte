@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { doiComparisonKey, identifierRows } from './metadata-draft.js';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -15,11 +16,15 @@
 	import Notice from '#lib/design/Notice.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import {
+		bibliographyExportParameters,
+		bibliographyFilename,
+		bibliographyFormats,
 		defaultExportPreferences,
 		readExportPreferences,
 		type ExportPreferences
 	} from '#lib/export-preferences.js';
 	import { itemFilesQuery } from '#lib/features/item/queries.js';
+	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
 	import { invalidateLibrary } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -55,10 +60,36 @@
 	);
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
 	const copyDestinations = $derived(overview.copy_targets);
+	const providers = createQuery(() => ({
+		...discoveryProvidersQuery(workspaceId),
+		enabled: open && section === 'sources'
+	}));
+	const doiProviders = $derived(
+		providers.data?.lookup.filter((choice) => choice.identifier_namespace === 'doi') ?? []
+	);
+	$effect(() => {
+		if (
+			providers.data &&
+			doiProvider !== 'auto' &&
+			!doiProviders.some((choice) => choice.id === doiProvider)
+		) {
+			doiProvider = 'auto';
+		}
+	});
 	const externalIdentifiers = $derived(
-		overview.identifiers.filter(
-			(identifier: ItemOverviewView['identifiers'][number]) => identifier.provider !== 'doi'
-		)
+		identifierRows(overview.metadata, overview.primary_lookup_identifier)
+			.filter(
+				(row) =>
+					row.provider !== 'doi' ||
+					!overview.item.doi ||
+					doiComparisonKey(row.value) !== doiComparisonKey(overview.item.doi)
+			)
+			.map((row) => ({
+				...row,
+				lookupProvider: providers.data?.lookup.find(
+					(choice) => choice.identifier_namespace === row.provider
+				)?.id
+			}))
 	);
 
 	onMount(() => {
@@ -81,29 +112,7 @@
 	}
 
 	function bibliographyParameters() {
-		const citation = preferences.citation;
-		return {
-			file_format: format,
-			style: citation.style,
-			include_abstract: citation.includeAbstract,
-			preserve_case: citation.preserveCase,
-			include_identifiers: citation.includeIdentifiers,
-			include_custom_fields: citation.includeCustomFields,
-			encoding: citation.encoding,
-			journal_mode: citation.journalMode,
-			doi_policy: citation.doiPolicy,
-			url_policy: citation.urlPolicy,
-			excluded_fields: citation.excludedFields,
-			sort_by: citation.sortBy,
-			citation_key_formula: citation.citationKeyFormula,
-			citation_key_force_ascii: citation.citationKeyForceAscii
-		};
-	}
-
-	function bibliographyFilename() {
-		if (format === 'csl') return 'quirebase-citations.txt';
-		const extension = format === 'ris' ? 'ris' : format === 'endnote' ? 'enw' : 'bib';
-		return `quirebase-export.${extension}`;
+		return bibliographyExportParameters(preferences.citation, format);
 	}
 
 	function archiveFilename() {
@@ -148,7 +157,7 @@
 					{
 						params: { path: { item_id: itemId }, query: bibliographyParameters() }
 					},
-					{ suggestedName: bibliographyFilename() }
+					{ suggestedName: bibliographyFilename(format) }
 				),
 			$t('Bibliography downloaded')
 		);
@@ -362,12 +371,11 @@
 										</p>
 									</div>
 									<label
-										>{$t('Format')}<select class="select" bind:value={format}
-											><option value="csl">CSL citation</option><option value="bibtex"
-												>BibTeX</option
-											><option value="biblatex">BibLaTeX</option><option value="ris">RIS</option
-											><option value="endnote">EndNote</option></select
-										></label
+										>{$t('Format')}<select class="select" bind:value={format}>
+											{#each bibliographyFormats as choice (choice.value)}
+												<option value={choice.value}>{$t(choice.label)}</option>
+											{/each}
+										</select></label
 									>
 									<div class="flex flex-wrap gap-2">
 										<Button variant="filled" disabled={busy} onclick={downloadBibliography}
@@ -489,9 +497,9 @@
 													aria-label={$t('Provider')}
 												>
 													<option value="auto">{$t('Auto detect')}</option>
-													<option value="crossref">Crossref</option>
-													<option value="openalex">OpenAlex</option>
-													<option value="datacite">DataCite</option>
+													{#each doiProviders as choice (choice.id)}
+														<option value={choice.id}>{choice.name}</option>
+													{/each}
 												</select>
 												<Button
 													disabled={busy}
@@ -503,7 +511,7 @@
 											disabled={busy}
 											onclick={rescanDoi}>{$t('Rescan PDF for DOI')}</Button
 										>{/if}
-									{#each externalIdentifiers as identifier (`${identifier.provider}:${identifier.value}`)}<div
+									{#each externalIdentifiers as identifier (JSON.stringify( [identifier.provider, identifier.value] ))}<div
 											class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
 										>
 											<div>
@@ -511,10 +519,10 @@
 													class="block text-sm text-surface-600-400">{identifier.value}</span
 												>
 											</div>
-											{#if identifier.provider !== 'pmcid'}
+											{#if identifier.lookupProvider}
 												<Button
 													disabled={busy}
-													onclick={() => synchronize(identifier.provider, identifier.value)}
+													onclick={() => synchronize(identifier.lookupProvider!, identifier.value)}
 													>{$t('Autoupdate')}</Button
 												>
 											{/if}

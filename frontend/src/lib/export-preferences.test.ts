@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+	bibliographyExportParameters,
 	defaultExportPreferences,
 	exportPreferencesKey,
 	readExportPreferences,
@@ -18,6 +19,14 @@ describe('export preference storage', () => {
 		const preferences = structuredClone(defaultExportPreferences);
 		preferences.citation.style = 'workspace-a-custom-style';
 		preferences.citation.includeAbstract = false;
+		Object.assign(preferences.citation, {
+			preserveCase: true,
+			encoding: 'latex',
+			doiPolicy: 'omit',
+			urlPolicy: 'omit_when_doi',
+			excludedFields: 'abstract, publisher',
+			sortBy: 'author'
+		});
 		preferences.document.includeAnnotations = true;
 		writeExportPreferences('reader', preferences, 'workspace-a');
 
@@ -54,17 +63,72 @@ describe('export preference storage', () => {
 		expect(readExportPreferences('reader')).toEqual(defaultExportPreferences);
 	});
 
-	it('rejects unknown versions and invalid preference field types', () => {
+	it('falls back to defaults for invalid preference field types', () => {
 		localStorage.setItem(
 			exportPreferencesKey('reader'),
 			JSON.stringify({
-				schemaVersion: 2,
-				citation: { format: 'invalid', includeAbstract: 'yes' },
+				schemaVersion: 1,
+				citation: {
+					format: 'invalid',
+					includeAbstract: 'yes',
+					preserveCase: 'yes',
+					encoding: 'invalid',
+					doiPolicy: 'invalid',
+					urlPolicy: 'invalid',
+					excludedFields: [],
+					sortBy: 'invalid'
+				},
 				document: { includeAnnotations: 'yes' }
 			})
 		);
 
 		expect(readExportPreferences('reader')).toEqual(defaultExportPreferences);
+	});
+
+	it('sends format-specific preferences without filtering complete Commonmeta snapshots', () => {
+		const citation = {
+			...defaultExportPreferences.citation,
+			preserveCase: true,
+			encoding: 'latex' as const,
+			doiPolicy: 'omit' as const,
+			urlPolicy: 'omit_when_doi' as const,
+			excludedFields: 'abstract, publisher\nURL',
+			sortBy: 'author' as const,
+			includeAbstract: false
+		};
+		expect(bibliographyExportParameters(citation, 'bibtex')).toMatchObject({
+			preserve_case: true,
+			encoding: 'latex',
+			doi_policy: 'omit',
+			url_policy: 'omit_when_doi',
+			excluded_fields: ['abstract', 'publisher', 'URL'],
+			sort_by: 'author',
+			include_abstract: false
+		});
+		expect(bibliographyExportParameters(citation, 'csl-json')).toMatchObject({
+			preserve_case: false,
+			encoding: 'unicode',
+			doi_policy: 'omit',
+			excluded_fields: ['abstract', 'publisher', 'URL']
+		});
+		expect(bibliographyExportParameters(citation, 'ris')).toMatchObject({
+			preserve_case: false,
+			encoding: 'unicode',
+			excluded_fields: undefined,
+			doi_policy: 'omit'
+		});
+		expect(bibliographyExportParameters(citation, 'csl')).toMatchObject({
+			sort_by: 'input',
+			excluded_fields: undefined
+		});
+		expect(bibliographyExportParameters(citation, 'commonmeta')).toMatchObject({
+			include_abstract: true,
+			excluded_fields: undefined,
+			doi_policy: 'include',
+			url_policy: 'include',
+			preserve_case: false,
+			encoding: 'unicode'
+		});
 	});
 
 	it('keeps export controls usable when localStorage cannot be written', () => {

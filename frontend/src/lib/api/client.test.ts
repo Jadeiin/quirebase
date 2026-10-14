@@ -28,14 +28,11 @@ describe('apiRequest', () => {
 			'/workspaces/{workspace_id}/items',
 			{
 				body: {
-					title: 'Item',
-					reference_type: 'document',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					metadata: {
+						id: 'urn:uuid:cf281c3d-c96f-4ce6-a6f1-17460c42e79b',
+						type: 'Document',
+						title: 'Item'
+					}
 				}
 			},
 			fetcher
@@ -554,14 +551,11 @@ describe('structured API errors', () => {
 				'/workspaces/{workspace_id}/items',
 				{
 					body: {
-						title: 'Item',
-						reference_type: 'document',
-						keywords: [],
-						urls: [],
-						authors: [],
-						editors: [],
-						identifiers: [],
-						custom_fields: []
+						metadata: {
+							id: 'urn:uuid:cf281c3d-c96f-4ce6-a6f1-17460c42e79b',
+							type: 'Document',
+							title: 'Item'
+						}
 					}
 				},
 				fetcher

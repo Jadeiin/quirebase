@@ -36,8 +36,8 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 	await expect.poll(() => duplicateReads).toBe(0);
 	await page.getByRole('button', { name: 'Check for duplicates' }).click();
 	await expect.poll(() => duplicateReads).toBe(1);
-	await page.getByRole('radio', { name: 'Same DOI' }).focus();
-	await page.getByRole('radio', { name: 'Same DOI' }).press('ArrowRight');
+	await page.getByRole('radio', { name: 'Shared identifier' }).focus();
+	await page.getByRole('radio', { name: 'Shared identifier' }).press('ArrowRight');
 	await expect(page.getByRole('radio', { name: 'Same title' })).toBeChecked();
 	await expect.poll(() => duplicateReads).toBe(1);
 	await expect(page.getByText('The match criteria changed.')).toBeVisible();

@@ -35,10 +35,24 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 						? [
 								{
 									metadata: {
+										id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+										type: 'Other',
 										title: 'Imported PDF',
-										authors: [
-											{ display_name: 'Ada Lovelace', family_name: 'Lovelace', given_name: 'Ada' },
-											{ display_name: 'World Health Organization', kind: 'organization' }
+										contributors: [
+											{
+												type: 'Person',
+												person: {
+													name: 'Ada Lovelace',
+													family_name: 'Lovelace',
+													given_name: 'Ada'
+												},
+												roles: ['Author']
+											},
+											{
+												type: 'Organization',
+												organization: { name: 'World Health Organization' },
+												roles: ['Author']
+											}
 										]
 									},
 									source: { original_name: 'paper.pdf', size: 9 }
@@ -91,7 +105,17 @@ test('shared pending Import previews poll the batch without actor-only workflow 
 				status: previewRequests > 1 ? 'ready' : 'pending',
 				workflow_id: null,
 				records:
-					previewRequests > 1 ? [{ metadata: { title: 'Shared imported PDF', authors: [] } }] : [],
+					previewRequests > 1
+						? [
+								{
+									metadata: {
+										id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+										type: 'Other',
+										title: 'Shared imported PDF'
+									}
+								}
+							]
+						: [],
 				errors: []
 			}
 		});
@@ -147,7 +171,11 @@ test('Import preview paginates restored batches', async ({ page }) => {
 				status: 'ready',
 				workflow_id: null,
 				records: Array.from({ length: 21 }, (_, index) => ({
-					metadata: { title: `Record ${index + 1}`, authors: [] }
+					metadata: {
+						id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+						type: 'Other',
+						title: `Record ${index + 1}`
+					}
 				})),
 				errors: []
 			}

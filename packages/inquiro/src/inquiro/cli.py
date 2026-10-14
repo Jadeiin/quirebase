@@ -5,18 +5,10 @@ import asyncio
 import json
 import os
 import sys
-import unicodedata
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Protocol, Self, TextIO
 
-from inquiro.bibliography import (
-    DEFAULT_CITATION_KEY_FORMULA,
-    BibliographyExportOptions,
-    BibliographyRecord,
-    evaluate_citation_key_formula,
-    export_bibliography_records,
-    suffixed_citation_key,
-)
+from inquiro.bibliography import BibliographyExportOptions, export_bibliography_records
 from inquiro.models import (
     CandidateNotFound,
     CandidatePage,
@@ -54,7 +46,7 @@ class RuntimeFactory(Protocol):
     def __call__(self, config: ProviderConfig) -> Runtime: ...
 
 
-OUTPUT_FORMATS = ("json", "bibtex", "biblatex", "ris", "endnote")
+OUTPUT_FORMATS = ("json", "bibtex", "ris", "csl-json", "commonmeta")
 
 
 def _add_output_options(command: argparse.ArgumentParser) -> None:
@@ -66,32 +58,37 @@ def _add_output_options(command: argparse.ArgumentParser) -> None:
         help="Output format (default: json).",
     )
     command.add_argument(
+        "--omit-abstract", action="store_true", help="Omit abstracts from bibliography output."
+    )
+    command.add_argument("--preserve-case", action="store_true", help="Protect BibTeX title case.")
+    command.add_argument(
         "--encoding",
         choices=("unicode", "latex"),
         default="unicode",
-        help="BibTeX/BibLaTeX text encoding (default: unicode).",
+        help="BibTeX character representation; output bytes remain UTF-8.",
+    )
+    command.add_argument("--doi-policy", choices=("include", "omit"), default="include")
+    command.add_argument(
+        "--url-policy", choices=("include", "omit", "omit_when_doi"), default="include"
     )
     command.add_argument(
-        "--preserve-case",
-        action="store_true",
-        help="Protect uppercase title text in BibTeX/BibLaTeX output.",
+        "--exclude-field",
+        action="append",
+        default=[],
+        dest="excluded_fields",
+        help="Exclude a native BibTeX/CSL-JSON field; repeat for multiple fields.",
     )
     command.add_argument(
-        "--omit-abstract",
-        action="store_true",
-        help="Omit abstracts from bibliography output.",
-    )
-    command.add_argument(
-        "--include-identifiers",
-        action="store_true",
-        help="Include identifiers in addition to DOI.",
+        "--sort-by",
+        choices=("input", "citation_key", "author", "year", "title"),
+        default="input",
+        help="Bibliography record order.",
     )
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="inquiro",
-        description="Look up, discover, and export scholarly Candidate Records.",
+        prog="inquiro", description="Look up, discover, and export scholarly Candidate Records."
     )
     parser.add_argument(
         "--timeout",
@@ -103,21 +100,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-response-bytes",
         type=int,
-        default=10_000_000,
+        default=10000000,
         metavar="BYTES",
         help="Maximum provider response size (default: 10000000).",
     )
     commands = parser.add_subparsers(dest="command", required=True)
-
     lookup = commands.add_parser("lookup", help="Look up one Candidate Record by identifier.")
     lookup.add_argument("identifier", help="DOI, ISBN, PMID, arXiv ID, or provider identifier.")
     lookup.add_argument(
-        "--provider",
-        default="auto",
-        help="Identifier provider or auto detection (default: auto).",
+        "--provider", default="auto", help="Identifier provider or auto detection (default: auto)."
     )
     _add_output_options(lookup)
-
     search = commands.add_parser("search", help="Search one scholarly metadata provider.")
     search.add_argument("provider", help="Search provider, such as crossref or openalex.")
     search.add_argument("term", help="Search term for the first clause.")
@@ -164,7 +157,7 @@ def _provider_config(args: argparse.Namespace) -> ProviderConfig:
 
 def _search_query(args: argparse.Namespace) -> SearchQuery:
     clauses = [SearchClause(args.field, args.operator, args.term)]
-    clauses.extend(SearchClause(field, operator, term) for field, operator, term in args.clause)
+    clauses.extend((SearchClause(field, operator, term) for field, operator, term in args.clause))
     return SearchQuery(
         provider=args.provider,
         clauses=tuple(clauses),
@@ -182,56 +175,6 @@ def _write_json(value: object, *, stream: TextIO | None = None) -> None:
     stream.write("\n")
 
 
-def _candidate_record(candidate: CandidateRecord) -> BibliographyRecord:
-    identifiers = tuple(
-        (identifier.provider, identifier.value)
-        for identifier in candidate.identifiers
-        if identifier.provider.casefold() != "doi"
-    )
-    record = BibliographyRecord(
-        citation_key=None,
-        reference_type=candidate.reference_type or "document",
-        title=candidate.title,
-        authors=tuple(author.bibliographic_name for author in candidate.authors or ()),
-        abstract=candidate.abstract,
-        keywords=candidate.keywords or (),
-        publication_date=candidate.publication_date,
-        publication_title=candidate.publication_title,
-        journal_abbreviation=candidate.journal_abbreviation,
-        volume=candidate.volume,
-        issue=candidate.issue,
-        pages=candidate.pages,
-        publisher=candidate.publisher,
-        doi=candidate.doi,
-        urls=tuple(dict.fromkeys(link.url for link in candidate.urls or ())),
-        identifiers=identifiers,
-    )
-    return replace(
-        record,
-        citation_key=evaluate_citation_key_formula(
-            DEFAULT_CITATION_KEY_FORMULA,
-            record,
-            force_ascii=True,
-        ),
-    )
-
-
-def _bibliography_records(candidates: Sequence[CandidateRecord]) -> list[BibliographyRecord]:
-    records: list[BibliographyRecord] = []
-    used: set[str] = set()
-    for candidate in candidates:
-        record = _candidate_record(candidate)
-        base = record.citation_key or "UnknownXXXXWork"
-        key = base
-        position = 1
-        while unicodedata.normalize("NFKC", key).casefold() in used:
-            key = suffixed_citation_key(base, position)
-            position += 1
-        used.add(unicodedata.normalize("NFKC", key).casefold())
-        records.append(replace(record, citation_key=key))
-    return records
-
-
 def _write_result(result: CandidateRecord | CandidatePage, args: argparse.Namespace) -> None:
     if args.output_format == "json":
         _write_json(asdict(result))
@@ -241,13 +184,14 @@ def _write_result(result: CandidateRecord | CandidatePage, args: argparse.Namesp
         include_abstract=not args.omit_abstract,
         preserve_case=args.preserve_case,
         encoding=args.encoding,
-        include_identifiers=args.include_identifiers,
+        doi_policy=args.doi_policy,
+        url_policy=args.url_policy,
+        excluded_fields=tuple(args.excluded_fields),
+        sort_by=args.sort_by,
     )
     sys.stdout.write(
         export_bibliography_records(
-            _bibliography_records(candidates),
-            args.output_format,
-            options=options,
+            [candidate.work for candidate in candidates], args.output_format, options=options
         )
     )
 
@@ -268,8 +212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         asyncio.run(_run(args, ProviderRuntime))
     except InquiroError as error:
         _write_json(
-            {"error": {"type": type(error).__name__, "message": str(error)}},
-            stream=sys.stderr,
+            {"error": {"type": type(error).__name__, "message": str(error)}}, stream=sys.stderr
         )
         if isinstance(error, InvalidProviderRequest):
             return 2
@@ -278,6 +221,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if isinstance(error, ProviderUnavailable):
             return 4
         return 1
+    except ValueError as error:
+        _write_json(
+            {"error": {"type": "InvalidProviderRequest", "message": str(error)}}, stream=sys.stderr
+        )
+        return 2
     return 0
 
 

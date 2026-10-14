@@ -6,8 +6,6 @@ from fastapi import APIRouter
 from fastapi.responses import Response, StreamingResponse
 
 from quirebase.library import (
-    DEFAULT_CITATION_KEY_FORMULA,
-    BibliographyExportOptions,
     download_selected_item_documents,
     export_accessible_bibliography,
     export_selected_bibliography,
@@ -18,23 +16,6 @@ from quirebase.web.api.export_schemas import BibliographyExportRequest, Document
 from quirebase.web.responses import content_disposition
 
 router = APIRouter(tags=["Library exports"])
-
-
-def _bibliography_options(data: BibliographyExportRequest) -> BibliographyExportOptions:
-    return BibliographyExportOptions(
-        include_abstract=data.include_abstract,
-        preserve_case=data.preserve_case,
-        include_identifiers=data.include_identifiers,
-        include_custom_fields=data.include_custom_fields,
-        encoding=data.encoding,
-        journal_mode=data.journal_mode,
-        doi_policy=data.doi_policy,
-        url_policy=data.url_policy,
-        excluded_fields=tuple(data.excluded_fields),
-        sort_by=data.sort_by,
-        citation_key_formula=data.citation_key_formula.strip() or DEFAULT_CITATION_KEY_FORMULA,
-        citation_key_force_ascii=data.citation_key_force_ascii,
-    )
 
 
 @router.post(
@@ -52,7 +33,7 @@ async def export_item_selection(
         data.item_ids,
         data.file_format,
         style_key=data.style,
-        options=_bibliography_options(data),
+        options=data.to_options(),
     )
     return Response(
         contents,
@@ -68,11 +49,7 @@ async def export_item_selection(
     "/items/documents/archive",
     response_class=StreamingResponse,
     responses={
-        200: {
-            "content": {
-                "application/zip": {"schema": {"type": "string", "format": "binary"}},
-            }
-        }
+        200: {"content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}}}
     },
 )
 async def download_item_selection(
@@ -103,11 +80,7 @@ async def download_item_selection(
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
 async def export_library_bibliography(
-    workspace_id: UUID,
-    user: ApiUser,
-    db: Database,
-    file_format: str,
-    style: str = "apa",
+    workspace_id: UUID, user: ApiUser, db: Database, file_format: str, style: str = "apa"
 ) -> Response:
     contents, media_type, filename = await export_accessible_bibliography(
         db, user, workspace_id, file_format, style_key=style

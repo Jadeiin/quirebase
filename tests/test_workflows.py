@@ -381,8 +381,8 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     user = await _provisioned_user(async_db, "import-workflow-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Imported PDF",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Imported PDF"},
     )
     async_db.add(item)
     await async_db.flush()
@@ -596,7 +596,11 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
 
     monkeypatch.setattr("quirebase.operations.settings.get_effective_setting", one_hour)
     user = await _provisioned_user(async_db, "export-artifact-user")
-    item = Item(workspace_id=fixture_workspace_id(user), title="Export item", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Export item"},
+    )
     async_db.add(item)
     await async_db.flush()
     revision = FileRevision(
@@ -646,7 +650,11 @@ async def test_project_annotation_export_rejects_replaced_assignment(async_db, m
     monkeypatch.setattr("quirebase.operations.settings.get_effective_setting", one_hour)
     user = await _provisioned_user(async_db, "stale-project-export-user")
     workspace_id = fixture_workspace_id(user)
-    item = Item(workspace_id=workspace_id, title="Export item", created_by=user.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Export item"},
+    )
     project = Project(workspace_id=workspace_id, name="Export project", created_by=user.id)
     async_db.add_all([item, project])
     await async_db.flush()
@@ -708,8 +716,8 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
     user = await _provisioned_user(async_db, "integrity-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Integrity transaction",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Integrity transaction"},
     )
     async_db.add(item)
     await async_db.flush()
@@ -844,7 +852,11 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
 @pytest.mark.anyio
 async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     user = await _provisioned_user(async_db, "upload-tx-user")
-    item = Item(workspace_id=fixture_workspace_id(user), title="TX Item", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "TX Item"},
+    )
     async_db.add(item)
     await async_db.commit()
 
@@ -876,8 +888,8 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
     user = await _provisioned_user(async_db, "att-tx-user")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Attachment Item",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Attachment Item"},
     )
     async_db.add(item)
     await async_db.commit()
@@ -910,8 +922,8 @@ async def test_invalid_graphical_abstract_worker_deletes_owned_object_and_writes
     user = await _provisioned_user(async_db, "invalid-graphical-upload")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Invalid graphical upload",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Invalid graphical upload"},
     )
     async_db.add(item)
     await async_db.commit()
@@ -953,8 +965,12 @@ async def test_cancelled_graphical_abstract_validation_deletes_owned_object(asyn
     user = await _provisioned_user(async_db, "cancelled-graphical-upload")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Cancelled graphical upload",
         created_by=user.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Cancelled graphical upload",
+        },
     )
     async_db.add(item)
     await async_db.commit()
@@ -1027,8 +1043,8 @@ async def test_operations_and_library_transaction_steps(async_db):
     user = await _provisioned_user(async_db, "op-tx-user")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Reindex Item",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Reindex Item"},
     )
     async_db.add(item)
     await async_db.commit()
@@ -1201,7 +1217,7 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
         return {"eligible": True, "object_key": stored.key}
 
     monkeypatch.setattr(library_workflows, "extract_pdf_import_doi_step", extracted)
-    monkeypatch.setattr(library_workflows, "check_pdf_import_doi_step", eligible)
+    monkeypatch.setattr(library_workflows, "check_pdf_import_eligibility_step", eligible)
     monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", exhausted)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
 
@@ -1220,7 +1236,7 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
 
 
 @pytest.mark.anyio
-async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_lookup(monkeypatch):
+async def test_pdf_import_workflow_checkpoints_extract_eligibility_and_provider_lookup(monkeypatch):
     calls = []
     pending = {
         "_row": 1,
@@ -1241,9 +1257,9 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
             "object_key": candidate["_pdf"]["object_key"],
         }
 
-    async def check(batch_id, candidate, detected_doi):
+    async def check(batch_id, candidate):
         await asyncio.sleep(0)
-        calls.append(("check", batch_id, candidate["_row"], detected_doi))
+        calls.append(("check", batch_id, candidate["_row"]))
         return {"eligible": True, "object_key": candidate["_pdf"]["object_key"]}
 
     async def lookup(batch_id, candidate, detected_doi):
@@ -1260,7 +1276,7 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
         return True
 
     monkeypatch.setattr(library_workflows, "extract_pdf_import_doi_step", extract)
-    monkeypatch.setattr(library_workflows, "check_pdf_import_doi_step", check)
+    monkeypatch.setattr(library_workflows, "check_pdf_import_eligibility_step", check)
     monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", lookup)
     monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
@@ -1270,7 +1286,7 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
     assert result == {"candidates": 1, "diagnostics": 0, "discarded": False}
     assert calls == [
         ("extract", 1),
-        ("check", "batch-id", 1, "10.1000/checkpointed"),
+        ("check", "batch-id", 1),
         ("lookup", "batch-id", 1, "10.1000/checkpointed"),
     ]
 
@@ -1279,11 +1295,15 @@ async def test_pdf_import_workflow_checkpoints_extract_conflict_and_provider_loo
 async def test_tag_recommendation_item_listing_is_workspace_scoped(async_db):
     user = await _provisioned_user(async_db, "recommendation-list-user")
     other = await _provisioned_user(async_db, "recommendation-list-other")
-    own = Item(workspace_id=fixture_workspace_id(user), title="Own", created_by=user.id)
+    own = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Own"},
+    )
     foreign = Item(
         workspace_id=fixture_workspace_id(other),
-        title="Foreign",
         created_by=other.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Foreign"},
     )
     async_db.add_all([own, foreign])
     await async_db.commit()
@@ -1299,7 +1319,11 @@ async def test_integrity_backfill_does_not_overwrite_a_replaced_thumbnail(
     async_db, async_session_factory, monkeypatch
 ):
     user = await _provisioned_user(async_db, "thumbnail-repair-race")
-    item = Item(workspace_id=fixture_workspace_id(user), title="Repair race", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Repair race"},
+    )
     async_db.add(item)
     await async_db.flush()
     pdf = await get_object_store().put_object(

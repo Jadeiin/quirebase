@@ -16,20 +16,455 @@ const editableItemAuthorization = {
 	]
 };
 
+test('DOI source selector uses configured lookup capabilities', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+		route.fulfill({
+			json: {
+				search: [],
+				lookup: [
+					{ id: 'commonmeta', name: 'Commonmeta hosted', identifier_namespace: 'doi' },
+					{ id: 'crossref', name: 'Crossref', identifier_namespace: 'doi' },
+					{ id: 'pubmed', name: 'PubMed', identifier_namespace: 'pmid' }
+				],
+				max_search_clauses: 5
+			}
+		})
+	);
+	const metadata = {
+		id: 'https://doi.org/10.1000/primary',
+		type: 'JournalArticle',
+		title: 'Configured DOI sources'
+	};
+	await page.route('**/api/v1/workspaces/workspace-1/items/doi-provider/overview', (route) =>
+		route.fulfill({
+			json: {
+				item: {
+					id: 'doi-provider',
+					title_html: metadata.title,
+					doi: '10.1000/primary',
+					version: 1
+				},
+				metadata,
+				citation_key: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				tags: [],
+				latest_revision: null,
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+			}
+		})
+	);
+	let syncBody: Record<string, unknown> | null = null;
+	await page.route('**/api/v1/workspaces/workspace-1/items/doi-provider/metadata/sync', (route) => {
+		syncBody = route.request().postDataJSON();
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/item/doi-provider');
+	await page.getByRole('button', { name: 'Record tools', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	const selector = dialog.getByRole('combobox', { name: 'Provider', exact: true });
+	await expect(selector.locator('option')).toHaveText([
+		'Auto detect',
+		'Commonmeta hosted',
+		'Crossref'
+	]);
+	await selector.selectOption('commonmeta');
+	await dialog.getByRole('button', { name: 'Autoupdate', exact: true }).click();
+	await expect
+		.poll(() => syncBody)
+		.toEqual({ expected_version: 1, provider: 'commonmeta', uid: '10.1000/primary' });
+});
+
+for (const primarySpelling of [
+	'10.1000/primary',
+	'10.1000/PRIMARY',
+	'HTTPS://DX.DOI.ORG/10.1000/PRIMARY',
+	'https://doi.org/10.1000/pr%69mary'
+]) {
+	test(`Metadata sources hides the primary DOI ${primarySpelling} and keeps secondary DOIs selectable`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		const metadata = {
+			id: 'https://doi.org/10.1000/primary',
+			type: 'JournalArticle',
+			title: 'Multiple DOIs',
+			identifiers: [
+				{ identifier_type: 'DOI', identifier: primarySpelling },
+				{ identifier_type: 'DOI', identifier: '10.1000/secondary' },
+				{ identifier_type: 'DOI', identifier: '10.1000/secondary' }
+			]
+		};
+		await page.route('**/api/v1/workspaces/workspace-1/items/doi-sources/overview', (route) =>
+			route.fulfill({
+				json: {
+					item: {
+						id: 'doi-sources',
+						title_html: metadata.title,
+						doi: '10.1000/primary',
+						version: 1
+					},
+					metadata,
+					citation_key: null,
+					authorization: editableItemAuthorization,
+					copy_targets: [],
+					tags: [],
+					latest_revision: null,
+					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+				}
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/items/doi-sources', (route) =>
+			route.fulfill({
+				json: { id: 'doi-sources', title_html: metadata.title, version: 1, metadata }
+			})
+		);
+		let syncBody: Record<string, unknown> | null = null;
+		await page.route(
+			'**/api/v1/workspaces/workspace-1/items/doi-sources/metadata/sync',
+			(route) => {
+				syncBody = route.request().postDataJSON();
+				return route.fulfill({ json: { ok: true } });
+			}
+		);
+		await page.goto('/workspace/workspace-1/item/doi-sources');
+		await page.getByRole('button', { name: 'Record tools', exact: true }).click();
+		const dialog = page.getByRole('dialog');
+		await expect(dialog.getByText('10.1000/primary', { exact: true })).toHaveCount(1);
+		if (primarySpelling !== '10.1000/primary') {
+			await expect(dialog.getByText(primarySpelling, { exact: true })).toHaveCount(0);
+		}
+		await expect(dialog.getByRole('button', { name: 'Autoupdate', exact: true })).toHaveCount(2);
+		const secondary = dialog.getByText('10.1000/secondary', { exact: true });
+		await expect(secondary).toHaveCount(1);
+		await secondary
+			.locator('..')
+			.locator('..')
+			.getByRole('button', { name: 'Autoupdate', exact: true })
+			.click();
+		await expect
+			.poll(() => syncBody)
+			.toEqual({ expected_version: 1, provider: 'crossref', uid: '10.1000/secondary' });
+	});
+}
+
+for (const manual of [false, true]) {
+	for (const targetHasFiles of [false, true]) {
+		test(`cached Item navigation resets PDF URL and search with manual=${manual}, target files=${targetHasFiles}`, async ({
+			page
+		}) => {
+			await mockSession(page);
+			const urlFor = (id: string) => `https://papers.example/${id}.pdf`;
+			for (const id of ['pdf-source', 'pdf-target']) {
+				const metadata = {
+					id: `https://doi.org/10.1000/${id}`,
+					type: 'JournalArticle',
+					title: id,
+					...(id === 'pdf-source' || targetHasFiles
+						? { files: [{ url: urlFor(id) }, { url: urlFor(`${id}-other`) }] }
+						: {})
+				};
+				await page.route(`**/api/v1/workspaces/workspace-1/items/${id}/overview`, (route) =>
+					route.fulfill({
+						json: {
+							item: { id, title_html: id, version: 1 },
+							metadata,
+							citation_key: null,
+							authorization: editableItemAuthorization,
+							copy_targets: [],
+							tags: [],
+							latest_revision: null,
+							counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+						}
+					})
+				);
+				await page.route(`**/api/v1/workspaces/workspace-1/items/${id}`, (route) =>
+					route.fulfill({ json: { id, title_html: id, version: 1, metadata } })
+				);
+				await page.route(`**/api/v1/workspaces/workspace-1/items/${id}/documents`, (route) =>
+					route.fulfill({ json: { item_id: id, files: [] } })
+				);
+			}
+			const requests: Record<string, unknown>[] = [];
+			await page.route(
+				'**/api/v1/workspaces/workspace-1/items/pdf-target/revisions/remote',
+				(route) => {
+					requests.push(route.request().postDataJSON());
+					return route.fulfill({ status: 202, json: { id: 'pdf-import-workflow' } });
+				}
+			);
+			await page.route('**/api/v1/workspaces/workspace-1/workflows/pdf-import-workflow', (route) =>
+				route.fulfill({ json: { id: 'pdf-import-workflow', state: 'succeeded', error: null } })
+			);
+			async function navigate(id: string) {
+				await expect(page.getByRole('combobox', { name: 'PDF URL' })).toBeVisible();
+				await page.evaluate((itemId) => {
+					document.querySelector('[data-testid="cached-files-link"]')?.remove();
+					const link = document.createElement('a');
+					link.href = `/workspace/workspace-1/item/${itemId}/files`;
+					link.dataset.testid = 'cached-files-link';
+					link.textContent = 'Switch cached Item';
+					document.querySelector('main')!.append(link);
+				}, id);
+				await page.getByTestId('cached-files-link').click();
+				await expect(page).toHaveURL(new RegExp(`/item/${id}/files$`));
+				await expect(page.getByRole('combobox', { name: 'PDF URL' })).toBeVisible();
+			}
+			await page.goto('/workspace/workspace-1/item/pdf-source/files');
+			await navigate('pdf-target');
+			await navigate('pdf-source');
+			if (manual)
+				await page.getByRole('combobox', { name: 'PDF URL' }).fill(urlFor('manual-source'));
+			else await chooseSearchOption(page, 'PDF URL', urlFor('pdf-source-other'));
+			await navigate('pdf-target');
+			const expected = targetHasFiles ? urlFor('pdf-target') : '';
+			await expect(page.locator('input[name="url"]').first()).toHaveValue(expected);
+			await expect(page.getByRole('combobox', { name: 'PDF URL' })).toHaveValue(expected);
+			if (targetHasFiles) {
+				await page.getByRole('button', { name: 'Download and add PDF', exact: true }).click();
+				await expect.poll(() => requests[0]).toEqual({ source: expected });
+			} else expect(requests).toHaveLength(0);
+		});
+	}
+}
+
+for (const [primary, namespace, value, provider, identifierType, secondary] of [
+	[
+		'https://openalex.org/W123',
+		'openalex',
+		'W123',
+		'openalex',
+		'OpenAlex',
+		'https://openalex.org/W123'
+	],
+	['https://pubmed.ncbi.nlm.nih.gov/42/', 'pmid', '42', 'pubmed', 'PMID', '42'],
+	['https://arxiv.org/abs/2401.00001', 'arxiv', '2401.00001', 'arxiv', 'arXiv', '2401.00001']
+]) {
+	for (const alsoSecondary of [false, true]) {
+		test(`primary ${namespace} offers one sync action with secondary=${alsoSecondary}`, async ({
+			page
+		}) => {
+			await mockSession(page);
+			const metadata = {
+				id: primary,
+				type: 'Preprint',
+				title: 'Primary source',
+				...(alsoSecondary
+					? {
+							identifiers: [
+								{ identifier_type: identifierType, identifier: secondary },
+								{ identifier_type: identifierType, identifier: secondary }
+							]
+						}
+					: {})
+			};
+			await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+				route.fulfill({
+					json: {
+						search: [],
+						lookup: [{ id: provider, name: provider, identifier_namespace: namespace }],
+						max_search_clauses: 5
+					}
+				})
+			);
+			await page.route('**/api/v1/workspaces/workspace-1/items/primary-source/overview', (route) =>
+				route.fulfill({
+					json: {
+						item: { id: 'primary-source', title_html: metadata.title, version: 1 },
+						metadata,
+						primary_lookup_identifier: alsoSecondary ? null : { provider: namespace, value },
+						citation_key: null,
+						authorization: editableItemAuthorization,
+						copy_targets: [],
+						tags: [],
+						latest_revision: null,
+						counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+					}
+				})
+			);
+			await page.route('**/api/v1/workspaces/workspace-1/items/primary-source', (route) =>
+				route.fulfill({
+					json: { id: 'primary-source', title_html: metadata.title, version: 1, metadata }
+				})
+			);
+			let syncBody: Record<string, unknown> | null = null;
+			await page.route(
+				'**/api/v1/workspaces/workspace-1/items/primary-source/metadata/sync',
+				(route) => {
+					syncBody = route.request().postDataJSON();
+					return route.fulfill({ json: { ok: true } });
+				}
+			);
+			await page.goto('/workspace/workspace-1/item/primary-source');
+			await page.getByRole('button', { name: 'Record tools', exact: true }).click();
+			const action = page
+				.getByRole('dialog')
+				.getByRole('button', { name: 'Autoupdate', exact: true });
+			await expect(action).toHaveCount(1);
+			await action.click();
+			await expect
+				.poll(() => syncBody)
+				.toEqual({ expected_version: 1, provider, uid: alsoSecondary ? secondary : value });
+		});
+	}
+}
+
+for (const repeated of [false, true]) {
+	test(`metadata sources expose supported lookups with repeated identifiers=${repeated}`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		const pageErrors: string[] = [];
+		page.on('pageerror', (error) => pageErrors.push(error.message));
+		const identifiers = [
+			{ identifier_type: 'PMID', identifier: '42' },
+			...(repeated
+				? [
+						{ identifier_type: 'PMID', identifier: '42' },
+						{ identifier_type: 'Other', scheme: 'pmid', identifier: '42' }
+					]
+				: []),
+			{ identifier_type: 'Handle', identifier: '12345/record' },
+			{ identifier_type: 'URL', identifier: 'https://example.org/record' },
+			{ identifier_type: 'Other', scheme: 'Local registry', identifier: 'local-123' },
+			{ identifier_type: 'PMCID', identifier: 'PMC42' },
+			{ identifier_type: 'ISBN', identifier: '9780131103627' },
+			{ identifier_type: 'Bibcode', identifier: '2025ApJ...123..456A' }
+		];
+		const metadata = {
+			id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+			type: 'Dataset',
+			title: 'Identifier actions',
+			identifiers
+		};
+		await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+			route.fulfill({
+				json: {
+					search: [],
+					lookup: [
+						{ id: 'pubmed', name: 'PubMed', identifier_namespace: 'pmid' },
+						{ id: 'openlibrary', name: 'Open Library', identifier_namespace: 'isbn' }
+					],
+					max_search_clauses: 5
+				}
+			})
+		);
+		await page.route(
+			'**/api/v1/workspaces/workspace-1/items/identifier-actions/overview',
+			(route) =>
+				route.fulfill({
+					json: {
+						item: { id: 'identifier-actions', title_html: metadata.title, version: 1 },
+						metadata,
+						citation_key: null,
+						authorization: editableItemAuthorization,
+						copy_targets: [],
+						tags: [],
+						latest_revision: null,
+						counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+					}
+				})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/items/identifier-actions', (route) =>
+			route.fulfill({
+				json: { id: 'identifier-actions', title_html: metadata.title, version: 1, metadata }
+			})
+		);
+		let syncBody: Record<string, unknown> | null = null;
+		await page.route(
+			'**/api/v1/workspaces/workspace-1/items/identifier-actions/metadata/sync',
+			(route) => {
+				syncBody = route.request().postDataJSON();
+				return route.fulfill({ json: { ok: true } });
+			}
+		);
+		await page.goto('/workspace/workspace-1/item/identifier-actions');
+		await page.getByRole('button', { name: 'Record tools', exact: true }).click();
+		const dialog = page.getByRole('dialog');
+		await expect(dialog.getByText('42', { exact: true })).toHaveCount(1);
+		for (const value of [
+			'12345/record',
+			'https://example.org/record',
+			'local-123',
+			'PMC42',
+			'2025ApJ...123..456A'
+		]) {
+			const row = dialog.getByText(value, { exact: true }).locator('..').locator('..');
+			await expect(row).toBeVisible();
+			await expect(row.getByRole('button', { name: 'Autoupdate', exact: true })).toHaveCount(0);
+		}
+		await expect(dialog.getByRole('button', { name: 'Autoupdate', exact: true })).toHaveCount(2);
+		await dialog
+			.getByText('42', { exact: true })
+			.locator('..')
+			.locator('..')
+			.getByRole('button', { name: 'Autoupdate', exact: true })
+			.click();
+		await expect
+			.poll(() => syncBody)
+			.toEqual({ expected_version: 1, provider: 'pubmed', uid: '42' });
+		await expect(pageErrors).toEqual([]);
+	});
+}
+
+for (const withFiles of [false, true]) {
+	test(`overview includes the Work landing URL with files=${withFiles}`, async ({ page }) => {
+		await mockSession(page);
+		const url = 'https://pubmed.ncbi.nlm.nih.gov/42/';
+		const metadata = {
+			id: 'https://doi.org/10.1000/landing',
+			type: 'JournalArticle',
+			title: 'Landing page Item',
+			url,
+			...(withFiles ? { files: [{ url }, { url: 'https://example.org/article.pdf' }] } : {})
+		};
+		await page.route('**/api/v1/workspaces/workspace-1/items/landing/overview', (route) =>
+			route.fulfill({
+				json: {
+					item: { id: 'landing', title_html: metadata.title, version: 1 },
+					metadata,
+					citation_key: null,
+					authorization: { allowed: [] },
+					copy_targets: [],
+					tags: [],
+					latest_revision: null,
+					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+				}
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/items/landing', (route) =>
+			route.fulfill({ json: { id: 'landing', title_html: metadata.title, version: 1, metadata } })
+		);
+		await page.goto('/workspace/workspace-1/item/landing');
+		const panel = page
+			.locator('section')
+			.filter({ has: page.getByRole('heading', { name: 'External links', exact: true }) });
+		await expect(panel.locator(`a[href="${url}"]`)).toHaveCount(1);
+		await expect(panel.getByText('No external links.')).toHaveCount(0);
+		if (withFiles)
+			await expect(panel.locator('a[href="https://example.org/article.pdf"]')).toHaveCount(1);
+	});
+}
+
 test('item detail URL selects and loads the metadata section', async ({ page }) => {
 	await mockSession(page);
 	let metadataRequests = 0;
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: '<i>Visible</i> Item'
+				},
+				citation_key: null,
 				item: { id: 'item-1', title_html: '<i>Visible</i> Item', version: 1 },
 				latest_revision: null,
 				authorization: editableItemAuthorization,
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -45,23 +480,11 @@ test('item detail URL selects and loads the metadata section', async ({ page }) 
 				doi: null,
 				version: 1,
 				metadata: {
-					title: '<i>Visible</i> Item',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: '<i>Visible</i> Item'
 				},
-				abstract_html: null,
-				editors: [],
-				structured_authors: [],
-				reference_type: 'document',
-				volume: null,
-				issue: null,
-				pages: null,
-				keywords: null,
-				urls: null
+				abstract_html: null
 			}
 		});
 	});
@@ -83,6 +506,14 @@ test('Item overview renders without the deprecated Item Owner projection', async
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-overview/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Workspace-scoped Item',
+					date_published: '2026',
+					container: { title: 'Research Journal' }
+				},
+				citation_key: null,
 				item: {
 					id: 'item-overview',
 					title_html: 'Workspace-scoped Item',
@@ -96,7 +527,7 @@ test('Item overview renders without the deprecated Item Owner projection', async
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
-				identifiers: [],
+
 				latest_revision: null,
 				thumbnail: null
 			}
@@ -113,31 +544,11 @@ test('Item overview renders without the deprecated Item Owner projection', async
 				doi: null,
 				version: 1,
 				metadata: {
-					title: 'Workspace-scoped Item',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: [],
-					reference_type: 'document',
-					volume: null,
-					issue: null,
-					pages: null,
-					journal_abbreviation: null,
-					publisher: null,
-					place_published: null,
-					citation_key: null
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Workspace-scoped Item'
 				},
-				abstract_html: null,
-				editors: [],
-				structured_authors: [],
-				reference_type: 'document',
-				volume: null,
-				issue: null,
-				pages: null,
-				keywords: null,
-				urls: null
+				abstract_html: null
 			}
 		})
 	);
@@ -159,14 +570,18 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-readonly/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Read-only Item'
+				},
+				citation_key: null,
 				item: { id: 'item-readonly', title_html: 'Read-only Item', version: 1 },
 				latest_revision: null,
 				authorization: { allowed: [] },
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-2', username: 'owner' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -177,26 +592,26 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 				title_html: 'Read-only Item',
 				version: 1,
 				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
 					title: 'Read-only Item',
-					abstract: 'Shared abstract',
-					keywords: ['shared'],
-					urls: [],
-					authors: [
+					description: 'Shared abstract',
+					subjects: [{ subject: 'shared' }],
+					contributors: [
 						{
-							display_name: 'Ada Reader',
-							given_name: 'Ada',
-							family_name: 'Reader',
-							kind: 'person',
-							identifiers: [],
-							is_corresponding: false
+							type: 'Person',
+							person: {
+								name: 'Ada Reader',
+								family_name: 'Reader',
+								given_name: 'Ada'
+							},
+							roles: ['Author']
 						}
 					],
-					editors: [],
 					identifiers: [
-						{ provider: 'doi', value: '10.1000/shared' },
-						{ provider: 'openalex', value: 'W123' }
-					],
-					custom_fields: []
+						{ identifier_type: 'DOI', identifier: '10.1000/shared' },
+						{ identifier_type: 'OpenAlex', identifier: 'https://openalex.org/W1230000000' }
+					]
 				},
 				abstract_html: 'Shared abstract'
 			}
@@ -208,7 +623,9 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 	await expect(page.getByText('Ada Reader')).toBeVisible();
 	await expect(page.getByText('Shared abstract')).toBeVisible();
 	await expect(page.getByText('10.1000/shared')).toBeVisible();
-	await expect(page.getByRole('listitem').filter({ hasText: 'OPENALEX: W123' })).toBeVisible();
+	await expect(
+		page.getByText('openalex: https://openalex.org/W1230000000', { exact: true })
+	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Save metadata' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Record tools' })).toHaveCount(0);
 });
@@ -242,6 +659,12 @@ test('cross-Workspace copy uses the server-provided eligible destinations', asyn
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-copy/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Copy source'
+				},
+				citation_key: null,
 				item: { id: 'item-copy', title_html: 'Copy source', version: 1 },
 				latest_revision: null,
 				authorization: { allowed: ['workspace.export'] },
@@ -252,9 +675,7 @@ test('cross-Workspace copy uses the server-provided eligible destinations', asyn
 					}
 				],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -265,13 +686,9 @@ test('cross-Workspace copy uses the server-provided eligible destinations', asyn
 				title_html: 'Copy source',
 				version: 1,
 				metadata: {
-					title: 'Copy source',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Copy source'
 				},
 				abstract_html: null
 			}
@@ -313,6 +730,12 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-annotations/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Annotated Item'
+				},
+				citation_key: null,
 				item: { id: 'item-annotations', title_html: 'Annotated Item', version: 1 },
 				latest_revision: {
 					id: 'revision-new',
@@ -324,9 +747,7 @@ test('Item annotation review spans every PDF revision', async ({ page }) => {
 				authorization: { allowed: ['workspace.export'] },
 				copy_targets: [],
 				counts: { revisions: 2, attachments: 0, annotations: 2, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-2', username: 'owner' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -423,6 +844,12 @@ test('Item annotation review surfaces aggregate lookup failures', async ({ page 
 		(route) =>
 			route.fulfill({
 				json: {
+					metadata: {
+						id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+						type: 'Other',
+						title: 'Annotated Item'
+					},
+					citation_key: null,
 					item: { id: 'item-annotations-error', title_html: 'Annotated Item', version: 1 },
 					latest_revision: {
 						id: 'revision-new',
@@ -434,9 +861,7 @@ test('Item annotation review surfaces aggregate lookup failures', async ({ page 
 					authorization: { allowed: ['workspace.export'] },
 					copy_targets: [],
 					counts: { revisions: 1, attachments: 0, annotations: 1, discussion: 0 },
-					tags: [],
-					owner: { id: 'user-2', username: 'owner' },
-					identifiers: []
+					tags: []
 				}
 			})
 	);
@@ -465,6 +890,12 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-moderation/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Moderation Item'
+				},
+				citation_key: null,
 				item: { id: 'item-moderation', title_html: 'Moderation Item', version: 1 },
 				latest_revision: {
 					id: 'revision-1',
@@ -476,9 +907,7 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 				authorization: { allowed: ['workspace.export'] },
 				copy_targets: [],
 				counts: { revisions: 1, attachments: 0, annotations: 1, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-2', username: 'owner' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -584,14 +1013,18 @@ test('Item file uploads wait for durable processing before refreshing', async ({
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
+				},
+				citation_key: null,
 				item: { id: 'item-1', title_html: 'Files Item' },
 				latest_revision: null,
 				authorization: editableItemAuthorization,
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -624,13 +1057,9 @@ test('Item file uploads wait for durable processing before refreshing', async ({
 				title_html: 'Files Item',
 				version: 1,
 				metadata: {
-					title: 'Files Item',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
 				},
 				abstract_html: null
 			}
@@ -665,14 +1094,18 @@ test('Item file uploads settle with an error toast when status polling fails', a
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
+				},
+				citation_key: null,
 				item: { id: 'item-1', title_html: 'Files Item' },
 				latest_revision: null,
 				authorization: editableItemAuthorization,
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -686,13 +1119,9 @@ test('Item file uploads settle with an error toast when status polling fails', a
 				title_html: 'Files Item',
 				version: 1,
 				metadata: {
-					title: 'Files Item',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
 				},
 				abstract_html: null
 			}
@@ -723,14 +1152,24 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-remote/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Remote PDF Item',
+					files: [
+						{ url: 'https://papers.example/article.pdf', mime_type: 'application/pdf' },
+						{ url: 'https://papers.example/article.pdf', mime_type: 'application/pdf' },
+						{ url: 'https://papers.example/revised.pdf', mime_type: 'application/pdf' },
+						{ url: 'https://papers.example/supplement.zip', mime_type: 'application/zip' }
+					]
+				},
+				citation_key: null,
 				item: { id: 'item-remote', title_html: 'Remote PDF Item', version: 1 },
 				latest_revision: null,
 				authorization: editableItemAuthorization,
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -746,19 +1185,15 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 				title_html: 'Remote PDF Item',
 				version: 1,
 				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
 					title: 'Remote PDF Item',
-					keywords: [],
-					urls: [
-						{
-							url: 'https://papers.example/article.pdf',
-							kind: 'full_text',
-							media_type: 'application/pdf'
-						}
-					],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					files: [
+						{ url: 'https://papers.example/article.pdf', mime_type: 'application/pdf' },
+						{ url: 'https://papers.example/article.pdf', mime_type: 'application/pdf' },
+						{ url: 'https://papers.example/revised.pdf', mime_type: 'application/pdf' },
+						{ url: 'https://papers.example/supplement.zip', mime_type: 'application/zip' }
+					]
 				},
 				abstract_html: null
 			}
@@ -796,13 +1231,20 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 	await expect(page.locator('input[name="url"]').first()).toHaveValue(
 		'https://papers.example/article.pdf'
 	);
+	await chooseSearchOption(page, 'PDF URL', 'https://papers.example/revised.pdf');
+	await expect(page.getByRole('option')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Download and add PDF' }).click();
 	await expect
 		.poll(() => revisionImport)
 		.toEqual({
-			source: 'https://papers.example/article.pdf'
+			source: 'https://papers.example/revised.pdf'
 		});
 	await expect.poll(() => documentReads).toBeGreaterThan(1);
+
+	await expect(page.getByRole('combobox', { name: 'PDF URL' })).toHaveValue('');
+	await page.getByRole('combobox', { name: 'PDF URL' }).fill('https://papers.example/custom.pdf');
+	await page.getByRole('button', { name: 'Download and add PDF' }).click();
+	await expect.poll(() => revisionImport).toEqual({ source: 'https://papers.example/custom.pdf' });
 
 	const attachmentUrl = page.locator('input[name="url"]').nth(1);
 	await attachmentUrl.fill('https://papers.example/supplement.zip');
@@ -832,26 +1274,40 @@ test('Item Files acquires URL imports through the same-origin API', async ({ pag
 	expect(browserRemoteRequests).toBe(0);
 });
 
-test('manual Item creation submits complete structured metadata', async ({ page }) => {
+test('manual Item creation submits the standard Work and separate Citation Key', async ({
+	page
+}) => {
 	await mockSession(page);
 	let creation: Record<string, unknown> | null = null;
+	const metadata = {
+		id: 'https://doi.org/10.1000/created',
+		type: 'Book',
+		title: 'Structured record',
+		date_published: '2024',
+		container: { title: 'Collection' },
+		subjects: [{ subject: 'systems; theory' }, { subject: 'reproducibility' }],
+		contributors: [{ type: 'Person', person: { name: 'Ada Lovelace' }, roles: ['Author'] }],
+		identifiers: [
+			{ identifier_type: 'OpenAlex', identifier: 'https://openalex.org/W1230000000' },
+			{ identifier_type: 'DOI', identifier: '10.1000/second' }
+		],
+		funding_references: [{ funder_name: 'Foundation' }]
+	};
 	await page.route(/\/api\/v1\/workspaces\/workspace-1\/items$/, (route) => {
-		if (route.request().method() === 'POST') {
-			creation = route.request().postDataJSON();
-			return route.fulfill({ status: 201, json: { id: 'item-created', version: 1 } });
-		}
-		return route.fulfill({ status: 404, json: { detail: 'not found' } });
+		creation = route.request().postDataJSON();
+		return route.fulfill({ status: 201, json: { id: 'item-created', version: 1 } });
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-created/overview', (route) =>
 		route.fulfill({
 			json: {
-				item: { id: 'item-created', title_html: 'Structured record', version: 1 },
+				item: { id: 'item-created', title_html: metadata.title, version: 1 },
+				metadata,
+				citation_key: 'Lovelace2024',
 				authorization: editableItemAuthorization,
 				copy_targets: [],
-				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
-				identifiers: [],
-				latest_revision: null
+				latest_revision: null,
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
 			}
 		})
 	);
@@ -859,251 +1315,150 @@ test('manual Item creation submits complete structured metadata', async ({ page 
 		route.fulfill({
 			json: {
 				id: 'item-created',
-				title_html: 'Structured record',
-				authors: 'Ada Lovelace',
-				publication_date: '2026',
-				publication_title: 'Journal of Testing',
-				doi: null,
+				title_html: metadata.title,
 				version: 1,
-				metadata: {
-					title: 'Structured record',
-					keywords: ['systems; theory', 'reproducibility'],
-					urls: [],
-					authors: [
-						{
-							display_name: 'Ada Lovelace',
-							given_name: 'Ada',
-							family_name: 'Lovelace',
-							is_corresponding: true
-						}
-					],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
-				},
-				abstract_html: null,
-				editors: [],
-				structured_authors: [],
-				reference_type: 'document',
-				volume: null,
-				issue: null,
-				pages: null,
-				keywords: null,
-				urls: null
+				metadata,
+				citation_key: 'Lovelace2024'
 			}
 		})
 	);
-
 	await page.goto('/workspace/workspace-1/import');
 	await page.getByRole('button', { name: 'Open metadata editor' }).click();
-	await page.getByLabel('Title', { exact: true }).fill('Structured record');
-	await page.getByLabel('Reference type').selectOption('book');
-	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024');
+	await page.getByLabel('Title', { exact: true }).fill(metadata.title);
+	await page.getByLabel('Reference type').selectOption('Book');
+	const date = page.getByRole('textbox', { name: 'Publication date', exact: true });
+	await date.fill('2024');
 	await page.getByLabel('Date precision').selectOption('month');
-	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
-		''
-	);
-	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024-02');
+	await expect(date).toHaveValue('');
+	await date.fill('2024-02');
 	await page.getByLabel('Date precision').selectOption('day');
-	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
-		''
-	);
-	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024-02-29');
+	await expect(date).toHaveValue('');
+	await date.fill('2024-02-29');
 	await page.getByLabel('Date precision').selectOption('year');
-	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
-		'2024'
-	);
+	await expect(date).toHaveValue('2024');
 	await page.getByLabel('Citation key').fill('Lovelace2024');
-	await page.getByLabel('Publication title').fill('Journal of Testing');
-	await page.getByRole('button', { name: 'Add keyword' }).click();
-	await page.getByLabel('Keyword', { exact: true }).fill('systems; theory');
-	await page.getByRole('button', { name: 'Add keyword' }).click();
-	await page.getByLabel('Keyword', { exact: true }).nth(1).fill('reproducibility');
-	await page
-		.locator('header', { has: page.getByRole('heading', { name: 'Authors' }) })
-		.getByRole('button', { name: 'Add contributor' })
-		.click();
-	await page.getByLabel('First name').fill('Ada');
-	await page.getByLabel('Last name or organization').fill('Lovelace');
-	await page.getByLabel('Corresponding', { exact: true }).selectOption('true');
-	await expect(page.getByRole('textbox', { name: 'DOI', exact: true })).toHaveCount(0);
-	const identifiers = page
-		.getByRole('heading', { name: 'Upstream identifiers', exact: true })
-		.locator('xpath=ancestor::section[1]');
-	await identifiers.getByRole('button', { name: 'Add identifier' }).click();
-	await identifiers.getByLabel('Provider').fill('openalex');
-	await identifiers.getByLabel('Identifier').fill('W123');
-	await identifiers.getByRole('button', { name: 'Add identifier' }).click();
-	await identifiers.getByLabel('Provider').nth(1).fill('doi');
-	await identifiers.getByLabel('Identifier').nth(1).fill('10.1000/created');
-	await page.getByRole('button', { name: 'Add custom field' }).click();
-	await page.getByLabel('Field name').fill('reviewed');
-	await page.getByLabel('Value type').selectOption('json');
-	await page.getByLabel('Value', { exact: true }).fill('true');
-	await page.getByRole('button', { name: 'Add custom field' }).click();
-	await page.getByLabel('Field name').nth(1).fill('address');
-	await page.getByLabel('Value', { exact: true }).nth(1).fill('123 Main St');
+	await page.getByRole('button', { name: 'Edit standard metadata JSON' }).click();
+	await page.getByRole('textbox', { name: 'Metadata', exact: true }).fill(JSON.stringify(metadata));
 	await page.getByRole('button', { name: 'Create Item' }).click();
+	await expect(page.getByText('Apply JSON changes before saving.')).toBeVisible();
+	expect(creation).toBeNull();
+	await page.getByRole('button', { name: 'Apply JSON', exact: true }).click();
+	await page.getByRole('button', { name: 'Create Item' }).click();
+	await expect.poll(() => creation).toEqual({ metadata, citation_key: 'Lovelace2024' });
+});
 
-	await expect
-		.poll(() => creation)
-		.toMatchObject({
-			title: 'Structured record',
-			reference_type: 'book',
-			publication_date: '2024',
-			citation_key: 'Lovelace2024',
-			publication_title: 'Journal of Testing',
-			keywords: ['systems; theory', 'reproducibility'],
-			authors: [
+for (const published of ['2024-02', '2024-02-29T12:34:56Z']) {
+	test(`Item editing preserves hidden Work facts and ${published}`, async ({ page }) => {
+		await mockSession(page);
+		let update: Record<string, unknown> | null = null;
+		const metadata = {
+			id: 'https://doi.org/10.1000/own',
+			type: 'ProceedingsArticle',
+			title: 'Editable',
+			date_published: published,
+			contributors: [
 				{
-					display_name: 'Ada Lovelace',
-					given_name: 'Ada',
-					family_name: 'Lovelace',
-					is_corresponding: true
-				}
+					type: 'Person',
+					person: { name: 'Grace Hopper', affiliations: [{ name: 'University' }] },
+					roles: ['Author']
+				},
+				{ type: 'Organization', organization: { name: 'Research Council' }, roles: ['Editor'] }
 			],
 			identifiers: [
-				{ provider: 'openalex', value: 'W123' },
-				{ provider: 'doi', value: '10.1000/created' }
+				{ identifier_type: 'DOI', identifier: '10.1000/second' },
+				{ identifier_type: 'DOI', identifier: '10.1000/third' },
+				{ identifier_type: 'OpenAlex', identifier: 'https://openalex.org/W1230000000' }
 			],
-			custom_fields: [
-				{ name: 'reviewed', value: true },
-				{ name: 'address', value: '123 Main St' }
-			]
-		});
-	expect(creation).not.toHaveProperty('doi');
-});
-
-test('Item metadata editor preserves structured contributors and custom fields', async ({
-	page
-}) => {
-	await mockSession(page);
-	let update: Record<string, unknown> | null = null;
-	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
-		route.fulfill({
-			json: {
-				item: { id: 'item-1', title_html: 'Editable', version: 4 },
-				authorization: editableItemAuthorization,
-				copy_targets: [],
-				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: [],
-				latest_revision: null
-			}
-		})
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/items/item-1', (route) => {
-		if (route.request().method() === 'PUT') {
-			update = route.request().postDataJSON();
-			return route.fulfill({ json: { id: 'item-1', version: 5 } });
-		}
-		return route.fulfill({
-			json: {
-				id: 'item-1',
-				title_html: 'Editable',
-				version: 4,
-				metadata: {
-					title: 'Editable',
-					reference_type: 'paper-conference',
-					publication_date: '2024-02',
+			container: {
+				title: 'Proceedings',
+				identifiers: [{ identifier_type: 'ISBN', identifier: '9780131103627' }]
+			},
+			relations: [{ id: 'https://doi.org/10.1000/related', type: 'IsSupplementTo' }],
+			funding_references: [{ funder_name: 'Foundation' }]
+		};
+		await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+			route.fulfill({
+				json: {
+					item: { id: 'item-1', title_html: metadata.title, version: 4 },
+					metadata,
 					citation_key: 'Hopper2024',
-					doi: '10.1000/old',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [
-						{ provider: 'doi', value: '10.1000/old' },
-						{ provider: 'openalex', value: 'W123' }
-					],
-					custom_fields: []
-				},
-				abstract_html: null
+					authorization: editableItemAuthorization,
+					copy_targets: [],
+					tags: [],
+					latest_revision: null,
+					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+				}
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/items/item-1', (route) => {
+			if (route.request().method() === 'PUT') {
+				update = route.request().postDataJSON();
+				return route.fulfill({ json: { id: 'item-1', version: 5 } });
 			}
+			return route.fulfill({
+				json: {
+					id: 'item-1',
+					title_html: metadata.title,
+					version: 4,
+					metadata,
+					citation_key: 'Hopper2024'
+				}
+			});
 		});
-	});
-
-	await page.goto('/workspace/workspace-1/item/item-1/metadata');
-	await expect(page.getByLabel('Reference type')).toHaveValue('paper-conference');
-	await page.getByLabel('Reference type').selectOption('software');
-	await expect(page.getByLabel('Date precision')).toHaveValue('month');
-	await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
-		'2024-02'
-	);
-	await page.getByLabel('Date precision').selectOption('day');
-	await page.getByRole('textbox', { name: 'Publication date', exact: true }).fill('2024-02-29');
-	await expect(page.getByRole('textbox', { name: 'DOI', exact: true })).toHaveCount(0);
-	const identifiers = page
-		.getByRole('heading', { name: 'Upstream identifiers', exact: true })
-		.locator('xpath=ancestor::section[1]');
-	await expect(identifiers.getByLabel('Provider').first()).toHaveValue('doi');
-	await identifiers.getByLabel('Identifier').first().fill('10.1000/new');
-	await page
-		.locator('header', { has: page.getByRole('heading', { name: 'Authors' }) })
-		.getByRole('button', { name: 'Add contributor' })
-		.click();
-	await page.getByLabel('First name').fill('Grace');
-	await page.getByLabel('Last name or organization').fill('Hopper');
-	await page.getByRole('button', { name: 'Add custom field' }).click();
-	await page.getByLabel('Field name').fill('score');
-	await page.getByLabel('Value type').selectOption('json');
-	await page.getByLabel('Value', { exact: true }).fill('5');
-	await page.getByRole('button', { name: 'Save metadata' }).click();
-
-	await expect
-		.poll(() => update)
-		.toMatchObject({
-			expected_version: 4,
-			metadata: {
-				reference_type: 'software',
-				publication_date: '2024-02-29',
+		await page.goto('/workspace/workspace-1/item/item-1/metadata');
+		await expect(page.getByLabel('Reference type')).toHaveValue(metadata.type);
+		await page.getByLabel('Reference type').selectOption('Software');
+		await page.getByLabel('Title', { exact: true }).fill('Revised');
+		await expect(page.getByRole('textbox', { name: 'Publication date', exact: true })).toHaveValue(
+			published
+		);
+		if (published.includes('T')) await expect(page.getByLabel('Date precision')).toHaveCount(0);
+		else await expect(page.getByLabel('Date precision')).toHaveValue('month');
+		await page.getByRole('button', { name: 'Save metadata' }).click();
+		await expect
+			.poll(() => update)
+			.toEqual({
+				expected_version: 4,
 				citation_key: 'Hopper2024',
-				identifiers: [
-					{ provider: 'doi', value: '10.1000/new' },
-					{ provider: 'openalex', value: 'W123' }
-				],
-				authors: [
-					{
-						display_name: 'Grace Hopper',
-						given_name: 'Grace',
-						family_name: 'Hopper',
-						is_corresponding: null
-					}
-				],
-				custom_fields: [{ name: 'score', value: 5 }]
-			}
-		});
-	expect(update).not.toHaveProperty('metadata.doi');
-});
+				metadata: { ...metadata, title: 'Revised', type: 'Software' }
+			});
+	});
+}
 
 test('Metadata synchronization refreshes the editor draft and Overview details', async ({
 	page
 }) => {
 	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+		route.fulfill({
+			json: {
+				search: [],
+				lookup: [{ id: 'datacite', name: 'DataCite', identifier_namespace: 'doi' }],
+				max_search_clauses: 5
+			}
+		})
+	);
 	let version = 1;
 	let synchronized = false;
 	let synchronization: { provider?: string; uid?: string } | null = null;
 	const metadata = () => ({
+		id: 'https://doi.org/10.1000/sync',
+		type: 'Other',
 		title: synchronized ? 'Synchronized title' : 'Old title',
-		abstract: synchronized ? 'Synchronized abstract' : 'Old abstract',
-		keywords: [],
-		urls: [],
-		authors: [],
-		editors: [],
-		identifiers: [],
-		custom_fields: []
+		description: synchronized ? 'Synchronized abstract' : 'Old abstract',
+		identifiers: [{ identifier_type: 'DOI', identifier: '10.1000/sync' }]
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: metadata(),
+				citation_key: null,
 				item: { id: 'item-1', title_html: metadata().title, version, doi: '10.1000/sync' },
 				authorization: editableItemAuthorization,
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: [{ provider: 'doi', value: '10.1000/sync' }],
+
 				latest_revision: null
 			}
 		})
@@ -1121,7 +1476,7 @@ test('Metadata synchronization refreshes the editor draft and Overview details',
 				title_html: metadata().title,
 				version,
 				metadata: metadata(),
-				abstract_html: metadata().abstract
+				abstract_html: metadata().description
 			}
 		})
 	);
@@ -1133,7 +1488,10 @@ test('Metadata synchronization refreshes the editor draft and Overview details',
 	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Old title');
 
 	await page.getByRole('button', { name: 'Record tools' }).click();
-	await page.getByLabel('Provider').selectOption('datacite');
+	await page
+		.getByRole('dialog', { name: 'Item actions' })
+		.getByLabel('Provider', { exact: true })
+		.selectOption('datacite');
 	await page.getByRole('button', { name: 'Autoupdate' }).click();
 	await expect
 		.poll(() => synchronization)
@@ -1155,13 +1513,18 @@ test('Item organization toggles the Tag matrix and waits for recommendations', a
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Organize'
+				},
+				citation_key: null,
 				item: { id: 'item-1', title_html: 'Organize', version: 1 },
 				authorization: editableItemAuthorization,
 				copy_targets: [],
 				counts: { revisions: 1, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: [],
+
 				latest_revision: { id: 'revision-1', original_name: 'paper.pdf' }
 			}
 		})
@@ -1219,7 +1582,26 @@ test('Item organization toggles the Tag matrix and waits for recommendations', a
 
 test('Item actions export citations and synchronize upstream metadata', async ({ page }) => {
 	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+		route.fulfill({
+			json: {
+				search: [],
+				lookup: [{ id: 'openalex', name: 'OpenAlex', identifier_namespace: 'doi' }],
+				max_search_clauses: 5
+			}
+		})
+	);
 	const workspace = {
+		metadata: {
+			id: 'https://doi.org/10.1000/test',
+			type: 'Other',
+			title: 'Actionable',
+			description: '<i>Summary</i>',
+			date_published: '2026',
+			container: { title: 'Journal' },
+			identifiers: [{ identifier_type: 'OpenAlex', identifier: 'https://openalex.org/W1230000000' }]
+		},
+		citation_key: null,
 		item: {
 			id: 'item-1',
 			title_html: 'Actionable',
@@ -1233,8 +1615,7 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 		copy_targets: [],
 		counts: { revisions: 1, attachments: 0, annotations: 0, discussion: 0 },
 		tags: [],
-		owner: { id: 'user-1', username: 'reader' },
-		identifiers: [{ provider: 'openalex', value: 'W123' }],
+
 		latest_revision: {
 			id: 'revision-1',
 			original_name: 'paper.pdf',
@@ -1250,16 +1631,8 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 		route.fulfill({
 			json: {
 				...workspace.item,
-				metadata: {
-					title: 'Actionable',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
-				},
-				abstract_html: '<i>Summary</i>'
+				metadata: workspace.metadata,
+				abstract_html: workspace.metadata.description
 			}
 		})
 	);
@@ -1283,6 +1656,11 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 	await page.getByLabel('Format').selectOption('bibtex');
 	await page.getByRole('button', { name: 'Download file' }).click();
 	await expect.poll(() => exportQuery).toContain('file_format=bibtex');
+	for (const format of ['csl-json', 'commonmeta']) {
+		await page.getByLabel('Format').selectOption(format);
+		await page.getByRole('button', { name: 'Download file' }).click();
+		await expect.poll(() => exportQuery).toContain(`file_format=${format}`);
+	}
 	await page.getByRole('tab', { name: 'Metadata sources' }).click();
 	await page.getByLabel('Provider').selectOption('openalex');
 	await page.getByRole('button', { name: 'Autoupdate' }).first().click();
@@ -1338,4 +1716,85 @@ test('publication calendar preserves precision, supports keyboard selection and 
 	await date.press('Tab');
 	await expect(date).toHaveValue('');
 	expect(await date.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(true);
+});
+
+test('Overview and Files share Work without detail requests and localize publication details', async ({
+	page
+}) => {
+	await mockSession(page);
+	const metadata = {
+		id: 'https://doi.org/10.1000/overview',
+		type: 'JournalArticle',
+		title: 'Overview record',
+		description: '<i>Overview abstract</i>',
+		subjects: [{ subject: 'Graph theory' }],
+		files: [{ url: 'https://papers.example/overview.pdf', mime_type: 'application/pdf' }],
+		contributors: ['Ada', 'Grace'].map((name) => ({
+			type: 'Person',
+			person: { name, affiliations: [{ name: 'Research University' }] },
+			roles: ['Author']
+		})),
+		container: {
+			type: 'Journal',
+			title: 'Research Journal',
+			additional_titles: ['Res. J.'],
+			first_page: '10',
+			last_page: '24',
+			publisher: { name: 'Journal host' },
+			identifiers: [{ identifier_type: 'ISSN', identifier: '1234-5678' }],
+			platform: 'Research platform',
+			series: 'Research series',
+			location: 'Shanghai',
+			url: 'https://journal.example',
+			country: 'CN',
+			language: 'zh'
+		}
+	};
+	await page.route('**/api/v1/workspaces/workspace-1/items/overview/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata,
+				item: { id: 'overview', title_html: metadata.title, version: 1 },
+				citation_key: 'ManualOverviewKey',
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				tags: [],
+				latest_revision: null,
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
+			}
+		})
+	);
+	let detailRequests = 0;
+	await page.route('**/api/v1/workspaces/workspace-1/items/overview', (route) => {
+		detailRequests += 1;
+		return route.fulfill({ status: 500, json: { message: 'Unexpected detail request' } });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/items/overview/documents', (route) =>
+		route.fulfill({ json: { item_id: 'overview', files: [] } })
+	);
+	await page.goto('/workspace/workspace-1/item/overview');
+	await expect(page.getByText('Research University', { exact: true })).toHaveCount(1);
+	await expect(page.getByText('10–24', { exact: true })).toBeVisible();
+	await expect(page.getByText('ISSN: 1234-5678', { exact: true })).toBeVisible();
+	await expect(page.getByText('Journal host', { exact: true })).toBeVisible();
+	await expect(page.getByText('Res. J.', { exact: true })).toBeVisible();
+	await expect(page.getByText('Research platform', { exact: true })).toBeVisible();
+	await expect(page.getByText('Overview abstract', { exact: true })).toBeVisible();
+	await expect(page.getByText('ManualOverviewKey', { exact: true })).toBeVisible();
+	await expect(page.getByText('Graph theory', { exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Files', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'PDF URL' })).toHaveValue(
+		'https://papers.example/overview.pdf'
+	);
+	await page.getByRole('link', { name: 'Overview', exact: true }).click();
+	await expect(page.getByText('ManualOverviewKey', { exact: true })).toBeVisible();
+	expect(detailRequests).toBe(0);
+	await page.evaluate(() => {
+		localStorage.setItem('quirebase:locale', 'zh-CN');
+		window.dispatchEvent(
+			new StorageEvent('storage', { key: 'quirebase:locale', newValue: 'zh-CN' })
+		);
+	});
+	await expect(page.getByText('期刊论文', { exact: true })).toBeVisible();
+	await expect(page.getByText('期刊', { exact: true })).toBeVisible();
 });

@@ -1,148 +1,136 @@
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import {
-	createMetadataDraft,
-	metadataFromDraft,
+	contributorName,
 	contributorAffiliations,
-	newContributor,
+	identifierRows,
+	doiComparisonKey,
+	pdfFileUrls,
+	workKeywords,
 	type Metadata
 } from './metadata-draft.js';
 
-const snapshot: Metadata = {
-	title: 'Research',
-	reference_type: 'document',
-	authors: [
-		{
-			display_name: 'John Smith Jr',
-			family_name: 'Smith',
-			given_name: 'John',
-			suffix: 'Jr',
-			kind: 'person',
-			is_corresponding: true,
-			identifiers: [{ provider: 'orcid', value: '0000-0002-1825-0097' }],
-			affiliations: [
-				{
-					name: 'University',
-					country_code: 'CN',
-					raw_name: 'Lab, University',
-					identifiers: [{ provider: 'ror', value: '03yrm5c26' }]
-				}
-			]
-		}
-	],
-	editors: [
-		{
-			display_name: 'Council',
-			kind: 'organization',
-			identifiers: [],
-			affiliations: [{ name: 'University', identifiers: [] }]
-		}
-	],
-	urls: [
-		{
-			url: 'https://example.test/paper',
-			kind: 'full_text',
-			media_type: 'application/pdf',
-			version: 'publishedVersion',
-			license: 'cc-by',
-			is_open_access: false,
-			intended_application: 'text-mining'
-		}
-	],
-	keywords: ['Graph; theory'],
-	identifiers: [{ provider: 'openalex', value: 'W123' }],
-	custom_fields: [
-		{ name: 'code', value: '123' },
-		{ name: 'flag', value: 'true' },
-		{ name: 'missing', value: 'null' },
-		{ name: 'empty', value: '' },
-		{ name: 'boolean', value: false },
-		{ name: 'number', value: 123 },
-		{ name: 'null', value: null },
-		{ name: 'nested', value: { array: ['123', false] } }
-	]
-};
-function draft() {
-	let nextKey = 0;
-	return createMetadataDraft(snapshot, () => ++nextKey);
-}
+it.each([
+	['10.1000/PRIMARY', '10.1000/primary'],
+	[' DOI: 10.1000/Primary ', '10.1000/primary'],
+	['HTTPS://DX.DOI.ORG/10.1000/PRIMARY', '10.1000/primary'],
+	['https://doi.org/10.1000/pr%69mary', '10.1000/primary'],
+	['https://doi.org/10.1000/%C3%9Cber', '10.1000/Über'],
+	['10.1000/Über', '10.1000/Über'],
+	['10.1000/über', '10.1000/über'],
+	['10.1000/A%3c', '10.1000/a%3c'],
+	['https://doi.org/10.1000/A%253c', '10.1000/a%3c'],
+	['https://doi.org/10.1000/A%3c', '10.1000/a<'],
+	['https://doi.org/10.1000/%FF', '10.1000/%ff'],
+	['https://doi.org/10.1000/A%3c%invalid', '10.1000/a<%invalid']
+])('compares DOI spelling %s as %s without conflating distinct identifiers', (value, expected) => {
+	expect(doiComparisonKey(value)).toBe(expected);
+});
 
-describe('metadata editor', () => {
-	it('edits or clears DOI in the identifier list without sending a stale DOI alias', () => {
-		let nextKey = 0;
-		const edited = createMetadataDraft(
+it('projects the selected contributor entity while preserving both entity snapshots', () => {
+	const credit = {
+		type: 'Organization',
+		person: { name: 'Ada Researcher', affiliations: [{ name: 'University' }] },
+		organization: { name: 'Research Council' },
+		roles: ['Author']
+	};
+	const work = {
+		id: 'https://doi.org/10.1000/entity',
+		type: 'Dataset',
+		title: 'Research',
+		contributors: [credit]
+	} as Metadata;
+	expect(contributorName(credit)).toBe('Research Council');
+	expect(contributorAffiliations(work)).toEqual([]);
+	credit.type = 'Person';
+	expect(contributorName(credit)).toBe('Ada Researcher');
+	expect(contributorAffiliations(work)).toEqual(['University']);
+	expect(credit.organization.name).toBe('Research Council');
+});
+
+it('deduplicates affiliation and keyword display without changing the contributor records', () => {
+	const metadata = {
+		id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+		type: 'Dataset',
+		title: 'Research',
+		contributors: [
 			{
-				...snapshot,
-				doi: '10.1000/old',
-				identifiers: [
-					{ provider: 'doi', value: '10.1000/old' },
-					{ provider: 'openalex', value: 'W123' }
-				]
+				type: 'Person',
+				person: {
+					name: 'Ada',
+					affiliations: [{ name: ' University  of Research ' }, { name: 'Laboratory' }]
+				},
+				roles: ['Author']
 			},
-			() => ++nextKey
-		);
-		expect(edited).not.toHaveProperty('doi');
-		expect(edited.identifiers.map(({ provider, value }) => ({ provider, value }))).toEqual([
-			{ provider: 'doi', value: '10.1000/old' },
-			{ provider: 'openalex', value: 'W123' }
-		]);
-		edited.identifiers[0].value = '10.1000/new';
-		expect(metadataFromDraft(edited)).not.toHaveProperty('doi');
-		expect(metadataFromDraft(edited).identifiers).toEqual([
-			{ provider: 'doi', value: '10.1000/new' },
-			{ provider: 'openalex', value: 'W123' }
-		]);
-		edited.identifiers.splice(0, 1);
-		expect(metadataFromDraft(edited)).not.toHaveProperty('doi');
-		expect(metadataFromDraft(edited).identifiers).toEqual([
-			{ provider: 'openalex', value: 'W123' }
-		]);
-	});
-	it('preserves contributor institutions, identifiers, suffixes and link attributes when only a title changes', () => {
-		const edited = draft();
-		edited.title = 'Revised';
-		const result = metadataFromDraft(edited);
-		expect(result.title).toBe('Revised');
-		expect(result.authors[0]).toMatchObject(snapshot.authors[0]);
-		expect(result.editors[0]).toMatchObject(snapshot.editors[0]);
-		expect(result.urls).toEqual(snapshot.urls);
-		expect(result.identifiers).toEqual(snapshot.identifiers);
-		expect(result.keywords).toEqual(['Graph; theory']);
-		expect(result.custom_fields).toEqual(snapshot.custom_fields);
-		expect(result).not.toHaveProperty('affiliation');
-		expect(result).not.toHaveProperty('affiliations');
-	});
-	it('uses an explicit value type so text resembling JSON remains text', () => {
-		const edited = draft();
-		edited.custom_fields[0].value = '456';
-		expect(metadataFromDraft(edited).custom_fields[0].value).toBe('456');
-		edited.custom_fields[0].type = 'json';
-		expect(metadataFromDraft(edited).custom_fields[0].value).toBe(456);
-		edited.custom_fields[0].value = '{invalid';
-		expect(() => metadataFromDraft(edited)).toThrow();
-	});
-	it('clears institutions and URLs explicitly without changing the original snapshot', () => {
-		const edited = draft();
-		edited.authors[0].affiliations?.splice(0);
-		edited.urls.splice(0);
-		const result = metadataFromDraft(edited);
-		expect(result.authors[0].affiliations).toEqual([]);
-		expect(result.urls).toEqual([]);
-		expect(snapshot.authors[0].affiliations).toHaveLength(1);
-		expect(snapshot.urls).toHaveLength(1);
-	});
-	it('derives institution display from the credited contributors', () => {
-		expect(contributorAffiliations(snapshot)).toEqual(['University']);
-	});
-	it('saves a given-only name and a literal organization while skipping blank rows', () => {
-		const edited = draft();
-		edited.authors = [{ ...newContributor(100), given_name: 'Wei' }, newContributor(101)];
-		edited.editors = [
-			{ ...newContributor(102), kind: 'organization', display_name: 'Research Council' }
-		];
-		const result = metadataFromDraft(edited);
-		expect(result.authors).toHaveLength(1);
-		expect(result.authors[0].display_name).toBe('Wei');
-		expect(result.authors[0].family_name).toBeNull();
-		expect(result.editors[0].display_name).toBe('Research Council');
-	});
+			{
+				type: 'Person',
+				person: { name: 'Grace', affiliations: [{ name: 'University of Research' }] },
+				roles: ['Author']
+			}
+		],
+		subjects: [{ subject: 'Research' }, { subject: 'Research' }]
+	} as Metadata;
+	const initial = structuredClone(metadata);
+	expect(contributorAffiliations(metadata)).toEqual(['University of Research', 'Laboratory']);
+	expect(workKeywords(metadata)).toEqual(['Research']);
+	expect(metadata).toEqual(initial);
+});
+
+it('offers unique remote PDF URLs and keeps unknown download endpoints selectable', () => {
+	const metadata = {
+		id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+		type: 'Dataset',
+		title: 'Research',
+		files: [
+			{ url: 'https://papers.example/download?id=1', mime_type: 'application/pdf; charset=binary' },
+			{ url: 'https://papers.example/download?id=1', mime_type: 'application/pdf' },
+			{ url: 'https://papers.example/ARTICLE.PDF?token=test' },
+			{ url: 'https://papers.example/unknown' },
+			{ url: 'https://papers.example/supplement.zip', mime_type: 'application/zip' },
+			{ url: 'javascript:alert(1)', mime_type: 'application/pdf' },
+			{ url: 'file:///private/article.pdf' },
+			{ url: 'invalid' }
+		]
+	} as Metadata;
+	expect(pdfFileUrls(metadata)).toEqual([
+		'https://papers.example/download?id=1',
+		'https://papers.example/ARTICLE.PDF?token=test',
+		'https://papers.example/unknown'
+	]);
+});
+
+it('deduplicates identifier display rows and preserves the complete Work', () => {
+	const metadata = {
+		id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+		type: 'Dataset',
+		identifiers: [
+			{ identifier_type: 'PMID', identifier: '42' },
+			{ identifier_type: 'PMID', identifier: '42' },
+			{ identifier_type: 'Other', scheme: 'pmid', identifier: '42' },
+			{ identifier_type: 'PMID', identifier: '43' },
+			{ identifier_type: 'Other', scheme: 'Local registry', identifier: '42' }
+		]
+	} as Metadata;
+	const original = structuredClone(metadata);
+	expect(identifierRows(metadata)).toEqual([
+		{ provider: 'pmid', value: '42' },
+		{ provider: 'pmid', value: '43' },
+		{ provider: 'local registry', value: '42' }
+	]);
+	expect(metadata).toEqual(original);
+});
+
+it('combines backend primary lookup context with identifier display without changing the Work', () => {
+	const metadata = {
+		id: 'https://pubmed.ncbi.nlm.nih.gov/42/',
+		type: 'Preprint',
+		identifiers: [{ identifier_type: 'PMID', identifier: '42' }]
+	} as Metadata;
+	const original = structuredClone(metadata);
+	expect(identifierRows(metadata, { provider: 'pmid', value: '42' })).toEqual([
+		{ provider: 'pmid', value: '42' }
+	]);
+	expect(
+		identifierRows({ id: metadata.id, type: metadata.type }, { provider: 'pmid', value: '42' })
+	).toEqual([{ provider: 'pmid', value: '42' }]);
+	expect(metadata).toEqual(original);
 });

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
-from item_helpers import contributor
+from item_helpers import contributor, work_identifier
 from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,8 +58,6 @@ from quirebase.documents import (
 )
 from quirebase.documents.workflows import _lock_upload_authority
 from quirebase.library import (
-    ExternalIdentifier,
-    ItemMetadata,
     ItemMetadataData,
     ItemSection,
     TagConflict,
@@ -75,6 +73,7 @@ from quirebase.library import (
     moderate_project_discussion_message,
     open_item_section,
     remove_tag_from_item,
+    rescan_pdf_doi,
     revise_item_metadata,
     search_library,
     stage_import_batch,
@@ -90,7 +89,6 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
-    ItemIdentifier,
     ItemRead,
     ItemTag,
     LoginSession,
@@ -160,15 +158,13 @@ async def _login_users(db: AsyncSession, *, rehash: bool = False) -> tuple[User,
     admin = User(username=f"login-admin-{suffix}", password_hash="unused", role="administrator")
     user = User(
         username=f"login-user-{suffix}",
-        password_hash=(
-            PasswordHasher(time_cost=1).hash("original-password")
-            if rehash
-            else hash_password("original-password")
-        ),
+        password_hash=PasswordHasher(time_cost=1).hash("original-password")
+        if rehash
+        else hash_password("original-password"),
     )
     db.add_all([admin, user])
     await db.commit()
-    return admin, user
+    return (admin, user)
 
 
 @pytest.mark.concurrency_case("login-revocation")
@@ -179,8 +175,8 @@ async def test_login_rejects_credentials_revoked_after_password_verification(
 ):
     async with postgres_sessions() as setup:
         admin, user = await _login_users(setup, rehash=rehash)
-        admin_id, user_id, username = admin.id, user.id, user.username
-    verified, resume = asyncio.Event(), asyncio.Event()
+        admin_id, user_id, username = (admin.id, user.id, user.username)
+    verified, resume = (asyncio.Event(), asyncio.Event())
     verify = authentication.verify_and_update_password
     transactions = []
 
@@ -238,8 +234,8 @@ async def test_login_waits_for_an_uncommitted_credential_revocation(
 ):
     async with postgres_sessions() as setup:
         admin, user = await _login_users(setup)
-        admin_id, user_id, username = admin.id, user.id, user.username
-    verified, resume = asyncio.Event(), asyncio.Event()
+        admin_id, user_id, username = (admin.id, user.id, user.username)
+    verified, resume = (asyncio.Event(), asyncio.Event())
     verify = authentication.verify_and_update_password
 
     async def paused_verify(encoded, password):
@@ -278,8 +274,8 @@ async def test_credential_revocation_waits_for_signing_and_removes_the_signed_se
 ):
     async with postgres_sessions() as setup:
         admin, user = await _login_users(setup)
-        admin_id, user_id, username = admin.id, user.id, user.username
-    prepared, resume = asyncio.Event(), asyncio.Event()
+        admin_id, user_id, username = (admin.id, user.id, user.username)
+    prepared, resume = (asyncio.Event(), asyncio.Event())
     create = authentication._create_login_session
 
     async def paused_create(*args, **kwargs):
@@ -379,7 +375,7 @@ async def test_login_failure_upsert_increments_or_recreates_a_cleared_counter(
     read_at = datetime(2026, 10, 8, tzinfo=UTC)
     monkeypatch.setattr(throttling, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
     first_at = read_at
-    inserting, resume = asyncio.Event(), asyncio.Event()
+    inserting, resume = (asyncio.Event(), asyncio.Event())
 
     async def first_failure():
         async with postgres_race.session("first") as db:
@@ -433,7 +429,6 @@ async def test_concurrent_first_login_failures_wait_and_preserve_both_counts(
         await postgres_race.wait_blocked("second", "first")
         await commit()
         await postgres_race.join("second")
-
     async with postgres_sessions() as db:
         row = await db.get(LoginThrottle, identity)
         assert row.failures == 2
@@ -456,7 +451,7 @@ async def test_expired_login_check_does_not_delete_a_concurrently_reset_window(
             )
         )
         await db.commit()
-    expired_read, resume = asyncio.Event(), asyncio.Event()
+    expired_read, resume = (asyncio.Event(), asyncio.Event())
 
     async def check():
         async with postgres_race.session("check") as db:
@@ -495,13 +490,16 @@ async def test_item_reading_upsert_keeps_a_competing_readers_newer_timestamp(
 ):
     async with postgres_sessions() as db:
         owner = await _user(db, "reading-gap")
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-        item = Item(workspace_id=workspace_id, title="Reading gap", created_by=owner_id)
+        workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Reading gap"},
+        )
         db.add(item)
         await db.commit()
         item_id = item.id
-
-    inserting, resume = asyncio.Event(), asyncio.Event()
+    inserting, resume = (asyncio.Event(), asyncio.Event())
     read_at = datetime(2026, 10, 8, tzinfo=UTC)
     monkeypatch.setattr(item_sections, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
 
@@ -513,7 +511,7 @@ async def test_item_reading_upsert_keeps_a_competing_readers_newer_timestamp(
                 if (
                     statement.is_insert
                     and statement.table.name == ItemRead.__tablename__
-                    and not inserting.is_set()
+                    and (not inserting.is_set())
                 ):
                     postgres_race.note("reading.before_upsert", actor="first")
                     inserting.set()
@@ -539,8 +537,6 @@ async def test_item_reading_upsert_keeps_a_competing_readers_newer_timestamp(
         assert (await postgres_race.join("second")).item.id == item_id
     finally:
         resume.set()
-    # The older reader takes the native update path without overwriting the
-    # newer timestamp committed by the second.
     assert (await postgres_race.join("first")).item.id == item_id
     async with postgres_race.session("verify") as db:
         reads = (await db.scalars(select(ItemRead).where(ItemRead.item_id == item_id))).all()
@@ -553,11 +549,10 @@ async def test_item_reading_upsert_keeps_a_competing_readers_newer_timestamp(
 async def test_workspace_read_tolerates_committed_root_deletion(postgres_sessions, surface):
     async with postgres_sessions() as setup_db:
         owner = await _user(setup_db, "workspace-read-delete")
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
         if surface == "admin":
             owner.role = "administrator"
             await setup_db.commit()
-
     async with postgres_sessions() as read_db:
         owner = await read_db.get(User, owner_id)
         if surface == "detail":
@@ -570,9 +565,6 @@ async def test_workspace_read_tolerates_committed_root_deletion(postgres_session
             rows = await list_workspaces_for_governance(read_db, owner)
             workspace_ids = {workspace.id for workspace in rows}
         assert workspace_ids == {workspace_id}
-
-        # Commit the root cascade after the initial read. Owner projection must
-        # tolerate deletion without requiring the Web application's static build.
         async with postgres_sessions() as delete_db:
             workspace = await delete_db.get(Workspace, workspace_id)
             await delete_db.delete(workspace)
@@ -588,7 +580,7 @@ async def test_project_discussion_moderation_waits_for_root_deletion(
     async with postgres_sessions() as db:
         owner = await _user(db, "discussion-moderator")
         author = await _user(db, "discussion-author")
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
         db.add(
             WorkspaceMember(workspace_id=workspace_id, user_id=author.id, role=WorkspaceRole.editor)
         )
@@ -598,10 +590,9 @@ async def test_project_discussion_moderation_waits_for_root_deletion(
         message = await add_project_discussion_message(
             db, author, workspace_id, project.id, "Moderate this message"
         )
-        project_id, message_id = project.id, message.id
+        project_id, message_id = (project.id, message.id)
         if root == "workspace":
             await archive_workspace(db, owner, workspace_id)
-
     model, root_id = (Workspace, workspace_id) if root == "workspace" else (Project, project_id)
     async with postgres_race.session("delete") as delete_db:
         resource = await delete_db.scalar(
@@ -622,7 +613,6 @@ async def test_project_discussion_moderation_waits_for_root_deletion(
 
         postgres_race.start("moderate", moderate())
         await postgres_race.wait_blocked("moderate", "delete")
-        # The parent's cascade must finish while moderation waits at the root.
         if root == "project":
             actor = await delete_db.get(User, owner_id)
             await delete_project(delete_db, actor, workspace_id, project_id, resource.name)
@@ -634,22 +624,20 @@ async def test_project_discussion_moderation_waits_for_root_deletion(
 
 
 async def _project_annotation_context(
-    db: AsyncSession,
-    prefix: str,
-    *,
-    annotation_scope: AnnotationScope = AnnotationScope.project,
+    db: AsyncSession, prefix: str, *, annotation_scope: AnnotationScope = AnnotationScope.project
 ) -> tuple[str, str, str, str, str, str]:
     owner = await _user(db, f"{prefix}-owner")
-    workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-    item = Item(workspace_id=workspace_id, title=prefix, created_by=owner_id)
+    workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner_id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": prefix},
+    )
     project = Project(workspace_id=workspace_id, name=prefix, created_by=owner_id)
     db.add_all([item, project])
     await db.flush()
     assignment = ProjectItem(
-        workspace_id=workspace_id,
-        project_id=project.id,
-        item_id=item.id,
-        added_by=owner_id,
+        workspace_id=workspace_id, project_id=project.id, item_id=item.id, added_by=owner_id
     )
     revision = FileRevision(
         workspace_id=workspace_id,
@@ -673,13 +661,13 @@ async def _project_annotation_context(
         author_id=owner_id,
         kind=AnnotationKind.note,
         scope=annotation_scope,
-        project_item_id=(assignment.id if annotation_scope is AnnotationScope.project else None),
+        project_item_id=assignment.id if annotation_scope is AnnotationScope.project else None,
         body="Reply target",
         payload={"type": "note", "rect": {"x": 1, "y": 1, "width": 1, "height": 1}},
     )
     db.add(annotation)
     await db.commit()
-    return workspace_id, owner_id, item.id, project.id, assignment.id, annotation.id
+    return (workspace_id, owner_id, item.id, project.id, assignment.id, annotation.id)
 
 
 @pytest.mark.concurrency_case("annotation-version")
@@ -715,8 +703,7 @@ async def test_annotation_edits_with_one_version_have_one_commit_and_audit(
             await db.flush()
             target_id = reply.id
         await db.commit()
-
-    reached_commit, resume = asyncio.Event(), asyncio.Event()
+    reached_commit, resume = (asyncio.Event(), asyncio.Event())
 
     async def edit(name):
         async with postgres_race.session(name) as db:
@@ -794,39 +781,37 @@ async def test_cross_workspace_discussion_id_does_not_lock_foreign_row(postgres_
         second_workspace_id = fixture_workspace_id(second_owner)
         first_item = Item(
             workspace_id=first_workspace_id,
-            title="Requested Workspace Item",
             created_by=first_owner.id,
+            work={
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Requested Workspace Item",
+            },
         )
         second_item = Item(
             workspace_id=second_workspace_id,
-            title="Foreign Workspace Item",
             created_by=second_owner.id,
+            work={
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Foreign Workspace Item",
+            },
         )
         setup_db.add_all([first_item, second_item])
         await setup_db.commit()
         foreign_message = await add_discussion_message(
-            setup_db,
-            second_owner,
-            second_workspace_id,
-            second_item.id,
-            "Foreign row",
+            setup_db, second_owner, second_workspace_id, second_item.id, "Foreign row"
         )
         first_owner_id = first_owner.id
         first_item_id = first_item.id
         foreign_message_id = foreign_message.id
-
     async with postgres_sessions() as requester_db:
         requester = await requester_db.get(User, first_owner_id)
         assert requester is not None
         with pytest.raises(ResourceUnavailable):
             await delete_discussion_message(
-                requester_db,
-                requester,
-                first_workspace_id,
-                first_item_id,
-                foreign_message_id,
+                requester_db, requester, first_workspace_id, first_item_id, foreign_message_id
             )
-
         async with postgres_sessions() as foreign_db:
             locked = await foreign_db.scalar(
                 select(DiscussionMessage)
@@ -845,8 +830,12 @@ async def test_write_authorization_serializes_with_workspace_archive(
     async with postgres_sessions() as db:
         owner = await _user(db, "write-race-owner")
         writer = await _user(db, "write-race-writer")
-        workspace_id, owner_id, writer_id = fixture_workspace_id(owner), owner.id, writer.id
-        item = Item(workspace_id=workspace_id, title="Write race", created_by=owner_id)
+        workspace_id, owner_id, writer_id = (fixture_workspace_id(owner), owner.id, writer.id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Write race"},
+        )
         db.add_all([
             item,
             WorkspaceMember(
@@ -858,7 +847,6 @@ async def test_write_authorization_serializes_with_workspace_archive(
         ])
         await db.commit()
         item_id = item.id
-
     authorized = asyncio.Event()
     release_write = asyncio.Event()
 
@@ -887,7 +875,6 @@ async def test_write_authorization_serializes_with_workspace_archive(
     release_write.set()
     await postgres_race.join("writer")
     await postgres_race.join("archive")
-
     async with postgres_sessions() as db:
         actor = await db.get(User, writer_id)
         assert actor is not None
@@ -901,16 +888,11 @@ async def test_project_discussion_waits_for_archive_and_rechecks_state(
 ):
     async with postgres_sessions() as db:
         owner = await _user(db, "project-archive-race")
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-        project = Project(
-            workspace_id=workspace_id,
-            name="Archiving",
-            created_by=owner_id,
-        )
+        workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
+        project = Project(workspace_id=workspace_id, name="Archiving", created_by=owner_id)
         db.add(project)
         await db.commit()
         project_id = project.id
-
     async with postgres_race.session("archive") as archive_db:
         project = await archive_db.scalar(
             select(Project).where(Project.id == project_id).with_for_update()
@@ -939,8 +921,7 @@ async def test_waiting_writer_reloads_workspace_after_archive_commits(
 ):
     async with postgres_sessions() as db:
         owner = await _user(db, "waiting-write-owner")
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-
+        workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
     async with postgres_race.session("archive") as governance_db:
         workspace = await governance_db.scalar(
             select(Workspace).where(Workspace.id == workspace_id).with_for_update()
@@ -1000,9 +981,6 @@ async def test_workspace_invitation_serializes_with_invitee_deactivation(postgre
         controller = await _user(db, "invite-deactivate-controller")
         invitee = await _user(db, "invite-deactivate-target")
         controller.role = "administrator"
-
-        # The invitee cannot be deactivated while owning its provisioned
-        # Workspace, so transfer that independent governance root first.
         invitee_workspace_id = fixture_workspace_id(invitee)
         controller_membership = WorkspaceMember(
             workspace_id=invitee_workspace_id,
@@ -1016,8 +994,7 @@ async def test_workspace_invitation_serializes_with_invitee_deactivation(postgre
             db, invitee, invitee_workspace_id, controller_membership.id
         )
         workspace_id = fixture_workspace_id(owner)
-        owner_id, controller_id, invitee_id = owner.id, controller.id, invitee.id
-
+        owner_id, controller_id, invitee_id = (owner.id, controller.id, invitee.id)
     invitation_started = asyncio.Event()
     deactivation_started = asyncio.Event()
 
@@ -1045,24 +1022,18 @@ async def test_workspace_invitation_serializes_with_invitee_deactivation(postgre
             select(Workspace).where(Workspace.id == workspace_id).with_for_update()
         )
         assert workspace is not None
-
         invitation_task = asyncio.create_task(invite())
         await invitation_started.wait()
         await asyncio.sleep(0.05)
         assert not invitation_task.done()
-
         deactivation_task = asyncio.create_task(deactivate())
         await deactivation_started.wait()
         await asyncio.sleep(0.05)
-        # Invitation holds the invitee's shared User lock while waiting for the
-        # Workspace, so deactivation cannot overtake it.
         assert not deactivation_task.done()
-
         await blocker_db.commit()
         outcomes = await asyncio.wait_for(
             asyncio.gather(invitation_task, deactivation_task), timeout=5
         )
-
     assert outcomes == ["invited", "deactivated"]
 
 
@@ -1076,8 +1047,7 @@ async def test_workspace_governance_serializes_with_admin_demotion(postgres_sess
         controller.role = "administrator"
         await db.commit()
         workspace_id = fixture_workspace_id(owner)
-        governance_admin_id, controller_id = governance_admin.id, controller.id
-
+        governance_admin_id, controller_id = (governance_admin.id, controller.id)
     governance_started = asyncio.Event()
     demotion_started = asyncio.Event()
 
@@ -1102,22 +1072,16 @@ async def test_workspace_governance_serializes_with_admin_demotion(postgres_sess
             select(Workspace).where(Workspace.id == workspace_id).with_for_update()
         )
         assert workspace is not None
-
         governance_task = asyncio.create_task(suspend_governance())
         await governance_started.wait()
         await asyncio.sleep(0.05)
         assert not governance_task.done()
-
         demotion_task = asyncio.create_task(demote())
         await demotion_started.wait()
         await asyncio.sleep(0.05)
-        # Governance holds current administrator authority under a shared User
-        # lock, so revocation cannot commit ahead of the operation.
         assert not demotion_task.done()
-
         await blocker_db.commit()
         outcomes = await asyncio.wait_for(asyncio.gather(governance_task, demotion_task), timeout=5)
-
     assert outcomes == ["suspended", "demoted"]
 
 
@@ -1129,8 +1093,7 @@ async def test_cross_admin_demotion_locks_users_in_stable_order(postgres_session
         first.role = "administrator"
         second.role = "administrator"
         await db.commit()
-        first_id, second_id = first.id, second.id
-
+        first_id, second_id = (first.id, second.id)
     gate = asyncio.Event()
     ready = 0
     ready_lock = asyncio.Lock()
@@ -1153,31 +1116,22 @@ async def test_cross_admin_demotion_locks_users_in_stable_order(postgres_session
             return "demoted"
 
     outcomes = await asyncio.wait_for(
-        asyncio.gather(
-            demote(first_id, second_id),
-            demote(second_id, first_id),
-        ),
-        timeout=5,
+        asyncio.gather(demote(first_id, second_id), demote(second_id, first_id)), timeout=5
     )
     assert sorted(outcomes) == ["demoted", "denied"]
 
 
 @pytest.mark.concurrency_case("actor-revocation")
 async def test_password_hashing_does_not_hold_the_user_authorization_lock(
-    postgres_sessions,
-    monkeypatch,
+    postgres_sessions, monkeypatch
 ):
     async with postgres_sessions() as db:
         administrator = await _user(db, "password-change-admin")
         administrator.role = "administrator"
-        user = User(
-            username=f"password-change-target-{uuid4()}",
-            password_hash="verified-hash",
-        )
+        user = User(username=f"password-change-target-{uuid4()}", password_hash="verified-hash")
         db.add(user)
         await db.commit()
-        administrator_id, user_id = administrator.id, user.id
-
+        administrator_id, user_id = (administrator.id, user.id)
     hashing_started = asyncio.Event()
     release_hashing = asyncio.Event()
 
@@ -1192,7 +1146,6 @@ async def test_password_hashing_does_not_hold_the_user_authorization_lock(
 
     monkeypatch.setattr("quirebase.accounts.authentication.verify_password_async", verify_password)
     monkeypatch.setattr("quirebase.accounts.authentication.hash_password_async", hash_password)
-
     async with postgres_sessions() as password_db:
         actor = await password_db.get(User, user_id)
         assert actor is not None
@@ -1205,12 +1158,10 @@ async def test_password_hashing_does_not_hold_the_user_authorization_lock(
                 administrator = await admin_db.get(User, administrator_id)
                 assert administrator is not None
                 await asyncio.wait_for(
-                    update_user_status(admin_db, administrator, user_id, active=False),
-                    timeout=2,
+                    update_user_status(admin_db, administrator, user_id, active=False), timeout=2
                 )
         finally:
             release_hashing.set()
-
         outcome = await asyncio.wait_for(
             asyncio.gather(password_task, return_exceptions=True), timeout=5
         )
@@ -1220,22 +1171,17 @@ async def test_password_hashing_does_not_hold_the_user_authorization_lock(
 
 @pytest.mark.concurrency_case("governance-demotion")
 async def test_admin_password_hashing_precedes_final_locked_reauthorization(
-    postgres_sessions,
-    monkeypatch,
+    postgres_sessions, monkeypatch
 ):
     async with postgres_sessions() as db:
         controller = await _user(db, "password-reset-controller")
         resetter = await _user(db, "password-reset-actor")
         controller.role = "administrator"
         resetter.role = "administrator"
-        target = User(
-            username=f"password-reset-target-{uuid4()}",
-            password_hash="old-hash",
-        )
+        target = User(username=f"password-reset-target-{uuid4()}", password_hash="old-hash")
         db.add(target)
         await db.commit()
-        controller_id, resetter_id, target_id = controller.id, resetter.id, target.id
-
+        controller_id, resetter_id, target_id = (controller.id, resetter.id, target.id)
     hashing_started = asyncio.Event()
     release_hashing = asyncio.Event()
 
@@ -1245,7 +1191,6 @@ async def test_admin_password_hashing_precedes_final_locked_reauthorization(
         return "replacement-hash"
 
     monkeypatch.setattr("quirebase.accounts.administration.hash_password_async", hash_password)
-
     async with postgres_sessions() as reset_db:
         resetter = await reset_db.get(User, resetter_id)
         assert resetter is not None
@@ -1258,12 +1203,10 @@ async def test_admin_password_hashing_precedes_final_locked_reauthorization(
                 controller = await controller_db.get(User, controller_id)
                 assert controller is not None
                 await asyncio.wait_for(
-                    change_user_role(controller_db, controller, resetter_id, "member"),
-                    timeout=2,
+                    change_user_role(controller_db, controller, resetter_id, "member"), timeout=2
                 )
         finally:
             release_hashing.set()
-
         outcome = await asyncio.wait_for(
             asyncio.gather(reset_task, return_exceptions=True), timeout=5
         )
@@ -1294,7 +1237,6 @@ async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgr
         db.add_all([first_member, second_member])
         await db.commit()
         target_ids = (first_member.id, second_member.id)
-
     gate = asyncio.Event()
     ready = 0
     ready_lock = asyncio.Lock()
@@ -1318,7 +1260,6 @@ async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgr
 
     outcomes = await asyncio.gather(*(transfer(target_id) for target_id in target_ids))
     assert sorted(outcomes) == ["committed", "denied"]
-
     async with postgres_sessions() as db:
         workspace = await db.get(Workspace, workspace_id)
         assert workspace is not None
@@ -1341,15 +1282,12 @@ async def test_concurrent_ownership_transfer_reauthorizes_after_root_lock(postgr
 
 
 @pytest.mark.concurrency_case("actor-revocation")
-async def test_ownership_transfer_serializes_with_target_deactivation(
-    postgres_sessions,
-):
+async def test_ownership_transfer_serializes_with_target_deactivation(postgres_sessions):
     async with postgres_sessions() as db:
         owner = await _user(db, "transfer-deactivate-owner")
         admin = await _user(db, "transfer-deactivate-admin")
         target = await _user(db, "transfer-deactivate-target")
         admin.role = "administrator"
-
         target_workspace_id = fixture_workspace_id(target)
         admin_membership = WorkspaceMember(
             workspace_id=target_workspace_id,
@@ -1360,7 +1298,6 @@ async def test_ownership_transfer_serializes_with_target_deactivation(
         db.add(admin_membership)
         await db.flush()
         await transfer_workspace_ownership(db, target, target_workspace_id, admin_membership.id)
-
         workspace_id = fixture_workspace_id(owner)
         target_membership = WorkspaceMember(
             workspace_id=workspace_id,
@@ -1374,7 +1311,6 @@ async def test_ownership_transfer_serializes_with_target_deactivation(
         admin_id = admin.id
         target_id = target.id
         target_membership_id = target_membership.id
-
     transfer_started = asyncio.Event()
     deactivation_started = asyncio.Event()
 
@@ -1403,25 +1339,19 @@ async def test_ownership_transfer_serializes_with_target_deactivation(
             select(Workspace).where(Workspace.id == workspace_id).with_for_update()
         )
         assert workspace is not None
-
         transfer_task = asyncio.create_task(transfer())
         await transfer_started.wait()
         await asyncio.sleep(0.05)
         assert not transfer_task.done()
-
         deactivation_task = asyncio.create_task(deactivate())
         await deactivation_started.wait()
         await asyncio.sleep(0.05)
         assert not deactivation_task.done()
-
         await blocker_db.commit()
         outcomes = await asyncio.wait_for(
-            asyncio.gather(transfer_task, deactivation_task, return_exceptions=True),
-            timeout=5,
+            asyncio.gather(transfer_task, deactivation_task, return_exceptions=True), timeout=5
         )
-
     assert outcomes == ["transferred", "denied"]
-
     async with postgres_sessions() as db:
         workspace = await db.get(Workspace, workspace_id)
         target = await db.get(User, target_id)
@@ -1461,13 +1391,16 @@ async def test_upload_finalizer_and_deactivation_follow_user_workspace_lock_orde
         )
         item = Item(
             workspace_id=workspace_id,
-            title="Upload finalizer lock order",
             created_by=administrator.id,
+            work={
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Upload finalizer lock order",
+            },
         )
         db.add(item)
         await db.commit()
-        administrator_id, actor_id, item_id = administrator.id, actor.id, item.id
-
+        administrator_id, actor_id, item_id = (administrator.id, actor.id, item.id)
     finalizer_started = asyncio.Event()
     deactivation_started = asyncio.Event()
 
@@ -1491,23 +1424,18 @@ async def test_upload_finalizer_and_deactivation_follow_user_workspace_lock_orde
             select(Workspace).where(Workspace.id == workspace_id).with_for_update()
         )
         assert workspace is not None
-
         finalizer_task = asyncio.create_task(finalize_upload())
         await finalizer_started.wait()
         await asyncio.sleep(0.05)
         assert not finalizer_task.done()
-
         deactivation_task = asyncio.create_task(deactivate_actor())
         await deactivation_started.wait()
         await asyncio.sleep(0.05)
         assert not deactivation_task.done()
-
         await blocker_db.commit()
         outcomes = await asyncio.wait_for(
-            asyncio.gather(finalizer_task, deactivation_task, return_exceptions=True),
-            timeout=5,
+            asyncio.gather(finalizer_task, deactivation_task, return_exceptions=True), timeout=5
         )
-
     assert outcomes == ["finalized", "deactivated"]
 
 
@@ -1518,9 +1446,17 @@ async def test_upload_finalizers_for_different_items_share_workspace_guard(
 ):
     async with postgres_sessions() as db:
         actor = await _user(db, "parallel-upload-owner")
-        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
+        workspace_id, actor_id = (fixture_workspace_id(actor), actor.id)
         items = [
-            Item(workspace_id=workspace_id, title=f"Parallel upload {i}", created_by=actor_id)
+            Item(
+                workspace_id=workspace_id,
+                created_by=actor_id,
+                work={
+                    "id": f"urn:uuid:{uuid4()}",
+                    "type": "Document",
+                    "title": f"Parallel upload {i}",
+                },
+            )
             for i in range(2)
         ]
         db.add_all(items)
@@ -1541,13 +1477,11 @@ async def test_upload_finalizers_for_different_items_share_workspace_guard(
     async with postgres_race.session("first") as db:
         await _lock_upload_authority(db, actor_id, workspace_id, item_ids[0], role=role)
         postgres_race.start("second", finalize_second())
-        # A second Item can finalize while the first transaction remains open.
         assert await postgres_race.join("second") == "finalized"
         postgres_race.start("archive", archive())
         await postgres_race.wait_blocked("archive", "first")
         await db.commit()
         await postgres_race.join("archive")
-
     async with postgres_race.session("rejected") as db:
         with pytest.raises(ValueError, match="no longer writable"):
             await _lock_upload_authority(db, actor_id, workspace_id, item_ids[1], role=role)
@@ -1561,8 +1495,16 @@ async def test_workspace_teardown_fences_waiting_finalizer_and_releases_its_orph
     pending = await store.put_object(uuid4(), ObjectSuffix.PDF, b"pending", max_bytes=100)
     async with postgres_sessions() as db:
         owner = await _user(db, "teardown-upload-owner")
-        owner_id, workspace_id = owner.id, fixture_workspace_id(owner)
-        item = Item(workspace_id=workspace_id, title="Deleted during upload", created_by=owner_id)
+        owner_id, workspace_id = (owner.id, fixture_workspace_id(owner))
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Deleted during upload",
+            },
+        )
         db.add(item)
         workspace = await db.get(Workspace, workspace_id)
         workspace.state = WorkspaceState.archived
@@ -1575,7 +1517,7 @@ async def test_workspace_teardown_fences_waiting_finalizer_and_releases_its_orph
         workflow_id="late-upload",
         attributes=object_reservation_attributes([pending.key]),
     )
-    ready, release = asyncio.Event(), asyncio.Event()
+    ready, release = (asyncio.Event(), asyncio.Event())
 
     async def teardown():
         async with postgres_race.session("teardown") as db:
@@ -1613,9 +1555,7 @@ async def test_workspace_teardown_fences_waiting_finalizer_and_releases_its_orph
 
 @pytest.mark.concurrency_case("actor-revocation")
 async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_order(
-    postgres_sessions,
-    postgres_search_tables,
-    postgres_race,
+    postgres_sessions, postgres_search_tables, postgres_race
 ):
     async with postgres_sessions() as db:
         administrator = await _user(db, "import-deactivate-admin")
@@ -1636,13 +1576,21 @@ async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_o
             workspace_id=workspace_id,
             actor_id=administrator.id,
             file_format="bibtex",
-            records=[{"title": "Confirmed without a deadlock"}],
+            records=[
+                {
+                    "work": {
+                        "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                        "type": "Document",
+                        "title": "Confirmed without a deadlock",
+                    }
+                }
+            ],
             errors=[],
             status="ready",
         )
         db.add(batch)
         await db.commit()
-        administrator_id, actor_id, batch_id = administrator.id, actor.id, batch.id
+        administrator_id, actor_id, batch_id = (administrator.id, actor.id, batch.id)
 
     async def confirm_import() -> str:
         async with postgres_race.session("confirm") as db:
@@ -1663,33 +1611,27 @@ async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_o
             select(Workspace).where(Workspace.id == workspace_id).with_for_update()
         )
         assert workspace is not None
-
         postgres_race.start("confirm", confirm_import())
         await postgres_race.wait_blocked("confirm", "blocker")
         postgres_race.start("deactivate", deactivate_actor())
         await postgres_race.wait_blocked("deactivate", "confirm")
-
         await blocker_db.commit()
         outcomes = [await postgres_race.join("confirm"), await postgres_race.join("deactivate")]
-
     assert outcomes == ["confirmed", "deactivated"]
     async with postgres_race.session("verify") as db:
         administrator = await db.get(User, administrator_id)
         items, total, *_ = await search_library(db, administrator, workspace_id, q="Confirmed")
-        assert total == 1 and items[0].title == "Confirmed without a deadlock"
+        assert total == 1 and items[0].work.get("title") == "Confirmed without a deadlock"
 
 
 @pytest.mark.concurrency_case("participation-recheck")
-async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
-    postgres_sessions,
-):
+async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(postgres_sessions):
     async with postgres_sessions() as db:
         owner = await _user(db, "rename-lock-owner")
         workspace_id = fixture_workspace_id(owner)
         project = await create_project(db, owner, workspace_id, "Initial name")
         project_id = project.id
         owner_id = owner.id
-
     gate = asyncio.Event()
     ready = 0
     ready_lock = asyncio.Lock()
@@ -1707,7 +1649,6 @@ async def test_concurrent_project_renames_do_not_upgrade_shared_workspace_locks(
             await update_project_settings(db, actor, workspace_id, project_id, name=name)
 
     await asyncio.wait_for(asyncio.gather(rename("First name"), rename("Second name")), timeout=5)
-
     async with postgres_sessions() as db:
         project = await db.get(Project, project_id)
         assert project is not None
@@ -1723,7 +1664,7 @@ async def test_project_participation_add_races_switch_to_workspace_mode(
         owner = await _user(db, "participation-owner")
         target = await _user(db, "participation-target")
         workspace_id = fixture_workspace_id(owner)
-        owner_id, target_id, target_username = owner.id, target.id, target.username
+        owner_id, target_id, target_username = (owner.id, target.id, target.username)
         db.add(
             WorkspaceMember(
                 workspace_id=workspace_id,
@@ -1737,7 +1678,6 @@ async def test_project_participation_add_races_switch_to_workspace_mode(
             db, owner, workspace_id, "Concurrent participation", ProjectParticipation.managed
         )
         project_id = project.id
-
     ready_to_commit = asyncio.Event()
     release_commit = asyncio.Event()
 
@@ -1782,7 +1722,6 @@ async def test_project_participation_add_races_switch_to_workspace_mode(
         release_commit.set()
     assert await postgres_race.join(first) == "committed"
     assert await postgres_race.join(second) == ("rejected" if first == "settings" else "committed")
-
     async with postgres_sessions() as db:
         project = await db.get(Project, project_id)
         assert project.participation is ProjectParticipation.workspace
@@ -1820,7 +1759,6 @@ async def test_reply_create_waits_for_annotation_moderation_and_rechecks(postgre
             _assignment_id,
             annotation_id,
         ) = await _project_annotation_context(db, "reply-moderation")
-
     async with postgres_sessions() as moderator_db:
         annotation = await moderator_db.scalar(
             select(PdfAnnotation).where(PdfAnnotation.id == annotation_id).with_for_update()
@@ -1828,7 +1766,6 @@ async def test_reply_create_waits_for_annotation_moderation_and_rechecks(postgre
         assert annotation is not None
         annotation.locked_at = datetime.now(UTC)
         await moderator_db.flush()
-
         started = asyncio.Event()
 
         async def reply() -> str:
@@ -1874,7 +1811,6 @@ async def test_reply_create_races_archived_workspace_root_deletion(
             annotation_id,
         ) = await _project_annotation_context(db, "reply-workspace-delete")
         await archive_workspace(db, await db.get(User, owner_id), workspace_id)
-
     async with postgres_race.session("delete") as delete_db:
         workspace = await delete_db.scalar(
             select(Workspace).where(Workspace.id == workspace_id).with_for_update()
@@ -1916,7 +1852,6 @@ async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postg
             assignment_id,
             annotation_id,
         ) = await _project_annotation_context(db, "reply-detachment")
-
     async with postgres_sessions() as detach_db:
         assignment = await detach_db.scalar(
             select(ProjectItem).where(ProjectItem.id == assignment_id).with_for_update()
@@ -1924,7 +1859,6 @@ async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postg
         assert assignment is not None
         await detach_db.delete(assignment)
         await detach_db.flush()
-
         started = asyncio.Event()
 
         async def reply() -> str:
@@ -1968,11 +1902,7 @@ async def test_annotation_edit_waits_for_project_item_detachment_and_rechecks(
             _project_id,
             assignment_id,
             annotation_id,
-        ) = await _project_annotation_context(
-            db,
-            "annotation-edit-detachment",
-        )
-
+        ) = await _project_annotation_context(db, "annotation-edit-detachment")
     async with postgres_race.session("detach") as detach_db:
         assignment = await detach_db.scalar(
             select(ProjectItem).where(ProjectItem.id == assignment_id).with_for_update()
@@ -2012,7 +1942,6 @@ async def test_annotation_edit_waits_for_project_item_detachment_and_rechecks(
         await postgres_race.wait_blocked("edit", "detach")
         await detach_db.commit()
         assert await postgres_race.join("edit") == "rejected"
-
     async with postgres_sessions() as db:
         assert await db.get(PdfAnnotation, annotation_id) is None
         assert await db.get(ProjectItem, assignment_id) is None
@@ -2031,19 +1960,21 @@ async def test_annotation_edit_waits_for_project_item_detachment_and_rechecks(
 async def test_bulk_project_assignment_translates_item_delete_race(postgres_sessions):
     async with postgres_sessions() as db:
         owner = await _user(db, "bulk-delete-race-owner")
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-        item = Item(workspace_id=workspace_id, title="Delete race", created_by=owner_id)
+        workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Delete race"},
+        )
         project = Project(workspace_id=workspace_id, name="Delete race", created_by=owner_id)
         db.add_all([item, project])
         await db.commit()
-        item_id, project_id = item.id, project.id
-
+        item_id, project_id = (item.id, project.id)
     async with postgres_sessions() as delete_db:
         item = await delete_db.scalar(select(Item).where(Item.id == item_id).with_for_update())
         assert item is not None
         await delete_db.delete(item)
         await delete_db.flush()
-
         started = asyncio.Event()
 
         async def assign() -> str:
@@ -2095,7 +2026,6 @@ async def test_project_join_uses_shared_workspace_guard(postgres_sessions):
         )
         project_id = project.id
         participant_id = participant.id
-
     async with postgres_sessions() as blocker:
         await blocker.scalar(
             select(Workspace.id).where(Workspace.id == workspace_id).with_for_update(read=True)
@@ -2116,7 +2046,7 @@ async def test_open_project_join_races_workspace_member_suspension(postgres_sess
         owner = await _user(db, "join-race-owner")
         target = await _user(db, "join-race-target")
         workspace_id = fixture_workspace_id(owner)
-        owner_id, target_id = owner.id, target.id
+        owner_id, target_id = (owner.id, target.id)
         membership = WorkspaceMember(
             workspace_id=workspace_id,
             user_id=target_id,
@@ -2130,7 +2060,6 @@ async def test_open_project_join_races_workspace_member_suspension(postgres_sess
             db, owner, workspace_id, "Open join race", ProjectParticipation.open
         )
         project_id = project.id
-
     gate = asyncio.Event()
     ready = 0
     ready_lock = asyncio.Lock()
@@ -2158,7 +2087,6 @@ async def test_open_project_join_races_workspace_member_suspension(postgres_sess
 
     outcomes = await asyncio.gather(change_membership(False), change_membership(True))
     assert sorted(outcomes) in (["committed", "committed"], ["committed", "rejected"])
-
     async with postgres_sessions() as db:
         membership = await db.get(WorkspaceMember, membership_id)
         assert membership is not None
@@ -2183,11 +2111,14 @@ async def test_concurrent_project_item_add_is_idempotent(postgres_sessions):
         workspace_id = fixture_workspace_id(owner)
         owner_id = owner.id
         project = await create_project(db, owner, workspace_id, "Working set")
-        item = Item(workspace_id=workspace_id, title="Shared assignment", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Shared assignment"},
+        )
         db.add(item)
         await db.commit()
-        project_id, item_id = project.id, item.id
-
+        project_id, item_id = (project.id, item.id)
     gate = asyncio.Event()
     ready = 0
     ready_lock = asyncio.Lock()
@@ -2222,7 +2153,11 @@ async def test_concurrent_item_tag_add_is_idempotent(postgres_sessions):
         owner = await _user(db, "tag-owner")
         workspace_id = fixture_workspace_id(owner)
         owner_id = owner.id
-        item = Item(workspace_id=workspace_id, title="Tagged once", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Tagged once"},
+        )
         tag = Tag(
             workspace_id=workspace_id,
             name="Evidence",
@@ -2231,8 +2166,7 @@ async def test_concurrent_item_tag_add_is_idempotent(postgres_sessions):
         )
         db.add_all([item, tag])
         await db.commit()
-        item_id, tag_id = item.id, tag.id
-
+        item_id, tag_id = (item.id, tag.id)
     gate = asyncio.Event()
     ready = 0
     ready_lock = asyncio.Lock()
@@ -2271,16 +2205,18 @@ async def test_single_tag_add_reports_conflict_if_skipped_link_is_removed_before
 ):
     async with postgres_sessions() as db:
         actor = await _user(db, "single-tag-remove-owner")
-        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
-        item = Item(workspace_id=workspace_id, title="Removed duplicate", created_by=actor_id)
+        workspace_id, actor_id = (fixture_workspace_id(actor), actor.id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=actor_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Removed duplicate"},
+        )
         tag = Tag(workspace_id=workspace_id, name="Existing tag", created_by=actor_id)
         db.add_all([item, tag])
         await db.commit()
-        item_id, tag_id = item.id, tag.id
+        item_id, tag_id = (item.id, tag.id)
         await add_existing_tag_to_item(db, actor, workspace_id, item_id, tag_id)
-
-    rereading, resume = asyncio.Event(), asyncio.Event()
-
+    rereading, resume = (asyncio.Event(), asyncio.Event())
     scalar = AsyncSession.scalar
 
     async def paused_read(db, statement, *args, **kwargs):
@@ -2325,9 +2261,13 @@ async def test_association_batch_skips_a_competing_insert_without_losing_other_l
 ):
     async with postgres_sessions() as db:
         actor = await _user(db, f"{kind}-batch-overlap")
-        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
+        workspace_id, actor_id = (fixture_workspace_id(actor), actor.id)
         items = [
-            Item(workspace_id=workspace_id, title=f"Overlap {index}", created_by=actor_id)
+            Item(
+                workspace_id=workspace_id,
+                created_by=actor_id,
+                work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": f"Overlap {index}"},
+            )
             for index in range(2)
         ]
         root = (
@@ -2337,10 +2277,9 @@ async def test_association_batch_skips_a_competing_insert_without_losing_other_l
         )
         db.add_all([*items, root])
         await db.commit()
-        item_ids, root_id = [item.id for item in items], root.id
-
+        item_ids, root_id = ([item.id for item in items], root.id)
     model = ItemTag if kind == "tag" else ProjectItem
-    checked, resume = asyncio.Event(), asyncio.Event()
+    checked, resume = (asyncio.Event(), asyncio.Event())
 
     async def batch():
         async with postgres_race.session("batch") as db:
@@ -2349,8 +2288,8 @@ async def test_association_batch_skips_a_competing_insert_without_losing_other_l
             async def paused_scalars(statement, *args, **kwargs):
                 if (
                     statement.is_insert
-                    and not checked.is_set()
-                    and statement.table.name == model.__tablename__
+                    and (not checked.is_set())
+                    and (statement.table.name == model.__tablename__)
                 ):
                     checked.set()
                     postgres_race.note("association.before_insert", actor="batch")
@@ -2400,18 +2339,21 @@ async def test_bulk_tag_add_does_not_resurrect_a_link_removed_after_conflict_ski
 ):
     async with postgres_sessions() as db:
         actor = await _user(db, "bulk-tag-remove-owner")
-        workspace_id, actor_id = fixture_workspace_id(actor), actor.id
+        workspace_id, actor_id = (fixture_workspace_id(actor), actor.id)
         items = [
-            Item(workspace_id=workspace_id, title=f"Tag race {i}", created_by=actor_id)
+            Item(
+                workspace_id=workspace_id,
+                created_by=actor_id,
+                work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": f"Tag race {i}"},
+            )
             for i in range(2)
         ]
         tag = Tag(workspace_id=workspace_id, name="Disappearing duplicate", created_by=actor_id)
         db.add_all([*items, tag])
         await db.commit()
-        item_ids, tag_id = [item.id for item in items], tag.id
+        item_ids, tag_id = ([item.id for item in items], tag.id)
         await add_existing_tag_to_item(db, actor, workspace_id, item_ids[0], tag_id)
-
-    inserted, resume = asyncio.Event(), asyncio.Event()
+    inserted, resume = (asyncio.Event(), asyncio.Event())
 
     async def batch():
         async with postgres_race.session("batch") as db:
@@ -2440,7 +2382,6 @@ async def test_bulk_tag_add_does_not_resurrect_a_link_removed_after_conflict_ski
     finally:
         resume.set()
     await postgres_race.join("batch")
-
     async with postgres_race.session("verify") as db:
         assert set(await db.scalars(select(ItemTag.item_id))) == {item_ids[1]}
         assert (
@@ -2460,7 +2401,7 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
         owner = await _user(db, "import-replay")
         owner.role = "administrator"
         await db.commit()
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        workspace_id, owner_id = (fixture_workspace_id(owner), owner.id)
         batch = await stage_import_batch(
             db,
             owner,
@@ -2470,7 +2411,7 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
         )
         records = batch.records
         errors = batch.errors
-        assert len(records) == 2 and not errors
+        assert len(records) == 2 and all(error.severity == "warning" for error in errors)
         batch_id = batch.id
 
     async def confirm(name):
@@ -2484,15 +2425,11 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
         second = "second" if first == "first" else "first"
         for name in (first, second):
             postgres_race.start(name, confirm(name))
-            # PostgreSQL queues the second contender behind the first one's
-            # tuple lock, while the first waits for the blocker's transaction.
             await postgres_race.wait_blocked(name, "blocker" if name == first else first)
         await db.commit()
     first_ids = await postgres_race.join(first)
     second_ids = await postgres_race.join(second)
     assert len(first_ids) == 2 and first_ids == second_ids
-
-    # The client loses the committed response, then retries on a fresh Session.
     async with postgres_race.session("replay") as db:
         owner = await db.get(User, owner_id)
         assert await commit_import_batch(db, owner, workspace_id, batch_id) == first_ids
@@ -2506,48 +2443,58 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
         assert total == 1 and items[0].id in first_ids
 
 
-@pytest.mark.concurrency_case("identifier-claim")
+@pytest.mark.concurrency_case("identifier-coexistence")
 @pytest.mark.parametrize(("provider", "value"), [("openalex", "W123"), ("doi", "10.1000/example")])
-async def test_concurrent_items_cannot_claim_the_same_identifier(
+async def test_concurrent_items_can_share_the_same_identifier(
     postgres_sessions, postgres_search_tables, postgres_race, monkeypatch, provider, value
 ):
     async with postgres_sessions() as db:
-        actor = await _user(db, "identifier-claim")
+        actor = await _user(db, "identifier-coexistence")
         workspace_id = fixture_workspace_id(actor)
-        first = await create_item(db, actor, workspace_id, ItemMetadata(title="First"))
-        second = await create_item(db, actor, workspace_id, ItemMetadata(title="Second"))
-        actor_id = actor.id
-    replacement = ItemMetadata(title="Claimed", identifiers=(ExternalIdentifier(provider, value),))
-
-    async def claim_second():
-        async with postgres_race.session("second") as db:
-            with pytest.raises(ValidationFailure, match="already assigned to another Item"):
-                await revise_item_metadata(
-                    db, await db.get(User, actor_id), workspace_id, second.item_id, 1, replacement
-                )
-
-    async with postgres_race.session("first") as db:
-        commit = db.commit
-        monkeypatch.setattr(db, "commit", AsyncMock(side_effect=db.flush))
-        await revise_item_metadata(
-            db, await db.get(User, actor_id), workspace_id, first.item_id, 1, replacement
+        first = await create_item(
+            db,
+            actor,
+            workspace_id,
+            {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "First"},
         )
-        postgres_race.start("second", claim_second())
-        await postgres_race.wait_blocked("second", "first")
-        await commit()
-        await postgres_race.join("second")
+        second = await create_item(
+            db,
+            actor,
+            workspace_id,
+            {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Second"},
+        )
+        actor_id = actor.id
+    replacement = {
+        "id": f"urn:uuid:{uuid4()}",
+        "type": "Document",
+        "title": "Claimed",
+        "identifiers": (work_identifier(provider, value),),
+    }
+
+    async def replace(item_id, label):
+        async with postgres_race.session(label) as db:
+            return await revise_item_metadata(
+                db, await db.get(User, actor_id), workspace_id, item_id, 1, replacement
+            )
+
+    postgres_race.start("first", replace(first.item_id, "first"))
+    postgres_race.start("second", replace(second.item_id, "second"))
+    await postgres_race.join("first")
+    await postgres_race.join("second")
     async with postgres_sessions() as db:
-        rows = (await db.scalars(select(ItemIdentifier))).all()
-        assert len(rows) == 1 and rows[0].item_id == first.item_id
-        loser = await db.get(Item, second.item_id)
-        assert (loser.title, loser.version) == ("Second", 1)
+        for item_id in (first.item_id, second.item_id):
+            item = await db.get(Item, item_id)
+            assert (
+                item.work == {**replacement, "identifiers": list(replacement["identifiers"])}
+                and item.version == 2
+            )
         assert (
             await db.scalar(
                 select(func.count())
                 .select_from(AuditEvent)
                 .where(AuditEvent.action == "item.update")
             )
-            == 1
+            == 2
         )
 
 
@@ -2560,10 +2507,14 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
     async with postgres_sessions() as db:
         owner = await _user(db, "metadata-cas")
         owner.role = "administrator"
-        item = Item(workspace_id=fixture_workspace_id(owner), title="Original", created_by=owner.id)
+        item = Item(
+            workspace_id=fixture_workspace_id(owner),
+            created_by=owner.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Original"},
+        )
         db.add(item)
         await db.commit()
-        workspace_id, owner_id, item_id = fixture_workspace_id(owner), owner.id, item.id
+        workspace_id, owner_id, item_id = (fixture_workspace_id(owner), owner.id, item.id)
 
     async def replace_second():
         async with postgres_race.session("second") as db:
@@ -2575,7 +2526,13 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
                     workspace_id,
                     item_id,
                     1,
-                    ItemMetadata(loser, authors=(contributor(loser, "Author"),), keywords=(loser,)),
+                    {
+                        "id": f"urn:uuid:{uuid4()}",
+                        "type": "Document",
+                        "title": loser,
+                        "contributors": (contributor(loser, "Author"),),
+                        "subjects": [{"subject": v} for v in (loser,)],
+                    },
                 )
             assert conflict.value.current_version == 2
 
@@ -2591,26 +2548,140 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
             workspace_id,
             item_id,
             1,
-            ItemMetadata(
-                winner, authors=(contributor(winner, "Author", True),), keywords=(winner,)
-            ),
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": winner,
+                "contributors": (contributor(winner, "Author", True),),
+                "subjects": [{"subject": v} for v in (winner,)],
+            },
         )
         assert result.version == 2
         await postgres_race.join("second")
-
     async with postgres_race.session("verify") as db:
         actor = await db.get(User, owner_id)
         context = await resolve_workspace_context(db, actor, workspace_id)
         view = await open_item_section(db, context, item_id, ItemSection.metadata)
         assert isinstance(view, ItemMetadataData)
         assert view.metadata.title == winner and view.item.version == 2
-        assert view.metadata.authors == (contributor(winner, "Author", True),)
-        assert view.metadata.keywords == (winner,)
+        assert view.item.work["contributors"] == [contributor(winner, "Author", True)]
+        assert view.item.work["subjects"] == [{"subject": winner}]
         items, total, *_ = await search_library(db, actor, workspace_id, q=winner)
         assert total == 1 and items[0].id == item_id
         assert (await search_library(db, actor, workspace_id, q=loser))[1] == 0
         events, total = await query_events(db, actor, action="item.update")
         assert total == 1 and events[0].target_id == str(item_id)
+
+
+@pytest.mark.concurrency_case("pdf-doi-metadata-edit")
+@pytest.mark.parametrize("first", ["scan", "edit"])
+async def test_pdf_doi_rescan_serializes_with_metadata_replacement(
+    postgres_sessions, postgres_search_tables, postgres_race, monkeypatch, first
+):
+    original = {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Originalrace"}
+    edited = {
+        **original,
+        "title": "Editedrace",
+        "contributors": [contributor("Editedrace", "Author")],
+        "subjects": [{"subject": "Editedsubject"}],
+    }
+    async with postgres_sessions() as db:
+        owner = await _user(db, "pdf-doi-metadata")
+        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
+        item = Item(workspace_id=workspace_id, created_by=owner_id, work=original)
+        db.add(item)
+        await db.flush()
+        item_id = item.id
+        db.add(
+            FileRevision(
+                workspace_id=workspace_id,
+                item_id=item_id,
+                full_text="doi: 10.1234/scanned",
+                created_by=owner_id,
+                file=FileObject(
+                    backend="documents",
+                    filename=str(uuid4()),
+                    size=1,
+                    content_type="application/pdf",
+                    metadata={"original_name": "paper.pdf"},
+                ),
+            )
+        )
+        await db.commit()
+
+    ready, resume = asyncio.Event(), asyncio.Event()
+
+    async def scan():
+        async with postgres_race.session("scan") as db:
+            if first == "scan":
+                scalar = db.scalar
+
+                async def pause_after_locked_snapshot(statement, *args, **kwargs):
+                    result = await scalar(statement, *args, **kwargs)
+                    if (
+                        isinstance(statement, Select)
+                        and statement.column_descriptions[0]["expr"] is Item
+                        and statement.get_execution_options().get("populate_existing")
+                    ):
+                        ready.set()
+                        await asyncio.wait_for(resume.wait(), timeout=5)
+                    return result
+
+                monkeypatch.setattr(db, "scalar", pause_after_locked_snapshot)
+            return await rescan_pdf_doi(db, await db.get(User, owner_id), workspace_id, item_id)
+
+    async def edit():
+        async with postgres_race.session("edit") as db:
+            if first == "edit":
+                commit = db.commit
+
+                async def pause_before_commit():
+                    ready.set()
+                    await asyncio.wait_for(resume.wait(), timeout=5)
+                    await commit()
+
+                monkeypatch.setattr(db, "commit", pause_before_commit)
+            if first == "scan":
+                with pytest.raises(VersionConflict) as conflict:
+                    await revise_item_metadata(
+                        db, await db.get(User, owner_id), workspace_id, item_id, 1, edited
+                    )
+                assert conflict.value.current_version == 2
+            else:
+                result = await revise_item_metadata(
+                    db, await db.get(User, owner_id), workspace_id, item_id, 1, edited
+                )
+                assert result.version == 2
+
+    second = "edit" if first == "scan" else "scan"
+    operations = {"scan": scan, "edit": edit}
+    postgres_race.start(first, operations[first]())
+    await asyncio.wait_for(ready.wait(), timeout=5)
+    postgres_race.start(second, operations[second]())
+    try:
+        await postgres_race.wait_blocked(second, first)
+    finally:
+        resume.set()
+    assert await postgres_race.join("scan") == "10.1234/scanned"
+    await postgres_race.join("edit")
+
+    async with postgres_race.session("verify") as db:
+        item = await db.get(Item, item_id)
+        expected = edited if first == "edit" else original
+        assert item.work == {
+            **expected,
+            "identifiers": [work_identifier("DOI", "10.1234/scanned")],
+        }
+        assert item.version == (3 if first == "edit" else 2)
+        actor = await db.get(User, owner_id)
+        items, total, *_ = await search_library(db, actor, workspace_id, q=expected["title"])
+        assert total == 1 and items[0].id == item_id
+        actions = list(
+            await db.scalars(select(AuditEvent.action).where(AuditEvent.target_id == str(item_id)))
+        )
+        assert sorted(actions) == (
+            ["item.rescan_doi", "item.update"] if first == "edit" else ["item.rescan_doi"]
+        )
 
 
 @pytest.mark.concurrency_case("settings-install")
@@ -2622,7 +2693,7 @@ async def test_concurrent_setting_upserts_preserve_whole_batch(
         second = User(username="settings-second", password_hash="unused", role="administrator")
         db.add_all([first, second, SystemSetting(key="session_days", value="30")])
         await db.commit()
-        first_id, second_id = first.id, second.id
+        first_id, second_id = (first.id, second.id)
 
     async def install_second():
         async with postgres_race.session("second") as db:
@@ -2649,7 +2720,6 @@ async def test_concurrent_setting_upserts_preserve_whole_batch(
         await postgres_race.wait_blocked("second", "first")
         await commit()
         await postgres_race.join("second")
-
     async with postgres_race.session("verify") as db:
         rows = {record.key: record for record in await db.scalars(select(SystemSetting))}
         assert {key: record.value for key, record in rows.items()} == {
@@ -2673,14 +2743,13 @@ async def test_concurrent_citation_style_install_translates_unique_race_and_keep
     assert xml is not None
     async with postgres_sessions() as db:
         owner = await _user(db, "citation-installer")
-        actor_id, workspace_id = owner.id, fixture_workspace_id(owner)
+        actor_id, workspace_id = (owner.id, fixture_workspace_id(owner))
 
     async def install_second():
         async with postgres_race.session("second") as db:
             actor = await db.get(User, actor_id)
             with pytest.raises(ValidationFailure, match="already exists"):
                 await create_custom_citation_style(db, actor, workspace_id, " Shared ", xml)
-            # A uniqueness conflict rolls back only its savepoint.
             await create_custom_citation_style(db, actor, workspace_id, "Distinct", xml)
 
     async with postgres_race.session("first") as db:
@@ -2693,7 +2762,6 @@ async def test_concurrent_citation_style_install_translates_unique_race_and_keep
         await postgres_race.wait_blocked("second", "first")
         await commit()
         await postgres_race.join("second")
-
     async with postgres_race.session("verify") as db:
         names = set(
             await db.scalars(
@@ -2726,7 +2794,12 @@ async def test_participation_guards_preserve_independent_writes_and_revocation(
             await join_project(db, target, workspace_id, project.id)
         elif operation == "remove":
             await add_project_participant(db, owner, workspace_id, project.id, target.username)
-        project_id, owner_id, target_id, username = project.id, owner.id, target.id, target.username
+        project_id, owner_id, target_id, username = (
+            project.id,
+            owner.id,
+            target.id,
+            target.username,
+        )
 
     async def mutate():
         async with postgres_race.session("mutation") as db:
@@ -2751,7 +2824,6 @@ async def test_participation_guards_preserve_independent_writes_and_revocation(
             await db.rollback()
         assert await postgres_race.join("mutation") == "committed"
         await db.rollback()
-
     async with postgres_sessions() as db:
         participant_id = await db.scalar(
             select(ProjectParticipant.id).where(
@@ -2778,9 +2850,13 @@ async def test_duplicate_participation_commands_have_one_audit_effect(
         project = await create_project(db, owner, workspace_id, "Atomic participation", mode)
         if operation == "leave":
             await join_project(db, target, workspace_id, project.id)
-        project_id, owner_id, target_id, username = project.id, owner.id, target.id, target.username
-
-    reached_commit, release_commit = asyncio.Event(), asyncio.Event()
+        project_id, owner_id, target_id, username = (
+            project.id,
+            owner.id,
+            target.id,
+            target.username,
+        )
+    reached_commit, release_commit = (asyncio.Event(), asyncio.Event())
 
     async def mutate(name):
         async with postgres_race.session(name) as db:
@@ -2840,9 +2916,8 @@ async def test_open_join_reports_conflict_when_leave_wins_before_existing_row_re
             db, owner, workspace_id, "Opposing selections", ProjectParticipation.open
         )
         selection = await join_project(db, target, workspace_id, project.id)
-        project_id, target_id, old_selection_id = project.id, target.id, selection.id
-
-    rereading, resume = asyncio.Event(), asyncio.Event()
+        project_id, target_id, old_selection_id = (project.id, target.id, selection.id)
+    rereading, resume = (asyncio.Event(), asyncio.Event())
 
     async def rejoin():
         async with postgres_race.session("rejoin") as db:
@@ -2851,8 +2926,8 @@ async def test_open_join_reports_conflict_when_leave_wins_before_existing_row_re
             async def paused_scalar(statement, *args, **kwargs):
                 if (
                     statement.is_select
-                    and not rereading.is_set()
-                    and statement.column_descriptions[0].get("entity") is ProjectParticipant
+                    and (not rereading.is_set())
+                    and (statement.column_descriptions[0].get("entity") is ProjectParticipant)
                 ):
                     rereading.set()
                     await resume.wait()
@@ -2887,8 +2962,7 @@ async def test_open_join_reports_conflict_when_leave_wins_before_existing_row_re
         ).all()
         assert rows == []
         join_events = select(func.count(AuditEvent.id)).where(
-            AuditEvent.project_id == project_id,
-            AuditEvent.action == "project.participant.join",
+            AuditEvent.project_id == project_id, AuditEvent.action == "project.participant.join"
         )
         assert await db.scalar(join_events) == 1
         assert (
@@ -2931,10 +3005,8 @@ async def test_item_delete_waits_for_project_reply_without_annotation_lock_cycle
                         column.get("entity") is PdfAnnotation
                         for column in statement.column_descriptions
                     )
-                    and not reply_has_assignment.is_set()
+                    and (not reply_has_assignment.is_set())
                 ):
-                    # The real command holds ProjectItem's shared lock, but has
-                    # not yet acquired Annotation's shared lock.
                     reply_has_assignment.set()
                     await resume_reply.wait()
                 return await scalar(statement, *args, **kwargs)

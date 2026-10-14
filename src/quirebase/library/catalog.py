@@ -6,10 +6,10 @@ from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
-from advanced_alchemy.filters import LimitOffset, OrderBy
+from advanced_alchemy.filters import LimitOffset
 from inquiro.richtext import convert_rich_text
+from inquiro.work import work_identifiers
 from sqlalchemy import Select, or_, select
-from sqlalchemy.orm import selectinload
 
 from quirebase.access import (
     ResourceAction,
@@ -28,7 +28,6 @@ from quirebase.models import (
     ItemTag,
     LoginSession,
     ProjectItem,
-    ReferenceType,
     Tag,
     User,
 )
@@ -51,11 +50,10 @@ class LibraryFilter:
     keyword: str = ""
     author: str = ""
     has_files: bool | None = None
-    reference_type: ReferenceType | None = None
+    reference_type: str | None = None
     keyword_exact: str | None = None
     author_last_name: str | None = None
     author_first_name: str | None = None
-    author_suffix: str | None = None
 
 
 async def _library_query(
@@ -103,19 +101,15 @@ async def _library_query(
         )
     if filters.year:
         item_query = item_query.where(
-            Item.publication_date.startswith(filters.year, autoescape=True)
+            Item.work["date_published"].as_string().startswith(filters.year, autoescape=True)
         )
     if filters.reference_type is not None:
-        item_query = item_query.where(Item.reference_type == filters.reference_type)
+        item_query = item_query.where(Item.work["type"].as_string() == filters.reference_type)
     if filters.keyword.strip():
         item_query = item_query.where(keyword_condition(db, filters.keyword.strip(), exact=False))
     if filters.keyword_exact is not None:
-        item_query = item_query.where(
-            keyword_condition(db, filters.keyword_exact.strip(), exact=True)
-        )
-    if (
-        filters.author_first_name is not None or filters.author_suffix is not None
-    ) and filters.author_last_name is None:
+        item_query = item_query.where(keyword_condition(db, filters.keyword_exact, exact=True))
+    if filters.author_first_name is not None and filters.author_last_name is None:
         raise ValidationFailure("an exact author filter requires a last name")
     if filters.author.strip() or filters.author_last_name is not None:
         item_query = item_query.where(
@@ -124,7 +118,6 @@ async def _library_query(
                 text=filters.author.strip(),
                 last_name=filters.author_last_name,
                 first_name=filters.author_first_name,
-                suffix=filters.author_suffix,
             )
         )
     if filters.has_files is not None:
@@ -153,11 +146,10 @@ async def search_library(
     offset: int = 0,
     sort: Literal["updated", "created", "title"] = "updated",
     has_files: bool | None = None,
-    reference_type: ReferenceType | None = None,
+    reference_type: str | None = None,
     keyword_exact: str | None = None,
     author_last_name: str | None = None,
     author_first_name: str | None = None,
-    author_suffix: str | None = None,
 ) -> tuple[list[Item], int]:
     item_query = await _library_query(
         db,
@@ -175,17 +167,18 @@ async def search_library(
             keyword_exact=keyword_exact,
             author_last_name=author_last_name,
             author_first_name=author_first_name,
-            author_suffix=author_suffix,
         ),
     )
-    sort_field = {"updated": "updated_at", "created": "created_at", "title": "title"}[sort]
+    expression = {
+        "updated": Item.updated_at,
+        "created": Item.created_at,
+        "title": Item.work["title"].as_string(),
+    }[sort]
     records, total = await select_page(
         db,
-        item_query.options(selectinload(Item.identifier_links)),
+        item_query.order_by(expression.asc() if sort == "title" else expression.desc(), Item.id),
         Item,
         LimitOffset(limit=limit, offset=offset),
-        OrderBy(field_name=sort_field, sort_order="asc" if sort == "title" else "desc"),
-        OrderBy(field_name="id"),
     )
     return list(records), total
 
@@ -203,10 +196,7 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -
     new_items = list(
         (
             await db.scalars(
-                workspace_items_query(context)
-                .options(selectinload(Item.identifier_links))
-                .order_by(Item.created_at.desc())
-                .limit(10)
+                workspace_items_query(context).order_by(Item.created_at.desc()).limit(10)
             )
         ).all()
     )
@@ -214,7 +204,6 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -
         (
             await db.execute(
                 workspace_items_query(context)
-                .options(selectinload(Item.identifier_links))
                 .join(ItemRead, ItemRead.item_id == Item.id)
                 .where(
                     ItemRead.user_id == user.id,
@@ -249,7 +238,7 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -
 async def find_duplicates(
     db: AsyncSession, user: User, workspace_id: UUID, mode: str
 ) -> list[list[Item]]:
-    if mode not in ("", "doi", "title", "similar"):
+    if mode not in ("", "identifier", "title", "similar"):
         raise ValidationFailure(f"unknown duplicate mode: {mode}")
     if not mode:
         return []
@@ -258,31 +247,48 @@ async def find_duplicates(
     items = list(
         (
             await db.scalars(
-                workspace_items_query(context)
-                .options(selectinload(Item.identifier_links))
-                .order_by(Item.title)
-                .limit(limit)
+                workspace_items_query(context).order_by(Item.work["title"].as_string()).limit(limit)
             )
         ).all()
     )
     groups: list[list[Item]] = []
     buckets: dict[str, list[Item]] = {}
-    if mode == "doi":
+    if mode == "identifier":
+        # Connected suggestions handle A↔B↔C overlaps without arbitrarily
+        # selecting one identifier or treating a match as a merge command.
+        parents = {item.id: item.id for item in items}
+
+        def root(item_id):
+            while parents[item_id] != item_id:
+                parents[item_id] = parents[parents[item_id]]
+                item_id = parents[item_id]
+            return item_id
+
+        owners: dict[tuple[str, str], UUID] = {}
         for item in items:
-            key = next((row.value for row in item.identifier_links if row.provider == "doi"), "")
-            if key:
-                buckets.setdefault(key, []).append(item)
+            for pair in work_identifiers(item.work):
+                if pair in owners:
+                    parents[root(item.id)] = root(owners[pair])
+                else:
+                    owners[pair] = item.id
+        for item in items:
+            buckets.setdefault(root(item.id), []).append(item)
     elif mode == "title":
         for item in items:
-            buckets.setdefault(_normalized_title(item.title), []).append(item)
+            buckets.setdefault(_normalized_title(item.work.get("title", "")), []).append(item)
     elif mode == "similar":
         remaining = items.copy()
         while remaining:
             anchor = remaining.pop(0)
-            key = _normalized_title(anchor.title)
+            key = _normalized_title(anchor.work.get("title", ""))
             matches = [anchor]
             for candidate in remaining.copy():
-                if SequenceMatcher(None, key, _normalized_title(candidate.title)).ratio() >= 0.9:
+                if (
+                    SequenceMatcher(
+                        None, key, _normalized_title(candidate.work.get("title", ""))
+                    ).ratio()
+                    >= 0.9
+                ):
                     matches.append(candidate)
                     remaining.remove(candidate)
             if len(matches) > 1:

@@ -108,7 +108,13 @@ async def test_http_api_and_database_share_the_asyncio_request_loop(async_sessio
         created = await client.post(
             f"/api/v1/workspaces/{workspace_id}/items",
             headers=headers,
-            json=json_payload({"title": "Async Item"}),
+            json=json_payload({
+                "metadata": {
+                    "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                    "type": "Document",
+                    "title": "Async Item",
+                }
+            }),
         )
         listed = await client.get(f"/api/v1/workspaces/{workspace_id}/items", headers=headers)
 

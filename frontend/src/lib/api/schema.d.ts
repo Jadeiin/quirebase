@@ -1020,6 +1020,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workspaces/{workspace_id}/metadata/schema': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Commonmeta Schema */
+		get: operations['library.commonmeta_schema'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workspaces/{workspace_id}/items/bibliography': {
 		parameters: {
 			query?: never;
@@ -2123,6 +2140,42 @@ export interface components {
 			/** Api Tokens */
 			api_tokens: components['schemas']['ApiTokenView'][];
 		};
+		/** AdditionalDescription */
+		AdditionalDescription: {
+			/**
+			 * Description
+			 * @description The description of the resource.
+			 */
+			description: string;
+			/**
+			 * Type
+			 * @description The type of the description.
+			 */
+			type?: ('Abstract' | 'Summary' | 'Methods' | 'TechnicalInfo' | 'Other') | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+		};
+		/** AdditionalTitle */
+		AdditionalTitle: {
+			/**
+			 * Title
+			 * @description The title of the resource.
+			 */
+			title: string;
+			/**
+			 * Type
+			 * @description The type of the title.
+			 */
+			type?: ('AlternativeTitle' | 'Subtitle' | 'TranslatedTitle') | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+		};
 		/** AdminAuditEventView */
 		AdminAuditEventView: {
 			/**
@@ -2323,19 +2376,125 @@ export interface components {
 			/** Governance Frozen By */
 			governance_frozen_by?: string | null;
 		};
-		/** Affiliation */
-		Affiliation: {
-			/** Name */
+		/** Affiliation1 */
+		Affiliation1: {
+			/**
+			 * Identifier
+			 * @description The identifier of the affiliated organization.
+			 */
+			identifier: string;
+			/**
+			 * Identifier Type
+			 * @description The type of the identifier.
+			 */
+			identifier_type?:
+				('ROR' | 'FundRef' | 'GRID' | 'ISNI' | 'Ringgold' | 'URL' | 'Wikidata' | 'Other') | null;
+			/**
+			 * Name
+			 * @description The name of the affiliated organization.
+			 */
+			name?: string | null;
+			/**
+			 * Role
+			 * @description The role or job title held at the organization.
+			 */
+			role?: string | null;
+			/**
+			 * Start Date
+			 * @description The date the affiliation began.
+			 */
+			start_date?: string | null;
+			/**
+			 * End Date
+			 * @description The date the affiliation ended.
+			 */
+			end_date?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Affiliation2 */
+		Affiliation2: {
+			/**
+			 * Identifier
+			 * @description The identifier of the affiliated organization.
+			 */
+			identifier?: string | null;
+			/**
+			 * Identifier Type
+			 * @description The type of the identifier.
+			 */
+			identifier_type?:
+				('ROR' | 'FundRef' | 'GRID' | 'ISNI' | 'Ringgold' | 'URL' | 'Wikidata' | 'Other') | null;
+			/**
+			 * Name
+			 * @description The name of the affiliated organization.
+			 */
 			name: string;
 			/**
-			 * Identifiers
-			 * @default []
+			 * Role
+			 * @description The role or job title held at the organization.
 			 */
-			identifiers: components['schemas']['Identifier'][];
-			/** Country Code */
-			country_code?: string | null;
-			/** Raw Name */
-			raw_name?: string | null;
+			role?: string | null;
+			/**
+			 * Start Date
+			 * @description The date the affiliation began.
+			 */
+			start_date?: string | null;
+			/**
+			 * End Date
+			 * @description The date the affiliation ended.
+			 */
+			end_date?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** AnnotationCreate */
 		AnnotationCreate: {
@@ -2709,8 +2868,6 @@ export interface components {
 			first_name: string | null;
 			/** Item Count */
 			item_count: number;
-			/** Suffix */
-			suffix?: string | null;
 		};
 		/** AuthorSuggestionView */
 		AuthorSuggestionView: {
@@ -2718,139 +2875,11 @@ export interface components {
 			last_name: string;
 			/** First Name */
 			first_name?: string | null;
-			/** Suffix */
-			suffix?: string | null;
 			/** Full Name */
 			full_name: string;
 		};
-		/**
-		 * BibliographicMetadata
-		 * @description A complete description, independent of its source and persistence.
-		 */
-		'BibliographicMetadata-Input': {
-			/** Title */
-			title: string;
-			/** Abstract */
-			abstract?: string | null;
-			/**
-			 * Keywords
-			 * @default []
-			 */
-			keywords: string[];
-			/** Publication Date */
-			publication_date?: string | null;
-			/** Publication Title */
-			publication_title?: string | null;
-			/** @default document */
-			reference_type: components['schemas']['ReferenceType'];
-			/** Volume */
-			volume?: string | null;
-			/** Issue */
-			issue?: string | null;
-			/** Pages */
-			pages?: string | null;
-			/** Publisher */
-			publisher?: string | null;
-			/** Place Published */
-			place_published?: string | null;
-			/** Journal Abbreviation */
-			journal_abbreviation?: string | null;
-			/** Citation Key */
-			citation_key?: string | null;
-			/**
-			 * Urls
-			 * @default []
-			 */
-			urls: components['schemas']['ResourceLink'][];
-			/**
-			 * Authors
-			 * @default []
-			 */
-			authors: components['schemas']['Contributor'][];
-			/**
-			 * Editors
-			 * @default []
-			 */
-			editors: components['schemas']['Contributor'][];
-			/** Doi */
-			doi?: string | null;
-			/**
-			 * Identifiers
-			 * @default []
-			 */
-			identifiers: components['schemas']['Identifier'][];
-			/**
-			 * Custom Fields
-			 * @default []
-			 */
-			custom_fields: components['schemas']['CustomField-Input'][];
-		};
-		/**
-		 * BibliographicMetadata
-		 * @description A complete description, independent of its source and persistence.
-		 */
-		'BibliographicMetadata-Output': {
-			/** Title */
-			title: string;
-			/** Abstract */
-			abstract?: string | null;
-			/**
-			 * Keywords
-			 * @default []
-			 */
-			keywords: string[];
-			/** Publication Date */
-			publication_date?: string | null;
-			/** Publication Title */
-			publication_title?: string | null;
-			/** @default document */
-			reference_type: components['schemas']['ReferenceType'];
-			/** Volume */
-			volume?: string | null;
-			/** Issue */
-			issue?: string | null;
-			/** Pages */
-			pages?: string | null;
-			/** Publisher */
-			publisher?: string | null;
-			/** Place Published */
-			place_published?: string | null;
-			/** Journal Abbreviation */
-			journal_abbreviation?: string | null;
-			/** Citation Key */
-			citation_key?: string | null;
-			/**
-			 * Urls
-			 * @default []
-			 */
-			urls: components['schemas']['ResourceLink'][];
-			/**
-			 * Authors
-			 * @default []
-			 */
-			authors: components['schemas']['Contributor'][];
-			/**
-			 * Editors
-			 * @default []
-			 */
-			editors: components['schemas']['Contributor'][];
-			/** Doi */
-			doi?: string | null;
-			/**
-			 * Identifiers
-			 * @default []
-			 */
-			identifiers: components['schemas']['Identifier'][];
-			/**
-			 * Custom Fields
-			 * @default []
-			 */
-			custom_fields: components['schemas']['CustomField-Output'][];
-		};
 		/** BibliographyExportRequest */
 		BibliographyExportRequest: {
-			/** Item Ids */
-			item_ids?: string[];
 			/** File Format */
 			file_format: string;
 			/**
@@ -2869,25 +2898,10 @@ export interface components {
 			 */
 			preserve_case: boolean;
 			/**
-			 * Include Identifiers
-			 * @default false
-			 */
-			include_identifiers: boolean;
-			/**
-			 * Include Custom Fields
-			 * @default false
-			 */
-			include_custom_fields: boolean;
-			/**
 			 * Encoding
 			 * @default unicode
 			 */
 			encoding: string;
-			/**
-			 * Journal Mode
-			 * @default full
-			 */
-			journal_mode: string;
 			/**
 			 * Doi Policy
 			 * @default include
@@ -2915,6 +2929,8 @@ export interface components {
 			 * @default false
 			 */
 			citation_key_force_ascii: boolean;
+			/** Item Ids */
+			item_ids?: string[];
 		};
 		/** BreakGlassReadRequest */
 		BreakGlassReadRequest: {
@@ -2973,11 +2989,6 @@ export interface components {
 			doi?: string | null;
 			/** Abstract */
 			abstract?: string | null;
-			/**
-			 * Imported
-			 * @default false
-			 */
-			imported: boolean;
 		};
 		/** CitationKeyPreviewView */
 		CitationKeyPreviewView: {
@@ -3015,37 +3026,248 @@ export interface components {
 			/** Media Type */
 			media_type: string;
 		};
-		/**
-		 * Contributor
-		 * @description One credited author, including affiliations on this particular record.
-		 *
-		 *     Name parts describe upstream facts. bibliographic_name provides a separate
-		 *     formatting projection when a source supplies only a display name.
-		 */
-		Contributor: {
-			/** Display Name */
-			display_name: string;
-			/** Family Name */
-			family_name?: string | null;
-			/** Given Name */
-			given_name?: string | null;
-			/**
-			 * Kind
-			 * @default unknown
-			 * @enum {string}
-			 */
-			kind: 'person' | 'organization' | 'unknown';
+		/** Container */
+		Container: {
 			/**
 			 * Identifiers
-			 * @default []
+			 * @description External identifiers for the container (e.g. its OpenAlex source id, ISSN, DOI, or ISBN).
 			 */
-			identifiers: components['schemas']['Identifier'][];
-			/** Affiliations */
-			affiliations?: components['schemas']['Affiliation'][] | null;
-			/** Is Corresponding */
-			is_corresponding?: boolean | null;
-			/** Suffix */
-			suffix?: string | null;
+			identifiers?: components['schemas']['Identifier1'][] | null;
+			/**
+			 * Type
+			 * @description The type of the container.
+			 */
+			type?:
+				| (
+						| 'Blog'
+						| 'Book'
+						| 'BookSeries'
+						| 'Journal'
+						| 'Proceedings'
+						| 'ProceedingsSeries'
+						| 'Repository'
+						| 'DataRepository'
+						| 'Periodical'
+						| 'Series'
+						| 'igsnCatalog'
+						| 'raidRegistry'
+						| 'Other'
+				  )
+				| null;
+			/**
+			 * Title
+			 * @description The name of the container.
+			 */
+			title?: string | null;
+			/**
+			 * Additional Titles
+			 * @description Abbreviated or alternate titles of the container.
+			 */
+			additional_titles?: string[] | null;
+			/**
+			 * Description
+			 * @description A description of the container.
+			 */
+			description?: string | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+			license?: components['schemas']['License'] | null;
+			/**
+			 * Platform
+			 * @description The platform of the container.
+			 */
+			platform?: string | null;
+			/**
+			 * Image
+			 * @description The image for the container.
+			 */
+			image?: string | null;
+			/** @description The publisher or host organization of the container. */
+			publisher?: components['schemas']['Publisher'] | null;
+			/**
+			 * Country
+			 * @description ISO 3166-1 alpha-2 country code of the container.
+			 */
+			country?: string | null;
+			/**
+			 * First Page
+			 * @description The first page of the resource.
+			 */
+			first_page?: string | null;
+			/**
+			 * Last Page
+			 * @description The last page of the resource.
+			 */
+			last_page?: string | null;
+			/**
+			 * Volume
+			 * @description The volume of the resource.
+			 */
+			volume?: string | null;
+			/**
+			 * Issue
+			 * @description The issue of the resource.
+			 */
+			issue?: string | null;
+			/**
+			 * Location
+			 * @description The location of the conference or event.
+			 */
+			location?: string | null;
+			/**
+			 * Series
+			 * @description The series name or acronym for the conference or event.
+			 */
+			series?: string | null;
+			/**
+			 * Url
+			 * @description The homepage URL of the container.
+			 */
+			url?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the container record was last updated.
+			 */
+			date_updated?: string | null;
+		};
+		/** Contributor */
+		'Contributor-Input': {
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type: 'Person' | 'Organization';
+			/** Person */
+			person?:
+				| components['schemas']['Person1-Input']
+				| components['schemas']['Person2-Input']
+				| components['schemas']['Person3-Input']
+				| components['schemas']['Person4-Input']
+				| null;
+			organization?: components['schemas']['Organization-Input'] | null;
+			/**
+			 * Roles
+			 * @description List of roles assumed by the contributor when working on the resource.
+			 */
+			roles?:
+				| (
+						| 'Author'
+						| 'Chair'
+						| 'Conceptualization'
+						| 'ContactPerson'
+						| 'CorrespondingAuthor'
+						| 'DataCollector'
+						| 'DataCuration'
+						| 'DataManager'
+						| 'Distributor'
+						| 'Editor'
+						| 'FormalAnalysis'
+						| 'FundingAcquisition'
+						| 'HostingInstitution'
+						| 'Interviewee'
+						| 'Investigation'
+						| 'Maintainer'
+						| 'Methodology'
+						| 'Other'
+						| 'Producer'
+						| 'ProjectAdministration'
+						| 'ProjectLeader'
+						| 'ProjectManager'
+						| 'ProjectMember'
+						| 'Reader'
+						| 'RelatedPerson'
+						| 'RegistrationAgency'
+						| 'RegistrationAuthority'
+						| 'ResearchGroup'
+						| 'Researcher'
+						| 'Resources'
+						| 'Reviewer'
+						| 'ReviewerExternal'
+						| 'ReviewAssistant'
+						| 'RightsHolder'
+						| 'Software'
+						| 'Sponsor'
+						| 'StatsReviewer'
+						| 'Supervision'
+						| 'Translator'
+						| 'Validation'
+						| 'Visualization'
+						| 'WorkPackageLeader'
+						| 'WritingOriginalDraft'
+						| 'WritingReviewEditing'
+				  )[]
+				| null;
+		};
+		/** Contributor */
+		'Contributor-Output': {
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type: 'Person' | 'Organization';
+			/** Person */
+			person?:
+				| components['schemas']['Person1-Output']
+				| components['schemas']['Person2-Output']
+				| components['schemas']['Person3-Output']
+				| components['schemas']['Person4-Output']
+				| null;
+			organization?: components['schemas']['Organization-Output'] | null;
+			/**
+			 * Roles
+			 * @description List of roles assumed by the contributor when working on the resource.
+			 */
+			roles?:
+				| (
+						| 'Author'
+						| 'Chair'
+						| 'Conceptualization'
+						| 'ContactPerson'
+						| 'CorrespondingAuthor'
+						| 'DataCollector'
+						| 'DataCuration'
+						| 'DataManager'
+						| 'Distributor'
+						| 'Editor'
+						| 'FormalAnalysis'
+						| 'FundingAcquisition'
+						| 'HostingInstitution'
+						| 'Interviewee'
+						| 'Investigation'
+						| 'Maintainer'
+						| 'Methodology'
+						| 'Other'
+						| 'Producer'
+						| 'ProjectAdministration'
+						| 'ProjectLeader'
+						| 'ProjectManager'
+						| 'ProjectMember'
+						| 'Reader'
+						| 'RelatedPerson'
+						| 'RegistrationAgency'
+						| 'RegistrationAuthority'
+						| 'ResearchGroup'
+						| 'Researcher'
+						| 'Resources'
+						| 'Reviewer'
+						| 'ReviewerExternal'
+						| 'ReviewAssistant'
+						| 'RightsHolder'
+						| 'Software'
+						| 'Sponsor'
+						| 'StatsReviewer'
+						| 'Supervision'
+						| 'Translator'
+						| 'Validation'
+						| 'Visualization'
+						| 'WorkPackageLeader'
+						| 'WritingOriginalDraft'
+						| 'WritingReviewEditing'
+				  )[]
+				| null;
 		};
 		/** CrossWorkspaceCopyRequest */
 		CrossWorkspaceCopyRequest: {
@@ -3077,18 +3299,6 @@ export interface components {
 			 * Format: uuid
 			 */
 			target_item_id: string;
-		};
-		/** CustomField */
-		'CustomField-Input': {
-			/** Name */
-			name: string;
-			value: components['schemas']['JsonValue-Input'];
-		};
-		/** CustomField */
-		'CustomField-Output': {
-			/** Name */
-			name: string;
-			value: components['schemas']['JsonValue-Output'];
 		};
 		/** DashboardProjectView */
 		DashboardProjectView: {
@@ -3122,6 +3332,59 @@ export interface components {
 			project_count: number;
 			/** Session Count */
 			session_count: number;
+		};
+		/** Dates */
+		Dates: {
+			/**
+			 * Created
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			created?: string | null;
+			/**
+			 * Submitted
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			submitted?: string | null;
+			/**
+			 * Accepted
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			accepted?: string | null;
+			/**
+			 * Accessed
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			accessed?: string | null;
+			/**
+			 * Available
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			available?: string | null;
+			/**
+			 * Withdrawn
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			withdrawn?: string | null;
+			/**
+			 * Collected
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			collected?: string | null;
+			/**
+			 * Valid
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			valid?: string | null;
+			/**
+			 * Copyrighted
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			copyrighted?: string | null;
+			/**
+			 * Other
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			other?: string | null;
 		};
 		/** DeleteConfirmationRequest */
 		DeleteConfirmationRequest: {
@@ -3272,6 +3535,21 @@ export interface components {
 			/** Timezone */
 			timezone?: string | null;
 		};
+		/** File */
+		File: {
+			/** Bucket */
+			bucket?: string | null;
+			/** Key */
+			key?: string | null;
+			/** Checksum */
+			checksum?: string | null;
+			/** Url */
+			url: string;
+			/** Size */
+			size?: number | null;
+			/** Mime Type */
+			mime_type?: string | null;
+		};
 		/** FileView */
 		FileView: {
 			/**
@@ -3326,6 +3604,213 @@ export interface components {
 			 */
 			alignment: 'left' | 'center' | 'right';
 		};
+		/** FundingReferences */
+		FundingReferences: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id?: string | null;
+			/** Funder Name */
+			funder_name: string;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title?: string | null;
+			/** Award Number */
+			award_number?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** FundingReferences1 */
+		FundingReferences1: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id: string;
+			/** Funder Name */
+			funder_name?: string | null;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title?: string | null;
+			/** Award Number */
+			award_number?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** FundingReferences2 */
+		FundingReferences2: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id?: string | null;
+			/** Funder Name */
+			funder_name?: string | null;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title?: string | null;
+			/** Award Number */
+			award_number: string;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** FundingReferences3 */
+		FundingReferences3: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id?: string | null;
+			/** Funder Name */
+			funder_name?: string | null;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title: string;
+			/** Award Number */
+			award_number?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** GeoLocation */
+		GeoLocation: {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id?: string | null;
+			/** Place */
+			place?: string | null;
+			/** Point Longitude */
+			point_longitude?: number | null;
+			/** Point Latitude */
+			point_latitude?: number | null;
+			/** Box West Longitude */
+			box_west_longitude?: number | null;
+			/** Box East Longitude */
+			box_east_longitude?: number | null;
+			/** Box South Latitude */
+			box_south_latitude?: number | null;
+			/** Box North Latitude */
+			box_north_latitude?: number | null;
+			/**
+			 * Polygon
+			 * @description The polygon geometry, formatted as Well-Known Text (WKT).
+			 */
+			polygon?: string | null;
+		};
 		/** HealthView */
 		HealthView: {
 			/**
@@ -3334,15 +3819,100 @@ export interface components {
 			 */
 			status: string;
 		};
-		/**
-		 * Identifier
-		 * @description A provider-qualified lookup key or a namespaced confirmed identifier.
-		 */
-		Identifier: {
-			/** Provider */
-			provider: string;
-			/** Value */
-			value: string;
+		/** Identifier */
+		'Identifier-Input': {
+			/** Identifier */
+			identifier: string;
+			/**
+			 * Identifier Type
+			 * @enum {string}
+			 */
+			identifier_type:
+				| 'ARK'
+				| 'arXiv'
+				| 'article_id'
+				| 'Bibcode'
+				| 'DOI'
+				| 'FundRef'
+				| 'GeoNames'
+				| 'GRID'
+				| 'Handle'
+				| 'ISBN'
+				| 'ISNI'
+				| 'ISSN'
+				| 'OpenAlex'
+				| 'PMID'
+				| 'PMCID'
+				| 'PURL'
+				| 'RAiD'
+				| 'ResearcherID'
+				| 'ROR'
+				| 'ScopusID'
+				| 'SWHID'
+				| 'URL'
+				| 'URN'
+				| 'UUID'
+				| 'GUID'
+				| 'Wikidata'
+				| 'Other';
+			/**
+			 * Scheme
+			 * @description The scheme for identifiers with identifier_type 'Other', e.g. 'IGSN' or 'MGDS'.
+			 */
+			scheme?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Identifier1 */
+		Identifier1: {
+			/**
+			 * Identifier
+			 * @description The identifier for the container.
+			 */
+			identifier: string;
+			/**
+			 * Identifier Type
+			 * @description Identifier type for a container (journal, repository, blog, etc.).
+			 * @enum {string}
+			 */
+			identifier_type:
+				| 'DataCite'
+				| 'DOI'
+				| 'Handle'
+				| 'ISBN'
+				| 'ISSN'
+				| 'OpenAlex'
+				| 'PURL'
+				| 're3data'
+				| 'URL'
+				| 'URN'
+				| 'UUID'
+				| 'Wikidata'
+				| 'Other';
 		};
 		/** IdentifierImportRequest */
 		IdentifierImportRequest: {
@@ -3383,7 +3953,7 @@ export interface components {
 		ImportBatchStatus: 'pending' | 'ready' | 'failed' | 'committed';
 		/** ImportCandidatePreview */
 		ImportCandidatePreview: {
-			metadata: components['schemas']['BibliographicMetadata-Output'];
+			metadata: components['schemas']['Work-Output'];
 			source?: components['schemas']['ImportSource'] | null;
 		};
 		/** ImportDiagnostic */
@@ -3467,6 +4037,12 @@ export interface components {
 			/** Name */
 			name: string;
 		};
+		/** ItemCreateRequest */
+		ItemCreateRequest: {
+			metadata: components['schemas']['Work-Input'];
+			/** Citation Key */
+			citation_key?: string | null;
+		};
 		/** ItemDetailView */
 		ItemDetailView: {
 			/**
@@ -3486,31 +4062,11 @@ export interface components {
 			doi: string | null;
 			/** Version */
 			version: number;
-			metadata: components['schemas']['BibliographicMetadata-Output'];
+			metadata: components['schemas']['Work-Output'];
 			/** Abstract Html */
 			abstract_html: string | null;
-			/** Editors */
-			editors: components['schemas']['Contributor'][];
-			/** Structured Authors */
-			structured_authors: components['schemas']['Contributor'][];
-			reference_type: components['schemas']['ReferenceType'];
-			/** Volume */
-			volume: string | null;
-			/** Issue */
-			issue: string | null;
-			/** Pages */
-			pages: string | null;
-			/** Keywords */
-			keywords: string[];
-			/** Urls */
-			urls: components['schemas']['ResourceLink'][];
-		};
-		/** ItemIdentifierView */
-		ItemIdentifierView: {
-			/** Provider */
-			provider: string;
-			/** Value */
-			value: string;
+			/** Citation Key */
+			citation_key: string | null;
 		};
 		/** ItemLatestRevisionView */
 		ItemLatestRevisionView: {
@@ -3571,8 +4127,10 @@ export interface components {
 			counts: components['schemas']['ItemOverviewCountsView'];
 			/** Tags */
 			tags: components['schemas']['ItemTagView'][];
-			/** Identifiers */
-			identifiers: components['schemas']['ItemIdentifierView'][];
+			metadata: components['schemas']['Work-Output'];
+			/** Citation Key */
+			citation_key: string | null;
+			primary_lookup_identifier?: components['schemas']['inquiro__models__Identifier'] | null;
 			latest_revision?: components['schemas']['ItemLatestRevisionView'] | null;
 			thumbnail?: components['schemas']['ItemThumbnailView'] | null;
 			/** Copy Targets */
@@ -3622,26 +4180,10 @@ export interface components {
 		ItemUpdateRequest: {
 			/** Expected Version */
 			expected_version: number;
-			metadata: components['schemas']['BibliographicMetadata-Input'];
+			metadata: components['schemas']['Work-Input'];
+			/** Citation Key */
+			citation_key?: string | null;
 		};
-		'JsonValue-Input':
-			| string
-			| number
-			| boolean
-			| components['schemas']['JsonValue-Input'][]
-			| {
-					[key: string]: components['schemas']['JsonValue-Input'];
-			  }
-			| null;
-		'JsonValue-Output':
-			| string
-			| number
-			| boolean
-			| components['schemas']['JsonValue-Output'][]
-			| {
-					[key: string]: components['schemas']['JsonValue-Output'];
-			  }
-			| null;
 		/** KeywordFacet */
 		KeywordFacet: {
 			/** Value */
@@ -3657,6 +4199,41 @@ export interface components {
 			keywords: components['schemas']['KeywordFacet'][];
 			/** Reference Types */
 			reference_types: components['schemas']['ReferenceTypeFacet'][];
+		};
+		/** License */
+		License: {
+			/** Id */
+			id?: string | null;
+			/** Title */
+			title?: string | null;
+			/** Url */
+			url?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** LinePayload */
 		LinePayload: {
@@ -3874,6 +4451,218 @@ export interface components {
 			 */
 			ok: boolean;
 		};
+		/** Organization */
+		'Organization-Input': {
+			/**
+			 * Id
+			 * @description ROR identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Name
+			 * @description The name of the organization.
+			 */
+			name?: string | null;
+			/**
+			 * Acronym
+			 * @description The acronym or abbreviation of the organization.
+			 */
+			acronym?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, aliases, or translated names of the organization.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Types
+			 * @description The types of the organization.
+			 */
+			types?:
+				| (
+						| 'education'
+						| 'funder'
+						| 'healthcare'
+						| 'company'
+						| 'archive'
+						| 'nonprofit'
+						| 'government'
+						| 'facility'
+						| 'other'
+				  )[]
+				| null;
+			/**
+			 * Status
+			 * @description The status of the organization.
+			 */
+			status?: ('active' | 'inactive' | 'withdrawn') | null;
+			/**
+			 * Established
+			 * @description The year the organization was established.
+			 */
+			established?: number | null;
+			/**
+			 * Date Updated
+			 * @description The date the organization record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the organization, e.g. GRID, ISNI, FundRef, or Wikidata.
+			 */
+			identifiers?: components['schemas']['Identifier-Input'][] | null;
+			/**
+			 * Urls
+			 * @description Website and other URLs associated with the organization.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the organization, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Geo Locations
+			 * @description Geographic locations of the organization.
+			 */
+			geo_locations?: components['schemas']['GeoLocation'][] | null;
+			/**
+			 * Relations
+			 * @description Other organizations related to this organization.
+			 */
+			relations?: components['schemas']['Relation1'][] | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Organization */
+		'Organization-Output': {
+			/**
+			 * Id
+			 * @description ROR identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Name
+			 * @description The name of the organization.
+			 */
+			name?: string | null;
+			/**
+			 * Acronym
+			 * @description The acronym or abbreviation of the organization.
+			 */
+			acronym?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, aliases, or translated names of the organization.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Types
+			 * @description The types of the organization.
+			 */
+			types?:
+				| (
+						| 'education'
+						| 'funder'
+						| 'healthcare'
+						| 'company'
+						| 'archive'
+						| 'nonprofit'
+						| 'government'
+						| 'facility'
+						| 'other'
+				  )[]
+				| null;
+			/**
+			 * Status
+			 * @description The status of the organization.
+			 */
+			status?: ('active' | 'inactive' | 'withdrawn') | null;
+			/**
+			 * Established
+			 * @description The year the organization was established.
+			 */
+			established?: number | null;
+			/**
+			 * Date Updated
+			 * @description The date the organization record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the organization, e.g. GRID, ISNI, FundRef, or Wikidata.
+			 */
+			identifiers?: components['schemas']['inquiro__work_models__Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Website and other URLs associated with the organization.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the organization, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Geo Locations
+			 * @description Geographic locations of the organization.
+			 */
+			geo_locations?: components['schemas']['GeoLocation'][] | null;
+			/**
+			 * Relations
+			 * @description Other organizations related to this organization.
+			 */
+			relations?: components['schemas']['Relation1'][] | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
 		/** PasswordChangeRequest */
 		PasswordChangeRequest: {
 			/** Current Password */
@@ -3932,6 +4721,686 @@ export interface components {
 			revision: components['schemas']['PdfViewerRevisionView'];
 			/** Projects */
 			projects: components['schemas']['PdfViewerProjectView'][];
+		};
+		/** Person1 */
+		'Person1-Input': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id: string;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier-Input'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person1 */
+		'Person1-Output': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id: string;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['inquiro__work_models__Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person2 */
+		'Person2-Input': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name: string;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier-Input'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person2 */
+		'Person2-Output': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name: string;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['inquiro__work_models__Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person3 */
+		'Person3-Input': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name: string;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier-Input'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person3 */
+		'Person3-Output': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name: string;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['inquiro__work_models__Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person4 */
+		'Person4-Input': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name: string;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier-Input'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person4 */
+		'Person4-Output': {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name: string;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['inquiro__work_models__Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** Point */
 		Point: {
@@ -4054,6 +5523,21 @@ export interface components {
 			 * @default []
 			 */
 			sorts: components['schemas']['SearchSort'][];
+			/** Identifier Namespace */
+			identifier_namespace?: string | null;
+		};
+		/** Publisher */
+		Publisher: {
+			/**
+			 * Id
+			 * @description ROR identifier URL of the publisher.
+			 */
+			id?: string | null;
+			/**
+			 * Name
+			 * @description The name of the publisher.
+			 */
+			name?: string | null;
 		};
 		/** Rect */
 		Rect: {
@@ -4076,31 +5560,112 @@ export interface components {
 			 */
 			type: 'rectangle';
 		};
-		/**
-		 * ReferenceType
-		 * @enum {string}
-		 */
-		ReferenceType:
-			| 'article'
-			| 'article-journal'
-			| 'article-magazine'
-			| 'article-newspaper'
-			| 'book'
-			| 'chapter'
-			| 'paper-conference'
-			| 'thesis'
-			| 'report'
-			| 'webpage'
-			| 'dataset'
-			| 'software'
-			| 'patent'
-			| 'standard'
-			| 'manuscript'
-			| 'document'
-			| 'preprint';
+		/** Reference */
+		Reference: {
+			/** Key */
+			key?: string | null;
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id?: string | null;
+			/** Type */
+			type?:
+				| (
+						| 'Preprint'
+						| 'Audiovisual'
+						| 'Blog'
+						| 'BlogPost'
+						| 'BlogVolume'
+						| 'Book'
+						| 'BookChapter'
+						| 'BookPart'
+						| 'BookSection'
+						| 'BookSeries'
+						| 'BookSet'
+						| 'Collection'
+						| 'Component'
+						| 'ComputationalNotebook'
+						| 'Database'
+						| 'Dataset'
+						| 'Dissertation'
+						| 'Document'
+						| 'Entry'
+						| 'Event'
+						| 'Figure'
+						| 'Grant'
+						| 'Image'
+						| 'Instrument'
+						| 'InteractiveResource'
+						| 'Journal'
+						| 'JournalArticle'
+						| 'JournalIssue'
+						| 'JournalVolume'
+						| 'LegalDocument'
+						| 'Manuscript'
+						| 'Map'
+						| 'Model'
+						| 'OutputManagementPlan'
+						| 'Patent'
+						| 'PeerReview'
+						| 'Performance'
+						| 'PersonalCommunication'
+						| 'PhysicalObject'
+						| 'Poster'
+						| 'Presentation'
+						| 'Proceedings'
+						| 'ProceedingsArticle'
+						| 'ProceedingsSeries'
+						| 'Report'
+						| 'ReportComponent'
+						| 'ReportSeries'
+						| 'Review'
+						| 'Service'
+						| 'Software'
+						| 'Sound'
+						| 'Standard'
+						| 'StudyRegistration'
+						| 'WebPage'
+						| 'Workflow'
+						| 'Other'
+				  )
+				| null;
+			/**
+			 * Reference
+			 * @description The reference formatted as string.
+			 */
+			reference?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
 		/** ReferenceTypeFacet */
 		ReferenceTypeFacet: {
-			value: components['schemas']['ReferenceType'];
+			/** Value */
+			value: string;
 			/** Item Count */
 			item_count: number;
 		};
@@ -4110,6 +5675,113 @@ export interface components {
 			username: string;
 			/** Password */
 			password: string;
+		};
+		/** Relation */
+		Relation: {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id: string;
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type:
+				| 'IsNewVersionOf'
+				| 'IsPreviousVersionOf'
+				| 'IsVersionOf'
+				| 'HasVersion'
+				| 'IsPartOf'
+				| 'HasPart'
+				| 'IsVariantFormOf'
+				| 'IsOriginalFormOf'
+				| 'IsIdenticalTo'
+				| 'IsTranslationOf'
+				| 'HasTranslation'
+				| 'IsReviewOf'
+				| 'HasReview'
+				| 'IsPreprintOf'
+				| 'HasPreprint'
+				| 'IsReferencedBy'
+				| 'IsSupplementTo'
+				| 'IsSupplementedBy'
+				| 'Other';
+			/**
+			 * Name
+			 * @description A human-readable label for the related resource.
+			 */
+			name?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Relation1 */
+		Relation1: {
+			/**
+			 * Id
+			 * @description ROR URL of the related organization.
+			 */
+			id: string;
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type: 'IsPartOf' | 'HasPart' | 'IsRelatedTo' | 'Other';
+			/**
+			 * Name
+			 * @description A human-readable label for the related organization.
+			 */
+			name?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** RemoteAttachmentRequest */
 		RemoteAttachmentRequest: {
@@ -4195,27 +5867,6 @@ export interface components {
 			| 'project_annotation_reply.update'
 			| 'project_annotation_reply.delete'
 			| 'project_annotation_reply.restore';
-		/** ResourceLink */
-		ResourceLink: {
-			/** Url */
-			url: string;
-			/**
-			 * Kind
-			 * @default other
-			 * @enum {string}
-			 */
-			kind: 'landing_page' | 'full_text' | 'other';
-			/** Media Type */
-			media_type?: string | null;
-			/** Version */
-			version?: string | null;
-			/** License */
-			license?: string | null;
-			/** Is Open Access */
-			is_open_access?: boolean | null;
-			/** Intended Application */
-			intended_application?: string | null;
-		};
 		/** RuntimeSettingsRequest */
 		RuntimeSettingsRequest: {
 			/**
@@ -4324,6 +5975,31 @@ export interface components {
 			integrity_status: string;
 			/** Integrity Checked At */
 			integrity_checked_at?: string | null;
+		};
+		/** Subject */
+		Subject: {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id?: string | null;
+			/** Subject */
+			subject: string;
+			/**
+			 * Scheme
+			 * @description The subject classification scheme, e.g. FOS, ANZSRC, or JEL.
+			 */
+			scheme?: string | null;
+			/**
+			 * Scheme Uri
+			 * @description A URI identifying the subject classification scheme.
+			 */
+			scheme_uri?: string | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
 		};
 		/**
 		 * SystemAction
@@ -4446,6 +6122,16 @@ export interface components {
 			/** Segment Rects */
 			segment_rects: components['schemas']['Rect'][];
 		};
+		/** Url */
+		Url: {
+			/**
+			 * Name
+			 * @description A label for the URL.
+			 */
+			name?: string | null;
+			/** Url */
+			url: string;
+		};
 		/** UserRoleRequest */
 		UserRoleRequest: {
 			/**
@@ -4458,6 +6144,432 @@ export interface components {
 		UserStatusRequest: {
 			/** Active */
 			active: boolean;
+		};
+		/** Work */
+		'Work-Input': {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id: string;
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type:
+				| 'Preprint'
+				| 'Audiovisual'
+				| 'Blog'
+				| 'BlogPost'
+				| 'BlogVolume'
+				| 'Book'
+				| 'BookChapter'
+				| 'BookPart'
+				| 'BookSection'
+				| 'BookSeries'
+				| 'BookSet'
+				| 'Collection'
+				| 'Component'
+				| 'ComputationalNotebook'
+				| 'Database'
+				| 'Dataset'
+				| 'Dissertation'
+				| 'Document'
+				| 'Entry'
+				| 'Event'
+				| 'Figure'
+				| 'Grant'
+				| 'Image'
+				| 'Instrument'
+				| 'InteractiveResource'
+				| 'Journal'
+				| 'JournalArticle'
+				| 'JournalIssue'
+				| 'JournalVolume'
+				| 'LegalDocument'
+				| 'Manuscript'
+				| 'Map'
+				| 'Model'
+				| 'OutputManagementPlan'
+				| 'Patent'
+				| 'PeerReview'
+				| 'Performance'
+				| 'PersonalCommunication'
+				| 'PhysicalObject'
+				| 'Poster'
+				| 'Presentation'
+				| 'Proceedings'
+				| 'ProceedingsArticle'
+				| 'ProceedingsSeries'
+				| 'Report'
+				| 'ReportComponent'
+				| 'ReportSeries'
+				| 'Review'
+				| 'Service'
+				| 'Software'
+				| 'Sound'
+				| 'Standard'
+				| 'StudyRegistration'
+				| 'WebPage'
+				| 'Workflow'
+				| 'Other';
+			/**
+			 * Additional Descriptions
+			 * @description The additional descriptions of the resource.
+			 */
+			additional_descriptions?: components['schemas']['AdditionalDescription'][] | null;
+			/**
+			 * Additional Titles
+			 * @description Additional titles of the resource.
+			 */
+			additional_titles?: components['schemas']['AdditionalTitle'][] | null;
+			/**
+			 * Additional Type
+			 * @description The additional type of the resource.
+			 */
+			additional_type?: string | null;
+			/**
+			 * Archive Locations
+			 * @description The locations where content is archived.
+			 */
+			archive_locations?:
+				('CLOCKSS' | 'LOCKSS' | 'Portico' | 'KB' | 'Internet Archive' | 'DWT')[] | null;
+			/** @description The container of the resource. */
+			container?: components['schemas']['Container'] | null;
+			/**
+			 * Content
+			 * @description The full text content of the resource, e.g. the body of a blog post.
+			 */
+			content?: string | null;
+			/**
+			 * Contributors
+			 * @description The contributors to the resource.
+			 */
+			contributors?: components['schemas']['Contributor-Input'][] | null;
+			/**
+			 * Date Published
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			date_published?: string | null;
+			/**
+			 * Date Updated
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			date_updated?: string | null;
+			/** @description Other dates for the resource. */
+			dates?: components['schemas']['Dates'] | null;
+			/**
+			 * Description
+			 * @description The description of the resource.
+			 */
+			description?: string | null;
+			/**
+			 * Files
+			 * @description The downloadable files for the resource.
+			 */
+			files?: components['schemas']['File'][] | null;
+			/**
+			 * Funding References
+			 * @description The funding references for the resource.
+			 */
+			funding_references?:
+				| (
+						| components['schemas']['FundingReferences']
+						| components['schemas']['FundingReferences1']
+						| components['schemas']['FundingReferences2']
+						| components['schemas']['FundingReferences3']
+				  )[]
+				| null;
+			/** Geo Locations */
+			geo_locations?: components['schemas']['GeoLocation'][] | null;
+			/**
+			 * Identifiers
+			 * @description Identifiers for the resource, excluding the id.
+			 */
+			identifiers?: components['schemas']['Identifier-Input'][] | null;
+			/**
+			 * Image
+			 * @description The image for the resource, e.g. a thumbnail for a blog post.
+			 */
+			image?: string | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+			license?: components['schemas']['License'] | null;
+			/**
+			 * Provider
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			provider?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+			publisher?: components['schemas']['Organization-Input'] | null;
+			/**
+			 * References
+			 * @description References cited by this resource.
+			 */
+			references?: components['schemas']['Reference'][] | null;
+			/**
+			 * Relations
+			 * @description Other resolvable persistent unique IDs related to the resource.
+			 */
+			relations?: components['schemas']['Relation'][] | null;
+			/**
+			 * Schema Version
+			 * @description The URI of the commonmeta JSON Schema version used.
+			 */
+			schema_version?: 'https://commonmeta.org/commonmeta_v1.0.json' | null;
+			/** Subjects */
+			subjects?: components['schemas']['Subject'][] | null;
+			/**
+			 * Title
+			 * @description The title of the resource.
+			 */
+			title?: string | null;
+			/**
+			 * Url
+			 * @description The URL of the resource.
+			 */
+			url?: string | null;
+			/**
+			 * Version
+			 * @description The version of the resource.
+			 */
+			version?: string | null;
+		};
+		/** Work */
+		'Work-Output': {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id: string;
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type:
+				| 'Preprint'
+				| 'Audiovisual'
+				| 'Blog'
+				| 'BlogPost'
+				| 'BlogVolume'
+				| 'Book'
+				| 'BookChapter'
+				| 'BookPart'
+				| 'BookSection'
+				| 'BookSeries'
+				| 'BookSet'
+				| 'Collection'
+				| 'Component'
+				| 'ComputationalNotebook'
+				| 'Database'
+				| 'Dataset'
+				| 'Dissertation'
+				| 'Document'
+				| 'Entry'
+				| 'Event'
+				| 'Figure'
+				| 'Grant'
+				| 'Image'
+				| 'Instrument'
+				| 'InteractiveResource'
+				| 'Journal'
+				| 'JournalArticle'
+				| 'JournalIssue'
+				| 'JournalVolume'
+				| 'LegalDocument'
+				| 'Manuscript'
+				| 'Map'
+				| 'Model'
+				| 'OutputManagementPlan'
+				| 'Patent'
+				| 'PeerReview'
+				| 'Performance'
+				| 'PersonalCommunication'
+				| 'PhysicalObject'
+				| 'Poster'
+				| 'Presentation'
+				| 'Proceedings'
+				| 'ProceedingsArticle'
+				| 'ProceedingsSeries'
+				| 'Report'
+				| 'ReportComponent'
+				| 'ReportSeries'
+				| 'Review'
+				| 'Service'
+				| 'Software'
+				| 'Sound'
+				| 'Standard'
+				| 'StudyRegistration'
+				| 'WebPage'
+				| 'Workflow'
+				| 'Other';
+			/**
+			 * Additional Descriptions
+			 * @description The additional descriptions of the resource.
+			 */
+			additional_descriptions?: components['schemas']['AdditionalDescription'][] | null;
+			/**
+			 * Additional Titles
+			 * @description Additional titles of the resource.
+			 */
+			additional_titles?: components['schemas']['AdditionalTitle'][] | null;
+			/**
+			 * Additional Type
+			 * @description The additional type of the resource.
+			 */
+			additional_type?: string | null;
+			/**
+			 * Archive Locations
+			 * @description The locations where content is archived.
+			 */
+			archive_locations?:
+				('CLOCKSS' | 'LOCKSS' | 'Portico' | 'KB' | 'Internet Archive' | 'DWT')[] | null;
+			/** @description The container of the resource. */
+			container?: components['schemas']['Container'] | null;
+			/**
+			 * Content
+			 * @description The full text content of the resource, e.g. the body of a blog post.
+			 */
+			content?: string | null;
+			/**
+			 * Contributors
+			 * @description The contributors to the resource.
+			 */
+			contributors?: components['schemas']['Contributor-Output'][] | null;
+			/**
+			 * Date Published
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			date_published?: string | null;
+			/**
+			 * Date Updated
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			date_updated?: string | null;
+			/** @description Other dates for the resource. */
+			dates?: components['schemas']['Dates'] | null;
+			/**
+			 * Description
+			 * @description The description of the resource.
+			 */
+			description?: string | null;
+			/**
+			 * Files
+			 * @description The downloadable files for the resource.
+			 */
+			files?: components['schemas']['File'][] | null;
+			/**
+			 * Funding References
+			 * @description The funding references for the resource.
+			 */
+			funding_references?:
+				| (
+						| components['schemas']['FundingReferences']
+						| components['schemas']['FundingReferences1']
+						| components['schemas']['FundingReferences2']
+						| components['schemas']['FundingReferences3']
+				  )[]
+				| null;
+			/** Geo Locations */
+			geo_locations?: components['schemas']['GeoLocation'][] | null;
+			/**
+			 * Identifiers
+			 * @description Identifiers for the resource, excluding the id.
+			 */
+			identifiers?: components['schemas']['inquiro__work_models__Identifier'][] | null;
+			/**
+			 * Image
+			 * @description The image for the resource, e.g. a thumbnail for a blog post.
+			 */
+			image?: string | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+			license?: components['schemas']['License'] | null;
+			/**
+			 * Provider
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			provider?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+			publisher?: components['schemas']['Organization-Output'] | null;
+			/**
+			 * References
+			 * @description References cited by this resource.
+			 */
+			references?: components['schemas']['Reference'][] | null;
+			/**
+			 * Relations
+			 * @description Other resolvable persistent unique IDs related to the resource.
+			 */
+			relations?: components['schemas']['Relation'][] | null;
+			/**
+			 * Schema Version
+			 * @description The URI of the commonmeta JSON Schema version used.
+			 */
+			schema_version?: 'https://commonmeta.org/commonmeta_v1.0.json' | null;
+			/** Subjects */
+			subjects?: components['schemas']['Subject'][] | null;
+			/**
+			 * Title
+			 * @description The title of the resource.
+			 */
+			title?: string | null;
+			/**
+			 * Url
+			 * @description The URL of the resource.
+			 */
+			url?: string | null;
+			/**
+			 * Version
+			 * @description The version of the resource.
+			 */
+			version?: string | null;
 		};
 		/** WorkflowStatusView */
 		WorkflowStatusView: {
@@ -4710,6 +6822,84 @@ export interface components {
 			id: string;
 			/** Version */
 			version?: number | null;
+		};
+		/**
+		 * Identifier
+		 * @description A provider-qualified lookup key or a namespaced confirmed identifier.
+		 */
+		inquiro__models__Identifier: {
+			/** Provider */
+			provider: string;
+			/** Value */
+			value: string;
+		};
+		/** Identifier */
+		inquiro__work_models__Identifier: {
+			/** Identifier */
+			identifier: string;
+			/**
+			 * Identifier Type
+			 * @enum {string}
+			 */
+			identifier_type:
+				| 'ARK'
+				| 'arXiv'
+				| 'article_id'
+				| 'Bibcode'
+				| 'DOI'
+				| 'FundRef'
+				| 'GeoNames'
+				| 'GRID'
+				| 'Handle'
+				| 'ISBN'
+				| 'ISNI'
+				| 'ISSN'
+				| 'OpenAlex'
+				| 'PMID'
+				| 'PMCID'
+				| 'PURL'
+				| 'RAiD'
+				| 'ResearcherID'
+				| 'ROR'
+				| 'ScopusID'
+				| 'SWHID'
+				| 'URL'
+				| 'URN'
+				| 'UUID'
+				| 'GUID'
+				| 'Wikidata'
+				| 'Other';
+			/**
+			 * Scheme
+			 * @description The scheme for identifiers with identifier_type 'Other', e.g. 'IGSN' or 'MGDS'.
+			 */
+			scheme?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** Body_imports.stage_bibliography_import */
 		stage_bibliography_import: {
@@ -7020,11 +9210,10 @@ export interface operations {
 				keyword?: string;
 				author?: string;
 				has_files?: boolean | null;
-				reference_type?: components['schemas']['ReferenceType'] | null;
+				reference_type?: string | null;
 				keyword_exact?: string | null;
 				author_last_name?: string | null;
 				author_first_name?: string | null;
-				author_suffix?: string | null;
 			};
 			header?: never;
 			path: {
@@ -7074,7 +9263,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['BibliographicMetadata-Input'];
+				'application/json': components['schemas']['ItemCreateRequest'];
 			};
 		};
 		responses: {
@@ -7118,11 +9307,10 @@ export interface operations {
 				keyword?: string;
 				author?: string;
 				has_files?: boolean | null;
-				reference_type?: components['schemas']['ReferenceType'] | null;
+				reference_type?: string | null;
 				keyword_exact?: string | null;
 				author_last_name?: string | null;
 				author_first_name?: string | null;
-				author_suffix?: string | null;
 			};
 			header?: never;
 			path: {
@@ -7732,6 +9920,48 @@ export interface operations {
 			};
 		};
 	};
+	'library.commonmeta_schema': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': {
+						[key: string]: unknown;
+					};
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
 	'library_exports.export_item_selection': {
 		parameters: {
 			query?: never;
@@ -7756,7 +9986,8 @@ export interface operations {
 					'text/plain': string;
 					'application/x-bibtex': string;
 					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
+					'application/vnd.citationstyles.csl+json': string;
+					'application/vnd.commonmeta+json': string;
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7846,7 +10077,8 @@ export interface operations {
 					'text/plain': string;
 					'application/x-bibtex': string;
 					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
+					'application/vnd.citationstyles.csl+json': string;
+					'application/vnd.commonmeta+json': string;
 				};
 			};
 			/** @description Unprocessable Content */
@@ -9484,13 +11716,10 @@ export interface operations {
 				style?: string;
 				include_abstract?: boolean;
 				preserve_case?: boolean;
-				include_identifiers?: boolean;
-				include_custom_fields?: boolean;
 				encoding?: string;
-				journal_mode?: string;
 				doi_policy?: string;
 				url_policy?: string;
-				excluded_fields?: string;
+				excluded_fields?: string[];
 				sort_by?: string;
 				citation_key_formula?: string;
 				citation_key_force_ascii?: boolean;
@@ -9513,7 +11742,8 @@ export interface operations {
 					'text/plain': string;
 					'application/x-bibtex': string;
 					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
+					'application/vnd.citationstyles.csl+json': string;
+					'application/vnd.commonmeta+json': string;
 				};
 			};
 			/** @description Unprocessable Content */
@@ -9543,13 +11773,10 @@ export interface operations {
 				style?: string;
 				include_abstract?: boolean;
 				preserve_case?: boolean;
-				include_identifiers?: boolean;
-				include_custom_fields?: boolean;
 				encoding?: string;
-				journal_mode?: string;
 				doi_policy?: string;
 				url_policy?: string;
-				excluded_fields?: string;
+				excluded_fields?: string[];
 				sort_by?: string;
 				citation_key_formula?: string;
 				citation_key_force_ascii?: boolean;

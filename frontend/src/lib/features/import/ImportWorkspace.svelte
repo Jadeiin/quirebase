@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { bibliographyFormats } from '#lib/export-preferences.js';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onDestroy, onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import type { components } from '#lib/api/schema.js';
 	import Panel from '#lib/design/Panel.svelte';
@@ -29,6 +31,7 @@
 	let busy = $state(false);
 	let previewPage = $state(1);
 	let manualOpen = $state(false);
+	let metadataErrors = $state<components['schemas']['ErrorField'][]>([]);
 	let pdfFiles = $state<File[]>([]);
 	let pdfInput = $state<HTMLInputElement>();
 	let pollingAbort: AbortController | null = null;
@@ -46,15 +49,10 @@
 		}
 	});
 	const workflows = getWorkflowCenter();
-	const emptyMetadata: components['schemas']['BibliographicMetadata-Input'] = {
-		title: '',
-		reference_type: 'document',
-		keywords: [],
-		urls: [],
-		authors: [],
-		editors: [],
-		identifiers: [],
-		custom_fields: []
+	const emptyMetadata: components['schemas']['ItemDetailView']['metadata'] = {
+		id: `urn:uuid:${crypto.randomUUID()}`,
+		type: 'Document',
+		title: ''
 	};
 
 	function stopPolling() {
@@ -283,17 +281,22 @@
 		}
 	}
 
-	async function createItem(metadata: components['schemas']['BibliographicMetadata-Input']) {
+	async function createItem(
+		metadata: components['schemas']['ItemDetailView']['metadata'],
+		citationKey: string
+	) {
 		if (!workspace.can('item.create')) return;
 		busy = true;
 		error = '';
+		metadataErrors = [];
 		try {
 			const item = await workspace.api.request('POST', '/workspaces/{workspace_id}/items', {
-				body: metadata
+				body: { metadata, citation_key: citationKey || null }
 			});
 			await invalidateLibrary(queryClient, workspaceId);
 			await goto(resolve(workspaceHref(workspaceId, `item/${item.id}`)));
 		} catch (reason) {
+			metadataErrors = reason instanceof ApiError ? reason.fields : [];
 			error = apiErrorMessage(reason, $t('Unable to create Item'));
 		} finally {
 			busy = false;
@@ -393,8 +396,9 @@
 			>
 			<label
 				>{$t('File format')}<select class="select" name="file_format">
-					<option value="bibtex">BibTeX</option><option value="biblatex">BibLaTeX</option>
-					<option value="ris">RIS</option><option value="endnote">EndNote</option>
+					{#each bibliographyFormats.filter((choice) => choice.importable) as choice (choice.value)}
+						<option value={choice.value}>{$t(choice.label)}</option>
+					{/each}
 				</select></label
 			>
 		</ImportSourceForm>
@@ -462,6 +466,7 @@
 			</div>
 			<ItemMetadataForm
 				metadata={emptyMetadata}
+				serverErrors={metadataErrors}
 				{busy}
 				submitLabel={$t('Create Item')}
 				onsubmit={createItem}

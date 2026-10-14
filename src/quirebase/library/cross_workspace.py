@@ -15,13 +15,12 @@ from quirebase.core.errors import ValidationFailure
 from quirebase.documents import prepare_item_document_copy
 from quirebase.models import (
     Item,
-    ItemIdentifier,
     User,
     Workspace,
 )
 from quirebase.search import search_index
 
-from ._item_identifiers import _replace_item_identifiers_many
+from ._metadata import metadata_write, validate_citation_key
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -29,25 +28,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-_ITEM_FIELDS = (
-    "title",
-    "abstract",
-    "publication_date",
-    "publication_title",
-    "volume",
-    "issue",
-    "pages",
-    "publisher",
-    "place_published",
-    "journal_abbreviation",
-    "reference_type",
-    "authors",
-    "editors",
-    "citation_key",
-    "urls",
-    "keywords",
-    "custom_fields",
-)
+_ITEM_FIELDS = ("work", "citation_key")
 
 
 async def copy_item_to_workspace(
@@ -67,9 +48,6 @@ async def copy_item_to_workspace(
     item_fields: dict[str, Any] = deepcopy({
         field: getattr(source, field) for field in _ITEM_FIELDS
     })
-    identifier_links = tuple(
-        sorted((link.provider, link.value) for link in source.identifier_links)
-    )
     documents = await prepare_item_document_copy(db, source_workspace_id, item_id)
     await require_workspace_action(db, actor, target_workspace_id, ResourceAction.item_create)
 
@@ -122,19 +100,8 @@ async def copy_item_to_workspace(
             or any(getattr(current_source, field) != value for field, value in item_fields.items())
         ):
             raise ValidationFailure("source Item changed while its files were copied")
-        current_identifier_links = tuple(
-            sorted(
-                (link.provider, link.value)
-                for link in (
-                    await db.scalars(
-                        select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)
-                    )
-                ).all()
-            )
-        )
-        if current_identifier_links != identifier_links:
-            raise ValidationFailure("source Item changed while its files were copied")
-
+        item_fields["work"] = metadata_write(item_fields["work"])["work"]
+        item_fields["citation_key"] = validate_citation_key(item_fields["citation_key"])
         target = Item(
             workspace_id=target_workspace_id,
             created_by=current_actor.id,
@@ -142,8 +109,6 @@ async def copy_item_to_workspace(
         )
         db.add(target)
         await db.flush()
-
-        await _replace_item_identifiers_many(db, [(target, list(identifier_links))], replace=False)
 
         await documents.install(db, current_actor.id, target_workspace_id, target.id)
         await search_index(db).index_item(db, target.id)

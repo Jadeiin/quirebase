@@ -52,7 +52,6 @@ ORM_MODEL_OWNERS = {
     "ObjectIntegrityScan": "operations",
     "Invitation": "accounts",
     "Item": "library",
-    "ItemIdentifier": "library",
     "ItemRead": "library",
     "ItemTag": "library",
     "ItemTagRecommendation": "library",
@@ -197,7 +196,6 @@ LIBRARY_FACADE_OPERATIONS = {
     "export_selected_bibliography",
     "format_csl_export",
     "format_standard_export",
-    "get_accessible_item_identifiers",
     "get_item_citation_response",
     "get_item_citation_text_response",
     "list_custom_citation_styles",
@@ -654,13 +652,7 @@ def test_internal_write_helpers_keep_the_callers_transaction():
     helper_locations = {
         "projects/workspaces.py": {"_add_missing_project_items"},
         "library/tags.py": {"_assign_item_tags"},
-        "library/item_metadata.py": {"_write_item_identifiers"},
         "library/identifiers.py": {"_create_items_from_candidates"},
-    }
-    path = "library/_item_identifiers.py"
-    tree = ast.parse((SRC_ROOT / path).read_text(encoding="utf-8"))
-    helper_locations[path] = {
-        node.name for node in tree.body if isinstance(node, ast.AsyncFunctionDef)
     }
     helper_owners = {}
     for path, names in helper_locations.items():
@@ -743,20 +735,16 @@ def test_bibliography_integration_tests_use_the_package_facade():
 
 def test_inquiro_facade_exposes_provider_operations_and_bibliographic_value_types():
     expected = {
+        "Work",
         "AcquiredDocument",
-        "Affiliation",
-        "BibliographicMetadata",
         "CandidateNotFound",
         "CandidatePage",
         "CandidateRecord",
-        "Contributor",
-        "CustomField",
         "DocumentRequest",
         "Identifier",
         "InquiroError",
         "InvalidPdfResponse",
         "InvalidProviderRequest",
-        "JsonValue",
         "MetadataProviderChoices",
         "PdfAccessDenied",
         "PdfNotAvailable",
@@ -764,7 +752,6 @@ def test_inquiro_facade_exposes_provider_operations_and_bibliographic_value_type
         "ProviderChoice",
         "ProviderRuntime",
         "ProviderUnavailable",
-        "ResourceLink",
         "SearchClause",
         "SearchQuery",
         "metadata_provider_choices",

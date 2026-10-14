@@ -68,7 +68,8 @@ def _archive_name(value: str, fallback: str) -> str:
 
 def _item_archive_prefix(item: Item) -> str:
     return _archive_name(
-        item.citation_key or convert_rich_text(item.title, source="html", target="text"),
+        item.citation_key
+        or convert_rich_text(item.work.get("title", ""), source="html", target="text"),
         str(item.id)[:8],
     )
 
@@ -433,7 +434,9 @@ async def assemble_document_bundle(
                 yield member
             item_manifest.append({
                 "item_id": item.id,
-                "title": convert_rich_text(item.title, source="html", target="text"),
+                "title": convert_rich_text(
+                    item.work.get("title", ""), source="html", target="text"
+                ),
                 "folder": root,
             })
         value = json.dumps(

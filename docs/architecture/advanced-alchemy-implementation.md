@@ -59,7 +59,7 @@ Structured persistent values use `JsonB`, including Import Batch snapshots/resul
 Item author/editor snapshots, keywords, URLs and custom fields, recommendation candidates,
 PDF geometry/payloads and integrity diagnostics.
 JSON UUIDs reload as strings. Commands replace complete values. Search projections and
-canonical Identifier associations provide the corresponding projections and relationships.
+Commonmeta Work JSON provides bibliographic snapshots without identifier associations.
 
 Argon2 inputs are prepared outside the event loop. The prepared password type represents its physical
 `Text` column for Alembic. Alembic renders AA type representations and dialect
@@ -133,18 +133,17 @@ with `deleted_by_moderation=False`. Commands own payload validation, authorizati
 version-conflict translation, Audit and transaction completion.
 
 Library's Item metadata commands directly insert roots and replace them through scoped version CAS.
-Provider merge logic lives in `identifiers`; shared Identifier relationship writing lives in `item_metadata`,
-and the reused batch candidate mechanism lives in `identifiers`. Metadata inputs become explicit
+Library Work merge policy lives in `_metadata`; `item_metadata` owns complete replacement,
+and `identifiers` reuses candidate creation for confirmed imports. Metadata inputs become explicit
 write plans: replacement clears omitted associations; Provider merges preserve missing fields,
-merge URLs/keywords and retain citation
-keys. Shared bounded-column validation accepts domain values. The Item replacement command
+merge standard Work facts and retain citation keys. Shared bounded-column validation accepts domain values. The Item replacement command
 uses Workspace, identity and expected-version predicates in its SQL. `Item.version` is an
 application CAS field.
 Provider synchronization directly advances the version through Workspace, identity and version CAS;
 the command owns external I/O, authority rechecks, merge decisions, conflicts, Audit and Search.
 
-Import confirmation batches Item roots containing Contributor snapshots and separately writes
-Identifier links. Contributor spelling is record-local, and array order represents credit order.
+Import confirmation batches Item roots containing complete Work snapshots, allowing shared
+bibliographic identifiers. Contributor spelling is record-local, and array order represents credit order.
 The locked Import Batch establishes
 result ordering and replay identity. The confirmation command owns File ownership transfer, Search,
 Audit and enqueue.

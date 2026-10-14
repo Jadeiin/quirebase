@@ -47,7 +47,11 @@ async def test_tag_mutations_are_workspace_scoped_and_audited(async_db):
     user = await _user(async_db, "tag-remover")
     workspace_id = fixture_workspace_id(user)
     assert workspace_id is not None
-    item = Item(workspace_id=workspace_id, title="Tagged Item", created_by=user.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Tagged Item"},
+    )
     async_db.add(item)
     await async_db.flush()
 
@@ -79,7 +83,11 @@ async def test_tag_selection_is_atomic(async_db):
     user = await _user(async_db, "tag-selection-atomic")
     workspace_id = fixture_workspace_id(user)
     assert workspace_id is not None
-    item = Item(workspace_id=workspace_id, title="Atomic Tag Selection", created_by=user.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Atomic Tag Selection"},
+    )
     async_db.add(item)
     await async_db.flush()
     assignment = await add_tag_to_item(async_db, user, workspace_id, item.id, "Keep Me")
@@ -121,10 +129,14 @@ async def test_tag_matrix_and_normalized_names_are_workspace_scoped(async_db):
     tags.append(Tag(workspace_id=foreign_workspace_id, name="Foreign", created_by=foreign.id))
     item = Item(
         workspace_id=workspace_id,
-        title="Compiler Optimization Algorithms",
-        abstract="Efficient algorithms for compiler backend.",
-        keywords=metadata_list_values("Compiler; New Optimizer"),
         created_by=user.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Compiler Optimization Algorithms",
+            "description": "Efficient algorithms for compiler backend.",
+            "subjects": [{"subject": v} for v in metadata_list_values("Compiler; New Optimizer")],
+        },
     )
     async_db.add_all([*tags, item])
     await async_db.flush()

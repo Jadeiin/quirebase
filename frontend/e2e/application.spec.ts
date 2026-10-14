@@ -262,15 +262,22 @@ test('Appearance labels stay aligned when the selected theme changes', async ({ 
 	await page.goto('/workspace/workspace-1');
 	for (const active of ['Dark theme', 'Light theme']) {
 		await page.getByRole('button', { name: /reader/i }).click();
-		const positions = [];
 		for (const name of ['Light theme', 'Dark theme', 'System theme']) {
 			const item = page.getByRole('menuitem', { name });
-			const text = item.locator('span').filter({ hasText: new RegExp(`^${name}$`) });
-			positions.push((await text.boundingBox())!.x);
 			await expect(item).toHaveAttribute('data-active', String(name === active));
 			await expect(item.locator('span').last()).toHaveText(name === active ? '✓' : '');
 		}
-		expect(Math.max(...positions) - Math.min(...positions)).toBeLessThan(1);
+		await expect
+			.poll(() =>
+				page.getByRole('menuitem', { name: /^(Light|Dark|System) theme$/ }).evaluateAll((items) => {
+					// Measure one layout frame; the menu can reposition while opening.
+					const positions = items.map(
+						(item) => item.querySelector('span.min-w-0')!.getBoundingClientRect().x
+					);
+					return Math.max(...positions) - Math.min(...positions);
+				})
+			)
+			.toBeLessThan(1);
 		await page.getByRole('menuitem', { name: 'Light theme' }).click();
 	}
 });

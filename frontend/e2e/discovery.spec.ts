@@ -58,8 +58,7 @@ test('discovery renders the flat results response contract', async ({ page }) =>
 						identifier: '10.1000/result',
 						title: 'Discovered paper',
 						authors: 'A. Researcher',
-						publication_date: '2026',
-						imported: false
+						publication_date: '2026'
 					}
 				],
 				total: 1,
@@ -99,8 +98,7 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 						provider: 'openalex',
 						identifier_provider: 'openalex',
 						identifier: 'W123',
-						title: 'Candidate',
-						imported: false
+						title: 'Candidate'
 					}
 				],
 				total: 1,
@@ -118,7 +116,15 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 				id: 'batch-discovery',
 				status: 'ready',
 				workflow_id: null,
-				records: [{ metadata: { title: 'Candidate', authors: [] } }],
+				records: [
+					{
+						metadata: {
+							id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+							type: 'Other',
+							title: 'Candidate'
+						}
+					}
+				],
 				errors: []
 			}
 		})

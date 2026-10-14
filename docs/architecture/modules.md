@@ -108,6 +108,20 @@ Documents, Library, Models, Operations, Projects, Search and Workspaces. Bootstr
 durable workflows through their implementation modules; ordinary Library callers use its facade.
 The persistence mapping may import Core, and no other Module may import the CLI.
 
+## Commonmeta capability boundary
+
+Inquiro owns the external Work schema, generated neutral types, bounded Provider transport,
+reader/writer orchestration and comparison normalization. Quirebase Library owns Item title/size
+and Citation Key limits, authorized Workspace lookup, partial merge policy, duplicate suggestions,
+CAS, persistence and ImportBatch recovery. Search uses neutral Work projections only. Frontend
+uses generated HTTP types and the authorized official-schema endpoint. The Web UI Adapter owns
+schema-renderer configuration, localized controls, complete Work drafts and field-error/conflict
+presentation. Its Draft-07 rendering conversion never replaces original-schema validation or
+Library's write policy. Inquiro selects active Contributor entities only in neutral projections
+and temporary writer inputs, preserving complete Work snapshots for persistence and Commonmeta
+export. Neither Inquiro nor commonmeta-py knows Workspace, Item UUID or database identity. See
+[ADR 0015](../adr/0015-commonmeta-work-and-duplicate-suggestions.md).
+
 ## Interfaces
 
 A Module interface is the smallest surface callers need to exercise a business capability.
@@ -191,97 +205,55 @@ supplies the built-in style catalog; custom CSL renders without that catalog. Li
 unknown styles as input errors and preserves unexpected rendering failures as Implementation
 errors.
 
-`inquiro.bibliography` is a package facade: the only supported import surface for neutral
-records, bibliography interchange, Citation Key generation, Citation Style catalog access and CSL
-rendering. Its internal modules (`records`, `options`, `keys`, `formats`, `styles`, `engine`) are private
-implementation seams with a test-enforced layer order (records/options → keys →
-formats/styles → engine); nothing inside the package may import a higher layer, and nothing
-outside may bypass the facade. One options class (`BibliographyExportOptions`) carries every
-export preference; validation is concentrated in `export_bibliography_records`. Shared payload
-cleaning lives in `inquiro.canonical`; the neutral `inquiro.reference_types` Module owns one
-CSL-aligned Reference Type enum, with standard values read from citeproc-py's bundled CSL schema, and
-directional Provider/format mappings. Models imports only that neutral vocabulary to define its SQLAlchemy enum constraint; it does not depend on Provider
-execution. Provider-specific payload helpers stay private inside `inquiro.providers`. Import Batch
-JSON belongs to Library, while source conversion and bibliographic normalization belong to
-`inquiro.metadata`. `inquiro.models` defines Contributor, Affiliation, Identifier, ResourceLink,
-CustomField and BibliographicMetadata once. Candidate Records and Item metadata reuse these nested
-values, preserving display names, family/given names, suffixes, identifiers, per-credit institutions
-and link media type, version, license, access status and purpose through preview and confirmation.
-Item has no affiliation text or top-level institution list. Suffixes stay separate until the
-bibliographic formatting projection. Library maps ORM fields and Identifier rows into the neutral
-metadata interface; Inquiro accepts no Quirebase or SQLAlchemy objects.
+`inquiro.bibliography` is the facade for standard Work interchange, Citation Key generation,
+Citation Styles and rendering. Its `options`, `keys`, `styles`, `formats` and `engine` modules
+follow the import-linter layer contract. Field and type conversion is delegated to commonmeta-py;
+there is no parallel Bibliography Record or Reference Type registry. `inquiro.work` validates the
+locked external schema and supplies neutral projections; `inquiro.work_models` is generated from
+that schema. Candidate Records contain Work, Provider context and diagnostics. Library owns
+ImportBatch JSON and business merge policy. Inquiro accepts no Quirebase or SQLAlchemy objects.
+The [support matrix](item-metadata-json.md) records explicit upstream conversion restrictions.
 
 Scholarly inline Rich Text crosses the Inquiro Interface through one restricted conversion
-operation. Its canonical application representation is sanitized HTML containing only `i`, `b`,
+operation. Its restricted rendering representation is sanitized HTML containing only `i`, `b`,
 `sup` and `sub`, without attributes. The private Implementation maps the equivalent supported
 LaTeX commands (`emph`, `mkbibemph`, `textit`, `textbf`, `textsuperscript` and `textsubscript`) to
-Inquiro-owned nodes and renders canonical HTML, LaTeX or plaintext. Library stores canonical HTML
-for Item titles and abstracts; Citation Key generation, Search, recommendations, archive names and
+Inquiro-owned nodes and renders canonical HTML, LaTeX or plaintext. Library preserves the validated
+Work, including its source titles and abstracts. Citation rendering sanitizes temporary display
+values, including nested contributor names, before passing them to citeproc; it preserves stored
+Work and interchange snapshots. Citation Key generation, Search, recommendations, archive names and
 non-rich export formats explicitly request plaintext. Inline `$...$` formulae remain verbatim in
 the canonical representation and bibliography round-trips. The frontend Web UI Adapter alone
 projects them through Temml into allowlisted MathML. `pylatexenc` and bibliography implementation
 types do not cross the Inquiro Interface.
 
-Item metadata mutation crosses the Library interface through `create_item`,
-`revise_item_metadata` and `regenerate_citation_key`. Creation and revision share one flat,
-typed `ItemMetadata` value (Library's name for Inquiro BibliographicMetadata); Contributor,
-identifier and custom-field values are parsed before
-crossing the seam. Permission, optimistic concurrency, Identifier projections, Search
-synchronization, Audit Event recording and commit order remain in the Library implementation.
-These operations return an immutable Item identity and version, not a mutable ORM aggregate.
-Their implementation lives in `library.item_metadata`; that internal Module owns writes to one
-Item's bibliographic record, not unrelated Item operations.
+Item metadata mutation crosses Library through `create_item`, `revise_item_metadata` and
+`regenerate_citation_key`. Creation and revision validate the generated standard Work plus
+Library's title, payload-size, calendar-date and Citation Key limits. Library owns permission,
+Item version CAS, Search coordination, Audit, transactional enqueue and commit. The commands
+return an Item UUID and version. `library.item_metadata` owns complete replacement;
+`library._metadata` owns record-local Provider merge policy, preserving omitted and local facts.
 
-Item is the canonical source of its ordered author/editor snapshots and keyword/URL arrays.
-Contributor validation, source projection and merge rules live in `inquiro.metadata`.
-`library._metadata` owns ORM adaptation and Library field limits; there is no
-shared Author identity or independently mutable Contributor association. `library.catalog` owns
-the authorized Workspace/Project candidate query reused by Search, Contributor suggestions and
-`library.facets`. `library._json_queries` isolates PostgreSQL and SQLite JSON expressions.
-Facets count distinct Items per stored name or term and do not infer researcher identity.
-Search owns its existing rebuildable full-text projections; an additional facet projection is
-deferred until measured query costs justify it. See the
-[Item metadata query contract](item-metadata-json.md).
+`Item.work` is the sole bibliographic snapshot, including ordered credits, subjects, files and
+identifiers. `library.catalog` supplies authorized Workspace/Project candidates to Search,
+Contributor suggestions and facets. JSON expressions are isolated in `library._json_queries`;
+facets count distinct Items and never infer shared researcher identity. Existing full-text
+projections remain rebuildable. New JSON indexes or facet projections require measured need.
 
-Item metadata exposes one controlled Reference Type and one `citation_key` across persistence,
-Library commands and HTTP. Reference Types follow CSL semantics, with the Library preprint
-extension projected as CSL article. Source-aware mappings distinguish BibTeX article from CSL
-article, and proceedings volumes from individual conference papers. Degree and publication
-status do not become extra Reference Types. Unsupported file classifications use document,
-preserve source_reference_type/source_reference_format in existing custom fields, and emit a
-non-blocking warning. Errors still block bibliography confirmation. Export format entry types are
-derived from Reference Type rather than stored separately. Manual Publication Dates accept only calendar-valid `YYYY`, `YYYY-MM` or
-`YYYY-MM-DD`; upstream and bibliography adapters normalize their date representations without
-inventing absent month/day parts. Inquiro delegates textual date parsing and month names to
-`python-dateutil`, while its shared projection owns precision and range reduction. Provider,
-file-import and CSL projections use that same date normalization; cross-year ranges have no
-single Publication Date. SQLAlchemy non-native Enum columns receive their StrEnum directly
-and generate their own CHECK constraints. Cross-column business invariants retain explicit checks.
-Citation Key formula preview is an authenticated account operation with no Workspace dependency;
-Workspace selection remains necessary for custom Citation Styles.
+Commonmeta owns Work type vocabulary and field constraints. The separate Item Citation Key
+retains its formula preview and 128-character business limit. Manual dates preserve standard
+precision, including valid full timestamps; Provider date normalization never invents missing
+month/day components. Source attributes without a standard representation receive diagnostics,
+and valid records in an ImportBatch can be confirmed alongside failed records.
 
-Upstream Identifiers have one value per Identifier Namespace on an Item; the persisted namespace
-field is named `provider`. Namespace names are normalized before duplicate validation, and
-conflicting entries are rejected instead of silently keeping the last value. Inquiro owns the
-distinction between query context and record identity: `CandidateRecord.lookup_identifier`
-preserves the parsed lookup input, or supplies the next lookup key for a Search result;
-`identifiers` contains confirmed identities only. A DOI query against OpenAlex contributes the
-returned Work ID and canonical DOI to `identifiers`; a Crossref or DataCite query contributes a DOI
-identity without a second source-specific DOI alias. The actual metadata source remains in
-`CandidateRecord.provider`. Lookup and Search Adapters return `CandidateRecord` directly; Search
-uses `CandidatePage` and the validated `SearchQuery` without parallel internal result types. Each
-Provider shares parsing between operations that return the same upstream record shape. The runtime
-normalizes dates and checks identifier namespace cardinality. Library projects the confirmed identities without Provider-specific
-reconciliation or forced writes of query inputs. Database uniqueness also binds each Workspace's
-Namespace/value pair to one Item; the
-Identifier row carries Workspace lineage through its composite Item foreign key. A competing
-claim returns a validation conflict after savepoint recovery without retry. Cross-Workspace copies
-retain independent claims and use the same Identifier writer as metadata edits and Import.
-
-All external identities, including DOI, use the ItemIdentifier association with no Item DOI
-column or serialized Item cache. DOI comparison folds only ASCII letters in the stored value.
-CandidateRecord derives its DOI from confirmed identifiers. Discovery and Search query those associations
-explicitly. Contributor/institution identifiers never claim Item identity.
+Work.id and top-level Work.identifiers are the only bibliographic identifier source. Multiple
+values of one kind and multiple Items with shared identifiers are allowed. Library duplicate
+suggestions, Provider imported indicators and import warnings compare supported identifiers
+within authorized Workspace Items, excluding container, contributor and related-resource IDs.
+No identifier association, projection table, claim or Workspace uniqueness invariant exists.
+The internal Item UUID remains its identity. Identifier input is query context retained in
+CandidateRecord.lookup_identifier; adapters never force it into returned identities. OpenAlex
+lookup consumes commonmeta-py's reader directly, including its URL-form identifiers and files.
 
 Identifier lookup Import Batches use `metadata` as their input format. Lookup and metadata sync
 Audit Events record the actual metadata source in `provider` and the requested lookup route in
@@ -290,8 +262,8 @@ provenance is not concatenated into the batch's format name.
 
 Metadata limits are business rules shared by manual creation, revision and Import confirmation.
 JSON Contributor snapshots have no former Author-column name length or identity-key limit.
-Titles contain at most 1,000 visible text characters; canonical HTML is stored as `Text`
-without a B-tree index so markup and UTF-8 byte size cannot invalidate an otherwise valid title.
+Titles contain at most 1,000 visible text characters inside the Work JSON value. No B-tree
+indexes the full rich title, and the Work payload has a separate 1 MiB limit.
 Full-text Search continues to use its own FTS5/GIN projections. Title pagination and the preliminary
 ordering used by duplicate detection may require an explicit database sort; a future optimization
 must use a bounded plaintext ordering projection rather than indexing the complete HTML value.
@@ -301,9 +273,9 @@ Audit target IDs use the same 255-character protocol limit as persisted workflow
 Audit Event may identify either a UUID resource or a prefixed workflow execution. Invalid input
 raises a domain validation error before commit on both SQLite and PostgreSQL.
 
-`ItemMetadata` is a transport-neutral business command and may be used directly by inbound
-Adapters that can derive their wire schema from dataclasses; they must not maintain mirrored input
-models. HTTP response DTOs and pure projections live beside their capability routes under
+The generated Commonmeta Work supplies metadata types to inbound adapters; Item write envelopes
+add only business properties such as expected version and Citation Key. Adapters do not mirror
+Work fields or maintain another bibliographic schema. HTTP response DTOs and pure projections live beside their capability routes under
 `web/api`; MCP derives its schemas and execution from that OpenAPI contract instead of owning a
 second response model or orchestration path.
 
@@ -332,8 +304,8 @@ Item capability from the resolved context, without metadata-edit or delete boole
 Section composition consumes Documents-owned `DocumentInfo` values through
 `list_item_revisions`, `list_item_attachments` and `count_item_attachments`. These frozen summaries
 expose file names, sizes, media types and processing facts without FileObject descriptors or
-storage keys. Metadata sections use Library's immutable `ItemMetadata` and its `Contributor`
-values; Web does not traverse Contributor ORM relationships. HTTP projection functions accept
+storage keys. Metadata sections use isolated generated Work snapshots; Web does not traverse Contributor ORM
+relationships. HTTP projection functions accept
 the concrete section type. Stable scalar Item, Tag and Project mappings remain shared reads.
 
 Documents owns the complete Annotation browse query. `count_item_annotations`,
@@ -429,10 +401,9 @@ Identifier parsing shared by Crossref, DataCite and other Providers belongs to I
 `identifiers` Module. Each Provider is a leaf Implementation: it may depend on neutral value
 types, shared parsing and the private Provider contract, but never on a peer Provider, the runtime
 or catalog. Each Provider definition declares its metadata source name and primary Identifier
-Namespace separately. Both names route explicit identifier requests; Bibliography reads the
-private catalog to derive its supported Item Identifier Namespaces and normalize `eprint` archives.
-BibliographyRecord retains its explicit DOI formatting field; Item identities use ItemIdentifier.
-Journal-level ISSN remains custom bibliography metadata.
+Namespace separately. Both names route explicit identifier requests. Bibliography conversion consumes standard Work
+values without importing the private Provider catalog or maintaining identifier/type registries.
+Container identifiers remain within Work.container and never identify an Item.
 One bounded transport Implementation applies timeout, response-size, rate-limit and
 HTTP-error rules before dispatching through the production HTTP Adapter or test Mock Adapter.
 Metadata requests reject redirects; PDF acquisition follows a bounded redirect chain, streams into

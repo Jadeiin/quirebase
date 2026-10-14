@@ -79,7 +79,7 @@ async def delete_item(db: AsyncSession, actor: User, workspace_id: UUID, item_id
     if item is None:
         raise ResourceNotFound("item not found")
 
-    title = item.title
+    title = item.work.get("title", "")
     cleanup_keys = await delete_item_documents(db, workspace_id, (item.id,))
 
     # Revision projections are owned by FileRevision and cascade on PostgreSQL;

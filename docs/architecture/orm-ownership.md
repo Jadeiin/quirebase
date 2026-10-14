@@ -26,7 +26,7 @@ The architecture suite keeps this list complete when mappings are added or remov
 | --- | --- |
 | Accounts | `User`, `LoginSession`, `LoginThrottle`, `Invitation`, `ApiToken` |
 | Workspaces | `Workspace`, `WorkspaceMember`, `WorkspaceInvitation` |
-| Library | `Item`, `ItemIdentifier`, `ItemRead`, `Tag`, `ItemTag`, `ItemTagRecommendation`, `DiscussionMessage`, `ImportBatch`, `CitationStyle` |
+| Library | `Item`, `ItemRead`, `Tag`, `ItemTag`, `ItemTagRecommendation`, `DiscussionMessage`, `ImportBatch`, `CitationStyle` |
 | Projects | `Project`, `ProjectParticipant`, `ProjectItem` |
 | Documents | `FileRevision`, `Attachment`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
 | Audit | `AuditEvent` |

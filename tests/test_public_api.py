@@ -213,16 +213,23 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
             f"{workspace_base}/items",
             headers=headers,
             json=json_payload({
-                "title": "HTTP API Item",
-                "abstract": "Shared contract",
-                "authors": [
-                    {
-                        "display_name": "Li, Ming",
-                        "family_name": "Li",
-                        "given_name": "Ming",
-                    }
-                ],
-                "custom_fields": [{"name": "rating", "value": 5}],
+                "metadata": {
+                    "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                    "type": "Document",
+                    "title": "HTTP API Item",
+                    "description": "Shared contract",
+                    "contributors": [
+                        {
+                            "type": "Person",
+                            "person": {
+                                "family_name": "Li",
+                                "given_name": "Ming",
+                                "name": "Li, Ming",
+                            },
+                            "roles": ["Author"],
+                        }
+                    ],
+                }
             }),
         )
         assert created.status_code == 201
@@ -245,7 +252,7 @@ async def test_http_api_library_project_tag_and_discussion_lifecycle(
         listed = await client.get(f"{workspace_base}/items?query=HTTP", headers=headers)
         detail = await client.get(f"{workspace_base}/items/{item_id}", headers=headers)
         assert listed.json()["items"][0]["id"] == item_id
-        assert detail.json()["metadata"]["custom_fields"] == [{"name": "rating", "value": 5}]
+        assert detail.json()["metadata"]["title"] == "HTTP API Item"
 
         metadata = detail.json()["metadata"]
         metadata["title"] = "Updated through HTTP API"
@@ -330,7 +337,13 @@ async def test_http_api_document_and_annotation_views_match_api_contracts(
             await client.post(
                 f"{workspace_base}/items",
                 headers=headers,
-                json=json_payload({"title": item_response_title}),
+                json=json_payload({
+                    "metadata": {
+                        "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                        "type": "Document",
+                        "title": item_response_title,
+                    }
+                }),
             )
         ).json()["id"]
 
@@ -543,8 +556,12 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
     )
     item = Item(
         workspace_id=workspace_id,
-        title="Administrator annotation access",
         created_by=author.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Administrator annotation access",
+        },
     )
     project = Project(
         workspace_id=workspace_id,

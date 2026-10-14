@@ -11,7 +11,6 @@ from quirebase.access import (
 )
 from quirebase.library import (
     ItemDiscussionData,
-    ItemMetadata,
     ItemMetadataData,
     ItemSection,
     LibraryFacets,
@@ -25,6 +24,7 @@ from quirebase.library import (
     delete_discussion_message,
     get_item_citation_text_response,
     get_library_facets,
+    get_work_schema,
     list_accessible_tags_with_counts,
     moderate_discussion_message,
     open_item_section,
@@ -32,7 +32,6 @@ from quirebase.library import (
     revise_item_metadata,
     search_library,
 )
-from quirebase.models import ReferenceType
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.library_schemas import (
@@ -43,6 +42,7 @@ from quirebase.web.api.library_schemas import (
     DiscussionMessageView,
     DiscussionModerationRequest,
     DiscussionRequest,
+    ItemCreateRequest,
     ItemDetailView,
     ItemUpdateRequest,
     LibrarySearchView,
@@ -65,11 +65,10 @@ def library_filters(
     keyword: str = "",
     author: str = "",
     has_files: bool | None = None,
-    reference_type: ReferenceType | None = None,
+    reference_type: str | None = None,
     keyword_exact: str | None = None,
     author_last_name: str | None = None,
     author_first_name: str | None = None,
-    author_suffix: str | None = None,
 ) -> LibraryFilter:
     return LibraryFilter(
         q=query,
@@ -83,7 +82,6 @@ def library_filters(
         keyword_exact=keyword_exact,
         author_last_name=author_last_name,
         author_first_name=author_first_name,
-        author_suffix=author_suffix,
     )
 
 
@@ -135,7 +133,6 @@ async def search_items(
         keyword_exact=filters.keyword_exact,
         author_last_name=filters.author_last_name,
         author_first_name=filters.author_first_name,
-        author_suffix=filters.author_suffix,
     )
     return LibrarySearchView(
         items=[item_search_view(item) for item in items],
@@ -162,9 +159,11 @@ async def get_item_facets(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_library_item(
-    workspace_id: UUID, metadata: ItemMetadata, user: ApiUser, db: Database
+    workspace_id: UUID, data: ItemCreateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
-    result = await create_item(db, user, workspace_id, metadata)
+    result = await create_item(
+        db, user, workspace_id, data.metadata, citation_key=data.citation_key
+    )
     return WriteResult(id=result.item_id, version=result.version)
 
 
@@ -182,8 +181,17 @@ async def get_library_item(
 async def update_library_item(
     workspace_id: UUID, item_id: UUID, data: ItemUpdateRequest, user: ApiUser, db: Database
 ) -> WriteResult:
+    key_write = (
+        {"citation_key": data.citation_key} if "citation_key" in data.model_fields_set else {}
+    )
     result = await revise_item_metadata(
-        db, user, workspace_id, item_id, data.expected_version, data.metadata
+        db,
+        user,
+        workspace_id,
+        item_id,
+        data.expected_version,
+        data.metadata,
+        **key_write,
     )
     return WriteResult(id=result.item_id, version=result.version)
 
@@ -338,3 +346,8 @@ async def moderate_discussion(
 ) -> OkView:
     await moderate_discussion_message(db, user, workspace_id, item_id, message_id, data.reason)
     return OkView()
+
+
+@router.get("/metadata/schema")
+async def commonmeta_schema(context: WorkspaceAccess) -> dict:
+    return get_work_schema()

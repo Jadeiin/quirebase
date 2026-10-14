@@ -5,7 +5,7 @@ import json
 import zipfile
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pymupdf
 import pytest
@@ -337,7 +337,9 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
 
     await provision_initial_workspace(async_db, owner)
     item = Item(
-        workspace_id=fixture_workspace_id(owner), title="Bulk project race", created_by=owner.id
+        workspace_id=fixture_workspace_id(owner),
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Bulk project race"},
     )
     project = Project(
         workspace_id=fixture_workspace_id(owner),
@@ -606,8 +608,8 @@ async def test_bulk_export_rejects_inaccessible_items(
     await provision_initial_workspace(db, other_user)
     private_item = Item(
         workspace_id=fixture_workspace_id(other_user),
-        title="Private metadata",
         created_by=other_user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Private metadata"},
     )
     db.add(private_item)
     await db.commit()
@@ -639,8 +641,8 @@ async def test_bulk_archive_roots_are_unique_for_uuid7_and_adversarial_titles(
             id=item_id,
             workspace_id=original.workspace_id,
             created_by=owner.id,
-            title="Same title",
-            citation_key=(f"Same-{ids[2]}" if i == 0 else "Same"),
+            citation_key=f"Same-{ids[2]}" if i == 0 else "Same",
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Same title"},
         )
         for i, item_id in enumerate(ids)
     ]

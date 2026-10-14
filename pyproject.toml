@@ -54,6 +54,7 @@ dev = [
   "pytest-xdist>=3.8,<4",
   "ruff>=0.16,<1",
   "import-linter[ui]>=2.15,<3.0",
+  "datamodel-code-generator==0.83.0",
 ]
 
 [project.scripts]
@@ -138,11 +139,16 @@ module = [
   "citeproc",
   "citeproc.*",
   "citeproc_styles",
+  "commonmeta",
+  "commonmeta.*",
+  "commonmeta_schema",
+  "bibtexparser",
+  "bibtexparser.*",
+  "dateutil.*",
   "keybert",
   "keybert.*",
   "model2vec",
   "model2vec.*",
-  "rispy",
   "yake",
   "yake.*",
 ]
@@ -393,13 +399,12 @@ allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 id = "inquiro-richtext-callers"
-name = "Non-Library Inquiro callers use only neutral text and Reference Types"
+name = "Non-Library Inquiro callers use only neutral text and Work projections"
 type = "protected"
 protected_modules = ["inquiro.*"]
 allowed_importers = ["inquiro", "quirebase.library"]
-# Rich Text is shared with Documents and Search; Models shares only the neutral
-# Reference Type vocabulary. The root contract still restricts all callers.
-ignore_imports = ["quirebase.** -> inquiro.richtext", "quirebase.models -> inquiro.reference_types"]
+# Documents shares Rich Text; Search projects neutral Work values.
+ignore_imports = ["quirebase.** -> inquiro.richtext", "quirebase.search.** -> inquiro.work"]
 
 [[tool.importlinter.contracts]]
 id = "inquiro-provider-facade"
@@ -434,7 +439,7 @@ id = "bibliography-layers"
 name = "Bibliography implementation layers stay acyclic"
 type = "layers"
 containers = ["inquiro.bibliography"]
-layers = ["engine", "formats : styles", "keys", "records : options"]
+layers = ["engine : formats", "styles : keys", "options"]
 exhaustive = true
 
 [[tool.importlinter.contracts]]
@@ -444,7 +449,7 @@ type = "layers"
 containers = ["inquiro.providers"]
 layers = [
   "_catalog",
-  "arxiv | crossref | datacite | ieee | nasa_ads | openalex | openlibrary | pmc | pubmed",
+  "arxiv | commonmeta | crossref | datacite | ieee | nasa_ads | openalex | openlibrary | pmc | pubmed",
   "_contracts : _payload",
 ]
 exhaustive = true

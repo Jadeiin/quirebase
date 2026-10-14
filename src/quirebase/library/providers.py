@@ -20,7 +20,6 @@ from inquiro import (
     SearchQuery,
     metadata_provider_choices,
 )
-from inquiro.metadata import MetadataValidationError, record_metadata_values
 
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
 
@@ -39,13 +38,6 @@ class RemotePdf:
 
 def get_metadata_provider_choices(settings: Settings) -> MetadataProviderChoices:
     return metadata_provider_choices(provider_config(settings))
-
-
-def candidate_record_values(record: CandidateRecord) -> dict:
-    try:
-        return record_metadata_values(record)
-    except MetadataValidationError as error:
-        raise ValidationFailure(str(error)) from error
 
 
 def provider_config(settings: Settings) -> ProviderConfig:

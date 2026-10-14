@@ -13,7 +13,6 @@ from advanced_alchemy.types import (
     JsonB,
     StoredObject,
 )
-from inquiro.reference_types import ReferenceType
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -255,32 +254,12 @@ class Invitation(EntityBase):
 
 class Item(EntityBase):
     __tablename__ = "items"
-    __table_args__ = (
-        UniqueConstraint("workspace_id", "id", name="uq_items_workspace_id"),
-        Index("ix_items_workspace_reference_type", "workspace_id", "reference_type"),
-    )
+    __table_args__ = (UniqueConstraint("workspace_id", "id", name="uq_items_workspace_id"),)
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
-    title: Mapped[str] = mapped_column(Text)
-    abstract: Mapped[str | None] = mapped_column(Text)
-    publication_date: Mapped[str | None] = mapped_column(String(10))
-    publication_title: Mapped[str | None] = mapped_column(Text)
-    volume: Mapped[str | None] = mapped_column(String(100))
-    issue: Mapped[str | None] = mapped_column(String(100))
-    pages: Mapped[str | None] = mapped_column(String(100))
-    publisher: Mapped[str | None] = mapped_column(Text)
-    place_published: Mapped[str | None] = mapped_column(String(255))
-    journal_abbreviation: Mapped[str | None] = mapped_column(Text)
-    reference_type: Mapped[ReferenceType] = mapped_column(
-        enum_type(ReferenceType, "reference_type"), default=ReferenceType.document
-    )
-    authors: Mapped[list[dict[str, Any]]] = mapped_column(JsonB, default=list)
-    editors: Mapped[list[dict[str, Any]]] = mapped_column(JsonB, default=list)
+    work: Mapped[dict[str, Any]] = mapped_column(JsonB)
     citation_key: Mapped[str | None] = mapped_column(String(MAX_CITATION_KEY_LENGTH), index=True)
-    urls: Mapped[list[dict[str, Any]]] = mapped_column(JsonB, default=list)
-    keywords: Mapped[list[str]] = mapped_column(JsonB, default=list)
-    custom_fields: Mapped[dict | None] = mapped_column(JsonB)
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     updated_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -289,32 +268,8 @@ class Item(EntityBase):
     revisions: Mapped[list[FileRevision]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True
     )
-    identifier_links: Mapped[list[ItemIdentifier]] = relationship(
-        back_populates="item", cascade="all, delete-orphan", passive_deletes=True
-    )
     creator: Mapped[User] = relationship(foreign_keys=[created_by])
     updater: Mapped[User | None] = relationship(foreign_keys=[updated_by])
-
-
-class ItemIdentifier(EntityBase):
-    __tablename__ = "item_identifiers"
-    __table_args__ = (
-        UniqueConstraint("item_id", "provider", name="uq_item_identifiers_item_provider"),
-        UniqueConstraint(
-            "workspace_id", "provider", "value", name="uq_item_identifiers_workspace_provider_value"
-        ),
-        ForeignKeyConstraint(
-            ["workspace_id", "item_id"],
-            ["items.workspace_id", "items.id"],
-            name="fk_item_identifiers_item_workspace",
-            ondelete="CASCADE",
-        ),
-    )
-    workspace_id: Mapped[UUID] = mapped_column(GUID(), index=True)
-    item_id: Mapped[UUID] = mapped_column(GUID(), index=True)
-    provider: Mapped[str] = mapped_column(String(40), index=True)
-    value: Mapped[str] = mapped_column(String(500), index=True)
-    item: Mapped[Item] = relationship(back_populates="identifier_links")
 
 
 class ItemRead(Base):

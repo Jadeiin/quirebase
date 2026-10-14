@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
@@ -9,7 +10,7 @@ from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import Settings
-from quirebase.library import ItemMetadata, create_item
+from quirebase.library import create_item
 from quirebase.library.tag_recommendations import recommend_item_tags
 from quirebase.library.workflows import (
     commit_item_tag_recommendation_step,
@@ -32,11 +33,15 @@ async def test_request_is_idempotent_until_explicitly_superseded(async_db, fake_
     db = async_db
     user = await _user(db, "recommend-owner")
     item = Item(
-        title="Graph representation learning for molecules",
         workspace_id=fixture_workspace_id(user),
-        abstract="A robust neural method for molecular prediction.",
-        keywords=metadata_list_values("provider supplied keyword"),
         created_by=user.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Graph representation learning for molecules",
+            "description": "A robust neural method for molecular prediction.",
+            "subjects": [{"subject": v} for v in metadata_list_values("provider supplied keyword")],
+        },
     )
     db.add(item)
     await db.flush()
@@ -66,13 +71,12 @@ async def test_item_creation_enqueues_and_worker_persists_yake_results(async_db,
         db,
         user,
         fixture_workspace_id(user),
-        ItemMetadata(
-            title="Graph neural networks for molecular property prediction",
-            abstract=(
-                "Graph neural networks learn molecular representations and improve "
-                "property prediction with robust message passing methods."
-            ),
-        ),
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Graph neural networks for molecular property prediction",
+            "description": "Graph neural networks learn molecular representations and improve property prediction with robust message passing methods.",
+        },
     )
     record = await db.scalar(
         select(ItemTagRecommendation).where(ItemTagRecommendation.item_id == item_result.item_id)
@@ -101,9 +105,13 @@ async def test_stale_job_cannot_overwrite_new_generation(async_db):
     user = await _user(db, "stale-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Stable title",
-        abstract="Enough English content",
         created_by=user.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Stable title",
+            "description": "Enough English content",
+        },
     )
     db.add(item)
     await db.flush()
@@ -148,8 +156,12 @@ async def test_concurrent_force_requests_receive_distinct_generation_tokens(
     user = await _user(db, "concurrent-recommend-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Concurrent recommendation requests",
         created_by=user.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Concurrent recommendation requests",
+        },
     )
     db.add(item)
     await db.flush()
@@ -195,8 +207,12 @@ async def test_missing_keybert_configuration_fails_explicitly(async_db):
     user = await _user(db, "keybert-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Local semantic extraction",
         created_by=user.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Local semantic extraction",
+        },
     )
     db.add(item)
     await db.flush()
@@ -224,8 +240,8 @@ async def test_generation_result_does_not_include_source_text(async_db, monkeypa
     user = await _user(db, "compact-generation-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Compact checkpoint",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Compact checkpoint"},
     )
     db.add(item)
     await db.flush()

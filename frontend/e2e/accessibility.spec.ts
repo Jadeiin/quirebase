@@ -64,6 +64,14 @@ test('Item detail has no high-impact accessibility violations', async ({ page })
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: '<i>Accessible</i> Item',
+					date_published: '2026',
+					container: { title: 'Journal' }
+				},
+				citation_key: null,
 				item: {
 					id: 'item-1',
 					title_html: '<i>Accessible</i> Item',
@@ -87,9 +95,7 @@ test('Item detail has no high-impact accessibility violations', async ({ page })
 				},
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
-				tags: [],
-				owner: { id: 'user-1', username: 'reader' },
-				identifiers: []
+				tags: []
 			}
 		})
 	);
@@ -104,13 +110,9 @@ test('Item detail has no high-impact accessibility violations', async ({ page })
 				doi: null,
 				version: 1,
 				metadata: {
-					title: '<i>Accessible</i> Item',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: '<i>Accessible</i> Item'
 				},
 				abstract_html: null
 			}

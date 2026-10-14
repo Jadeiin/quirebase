@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
@@ -82,9 +83,13 @@ async def test_postgresql_search_contract():
             workspace = await provision_initial_workspace(db, user)
             item = Item(
                 workspace_id=workspace.id,
-                title="Spectral graph methods",
-                abstract="Topological signal",
                 created_by=user.id,
+                work={
+                    "id": f"urn:uuid:{uuid4()}",
+                    "type": "Document",
+                    "title": "Spectral graph methods",
+                    "description": "Topological signal",
+                },
             )
             db.add(item)
             await db.flush()

@@ -93,7 +93,6 @@ async def test_resource_projections_match_commands_and_project_choices(
         overview = await client.get(f"{base}/items/{item_id}/overview")
         assert overview.status_code == 200
         assert ("item.update" in overview.json()["authorization"]["allowed"]) == workspace_writable
-
         response = await client.patch(f"{base}/projects/{project.id}", json={"name": "Changed"})
         assert (response.status_code == 200) == project_writable
         if not project_writable:
@@ -110,18 +109,23 @@ async def test_resource_projections_match_commands_and_project_choices(
             )
         )
         assert len(events) == int(project_writable)
-
-        # Canonical Item authority is independent of the associated Project's state.
         await db.refresh(item)
         item_response = await client.put(
             f"{base}/items/{item_id}",
-            json={"expected_version": item.version, "metadata": {"title": "Changed Item"}},
+            json={
+                "expected_version": item.version,
+                "metadata": {
+                    "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                    "type": "Document",
+                    "title": "Changed Item",
+                },
+            },
         )
         assert (item_response.status_code == 200) == workspace_writable
         if not workspace_writable:
             assert item_response.status_code in {403, 409}
         await db.refresh(item)
-        assert item.title == ("Changed Item" if workspace_writable else "Paper")
+        assert item.work.get("title") == ("Changed Item" if workspace_writable else "Paper")
         item_events = list(
             await db.scalars(
                 select(AuditEvent.id).where(

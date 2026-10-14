@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from test_public_api import api_client, bearer
 from workspace_helpers import provision_initial_workspace
@@ -122,7 +124,11 @@ async def test_project_pages_count_authorized_roots_and_separate_governance_from
         Project(workspace_id=other.id, name="Foreign", created_by=editor.id),
     ])
     items = [
-        Item(workspace_id=workspace.id, title=f"Item {index}", created_by=owner.id)
+        Item(
+            workspace_id=workspace.id,
+            created_by=owner.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": f"Item {index}"},
+        )
         for index in range(3)
     ]
     async_db.add_all(items)
@@ -234,7 +240,11 @@ async def test_item_file_filters_and_project_pages_count_roots_once(
         participation=ProjectParticipation.managed,
     )
     items = [
-        Item(workspace_id=workspace.id, title=f"Item {index:02}", created_by=owner.id)
+        Item(
+            workspace_id=workspace.id,
+            created_by=owner.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": f"Item {index:02}"},
+        )
         for index in range(27)
     ]
     async_db.add_all([project, *items])

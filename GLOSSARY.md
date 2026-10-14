@@ -11,15 +11,19 @@ A bibliographic record representing a paper, book, preprint, manuscript or
 other research output.
 _Avoid_: Paper, Work, Document when referring to the stored bibliographic record
 
+**Work**:
+The official Commonmeta bibliographic value stored in an Item. Work describes a research output;
+its external identity is independent of the Item UUID, its Workspace and its governance.
+
 **Reference Type**:
-The controlled literature classification of an Item. Its vocabulary follows CSL semantics,
-distinguishing journal, magazine and newspaper articles, conference papers, books, chapters and
-other research outputs; preprint is a separate Library classification. A classification does not
-encode academic degree or publication status. Unrecognized classifications are general documents.
+The Work's standard Commonmeta `type` classification, including JournalArticle, Book,
+BookChapter, Dataset and Preprint. Type vocabulary and format conversion belong to the external
+standard and its implementation; Quirebase maintains no parallel enum or type mapping.
 
 **Publication Date**:
 The publication year, year and month, or complete calendar date, stored as `YYYY`, `YYYY-MM` or
-`YYYY-MM-DD`. Missing month or day values do not imply January or the first day of a month.
+`YYYY-MM-DD`, or a full ISO date-time supplied by the Work. Missing month or day values do not
+imply January or the first day of a month.
 Date ranges retain only a shared year or month; a range spanning years has no single Publication Date.
 
 **Citation Key**:
@@ -75,13 +79,13 @@ _Avoid_: Item Owner when discussing authorization
 **Contributor**:
 A person or organization credited in one Item's ordered bibliographic metadata as an author
 or editor. Names belong to that record and do not establish a shared researcher identity;
-source display names, optional family/given names, suffixes and namespaced identifiers describe
+standard person/organization names, optional family/given names and entity identifiers describe
 that record's credit. Organization credits retain their literal names.
 _Avoid_: Creator, User
 
 **Affiliation**:
 An institution credited with a Contributor on a particular bibliographic record. It may include
-institution identifiers, country and original credit text. It belongs to that record's authorship,
+a standard institution name and identifier. It belongs to that record's authorship,
 not to an independent Contributor identity. Provider metadata, Import previews and Item Contributor snapshots preserve this mapping.
 Item has no separate affiliation field or institution list.
 
@@ -180,8 +184,7 @@ _Avoid_: Item Keyword, Tag, automatic Tag
 **Candidate Record**:
 An uncommitted bibliographic metadata payload retrieved via Discovery or Identifier Lookup, subject
 to preview before Import. Provider Candidate Records carry structured Contributors, their
-Affiliations, individual Keywords and resource links with source-supplied metadata. Source name
-parts are distinct from inferred names used for bibliography formatting.
+Affiliations, individual Keywords and resource links with source-supplied metadata. Candidates carry a standard Work with separate Provider and lookup-input context.
 _Avoid_: Staged Item, Provisional Work
 
 **Import Batch**:
@@ -224,19 +227,16 @@ _Avoid_: Plugin
 **Identifier Namespace**:
 The kind of scholarly identifier, such as DOI, PMID, PMCID, arXiv ID or OpenAlex Work ID.
 It is distinct from the Provider returning metadata: Crossref and DataCite both return DOI
-identifiers. The `provider` field on a stored Upstream Identifier names its Identifier Namespace.
+identifiers. Commonmeta `identifier_type` and, for Other identifiers, `scheme` describe the identifier kind.
 ISSN identifies a journal rather than an Item and belongs to bibliographic metadata.
 
 **Upstream Identifier**:
-An external identity for an Item, expressed as an Identifier Namespace/value pair, including DOI.
-The pair identifies the upstream record and may support metadata lookup or document acquisition;
-the Provider returning metadata is recorded separately as provenance. DOI comparison ignores
-ASCII letter case while preserving differences between non-ASCII characters. An Item has at most one value per Identifier Namespace, and a
-Namespace/value pair belongs to at most one Item within a Workspace. Independent copies in
-different Workspaces may retain the same pair. Identifier Lookup inputs are query context;
-only confirmed record identities become Upstream Identifiers.
-An ISBN on a chapter describes its containing book, not the chapter's identity.
-_Avoid_: Source ID, External ID when the issuing Provider matters
+A bibliographic identifier declared by Work.id or Work.identifiers, including DOI. An Item can
+carry multiple values of the same identifier kind, and Items within or across Workspaces can
+share them. DOI comparison folds ASCII letter case while preserving non-ASCII distinctions.
+Identifier Lookup input is query context; it is never injected as a confirmed identity.
+Container, contributor and related-resource identifiers do not identify the Work itself.
+_Avoid_: Identifier claim, workspace-unique bibliographic identity
 
 **User**:
 An authenticated human account with an assigned System Role.
@@ -316,8 +316,8 @@ for invalidating a Login Session or API Token without deleting its audit/persist
 - An Import Batch holds parsed Candidate Records until confirmed into Items; a committed batch retains
   the confirmation result but is no longer an active staging reservation.
 - Citation Styles format Items during export or citation generation.
-- An Item may have zero or more Upstream Identifiers, including DOI. Each identity belongs to
-  at most one Item within a Workspace.
+- An Item may have zero or more supported Upstream Identifiers, including multiple DOIs.
+  Shared identifiers yield Library duplicate suggestions, independently of Item UUID identity.
 - An Audit Event may reference an actor and a target.
 
 ## Example dialogue

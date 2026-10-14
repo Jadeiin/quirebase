@@ -307,8 +307,10 @@ async def store_pdf_revision(
 ) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
-    user_id = user.id
+    # Remote acquisition may have rolled back the session, expiring even the
+    # User's primary key. Authorization reloads it asynchronously before use.
     await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
+    user_id = user.id
     if not filename or not filename.lower().endswith(".pdf"):
         raise UnsupportedMediaType("a PDF file is required")
     if max_bytes is None:
@@ -389,8 +391,10 @@ async def create_attachment(
 ) -> UploadWorkflow:
     from quirebase.operations.settings import get_effective_setting
 
-    user_id = user.id
+    # Remote acquisition may have rolled back the session, expiring even the
+    # User's primary key. Authorization reloads it asynchronously before use.
     await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
+    user_id = user.id
     if not filename:
         raise ValidationFailure("attachment filename is required")
     if max_bytes is None:

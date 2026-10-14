@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import replace
 
-from inquiro.bibliography.records import BibliographyRecord, Contributor
-from inquiro.reference_types import normalize_reference_type
 from inquiro.richtext import convert_rich_text
+from inquiro.work import work_authors
 
 DEFAULT_CITATION_KEY_FORMULA = "auth.capitalize + year + shorttitle(1).capitalize"
 
@@ -45,20 +43,20 @@ def extract_year(publication_date: str | None) -> str | None:
     return match.group(1) if match else None
 
 
-def generate_default_citation_key(item: BibliographyRecord, *, max_length: int = 255) -> str:
+def generate_default_citation_key(item: dict, *, max_length: int = 255) -> str:
     author_part = "Unknown"
-    if item.authors:
-        last_name = item.authors[0].family_name
+    if work_authors(item):
+        last_name = _author_family(work_authors(item)[0])
         # Clean non-alphanumeric
         last_clean = re.sub(r"[^A-Za-z0-9]", "", last_name)
         if last_clean:
             author_part = last_clean.capitalize()
 
-    year_part = extract_year(item.publication_date) or "XXXX"
+    year_part = extract_year(item.get("date_published")) or "XXXX"
 
     title_part = "Work"
-    if item.title:
-        plain_title = convert_rich_text(item.title, source="html", target="text")
+    if item.get("title"):
+        plain_title = convert_rich_text(item.get("title", ""), source="html", target="text")
         words = re.findall(r"[A-Za-z0-9]+", plain_title)
         for word in words:
             if word.lower() not in _STOP_WORDS and len(word) > 2:
@@ -127,32 +125,34 @@ def _formula_count(value: str) -> int:
     return count
 
 
-def _formula_value(record: BibliographyRecord, field_name: str) -> str:
+def _formula_value(record: dict, field_name: str) -> str:
     if field_name == "auth":
-        return record.authors[0].family_name if record.authors else "Unknown"
+        return _author_family(work_authors(record)[0]) if work_authors(record) else "Unknown"
     if field_name.startswith("authors("):
         count = _formula_count(field_name[8:-1])
-        return "".join(author.family_name for author in record.authors[:count]) or "Unknown"
+        return (
+            "".join(_author_family(author) for author in work_authors(record)[:count]) or "Unknown"
+        )
     if field_name == "year":
-        return extract_year(record.publication_date) or "XXXX"
+        return extract_year(record.get("date_published")) or "XXXX"
     if field_name == "title":
-        return convert_rich_text(record.title, source="html", target="text") or "Work"
+        return convert_rich_text(record.get("title", ""), source="html", target="text") or "Work"
     if field_name.startswith("shorttitle("):
         count = _formula_count(field_name[11:-1])
-        plain_title = convert_rich_text(record.title, source="html", target="text")
+        plain_title = convert_rich_text(record.get("title", ""), source="html", target="text")
         words = re.findall(r"[^\W_]+", plain_title, flags=re.UNICODE)
         significant = [word for word in words if word.casefold() not in _STOP_WORDS]
         return "".join((significant or words)[:count]) or "Work"
     if field_name == "journal":
-        return record.publication_title or ""
+        return record.get("container", {}).get("title") or ""
     if field_name == "type":
-        return normalize_reference_type(record.reference_type) or record.reference_type
+        return record.get("type", "Other")
     raise CitationKeyFormulaError(f"unknown field: {field_name}")
 
 
 def evaluate_citation_key_formula(
     formula: str,
-    record: BibliographyRecord,
+    record: dict,
     *,
     force_ascii: bool = False,
     max_length: int = 255,
@@ -204,14 +204,25 @@ def evaluate_citation_key_formula(
     return (result or "UnknownXXXXWork")[:max_length]
 
 
-_PREVIEW_SAMPLE = BibliographyRecord(
-    citation_key=None,
-    reference_type="article",
-    title="A Sketch of the Analytical Engine",
-    authors=(Contributor("Lovelace", "Ada"),),
-    publication_date="1843",
-    publication_title="Scientific Memoirs",
-)
+def _author_family(contributor: dict) -> str:
+    entity = contributor.get(contributor["type"].lower(), {})
+    return entity.get("family_name") or entity.get("name") or "Unknown"
+
+
+_PREVIEW_SAMPLE = {
+    "id": "urn:uuid:cf281c3d-c96f-4ce6-a6f1-17460c42e79b",
+    "type": "JournalArticle",
+    "title": "A Sketch of the Analytical Engine",
+    "contributors": [
+        {
+            "type": "Person",
+            "person": {"family_name": "Lovelace", "given_name": "Ada"},
+            "roles": ["Author"],
+        }
+    ],
+    "date_published": "1843",
+    "container": {"title": "Scientific Memoirs"},
+}
 
 
 def validate_citation_key_formula(formula: str) -> None:
@@ -225,7 +236,7 @@ def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
     Returns ``"key  keya"``: the sample and a near-duplicate evaluated with the
     formula, with the export disambiguation suffix applied on collision.
     """
-    duplicate = replace(_PREVIEW_SAMPLE, title="A Sketch of the Analytical Engine (revisited)")
+    duplicate = _PREVIEW_SAMPLE | {"title": "A Sketch of the Analytical Engine (revisited)"}
     keys = [
         evaluate_citation_key_formula(formula, record, force_ascii=force_ascii)
         for record in (_PREVIEW_SAMPLE, duplicate)

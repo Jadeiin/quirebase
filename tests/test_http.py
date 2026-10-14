@@ -22,7 +22,7 @@ from quirebase.core.database import get_db
 from quirebase.core.errors import VersionConflict
 from quirebase.core.storage import ObjectMetadata, ObjectSuffix, get_object_store
 from quirebase.documents import workflows as document_workflows
-from quirebase.library import ItemMetadata, request_item_tag_recommendation, revise_item_metadata
+from quirebase.library import request_item_tag_recommendation, revise_item_metadata
 from quirebase.models import (
     Attachment,
     AttachmentRole,
@@ -64,8 +64,8 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     )
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Paper",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Paper"},
     )
     db.add_all([login, item])
     await db.flush()
@@ -87,7 +87,6 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     )
     db.add(revision)
     await db.commit()
-
     test_app = create_web_test_app(mcp_session_factory=session_factory)
 
     async def override_db():
@@ -98,14 +97,11 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
     client = httpx2.AsyncClient(
         transport=httpx2.ASGITransport(app=test_app, raise_app_exceptions=False),
         base_url="http://testserver",
-        headers={
-            "Accept-Language": "zh-CN,zh;q=0.9",
-            "Origin": "http://testserver",
-        },
+        headers={"Accept-Language": "zh-CN,zh;q=0.9", "Origin": "http://testserver"},
         follow_redirects=True,
     )
     client.cookies.set(get_settings().session_cookie, raw)
-    return client, item, revision
+    return (client, item, revision)
 
 
 @pytest.mark.anyio
@@ -116,7 +112,7 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
-    workspace_id, owner_id = item.workspace_id, item.created_by
+    workspace_id, owner_id = (item.workspace_id, item.created_by)
     workspace = await async_db.get(Workspace, workspace_id)
     workspace.state = WorkspaceState.archived
     workspace.archived_at = datetime.now(UTC) - timedelta(
@@ -132,17 +128,15 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
         owner = await async_db.get(User, owner_id)
         owner.role = "administrator"
     await async_db.commit()
-
     detail = surface == "detail"
     if surface == "admin":
-        url, api = "/api/v1/admin/workspaces", admin_api
+        url, api = ("/api/v1/admin/workspaces", admin_api)
     else:
         url = f"/api/v1/workspaces/{workspace_id}" if detail else "/api/v1/workspaces"
         api = workspace_api
     owner_lookup = api.workspace_owner_ids
 
     async def delete_before_owner_lookup(db, workspace_ids):
-        # The handler has already read the Workspace or resolved its access context.
         assert workspace_id in workspace_ids
         async with async_session_factory() as delete_db:
             owner = await delete_db.get(User, owner_id)
@@ -159,7 +153,6 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
                 view["id"]
                 for view in (before.json()["items"] if surface == "list" else before.json())
             } == set(map(str, {workspace_id, retained.id}))
-
         monkeypatch.setattr(api, "workspace_owner_ids", delete_before_owner_lookup)
         response = await client.get(url)
         if detail:
@@ -208,17 +201,13 @@ async def test_managed_project_nonmember_cannot_discover_project_contexts(
             expires_at=datetime.now(UTC) + timedelta(hours=1),
         ),
         ProjectItem(
-            workspace_id=workspace_id,
-            project_id=project.id,
-            item_id=item.id,
-            added_by=owner.id,
+            workspace_id=workspace_id, project_id=project.id, item_id=item.id, added_by=owner.id
         ),
     ])
     await async_db.commit()
     client.cookies.set(get_settings().session_cookie, "managed-outsider-session")
     base = f"/api/v1/workspaces/{workspace_id}"
     missing_id = str(uuid4())
-
     try:
         for method, path in (
             ("GET", "/projects/{project_id}"),
@@ -233,7 +222,6 @@ async def test_managed_project_nonmember_cannot_discover_project_contexts(
             missing = await client.request(method, base + path.format(project_id=missing_id))
             assert hidden.status_code == missing.status_code == 404
             assert hidden.json() == missing.json()
-
         listed = await client.get(base + "/projects?view=all")
         organize = await client.get(base + f"/items/{item.id}/organize")
         viewer = await client.get(base + f"/items/{item.id}/revisions/{revision.id}/viewer")
@@ -271,11 +259,9 @@ async def test_inaccessible_workspace_responses_do_not_expose_existence(
                     workspace_id=workspace_id,
                     user_id=item.created_by,
                     role=WorkspaceRole.viewer,
-                    state=(
-                        WorkspaceMemberState.suspended
-                        if availability == "suspended"
-                        else WorkspaceMemberState.active
-                    ),
+                    state=WorkspaceMemberState.suspended
+                    if availability == "suspended"
+                    else WorkspaceMemberState.active,
                     terminated_at=datetime.now(UTC) if availability == "terminated" else None,
                 )
             )
@@ -312,7 +298,6 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
     url = f"/api/v1/workspaces/{source.workspace_id}/items/{source.id}/copy"
     request = {"target_workspace_id": target_workspace_id}
     headers = {"X-CSRF-Token": "test-csrf"}
-
     try:
         missing = await client.post(url, headers=headers, json=json_payload(request))
         assert missing.status_code == 404
@@ -322,7 +307,6 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
         )
         assert nonexistent.status_code == missing.status_code
         assert nonexistent.json() == missing.json()
-
         membership = WorkspaceMember(
             workspace_id=target_workspace_id,
             user_id=source.created_by,
@@ -331,11 +315,9 @@ async def test_cross_workspace_copy_api_checks_target_membership_and_resource_ac
         )
         async_db.add(membership)
         await async_db.commit()
-
         viewer = await client.post(url, headers=headers, json=json_payload(request))
         assert viewer.status_code == 403
         assert viewer.json()["code"] == "permission_denied"
-
         membership.role = WorkspaceRole.editor
         await async_db.commit()
         copied = await client.post(url, headers=headers, json=json_payload(request))
@@ -409,10 +391,7 @@ async def test_read_only_workspace_pdf_viewer_disables_annotation_edits(
                 "kind": "note",
                 "scope": "private",
                 "body": "Cannot save",
-                "payload": {
-                    "type": "note",
-                    "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
-                },
+                "payload": {"type": "note", "rect": {"x": 10, "y": 10, "width": 20, "height": 20}},
             }),
         )
         assert created.status_code == 409
@@ -438,10 +417,10 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert viewer.json()["revision"]["page_geometry"] == [[0, 0, 300, 400]]
         assert viewer.json()["editable"] is True
         assert viewer.json()["annotation_author"] == "reader"
-        assert viewer.json()["revision"]["content_url"] == (
-            f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content"
+        assert (
+            viewer.json()["revision"]["content_url"]
+            == f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content"
         )
-
         content = await client.get(
             f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=0-4"},
@@ -452,18 +431,14 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert content.headers["etag"].startswith('"')
         assert content.headers["etag"].endswith('"')
         assert not content.headers["etag"].startswith('""')
-
         empty_range = await client.get(
             f"{workspace_base}/items/{item.id}/revisions/{revision.id}/content",
             headers={"Range": "bytes=-"},
         )
         assert empty_range.status_code == 416
         assert empty_range.headers["content-range"].startswith("bytes */")
-
         project = Project(
-            workspace_id=item.workspace_id,
-            name="Annotation replies",
-            created_by=item.created_by,
+            workspace_id=item.workspace_id, name="Annotation replies", created_by=item.created_by
         )
         db.add(project)
         await db.flush()
@@ -476,7 +451,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             )
         )
         await db.commit()
-
         created = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
@@ -500,7 +474,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         annotation = created.json()
         assert annotation["mine"] is True
         assert annotation["replies"] == []
-
         reply_id = str(uuid4())
         replied = await client.post(
             f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}/replies",
@@ -545,7 +518,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             params={"version": 4},
         )
         assert deleted_reply_again.status_code == 200
-
         duplicate = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
@@ -562,11 +534,10 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             }),
         )
         assert duplicate.status_code == 409
-
         other_item = Item(
             workspace_id=item.workspace_id,
-            title="Different paper",
             created_by=item.created_by,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Different paper"},
         )
         db.add(other_item)
         await db.commit()
@@ -574,7 +545,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             f"{workspace_base}/items/{other_item.id}/revisions/{revision.id}/export"
         )
         assert mismatched.status_code == 404
-
         revision.file.update_metadata({"original_name": "论文.pdf"})
         flag_modified(revision, "file")
         await db.commit()
@@ -599,7 +569,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         revision.file.update_metadata({"original_name": "paper.pdf"})
         flag_modified(revision, "file")
         await db.commit()
-
         exported = await client.get(
             f"{workspace_base}/items/{item.id}/revisions/{revision.id}/export",
             params={"include_annotations": False},
@@ -617,7 +586,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         details = [event.detail for event in events]
         assert any(detail["item_id"] == str(item.id) for detail in details)
         assert all(event.actor_id == item.created_by for event in events)
-
         underlined = await client.post(
             f"{workspace_base}/items/{item.id}/annotations",
             headers={"X-CSRF-Token": "test-csrf"},
@@ -640,7 +608,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
         assert underlined.status_code == 201
         assert underlined.json()["kind"] == "underline"
         assert underlined.json()["payload"]["style"]["stroke_color"] == "#FF5959"
-
         conflict = await client.patch(
             f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
@@ -654,7 +621,6 @@ async def test_pdf_range_and_annotation_api(async_db, async_session_factory, tmp
             }),
         )
         assert conflict.status_code == 409
-
         deleted = await client.delete(
             f"{workspace_base}/items/{item.id}/annotations/{annotation['id']}",
             headers={"X-CSRF-Token": "test-csrf"},
@@ -716,10 +682,7 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
     await db.flush()
     db.add(
         WorkspaceMember(
-            workspace_id=item.workspace_id,
-            user_id=viewer.id,
-            role=role,
-            invited_by=item.created_by,
+            workspace_id=item.workspace_id, user_id=viewer.id, role=role, invited_by=item.created_by
         )
     )
     db.add_all([
@@ -742,12 +705,8 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
         ),
     ])
     await db.commit()
-
     try:
-        owner_client.cookies.set(
-            get_settings().session_cookie,
-            "annotation-viewer-session",
-        )
+        owner_client.cookies.set(get_settings().session_cookie, "annotation-viewer-session")
         viewer = await owner_client.get(
             f"{workspace_base}/items/{item.id}/revisions/{revision.id}/viewer"
         )
@@ -760,13 +719,9 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
                 "kind": "note",
                 "scope": "private",
                 "body": "Reader note",
-                "payload": {
-                    "type": "note",
-                    "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
-                },
+                "payload": {"type": "note", "rect": {"x": 10, "y": 10, "width": 20, "height": 20}},
             }),
         )
-
         assert viewer.status_code == 200
         assert viewer.json()["editable"] is True
         project_editable = role is WorkspaceRole.reviewer and project_state is ProjectState.active
@@ -784,10 +739,7 @@ async def test_pdf_viewer_creation_permissions_match_annotation_scope(
                 "scope": "project",
                 "project_id": project.id,
                 "body": "Project note",
-                "payload": {
-                    "type": "note",
-                    "rect": {"x": 10, "y": 10, "width": 20, "height": 20},
-                },
+                "payload": {"type": "note", "rect": {"x": 10, "y": 10, "width": 20, "height": 20}},
             }),
         )
         assert project_created.status_code == (
@@ -814,10 +766,8 @@ async def test_item_overview_uses_the_ready_revision_thumbnail(
     )
     await async_db.commit()
     thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
-
     try:
         response = await client.get(thumbnail_url)
-
         assert response.status_code == 200
         assert response.headers["content-type"] == "image/png"
         assert response.content == b"\x89PNG\r\n\x1a\nthumbnail"
@@ -842,27 +792,16 @@ async def test_item_thumbnail_revalidates_all_if_none_match_forms(
     )
     await async_db.commit()
     thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
-
     try:
         initial = await client.get(thumbnail_url)
         etag = initial.headers["etag"]
-
-        for validator in (
-            "*",
-            f'"other", {etag}',
-            f"W/{etag}",
-            f'"opaque,tag", W/{etag}',
-        ):
+        for validator in ("*", f'"other", {etag}', f"W/{etag}", f'"opaque,tag", W/{etag}'):
             response = await client.get(thumbnail_url, headers={"If-None-Match": validator})
             assert response.status_code == 304
             assert response.headers["etag"] == etag
             assert response.headers["cache-control"] == "private, no-cache"
             assert response.content == b""
-
-        mismatch = await client.get(
-            thumbnail_url,
-            headers={"If-None-Match": '"first", W/"second"'},
-        )
+        mismatch = await client.get(thumbnail_url, headers={"If-None-Match": '"first", W/"second"'})
         assert mismatch.status_code == 200
         assert mismatch.content == b"cached-thumbnail"
     finally:
@@ -903,10 +842,8 @@ async def test_item_thumbnail_fetches_the_source_checked_for_cache_metadata(
         return checked_metadata
 
     monkeypatch.setattr(documents_api, "head_item_thumbnail", switch_source_after_head)
-
     try:
         response = await client.get(f"{workspace_base}/items/{item.id}/thumbnail")
-
         assert checked_metadata is not None
         assert response.status_code == 200
         assert response.content == b"original-thumbnail"
@@ -927,7 +864,6 @@ async def test_item_overview_omits_a_missing_thumbnail(
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     thumbnail_url = f"{workspace_base}/items/{item.id}/thumbnail"
-
     try:
         response = await client.get(thumbnail_url)
         assert response.status_code == 404
@@ -985,28 +921,20 @@ async def test_deleting_latest_pdf_revision_removes_its_files_and_falls_back_thu
     index = search_index(db)
     await index.index_revision(db, new_revision.id)
     recommendation = await request_item_tag_recommendation(
-        db,
-        item_id,
-        workspace_id=item.workspace_id,
-        actor_id=item.created_by,
+        db, item_id, workspace_id=item.workspace_id, actor_id=item.created_by
     )
     previous_generation = recommendation.generation_token
     await db.commit()
-
     try:
         assert (await client.get(thumbnail_url)).content == b"new-thumbnail"
         assert await index.search(db, "deletedsearchtoken") == [item_id]
-
         deleted = await client.delete(
             f"{workspace_base}/items/{item_id}/revisions/{new_revision_id}"
         )
-
         assert deleted.status_code == 200
         assert await db.get(FileRevision, new_revision_id) is None
         await document_workflows.delete_unreferenced_objects_step(
-            item.created_by,
-            item.workspace_id,
-            [key, new_thumbnail.key],
+            item.created_by, item.workspace_id, [key, new_thumbnail.key]
         )
         assert not new_object.exists()
         assert not local_object_path(new_thumbnail.key).exists()
@@ -1041,7 +969,6 @@ async def test_graphical_abstract_upload_admits_worker_without_creating_attachme
     )
     item_id = item.id
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-
     try:
         uploaded = await client.post(
             f"{workspace_base}/items/{item_id}/attachments",
@@ -1049,7 +976,6 @@ async def test_graphical_abstract_upload_admits_worker_without_creating_attachme
             files={"attachment": ("abstract.png", content, "image/png")},
             follow_redirects=False,
         )
-
         assert uploaded.status_code == 202
         workflow_id = uploaded.json()["id"]
         assert workflow_id.startswith("upload-attachment:")
@@ -1082,7 +1008,6 @@ async def test_uploaded_graphical_abstract_is_served_as_item_thumbnail(
     workspace_id = item.workspace_id
     workspace_base = f"/api/v1/workspaces/{workspace_id}"
     image = b"\x89PNG\r\n\x1a\ngraphical"
-
     try:
         uploaded = await client.post(
             f"{workspace_base}/items/{item_id}/attachments",
@@ -1090,7 +1015,6 @@ async def test_uploaded_graphical_abstract_is_served_as_item_thumbnail(
             files={"attachment": ("abstract.png", image, "image/png")},
             follow_redirects=False,
         )
-
         assert uploaded.status_code == 202
         workflow_id = uploaded.json()["id"]
         assert await db.scalar(select(Attachment.id).where(Attachment.item_id == item_id)) is None
@@ -1109,15 +1033,12 @@ async def test_uploaded_graphical_abstract_is_served_as_item_thumbnail(
         enqueue = fake_durable_operations.enqueues[-1]
         attachment_id = enqueue["args"][3]
         result = await worker_body(*enqueue["args"])
-
         assert result == {"attachment_id": attachment_id, "item_id": item_id}
         saved = await db.get(Attachment, attachment_id)
         assert saved is not None
         assert saved.role is AttachmentRole.graphical_abstract
         assert saved.file.content_type == "image/png"
-
         thumbnail = await client.get(f"{workspace_base}/items/{item_id}/thumbnail")
-
         assert thumbnail.status_code == 200
         assert thumbnail.headers["content-type"] == "image/png"
         assert thumbnail.content == image
@@ -1136,7 +1057,6 @@ async def test_regular_attachment_accepts_non_image_content(
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
-
     try:
         uploaded = await client.post(
             f"{workspace_base}/items/{item_id}/attachments",
@@ -1165,25 +1085,35 @@ async def test_item_update_detects_conflicts_and_updates_search(
             f"{workspace_base}/items/{item.id}",
             json=json_payload({
                 "expected_version": 1,
-                "metadata": {"title": "Revised Paper", "abstract": "Quantum transport"},
+                "metadata": {
+                    "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                    "type": "Document",
+                    "title": "Revised Paper",
+                    "description": "Quantum transport",
+                },
             }),
         )
         assert updated.status_code == 200
         await db.refresh(item)
         assert item.version == 2
-        assert item.title == "Revised Paper"
-
+        assert item.work.get("title") == "Revised Paper"
         results = await client.get(f"{workspace_base}/items", params={"query": "quantum"})
         assert results.status_code == 200
         assert results.json()["items"][0]["title_html"] == "Revised Paper"
-
         stale = await client.put(
             f"{workspace_base}/items/{item.id}",
-            json=json_payload({"expected_version": 1, "metadata": {"title": "Lost update"}}),
+            json=json_payload({
+                "expected_version": 1,
+                "metadata": {
+                    "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                    "type": "Document",
+                    "title": "Lost update",
+                },
+            }),
         )
         assert stale.status_code == 409
         await db.refresh(item)
-        assert item.title == "Revised Paper"
+        assert item.work.get("title") == "Revised Paper"
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -1198,32 +1128,27 @@ async def test_item_update_uses_atomic_optimistic_lock(async_db, async_session_f
     await provision_initial_workspace(db, owner)
     item = Item(
         workspace_id=fixture_workspace_id(owner),
-        title="Original",
         created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Original"},
     )
     db.add(item)
     await db.commit()
     owner_id = owner.id
     item_id = item.id
-
-    async with (
-        async_session_factory() as first,
-        async_session_factory() as second,
-    ):
+    async with async_session_factory() as first, async_session_factory() as second:
         first_owner = await first.get(User, owner_id)
         second_owner = await second.get(User, owner_id)
         first_item = await first.get(Item, item_id)
         second_item = await second.get(Item, item_id)
         assert first_owner and second_owner and first_item and second_item
         assert first_item.version == second_item.version == 1
-
         await revise_item_metadata(
             first,
             first_owner,
             fixture_workspace_id(owner),
             item_id,
             first_item.version,
-            ItemMetadata(title="First update"),
+            {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "First update"},
         )
         with pytest.raises(VersionConflict):
             await revise_item_metadata(
@@ -1232,12 +1157,12 @@ async def test_item_update_uses_atomic_optimistic_lock(async_db, async_session_f
                 fixture_workspace_id(owner),
                 item_id,
                 second_item.version,
-                ItemMetadata(title="Lost update"),
+                {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Lost update"},
             )
     db.expire_all()
     refreshed = await db.get(Item, item_id)
     assert refreshed is not None
-    assert refreshed.title == "First update"
+    assert refreshed.work.get("title") == "First update"
 
 
 @pytest.mark.anyio
@@ -1251,9 +1176,7 @@ async def test_content_media_types_at_runtime(
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     item_id = item.id
     store = get_object_store()
-
     try:
-        # 1. Attachment downloads retain their stored media type.
         att_key = "attachments/test.pdf"
         await store.put(att_key, b"%PDF-1.4 test")
         attachment = Attachment(
@@ -1272,41 +1195,32 @@ async def test_content_media_types_at_runtime(
         )
         db.add(attachment)
         await db.flush()
-
         att_resp = await client.get(
             f"{workspace_base}/items/{item_id}/attachments/{attachment.id}/content"
         )
         assert att_resp.status_code == 200
         assert att_resp.headers["content-type"] == "application/pdf"
         assert 'filename="test.pdf"' in att_resp.headers["content-disposition"]
-
-        # 2. Citation text returns text/plain or text/html based on output param
         cite_text = await client.get(
             f"{workspace_base}/items/{item_id}/citation/content?output=text"
         )
         assert cite_text.status_code == 200
         assert "text/plain" in cite_text.headers["content-type"]
-
         cite_html = await client.get(
             f"{workspace_base}/items/{item_id}/citation/content?output=html"
         )
         assert cite_html.status_code == 200
         assert "text/html" in cite_html.headers["content-type"]
-
-        # 3. Bibliography returns application/x-bibtex or application/x-research-info-systems
         bib_resp = await client.get(
             f"{workspace_base}/items/{item_id}/bibliography?file_format=bibtex"
         )
         assert bib_resp.status_code == 200
         assert "application/x-bibtex" in bib_resp.headers["content-type"]
-
         ris_resp = await client.get(
             f"{workspace_base}/items/{item_id}/bibliography?file_format=ris"
         )
         assert ris_resp.status_code == 200
         assert "application/x-research-info-systems" in ris_resp.headers["content-type"]
-
-        # 4. Graphical abstract thumbnail returns its image media type (e.g. image/jpeg)
         ga_key = "attachments/ga.jpg"
         await store.put(ga_key, b"\xff\xd8\xff test")
         ga_attachment = Attachment(
@@ -1325,7 +1239,6 @@ async def test_content_media_types_at_runtime(
         )
         db.add(ga_attachment)
         await db.flush()
-
         thumb_resp = await client.get(f"{workspace_base}/items/{item_id}/thumbnail")
         assert thumb_resp.status_code == 200
         assert thumb_resp.headers["content-type"] == "image/jpeg"

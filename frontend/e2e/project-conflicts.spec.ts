@@ -25,12 +25,18 @@ test('Organize prioritizes working contexts without restricting other Project as
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 		route.fulfill({
 			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Reading Item'
+				},
+				citation_key: null,
 				item: { id: 'item-1', title_html: 'Reading Item', version: 1 },
 				latest_revision: null,
 				authorization: { allowed: [] },
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
-				identifiers: [],
+
 				copy_targets: []
 			}
 		})
@@ -128,12 +134,18 @@ for (const assigned of [false, true]) {
 		await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
 			route.fulfill({
 				json: {
+					metadata: {
+						id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+						type: 'Other',
+						title: 'Reading Item'
+					},
+					citation_key: null,
 					item: { id: 'item-1', title_html: 'Reading Item', version: 1 },
 					latest_revision: null,
 					authorization: { allowed: [] },
 					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 					tags: [],
-					identifiers: [],
+
 					copy_targets: []
 				}
 			})

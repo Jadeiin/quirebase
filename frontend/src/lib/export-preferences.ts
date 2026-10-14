@@ -1,13 +1,20 @@
+import { msg } from '#lib/i18n.js';
+
+export const bibliographyFormats = [
+	{ value: 'csl', label: msg('CSL citation'), extension: 'txt', importable: false },
+	{ value: 'bibtex', label: msg('BibTeX'), extension: 'bib', importable: true },
+	{ value: 'ris', label: msg('RIS'), extension: 'ris', importable: true },
+	{ value: 'csl-json', label: msg('CSL-JSON'), extension: 'json', importable: true },
+	{ value: 'commonmeta', label: msg('Commonmeta'), extension: 'json', importable: true }
+] as const;
+
 export type ExportPreferences = {
 	citation: {
-		format: 'csl' | 'bibtex' | 'biblatex' | 'ris' | 'endnote';
+		format: (typeof bibliographyFormats)[number]['value'];
 		style: string;
 		includeAbstract: boolean;
 		preserveCase: boolean;
-		includeIdentifiers: boolean;
-		includeCustomFields: boolean;
 		encoding: 'unicode' | 'latex';
-		journalMode: 'full' | 'abbreviated' | 'prefer_abbreviated';
 		doiPolicy: 'include' | 'omit';
 		urlPolicy: 'include' | 'omit' | 'omit_when_doi';
 		excludedFields: string;
@@ -24,10 +31,7 @@ export const defaultExportPreferences: ExportPreferences = {
 		style: 'apa',
 		includeAbstract: true,
 		preserveCase: false,
-		includeIdentifiers: false,
-		includeCustomFields: false,
 		encoding: 'unicode',
-		journalMode: 'full',
 		doiPolicy: 'include',
 		urlPolicy: 'include',
 		excludedFields: '',
@@ -83,30 +87,23 @@ export function readExportPreferences(userId: string, workspaceId = ''): ExportP
 
 		const citation = parsed.citation;
 		preferences.citation.format =
-			enumValue(citation.format, ['csl', 'bibtex', 'biblatex', 'ris', 'endnote']) ??
-			preferences.citation.format;
+			enumValue(
+				citation.format,
+				bibliographyFormats.map((format) => format.value)
+			) ?? preferences.citation.format;
 		preferences.citation.includeAbstract =
 			booleanValue(citation.includeAbstract) ?? preferences.citation.includeAbstract;
 		preferences.citation.preserveCase =
 			booleanValue(citation.preserveCase) ?? preferences.citation.preserveCase;
-		preferences.citation.includeIdentifiers =
-			booleanValue(citation.includeIdentifiers) ?? preferences.citation.includeIdentifiers;
-		preferences.citation.includeCustomFields =
-			booleanValue(citation.includeCustomFields) ?? preferences.citation.includeCustomFields;
 		preferences.citation.encoding =
 			enumValue(citation.encoding, ['unicode', 'latex']) ?? preferences.citation.encoding;
-		preferences.citation.journalMode =
-			enumValue(citation.journalMode, ['full', 'abbreviated', 'prefer_abbreviated']) ??
-			(citation.abbreviateJournal === true
-				? 'prefer_abbreviated'
-				: preferences.citation.journalMode);
 		preferences.citation.doiPolicy =
 			enumValue(citation.doiPolicy, ['include', 'omit']) ?? preferences.citation.doiPolicy;
 		preferences.citation.urlPolicy =
 			enumValue(citation.urlPolicy, ['include', 'omit', 'omit_when_doi']) ??
 			preferences.citation.urlPolicy;
 		preferences.citation.excludedFields =
-			stringValue(citation.excludedFields, 2000) ?? preferences.citation.excludedFields;
+			stringValue(citation.excludedFields, 8192) ?? preferences.citation.excludedFields;
 		preferences.citation.sortBy =
 			enumValue(citation.sortBy, ['input', 'citation_key', 'author', 'year', 'title']) ??
 			preferences.citation.sortBy;
@@ -122,6 +119,37 @@ export function readExportPreferences(userId: string, workspaceId = ''): ExportP
 	} catch {
 		return preferences;
 	}
+}
+
+export function bibliographyExportParameters(
+	citation: ExportPreferences['citation'],
+	format: string
+) {
+	const bibtex = format === 'bibtex';
+	const structured = bibtex || format === 'csl-json';
+	const citationOutput = ['bibtex', 'ris', 'csl-json', 'csl'].includes(format);
+	return {
+		file_format: format,
+		style: citation.style,
+		include_abstract: format === 'commonmeta' || citation.includeAbstract,
+		sort_by: format === 'csl' ? 'input' : citation.sortBy,
+		citation_key_formula: citation.citationKeyFormula,
+		citation_key_force_ascii: citation.citationKeyForceAscii,
+		preserve_case: bibtex && citation.preserveCase,
+		encoding: bibtex ? citation.encoding : 'unicode',
+		doi_policy: citationOutput ? citation.doiPolicy : 'include',
+		url_policy: citationOutput ? citation.urlPolicy : 'include',
+		excluded_fields: structured
+			? citation.excludedFields.split(/[,\s]+/).filter(Boolean)
+			: undefined
+	};
+}
+
+export function bibliographyFilename(format: string): string {
+	if (format === 'csl') return 'quirebase-citations.txt';
+	const extension =
+		bibliographyFormats.find((choice) => choice.value === format)?.extension ?? 'json';
+	return `quirebase-export.${extension}`;
 }
 
 export function writeExportPreferences(

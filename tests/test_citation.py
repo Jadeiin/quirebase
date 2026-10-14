@@ -5,11 +5,10 @@ from app_helpers import json_payload
 from inquiro.bibliography import (
     BibliographyExportOptions,
     builtin_style_xml,
-    record_to_csl_json,
     render_citation,
+    work_to_csl_json,
 )
-from item_helpers import bibliography_record_from_item as record_from_item
-from item_helpers import contributor_values, metadata_list_values
+from item_helpers import contributor_values
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import (
@@ -29,14 +28,7 @@ from quirebase.library.citations import (
     resolve_style_xml,
     select_builtin_citation_styles,
 )
-from quirebase.models import (
-    CitationStyle,
-    Item,
-    ItemIdentifier,
-    User,
-    WorkspaceMember,
-    WorkspaceRole,
-)
+from quirebase.models import CitationStyle, Item, User, WorkspaceMember, WorkspaceRole
 from quirebase.workspaces import archive_workspace
 
 _counter = 0
@@ -50,32 +42,39 @@ async def _async_item(db, **overrides) -> Item:
     await db.flush()
     await provision_initial_workspace(db, user)
     await db.commit()
-    fields = {
+    work = {
+        "id": "https://doi.org/10.1234/example",
+        "type": "JournalArticle",
         "title": "An Example Paper",
-        "authors": "Doe, Jane; Smith, Alex",
-        "editors": "Editor, Ada",
-        "publication_title": "Testing Quarterly",
-        "publication_date": "2025-02-03",
-        "doi": "10.1234/example",
-        "keywords": "search; testing",
-        "abstract": "A full abstract.",
-        "reference_type": "article-journal",
+        "contributors": contributor_values("Doe, Jane; Smith, Alex"),
+        "container": {"title": "Testing Quarterly"},
+        "date_published": "2025-02-03",
+        "description": "A full abstract.",
+        "subjects": [{"subject": "search"}, {"subject": "testing"}],
     }
-    fields.update(overrides)
-    for role in ("authors", "editors"):
-        fields[role] = contributor_values(fields[role])
-    fields["keywords"] = metadata_list_values(fields["keywords"])
-    doi = fields.pop("doi", None)
-    item = Item(
-        workspace_id=fixture_workspace_id(user),
-        created_by=user.id,
-        identifier_links=[
-            ItemIdentifier(workspace_id=fixture_workspace_id(user), provider="doi", value=doi)
-        ]
-        if doi
-        else [],
-        **fields,
-    )
+    editor = contributor_values("Editor, Ada")[0]
+    editor["roles"] = ["Editor"]
+    work["contributors"].append(editor)
+    for key, value in overrides.items():
+        if key == "reference_type":
+            work["type"] = {
+                "book": "Book",
+                "preprint": "Preprint",
+                "thesis": "Dissertation",
+                "document": "Document",
+            }[value]
+        elif key == "authors":
+            work["contributors"] = contributor_values(value)
+        elif key == "editors":
+            credits = contributor_values(value)
+            for credit in credits:
+                credit["roles"] = ["Editor"]
+            work["contributors"] += credits
+        else:
+            work[
+                {"abstract": "description", "publication_date": "date_published"}.get(key, key)
+            ] = value
+    item = Item(workspace_id=fixture_workspace_id(user), created_by=user.id, work=work)
     db.add(item)
     await db.flush()
     return item
@@ -96,7 +95,6 @@ async def test_shared_citation_style_writes_require_resource_action(async_db, ro
     xml = builtin_style_xml("apa")
     assert xml is not None
     style = await create_custom_citation_style(async_db, owner, item.workspace_id, "Shared", xml)
-
     with pytest.raises(PermissionDenied):
         await create_custom_citation_style(async_db, contributor, item.workspace_id, "Other", xml)
     with pytest.raises(PermissionDenied):
@@ -160,8 +158,7 @@ async def test_duplicate_shared_citation_style_returns_validation_response(
 
 @pytest.mark.anyio
 async def test_item_to_csl_json_maps_core_fields(async_db):
-    record = record_to_csl_json(record_from_item(await _async_item(async_db)))
-
+    record = work_to_csl_json((await _async_item(async_db)).work)
     assert record["type"] == "article-journal"
     assert record["title"] == "An Example Paper"
     assert record["DOI"] == "10.1234/example"
@@ -170,33 +167,31 @@ async def test_item_to_csl_json_maps_core_fields(async_db):
     assert [name["family"] for name in record["author"]] == ["Doe", "Smith"]
     assert record["author"][0]["given"] == "Jane"
     assert record["editor"][0]["family"] == "Editor"
-    assert record["keyword"] == ["search", "testing"]
+    assert record["categories"] == ["search", "testing"]
 
 
 @pytest.mark.anyio
-async def test_item_to_csl_json_projects_canonical_rich_text_to_plaintext(async_db):
-    record = record_to_csl_json(
-        record_from_item(
+async def test_item_to_csl_json_preserves_supported_rich_text(async_db):
+    record = work_to_csl_json(
+        (
             await _async_item(
                 async_db,
                 title="Using <i>AI</i> &amp; ML",
                 abstract="A <b>formatted</b> result with H<sub>2</sub>O.",
             )
-        )
+        ).work
     )
-
-    assert record["title"] == "Using AI & ML"
-    assert record["abstract"] == "A formatted result with H2O."
+    assert record["title"] == "Using <i>AI</i> &amp; ML"
+    assert record["abstract"] == "A <b>formatted</b> result with H<sub>2</sub>O."
 
 
 @pytest.mark.anyio
-async def test_export_options_control_abstract_and_journal_abbreviation(async_db):
-    item = await _async_item(async_db, journal_abbreviation="TQ")
-    options = BibliographyExportOptions(include_abstract=False, journal_mode="prefer_abbreviated")
-    record = record_to_csl_json(record_from_item(item), options)
-
+async def test_export_options_control_abstract(async_db):
+    item = await _async_item(async_db)
+    options = BibliographyExportOptions(include_abstract=False)
+    record = work_to_csl_json(item.work, options)
     assert "abstract" not in record
-    assert record["container-title"] == "TQ"
+    assert record["container-title"] == "Testing Quarterly"
 
 
 def test_citation_key_preview_shows_key_and_disambiguation_suffix():
@@ -210,7 +205,6 @@ def test_citation_key_preview_shows_key_and_disambiguation_suffix():
 def test_citation_key_preview_rejects_invalid_formulas():
     with pytest.raises(ValidationFailure):
         preview_citation_key("auth + unknown")
-
     with pytest.raises(ValidationFailure):
         preview_citation_key("x" * 1001)
 
@@ -219,16 +213,19 @@ def test_citation_key_preview_rejects_invalid_formulas():
 async def test_standard_export_applies_citation_key_formula_to_keyless_items(async_db):
     item = await _async_item(async_db, title="An Example Paper")
     item.citation_key = None
-
+    item.work = {
+        **item.work,
+        "contributors": [
+            credit for credit in item.work["contributors"] if "Author" in credit["roles"]
+        ],
+    }
     contents, _media_type, _filename = format_standard_export(
         [item],
         "bibtex",
         options=BibliographyExportOptions(
-            citation_key_formula="auth.lower + year",
-            citation_key_force_ascii=True,
+            citation_key_formula="auth.lower + year", citation_key_force_ascii=True
         ),
     )
-
     assert "@article{doe2025," in contents
 
 
@@ -244,7 +241,6 @@ async def test_standard_export_rejects_invalid_citation_key_formula(async_db):
 
 def test_builtin_style_catalog_is_searchable():
     selection = select_builtin_citation_styles("american medical", limit=10)
-
     assert selection.included is None
     assert selection.matches
     assert any("medical" in style.name.lower() for style in selection.matches)
@@ -267,9 +263,7 @@ def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
         return catalog
 
     monkeypatch.setattr(styles, "builtin_style_catalog", load_catalog)
-
     selection = citations.select_builtin_citation_styles("matching", limit=1, include="saved")
-
     assert catalog_calls == 1
     assert selection.matches == (catalog[0],)
     assert selection.included == catalog[1]
@@ -289,17 +283,12 @@ async def test_citation_copy_endpoint_accepts_export_options(
     try:
         response = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/bibliography/content",
-            params={
-                "file_format": "bibtex",
-                "include_abstract": "false",
-                "preserve_case": "true",
-                "journal_mode": "prefer_abbreviated",
-            },
+            params={"file_format": "bibtex", "include_abstract": "false"},
         )
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/plain; charset=utf-8"
         assert "abstract" not in response.text
-        assert "title = {{P}aper}" in response.text
+        assert "title = {Paper}" in response.text
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -353,11 +342,7 @@ async def test_citation_style_search_includes_requested_saved_style(
         assert response.status_code == 200
         styles = response.json()["styles"]
         assert len(styles) == 2
-        assert styles[-1] == {
-            "key": "apa",
-            "name": "APA Style 7th edition",
-            "scope": "builtin",
-        }
+        assert styles[-1] == {"key": "apa", "name": "APA Style 7th edition", "scope": "builtin"}
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -366,33 +351,23 @@ async def test_citation_style_search_includes_requested_saved_style(
 @pytest.mark.anyio
 async def test_item_to_csl_json_maps_reference_types(async_db):
     assert (
-        record_to_csl_json(record_from_item(await _async_item(async_db, reference_type="book")))[
-            "type"
-        ]
+        work_to_csl_json((await _async_item(async_db, reference_type="book")).work)["type"]
         == "book"
     )
     assert (
-        record_to_csl_json(
-            record_from_item(await _async_item(async_db, reference_type="preprint"))
-        )["type"]
+        work_to_csl_json((await _async_item(async_db, reference_type="preprint")).work)["type"]
         == "article"
     )
-    assert record_to_csl_json(
-        record_from_item(await _async_item(async_db, reference_type="thesis"))
-    )["type"]
+    assert work_to_csl_json((await _async_item(async_db, reference_type="thesis")).work)["type"]
     assert (
-        record_to_csl_json(
-            record_from_item(await _async_item(async_db, reference_type="document"))
-        )["type"]
+        work_to_csl_json((await _async_item(async_db, reference_type="document")).work)["type"]
         == "document"
     )
 
 
 @pytest.mark.anyio
 async def test_author_names_without_commas_use_last_token_as_family(async_db):
-    record = record_to_csl_json(
-        record_from_item(await _async_item(async_db, authors="Ada Lovelace"))
-    )
+    record = work_to_csl_json((await _async_item(async_db, authors="Ada Lovelace")).work)
     assert record["author"] == [{"family": "Lovelace", "given": "Ada"}]
 
 
@@ -402,7 +377,7 @@ async def test_builtin_styles_render(async_db):
     for style_key in ("apa", "ieee", "modern-language-association"):
         xml = builtin_style_xml(style_key)
         assert xml is not None, style_key
-        rendered = render_citation(record_from_item(item), xml)
+        rendered = render_citation(item.work, xml)
         assert "An Example Paper" in rendered
 
 
@@ -411,7 +386,7 @@ async def test_render_citation_html(async_db):
     item = await _async_item(async_db)
     apa_xml = builtin_style_xml("apa")
     assert apa_xml is not None
-    rendered = render_citation(record_from_item(item), apa_xml, output_format="html")
+    rendered = render_citation(item.work, apa_xml, output_format="html")
     assert "An Example Paper" in rendered
 
 
@@ -427,23 +402,17 @@ async def test_resolve_style_xml_scoped_to_owner(async_db):
     await provision_initial_workspace(db, user_a)
     await provision_initial_workspace(db, user_b)
     await db.commit()
-
     style_a = await create_custom_citation_style(
         db, user_a, fixture_workspace_id(user_a), "Custom A", csl_xml
     )
-
-    # Owner can resolve
     assert (
         await resolve_style_xml(db, user_a, fixture_workspace_id(user_a), str(style_a.id))
         == csl_xml
     )
-    # Non-owner cannot resolve
     assert (
         await resolve_style_xml(db, user_b, fixture_workspace_id(user_b), str(style_a.id)) is None
     )
-    # Unauthenticated cannot resolve
     assert await resolve_style_xml(db, None, fixture_workspace_id(user_a), str(style_a.id)) is None
-    # Built-in styles remain resolvable by anyone
     assert await resolve_style_xml(db, user_a, fixture_workspace_id(user_a), "apa") == csl_xml
     assert await resolve_style_xml(db, user_b, fixture_workspace_id(user_b), "apa") == csl_xml
     assert await resolve_style_xml(db, None, fixture_workspace_id(user_a), "apa") == csl_xml
@@ -470,7 +439,6 @@ async def test_csl_export_preserves_unexpected_rendering_errors(async_db, monkey
         raise RuntimeError("rendering failed")
 
     monkeypatch.setattr(citations, "render_bibliography", rendering_failure)
-
     with pytest.raises(RuntimeError, match="rendering failed"):
         await format_csl_export(db, user, item.workspace_id, [item], style_key=str(style.id))
 
@@ -496,7 +464,6 @@ async def test_citation_text_preserves_unexpected_rendering_errors(async_db, mon
         raise RuntimeError("rendering failed")
 
     monkeypatch.setattr(citations, "render_citation", rendering_failure)
-
     with pytest.raises(RuntimeError, match="rendering failed"):
         await get_item_citation_text_response(
             db, user, item.workspace_id, item.id, style_key=str(style.id)
@@ -523,7 +490,6 @@ async def test_citation_routes_enforce_custom_style_ownership(
         await db.flush()
         await provision_initial_workspace(db, user_b)
         await db.commit()
-
         csl_xml = builtin_style_xml("apa")
         assert csl_xml is not None
         style_a = await create_custom_citation_style(
@@ -532,20 +498,15 @@ async def test_citation_routes_enforce_custom_style_ownership(
         style_b = await create_custom_citation_style(
             db, user_b, fixture_workspace_id(user_b), "User B Style", csl_xml
         )
-
-        # User A requesting User A's style succeeds
         res = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={style_a.id}"
         )
         assert res.status_code == 200
-        assert item.title in res.text
-
-        # User A requesting User B's style is forbidden / invalid
+        assert item.work.get("title") in res.text
         res_forbidden = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={style_b.id}"
         )
         assert res_forbidden.status_code == 422
-
         res_csl_forbidden = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/bibliography?file_format=csl&style={style_b.id}"
         )
@@ -570,18 +531,10 @@ async def test_custom_styles_accessible_in_item_sections(
     try:
         user = await db.get(User, item.created_by)
         assert user is not None
-        csl_xml = (
-            '<?xml version="1.0" encoding="utf-8"?>\n'
-            '<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">\n'
-            "  <info><id>test</id><title>Test Custom</title><updated>2025-01-01T00:00:00Z</updated></info>\n"
-            '  <citation><layout><text variable="title"/></layout></citation>\n'
-            '  <bibliography><layout><text variable="title"/></layout></bibliography>\n'
-            "</style>"
-        )
+        csl_xml = '<?xml version="1.0" encoding="utf-8"?>\n<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">\n  <info><id>test</id><title>Test Custom</title><updated>2025-01-01T00:00:00Z</updated></info>\n  <citation><layout><text variable="title"/></layout></citation>\n  <bibliography><layout><text variable="title"/></layout></bibliography>\n</style>'
         custom_style = await create_custom_citation_style(
             db, user, item.workspace_id, "My Isolated Custom Style", csl_xml
         )
-
         response = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/citation-styles",
             params={"include": custom_style.id},
@@ -591,12 +544,11 @@ async def test_custom_styles_accessible_in_item_sections(
             style["key"] == str(custom_style.id) and style["scope"] == "custom"
             for style in response.json()["styles"]
         )
-
         text_res = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={custom_style.id}"
         )
         assert text_res.status_code == 200
-        assert item.title in text_res.text
+        assert item.work.get("title") in text_res.text
     finally:
         await client.aclose()
         get_settings.cache_clear()

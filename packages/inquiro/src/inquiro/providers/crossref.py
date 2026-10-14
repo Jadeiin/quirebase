@@ -4,111 +4,45 @@ import json
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from inquiro.canonical import (
-    clean_markup,
-    clean_rich_markup,
-    first_text,
-)
+from inquiro.canonical import first_text
 from inquiro.identifiers import normalize_doi, parse_doi
 from inquiro.models import (
     AcquiredDocument,
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
-    Contributor,
     Identifier,
     PdfNotAvailable,
     ProviderConfig,
     ProviderUnavailable,
-    ResourceLink,
     SearchQuery,
 )
 from inquiro.providers._contracts import ProviderDefinition
-from inquiro.providers._payload import (
-    affiliation_values,
-    date_parts,
-    keyword_values,
-    unique_links,
-)
-from inquiro.reference_types import normalize_reference_type
+from inquiro.work import read_work
 
 if TYPE_CHECKING:
     from inquiro.transport import BoundedTransport
 
 
-def _contributors(message: dict) -> tuple[Contributor, ...] | None:
-    entries = message.get("author")
-    if not isinstance(entries, list):
-        return None
-    contributors = []
-    for author in entries:
-        if not isinstance(author, dict):
-            continue
-        family = clean_markup(first_text(author.get("family")))
-        given = clean_markup(first_text(author.get("given")))
-        display = clean_markup(first_text(author.get("name"))) or ", ".join(
-            part for part in (family, given) if part
-        )
-        if not display:
-            continue
-        orcid = first_text(author.get("ORCID"))
-        contributors.append(
-            Contributor(
-                display_name=display,
-                family_name=family,
-                given_name=given,
-                kind="person" if family or given else "unknown",
-                identifiers=(Identifier("orcid", orcid),) if orcid else (),
-                affiliations=affiliation_values(author.get("affiliation")),
-            )
-        )
-    return tuple(contributors)
-
-
-def _links(message: dict, doi: str) -> tuple[ResourceLink, ...]:
-    links = [ResourceLink(f"https://doi.org/{doi}", kind="landing_page")]
-    resource = (message.get("resource") or {}).get("primary") or {}
-    links.extend(
-        ResourceLink(url, kind="landing_page")
-        for value in (message.get("URL"), resource.get("URL"))
-        if (url := first_text(value))
-    )
-    links.extend(
-        ResourceLink(
-            url,
-            kind="full_text",
-            media_type=first_text(entry.get("content-type")),
-            version=first_text(entry.get("content-version")),
-            intended_application=first_text(entry.get("intended-application")),
-        )
-        for entry in message.get("link", [])
-        if isinstance(entry, dict) and (url := first_text(entry.get("URL")))
-    )
-    return unique_links(*links)
-
-
 def _record(message: dict, identifier: Identifier) -> CandidateRecord:
-    value = identifier.value
-    canonical_doi = normalize_doi(first_text(message.get("DOI")) or value)
+    # UPSTREAM(commonmeta-py 0.309): Crossref links without optional content-type raise KeyError.
+    payload = message | {"link": [{"content-type": None, **row} for row in message.get("link", [])]}
+    # UPSTREAM(commonmeta-py 0.309): the reader indexes license[0] even for an empty array.
+    # An empty Crossref collection carries no license to convert.
+    if payload.get("license") == []:
+        payload.pop("license")
     return CandidateRecord(
         provider="crossref",
         lookup_identifier=identifier,
-        title=clean_rich_markup(first_text(message.get("title"))) or "",
-        abstract=clean_rich_markup(first_text(message.get("abstract"))),
-        authors=_contributors(message),
-        keywords=keyword_values(message.get("subject")),
-        publication_date=date_parts(message),
-        publication_title=clean_markup(first_text(message.get("container-title"))),
-        journal_abbreviation=clean_markup(first_text(message.get("short-container-title"))),
-        volume=clean_markup(first_text(message.get("volume"))),
-        issue=clean_markup(
-            first_text(message.get("issue") or (message.get("journal-issue") or {}).get("issue"))
-        ),
-        pages=clean_markup(first_text(message.get("page"))),
-        publisher=clean_markup(first_text(message.get("publisher"))),
-        urls=_links(message, canonical_doi),
-        identifiers=(Identifier("doi", canonical_doi),),
-        reference_type=normalize_reference_type(message.get("type"), source="crossref"),
+        work=read_work(payload, "crossref"),
+        diagnostics=(
+            "Crossref link versions and intended applications have no Commonmeta file field and are not retained.",
+        )
+        if any(
+            row.get("content-version") or row.get("intended-application")
+            for row in message.get("link", [])
+        )
+        else (),
     )
 
 
@@ -207,12 +141,7 @@ class CrossrefSearchAdapter:
 
 class CrossrefDocumentAdapter:
     async def acquire(
-        self,
-        client: BoundedTransport,
-        value: str,
-        settings: ProviderConfig,
-        *,
-        endpoint: str,
+        self, client: BoundedTransport, value: str, settings: ProviderConfig, *, endpoint: str
     ) -> AcquiredDocument:
         params = {"mailto": settings.contact_email} if settings.contact_email else None
         body = await client.get(f"{endpoint}/{quote(value, safe='')}", params)

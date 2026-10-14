@@ -71,22 +71,36 @@ async def test_http_behavioral_contract(async_db, async_session_factory, tmp_pat
     await provision_initial_workspace(db, other_user)
     other_item = Item(
         workspace_id=fixture_workspace_id(other_user),
-        title="Private item",
         created_by=other_user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Private item"},
     )
     db.add(other_item)
     await db.commit()
 
     edit_resp = await client.put(
         f"{workspace_base}/items/{other_item.id}",
-        json=json_payload({"expected_version": 1, "metadata": {"title": "New Title"}}),
+        json=json_payload({
+            "expected_version": 1,
+            "metadata": {
+                "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                "type": "Document",
+                "title": "New Title",
+            },
+        }),
     )
     assert edit_resp.status_code == 404
 
     # 3. Version conflict returns the current version as structured metadata.
     conflict_resp = await client.put(
         f"{workspace_base}/items/{item_id}",
-        json=json_payload({"expected_version": 999, "metadata": {"title": "Conflict Title"}}),
+        json=json_payload({
+            "expected_version": 999,
+            "metadata": {
+                "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                "type": "Document",
+                "title": "Conflict Title",
+            },
+        }),
     )
     assert conflict_resp.status_code == 409
     assert conflict_resp.json() == {

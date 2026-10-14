@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { HTMLInputAttributes } from 'svelte/elements';
 	import { onMount } from 'svelte';
 	import { DatePicker, Portal, parseDate, type DateValue } from '@skeletonlabs/skeleton-svelte';
 	import Icon from '#lib/design/Icon.svelte';
@@ -9,13 +10,15 @@
 		precision = 'day',
 		label,
 		min = '0001-01-01',
-		max = '9999-12-31'
+		max = '9999-12-31',
+		inputAttributes = {}
 	} = $props<{
 		value?: string;
 		precision?: 'year' | 'month' | 'day';
 		label: string;
 		min?: string;
 		max?: string;
+		inputAttributes?: HTMLInputAttributes;
 	}>();
 	let input = $state<HTMLInputElement>();
 	let portalTarget = $state<HTMLElement>();
@@ -87,6 +90,7 @@
 							<!-- Zag filters separators by locale even with custom format/parse. The product input is ISO. -->
 							<input
 								{...attributes}
+								{...inputAttributes}
 								bind:this={input}
 								{value}
 								onbeforeinput={undefined}

@@ -16,6 +16,7 @@
 
 	let { params }: PageProps = $props();
 	let mutationError = $state('');
+	let serverErrors = $state<components['schemas']['ErrorField'][]>([]);
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
 	const overview = createQuery(() => itemOverviewQuery(params.workspaceId, params.itemId));
@@ -24,22 +25,29 @@
 		metadataMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 
-	function updateMetadata(
+	async function updateMetadata(
 		item: ItemDetail,
-		metadata: components['schemas']['BibliographicMetadata-Input']
+		metadata: components['schemas']['ItemDetailView']['metadata'],
+		citationKey: string
 	) {
-		if (!workspace.can('item.update')) return;
+		if (!workspace.can('item.update')) return false;
 		mutationError = '';
-		void metadataMutation.mutateAsync({ item, metadata }).catch(async (error) => {
+		serverErrors = [];
+		try {
+			await metadataMutation.mutateAsync({ item, metadata, citationKey });
+			return true;
+		} catch (error) {
 			if (error instanceof ApiError && error.status === 409) {
 				await Promise.all([details.refetch(), overview.refetch()]);
 				mutationError = $t(
-					'This Item changed since it was loaded. Latest metadata was loaded; review it and submit again.'
+					'This Item changed since it was loaded. Your draft was preserved; review the latest metadata.'
 				);
-				return;
+				return false;
 			}
+			serverErrors = error instanceof ApiError ? error.fields : [];
 			mutationError = apiErrorMessage(error, $t('Unable to save changes'));
-		});
+			return false;
+		}
 	}
 </script>
 
@@ -49,6 +57,7 @@
 		item={details.data!}
 		canEdit={can(overview.data?.authorization, 'item.update')}
 		busy={metadataMutation.isPending}
+		{serverErrors}
 		onSubmit={updateMetadata}
 	/>
 </ItemSectionState>

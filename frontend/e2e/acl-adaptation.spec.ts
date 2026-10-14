@@ -27,12 +27,14 @@ async function projectActions(
 }
 
 const overview = {
+	metadata: { id: 'urn:uuid:00000000-0000-4000-8000-000000000001', type: 'Other', title: 'Item' },
+	citation_key: null,
 	item: { id: 'item-1', title_html: 'Item', version: 1 },
 	latest_revision: null,
 	authorization: { allowed: [] },
 	counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 2 },
 	tags: [],
-	identifiers: [],
+
 	copy_targets: []
 };
 
@@ -305,13 +307,9 @@ test('Item actions follow export, file management and copy-target projections', 
 				title_html: 'Item',
 				version: 1,
 				metadata: {
-					title: 'Item',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Item'
 				}
 			}
 		})
@@ -483,7 +481,9 @@ test('missing Workspace context opens recovery and emits a diagnostic', async ({
 		.toBe(1);
 });
 
-test('metadata version conflict loads the latest Item before explicit retry', async ({ page }) => {
+test('metadata version conflict allows explicitly loading the latest Item before retry', async ({
+	page
+}) => {
 	await mockSession(page);
 	await projectActions(page, 'editor', ['workspace.read', 'item.update']);
 	let version = 1;
@@ -517,23 +517,11 @@ test('metadata version conflict loads the latest Item before explicit retry', as
 				title_html: version === 1 ? 'Initial' : 'Updated elsewhere',
 				version,
 				metadata: {
-					title: version === 1 ? 'Initial' : 'Updated elsewhere',
-					keywords: [],
-					urls: [],
-					authors: [],
-					editors: [],
-					identifiers: [],
-					custom_fields: []
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: version === 1 ? 'Initial' : 'Updated elsewhere'
 				},
-				abstract_html: null,
-				editors: [],
-				structured_authors: [],
-				reference_type: 'document',
-				volume: null,
-				issue: null,
-				pages: null,
-				keywords: null,
-				urls: null
+				abstract_html: null
 			}
 		});
 	});
@@ -541,7 +529,9 @@ test('metadata version conflict loads the latest Item before explicit retry', as
 	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Initial');
 	await page.getByLabel('Title', { exact: true }).fill('My edit');
 	await page.getByRole('button', { name: 'Save metadata' }).click();
-	await expect(page.getByText(/Latest metadata was loaded/)).toBeVisible();
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('My edit');
+	await expect(page.getByRole('button', { name: 'Save metadata' })).toBeDisabled();
+	await page.getByRole('button', { name: 'Discard draft and load latest' }).click();
 	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Updated elsewhere');
 	await page.getByLabel('Title', { exact: true }).fill('Reviewed edit');
 	await page.getByRole('button', { name: 'Save metadata' }).click();

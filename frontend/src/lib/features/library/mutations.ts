@@ -1,7 +1,11 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
 import { invalidateLibrary, invalidateProject } from '#lib/query/invalidation.js';
-import type { ExportPreferences } from '#lib/export-preferences.js';
+import {
+	bibliographyExportParameters,
+	bibliographyFilename,
+	type ExportPreferences
+} from '#lib/export-preferences.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type LibraryBulkAction = 'add_project' | 'add_tag' | 'bibliography' | 'documents' | 'delete';
@@ -14,12 +18,6 @@ export type LibraryBulkInput = {
 	exportFormat: string;
 	preferences: ExportPreferences;
 };
-
-function bibliographyFilename(format: string): string {
-	if (format === 'csl') return 'quirebase-citations.txt';
-	const extension = format === 'ris' ? 'ris' : format === 'endnote' ? 'enw' : 'bib';
-	return `quirebase-export.${extension}`;
-}
 
 function archiveFilename(includeAnnotations: boolean, includeSupplements: boolean): string {
 	const kind =
@@ -39,29 +37,12 @@ export async function runLibraryBulkDownload(
 ): Promise<void> {
 	const api = createWorkspaceApi(workspaceId);
 	if (input.action === 'bibliography') {
-		const citation = input.preferences.citation;
 		await api.download(
 			'/workspaces/{workspace_id}/items/bibliography',
 			{
 				body: {
 					item_ids: input.itemIds,
-					file_format: input.exportFormat,
-					style: citation.style,
-					include_abstract: citation.includeAbstract,
-					preserve_case: citation.preserveCase,
-					include_identifiers: citation.includeIdentifiers,
-					include_custom_fields: citation.includeCustomFields,
-					encoding: citation.encoding,
-					journal_mode: citation.journalMode,
-					doi_policy: citation.doiPolicy,
-					url_policy: citation.urlPolicy,
-					excluded_fields: citation.excludedFields
-						.split(',')
-						.map((value) => value.trim())
-						.filter(Boolean),
-					sort_by: citation.sortBy,
-					citation_key_formula: citation.citationKeyFormula,
-					citation_key_force_ascii: citation.citationKeyForceAscii
+					...bibliographyExportParameters(input.preferences.citation, input.exportFormat)
 				}
 			},
 			{ suggestedName: bibliographyFilename(input.exportFormat) }

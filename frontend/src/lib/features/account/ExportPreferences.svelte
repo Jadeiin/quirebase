@@ -11,6 +11,7 @@
 	} from '#lib/features/account/queries.js';
 	import {
 		defaultExportPreferences,
+		bibliographyFormats,
 		readExportPreferences,
 		writeExportPreferences,
 		type ExportPreferences
@@ -32,11 +33,7 @@
 	type PreferenceSection = 'csl' | 'bibtex' | 'bibliography' | 'documents';
 	let section = $state<PreferenceSection>('csl');
 	function formatSection(format: string): PreferenceSection {
-		return format === 'csl'
-			? 'csl'
-			: ['bibtex', 'biblatex'].includes(format)
-				? 'bibtex'
-				: 'bibliography';
+		return format === 'csl' ? 'csl' : format === 'bibtex' ? 'bibtex' : 'bibliography';
 	}
 	const workspaces = createInfiniteQuery(() => workspaceOptionsQuery());
 	const styles = createQuery(() =>
@@ -131,10 +128,11 @@
 	>
 		<h3>{$t('Bibliography file options')}</h3>
 		<label
-			>{$t('Journal title')}<select class="select" bind:value={preferences.citation.journalMode}
-				><option value="full">{$t('Full title')}</option><option value="prefer_abbreviated"
-					>{$t('Prefer abbreviation')}</option
-				><option value="abbreviated">{$t('Abbreviation only')}</option></select
+			>{$t('Output sorting')}<select class="select" bind:value={preferences.citation.sortBy}
+				><option value="input">{$t('Library order')}</option><option value="citation_key"
+					>{$t('Citation key')}</option
+				><option value="year">{$t('Year')}</option><option value="title">{$t('Title')}</option
+				><option value="author">{$t('Author')}</option></select
 			></label
 		>
 		<label
@@ -146,24 +144,26 @@
 		<label
 			>{$t('URL policy')}<select class="select" bind:value={preferences.citation.urlPolicy}
 				><option value="include">{$t('Include')}</option><option value="omit">{$t('Omit')}</option
-				><option value="omit_when_doi">{$t('Omit when DOI exists')}</option></select
+				><option value="omit_when_doi">{$t('Omit when a DOI exists')}</option></select
 			></label
 		>
-		<label
-			>{$t('Excluded fields')}<input
-				class="input"
-				bind:value={preferences.citation.excludedFields}
-				placeholder="abstract, keywords"
-			/></label
-		>
-		<label
-			>{$t('Output sorting')}<select class="select" bind:value={preferences.citation.sortBy}
-				><option value="input">{$t('Library order')}</option><option value="citation_key"
-					>{$t('Citation key')}</option
-				><option value="author">{$t('Author')}</option><option value="year">{$t('Year')}</option
-				><option value="title">{$t('Title')}</option></select
-			></label
-		>
+		<p class="text-sm text-surface-600-400">
+			{$t('DOI and URL preferences apply to BibTeX, RIS and CSL exports.')}
+		</p>
+		{#if section === 'bibtex' || preferences.citation.format === 'csl-json'}
+			<label
+				>{$t('Excluded fields')}<input
+					class="input"
+					bind:value={preferences.citation.excludedFields}
+					maxlength="8192"
+				/></label
+			>
+			<p class="text-sm text-surface-600-400">
+				{$t(
+					'Use comma-separated native field names. Field exclusions apply only to BibTeX and CSL-JSON; identity and type fields are required.'
+				)}
+			</p>
+		{/if}
 	</section>
 {/snippet}
 
@@ -184,24 +184,30 @@
 				class="select"
 				bind:value={preferences.citation.format}
 				onchange={(event) => (section = formatSection(event.currentTarget.value))}
-				><option value="csl">CSL citation</option><option value="bibtex">BibTeX</option><option
-					value="biblatex">BibLaTeX</option
-				><option value="ris">RIS</option><option value="endnote">EndNote</option></select
-			></label
+			>
+				{#each bibliographyFormats as choice (choice.value)}
+					<option value={choice.value}>{$t(choice.label)}</option>
+				{/each}
+			</select></label
 		>
 		<label class="flex items-center gap-2 pb-2"
-			><input type="checkbox" bind:checked={preferences.citation.includeAbstract} />{$t(
-				'Include abstract'
-			)}</label
+			><input
+				type="checkbox"
+				bind:checked={preferences.citation.includeAbstract}
+				disabled={preferences.citation.format === 'commonmeta'}
+			/>{$t('Include abstract')}</label
 		>
 	</div>
+	{#if preferences.citation.format === 'commonmeta'}<p class="text-surface-600-400">
+			{$t('Commonmeta exports retain the complete Work, including its abstract and identifiers.')}
+		</p>{/if}
 	<Tabs
 		value={section}
 		onValueChange={(details) => (section = (details.value ?? 'csl') as PreferenceSection)}
 	>
 		<Tabs.List class="max-w-full overflow-x-auto" aria-label={$t('Export preference sections')}>
 			<Tabs.Indicator class="bg-primary-700-300" />
-			{#each [['csl', 'CSL'], ['bibtex', 'BibTeX / BibLaTeX'], ['bibliography', 'RIS / EndNote'], ['documents', $t('Document downloads')]] as [value, label] (value)}
+			{#each [['csl', 'CSL'], ['bibtex', 'BibTeX'], ['bibliography', $t('Bibliography file options')], ['documents', $t('Document downloads')]] as [value, label] (value)}
 				<Tabs.Trigger {value} class="whitespace-nowrap data-selected:text-primary-700-300"
 					>{label}</Tabs.Trigger
 				>
@@ -253,30 +259,21 @@
 		<Tabs.Content value="bibtex">
 			<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
 				<div class="grid grid-cols-1 content-start gap-4">
-					{@render bibliographyOptions()}
-					<section
-						class="grid grid-cols-1 content-start gap-3 rounded-lg border border-surface-300-700 p-3"
+					<label
+						>{$t('BibTeX character representation')}<select
+							class="select"
+							bind:value={preferences.citation.encoding}
+							><option value="unicode">{$t('Unicode text')}</option><option value="latex"
+								>{$t('LaTeX character commands')}</option
+							></select
+						></label
 					>
-						<h3>{$t('BibTeX and BibLaTeX options')}</h3>
-						<label
-							>{$t('Encoding')}<select class="select" bind:value={preferences.citation.encoding}
-								><option value="unicode">Unicode</option><option value="latex">LaTeX</option
-								></select
-							></label
-						>
-						<label class="flex gap-2"
-							><input type="checkbox" bind:checked={preferences.citation.preserveCase} />
-							{$t('Preserve bibitem case')}</label
-						>
-						<label class="flex gap-2"
-							><input type="checkbox" bind:checked={preferences.citation.includeIdentifiers} />
-							{$t('Include additional identifiers')}</label
-						>
-						<label class="flex gap-2"
-							><input type="checkbox" bind:checked={preferences.citation.includeCustomFields} />
-							{$t('Include custom fields')}</label
-						>
-					</section>
+					<label class="flex items-center gap-2"
+						><input type="checkbox" bind:checked={preferences.citation.preserveCase} />{$t(
+							'Preserve BibTeX title case'
+						)}</label
+					>
+					{@render bibliographyOptions()}
 				</div>
 				<section
 					class="grid grid-cols-1 content-start gap-3 rounded-lg border border-surface-300-700 p-3"

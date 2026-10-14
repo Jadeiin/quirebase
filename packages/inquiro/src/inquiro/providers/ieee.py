@@ -3,35 +3,41 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Literal
 
-from inquiro.canonical import (
-    clean_rich_markup,
-    first_text,
-)
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import clean_rich_markup, first_text
 from inquiro.identifiers import normalize_doi, parse_ieee
 from inquiro.models import (
     AcquiredDocument,
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
-    Contributor,
     Identifier,
     PdfAccessDenied,
     PdfNotAvailable,
     ProviderConfig,
     ProviderUnavailable,
-    ResourceLink,
     SearchClause,
     SearchQuery,
 )
 from inquiro.providers._contracts import ProviderDefinition
-from inquiro.providers._payload import affiliation_values, keyword_values, unique_links
-from inquiro.reference_types import ReferenceType, normalize_reference_type
+from inquiro.providers._payload import (
+    affiliation_values,
+    keyword_values,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
+    unique_links,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from inquiro.transport import BoundedTransport
-
 _IEEE_FIELDS = {
     "any": None,
     "title": '"Document Title"',
@@ -56,7 +62,7 @@ def _ieee_boolean_query(clauses: Sequence[SearchClause]) -> str:
     return " ".join(parts)
 
 
-def _contributors(article: dict) -> tuple[Contributor, ...] | None:
+def _contributors(article: dict) -> tuple[dict, ...] | None:
     entries = (article.get("authors") or {}).get("authors")
     if not isinstance(entries, list):
         return None
@@ -69,7 +75,7 @@ def _contributors(article: dict) -> tuple[Contributor, ...] | None:
             affiliation = [affiliation]
         orcid = first_text(author.get("orcid"))
         authors.append(
-            Contributor(
+            source_credit(
                 display_name=name,
                 family_name=first_text(author.get("last_name")),
                 given_name=first_text(author.get("first_name")),
@@ -77,12 +83,12 @@ def _contributors(article: dict) -> tuple[Contributor, ...] | None:
                 affiliations=affiliation_values(affiliation),
             )
         )
-    return tuple(authors)
+    return tuple(authors) or None
 
 
-def _links(article: dict, article_number: str) -> tuple[ResourceLink, ...]:
+def _links(article: dict, article_number: str) -> tuple[dict, ...]:
     links = [
-        ResourceLink(f"https://ieeexplore.ieee.org/document/{article_number}", kind="landing_page")
+        source_link(f"https://ieeexplore.ieee.org/document/{article_number}", kind="landing_page")
     ]
     fields: tuple[tuple[str, Literal["landing_page", "full_text"], str | None], ...] = (
         ("abstract_url", "landing_page", None),
@@ -91,7 +97,7 @@ def _links(article: dict, article_number: str) -> tuple[ResourceLink, ...]:
     )
     for key, kind, media_type in fields:
         if url := first_text(article.get(key)):
-            links.append(ResourceLink(url, kind=kind, media_type=media_type))
+            links.append(source_link(url, kind=kind, media_type=media_type))
     return unique_links(*links)
 
 
@@ -112,27 +118,30 @@ def _record(article: dict, identifier: Identifier) -> CandidateRecord:
     if not title:
         raise CandidateNotFound("IEEE Xplore article was not found")
     doi = normalize_doi(first_text(article.get("doi")) or "") or None
-    article_number = first_text(article.get("article_number")) or (
-        identifier.value if identifier.provider == "ieee" else None
-    )
+    article_number = first_text(article.get("article_number"))
     identifiers = {"ieee": article_number}
     if doi:
         identifiers["doi"] = doi
     return CandidateRecord(
         provider="ieee",
         lookup_identifier=identifier,
-        title=title,
-        abstract=clean_rich_markup(first_text(article.get("abstract"))),
-        authors=_contributors(article),
-        keywords=_keywords(article),
-        publication_date=first_text(article.get("publication_year")),
-        publication_title=first_text(article.get("publication_title")),
-        urls=_links(article, article_number) if article_number else None,
-        identifiers=tuple(Identifier(key, value) for key, value in identifiers.items() if value),
-        reference_type=normalize_reference_type(
-            first_text(article.get("content_type")), source="ieee"
-        )
-        or ReferenceType.article_journal,
+        work=compact({
+            "id": source_work_id(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
+            ),
+            "type": "Other",
+            "title": title,
+            "description": clean_rich_markup(first_text(article.get("abstract"))),
+            "contributors": _contributors(article),
+            "date_published": first_text(article.get("publication_year")),
+            "identifiers": source_identifiers(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
+            ),
+            "subjects": source_subjects(_keywords(article) or ()),
+            "container": compact({"title": first_text(article.get("publication_title"))}),
+            "url": source_landing_url(_links(article, article_number) if article_number else None),
+            "files": source_files(_links(article, article_number) if article_number else None),
+        }),
     )
 
 
@@ -147,11 +156,7 @@ class IeeeLookupAdapter:
     ) -> CandidateRecord:
         value = identifier.value
         api_key = settings.ieee_api_key or ""
-        params = {
-            "apikey": api_key,
-            "format": "json",
-            "article_number": value,
-        }
+        params = {"apikey": api_key, "format": "json", "article_number": value}
         body = await client.get(endpoint, params)
         try:
             payload = json.loads(body)
@@ -224,20 +229,10 @@ class IeeeSearchAdapter:
 
 class IeeeDocumentAdapter:
     async def acquire(
-        self,
-        client: BoundedTransport,
-        value: str,
-        settings: ProviderConfig,
-        *,
-        endpoint: str,
+        self, client: BoundedTransport, value: str, settings: ProviderConfig, *, endpoint: str
     ) -> AcquiredDocument:
         body = await client.get(
-            endpoint,
-            {
-                "apikey": settings.ieee_api_key,
-                "format": "json",
-                "article_number": value,
-            },
+            endpoint, {"apikey": settings.ieee_api_key, "format": "json", "article_number": value}
         )
         try:
             payload = json.loads(body)
@@ -256,15 +251,10 @@ class IeeeDocumentAdapter:
         access_type = (first_text(article.get("accessType")) or "").lower()
         if access_type not in {"open access", "ephemera"}:
             raise PdfAccessDenied("IEEE Xplore PDF is not openly accessible")
-        # IEEE's /fulltext API returns structured article text; pdf_url is the PDF resource.
         pdf_url = first_text(article.get("pdf_url"))
         if not pdf_url:
             raise PdfNotAvailable("IEEE Xplore did not provide a PDF link")
-        return await client.download_pdf(
-            pdf_url,
-            filename=f"{value}.pdf",
-            provider="ieee",
-        )
+        return await client.download_pdf(pdf_url, filename=f"{value}.pdf", provider="ieee")
 
 
 IEEE_PROVIDER = ProviderDefinition(

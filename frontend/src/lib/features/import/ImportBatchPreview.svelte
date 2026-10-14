@@ -2,6 +2,7 @@
 	import LoadingState from '#lib/design/LoadingState.svelte';
 	import type { components } from '#lib/api/schema.js';
 	import RichText from '#lib/design/RichText.svelte';
+	import { text, objects, contributorName } from '../item/metadata-draft.js';
 	import Panel from '#lib/design/Panel.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import Notice from '#lib/design/Notice.svelte';
@@ -62,13 +63,12 @@
 	{/if}
 	{#each records as record (record)}
 		<ItemRow>
-			<strong><RichText html={record.metadata.title || $t('Untitled')} /></strong>
-			<span class="text-surface-600-400"
-				>{record.metadata.authors
-					.map((person: components['schemas']['Contributor']) => person.display_name)
-					.join('; ') ||
-					record.metadata.doi ||
-					''}</span
+			<strong><RichText html={text(record.metadata.title) || $t('Untitled')} /></strong>
+			<span class="text-surface-600-400">
+				{objects(record.metadata.contributors)
+					.filter((row) => Array.isArray(row.roles) && row.roles.includes('Author'))
+					.map(contributorName)
+					.join('; ') || text(record.metadata.id)}</span
 			>
 			{#if record.source}<span class="text-surface-600-400">{record.source.original_name}</span
 				>{/if}

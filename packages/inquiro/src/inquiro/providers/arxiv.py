@@ -4,33 +4,36 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Literal
 from xml.etree import ElementTree
 
-from inquiro.canonical import (
-    first_text,
-)
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import first_text
 from inquiro.identifiers import normalize_doi, parse_arxiv
 from inquiro.models import (
     AcquiredDocument,
-    Affiliation,
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
-    Contributor,
     Identifier,
     ProviderConfig,
     ProviderUnavailable,
-    ResourceLink,
     SearchQuery,
 )
 from inquiro.providers._contracts import ProviderDefinition
 from inquiro.providers._payload import (
     boolean_query,
+    source_affiliation,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
     unique_links,
 )
-from inquiro.reference_types import ReferenceType
 
 if TYPE_CHECKING:
     from inquiro.transport import BoundedTransport
-
 _NAMESPACE = {
     "atom": "http://www.w3.org/2005/Atom",
     "arxiv": "http://arxiv.org/schemas/atom",
@@ -38,22 +41,22 @@ _NAMESPACE = {
 }
 
 
-def _contributors(entry: ElementTree.Element) -> tuple[Contributor, ...]:
+def _contributors(entry: ElementTree.Element) -> tuple[dict, ...] | None:
     authors = []
     for author in entry.findall("atom:author", _NAMESPACE):
         name = first_text(author.findtext("atom:name", namespaces=_NAMESPACE))
         if not name:
             continue
         affiliations = tuple(
-            Affiliation(affiliation_name)
+            source_affiliation(affiliation_name)
             for node in author.findall("arxiv:affiliation", _NAMESPACE)
             if (affiliation_name := first_text(node.text))
         )
-        authors.append(Contributor(name, affiliations=affiliations or None))
-    return tuple(authors)
+        authors.append(source_credit(name, affiliations=affiliations or None))
+    return tuple(authors) or None
 
 
-def _links(entry: ElementTree.Element, value: str, doi: str | None) -> tuple[ResourceLink, ...]:
+def _links(entry: ElementTree.Element, value: str, doi: str | None) -> tuple[dict, ...]:
     links = []
     for node in entry.findall("atom:link", _NAMESPACE):
         if not (url := first_text(node.get("href"))):
@@ -66,21 +69,23 @@ def _links(entry: ElementTree.Element, value: str, doi: str | None) -> tuple[Res
             if node.get("rel") == "alternate" or node.get("title") == "doi"
             else "other"
         )
-        links.append(ResourceLink(url, kind=kind, media_type=media_type))
+        links.append(source_link(url, kind=kind, media_type=media_type))
     for link in (
-        ResourceLink(f"https://arxiv.org/abs/{value}", kind="landing_page"),
-        ResourceLink(
+        source_link(f"https://arxiv.org/abs/{value}", kind="landing_page"),
+        source_link(
             f"https://arxiv.org/pdf/{value}.pdf", kind="full_text", media_type="application/pdf"
         ),
-        ResourceLink(f"https://doi.org/{doi}", kind="landing_page") if doi else None,
+        source_link(f"https://doi.org/{doi}", kind="landing_page") if doi else None,
     ):
-        if link and not any(existing.url == link.url for existing in links):
+        if link and (not any(existing["url"] == link["url"] for existing in links)):
             links.append(link)
     return unique_links(*links)
 
 
 def _record(entry: ElementTree.Element, identifier: Identifier) -> CandidateRecord:
-    value = identifier.value
+    returned = entry.findtext("atom:id", default="", namespaces=_NAMESPACE)
+    confirmed = parse_arxiv(returned, "arxiv")
+    value = confirmed.value if confirmed else ""
     summary = entry.findtext("atom:summary", default="", namespaces=_NAMESPACE)
     if summary.strip().lower().startswith("error:"):
         raise CandidateNotFound("arXiv returned an error entry")
@@ -88,30 +93,44 @@ def _record(entry: ElementTree.Element, identifier: Identifier) -> CandidateReco
     doi_link = entry.find("atom:link[@title='doi']", _NAMESPACE)
     if not doi and doi_link is not None:
         doi = normalize_doi(doi_link.attrib.get("href", "")) or None
-    identifiers: dict[str, str] = {"arxiv": value}
+    identifiers: dict[str, str] = {"arxiv": value} if value else {}
     if doi:
         identifiers["doi"] = doi
     published = entry.findtext("atom:published", default="", namespaces=_NAMESPACE)
     return CandidateRecord(
         provider="arxiv",
         lookup_identifier=identifier,
-        title=first_text(entry.findtext("atom:title", default="", namespaces=_NAMESPACE)) or "",
-        abstract=summary.strip() or None,
-        authors=_contributors(entry),
-        keywords=tuple(
-            dict.fromkeys(
-                term
-                for category in entry.findall("atom:category", _NAMESPACE)
-                if (term := first_text(category.get("term")))
-            )
-        ),
-        publication_date=published[:10] if published else None,
-        publication_title=first_text(
-            entry.findtext("arxiv:journal_ref", default="", namespaces=_NAMESPACE)
-        ),
-        urls=_links(entry, value, doi),
-        identifiers=tuple(Identifier(key, value) for key, value in identifiers.items()),
-        reference_type=ReferenceType.preprint,
+        work=compact({
+            "id": source_work_id(
+                tuple((Identifier(key, value) for key, value in identifiers.items()))
+            ),
+            "type": "Preprint",
+            "title": first_text(entry.findtext("atom:title", default="", namespaces=_NAMESPACE))
+            or "",
+            "description": summary.strip() or None,
+            "contributors": _contributors(entry),
+            "date_published": published[:10] if published else None,
+            "identifiers": source_identifiers(
+                tuple((Identifier(key, value) for key, value in identifiers.items()))
+            ),
+            "subjects": source_subjects(
+                tuple(
+                    dict.fromkeys(
+                        term
+                        for category in entry.findall("atom:category", _NAMESPACE)
+                        if (term := first_text(category.get("term")))
+                    )
+                )
+                or ()
+            ),
+            "container": compact({
+                "title": first_text(
+                    entry.findtext("arxiv:journal_ref", default="", namespaces=_NAMESPACE)
+                )
+            }),
+            "url": source_landing_url(_links(entry, value, doi)),
+            "files": source_files(_links(entry, value, doi)),
+        }),
     )
 
 
@@ -125,10 +144,7 @@ class ArxivLookupAdapter:
         endpoint: str,
     ) -> CandidateRecord:
         value = identifier.value
-        body = await client.get(
-            endpoint,
-            {"id_list": value, "max_results": "1"},
-        )
+        body = await client.get(endpoint, {"id_list": value, "max_results": "1"})
         try:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
@@ -184,26 +200,18 @@ class ArxivSearchAdapter:
             entry_id = entry.findtext("atom:id", default="", namespaces=_NAMESPACE)
             if identifier := parse_arxiv(entry_id, "arxiv"):
                 record = _record(entry, identifier)
-                results.append(
-                    replace(record, publication_title=record.publication_title or "arXiv")
-                )
+                container = {"title": "arXiv", **record.work.get("container", {})}
+                results.append(replace(record, work={**record.work, "container": container}))
         return CandidatePage("arxiv", tuple(results), total, request.page, request.per_page)
 
 
 class ArxivDocumentAdapter:
     async def acquire(
-        self,
-        client: BoundedTransport,
-        value: str,
-        settings: ProviderConfig,
-        *,
-        endpoint: str,
+        self, client: BoundedTransport, value: str, settings: ProviderConfig, *, endpoint: str
     ) -> AcquiredDocument:
         filename = f"{value.replace('/', '_')}.pdf"
         return await client.download_pdf(
-            f"{endpoint}/{value}.pdf",
-            filename=filename,
-            provider="arxiv",
+            f"{endpoint}/{value}.pdf", filename=filename, provider="arxiv"
         )
 
 

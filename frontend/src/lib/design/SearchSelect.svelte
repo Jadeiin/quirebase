@@ -18,6 +18,10 @@
 		disabled = false,
 		filterOptions = true,
 		loading = false,
+		allowCustomValue = false,
+		inputName,
+		inputType = 'text',
+		required = false,
 		footer,
 		class: className = ''
 	} = $props<{
@@ -32,6 +36,10 @@
 		disabled?: boolean;
 		filterOptions?: boolean;
 		loading?: boolean;
+		allowCustomValue?: boolean;
+		inputName?: string;
+		inputType?: 'text' | 'url';
+		required?: boolean;
 		footer?: Snippet;
 		class?: string;
 	}>();
@@ -70,8 +78,10 @@
 	class={`min-w-0 ${className}`.trim()}
 	{collection}
 	{disabled}
+	{allowCustomValue}
+	{required}
 	{open}
-	inputValue={search ?? selectedLabel ?? selected?.label ?? ''}
+	inputValue={search ?? selectedLabel ?? selected?.label ?? (allowCustomValue ? value : '')}
 	value={value ? [value] : []}
 	positioning={{ strategy: 'fixed' }}
 	openOnClick
@@ -80,7 +90,10 @@
 		if (target instanceof Node && footerElement?.contains(target)) event.preventDefault();
 	}}
 	onInputValueChange={(details) => {
-		if (details.reason === 'input-change') search = details.inputValue;
+		if (details.reason === 'input-change') {
+			search = details.inputValue;
+			if (allowCustomValue) value = details.inputValue;
+		}
 	}}
 	onValueChange={(details) => {
 		value = details.value[0] ?? '';
@@ -94,7 +107,13 @@
 	<Combobox.Label>{label}</Combobox.Label>
 	<Combobox.Control>
 		<Combobox.Input placeholder={placeholder || emptyLabel} class="pr-10">
-			{#snippet element(attributes)}<input {...attributes} bind:this={input} />{/snippet}
+			{#snippet element(attributes)}<input
+					{...attributes}
+					name={inputName}
+					type={inputType}
+					{required}
+					bind:this={input}
+				/>{/snippet}
 		</Combobox.Input>
 		<Combobox.Trigger aria-label={$t('Show options for {label}', { label })}
 			><Icon name="chevron-down" size={16} /></Combobox.Trigger

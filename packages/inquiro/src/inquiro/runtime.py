@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Self
 from urllib.parse import urlsplit
 
 from inquiro.canonical import normalize_publication_date
 from inquiro.identifiers import parse_identifier
-from inquiro.metadata import clean_identifier_value
 from inquiro.models import (
     MAX_SEARCH_CLAUSES,
     AcquiredDocument,
@@ -14,7 +14,6 @@ from inquiro.models import (
     CandidatePage,
     CandidateRecord,
     DocumentRequest,
-    Identifier,
     InquiroError,
     InvalidProviderRequest,
     MetadataProviderChoices,
@@ -26,6 +25,7 @@ from inquiro.models import (
 )
 from inquiro.providers._catalog import builtin_providers
 from inquiro.transport import BoundedTransport, Exchange, HttpExchange, RemoteNotFound
+from inquiro.work import InvalidWork, validate_work
 
 if TYPE_CHECKING:
     from inquiro.providers._contracts import ProviderDefinition
@@ -34,26 +34,31 @@ SEARCH_FIELDS = frozenset({"any", "title", "author", "publication", "abstract"})
 SEARCH_OPERATORS = frozenset({"and", "or", "not"})
 
 
-def _candidate_identifiers(
-    identifiers: tuple[Identifier, ...],
-) -> tuple[Identifier, ...]:
-    unique: dict[str, Identifier] = {}
-    for identifier in identifiers:
-        namespace = identifier.provider.strip().lower()
-        identifier = Identifier(namespace, clean_identifier_value(namespace, identifier.value))
-        previous = unique.get(identifier.provider)
-        if previous is not None and previous != identifier:
-            raise ProviderUnavailable("metadata provider returned conflicting identifiers")
-        unique[identifier.provider] = identifier
-    return tuple(unique.values())
-
-
 def _normalize_candidate(record: CandidateRecord) -> CandidateRecord:
-    return replace(
-        record,
-        publication_date=normalize_publication_date(record.publication_date),
-        identifiers=_candidate_identifiers(record.identifiers),
-    )
+    try:
+        work = validate_work(record.work)
+        # The schema's date regex accepts invalid calendar components. Check them
+        # before retaining the supplied precision, including complete timestamps.
+        if published := work.get("date_published"):
+            if "T" in published:
+                datetime.fromisoformat(published)
+            else:
+                parts = [int(part) for part in published.split("-")]
+                date(*(parts + [1] * (3 - len(parts))))
+        return replace(record, work=work)
+    except (InvalidWork, ValueError):
+        pass
+    work = dict(record.work)
+    if "date_published" in work:
+        normalized = normalize_publication_date(work["date_published"])
+        if normalized:
+            work["date_published"] = normalized
+        else:
+            work.pop("date_published")
+    try:
+        return replace(record, work=validate_work(work))
+    except InvalidWork as error:
+        raise ProviderUnavailable(f"provider returned invalid Commonmeta: {error}") from error
 
 
 def metadata_provider_choices(config: ProviderConfig = ProviderConfig()) -> MetadataProviderChoices:
@@ -67,7 +72,11 @@ def metadata_provider_choices(config: ProviderConfig = ProviderConfig()) -> Meta
             if provider.search_adapter is not None and provider.has_credentials(config, "search")
         ),
         lookup=tuple(
-            ProviderChoice(provider.name, provider.display_name or provider.name)
+            ProviderChoice(
+                provider.name,
+                provider.display_name or provider.name,
+                identifier_namespace=provider.identifier_namespace,
+            )
             for provider in builtin_providers()
             if provider.lookup_adapter is not None and provider.has_credentials(config, "lookup")
         ),
@@ -165,8 +174,6 @@ class ProviderRuntime:
             raise
         except (TypeError, ValueError) as error:
             raise ProviderUnavailable("metadata provider returned invalid metadata") from error
-        if not record.title:
-            raise ProviderUnavailable("metadata provider returned a record without a title")
         return _normalize_candidate(record)
 
     async def search(self, query: SearchQuery) -> CandidatePage:

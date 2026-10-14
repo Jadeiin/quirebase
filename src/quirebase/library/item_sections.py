@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from inquiro import Identifier as MetadataLookupIdentifier
+from inquiro.work import work_identifiers
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import selectinload
 
@@ -27,12 +29,11 @@ from quirebase.documents import (
     list_item_attachments,
     list_item_revisions,
 )
-from quirebase.library._metadata import ItemMetadata, metadata_from_item
+from quirebase.library._metadata import Work, metadata_from_item
 from quirebase.library.tags import TagMatrix, get_tag_matrix_for_item
 from quirebase.models import (
     DiscussionMessage,
     Item,
-    ItemIdentifier,
     ItemRead,
     ItemTag,
     Project,
@@ -78,12 +79,12 @@ class ItemOverviewData(ItemSectionData):
     message_count: int
     tags: tuple[Tag, ...]
     updater: User | None
-    identifiers: tuple[ItemIdentifier, ...]
+    primary_lookup_identifier: MetadataLookupIdentifier | None = None
 
 
 @dataclass(frozen=True)
 class ItemMetadataData(ItemSectionData):
-    metadata: ItemMetadata
+    metadata: Work
 
 
 @dataclass(frozen=True)
@@ -157,10 +158,14 @@ async def _open_overview(
         or 0
     )
     attachment_count = await count_item_attachments(db, item.workspace_id, item.id)
-    identifiers = tuple(
-        (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
-    )
+
     tags = await _assigned_tags(db, item)
+    # This is query context for the current authorized Item. Keep recognition
+    # and comparison in Inquiro, including URI forms and aliases already in Work.
+    missing_primary = work_identifiers({"id": item.work.get("id", "")}) - work_identifiers({
+        "identifiers": item.work.get("identifiers", [])
+    })
+    primary = next(iter(missing_primary), None)
     return ItemOverviewData(
         item=item,
         revisions=revisions[:1],
@@ -170,20 +175,18 @@ async def _open_overview(
         message_count=message_count,
         tags=tags,
         updater=await db.get(User, item.updated_by) if item.updated_by else None,
-        identifiers=identifiers,
+        primary_lookup_identifier=MetadataLookupIdentifier(*primary) if primary else None,
     )
 
 
 async def _open_metadata(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemMetadataData:
-    identifiers = tuple(
-        (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item.id))).all()
-    )
+
     return ItemMetadataData(
         item=item,
         revisions=await list_item_revisions(db, item.workspace_id, item.id),
-        metadata=metadata_from_item(item, identifiers),
+        metadata=metadata_from_item(item),
     )
 
 

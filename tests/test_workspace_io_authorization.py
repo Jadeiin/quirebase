@@ -1,22 +1,23 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pymupdf
 import pytest
+from commonmeta.base_utils import compact
 from inquiro import CandidatePage, CandidateRecord, Identifier
 from sqlalchemy import func, select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.errors import PermissionDenied, WorkspaceMembershipRequired
-from quirebase.library import export_accessible_bibliography, get_accessible_item_identifiers
+from quirebase.library import export_accessible_bibliography, find_duplicates
 from quirebase.library.discovery import DiscoveryClause, search_candidate_records
 from quirebase.library.imports import stage_identifier_import_batch, stage_pdf_import_batch
 from quirebase.models import (
     ImportBatch,
     Item,
-    ItemIdentifier,
     User,
     WorkspaceMember,
     WorkspaceMemberState,
@@ -39,7 +40,7 @@ async def _member(async_db):
     )
     async_db.add(membership)
     await async_db.commit()
-    return member, membership.id, fixture_workspace_id(owner)
+    return (member, membership.id, fixture_workspace_id(owner))
 
 
 @pytest.mark.anyio
@@ -51,15 +52,20 @@ async def test_workspace_bibliography_export_requires_membership(async_db):
     await provision_initial_workspace(async_db, owner)
     await provision_initial_workspace(async_db, outsider)
     workspace_id = fixture_workspace_id(owner)
-    async_db.add(Item(workspace_id=workspace_id, title="Private metadata", created_by=owner.id))
+    async_db.add(
+        Item(
+            workspace_id=workspace_id,
+            created_by=owner.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Private metadata"},
+        )
+    )
     await async_db.commit()
-
     with pytest.raises(WorkspaceMembershipRequired):
         await export_accessible_bibliography(async_db, outsider, workspace_id, file_format="bibtex")
 
 
 @pytest.mark.anyio
-async def test_workspace_identifier_enumeration_requires_membership(async_db):
+async def test_workspace_duplicate_detection_requires_membership(async_db):
     owner = User(username="identifier-owner", password_hash="unused")
     outsider = User(username="identifier-outsider", password_hash="unused")
     async_db.add_all([owner, outsider])
@@ -70,17 +76,18 @@ async def test_workspace_identifier_enumeration_requires_membership(async_db):
     async_db.add(
         Item(
             workspace_id=workspace_id,
-            title="Private identifiers",
-            identifier_links=[
-                ItemIdentifier(workspace_id=workspace_id, provider="doi", value="10.1000/private")
-            ],
             created_by=owner.id,
+            work={
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Private identifiers",
+                "identifiers": [{"identifier_type": "DOI", "identifier": "10.1000/private"}],
+            },
         )
     )
     await async_db.commit()
-
     with pytest.raises(WorkspaceMembershipRequired):
-        await get_accessible_item_identifiers(async_db, outsider, workspace_id)
+        await find_duplicates(async_db, outsider, workspace_id, "identifier")
 
 
 @pytest.mark.anyio
@@ -98,7 +105,11 @@ async def test_identifier_import_rechecks_create_after_provider_io(
         return CandidateRecord(
             provider="crossref",
             lookup_identifier=Identifier("doi", "10.1000/revoked"),
-            title="Revoked import",
+            work=compact({
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Revoked import",
+            }),
         )
 
     monkeypatch.setattr("quirebase.library.imports.lookup_candidate", lookup)
@@ -132,14 +143,14 @@ async def test_pdf_import_rechecks_create_and_cleans_staged_object(
     monkeypatch.setattr("quirebase.library.imports.stage_pdf", stage_then_revoke)
     with pytest.raises(WorkspaceMembershipRequired):
         await stage_pdf_import_batch(
-            async_db, member, workspace_id, [(pdf_bytes, "revoked.pdf")], max_bytes=100_000
+            async_db, member, workspace_id, [(pdf_bytes, "revoked.pdf")], max_bytes=100000
         )
     assert await async_db.scalar(select(func.count()).select_from(ImportBatch)) == 0
     assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
 
 
 @pytest.mark.anyio
-async def test_discovery_rechecks_membership_before_local_matching(
+async def test_discovery_rechecks_membership_before_returning_candidates(
     async_db, async_session_factory, monkeypatch
 ):
     member, membership_id, workspace_id = await _member(async_db)
@@ -153,15 +164,13 @@ async def test_discovery_rechecks_membership_before_local_matching(
         candidate = CandidateRecord(
             provider="crossref",
             lookup_identifier=Identifier("doi", "10.1000/existing"),
-            title="Candidate",
+            work=compact({"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Candidate"}),
         )
         return CandidatePage("crossref", (candidate,), 1, 1, 10)
 
-    match = AsyncMock()
+    audit = AsyncMock()
     monkeypatch.setattr("quirebase.library.discovery.search_candidates", search)
-    monkeypatch.setattr(
-        "quirebase.library.discovery.get_matching_accessible_item_identifiers", match
-    )
+    monkeypatch.setattr("quirebase.library.discovery.record_discovery_search_audit", audit)
     with pytest.raises(WorkspaceMembershipRequired):
         await search_candidate_records(
             async_db,
@@ -171,4 +180,4 @@ async def test_discovery_rechecks_membership_before_local_matching(
             (DiscoveryClause("title", "and", "candidate"),),
             settings=get_settings(),
         )
-    match.assert_not_awaited()
+    audit.assert_not_awaited()

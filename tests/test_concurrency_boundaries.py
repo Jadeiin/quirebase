@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -30,8 +32,8 @@ async def test_upload_finalizer_rechecks_revoked_membership(async_db):
     )
     item = Item(
         workspace_id=fixture_workspace_id(owner),
-        title="Finalizer target",
         created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Finalizer target"},
     )
     async_db.add_all([membership, item])
     await async_db.commit()

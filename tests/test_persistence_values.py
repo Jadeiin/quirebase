@@ -36,7 +36,11 @@ async def test_annotation_and_reply_share_uuid_and_follow_database_cascades(
     db.add(actor)
     await db.flush()
     workspace = await provision_initial_workspace(db, actor)
-    item = Item(workspace_id=workspace.id, created_by=actor.id, title="Annotations")
+    item = Item(
+        workspace_id=workspace.id,
+        created_by=actor.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Annotations"},
+    )
     db.add(item)
     await db.flush()
     revision = FileRevision(
@@ -138,9 +142,13 @@ async def test_structured_values_and_audit_timestamps_share_the_mutation_transac
     item = Item(
         workspace_id=workspace.id,
         created_by=user.id,
-        title="JSON values",
-        custom_fields={"dataset": {"ids": ["a", "b"]}},
         updated_at=old,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "JSON values",
+            "subjects": [{"subject": "original"}],
+        },
     )
     batch = ImportBatch(
         workspace_id=workspace.id,
@@ -161,7 +169,7 @@ async def test_structured_values_and_audit_timestamps_share_the_mutation_transac
     await persistence_db.execute(
         update(Item)
         .where(Item.id == item_id)
-        .values(custom_fields={"dataset": {"ids": ["a", "b", "c"]}})
+        .values(work={**item.work, "subjects": [{"subject": "changed"}]})
     )
     event = record_event(
         persistence_db,
@@ -181,7 +189,7 @@ async def test_structured_values_and_audit_timestamps_share_the_mutation_transac
     assert event.target_ids == [str(item_id)]
     await persistence_db.rollback()
     await persistence_db.refresh(item)
-    assert item.custom_fields == {"dataset": {"ids": ["a", "b"]}}
+    assert item.work["subjects"] == [{"subject": "original"}]
     assert item.updated_at == old
     assert await persistence_db.scalar(select(AuditEvent).where(AuditEvent.id == event_id)) is None
 
@@ -189,7 +197,7 @@ async def test_structured_values_and_audit_timestamps_share_the_mutation_transac
     await persistence_db.execute(
         update(Item)
         .where(Item.id == item_id)
-        .values(title="Explicit timestamp", updated_at=explicit)
+        .values(work={**item.work, "title": "Explicit timestamp"}, updated_at=explicit)
     )
     await persistence_db.commit()
     await persistence_db.refresh(item)

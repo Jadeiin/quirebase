@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from app_helpers import json_payload
@@ -12,7 +13,6 @@ from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.models import (
     Item,
-    ItemIdentifier,
     ItemTag,
     LoginSession,
     Project,
@@ -150,17 +150,21 @@ async def test_tools_detect_title_duplicates_and_manage_owned_tags(
     try:
         duplicate = Item(
             workspace_id=item.workspace_id,
-            title="Paper!",
-            identifier_links=[
-                ItemIdentifier(workspace_id=item.workspace_id, provider="doi", value="10.1/same")
-            ],
             created_by=item.created_by,
+            work={
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Paper!",
+                "identifiers": [{"identifier_type": "DOI", "identifier": "10.1000/same"}],
+            },
         )
-        db.add(
-            ItemIdentifier(
-                workspace_id=item.workspace_id, item_id=item.id, provider="doi", value="10.1/first"
-            )
-        )
+        item.work = {
+            **item.work,
+            "identifiers": [
+                *item.work.get("identifiers", []),
+                {"identifier_type": "DOI", "identifier": "10.1000/first"},
+            ],
+        }
         tag = Tag(
             workspace_id=item.workspace_id,
             name="Old tag",

@@ -7,16 +7,15 @@ implementation seams (see ``tests/test_architecture.py``).
 from __future__ import annotations
 
 from inquiro.bibliography.engine import (
-    record_to_csl_json,
     render_bibliography,
     render_citation,
+    work_to_csl_json,
 )
 from inquiro.bibliography.formats import (
     BIBLIOGRAPHY_EXTENSIONS,
     BIBLIOGRAPHY_MEDIA_TYPES,
     SUPPORTED_FORMATS,
     export_bibliography_records,
-    first_url,
     parse_bibliography_records,
 )
 from inquiro.bibliography.keys import (
@@ -33,11 +32,6 @@ from inquiro.bibliography.options import (
     BibliographyExportOptions,
     InvalidExportOptions,
 )
-from inquiro.bibliography.records import (
-    BibliographyRecord,
-    Contributor,
-    record_from_item,
-)
 from inquiro.bibliography.styles import (
     CitationStyleOption,
     CitationStyleSelection,
@@ -53,11 +47,9 @@ __all__ = [
     "DEFAULT_CITATION_KEY_FORMULA",
     "SUPPORTED_FORMATS",
     "BibliographyExportOptions",
-    "BibliographyRecord",
     "CitationKeyFormulaError",
     "CitationStyleOption",
     "CitationStyleSelection",
-    "Contributor",
     "InvalidExportOptions",
     "builtin_style_catalog",
     "builtin_style_xml",
@@ -65,15 +57,13 @@ __all__ = [
     "evaluate_citation_key_formula",
     "export_bibliography_records",
     "extract_year",
-    "first_url",
     "generate_default_citation_key",
     "is_valid_csl",
     "parse_bibliography_records",
     "preview_citation_key",
-    "record_from_item",
-    "record_to_csl_json",
     "render_bibliography",
     "render_citation",
     "select_builtin_citation_styles",
     "suffixed_citation_key",
+    "work_to_csl_json",
 ]

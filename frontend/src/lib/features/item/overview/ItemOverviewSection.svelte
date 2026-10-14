@@ -4,16 +4,21 @@
 	import { can } from '#lib/authorization/can.js';
 	import Panel from '#lib/design/Panel.svelte';
 	import RichText from '#lib/design/RichText.svelte';
-	import { t } from '#lib/i18n.js';
-	import { contributorAffiliations } from '../metadata-draft.js';
-	import type { ItemDetail } from '../types';
+	import { t, activeLocale } from '#lib/i18n.js';
+	import { metadataValueLabel } from '../metadata-labels.js';
+	import {
+		contributorAffiliations,
+		object,
+		objects,
+		text,
+		workKeywords
+	} from '../metadata-draft.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	let { itemId, data, details } = $props<{
+	let { itemId, data } = $props<{
 		itemId: string;
 		data: ItemOverviewView;
-		details?: ItemDetail;
 	}>();
 
 	let imageLoadFailed = $state(false);
@@ -27,6 +32,75 @@
 			return false;
 		}
 	}
+
+	const container = $derived(object(data.metadata.container));
+	const externalUrls = $derived([
+		...new Set(
+			[
+				text(data.metadata.url),
+				...objects(data.metadata.files).map((file) => text(file.url))
+			].filter(Boolean)
+		)
+	]);
+	const publicationRows = $derived.by(() => {
+		void $activeLocale;
+		const publisher = object(data.metadata.publisher);
+		const host = object(container.publisher);
+		const license = object(container.license);
+		const pages = [
+			...new Set([text(container.first_page), text(container.last_page)].filter(Boolean))
+		].join('–');
+		return [
+			{
+				label: $t('Publication'),
+				value: text(container.title) || data.item.publication_title || '—'
+			},
+			{ label: $t('Date'), value: data.item.publication_date || '—' },
+			{ label: 'DOI', value: data.item.doi || '—' },
+			{ label: $t('Type'), value: metadataValueLabel(text(data.metadata.type)) || '—' },
+			{
+				label: $t('Volume / Issue'),
+				value: `${text(container.volume) || '—'} / ${text(container.issue) || '—'}`
+			},
+			{ label: $t('Pages'), value: pages || '—' },
+			{
+				label: $t('Publisher'),
+				value: text(publisher.name) || text(publisher.id) || '—',
+				href: text(publisher.id)
+			},
+			{ label: $t('Publication type'), value: metadataValueLabel(text(container.type)) },
+			{
+				label: $t('Additional titles'),
+				value: Array.isArray(container.additional_titles)
+					? container.additional_titles.map(text).filter(Boolean).join('; ')
+					: ''
+			},
+			{
+				label: $t('Publication publisher'),
+				value: text(host.name) || text(host.id),
+				href: text(host.id)
+			},
+			{
+				label: $t('Publication identifiers'),
+				value: objects(container.identifiers)
+					.map((row) => `${text(row.identifier_type)}: ${text(row.identifier)}`)
+					.join('; ')
+			},
+			{ label: $t('Platform'), value: text(container.platform) },
+			{ label: $t('Series'), value: text(container.series) },
+			{ label: $t('Location'), value: text(container.location) },
+			{ label: $t('Country'), value: text(container.country) },
+			{ label: $t('Language'), value: text(container.language) },
+			{
+				label: $t('License'),
+				value: text(license.title) || text(license.id) || text(license.url),
+				href: text(license.id) || text(license.url)
+			},
+			{ label: $t('URL'), value: text(container.url), href: text(container.url) },
+			{ label: $t('Updated date'), value: text(container.date_updated) },
+			{ label: $t('Description'), value: text(container.description) }
+		].filter((row) => row.value);
+	});
 
 	$effect(() => {
 		if (data.thumbnail) {
@@ -42,8 +116,8 @@
 				<h2 class="m-0 text-lg">{$t('Abstract')}</h2>
 			</header>
 			<div class="px-5 py-5 leading-7 text-surface-700-300">
-				{#if details?.abstract_html}
-					<RichText html={details.abstract_html} />
+				{#if data.metadata.description}
+					<RichText html={data.metadata.description} />
 				{:else}
 					<p class="m-0 text-surface-600-400">{$t('No abstract available.')}</p>
 				{/if}
@@ -61,47 +135,20 @@
 				{/if}
 			</header>
 			<dl class="grid grid-cols-1 gap-4 px-5 py-5 text-sm sm:grid-cols-2">
-				<div>
-					<dt class="text-surface-600-400">{$t('Publication')}</dt>
-					<dd class="m-0 mt-1">{data.item.publication_title ?? '—'}</dd>
-				</div>
-				<div>
-					<dt class="text-surface-600-400">{$t('Date')}</dt>
-					<dd class="m-0 mt-1">{data.item.publication_date ?? '—'}</dd>
-				</div>
-				<div>
-					<dt class="text-surface-600-400">DOI</dt>
-					<dd class="m-0 mt-1 break-all">{data.item.doi ?? '—'}</dd>
-				</div>
-				<div>
-					<dt class="text-surface-600-400">{$t('Type')}</dt>
-					<dd class="m-0 mt-1">{details?.metadata.reference_type ?? '—'}</dd>
-				</div>
-				<div>
-					<dt class="text-surface-600-400">{$t('Volume / Issue')}</dt>
-					<dd class="m-0 mt-1">
-						{details?.metadata.volume ?? '—'} / {details?.metadata.issue ?? '—'}
-					</dd>
-				</div>
-				<div>
-					<dt class="text-surface-600-400">{$t('Pages')}</dt>
-					<dd class="m-0 mt-1">{details?.metadata.pages ?? '—'}</dd>
-				</div>
-				<div>
-					<dt class="text-surface-600-400">{$t('Journal abbreviation')}</dt>
-					<dd class="m-0 mt-1">{details?.metadata.journal_abbreviation ?? '—'}</dd>
-				</div>
-				<div>
-					<dt class="text-surface-600-400">{$t('Publisher')}</dt>
-					<dd class="m-0 mt-1">
-						{details?.metadata.publisher ?? '—'}{#if details?.metadata.place_published}
-							· {details.metadata.place_published}{/if}
-					</dd>
-				</div>
+				{#each publicationRows as row (row.label)}
+					<div class="min-w-0">
+						<dt class="text-surface-600-400">{row.label}</dt>
+						<dd class="m-0 mt-1 break-words">
+							{#if row.href && isSafeExternalUrl(row.href)}
+								<a href={row.href} target="_blank" rel="external noreferrer">{row.value}</a>
+							{:else}{row.value}{/if}
+						</dd>
+					</div>
+				{/each}
 				<div class="sm:col-span-2">
 					<dt class="text-surface-600-400">{$t('Affiliation')}</dt>
 					<dd class="m-0 mt-1">
-						{(details ? contributorAffiliations(details.metadata).join('; ') : '') || '—'}
+						{contributorAffiliations(data.metadata).join('; ') || '—'}
 					</dd>
 				</div>
 			</dl>
@@ -167,7 +214,7 @@
 		<Panel>
 			<h2 class="m-0 mb-4 text-lg">{$t('Keywords')}</h2>
 			<div class="flex flex-wrap gap-2">
-				{#each details?.metadata.keywords ?? [] as keyword (keyword)}
+				{#each workKeywords(data.metadata) as keyword (keyword)}
 					<span
 						class="rounded-full border border-surface-300-700 bg-surface-200-800 px-2.5 py-1 text-xs font-semibold"
 						>{keyword}</span
@@ -180,22 +227,22 @@
 		<Panel>
 			<h2 class="m-0 mb-4 text-lg">{$t('External links')}</h2>
 			<div class="grid grid-cols-1 gap-2">
-				{#each details?.metadata.urls ?? [] as link, index (link.url)}
-					{#if isSafeExternalUrl(link.url)}
+				{#each externalUrls as url, index (url)}
+					{#if isSafeExternalUrl(url)}
 						<a
 							class="grid min-w-0 grid-cols-1 gap-0.5 rounded-lg border border-surface-300-700 px-3 py-2 text-sm no-underline hover:bg-primary-50-950"
-							href={link.url}
+							href={url}
 							target="_blank"
 							rel="external noreferrer"
 							><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
-								class="truncate text-xs text-surface-600-400">{link.url}</span
+								class="truncate text-xs text-surface-600-400">{url}</span
 							></a
 						>
 					{:else}
 						<span
 							class="grid min-w-0 grid-cols-1 gap-0.5 rounded-lg border border-surface-300-700 px-3 py-2 text-sm"
 							><strong>{$t('External source {number}', { number: index + 1 })}</strong><span
-								class="truncate text-xs text-surface-600-400">{link.url}</span
+								class="truncate text-xs text-surface-600-400">{url}</span
 							></span
 						>
 					{/if}
@@ -215,7 +262,7 @@
 				</div>
 				<div>
 					<dt class="text-surface-600-400">{$t('Citation key')}</dt>
-					<dd class="m-0"><code>{details?.metadata.citation_key ?? '—'}</code></dd>
+					<dd class="m-0"><code>{data.citation_key ?? '—'}</code></dd>
 				</div>
 			</dl>
 		</Panel>

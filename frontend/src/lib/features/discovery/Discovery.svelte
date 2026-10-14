@@ -6,7 +6,6 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import type { components } from '#lib/api/schema.js';
-	import Badge from '#lib/design/Badge.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import Panel from '#lib/design/Panel.svelte';
@@ -228,7 +227,6 @@
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
 						<h3 class="mb-1 text-lg"><RichText html={candidate.title} /></h3>
-						{#if candidate.imported}<Badge variant="success">{$t('Already in Library')}</Badge>{/if}
 					</div>
 					<p class="mb-1 text-sm text-surface-700-300">
 						{candidate.authors ?? $t('Unknown contributors')}
@@ -247,7 +245,7 @@
 						>{candidate.identifier_provider}:{candidate.identifier}</code
 					>
 				</div>
-				{#if !candidate.imported && workspace.can('item.create')}
+				{#if workspace.can('item.create')}
 					<Button variant="filled" disabled={importing !== ''} onclick={() => review(candidate)}
 						>{importing === `${candidate.identifier_provider}:${candidate.identifier}`
 							? $t('Preparing…')

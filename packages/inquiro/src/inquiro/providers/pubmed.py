@@ -4,29 +4,32 @@ from html import escape
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree
 
-from inquiro.canonical import (
-    clean_rich_markup,
-    first_text,
-)
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import clean_rich_markup, first_text
 from inquiro.identifiers import parse_pmid
 from inquiro.models import (
-    Affiliation,
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
-    Contributor,
     Identifier,
     ProviderConfig,
     ProviderUnavailable,
-    ResourceLink,
     SearchQuery,
 )
 from inquiro.providers._contracts import ProviderDefinition
 from inquiro.providers._payload import (
     ncbi_contributors,
     ncbi_summaries,
+    source_affiliation,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
 )
-from inquiro.reference_types import ReferenceType
 
 if TYPE_CHECKING:
     from inquiro.transport import BoundedTransport
@@ -58,7 +61,7 @@ def _date(date: ElementTree.Element | None) -> str | None:
     return "-".join(part for part in (year, month, day if day and day.isdigit() else None) if part)
 
 
-def _authors(document: ElementTree.Element) -> tuple[Contributor, ...] | None:
+def _authors(document: ElementTree.Element) -> tuple[dict, ...] | None:
     author_lists = [
         node
         for node in document.findall("AuthorList")
@@ -82,7 +85,7 @@ def _authors(document: ElementTree.Element) -> tuple[Contributor, ...] | None:
                 if (source := item.get("Source")) and (identity := _xml_text(item))
             )
             affiliations = tuple(
-                Affiliation(
+                source_affiliation(
                     affiliation_name,
                     identifiers=tuple(
                         Identifier(source.casefold(), identity)
@@ -94,17 +97,16 @@ def _authors(document: ElementTree.Element) -> tuple[Contributor, ...] | None:
                 if (affiliation_name := _xml_text(info.find("Affiliation")))
             )
             authors.append(
-                Contributor(
+                source_credit(
                     name,
-                    family,
-                    given,
-                    "organization" if organization else "person",
-                    identities,
-                    affiliations if node.find("AffiliationInfo") is not None else None,
-                    suffix=suffix,
+                    family_name=family,
+                    given_name=given,
+                    kind="organization" if organization else "person",
+                    identifiers=identities,
+                    affiliations=affiliations if node.find("AffiliationInfo") is not None else None,
                 )
             )
-    return tuple(authors)
+    return tuple(authors) or None
 
 
 class PubMedLookupAdapter:
@@ -134,7 +136,7 @@ class PubMedLookupAdapter:
             if document is None or article is None:
                 raise CandidateNotFound("PubMed record was not found")
             title = _xml_rich(article.find("ArticleTitle"))
-            reference_type = ReferenceType.article_journal
+            reference_type = "JournalArticle"
             authors = _authors(article)
             publication_date = _date(article.find("Journal/JournalIssue/PubDate"))
             publication_title = _xml_text(article.find("Journal/Title"))
@@ -151,9 +153,9 @@ class PubMedLookupAdapter:
             article = document
             chapter_title = _xml_rich(document.find("ArticleTitle"))
             title = chapter_title or _xml_rich(book.find("BookTitle"))
-            reference_type = ReferenceType.chapter if chapter_title else ReferenceType.book
+            reference_type = "BookChapter" if chapter_title else "Book"
             authors = _authors(document)
-            if authors is None and reference_type == "book":
+            if authors is None and reference_type == "Book":
                 authors = _authors(book)
             publication_date = _date(book.find("PubDate"))
             publication_title = _xml_text(book.find("BookTitle")) if chapter_title else None
@@ -192,48 +194,61 @@ class PubMedLookupAdapter:
             )
             if doi:
                 identifiers.append(Identifier("doi", doi))
-        pmid = _xml_text(document.find("PMID")) or value
-        if not any(identity.provider == "pmid" for identity in identifiers):
+        pmid = _xml_text(document.find("PMID"))
+        if pmid and (not any(identity.provider == "pmid" for identity in identifiers)):
             identifiers.insert(0, Identifier("pmid", pmid))
         abstract = []
         for node in article.findall("Abstract/AbstractText"):
             if content := _xml_rich(node):
                 label = first_text(node.get("Label"))
                 abstract.append(f"{escape(label)}: {content}" if label else content)
-        links = [ResourceLink(f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", kind="landing_page")]
+        links = [source_link(f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", kind="landing_page")]
         if doi:
-            links.append(ResourceLink(f"https://doi.org/{doi}", kind="landing_page"))
+            links.append(source_link(f"https://doi.org/{doi}", kind="landing_page"))
         if pmcid := next(
             (identity.value for identity in identifiers if identity.provider == "pmcid"), None
         ):
             links.append(
-                ResourceLink(f"https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/", kind="landing_page")
+                source_link(f"https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/", kind="landing_page")
             )
         return CandidateRecord(
             provider="pubmed",
             lookup_identifier=identifier,
-            title=title,
-            abstract=" ".join(abstract) or None,
-            authors=authors,
-            keywords=tuple(
-                dict.fromkeys(
-                    keyword
-                    for node in document.findall("KeywordList/Keyword")
-                    if (keyword := _xml_text(node))
-                )
-            )
-            if document.find("KeywordList") is not None
-            else None,
-            publication_date=publication_date,
-            publication_title=publication_title,
-            journal_abbreviation=journal_abbreviation,
-            volume=volume,
-            issue=issue,
-            pages=_xml_text(article.find("Pagination/MedlinePgn")),
-            publisher=publisher,
-            urls=tuple(links),
-            identifiers=tuple(dict.fromkeys(identifiers)),
-            reference_type=reference_type,
+            work=compact({
+                "id": source_work_id(tuple(dict.fromkeys(identifiers))),
+                "type": reference_type,
+                "title": title,
+                "description": " ".join(abstract) or None,
+                "contributors": authors,
+                "date_published": publication_date,
+                "identifiers": source_identifiers(tuple(dict.fromkeys(identifiers))),
+                "subjects": source_subjects(
+                    (
+                        tuple(
+                            dict.fromkeys(
+                                (
+                                    keyword
+                                    for node in document.findall("KeywordList/Keyword")
+                                    if (keyword := _xml_text(node))
+                                )
+                            )
+                        )
+                        if document.find("KeywordList") is not None
+                        else None
+                    )
+                    or ()
+                ),
+                "publisher": {"name": publisher} if publisher else None,
+                "container": compact({
+                    "title": publication_title,
+                    "volume": volume,
+                    "issue": issue,
+                    "additional_titles": [journal_abbreviation] if journal_abbreviation else None,
+                    "first_page": _xml_text(article.find("Pagination/MedlinePgn")),
+                }),
+                "url": source_landing_url(tuple(links)),
+                "files": source_files(tuple(links)),
+            }),
         )
 
 
@@ -256,23 +271,43 @@ class PubMedSearchAdapter:
                 CandidateRecord(
                     provider="pubmed",
                     lookup_identifier=Identifier("pmid", pmid),
-                    identifiers=(
-                        Identifier("pmid", pmid),
-                        *(
-                            Identifier(namespace, entry["value"])
-                            for entry in item.get("articleids", [])
-                            if (
-                                namespace := {"doi": "doi", "pmc": "pmcid", "pmcid": "pmcid"}.get(
-                                    entry.get("idtype")
+                    work=compact({
+                        "id": source_work_id((
+                            Identifier("pmid", pmid),
+                            *(
+                                Identifier(namespace, entry["value"])
+                                for entry in item.get("articleids", [])
+                                if (
+                                    namespace := {
+                                        "doi": "doi",
+                                        "pmc": "pmcid",
+                                        "pmcid": "pmcid",
+                                    }.get(entry.get("idtype"))
                                 )
-                            )
-                            and entry.get("value")
-                        ),
-                    ),
-                    title=title,
-                    authors=ncbi_contributors(item),
-                    publication_title=item.get("source"),
-                    publication_date=item.get("pubdate"),
+                                and entry.get("value")
+                            ),
+                        )),
+                        "type": "JournalArticle",
+                        "title": title,
+                        "contributors": ncbi_contributors(item),
+                        "date_published": item.get("pubdate"),
+                        "identifiers": source_identifiers((
+                            Identifier("pmid", pmid),
+                            *(
+                                Identifier(namespace, entry["value"])
+                                for entry in item.get("articleids", [])
+                                if (
+                                    namespace := {
+                                        "doi": "doi",
+                                        "pmc": "pmcid",
+                                        "pmcid": "pmcid",
+                                    }.get(entry.get("idtype"))
+                                )
+                                and entry.get("value")
+                            ),
+                        )),
+                        "container": compact({"title": item.get("source")}),
+                    }),
                 )
             )
         return CandidatePage("pubmed", tuple(results), total, request.page, request.per_page)

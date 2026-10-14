@@ -113,7 +113,15 @@ async def test_project_delete_cascades_context_and_preserves_workspace_data(
             workspace_id=workspace_id, name="Delete context", created_by=owner_id, state=state
         )
         other = Project(workspace_id=workspace_id, name="Preserve context", created_by=owner_id)
-        item = Item(workspace_id=workspace_id, title="Shared canonical Item", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Shared canonical Item",
+            },
+        )
         db.add_all([project, other, item])
         await db.flush()
         assignments = [
@@ -249,7 +257,11 @@ async def test_project_delete_guards_and_rollback_preserve_context(
             WorkspaceMember(workspace_id=workspace_id, user_id=editor.id, role=WorkspaceRole.editor)
         )
         project = Project(workspace_id=workspace_id, name="Guarded context", created_by=owner_id)
-        item = Item(workspace_id=workspace_id, title="Guarded Item", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Guarded Item"},
+        )
         db.add_all([project, item])
         await db.flush()
         assignment = ProjectItem(
@@ -312,7 +324,11 @@ async def test_final_cleanup_rechecks_references_added_after_scan(persistence_se
         _, candidates, _ = await scan_objects(db, retention_hours=1)
         assert stored.key in candidates
     async with persistence_sessions() as writer:
-        item = Item(workspace_id=workspace_id, title="Late reference", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Late reference"},
+        )
         writer.add(item)
         await writer.flush()
         if reference in {"revision", "thumbnail"}:
@@ -429,7 +445,11 @@ async def test_cleanup_preserves_atomic_import_staging_to_revision_transfer(
         observed = await original_read(db, *args, **kwargs)
         async with persistence_sessions() as writer:
             batch = await writer.get(ImportBatch, batch_id)
-            item = Item(workspace_id=workspace_id, title="Confirmed", created_by=owner_id)
+            item = Item(
+                workspace_id=workspace_id,
+                created_by=owner_id,
+                work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Confirmed"},
+            )
             writer.add(item)
             await writer.flush()
             writer.add(
@@ -672,7 +692,11 @@ async def test_organize_uses_complete_active_options_and_projects_participation(
     async with persistence_sessions() as db:
         owner_id, workspace_id = await _workspace(db)
         owner = await db.get(User, owner_id)
-        item = Item(workspace_id=workspace_id, title="Options", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Options"},
+        )
         db.add(item)
         implicit = [
             Project(
@@ -804,7 +828,11 @@ async def test_workspace_teardown_cleans_owned_projections_and_rollback_is_atomi
     async with persistence_sessions() as db:
         owner_id, workspace_id = await _workspace(db)
         owner = await db.get(User, owner_id)
-        item = Item(workspace_id=workspace_id, title="Teardown searchable", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Teardown searchable"},
+        )
         db.add(item)
         await db.flush()
         stored = await get_object_store().put_object(
@@ -887,8 +915,16 @@ async def test_item_deletion_retires_document_identities_and_cleanup_is_atomic(
     ]
     async with persistence_sessions() as db:
         owner_id, workspace_id = await _workspace(db)
-        item = Item(workspace_id=workspace_id, title="Retired documents", created_by=owner_id)
-        retained = Item(workspace_id=workspace_id, title="Retained item", created_by=owner_id)
+        item = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Retired documents"},
+        )
+        retained = Item(
+            workspace_id=workspace_id,
+            created_by=owner_id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Retained item"},
+        )
         artifact = _artifact(stored[3], workspace_id)
         db.add_all([item, retained, artifact])
         await db.flush()

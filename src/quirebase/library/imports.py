@@ -12,10 +12,7 @@ from inquiro.bibliography import (
     parse_bibliography_records,
 )
 from inquiro.identifiers import canonical_doi
-from inquiro.metadata import MetadataValidationError, metadata_from_values
-from inquiro.metadata import record_metadata_values as _record_to_item_payload
 from sqlalchemy import select, update
-from sqlalchemy.orm import selectinload
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.access.items import require_accessible_items, visible_items_query
@@ -38,14 +35,13 @@ from quirebase.documents.revisions import (
     attach_staged_pdf,
     stage_pdf,
 )
-from quirebase.library.activity import get_accessible_item_identifiers
 from quirebase.library.citations import format_csl_export, format_standard_export
-from quirebase.library.providers import candidate_record_values, lookup_candidate
+from quirebase.library.providers import lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import ImportBatch, ImportBatchStatus, Item, ItemIdentifier, User
+from quirebase.models import ImportBatch, ImportBatchStatus, Item, User
 from quirebase.search import search_index
 
-from ._metadata import ItemMetadata  # ruff: ignore[typing-only-first-party-import] - Pydantic resolves preview values
+from ._metadata import Work, metadata_write, validate_citation_key
 from .identifiers import _create_items_from_candidates
 
 if TYPE_CHECKING:
@@ -67,7 +63,7 @@ class ImportSource:
 
 @dataclass(frozen=True)
 class ImportCandidatePreview:
-    metadata: ItemMetadata
+    metadata: Work
     source: ImportSource | None = None
 
 
@@ -98,10 +94,7 @@ def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPrev
     previews = []
     for record in records:
         source = sources.get(record.get("_source_id"))
-        try:
-            metadata = metadata_from_values(record)
-        except MetadataValidationError as error:
-            raise ValidationFailure(str(error)) from error
+        metadata = Work.model_validate(record["work"])
         previews.append(
             ImportCandidatePreview(
                 metadata=metadata,
@@ -161,7 +154,7 @@ async def stage_import_batch(
 ) -> ImportBatchPreview:
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
+        raise ValidationFailure("format must be bibtex, ris, csl-json, or commonmeta")
     if len(file_bytes) > 5 * 1024 * 1024:
         raise SizeLimitExceeded("bibliography files are limited to 5 MiB")
     try:
@@ -169,7 +162,18 @@ async def stage_import_batch(
     except UnicodeDecodeError as error:
         raise ValidationFailure("bibliography must be UTF-8") from error
     typed_records, errors = parse_bibliography_records(contents, file_format)
-    records = [_record_to_item_payload(record) for record in typed_records]
+    records = []
+    for record in typed_records:
+        try:
+            values = metadata_write(record.work)
+            records.append({**values, "citation_key": validate_citation_key(record.citation_key)})
+        except ValidationFailure as error:
+            errors.append({
+                "row": record.row,
+                "severity": "error",
+                "code": "invalid_item",
+                "message": str(error),
+            })
     batch = ImportBatch(
         workspace_id=workspace_id,
         actor_id=user.id,
@@ -205,13 +209,16 @@ async def stage_identifier_import_batch(
     user = (
         await require_workspace_action(db, reloaded_user, workspace_id, ResourceAction.item_create)
     ).actor
-    rec_dict = candidate_record_values(record)
+    rec_dict = metadata_write(record.work)
     batch = ImportBatch(
         workspace_id=workspace_id,
         actor_id=user.id,
         file_format="metadata",
         records=[rec_dict],
-        errors=[],
+        errors=[
+            {"severity": "warning", "code": "provider_limitations", "message": message}
+            for message in record.diagnostics
+        ],
     )
     db.add(batch)
     await db.flush()
@@ -384,13 +391,12 @@ async def extract_pdf_import_doi(pending: dict) -> dict:
     }
 
 
-async def check_pdf_import_doi(
+async def check_pdf_import_eligibility(
     db: AsyncSession,
     batch_id: UUID,
     pending: dict,
-    detected_doi: str,
 ) -> dict:
-    """Check one DOI against the current owner's accessible Items."""
+    """Recheck the batch actor and Workspace before Provider I/O."""
     pdf = pending["_pdf"]
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending":
@@ -398,20 +404,7 @@ async def check_pdf_import_doi(
     user = await db.get(User, batch.actor_id)
     if user is None or not user.active:
         return {"discarded": True, "object_key": pdf["object_key"]}
-    normalized_doi = canonical_doi(detected_doi)
-    existing = await db.scalar(
-        visible_items_query(batch.workspace_id)
-        .with_only_columns(Item.id)
-        .join(ItemIdentifier, ItemIdentifier.item_id == Item.id)
-        .where(ItemIdentifier.provider == "doi", ItemIdentifier.value == normalized_doi)
-        .limit(1)
-    )
-    if existing is not None:
-        return _pdf_import_candidate_error(
-            pending,
-            "existing_doi",
-            BatchConflict("an accessible Item already has this DOI"),
-        )
+    await require_workspace_action(db, user, batch.workspace_id, ResourceAction.item_create)
     return {"eligible": True, "object_key": pdf["object_key"]}
 
 
@@ -436,7 +429,7 @@ async def lookup_pdf_import_candidate(
     try:
         normalized_doi = canonical_doi(detected_doi)
         record = await lookup_candidate(detected_doi, "doi", effective_settings)
-        candidate = candidate_record_values(record)
+        candidate = metadata_write(record.work)
         candidate["_source_id"] = pending["_source_id"]
         return {
             "record": candidate,
@@ -465,7 +458,7 @@ async def prepare_pdf_import_candidate(
     detected_doi = extracted.get("detected_doi")
     if not isinstance(detected_doi, str):
         return extracted
-    checked = await check_pdf_import_doi(db, batch_id, pending, detected_doi)
+    checked = await check_pdf_import_eligibility(db, batch_id, pending)
     if not checked.get("eligible"):
         return checked
     return await lookup_pdf_import_candidate(db, batch_id, pending, detected_doi)
@@ -691,32 +684,9 @@ async def commit_import_batch(
         return result_ids
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
-    errors = batch.errors
-    if any(error.get("severity") != "warning" for error in errors) and batch.file_format != "pdf":
-        raise BatchConflict("the preview contains errors")
     records = batch.records
     if not records:
         raise BatchConflict("the import batch has no candidate records")
-    if batch.file_format == "pdf":
-        known_dois = {
-            value
-            for provider, value in await get_accessible_item_identifiers(db, actor, workspace_id)
-            if provider == "doi"
-        }
-        candidate_dois: set[str] = set()
-        for record in records:
-            doi = (
-                (record.get("doi") or (record.get("identifiers") or {}).get("doi"))
-                if isinstance(record, dict)
-                else None
-            )
-            normalized_doi = canonical_doi(doi) if isinstance(doi, str) else ""
-            if normalized_doi in known_dois:
-                raise BatchConflict("an accessible Item already has this DOI")
-            if normalized_doi and normalized_doi in candidate_dois:
-                raise BatchConflict("another PDF in this batch has the same DOI")
-            if normalized_doi:
-                candidate_dois.add(normalized_doi)
     source_files = {file.metadata["source_id"]: file for file in batch.staged_files}
     candidates: list[dict] = []
     selected_files: list[FileObject | None] = []
@@ -763,11 +733,7 @@ async def commit_import_batch(
     batch.committed_item_ids = [str(item_id) for item_id in committed_item_ids]
     # Transfer file ownership to File Revisions in the same confirmation transaction.
     batch.staged_files = []
-    batch.records = [
-        {key: value for key, value in record.items() if key != "_source_id"}
-        for record in records
-        if isinstance(record, dict)
-    ]
+    batch.records = []
     batch.status = ImportBatchStatus.committed
     await db.commit()
     return committed_item_ids
@@ -815,9 +781,7 @@ async def export_accessible_bibliography(
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
     items = list(
         await db.scalars(
-            visible_items_query(workspace_id)
-            .options(selectinload(Item.identifier_links))
-            .order_by(Item.updated_at.desc(), Item.id)
+            visible_items_query(workspace_id).order_by(Item.updated_at.desc(), Item.id)
         )
     )
     if file_format == "csl":

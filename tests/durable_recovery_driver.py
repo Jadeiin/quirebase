@@ -7,12 +7,14 @@ import json
 import sys
 from contextlib import suppress
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pymupdf
 from advanced_alchemy.types import FileObject
-from inquiro import Contributor
+from commonmeta.author_utils import get_one_author
+from commonmeta.base_utils import compact
 from inquiro.models import CandidateRecord, Identifier
+from item_helpers import work_identifier
 from sqlalchemy import func, select, update
 from workspace_helpers import provision_initial_workspace
 
@@ -53,9 +55,13 @@ def instrument_external_provider(directory, *, pause):
         return CandidateRecord(
             provider="crossref",
             lookup_identifier=Identifier("doi", identifier),
-            title="Recovery retained paper",
-            identifiers=(Identifier("doi", identifier),),
-            authors=(Contributor("Recovery, Author"),),
+            work=compact({
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Recovery retained paper",
+                "contributors": (get_one_author({"name": "Recovery, Author"}),),
+                "identifiers": [work_identifier("doi", identifier)],
+            }),
         )
 
     imports.extract_pdf_import_doi = observed_extract
@@ -110,7 +116,6 @@ async def confirm(directory, state, *, crash):
             db, actor, UUID(state["workspace_id"]), UUID(state["batch_id"])
         )
         if crash:
-            # The commit is durable but the caller has received no response.
             (directory / "confirmation-committed").touch()
             await asyncio.Event().wait()
         write_json(directory / "confirmed.json", [str(item_id) for item_id in ids])
@@ -148,7 +153,11 @@ async def inspect_contract(directory, state, *, committed):
         diagnostics = preview.errors
         batch = await db.get(ImportBatch, preview.id)
         assert batch.status == ("committed" if committed else "ready")
-        assert len(records) == 1 and records[0].metadata.title == "Recovery retained paper"
+        assert (
+            records == ()
+            if committed
+            else len(records) == 1 and records[0].metadata.title == "Recovery retained paper"
+        )
         assert len(diagnostics) == 1
         assert diagnostics[0].filename == "uploaded-rejected.pdf"
         assert diagnostics[0].code == "metadata_not_found"

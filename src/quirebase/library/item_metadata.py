@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select, update
@@ -15,17 +16,15 @@ from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import Item
 from quirebase.search import search_index
 
-from ._item_identifiers import _replace_item_identifiers_many
 from ._metadata import (
-    ItemMetadata,
     ItemWriteResult,
-    MetadataWrite,
+    Work,
     generate_citation_key,
     metadata_write,
+    validate_citation_key,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,18 +32,24 @@ if TYPE_CHECKING:
     from quirebase.models import User
 
 
+class _CitationKeyWrite(Enum):
+    preserve = auto()
+
+
 async def _create_item(
     db: AsyncSession,
     actor: User,
     workspace_id: UUID,
-    metadata: ItemMetadata,
+    metadata: Work,
+    *,
+    citation_key: str | None = None,
 ) -> ItemWriteResult:
     context = await require_workspace_action(db, actor, workspace_id, ResourceAction.item_create)
     write = metadata_write(metadata)
-    item = Item(**write.values, workspace_id=workspace_id, created_by=actor.id)
+    write["citation_key"] = validate_citation_key(citation_key)
+    item = Item(**write, workspace_id=workspace_id, created_by=actor.id)
     db.add(item)
     await db.flush()
-    await _write_item_identifiers(db, [(item, write)], replace=False)
     await search_index(db).index_item(db, item.id)
     await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=actor.id)
     record_event(
@@ -65,10 +70,12 @@ async def create_item(
     db: AsyncSession,
     actor: User,
     workspace_id: UUID,
-    metadata: ItemMetadata,
+    metadata: Work,
+    *,
+    citation_key: str | None = None,
 ) -> ItemWriteResult:
     try:
-        return await _create_item(db, actor, workspace_id, metadata)
+        return await _create_item(db, actor, workspace_id, metadata, citation_key=citation_key)
     except Exception:
         await db.rollback()
         raise
@@ -80,11 +87,15 @@ async def _revise_item_metadata(
     workspace_id: UUID,
     item_id: UUID,
     expected_version: int,
-    metadata: ItemMetadata,
+    metadata: Work,
+    *,
+    citation_key: str | _CitationKeyWrite | None = _CitationKeyWrite.preserve,
 ) -> ItemWriteResult:
     actor_id = actor.id
     item = await require_editable_item(db, actor, workspace_id, item_id)
     write = metadata_write(metadata)
+    if not isinstance(citation_key, _CitationKeyWrite):
+        write["citation_key"] = validate_citation_key(citation_key)
     version = await db.scalar(
         update(Item)
         .where(
@@ -93,7 +104,7 @@ async def _revise_item_metadata(
             Item.version == expected_version,
         )
         .values(
-            **write.values,
+            **write,
             updated_by=actor_id,
             updated_at=datetime.now(UTC),
             version=Item.version + 1,
@@ -104,8 +115,6 @@ async def _revise_item_metadata(
         await db.rollback()
         current = await db.get(Item, item_id)
         raise VersionConflict(current.version if current else None)
-
-    await _write_item_identifiers(db, [(item, write)])
 
     # The bulk UPDATE does not reliably populate every value used by the search
     # projection. Refresh only the mutated aggregate; expiring the whole session
@@ -139,11 +148,13 @@ async def revise_item_metadata(
     workspace_id: UUID,
     item_id: UUID,
     expected_version: int,
-    metadata: ItemMetadata,
+    metadata: Work,
+    *,
+    citation_key: str | _CitationKeyWrite | None = _CitationKeyWrite.preserve,
 ) -> ItemWriteResult:
     try:
         return await _revise_item_metadata(
-            db, actor, workspace_id, item_id, expected_version, metadata
+            db, actor, workspace_id, item_id, expected_version, metadata, citation_key=citation_key
         )
     except Exception:
         await db.rollback()
@@ -199,13 +210,3 @@ async def regenerate_citation_key(
     except Exception:
         await db.rollback()
         raise
-
-
-async def _write_item_identifiers(
-    db: AsyncSession, prepared: Sequence[tuple[Item, MetadataWrite]], *, replace: bool = True
-) -> None:
-    identifiers = [
-        (item, write.identifiers) for item, write in prepared if write.identifiers is not None
-    ]
-    if identifiers:
-        await _replace_item_identifiers_many(db, identifiers, replace=replace)

@@ -4,26 +4,120 @@ from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
+from uuid import uuid4
+
+from commonmeta.author_utils import get_one_author
+from commonmeta.base_utils import compact
 
 from inquiro.canonical import clean_markup, first_text
-from inquiro.models import Affiliation, Contributor, Identifier, ProviderUnavailable, ResourceLink
+from inquiro.models import Identifier, ProviderUnavailable
+from inquiro.work import work_schema
+
+
+def source_identifiers(identifiers) -> list[dict] | None:
+    types = work_schema()["$defs"]["identifier"]["properties"]["identifier_type"]["enum"]
+    result = []
+    for row in identifiers:
+        name = next((value for value in types if value.lower() == row.provider.lower()), "Other")
+        result.append({
+            "identifier": row.value,
+            "identifier_type": name,
+            **({"scheme": row.provider} if name == "Other" else {}),
+        })
+    return result or None
+
+
+def source_work_id(identifiers) -> str:
+    doi = next((row.value for row in identifiers if row.provider == "doi"), None)
+    if doi:
+        from inquiro.identifiers import canonical_doi
+
+        # URI escaping is separate from the raw identifier retained in Work.identifiers.
+        return f"https://doi.org/{quote(canonical_doi(doi), safe='/')}"
+    return f"urn:uuid:{uuid4()}"
+
+
+def source_credit(
+    display_name,
+    *,
+    family_name=None,
+    given_name=None,
+    kind="unknown",
+    identifiers=(),
+    affiliations=None,
+    is_corresponding=None,
+) -> dict:
+    source = compact({
+        "name": display_name,
+        "familyName": family_name,
+        "givenName": given_name,
+        "ORCID": next((row.value for row in identifiers if row.provider == "orcid"), None),
+    })
+    result = get_one_author(source, via="crossref" if kind == "organization" else None)
+    if result is None:
+        raise ProviderUnavailable("provider returned a nameless credit")
+    entity = result.get("person", result.get("organization"))
+    entity["name"] = display_name
+    if affiliations and result["type"] == "Person":
+        entity["affiliations"] = list(affiliations)
+    if is_corresponding:
+        result["roles"].append("CorrespondingAuthor")
+    return result
+
+
+def source_affiliation(name, identifiers=()) -> dict:
+    result = {"name": name}
+    if identifiers:
+        row = next((row for row in identifiers if row.provider == "ror"), identifiers[0])
+        result.update(
+            identifier=row.value, identifier_type="ROR" if row.provider == "ror" else "Other"
+        )
+    return result
+
+
+def source_link(url, *, kind="other", media_type=None) -> dict:
+    return compact({"url": url, "kind": kind, "mime_type": media_type})
+
+
+def source_landing_url(links) -> str | None:
+    return next((row["url"] for row in links or () if row.get("kind") != "full_text"), None)
+
+
+def source_files(links) -> list[dict] | None:
+    return [
+        compact({"url": row["url"], "mime_type": row.get("mime_type")})
+        for row in links or ()
+        if row.get("kind") == "full_text"
+    ] or None
+
+
+def unique_objects(rows):
+    return tuple({json.dumps(row, sort_keys=True): row for row in rows}.values())
+
+
+def source_subjects(values) -> list[dict] | None:
+    return [{"subject": value} for value in values or ()] or None
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from inquiro.models import ProviderConfig, SearchClause, SearchQuery
     from inquiro.transport import BoundedTransport
-
 __all__: list[str] = []
 
 
-def text_contributors(values: Any) -> tuple[Contributor, ...] | None:
+def text_contributors(values: Any) -> tuple[dict, ...] | None:
     if not isinstance(values, (list, tuple)):
         return None
-    return tuple(
-        Contributor(display_name=name)
-        for value in values
-        if (name := clean_markup(first_text(value)))
+    return (
+        tuple(
+            source_credit(display_name=name)
+            for value in values
+            if (name := clean_markup(first_text(value)))
+        )
+        or None
     )
 
 
@@ -35,18 +129,18 @@ def keyword_values(values: Any) -> tuple[str, ...] | None:
     )
 
 
-def unique_links(*links: ResourceLink | None) -> tuple[ResourceLink, ...]:
-    return tuple(dict.fromkeys(link for link in links if link is not None))
+def unique_links(*links: dict | None) -> tuple[dict, ...]:
+    return unique_objects(link for link in links if link is not None)
 
 
-def affiliation_values(values: Any) -> tuple[Affiliation, ...] | None:
+def affiliation_values(values: Any) -> tuple[dict, ...] | None:
     if not isinstance(values, (list, tuple)):
         return None
     affiliations = []
     for entry in values:
         if isinstance(entry, str):
             if name := clean_markup(entry):
-                affiliations.append(Affiliation(name))
+                affiliations.append(source_affiliation(name))
             continue
         if not isinstance(entry, dict) or not (name := clean_markup(first_text(entry.get("name")))):
             continue
@@ -62,49 +156,8 @@ def affiliation_values(values: Any) -> tuple[Affiliation, ...] | None:
             and (value := first_text(identity.get("id")))
             and (scheme := first_text(identity.get("id-type")))
         )
-        affiliations.append(Affiliation(name, identifiers=tuple(identifiers)))
-    return tuple(dict.fromkeys(affiliations))
-
-
-def reconstruct_openalex_abstract(inverted_index: Any) -> str | None:
-    if not isinstance(inverted_index, dict) or not inverted_index:
-        return None
-    word_positions: list[tuple[int, str]] = []
-    for word, positions in inverted_index.items():
-        if isinstance(positions, list):
-            word_positions.extend((pos, word) for pos in positions if isinstance(pos, int))
-    if not word_positions:
-        return None
-    word_positions.sort(key=lambda item: item[0])
-    return clean_markup(" ".join(word for _, word in word_positions))
-
-
-def collect_openalex_keyword_names(*collections: Any) -> list[str]:
-    names: list[str] = []
-    for entries in collections:
-        if not isinstance(entries, list):
-            continue
-        for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            name = clean_markup(first_text(entry.get("display_name")))
-            if name and name not in names:
-                names.append(name)
-    return names
-
-
-def date_parts(message: dict) -> str | None:
-    parts = (
-        message.get("published-print")
-        or message.get("published-online")
-        or message.get("issued")
-        or {}
-    ).get("date-parts", [])
-    if not parts:
-        return None
-    return "-".join(
-        str(number).zfill(2) if index else str(number) for index, number in enumerate(parts[0])
-    )
+        affiliations.append(source_affiliation(name, identifiers=tuple(identifiers)))
+    return unique_objects(affiliations)
 
 
 def boolean_query(
@@ -164,29 +217,26 @@ async def ncbi_summaries(
         identifiers = found.get("idlist", [])
         total = int(found.get("count", 0))
         if not identifiers:
-            return total, []
+            return (total, [])
         summaries = json.loads(
-            await client.get(
-                f"{endpoint}/esummary.fcgi",
-                common
-                | {
-                    "id": ",".join(identifiers),
-                },
-            )
+            await client.get(f"{endpoint}/esummary.fcgi", common | {"id": ",".join(identifiers)})
         ).get("result", {})
     except (TypeError, ValueError) as error:
         raise ProviderUnavailable("NCBI returned invalid search results") from error
-    return total, [(identifier, summaries.get(identifier, {})) for identifier in identifiers]
+    return (total, [(identifier, summaries.get(identifier, {})) for identifier in identifiers])
 
 
-def ncbi_contributors(summary: dict) -> tuple[Contributor, ...] | None:
+def ncbi_contributors(summary: dict) -> tuple[dict, ...] | None:
     if "authors" not in summary:
         return None
-    return tuple(
-        Contributor(
-            author["name"],
-            kind="organization" if author.get("authtype") == "CollectiveName" else "unknown",
+    return (
+        tuple(
+            source_credit(
+                name,
+                kind="organization" if author.get("authtype") == "CollectiveName" else "unknown",
+            )
+            for author in summary["authors"]
+            if (name := clean_markup(first_text(author.get("name"))))
         )
-        for author in summary["authors"]
-        if author.get("name")
+        or None
     )

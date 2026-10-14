@@ -140,7 +140,6 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "keyword_exact",
         "author_last_name",
         "author_first_name",
-        "author_suffix",
     }
     assert set(tools["library.get_item_facets"].parameters["properties"]) == (
         set(tools["library.search_items"].parameters["properties"]) - {"offset", "sort"}
@@ -192,8 +191,11 @@ async def test_generated_library_tool_calls_api_and_preserves_mcp_audit_provenan
             "library.create_library_item",
             {
                 "workspace_id": fixture_workspace_id(user),
-                "title": "Created through generated MCP",
-                "doi": "10.1/generated",
+                "metadata": {
+                    "id": "https://doi.org/10.1000/generated",
+                    "type": "Document",
+                    "title": "Created through generated MCP",
+                },
             },
         )
 
@@ -243,7 +245,11 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
                 "name": "library.create_library_item",
                 "arguments": {
                     "workspace_id": fixture_workspace_id(user),
-                    "title": "Created through tool search",
+                    "metadata": {
+                        "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                        "type": "Document",
+                        "title": "Created through tool search",
+                    },
                 },
             },
         )
@@ -279,14 +285,25 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
             client,
             grant.raw_token,
             "library.create_library_item",
-            {"workspace_id": fixture_workspace_id(user), "title": "Versioned Item"},
+            {
+                "workspace_id": fixture_workspace_id(user),
+                "metadata": {
+                    "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                    "type": "Document",
+                    "title": "Versioned Item",
+                },
+            },
         )
         item_id = created.json()["result"]["structuredContent"]["id"]
         arguments = {
             "workspace_id": fixture_workspace_id(user),
             "item_id": item_id,
             "expected_version": 1,
-            "metadata": {"title": "First update"},
+            "metadata": {
+                "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                "type": "Document",
+                "title": "First update",
+            },
         }
         first = await _call(client, grant.raw_token, "library.update_library_item", arguments, 2)
         conflict = await _call(client, grant.raw_token, "library.update_library_item", arguments, 3)

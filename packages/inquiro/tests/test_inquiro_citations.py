@@ -1,3 +1,6 @@
+from copy import deepcopy
+
+import pytest
 from inquiro.bibliography import (
     builtin_style_catalog,
     builtin_style_xml,
@@ -36,3 +39,29 @@ def test_is_valid_csl_rejects_garbage():
 
 def test_builtin_style_xml_unknown_returns_none():
     assert builtin_style_xml("does-not-exist") is None
+
+
+@pytest.mark.parametrize(
+    "field", ["title", "container-title", "publisher", "abstract", "author", "editor"]
+)
+def test_direct_csl_rendering_sanitizes_nested_display_values(field):
+    malicious = (
+        'Visible<script>alert(1)</script><i onclick="alert(2)">Safe</i><img src=x onerror=alert(3)>'
+    )
+    entry = {"id": "citation-1", "type": "book"}
+    if field in {"author", "editor"}:
+        entry[field] = [{"family": malicious, "given": "Jane"}]
+        layout = f'<names variable="{field}"><name/></names>'
+    else:
+        entry[field] = malicious
+        layout = f'<text variable="{field}"/>'
+    before = deepcopy(entry)
+    xml = f"""<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+    <info><title>Safety</title><id>https://example.test/safety</id>
+    <updated>2026-10-10T00:00:00+00:00</updated></info>
+    <citation><layout>{layout}</layout></citation></style>"""
+    output = render_bibliography([entry], xml, output_format="html")[0]
+    assert "visible" in output.lower() and "safe" in output.lower()
+    assert "<script" not in output and "alert(" not in output
+    assert "onclick" not in output and "onerror" not in output and "<img" not in output
+    assert entry == before

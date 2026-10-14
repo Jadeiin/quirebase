@@ -22,7 +22,6 @@ EXPECTED_TABLES = {
     "file_revisions",
     "import_batches",
     "invitations",
-    "item_identifiers",
     "item_reads",
     "item_tags",
     "item_tag_recommendations",

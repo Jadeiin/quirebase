@@ -10,7 +10,6 @@ from inquiro.bibliography import (
     DEFAULT_CITATION_KEY_FORMULA,
     SUPPORTED_FORMATS,
     BibliographyExportOptions,
-    BibliographyRecord,
     CitationKeyFormulaError,
     CitationStyleOption,
     CitationStyleSelection,
@@ -18,15 +17,14 @@ from inquiro.bibliography import (
     builtin_style_xml,
     export_bibliography_records,
     is_valid_csl,
-    record_to_csl_json,
     render_bibliography,
     render_citation,
     select_builtin_citation_styles,
+    work_to_csl_json,
 )
 from inquiro.bibliography import (
     preview_citation_key as preview_formula,
 )
-from inquiro.metadata import metadata_bibliography_record
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -35,14 +33,10 @@ from quirebase.access.items import require_readable_item
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.models import CitationStyle
 
-from ._metadata import metadata_from_item
-
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.models import Item, ItemIdentifier, User
+    from quirebase.models import Item, User
 
 
 def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
@@ -143,17 +137,21 @@ async def format_csl_export(
     style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
-    entries = render_bibliography(
-        [
-            record_to_csl_json(
-                _item_to_bibliography_record(item, item.identifier_links),
-                options,
-                item_id=str(item.id),
-            )
-            for item in items
-        ],
-        style_xml,
-    )
+    try:
+        options = (options or BibliographyExportOptions()).validated(file_format="csl")
+        entries = render_bibliography(
+            [
+                work_to_csl_json(
+                    item.work,
+                    options,
+                    item_id=str(item.id),
+                )
+                for item in items
+            ],
+            style_xml,
+        )
+    except ValueError as error:
+        raise ValidationFailure(str(error)) from error
     return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
 
 
@@ -161,12 +159,13 @@ def format_standard_export(
     items: list[Item], file_format: str, options: BibliographyExportOptions | None = None
 ) -> tuple[str, str, str]:
     if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, biblatex, ris, or endnote")
+        raise ValidationFailure("format must be bibtex, ris, csl-json, or commonmeta")
     try:
         contents = export_bibliography_records(
-            [_item_to_bibliography_record(item, item.identifier_links) for item in items],
+            [item.work for item in items],
             file_format,
             options=options,
+            citation_keys=[item.citation_key for item in items],
         )
     except (InvalidExportOptions, CitationKeyFormulaError, ValueError) as error:
         raise ValidationFailure(str(error)) from error
@@ -205,9 +204,10 @@ async def get_item_citation_text_response(
     style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
-    rendered = render_citation(
-        _item_to_bibliography_record(item, item.identifier_links), style_xml, output_format=output
-    )
+    try:
+        rendered = render_citation(item.work, style_xml, output_format=output)
+    except ValueError as error:
+        raise ValidationFailure(str(error)) from error
     media_type = "text/html" if output == "html" else "text/plain"
     return rendered, media_type
 
@@ -230,9 +230,3 @@ __all__ = [
     "resolve_style_xml",
     "select_builtin_citation_styles",
 ]
-
-
-def _item_to_bibliography_record(
-    item: Item, identifiers: Sequence[ItemIdentifier]
-) -> BibliographyRecord:
-    return metadata_bibliography_record(metadata_from_item(item, identifiers))

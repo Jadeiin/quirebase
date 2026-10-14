@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import httpx2
 import pytest
 from app_helpers import json_payload
-from inquiro import CandidatePage, CandidateRecord, Contributor, Identifier
+from commonmeta.author_utils import get_one_author
+from commonmeta.base_utils import compact
+from inquiro import CandidatePage, CandidateRecord, Identifier
+from item_helpers import work_identifier
 from provider_helpers import provider_runtime
-from sqlalchemy import select
+from sqlalchemy import event, select
 from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
-from quirebase.models import AuditEvent, Item, ItemIdentifier
+from quirebase.models import AuditEvent, Item
 
 
 @pytest.mark.anyio
@@ -25,11 +29,15 @@ async def test_online_search_page_keeps_search_separate_from_import(
     )
     result = CandidateRecord(
         provider="openalex",
-        lookup_identifier=Identifier("openalex", "W99"),
-        title="Candidate paper",
-        authors=(Contributor("Researcher"),),
-        publication_title="Journal",
-        publication_date="2026",
+        lookup_identifier=Identifier("openalex", "W9900000000"),
+        work=compact({
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Candidate paper",
+            "date_published": "2026",
+            "contributors": (get_one_author({"name": "Researcher"}),),
+            "container": {"title": "Journal"},
+        }),
     )
     monkeypatch.setattr(
         "quirebase.library.discovery.search_candidates",
@@ -50,14 +58,13 @@ async def test_online_search_page_keeps_search_separate_from_import(
                 {
                     "provider": "openalex",
                     "identifier_provider": "openalex",
-                    "identifier": "W99",
+                    "identifier": "W9900000000",
                     "title": "Candidate paper",
                     "authors": "Researcher",
                     "publication_title": "Journal",
                     "publication_date": "2026",
                     "doi": None,
                     "abstract": None,
-                    "imported": False,
                 }
             ],
             "total": 11,
@@ -68,35 +75,52 @@ async def test_online_search_page_keeps_search_separate_from_import(
         assert event is not None
         assert event.detail["fields"] == ["title"]
         assert await db.scalar(select(AuditEvent).where(AuditEvent.action == "item.create")) is None
-        assert (await db.scalars(select(Item.title))).all() == ["Paper"]
+        assert (await db.scalars(select(Item.work["title"].as_string()))).all() == ["Paper"]
     finally:
         await client.aclose()
         get_settings.cache_clear()
 
 
 @pytest.mark.anyio
-async def test_discovery_imported_check_queries_only_returned_identifiers(
+async def test_discovery_does_not_read_stored_items_for_candidate_identity(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
-    async_db.add(
-        ItemIdentifier(
-            workspace_id=item.workspace_id, item_id=item.id, provider="openalex", value="W99"
-        )
-    )
+    item.work = {
+        **item.work,
+        "identifiers": [
+            *item.work.get("identifiers", []),
+            {"identifier_type": "OpenAlex", "identifier": "W9900000000"},
+        ],
+    }
     await async_db.commit()
     result = CandidateRecord(
         provider="openalex",
         lookup_identifier=Identifier("openalex", "w99"),
-        title="Already imported",
-        identifiers=(Identifier("openalex", "W99"), Identifier("doi", "10.1000/candidate")),
+        work=compact({
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Already imported",
+            "identifiers": [
+                work_identifier("openalex", "W9900000000"),
+                work_identifier("doi", "10.1000/candidate"),
+            ],
+        }),
     )
     monkeypatch.setattr(
         "quirebase.library.discovery.search_candidates",
         AsyncMock(return_value=CandidatePage("openalex", (result,), 1, 1, 10)),
     )
+    item_reads = []
+    engine = async_session_factory.kw["bind"].sync_engine
+
+    def record_query(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().lower().startswith("select") and "from items" in statement.lower():
+            item_reads.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record_query)
     try:
         searched = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
@@ -105,20 +129,20 @@ async def test_discovery_imported_check_queries_only_returned_identifiers(
                 "clauses": [{"operator": "and", "field": "title", "term": "imported"}],
             }),
         )
-
         assert searched.status_code == 200
-        assert searched.json()["results"][0]["imported"] is True
+        assert "imported" not in searched.json()["results"][0]
+        assert item_reads == []
     finally:
+        event.remove(engine, "before_cursor_execute", record_query)
         await client.aclose()
         get_settings.cache_clear()
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "stored_isbn, candidate_isbn",
-    [("080442957x", "080442957X"), ("080442957X", "080442957x")],
+    "stored_isbn, candidate_isbn", [("080442957x", "080442957X"), ("080442957X", "080442957x")]
 )
-async def test_discovery_recognizes_created_isbn_with_different_checksum_case(
+async def test_discovery_keeps_candidates_with_shared_isbn(
     async_db, async_session_factory, tmp_path, monkeypatch, stored_isbn, candidate_isbn
 ):
     client, item, _revision = await authenticated_async_client(
@@ -128,8 +152,12 @@ async def test_discovery_recognizes_created_isbn_with_different_checksum_case(
     candidate = CandidateRecord(
         provider="openlibrary",
         lookup_identifier=Identifier("isbn", candidate_isbn),
-        title="ISBN record",
-        identifiers=(Identifier("isbn", candidate_isbn),),
+        work=compact({
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "ISBN record",
+            "identifiers": [work_identifier("isbn", candidate_isbn)],
+        }),
     )
     monkeypatch.setattr(
         "quirebase.library.discovery.search_candidates",
@@ -139,8 +167,12 @@ async def test_discovery_recognizes_created_isbn_with_different_checksum_case(
         created = await client.post(
             f"{workspace_base}/items",
             json={
-                "title": candidate.title,
-                "identifiers": [{"provider": "isbn", "value": stored_isbn}],
+                "metadata": {
+                    "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+                    "type": "Document",
+                    "title": candidate.work.get("title"),
+                    "identifiers": [{"identifier_type": "ISBN", "identifier": stored_isbn}],
+                }
             },
         )
         assert created.status_code == 201
@@ -151,14 +183,12 @@ async def test_discovery_recognizes_created_isbn_with_different_checksum_case(
                 "clauses": [{"operator": "and", "field": "title", "term": "ISBN"}],
             },
         )
-
         assert searched.status_code == 200
-        assert searched.json()["results"][0]["imported"] is True
-        identifier = await async_db.scalar(
-            select(ItemIdentifier).where(ItemIdentifier.provider == "isbn")
-        )
-        assert identifier is not None
-        assert identifier.value == "080442957X"
+        assert "imported" not in searched.json()["results"][0]
+        from inquiro.work import work_identifiers
+
+        created_item = await async_db.get(Item, __import__("uuid").UUID(created.json()["id"]))
+        assert ("isbn", "080442957X") in work_identifiers(created_item.work)
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -189,7 +219,6 @@ async def test_discovery_search_uses_runtime_provider_settings(
                 "clauses": [{"operator": "and", "field": "any", "term": "stars"}],
             }),
         )
-
         assert searched.status_code == 200
         assert {provider["id"] for provider in providers.json()["search"]} >= {
             "nasa_ads",
@@ -237,11 +266,7 @@ async def test_discovery_rejects_unsupported_sort_instead_of_silently_falling_ba
 
 
 @pytest.mark.parametrize(
-    ("year_from", "expected_error"),
-    [
-        ("not-a-year", "int_parsing"),
-        ("999", "greater_than_equal"),
-    ],
+    ("year_from", "expected_error"), [("not-a-year", "int_parsing"), ("999", "greater_than_equal")]
 )
 @pytest.mark.anyio
 async def test_discovery_search_rejects_invalid_years(
@@ -259,7 +284,6 @@ async def test_discovery_search_rejects_invalid_years(
                 "year_from": year_from,
             }),
         )
-
         assert response.status_code == 422
         error = response.json()
         assert error["code"] == "validation_failed"
@@ -279,10 +303,7 @@ async def test_discovery_search_preserves_sparse_condition_rows(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
     search_candidates = AsyncMock(return_value=CandidatePage("openalex", (), 0, 1, 10))
-    monkeypatch.setattr(
-        "quirebase.library.discovery.search_candidates",
-        search_candidates,
-    )
+    monkeypatch.setattr("quirebase.library.discovery.search_candidates", search_candidates)
     try:
         response = await client.post(
             f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
@@ -354,38 +375,25 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     monkeypatch.setattr(
         "quirebase.library.providers.provider_runtime",
         lambda settings: provider_runtime(
-            settings=settings,
-            transport=httpx2.MockTransport(lookup_fallback_response),
+            settings=settings, transport=httpx2.MockTransport(lookup_fallback_response)
         ),
     )
-
     db = async_db
     user = User(username="search_user", password_hash="unused")
     db.add(user)
     await db.flush()
-
     await provision_initial_workspace(db, user)
     await db.commit()
-
     batch_nasa = await stage_identifier_import_batch(
-        db,
-        user,
-        fixture_workspace_id(user),
-        "2025ApJ...123..456A",
-        "bibcode",
+        db, user, fixture_workspace_id(user), "2025ApJ...123..456A", "bibcode"
     )
     records_nasa = batch_nasa.records
     errors_nasa = batch_nasa.errors
     assert not errors_nasa
     assert len(records_nasa) == 1
     assert batch_nasa.file_format == "metadata"
-
     batch_ieee = await stage_identifier_import_batch(
-        db,
-        user,
-        fixture_workspace_id(user),
-        "9876543",
-        "ieee",
+        db, user, fixture_workspace_id(user), "9876543", "ieee"
     )
     records_ieee = batch_ieee.records
     errors_ieee = batch_ieee.errors

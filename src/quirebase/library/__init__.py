@@ -2,17 +2,12 @@ from __future__ import annotations
 
 from quirebase.core.errors import UpstreamServiceError
 from quirebase.library._metadata import (
-    Affiliation,
-    Contributor,
-    CustomField,
-    ExternalIdentifier,
-    ItemMetadata,
     ItemWriteResult,
-    JsonValue,
-    ResourceLink,
+    Work,
+    get_work_schema,
+    item_summary,
 )
 from quirebase.library.activity import (
-    get_accessible_item_identifiers,
     record_discovery_search_audit,
 )
 from quirebase.library.administration import (
@@ -33,6 +28,7 @@ from quirebase.library.catalog import (
     search_library,
 )
 from quirebase.library.citations import (
+    BIBLIOGRAPHY_MEDIA_TYPES,
     DEFAULT_CITATION_KEY_FORMULA,
     BibliographyExportOptions,
     create_custom_citation_style,
@@ -64,7 +60,6 @@ from quirebase.library.discussions import (
 )
 from quirebase.library.facets import LibraryFacets, get_library_facets
 from quirebase.library.identifiers import (
-    create_item_from_metadata_record,
     rescan_pdf_doi,
     sync_metadata_from_upstream,
 )
@@ -97,6 +92,7 @@ from quirebase.library.item_sections import (
     ItemSection,
     ItemSectionData,
     ItemSectionResult,
+    MetadataLookupIdentifier,
     ProjectAssignmentOption,
     open_item_section,
 )
@@ -125,21 +121,17 @@ from quirebase.library.workflows import (
 )
 
 __all__ = [
+    "BIBLIOGRAPHY_MEDIA_TYPES",
     "DEFAULT_CITATION_KEY_FORMULA",
-    "Affiliation",
     "BatchConflict",
     "BibliographyExportOptions",
     "CandidatePageView",
     "CandidateView",
-    "Contributor",
-    "CustomField",
     "DiscoveryClause",
-    "ExternalIdentifier",
     "ImportBatchPreview",
     "ItemAnnotationsData",
     "ItemDiscussionData",
     "ItemFilesData",
-    "ItemMetadata",
     "ItemMetadataData",
     "ItemOrganizationData",
     "ItemOverviewData",
@@ -147,16 +139,16 @@ __all__ = [
     "ItemSectionData",
     "ItemSectionResult",
     "ItemWriteResult",
-    "JsonValue",
     "LibraryFacets",
     "LibraryFilter",
+    "MetadataLookupIdentifier",
     "MetadataProviderChoices",
     "ProjectAssignmentOption",
-    "ResourceLink",
     "TagConflict",
     "TagGroup",
     "TagMatrix",
     "UpstreamServiceError",
+    "Work",
     "acquire_remote_pdf",
     "add_discussion_message",
     "add_existing_tag_to_item",
@@ -168,7 +160,6 @@ __all__ = [
     "copy_item_to_workspace",
     "create_custom_citation_style",
     "create_item",
-    "create_item_from_metadata_record",
     "delete_custom_citation_style",
     "delete_discussion_message",
     "delete_item",
@@ -181,7 +172,6 @@ __all__ = [
     "find_duplicates",
     "format_csl_export",
     "format_standard_export",
-    "get_accessible_item_identifiers",
     "get_dashboard_data",
     "get_import_batch_preview",
     "get_item_citation_response",
@@ -189,8 +179,10 @@ __all__ = [
     "get_library_facets",
     "get_metadata_provider_choices",
     "get_storage_metrics",
+    "get_work_schema",
     "import_staging_object_keys",
     "item_ids_for_tag_recommendation",
+    "item_summary",
     "list_accessible_tags_with_counts",
     "list_custom_citation_styles",
     "list_project_discussion_messages",

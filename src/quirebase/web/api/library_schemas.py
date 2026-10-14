@@ -7,8 +7,7 @@ from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
-from quirebase.library import Contributor, ItemMetadata, ItemMetadataData, ResourceLink
-from quirebase.models import ReferenceType
+from quirebase.library import ItemMetadataData, Work, item_summary
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
@@ -34,16 +33,9 @@ class BulkActionRequest(BaseModel):
 
 
 class ItemDetailView(ItemSearchView):
-    metadata: ItemMetadata
+    metadata: Work
     abstract_html: str | None
-    editors: list[Contributor]
-    structured_authors: list[Contributor]
-    reference_type: ReferenceType
-    volume: str | None
-    issue: str | None
-    pages: str | None
-    keywords: list[str]
-    urls: list[ResourceLink]
+    citation_key: str | None
 
 
 class TagView(BaseModel):
@@ -74,7 +66,6 @@ class CitationView(BaseModel):
 class AuthorSuggestionView(BaseModel):
     last_name: str
     first_name: str | None = None
-    suffix: str | None = None
     full_name: str
 
 
@@ -89,15 +80,7 @@ class CitationStylesResponseView(BaseModel):
 
 
 def item_search_view(item: Any) -> ItemSearchView:
-    return ItemSearchView(
-        id=item.id,
-        title_html=item.title,
-        authors="; ".join(row["display_name"] for row in item.authors) or None,
-        publication_date=item.publication_date,
-        publication_title=item.publication_title,
-        doi=next((row.value for row in item.identifier_links if row.provider == "doi"), None),
-        version=item.version,
-    )
+    return ItemSearchView(**item_summary(item))
 
 
 def item_detail_view(view: ItemMetadataData) -> ItemDetailView:
@@ -105,15 +88,8 @@ def item_detail_view(view: ItemMetadataData) -> ItemDetailView:
     return ItemDetailView(
         **item_search_view(item).model_dump(),
         metadata=view.metadata,
-        abstract_html=item.abstract,
-        editors=list(view.metadata.editors),
-        structured_authors=list(view.metadata.authors),
-        reference_type=item.reference_type,
-        volume=item.volume,
-        issue=item.issue,
-        pages=item.pages,
-        keywords=item.keywords,
-        urls=list(view.metadata.urls),
+        abstract_html=item.work.get("description"),
+        citation_key=item.citation_key,
     )
 
 
@@ -144,8 +120,16 @@ def discussion_message_views(
 
 
 class ItemUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     expected_version: int = Field(ge=1)
-    metadata: ItemMetadata
+    metadata: Work
+    citation_key: str | None = Field(default=None, max_length=128)
+
+
+class ItemCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    metadata: Work
+    citation_key: str | None = Field(default=None, max_length=128)
 
 
 class CrossWorkspaceCopyRequest(BaseModel):

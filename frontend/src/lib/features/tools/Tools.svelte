@@ -36,7 +36,7 @@
 	type CitationStyle = { key: string; name: string; scope: 'builtin' | 'custom' };
 
 	let activeTool = $state<Tool>('duplicates');
-	let mode = $state('doi');
+	let mode = $state('identifier');
 	let scannedMode = $state('');
 	let tagFilter = $state('');
 	let submittedTagFilter = $state('');
@@ -264,11 +264,14 @@
 				>
 			</div>
 			<div class="border-b border-surface-300-700 bg-surface-100-900 px-5 py-3">
-				<SegmentedControl value={mode} onValueChange={(details) => (mode = details.value ?? 'doi')}>
+				<SegmentedControl
+					value={mode}
+					onValueChange={(details) => (mode = details.value ?? 'identifier')}
+				>
 					<SegmentedControl.Label>{$t('Match criteria')}</SegmentedControl.Label>
 					<SegmentedControl.Control class="flex-wrap">
 						<SegmentedControl.Indicator />
-						{#each [{ value: 'doi', label: $t('Same DOI') }, { value: 'title', label: $t('Same title') }, { value: 'similar', label: $t('Similar title') }] as option (option.value)}
+						{#each [{ value: 'identifier', label: $t('Shared identifier') }, { value: 'title', label: $t('Same title') }, { value: 'similar', label: $t('Similar title') }] as option (option.value)}
 							<SegmentedControl.Item value={option.value}>
 								<SegmentedControl.ItemText>{option.label}</SegmentedControl.ItemText>
 								<SegmentedControl.ItemHiddenInput />

@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from quirebase.library import MetadataLookupIdentifier, Work
 from quirebase.models import ProjectParticipation
 from quirebase.web.api.common import WorkspaceAuthorizationView
 from quirebase.web.api.library_schemas import ItemSearchView
@@ -39,11 +40,6 @@ class ItemTagView(BaseModel):
     name: str
 
 
-class ItemIdentifierView(BaseModel):
-    provider: str
-    value: str
-
-
 class ItemLatestRevisionView(BaseModel):
     id: UUID
     original_name: str
@@ -69,7 +65,9 @@ class ItemOverviewView(BaseModel):
     authorization: WorkspaceAuthorizationView
     counts: ItemOverviewCountsView
     tags: list[ItemTagView]
-    identifiers: list[ItemIdentifierView]
+    metadata: Work
+    citation_key: str | None
+    primary_lookup_identifier: MetadataLookupIdentifier | None = None
     latest_revision: ItemLatestRevisionView | None = None
     thumbnail: ItemThumbnailView | None = None
     copy_targets: list[ItemCopyTargetView]

@@ -78,10 +78,9 @@ async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
             "discussion": view.message_count,
         },
         "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
-        "identifiers": [
-            {"provider": identifier.provider, "value": identifier.value}
-            for identifier in view.identifiers
-        ],
+        "metadata": view.item.work,
+        "citation_key": view.item.citation_key,
+        "primary_lookup_identifier": view.primary_lookup_identifier,
         "latest_revision": (
             {
                 "id": latest.id,

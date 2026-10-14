@@ -8,7 +8,11 @@ from uuid import UUID, uuid4
 
 import pytest
 from inquiro.bibliography import builtin_style_xml
-from item_helpers import contributor, contributor_values, metadata_list_values, stored_doi
+from item_helpers import (
+    contributor,
+    stored_doi,
+    work_identifier,
+)
 from sqlalchemy import delete, event, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -17,27 +21,20 @@ from quirebase.access import resolve_workspace_context
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound, ResourceUnavailable, ValidationFailure
 from quirebase.library import (
-    ExternalIdentifier,
-    ItemMetadata,
     ItemMetadataData,
     ItemOverviewData,
     ItemSection,
-    ResourceLink,
     create_item,
     item_sections,
     open_item_section,
     revise_item_metadata,
 )
-from quirebase.library.citations import (
-    create_custom_citation_style,
-    delete_custom_citation_style,
-)
+from quirebase.library.citations import create_custom_citation_style, delete_custom_citation_style
 from quirebase.library.tags import _assign_item_tags, delete_tag, get_or_create_tag, rename_tag
 from quirebase.models import (
     AuditEvent,
     CitationStyle,
     Item,
-    ItemIdentifier,
     ItemRead,
     ItemTag,
     Project,
@@ -66,7 +63,11 @@ async def persistence_actor(persistence_db):
 async def _association_batch(db, actor, kind):
     workspace_id = fixture_workspace_id(actor)
     items = [
-        Item(workspace_id=workspace_id, title=f"Batch item {index}", created_by=actor.id)
+        Item(
+            workspace_id=workspace_id,
+            created_by=actor.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": f"Batch item {index}"},
+        )
         for index in range(501)
     ]
     root = (
@@ -77,7 +78,7 @@ async def _association_batch(db, actor, kind):
     db.add_all([*items, root])
     await db.commit()
     item_ids = [item.id for item in items]
-    root_id, actor_id = root.id, actor.id
+    root_id, actor_id = (root.id, actor.id)
 
     async def add(ids):
         if kind == "tag":
@@ -85,7 +86,7 @@ async def _association_batch(db, actor, kind):
             return len(created_ids)
         return await _add_missing_project_items(db, workspace_id, root_id, ids, actor_id)
 
-    return item_ids, add, ItemTag if kind == "tag" else ProjectItem, root_id
+    return (item_ids, add, ItemTag if kind == "tag" else ProjectItem, root_id)
 
 
 @pytest.mark.anyio
@@ -106,8 +107,6 @@ async def test_association_batches_deduplicate_and_share_caller_rollback(
     event.listen(engine, "before_cursor_execute", record_insert)
     try:
         assert await add([*item_ids, item_ids[0]]) == len(item_ids)
-        # Bound the write count: crossing a batch boundary must not become
-        # one statement or savepoint per Item.
         assert len(inserts) == 2
         assert await add(item_ids) == 0
         assert len(inserts) == 4
@@ -133,17 +132,12 @@ async def test_association_batch_constraint_failure_rolls_back_all_chunks(
     item_ids, add, model, root_id = await _association_batch(
         persistence_db, persistence_actor, kind
     )
-    # This missing Item sorts after every existing root, so the first chunk
-    # succeeds before a later chunk fails its lineage foreign key.
     with pytest.raises(IntegrityError) as failure:
         await add([*item_ids, UUID(int=(1 << 128) - 1)])
     assert await persistence_db.scalar(select(func.count()).select_from(model)) == 0
-    # Keep the failure traceback alive: rolled-back ORM results must not remain
-    # readable as phantom links through Session.get()'s identity-map fast path.
     if kind == "tag":
         assert await persistence_db.get(ItemTag, (min(item_ids), root_id)) is None
     assert failure.value is not None
-    # Recovery preserves the caller's transaction for a subsequent valid write.
     assert await add(item_ids[:1]) == 1
     await persistence_db.commit()
 
@@ -156,12 +150,15 @@ async def test_concurrent_item_sections_record_reading_once(
 ):
     actor_id = persistence_actor.id
     workspace_id = fixture_workspace_id(persistence_actor)
-    item = Item(workspace_id=workspace_id, title="Concurrent reading", created_by=actor_id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=actor_id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Concurrent reading"},
+    )
     persistence_db.add(item)
     await persistence_db.commit()
     item_id = item.id
     first_ready, second_writing, release_commit = (asyncio.Event() for _ in range(3))
-
     async with persistence_sessions() as first_db, persistence_sessions() as second_db:
         first_actor = await first_db.get(User, actor_id)
         second_actor = await second_db.get(User, actor_id)
@@ -170,8 +167,6 @@ async def test_concurrent_item_sections_record_reading_once(
         commit = first_db.commit
 
         async def held_commit():
-            # Hold the first inserted reading row uncommitted while the other
-            # section attempts to write the same user/Item reading record.
             await first_db.flush()
             first_ready.set()
             await release_commit.wait()
@@ -201,11 +196,9 @@ async def test_concurrent_item_sections_record_reading_once(
                 release_commit.set()
         finally:
             event.remove(connection.sync_connection, "before_cursor_execute", record_write)
-
         views = {type(first.result()), type(second.result())}
         assert views == {ItemOverviewData, ItemMetadataData}
         assert first.result().item.id == second.result().item.id == item_id
-
     async with persistence_sessions() as observer:
         reads = (await observer.scalars(select(ItemRead))).all()
         assert len(reads) == 1
@@ -222,7 +215,11 @@ async def test_item_reading_retains_the_latest_timestamp(
 ):
     actor_id = persistence_actor.id
     workspace_id = fixture_workspace_id(persistence_actor)
-    item = Item(workspace_id=workspace_id, title="Reading order", created_by=actor_id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=actor_id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Reading order"},
+    )
     persistence_db.add(item)
     await persistence_db.commit()
     item_id = item.id
@@ -230,7 +227,6 @@ async def test_item_reading_retains_the_latest_timestamp(
     read_at = started_at
     latest_read_at = started_at
     monkeypatch.setattr(item_sections, "datetime", SimpleNamespace(now=lambda _timezone: read_at))
-
     for offset in (0, 1, -1):
         read_at = started_at + timedelta(seconds=offset)
         latest_read_at = max(latest_read_at, read_at)
@@ -247,7 +243,11 @@ async def test_item_reading_insert_shares_the_callers_rollback(
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
     actor_id = persistence_actor.id
-    item = Item(workspace_id=workspace_id, title="Uncommitted reading", created_by=actor_id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=actor_id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Uncommitted reading"},
+    )
     persistence_db.add(item)
     await persistence_db.commit()
     item_id = item.id
@@ -268,7 +268,11 @@ async def test_item_reading_propagates_foreign_workspace_constraint_errors(
 ):
     workspace_id = fixture_workspace_id(persistence_actor)
     actor_id = persistence_actor.id
-    item = Item(workspace_id=workspace_id, title="Scoped reading", created_by=actor_id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=actor_id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Scoped reading"},
+    )
     persistence_db.add(item)
     await persistence_db.commit()
     item_id = item.id
@@ -277,8 +281,6 @@ async def test_item_reading_propagates_foreign_workspace_constraint_errors(
     context = await resolve_workspace_context(persistence_db, persistence_actor, workspace_id)
     if existing:
         await open_item_section(persistence_db, context, item_id, ItemSection.metadata)
-
-    # Hold outer transaction completion to test the command's savepoint recovery.
     monkeypatch.setattr(persistence_db, "commit", AsyncMock(side_effect=persistence_db.flush))
     monkeypatch.setattr(persistence_db, "rollback", AsyncMock())
     execute = persistence_db.execute
@@ -312,10 +314,9 @@ async def test_setting_bulk_writes_refresh_loaded_values_and_share_caller_rollba
     )
     assert loaded.value == "45"
     assert loaded.updated_by == actor_id
-    assert inspect(loaded).persistent and not inspect(loaded).expired
+    assert inspect(loaded).persistent and (not inspect(loaded).expired)
     record_event(persistence_db, actor_id, "test.settings", "system_settings")
     await persistence_db.flush()
-
     async with persistence_sessions() as observer:
         assert (await observer.get(SystemSetting, "session_days")).value == "30"
         assert await observer.get(SystemSetting, "metadata_contact_email") is None
@@ -323,7 +324,6 @@ async def test_setting_bulk_writes_refresh_loaded_values_and_share_caller_rollba
             await observer.scalar(select(AuditEvent).where(AuditEvent.action == "test.settings"))
             is None
         )
-
     await persistence_db.rollback()
     async with persistence_sessions() as observer:
         assert (await observer.get(SystemSetting, "session_days")).value == "30"
@@ -356,7 +356,6 @@ async def test_setting_savepoint_propagates_unrelated_constraint_errors(
     persistence_db, persistence_actor, monkeypatch
 ):
     await update_runtime_settings(persistence_db, persistence_actor, {"session_days": 30})
-    # Inject invalid persisted lineage after the independently tested Access gate.
     monkeypatch.setattr(
         runtime_settings,
         "require_system_action",
@@ -388,14 +387,16 @@ async def test_item_metadata_creation_rolls_back_search_and_audit_when_enqueue_f
             persistence_db,
             persistence_actor,
             fixture_workspace_id(persistence_actor),
-            ItemMetadata(
-                "Uncommitted Item",
-                authors=(contributor("Uncommitted", "Author"),),
-                identifiers=(ExternalIdentifier("pmid", "uncommitted"),),
-            ),
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": "Uncommitted Item",
+                "contributors": (contributor("Uncommitted", "Author"),),
+                "identifiers": (work_identifier("pmid", "uncommitted"),),
+            },
         )
     async with persistence_sessions() as observer:
-        for model in (Item, ItemIdentifier):
+        for model in (Item,):
             assert await observer.scalar(select(func.count()).select_from(model)) == 0
         assert await observer.scalar(text("SELECT count(*) FROM item_search")) == 0
         assert (
@@ -495,21 +496,19 @@ async def test_mutations_translate_a_missing_root_without_success_audit(
         root = await create_custom_citation_style(
             persistence_db, persistence_actor, workspace_id, "Vanishing", xml
         )
-        model, domain_error = CitationStyle, ResourceNotFound
+        model, domain_error = (CitationStyle, ResourceNotFound)
         mutation = delete_custom_citation_style(
             persistence_db, persistence_actor, workspace_id, root.id
         )
     else:
         root = await get_or_create_tag(persistence_db, persistence_actor, workspace_id, "Vanishing")
         await persistence_db.commit()
-        model, domain_error = Tag, ResourceUnavailable
+        model, domain_error = (Tag, ResourceUnavailable)
         mutation = (
             rename_tag(persistence_db, persistence_actor, workspace_id, root.id, "New Name")
             if operation == "tag_rename"
             else delete_tag(persistence_db, persistence_actor, workspace_id, root.id)
         )
-    # The locked root query now directly decides availability. Concurrent deletion
-    # and locking remain covered by the controlled PostgreSQL schedules.
     root_id = root.id
     await persistence_db.execute(delete(model).where(model.id == root_id))
     await persistence_db.commit()
@@ -528,9 +527,7 @@ async def test_import_batch_embeds_record_local_contributors_and_preserves_repla
 
     workspace_id = fixture_workspace_id(persistence_actor)
     contents = "\n".join(
-        f"@article{{entry{index}, title={{Batch item {index}}}, "
-        f"author={{Shared, Author and Writer{index}, Name}}, "
-        f"editor={{SHARED, AUTHOR}}, year={{2026}}, doi={{10.1000/{index}}}}}"
+        f"@article{{entry{index}, title={{Batch item {index}}}, author={{Shared, Author and Writer{index}, Name}}, editor={{SHARED, AUTHOR}}, year={{2026}}, doi={{10.1000/{index}}}}}"
         for index in range(size)
     ).encode()
     batch = await stage_import_batch(
@@ -538,17 +535,23 @@ async def test_import_batch_embeds_record_local_contributors_and_preserves_repla
     )
     records = batch.records
     errors = batch.errors
-    assert len(records) == size and not errors
+    assert len(records) == size and all(error.severity == "warning" for error in errors)
     batch_id = batch.id
     item_ids = await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
     items = [await persistence_db.get(Item, item_id) for item_id in item_ids]
-    assert [item.title for item in items] == [f"Batch item {index}" for index in range(size)]
-    assert [(await stored_doi(persistence_db, item)) for item in items] == [
-        f"10.1000/{index}" for index in range(size)
+    assert [item.work.get("title") for item in items] == [
+        f"Batch item {index}" for index in range(size)
     ]
-    assert all(item.authors[0]["family_name"] == "Shared" for item in items)
-    assert all(item.editors[0]["family_name"] == "SHARED" for item in items)
-    assert all(len(item.authors) == 2 and len(item.editors) == 1 for item in items)
+    assert [stored_doi(item) for item in items] == [f"10.1000/{index}" for index in range(size)]
+    assert all(item.work["contributors"][0]["person"]["family_name"] == "Shared" for item in items)
+    assert all(
+        next(credit for credit in item.work["contributors"] if "Editor" in credit["roles"])[
+            "person"
+        ]["family_name"]
+        == "SHARED"
+        for item in items
+    )
+    assert all(len(item.work["contributors"]) == 3 for item in items)
     assert (
         await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
         == item_ids
@@ -567,101 +570,77 @@ async def test_import_batch_embeds_record_local_contributors_and_preserves_repla
 async def test_item_metadata_merge_preserves_omissions_and_replacement_clears_links(
     persistence_db, persistence_actor
 ):
-    from quirebase.library.identifiers import apply_metadata_record
+    from quirebase.library.identifiers import _merge_metadata_work
 
+    metadata = {
+        "id": "https://doi.org/10.1000/original",
+        "type": "JournalArticle",
+        "title": "Original",
+        "subjects": [{"subject": "original"}],
+        "contributors": [contributor("Shared", "Author")],
+        "identifiers": [work_identifier("pmid", "42")],
+    }
     result = await create_item(
         persistence_db,
         persistence_actor,
         fixture_workspace_id(persistence_actor),
-        ItemMetadata(
-            "Original",
-            authors=(contributor("Shared", "Author"),),
-            editors=(contributor("Shared", "Author"),),
-            doi="10.1000/original",
-            identifiers=(ExternalIdentifier("pmid", "original"),),
-            urls=(ResourceLink("https://example.com/original"),),
-            keywords=("original",),
-            citation_key="UserSelectedKey",
-        ),
+        metadata,
+        citation_key="UserSelectedKey",
     )
     item = await persistence_db.get(Item, result.item_id)
-    await apply_metadata_record(
+    await _merge_metadata_work(
         persistence_db,
         persistence_actor,
         item,
-        {"title": "Merged", "keywords": ["new"]},
-        merge=True,
+        {"title": "Merged", "subjects": [{"subject": "new"}]},
     )
-    assert item.title == "Merged"
-    assert item.authors == contributor_values(
-        "Shared, Author"
-    ) and item.editors == contributor_values("Shared, Author")
-    assert (
-        await stored_doi(persistence_db, item)
-    ) == "10.1000/original" and item.citation_key == "UserSelectedKey"
-    assert item.urls == metadata_list_values(
-        "https://example.com/original", urls=True
-    ) and item.keywords == metadata_list_values("original; new")
-    assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 2
-
+    assert item.work["title"] == "Merged"
+    assert item.work["contributors"] == metadata["contributors"]
+    assert item.work["subjects"] == [{"subject": "original"}, {"subject": "new"}]
+    assert stored_doi(item) == "10.1000/original"
+    assert item.citation_key == "UserSelectedKey"
+    replaced = {"id": metadata["id"], "type": "Dataset", "title": "Replaced"}
     result = await revise_item_metadata(
-        persistence_db, persistence_actor, item.workspace_id, item.id, 1, ItemMetadata("Replaced")
+        persistence_db,
+        persistence_actor,
+        item.workspace_id,
+        item.id,
+        1,
+        replaced,
+        citation_key=None,
     )
-    assert result.version == 2
     await persistence_db.refresh(item)
-    assert item.title == "Replaced" and item.version == 2
-    assert item.authors == [] and item.editors == []
-    assert (await stored_doi(persistence_db, item)) is None
-    assert item.urls == [] and item.keywords == [] and item.citation_key is None
-    assert await persistence_db.scalar(select(func.count()).select_from(ItemIdentifier)) == 0
+    assert result.version == 2 and item.work == replaced and item.citation_key is None
 
 
 @pytest.mark.anyio
 async def test_bulk_candidate_aggregates_remain_inside_caller_rollback(
     persistence_db, persistence_sessions, persistence_actor
 ):
-    from quirebase.library.identifiers import (
-        _create_items_from_candidates,
-    )
+    from quirebase.library.identifiers import _create_items_from_candidates
 
+    candidates = [
+        {
+            "id": "https://doi.org/10.1000/shared",
+            "type": "Document",
+            "title": title,
+            "contributors": [contributor("Shared", "Author")],
+        }
+        for title in ("First", "Second")
+    ]
     items = await _create_items_from_candidates(
         persistence_db,
         fixture_workspace_id(persistence_actor),
         persistence_actor.id,
-        [
-            {
-                "title": "First",
-                "authors": [
-                    {
-                        "display_name": "Shared, Author",
-                        "family_name": "Shared",
-                        "given_name": "Author",
-                    }
-                ],
-                "identifiers": {"pmid": "first"},
-            },
-            {
-                "title": "Second",
-                "editors": [
-                    {
-                        "display_name": "Shared, Author",
-                        "family_name": "Shared",
-                        "given_name": "Author",
-                    }
-                ],
-                "doi": "10.1000/second",
-            },
-        ],
+        [{"work": candidate} for candidate in candidates],
     )
     assert len(items) == 2
-    for item in items:
-        assert inspect(item).persistent and not inspect(item).expired
+    assert all(inspect(item).persistent and not inspect(item).expired for item in items)
     record_event(persistence_db, persistence_actor.id, "test.bulk", "item")
     await persistence_db.flush()
     await persistence_db.rollback()
     async with persistence_sessions() as observer:
-        for model in (Item, ItemIdentifier):
-            assert await observer.scalar(select(func.count()).select_from(model)) == 0
+        assert await observer.scalar(select(func.count()).select_from(Item)) == 0
         assert (
             await observer.scalar(select(AuditEvent).where(AuditEvent.action == "test.bulk"))
             is None

@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select, true
 
-from quirebase.models import Item, ReferenceType
+from quirebase.models import Item
 
-from ._json_queries import array_elements, contributor_name_parts
+from ._json_queries import array_elements, author_role, contributor_name_parts
 from .catalog import LibraryFilter, _library_query
 
 if TYPE_CHECKING:
@@ -25,7 +25,6 @@ class AuthorFacet:
     last_name: str
     first_name: str | None
     item_count: int
-    suffix: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,7 +35,7 @@ class KeywordFacet:
 
 @dataclass(frozen=True)
 class ReferenceTypeFacet:
-    value: ReferenceType
+    value: str
     item_count: int
 
 
@@ -56,33 +55,33 @@ async def get_library_facets(
     limit: int = 50,
 ) -> LibraryFacets:
     query = await _library_query(db, user, workspace_id, filters)
-    candidates = query.with_only_columns(
-        Item.id, Item.authors, Item.keywords, Item.reference_type
-    ).subquery()
-    authors = array_elements(db, candidates.c.authors, objects=True)
-    family, given, suffix = contributor_name_parts(authors.c.value)
+    candidates = query.with_only_columns(Item.id, Item.work).subquery()
+    authors = array_elements(db, candidates.c.work["contributors"], objects=True)
+    family, given = contributor_name_parts(authors.c.value)
     count = func.count(func.distinct(candidates.c.id)).label("item_count")
     author_rows = await db.execute(
-        select(family, given, count, suffix)
+        select(family, given, count)
         .select_from(candidates.join(authors, true()))
-        .where(family.is_not(None), family != "")
-        .group_by(family, given, suffix)
-        .order_by(count.desc(), family, func.coalesce(given, ""), func.coalesce(suffix, ""))
+        .where(family.is_not(None), family != "", author_role(db, authors.c.value))
+        .group_by(family, given)
+        .order_by(count.desc(), family, func.coalesce(given, ""))
         .limit(limit)
     )
-    keywords = array_elements(db, candidates.c.keywords)
+    keywords = array_elements(db, candidates.c.work["subjects"], objects=True)
+    subject = keywords.c.value["subject"].as_string()
     keyword_rows = await db.execute(
-        select(keywords.c.value, count)
+        select(subject, count)
         .select_from(candidates.join(keywords, true()))
-        .where(keywords.c.value != "")
-        .group_by(keywords.c.value)
-        .order_by(count.desc(), keywords.c.value)
+        .where(subject != "")
+        .group_by(subject)
+        .order_by(count.desc(), subject)
         .limit(limit)
     )
+    reference_type = candidates.c.work["type"].as_string()
     type_rows = await db.execute(
-        select(candidates.c.reference_type, count)
-        .group_by(candidates.c.reference_type)
-        .order_by(count.desc(), candidates.c.reference_type)
+        select(reference_type, count)
+        .group_by(reference_type)
+        .order_by(count.desc(), reference_type)
         .limit(limit)
     )
     return LibraryFacets(

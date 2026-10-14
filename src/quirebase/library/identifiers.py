@@ -1,25 +1,24 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from inquiro.identifiers import canonical_doi
-from inquiro.models import CandidateRecord
+from inquiro.work import work_doi
 from sqlalchemy import select, update
 
-from quirebase.access import ResourceAction, require_workspace_action
+from quirebase.access import ResourceAction
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
-from quirebase.library.providers import candidate_record_values, lookup_candidate
+from quirebase.library.providers import lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import FileRevision, Item, ItemIdentifier, User
+from quirebase.models import FileRevision, Item, User
 from quirebase.search import search_index
 
-from ._item_identifiers import _replace_item_identifiers_many
-from ._metadata import MetadataWrite, candidate_write, generate_citation_key
-from .item_metadata import _write_item_identifiers
+from ._metadata import candidate_write, generate_citation_key, validate_citation_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -28,23 +27,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
-
-
-async def set_item_identifiers(
-    db: AsyncSession,
-    user: User,
-    workspace_id: UUID,
-    item_id: UUID,
-    id_pairs: list[tuple[str, str]],
-) -> list[ItemIdentifier]:
-    item = await require_editable_item(db, user, workspace_id, item_id)
-    return await _replace_item_identifiers_many(db, [(item, id_pairs)])
-
-
-async def get_item_identifiers(db: AsyncSession, item_id: UUID) -> list[ItemIdentifier]:
-    return list(
-        (await db.scalars(select(ItemIdentifier).where(ItemIdentifier.item_id == item_id))).all()
-    )
 
 
 async def rescan_pdf_doi(
@@ -70,6 +52,8 @@ async def rescan_pdf_doi(
             found_doi = first_doi_from_text(rev.full_text)
             if found_doi:
                 await require_editable_item(db, user, workspace_id, item_id)
+                # key_share=True without read=True emits FOR NO KEY UPDATE on PostgreSQL:
+                # serialize Work replacements and refresh any snapshot read before the wait.
                 item = await db.scalar(
                     select(Item)
                     .where(Item.id == item_id, Item.workspace_id == workspace_id)
@@ -79,13 +63,15 @@ async def rescan_pdf_doi(
                 if item is None:
                     raise ResourceUnavailable("item not found")
                 # A manually supplied DOI takes precedence over scanner output.
-                existing = await get_item_identifiers(db, item_id)
-                if doi := next((row.value for row in existing if row.provider == "doi"), None):
+                if doi := work_doi(item.work):
                     return doi
                 found_doi = canonical_doi(found_doi)
-                existing_pairs = [(ident.provider, ident.value) for ident in existing]
-                existing_pairs.append(("doi", found_doi))
-                await _replace_item_identifiers_many(db, [(item, existing_pairs)])
+                work = deepcopy(item.work)
+                work.setdefault("identifiers", []).append({
+                    "identifier_type": "DOI",
+                    "identifier": found_doi,
+                })
+                item.work = candidate_write(item, work, merge=False)["work"]
                 item.updated_by = user.id
                 item.updated_at = datetime.now(UTC)
                 item.version += 1
@@ -105,53 +91,18 @@ async def rescan_pdf_doi(
     return None
 
 
-async def apply_metadata_record(
+async def _merge_metadata_work(
     db: AsyncSession,
     user: User,
     item: Item,
-    record: CandidateRecord | dict,
-    *,
-    merge: bool = False,
+    work: dict,
 ) -> Item:
     item = await require_editable_item(db, user, item.workspace_id, item.id)
-    values = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
-    existing = (
-        {
-            link.provider: link.value
-            for link in await db.scalars(
-                select(ItemIdentifier).where(ItemIdentifier.item_id == item.id)
-            )
-        }
-        if merge
-        else {}
-    )
-    write = candidate_write(
-        item,
-        values,
-        merge=merge,
-        existing_identifiers=existing,
-    )
-    for name, value in write.values.items():
-        setattr(item, name, value)
-    await _write_item_identifiers(db, [(item, write)])
+    write = candidate_write(item, work, merge=True)
+    item.work = write["work"]
     if not item.citation_key:
         item.citation_key = generate_citation_key(item)
     await db.flush()
-    return item
-
-
-async def create_item_from_metadata_record(
-    db: AsyncSession,
-    user: User,
-    workspace_id: UUID,
-    record: CandidateRecord | dict,
-) -> Item:
-    """Create an imported Item and enqueue its initial Tag recommendation."""
-    await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
-    values = candidate_record_values(record) if isinstance(record, CandidateRecord) else record
-    items = await _create_items_from_candidates(db, workspace_id, user.id, [values])
-    item = items[0]
-    await request_item_tag_recommendation(db, item.id, workspace_id=workspace_id, actor_id=user.id)
     return item
 
 
@@ -196,14 +147,12 @@ async def _sync_metadata_from_upstream(
         raise VersionConflict(current.version if current else None)
 
     await db.refresh(item)
-    await apply_metadata_record(
+    await _merge_metadata_work(
         db,
         user,
         item,
-        record,
-        merge=True,
+        record.work,
     )
-    await db.refresh(item, ["identifier_links"])
 
     # Upstream changes commonly alter the title, first author or year. Keep a
     # key that was generated from the previous metadata in sync, while leaving
@@ -275,19 +224,14 @@ async def sync_metadata_from_upstream(
 async def _create_items_from_candidates(
     db: AsyncSession, workspace_id: UUID, actor_id: UUID, records: Sequence[dict]
 ) -> list[Item]:
-    prepared: list[tuple[Item, MetadataWrite]] = []
+    items = []
     for record in records:
-        item = Item(title="Untitled", workspace_id=workspace_id, created_by=actor_id)
-        write = candidate_write(item, record, merge=False, existing_identifiers={})
-        for name, value in write.values.items():
-            setattr(item, name, value)
-        prepared.append((item, write))
-    if not prepared:
-        return []
-    items = [item for item, _ in prepared]
+        item = Item(work={}, workspace_id=workspace_id, created_by=actor_id)
+        item.work = candidate_write(item, record["work"], merge=False)["work"]
+        item.citation_key = validate_citation_key(record.get("citation_key"))
+        items.append(item)
     db.add_all(items)
     await db.flush()
-    await _write_item_identifiers(db, prepared, replace=False)
     for item in items:
         if not item.citation_key:
             item.citation_key = generate_citation_key(item)

@@ -8,7 +8,7 @@ from uuid import uuid4
 import pymupdf
 import pytest
 from advanced_alchemy.types import FileObject
-from item_helpers import contributor
+from item_helpers import contributor, work_identifier
 from sqlalchemy import func, select, update
 from workspace_helpers import provision_initial_workspace
 
@@ -19,13 +19,7 @@ from quirebase.core.errors import (
     VersionConflict,
 )
 from quirebase.core.storage import ObjectSuffix, get_object_store
-from quirebase.library import (
-    ExternalIdentifier,
-    ItemMetadata,
-    copy_item_to_workspace,
-    revise_item_metadata,
-    stage_pdf_import_batch,
-)
+from quirebase.library import copy_item_to_workspace, revise_item_metadata, stage_pdf_import_batch
 from quirebase.library.imports import extract_pdf_import_doi
 from quirebase.models import (
     Attachment,
@@ -33,7 +27,6 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
-    ItemIdentifier,
     User,
     WorkspaceMember,
     WorkspaceRole,
@@ -48,7 +41,7 @@ async def provision_actor(db, username):
     db.add(actor)
     await db.flush()
     workspace = await provision_initial_workspace(db, actor)
-    return actor, workspace.id
+    return (actor, workspace.id)
 
 
 @pytest.mark.parametrize("rejection", ["foreign_identity", "viewer", "stale_version"])
@@ -66,34 +59,28 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
                 invited_by=other.id,
             )
         )
-        own = Item(workspace_id=own_workspace_id, created_by=actor.id, title="Protected local")
+        own = Item(
+            workspace_id=own_workspace_id,
+            created_by=actor.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Protected local"},
+        )
         foreign = Item(
-            workspace_id=foreign_workspace_id, created_by=other.id, title="Protected foreign"
+            workspace_id=foreign_workspace_id,
+            created_by=other.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Protected foreign"},
         )
         db.add_all([own, foreign])
         await db.flush()
         for item in (own, foreign):
-            item.authors = [
-                {
-                    "display_name": "Protected, Contributor",
-                    "family_name": "Protected",
-                    "given_name": "Contributor",
-                    "is_corresponding": False,
-                }
-            ]
-            db.add(
-                ItemIdentifier(
-                    workspace_id=item.workspace_id,
-                    item_id=item.id,
-                    provider="pmid",
-                    value="protected-id",
-                )
-            )
+            item.work = {
+                **item.work,
+                "contributors": [contributor("Protected", "Contributor")],
+                "identifiers": [work_identifier("pmid", "42")],
+            }
             await search_index(db).index_item(db, item.id)
         await db.commit()
-        own_id, foreign_id = own.id, foreign.id
+        own_id, foreign_id = (own.id, foreign.id)
         enqueues_before = list(fake_durable_operations.enqueues)
-
         target_workspace_id, target_id, expected_version, error = (
             own_workspace_id,
             foreign_id,
@@ -101,9 +88,9 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
             ResourceUnavailable,
         )
         if rejection == "viewer":
-            target_workspace_id, error = foreign_workspace_id, PermissionDenied
+            target_workspace_id, error = (foreign_workspace_id, PermissionDenied)
         elif rejection == "stale_version":
-            target_id, expected_version, error = own_id, 0, VersionConflict
+            target_id, expected_version, error = (own_id, 0, VersionConflict)
         with pytest.raises(error):
             await revise_item_metadata(
                 db,
@@ -111,31 +98,22 @@ async def test_metadata_rejection_preserves_roots_links_search_and_durable_side_
                 target_workspace_id,
                 target_id,
                 expected_version,
-                ItemMetadata(
-                    title="Mutation candidate",
-                    authors=(contributor("Replacement", "Contributor"),),
-                    identifiers=(ExternalIdentifier("pmid", "replacement-id"),),
-                ),
+                {
+                    "id": f"urn:uuid:{uuid4()}",
+                    "type": "Document",
+                    "title": "Mutation candidate",
+                    "contributors": (contributor("Replacement", "Contributor"),),
+                    "identifiers": (work_identifier("pmid", "replacement-id"),),
+                },
             )
         assert not db.in_transaction()
         assert fake_durable_operations.enqueues == enqueues_before
-
         async with persistence_sessions() as observer:
             for item_id, title in ((own_id, "Protected local"), (foreign_id, "Protected foreign")):
                 persisted = await observer.get(Item, item_id)
-                assert (persisted.title, persisted.version) == (title, 1)
-                assert persisted.authors == [
-                    {
-                        "display_name": "Protected, Contributor",
-                        "family_name": "Protected",
-                        "given_name": "Contributor",
-                        "is_corresponding": False,
-                    }
-                ]
-                identifier = await observer.scalar(
-                    select(ItemIdentifier).where(ItemIdentifier.item_id == item_id)
-                )
-                assert (identifier.provider, identifier.value) == ("pmid", "protected-id")
+                assert (persisted.work.get("title"), persisted.version) == (title, 1)
+                assert persisted.work["contributors"] == [contributor("Protected", "Contributor")]
+                assert persisted.work["identifiers"] == [work_identifier("pmid", "42")]
             assert (
                 await observer.scalar(
                     select(func.count())
@@ -166,7 +144,11 @@ async def test_copy_rejects_metadata_only_descriptor_changes_and_cleans_copied_o
                 invited_by=other.id,
             )
         )
-        source = Item(workspace_id=source_workspace_id, created_by=actor.id, title="Copy source")
+        source = Item(
+            workspace_id=source_workspace_id,
+            created_by=actor.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Copy source"},
+        )
         db.add(source)
         await db.flush()
         store = get_object_store()
@@ -184,14 +166,14 @@ async def test_copy_rejects_metadata_only_descriptor_changes_and_cleans_copied_o
             ),
         )
         db.add(revision)
-        changed_root, changed_model, changed_column = revision, FileRevision, FileRevision.file
+        changed_root, changed_model, changed_column = (revision, FileRevision, FileRevision.file)
         changed_file = revision.file
         if descriptor_kind == "thumbnail":
             image = await store.put_object(uuid4(), ObjectSuffix.PNG, b"thumbnail", max_bytes=100)
             revision.thumbnail = FileObject(
                 backend="documents", filename=image.key, size=image.size, metadata={"page": 1}
             )
-            changed_column, changed_file = FileRevision.thumbnail, revision.thumbnail
+            changed_column, changed_file = (FileRevision.thumbnail, revision.thumbnail)
         elif descriptor_kind == "attachment":
             extra = await store.put_object(
                 uuid4(), ObjectSuffix.BINARY, b"attachment", max_bytes=100
@@ -208,12 +190,12 @@ async def test_copy_rejects_metadata_only_descriptor_changes_and_cleans_copied_o
                 ),
             )
             db.add(attachment)
-            changed_root, changed_model, changed_column = attachment, Attachment, Attachment.file
+            changed_root, changed_model, changed_column = (attachment, Attachment, Attachment.file)
             changed_file = attachment.file
         await db.commit()
-        source_id, changed_id, changed_path = source.id, changed_root.id, changed_file.path
+        source_id, changed_id, changed_path = (source.id, changed_root.id, changed_file.path)
         changed_descriptor = FileObject(
-            **(changed_file.to_dict() | {"metadata": {"generation": "changed"}})
+            **changed_file.to_dict() | {"metadata": {"generation": "changed"}}
         )
         copied_paths: list[str] = []
         enqueues_before = list(fake_durable_operations.enqueues)
@@ -283,7 +265,7 @@ async def test_pdf_durable_inputs_remain_replayable_after_live_descriptor_metada
         actor, workspace_id = await provision_actor(db, "snapshot-actor")
         await db.commit()
         preview = await stage_pdf_import_batch(
-            db, actor, workspace_id, [(contents, "uploaded.pdf")], max_bytes=100_000
+            db, actor, workspace_id, [(contents, "uploaded.pdf")], max_bytes=100000
         )
         batch = await db.get(ImportBatch, preview.id)
         message = next(
@@ -295,17 +277,15 @@ async def test_pdf_durable_inputs_remain_replayable_after_live_descriptor_metada
         checkpoint = tmp_path / "durable-inputs.json"
         checkpoint.write_text(json.dumps(pending), encoding="utf-8")
         file = batch.staged_files[0]
-        source_id, path, size = file.metadata["source_id"], file.path, file.size
+        source_id, path, size = (file.metadata["source_id"], file.path, file.size)
         await db.execute(
             update(ImportBatch)
             .where(ImportBatch.id == batch.id)
             .values(
                 staged_files=[
                     FileObject(
-                        **(
-                            file.to_dict()
-                            | {"metadata": file.metadata | {"original_name": "renamed.pdf"}}
-                        )
+                        **file.to_dict()
+                        | {"metadata": file.metadata | {"original_name": "renamed.pdf"}}
                     )
                 ]
             )

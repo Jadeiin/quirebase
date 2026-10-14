@@ -31,8 +31,16 @@ async def test_shared_legacy_cas_migrates_to_independent_uuid_objects(async_db):
     store = get_object_store()
     await store.put(old_key, content)
     user = await _user(async_db, "migration-owner")
-    first_item = Item(workspace_id=fixture_workspace_id(user), title="First", created_by=user.id)
-    second_item = Item(workspace_id=fixture_workspace_id(user), title="Second", created_by=user.id)
+    first_item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "First"},
+    )
+    second_item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Second"},
+    )
     async_db.add_all([first_item, second_item])
     await async_db.flush()
     first = FileRevision(
@@ -110,7 +118,11 @@ async def test_reconciliation_deletes_only_old_unreferenced_managed_objects(
     os.utime(object_root / active_thumbnail.key, (cutoff, cutoff))
 
     user = await _user(async_db, "reconcile-owner")
-    item = Item(workspace_id=fixture_workspace_id(user), title="Referenced", created_by=user.id)
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Referenced"},
+    )
     async_db.add(item)
     await async_db.flush()
     async_db.add(
@@ -207,8 +219,8 @@ async def test_migration_repeat_cleans_legacy_thumbnail_when_target_is_recorded(
     user = await _user(async_db, "thumbnail-migration-owner")
     item = Item(
         workspace_id=fixture_workspace_id(user),
-        title="Thumbnail migration",
         created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Thumbnail migration"},
     )
     async_db.add(item)
     await async_db.flush()

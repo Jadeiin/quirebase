@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from advanced_alchemy.types import GUID
 from sqlalchemy import bindparam, false, select, text
-from sqlalchemy.orm import selectinload
 
 from quirebase.models import FileRevision, Item
 from quirebase.search.content import search_text_for_item, search_text_for_revision
@@ -22,7 +21,6 @@ class SQLiteSearchIndex:
         item = await db.scalar(
             select(Item)
             .where(Item.id == item_id)
-            .options(selectinload(Item.identifier_links))
             .execution_options(populate_existing=True)
             .with_for_update(read=True)
         )

@@ -215,14 +215,13 @@ async def extract_pdf_import_doi_step(pending: dict[str, Any]) -> dict[str, Any]
 
 
 @ads.transaction(isolation_level="READ COMMITTED")
-async def check_pdf_import_doi_step(
+async def check_pdf_import_eligibility_step(
     batch_id: UUID,
     pending: dict[str, Any],
-    detected_doi: str,
 ) -> dict[str, Any]:
-    from .imports import check_pdf_import_doi
+    from .imports import check_pdf_import_eligibility
 
-    return await check_pdf_import_doi(ads.sql_session(), batch_id, pending, detected_doi)
+    return await check_pdf_import_eligibility(ads.sql_session(), batch_id, pending)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
@@ -281,7 +280,7 @@ async def prepare_pdf_import_workflow(
             result = await extract_pdf_import_doi_step(pending)
             detected_doi = result.get("detected_doi")
             if isinstance(detected_doi, str):
-                result = await check_pdf_import_doi_step(batch_id, pending, detected_doi)
+                result = await check_pdf_import_eligibility_step(batch_id, pending)
                 if result.get("eligible"):
                     result = await lookup_pdf_import_candidate_step(batch_id, pending, detected_doi)
             normalized_doi = result.get("normalized_doi")
@@ -290,11 +289,11 @@ async def prepare_pdf_import_workflow(
                 errors.append({
                     "row": pending["_row"],
                     "filename": pdf["original_name"],
+                    "severity": "warning",
                     "code": "duplicate_batch_doi",
                     "message": "another PDF in this batch has the same DOI",
                 })
-                rejected_keys.append(pdf["object_key"])
-            elif isinstance(result.get("record"), dict):
+            if isinstance(result.get("record"), dict):
                 records.append(result["record"])
                 if isinstance(normalized_doi, str):
                     seen_dois.add(normalized_doi)

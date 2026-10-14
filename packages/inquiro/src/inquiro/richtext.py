@@ -17,7 +17,7 @@ from pylatexenc.latexencode import (  # type: ignore[import-untyped]
 
 type RichTextSource = Literal["html", "latex", "text"]
 type RichTextTarget = Literal["html", "latex", "text"]
-type LatexEncoding = Literal["unicode", "latex"]
+type LatexEncoding = Literal["unicode", "latex", "bibtex", "bibtex-latex"]
 
 _HTML_TAGS = {
     "em": "i",
@@ -40,6 +40,13 @@ _LATEX_COMMANDS = {
     "b": "textbf",
     "sup": "textsuperscript",
     "sub": "textsubscript",
+}
+_LATEX_SYMBOLS = {
+    "textbraceleft": "{",
+    "textbraceright": "}",
+    "textbackslash": "\\",
+    "textasciicircum": "^",
+    "textasciitilde": "~",
 }
 _DROP_CONTENT_TAGS = {"script", "style", "template"}
 _HTML_SEPARATOR_TAGS = {
@@ -94,6 +101,31 @@ _UNICODE_LATEX_ENCODER = UnicodeToLatexEncoder(
         )
     ],
     replacement_latex_protection="none",
+    unknown_char_policy="keep",
+    unknown_char_warning=False,
+)
+_BIBTEX_ESCAPE_RULE = UnicodeToLatexConversionRule(
+    RULE_DICT,
+    {
+        ord("#"): r"\#",
+        ord("%"): r"\%",
+        ord("&"): r"\&",
+        ord("_"): r"\_",
+        ord("~"): r"\textasciitilde{}",
+        ord("^"): r"\textasciicircum{}",
+        ord("\\"): r"\textbackslash{}",
+        ord("{"): r"\textbraceleft{}",
+        ord("}"): r"\textbraceright{}",
+    },
+)
+_BIBTEX_LATEX_ENCODER = UnicodeToLatexEncoder(
+    conversion_rules=[_BIBTEX_ESCAPE_RULE],
+    replacement_latex_protection="none",
+    unknown_char_policy="keep",
+    unknown_char_warning=False,
+)
+_BIBTEX_ASCII_ENCODER = UnicodeToLatexEncoder(
+    conversion_rules=[_BIBTEX_ESCAPE_RULE, "defaults"],
     unknown_char_policy="keep",
     unknown_char_warning=False,
 )
@@ -241,7 +273,13 @@ def _render_latex_text(value: str, encoding: LatexEncoding) -> str:
 
 
 def _encode_latex_segment(value: str, encoding: LatexEncoding) -> str:
-    encoded = _encode_pure_latex(value) if encoding == "latex" else _encode_unicode_latex(value)
+    if encoding in {"bibtex", "bibtex-latex"}:
+        # Work text is literal outside inline math. Escape delimiters as well
+        # as printable TeX specials before it enters a BibTeX field.
+        encoder = _BIBTEX_ASCII_ENCODER if encoding == "bibtex-latex" else _BIBTEX_LATEX_ENCODER
+        encoded = encoder.unicode_to_latex(value)
+    else:
+        encoded = _encode_pure_latex(value) if encoding == "latex" else _encode_unicode_latex(value)
     return encoded.replace("$", r"\$")
 
 
@@ -502,10 +540,19 @@ class _LaTeXRichTextParser:
                 tag = _LATEX_TAGS.get(command)
                 if tag:
                     parts.append(_Tag(tag, argument))
+                elif command in _LATEX_SYMBOLS:
+                    # These printable symbols take no argument. Our BibTeX writer
+                    # terminates them with {}, which must not erase their text.
+                    parts.append(_LATEX_SYMBOLS[command])
+                    parts.extend(_iter_nodes(argument))
                 else:
                     parts.extend(_iter_nodes(argument))
                 continue
-            plain.append(self.value[command_start : self.position])
+            if command in _LATEX_SYMBOLS:
+                flush()
+                parts.append(_LATEX_SYMBOLS[command])
+            else:
+                plain.append(self.value[command_start : self.position])
 
         flush()
         return _Text(tuple(parts)).root()

@@ -161,7 +161,8 @@ def test_openapi_media_type_contracts() -> None:
         "text/plain",
         "application/x-bibtex",
         "application/x-research-info-systems",
-        "application/x-endnote-refer",
+        "application/vnd.commonmeta+json",
+        "application/vnd.citationstyles.csl+json",
     }
     for bib_path, method in [
         ("/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography", "get"),

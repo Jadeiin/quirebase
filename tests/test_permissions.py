@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
@@ -32,7 +33,11 @@ async def test_item_access_is_workspace_membership_not_creator_or_project_partic
             invited_by=owner.id,
         )
     )
-    item = Item(workspace_id=workspace_id, title="Paper", created_by=owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Paper"},
+    )
     db.add(item)
     await db.commit()
 

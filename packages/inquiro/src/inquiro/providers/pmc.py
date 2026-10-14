@@ -6,10 +6,9 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
-from inquiro.canonical import (
-    clean_rich_markup,
-    first_text,
-)
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import clean_rich_markup, first_text
 from inquiro.identifiers import parse_pmcid
 from inquiro.models import (
     AcquiredDocument,
@@ -25,6 +24,8 @@ from inquiro.providers._contracts import ProviderDefinition, RemoteNotFound
 from inquiro.providers._payload import (
     ncbi_contributors,
     ncbi_summaries,
+    source_identifiers,
+    source_work_id,
 )
 
 if TYPE_CHECKING:
@@ -59,13 +60,23 @@ class PmcSearchAdapter:
                 CandidateRecord(
                     provider="pmc",
                     lookup_identifier=identity,
-                    identifiers=tuple(Identifier(key, value) for key, value in identities.items()),
-                    title=title,
-                    authors=ncbi_contributors(summary),
-                    publication_title=first_text(
-                        summary.get("fulljournalname") or summary.get("source")
-                    ),
-                    publication_date=first_text(summary.get("pubdate")),
+                    work=compact({
+                        "id": source_work_id(
+                            tuple((Identifier(key, value) for key, value in identities.items()))
+                        ),
+                        "type": "JournalArticle",
+                        "title": title,
+                        "contributors": ncbi_contributors(summary),
+                        "date_published": first_text(summary.get("pubdate")),
+                        "identifiers": source_identifiers(
+                            tuple((Identifier(key, value) for key, value in identities.items()))
+                        ),
+                        "container": compact({
+                            "title": first_text(
+                                summary.get("fulljournalname") or summary.get("source")
+                            )
+                        }),
+                    }),
                 )
             )
         return CandidatePage("pmc", tuple(results), total, request.page, request.per_page)
@@ -73,21 +84,10 @@ class PmcSearchAdapter:
 
 class PmcDocumentAdapter:
     async def acquire(
-        self,
-        client: BoundedTransport,
-        value: str,
-        settings: ProviderConfig,
-        *,
-        endpoint: str,
+        self, client: BoundedTransport, value: str, settings: ProviderConfig, *, endpoint: str
     ) -> AcquiredDocument:
         listing = await client.get(
-            endpoint,
-            {
-                "list-type": "2",
-                "prefix": f"{value}.",
-                "delimiter": "/",
-                "max-keys": "100",
-            },
+            endpoint, {"list-type": "2", "prefix": f"{value}.", "delimiter": "/", "max-keys": "100"}
         )
         try:
             root = ElementTree.fromstring(listing)
@@ -98,7 +98,7 @@ class PmcDocumentAdapter:
             for element in root.iter()
             if element.tag.rsplit("}", 1)[-1] == "Prefix"
             and (prefix := (element.text or "").strip())
-            and (match := re.fullmatch(rf"{re.escape(value)}\.(\d+)/", prefix))
+            and (match := re.fullmatch(f"{re.escape(value)}\\.(\\d+)/", prefix))
         ]
         if not versions:
             raise PdfNotAvailable("PMC article dataset was not found")

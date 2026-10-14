@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from quirebase.access.items import require_readable_item
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.models import Attachment, FileRevision, Item, User
+from quirebase.models import Attachment, FileRevision, User
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -21,7 +21,7 @@ async def require_revision(
     revision = await db.scalar(
         select(FileRevision)
         .options(
-            selectinload(FileRevision.item).selectinload(Item.identifier_links),
+            selectinload(FileRevision.item),
         )
         .where(
             FileRevision.id == revision_id,

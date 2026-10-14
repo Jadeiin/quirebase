@@ -261,7 +261,7 @@ test('only validated Citation Key formulas replace the saved preference', async 
 	await page.goto('/account');
 	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
 	const formula = page.getByLabel('Citation Key formula');
-	await page.getByRole('tab', { name: 'BibTeX / BibLaTeX', exact: true }).click();
+	await page.getByRole('tab', { name: 'BibTeX', exact: true }).click();
 	await expect(formula).toHaveValue(defaultCitationKeyFormula);
 	await formula.fill('broken(');
 	await expect.poll(() => previewedFormula).toBe('broken(');
@@ -302,13 +302,15 @@ test('Citation Key preview loads without a Workspace and follows formula and ASC
 	});
 	await page.goto('/account');
 	await expect.poll(() => requests.length).toBeGreaterThan(0);
-	await page.getByRole('tab', { name: 'BibTeX / BibLaTeX', exact: true }).click();
+	await page.getByRole('tab', { name: 'BibTeX', exact: true }).click();
 	const preview = page.getByLabel('Preview Citation Key');
 	await expect(preview).toHaveText(`${defaultCitationKeyFormula}:ascii`);
 	await page.getByLabel('Citation Key formula').fill('auth + year');
 	await expect(preview).toHaveText('auth + year:ascii');
 	await page.getByLabel('Use ASCII characters only').uncheck();
 	await expect(preview).toHaveText('auth + year:unicode');
-	await expect(page.getByLabel('Encoding')).toBeVisible();
+	await expect(page.getByRole('combobox', { name: 'BibTeX character representation' })).toHaveValue(
+		'unicode'
+	);
 	await expect(page.getByLabel('Default CSL style')).not.toBeVisible();
 });

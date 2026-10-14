@@ -349,7 +349,15 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 			.getByRole('option', { name: 'Custom style', exact: true })
 			.click();
 		await page.getByLabel('Default citation format').selectOption('bibtex');
-		await page.getByLabel('Include additional identifiers').check();
+		await page.getByLabel('Include abstract').uncheck();
+		await page
+			.getByRole('combobox', { name: 'BibTeX character representation' })
+			.selectOption('latex');
+		await page.getByRole('checkbox', { name: 'Preserve BibTeX title case' }).check();
+		await page.getByRole('combobox', { name: 'Output sorting' }).selectOption('author');
+		await page.getByRole('combobox', { name: 'DOI policy' }).selectOption('omit');
+		await page.getByRole('combobox', { name: 'URL policy' }).selectOption('omit_when_doi');
+		await page.getByRole('textbox', { name: 'Excluded fields' }).fill('abstract, publisher');
 		await expect
 			.poll(() =>
 				page.evaluate(
@@ -358,7 +366,22 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 							.citation
 				)
 			)
-			.toMatchObject({ format: 'bibtex', includeIdentifiers: true });
+			.toMatchObject({
+				format: 'bibtex',
+				includeAbstract: false,
+				encoding: 'latex',
+				preserveCase: true,
+				doiPolicy: 'omit',
+				urlPolicy: 'omit_when_doi',
+				excludedFields: 'abstract, publisher',
+				sortBy: 'author'
+			});
+		await page.reload();
+		await page.getByRole('tab', { name: 'BibTeX', exact: true }).click();
+		await expect(
+			page.getByRole('combobox', { name: 'BibTeX character representation' })
+		).toHaveValue('latex');
+		await expect(page.getByRole('checkbox', { name: 'Preserve BibTeX title case' })).toBeChecked();
 
 		let exportBody: Record<string, unknown> | null = null;
 		await page.route(`**/api/v1/workspaces/${workspaceId}/items*`, (route) =>
@@ -404,25 +427,37 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 			.toMatchObject({
 				file_format: 'bibtex',
 				style: workspaceId === 'workspace-1' ? 'custom-style-1' : 'apa',
-				include_identifiers: true
+				include_abstract: false,
+				encoding: 'latex',
+				preserve_case: true,
+				doi_policy: 'omit',
+				url_policy: 'omit_when_doi',
+				sort_by: 'author',
+				excluded_fields: ['abstract', 'publisher']
 			});
 
 		await page.route(`**/api/v1/workspaces/${workspaceId}/items/item-1/overview`, (route) =>
 			route.fulfill({
 				json: {
+					metadata: {
+						id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+						type: 'Other',
+						title: 'Exportable'
+					},
+					citation_key: null,
 					item: { id: 'item-1', title_html: 'Exportable', version: 1 },
 					latest_revision: null,
 					authorization: { allowed: ['workspace.export'] },
 					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 					tags: [],
-					identifiers: [],
+
 					copy_targets: []
 				}
 			})
 		);
-		let itemStyle: string | null = null;
+		let itemParameters: URLSearchParams | null = null;
 		await page.route(`**/api/v1/workspaces/${workspaceId}/items/item-1/bibliography?*`, (route) => {
-			itemStyle = new URL(route.request().url()).searchParams.get('style');
+			itemParameters = new URL(route.request().url()).searchParams;
 			return route.fulfill({
 				body: '@article{Reader2026}',
 				headers: { 'Content-Disposition': 'attachment; filename="item.bib"' }
@@ -432,8 +467,16 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 		await page.getByRole('button', { name: 'Export', exact: true }).click();
 		await page.getByRole('button', { name: 'Download file' }).click();
 		await expect
-			.poll(() => itemStyle)
+			.poll(() => itemParameters?.get('style'))
 			.toBe(workspaceId === 'workspace-1' ? 'custom-style-1' : 'apa');
+		expect(Object.fromEntries(itemParameters!)).toMatchObject({
+			encoding: 'latex',
+			preserve_case: 'true',
+			doi_policy: 'omit',
+			url_policy: 'omit_when_doi',
+			sort_by: 'author'
+		});
+		expect(itemParameters!.getAll('excluded_fields')).toEqual(['abstract', 'publisher']);
 	});
 }
 

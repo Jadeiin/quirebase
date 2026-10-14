@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { pdfFileUrls, type Metadata } from '../metadata-draft.js';
+	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { resolve } from '$app/paths';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { kilobytes, numberFormat } from '#lib/format.js';
 	import Panel from '#lib/design/Panel.svelte';
 	import { t } from '#lib/i18n.js';
-	import type { FileRow, FilesView, ItemDetail } from '../types';
+	import type { FileRow, FilesView } from '../types';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -13,7 +15,7 @@
 	let {
 		itemId,
 		data,
-		details,
+		metadata,
 		canEdit,
 		canDelete,
 		busy,
@@ -24,7 +26,7 @@
 	} = $props<{
 		itemId: string;
 		data: FilesView;
-		details?: ItemDetail;
+		metadata: Metadata;
 		canEdit: boolean;
 		canDelete: boolean;
 		busy: boolean;
@@ -35,6 +37,16 @@
 	}>();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
+	const pdfOptions = $derived(pdfFileUrls(metadata).map((url) => ({ value: url, label: url })));
+	let pdfUrl = $state<string | undefined>(undefined);
+	let pdfSearch = $state<string | null>(null);
+	let draftItemId = $state<string | undefined>(undefined);
+	$effect(() => {
+		if (draftItemId === itemId) return;
+		draftItemId = itemId;
+		pdfUrl = undefined;
+		pdfSearch = null;
+	});
 </script>
 
 <div class="grid grid-cols-1 gap-4 min-[800px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
@@ -93,19 +105,23 @@
 				as="form"
 				class="grid grid-cols-1 gap-3"
 				onsubmit={(event) => onUploadFromUrl(event, 'revision')}
+				onreset={() => {
+					pdfUrl = '';
+					pdfSearch = null;
+				}}
 			>
 				<h2>{$t('Add a PDF from URL')}</h2>
-				<input
-					class="input"
-					name="url"
-					type="url"
-					disabled={busy}
-					value={details?.metadata.urls.find(
-						(link: ItemDetail['metadata']['urls'][number]) =>
-							link.media_type === 'application/pdf' || link.url.toLowerCase().includes('.pdf')
-					)?.url ?? ''}
-					placeholder="https://example.org/article.pdf"
+				<SearchSelect
+					label={$t('PDF URL')}
+					inputName="url"
+					inputType="url"
+					allowCustomValue
 					required
+					disabled={busy}
+					bind:value={() => pdfUrl ?? pdfOptions[0]?.value ?? '', (next) => (pdfUrl = next)}
+					bind:search={pdfSearch}
+					options={pdfOptions}
+					placeholder="https://example.org/article.pdf"
 				/><Button disabled={busy}>{$t('Download and add PDF')}</Button>
 			</Panel>
 			<Panel

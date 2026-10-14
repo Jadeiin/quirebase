@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 import string
+from contextlib import suppress
 from typing import TYPE_CHECKING
+from urllib.parse import unquote, urlsplit
 
 from inquiro.models import Identifier, InvalidProviderRequest
 
@@ -24,7 +26,14 @@ IEEE_PATTERN = re.compile(r"\d{1,12}")
 def normalize_doi(value: str) -> str:
     """Strip DOI resolver prefixes without changing other identifier namespaces."""
     cleaned = value.strip()
-    cleaned = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", cleaned, flags=re.IGNORECASE)
+    if resolver := re.match(r"^https?://(?:dx\.)?doi\.org/", cleaned, flags=re.IGNORECASE):
+        cleaned = cleaned[resolver.end() :]
+        # Decode a resolver URI once. A bare DOI's literal percent sequences
+        # belong to the identifier and must not be interpreted as URI escapes.
+        # Keep undecodable octets distinct instead of replacing them with one
+        # replacement character and introducing false DOI matches.
+        with suppress(UnicodeDecodeError):
+            cleaned = unquote(cleaned, errors="strict")
     return re.sub(r"^doi:\s*", "", cleaned, flags=re.IGNORECASE)
 
 
@@ -38,17 +47,44 @@ def canonical_doi(value: str) -> str:
 def parse_doi(candidate: str, alias: str) -> Identifier | None:
     if not DOI_PATTERN.fullmatch(candidate):
         return None
-    provider = alias if alias in ("crossref", "datacite") else "doi"
+    # Keep an explicitly selected DOI source; the catalog validates aliases.
+    provider = "doi" if alias == "auto" else alias
     return Identifier(provider, candidate.rstrip(".,; "))
 
 
 def parse_pmid(candidate: str, _alias: str) -> Identifier | None:
     value = re.sub(r"^pmid:\s*", "", candidate, flags=re.IGNORECASE)
+    if "://" in candidate:
+        try:
+            uri = urlsplit(candidate)
+        except ValueError:
+            return None
+        if uri.scheme not in {"http", "https"}:
+            return None
+        if uri.hostname == "pubmed.ncbi.nlm.nih.gov":
+            value = uri.path.strip("/")
+        elif uri.hostname == "www.ncbi.nlm.nih.gov" and uri.path.startswith("/pubmed/"):
+            value = uri.path.removeprefix("/pubmed/").rstrip("/")
+        else:
+            return None
     return Identifier("pmid", value) if PMID_PATTERN.fullmatch(value) else None
 
 
 def parse_pmcid(candidate: str, alias: str) -> Identifier | None:
     value = re.sub(r"^pmcid?:\s*", "", candidate, flags=re.IGNORECASE)
+    if "://" in candidate:
+        try:
+            uri = urlsplit(candidate)
+        except ValueError:
+            return None
+        if uri.scheme not in {"http", "https"}:
+            return None
+        if uri.hostname == "pmc.ncbi.nlm.nih.gov" and uri.path.startswith("/articles/"):
+            value = uri.path.removeprefix("/articles/").rstrip("/")
+        elif uri.hostname == "www.ncbi.nlm.nih.gov" and uri.path.startswith("/pmc/articles/"):
+            value = uri.path.removeprefix("/pmc/articles/").rstrip("/")
+        else:
+            return None
     if value.isdigit() and alias in {"pmc", "pmcid"}:
         value = f"PMC{value}"
     return Identifier("pmcid", value.upper()) if PMCID_PATTERN.fullmatch(value) else None

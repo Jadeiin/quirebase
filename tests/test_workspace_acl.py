@@ -172,7 +172,6 @@ def test_effective_resource_actions_follow_workspace_lifecycle():
     governance_frozen = effective_resource_actions(
         WorkspaceRole.admin, WorkspaceState.active, governance_frozen=True
     )
-
     assert ResourceAction.item_create in active
     assert ResourceAction.workspace_delete not in active
     assert ResourceAction.project_create not in active
@@ -247,12 +246,10 @@ async def test_workspace_member_directory_and_governance_projections(async_db):
         ),
     ])
     await async_db.commit()
-
     directory, _ = await list_workspace_members(
         async_db, await resolve_workspace_context(async_db, active, workspace_id)
     )
     assert {member.user_id for member in directory} == {owner.id, active.id}
-
     governance, _ = await list_workspace_governance_members(
         async_db, await resolve_workspace_context(async_db, owner, workspace_id)
     )
@@ -284,12 +281,12 @@ async def _shared_annotation_context(db, name: str):
             invited_by=author.id,
         )
     )
-    item = Item(workspace_id=workspace_id, title=name, created_by=author.id)
-    project = Project(
+    item = Item(
         workspace_id=workspace_id,
-        name=name,
         created_by=author.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": name},
     )
+    project = Project(workspace_id=workspace_id, name=name, created_by=author.id)
     db.add_all([item, project])
     await db.flush()
     project_item = ProjectItem(
@@ -331,7 +328,7 @@ async def _shared_annotation_context(db, name: str):
     )
     db.add(reply)
     await db.commit()
-    return author, viewer, item, project, revision, annotation, reply
+    return (author, viewer, item, project, revision, annotation, reply)
 
 
 @pytest.mark.anyio
@@ -348,10 +345,7 @@ async def test_annotation_editability_projection_uses_bounded_database_queries(a
     await async_db.flush()
     assignments = [
         ProjectItem(
-            workspace_id=workspace_id,
-            project_id=project.id,
-            item_id=item.id,
-            added_by=author.id,
+            workspace_id=workspace_id, project_id=project.id, item_id=item.id, added_by=author.id
         )
         for project in projects
     ]
@@ -385,7 +379,6 @@ async def test_annotation_editability_projection_uses_bounded_database_queries(a
     ]
     async_db.add_all(additional_replies)
     await async_db.commit()
-
     records = [annotation, *additional_annotations]
     replies = [reply, *additional_replies]
 
@@ -403,7 +396,7 @@ async def test_annotation_editability_projection_uses_bounded_database_queries(a
             result = await coroutine
         finally:
             event.remove(engine, "before_cursor_execute", record_query)
-        return result, count
+        return (result, count)
 
     single_ids, single_queries = await select_count(
         editable_annotation_ids(async_db, author, workspace_id, [annotation])
@@ -414,7 +407,6 @@ async def test_annotation_editability_projection_uses_bounded_database_queries(a
     assert single_ids == {annotation.id}
     assert all_ids == {record.id for record in records}
     assert all_queries <= single_queries + 1
-
     annotations_by_id = {record.id: record for record in records}
     single_reply_ids, single_reply_queries = await select_count(
         editable_annotation_reply_ids(async_db, author, workspace_id, [reply], annotations_by_id)
@@ -441,8 +433,7 @@ async def test_annotation_editability_projection_respects_managed_project_partic
     workspace_id = fixture_workspace_id(owner)
     membership = await async_db.scalar(
         select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == reviewer.id,
+            WorkspaceMember.workspace_id == workspace_id, WorkspaceMember.user_id == reviewer.id
         )
     )
     assert membership is not None
@@ -473,7 +464,6 @@ async def test_annotation_editability_projection_respects_managed_project_partic
     )
     async_db.add(reply)
     await async_db.commit()
-
     assert await editable_annotation_ids(async_db, reviewer, workspace_id, [record]) == set()
     assert (
         await editable_annotation_reply_ids(
@@ -481,7 +471,6 @@ async def test_annotation_editability_projection_respects_managed_project_partic
         )
         == set()
     )
-
     await add_project_participant(async_db, owner, workspace_id, project.id, reviewer.username)
     assert await editable_annotation_ids(async_db, reviewer, workspace_id, [record]) == {record.id}
     assert await editable_annotation_reply_ids(
@@ -503,8 +492,7 @@ async def test_annotation_reply_editability_projection_checks_each_reply_author(
     workspace_id = fixture_workspace_id(author)
     membership = await async_db.scalar(
         select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == reviewer.id,
+            WorkspaceMember.workspace_id == workspace_id, WorkspaceMember.user_id == reviewer.id
         )
     )
     assert membership is not None
@@ -517,7 +505,6 @@ async def test_annotation_reply_editability_projection_checks_each_reply_author(
     )
     async_db.add(reviewer_reply)
     await async_db.commit()
-
     assert await editable_annotation_reply_ids(
         async_db,
         reviewer,
@@ -541,8 +528,7 @@ async def test_annotation_editability_helpers_hide_missing_workspace_membership(
     workspace_id = fixture_workspace_id(author)
     successor_membership = await async_db.scalar(
         select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == successor.id,
+            WorkspaceMember.workspace_id == workspace_id, WorkspaceMember.user_id == successor.id
         )
     )
     await transfer_workspace_ownership(async_db, author, workspace_id, successor_membership.id)
@@ -555,7 +541,6 @@ async def test_annotation_editability_helpers_hide_missing_workspace_membership(
     )
     assert membership is not None
     await suspend_workspace_member(async_db, successor, workspace_id, membership.id)
-
     assert not await can_edit_annotation(async_db, author, workspace_id, annotation)
     assert (
         await editable_annotation_reply_ids(
@@ -569,7 +554,6 @@ async def test_annotation_editability_helpers_hide_missing_workspace_membership(
 async def test_workspace_provisioning_cannot_be_repeated_for_one_user(async_db):
     user = await _user(async_db, "provisioned")
     workspace_id = fixture_workspace_id(user)
-
     with pytest.raises(ValidationFailure, match="only available during User creation"):
         await provision_initial_workspace(async_db, user)
     assert (
@@ -601,7 +585,6 @@ async def test_ownership_transfer_does_not_prevent_another_workspace(async_db):
     async_db.add(successor_membership)
     await async_db.commit()
     await transfer_workspace_ownership(async_db, first_owner, workspace_id, successor_membership.id)
-
     with pytest.raises(ValidationFailure, match="only available during User creation"):
         await provision_initial_workspace(async_db, first_owner)
     async_db.add(SystemSetting(key="workspace_creation_policy", value="members_allowed"))
@@ -627,7 +610,6 @@ async def test_workspace_creation_allows_user_without_an_existing_workspace(asyn
     async_db.add(user)
     async_db.add(SystemSetting(key="workspace_creation_policy", value="members_allowed"))
     await async_db.commit()
-
     workspace = await create_workspace(async_db, user, "Explicitly created space")
     assert (
         await async_db.scalar(
@@ -647,19 +629,13 @@ async def test_invitation_acceptance_rechecks_user_status(async_db, async_sessio
     invitee = await _user(async_db, "invitation-status-invitee")
     workspace_id = fixture_workspace_id(owner)
     _invitation, token = await invite_workspace_member(
-        async_db,
-        owner,
-        workspace_id,
-        invitee.username,
-        WorkspaceRole.viewer,
+        async_db, owner, workspace_id, invitee.username, WorkspaceRole.viewer
     )
-
     async with async_session_factory() as status_db:
         current_invitee = await status_db.get(User, invitee.id)
         assert current_invitee is not None
         current_invitee.active = False
         await status_db.commit()
-
     with pytest.raises(ResourceNotFound, match="invitation"):
         await accept_workspace_invitation(async_db, invitee, workspace_id, token)
     assert (
@@ -680,13 +656,8 @@ async def test_invitation_acceptance_records_system_authorization(async_db):
     invitee = await _user(async_db, "invitation-audit-invitee")
     workspace_id = fixture_workspace_id(owner)
     _invitation, token = await invite_workspace_member(
-        async_db,
-        owner,
-        workspace_id,
-        invitee.username,
-        WorkspaceRole.viewer,
+        async_db, owner, workspace_id, invitee.username, WorkspaceRole.viewer
     )
-
     member = await accept_workspace_invitation(async_db, invitee, workspace_id, token)
     event = await async_db.scalar(
         select(AuditEvent).where(
@@ -694,7 +665,6 @@ async def test_invitation_acceptance_records_system_authorization(async_db):
             AuditEvent.target_id == str(member.id),
         )
     )
-
     assert event is not None
     assert event.authorization_role == invitee.role
     assert event.authorization_resource_action == "workspace_invitation.accept"
@@ -706,20 +676,14 @@ async def test_invitation_creation_audit_references_invitation_and_invitee(async
     invitee = await _user(async_db, "invitation-create-audit-invitee")
     workspace_id = fixture_workspace_id(owner)
     invitation, _token = await invite_workspace_member(
-        async_db,
-        owner,
-        workspace_id,
-        invitee.username,
-        WorkspaceRole.viewer,
+        async_db, owner, workspace_id, invitee.username, WorkspaceRole.viewer
     )
-
     event = await async_db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "workspace.invitation.create",
             AuditEvent.target_id == str(invitation.id),
         )
     )
-
     assert event is not None
     assert event.workspace_id == workspace_id
     assert event.detail == json_payload({"user_id": invitee.id, "role": "viewer"})
@@ -753,23 +717,15 @@ async def test_invitation_creation_rechecks_user_status(async_db, async_session_
     owner = await _user(async_db, "invitation-create-status-owner")
     invitee = await _user(async_db, "invitation-create-status-invitee")
     workspace_id = fixture_workspace_id(owner)
-
-    # Match the HTTP handler, which resolves the target User before entering
-    # the service and therefore leaves a stale identity-map entry behind.
     assert await async_db.get(User, invitee.id) is invitee
     async with async_session_factory() as status_db:
         current_invitee = await status_db.get(User, invitee.id)
         assert current_invitee is not None
         current_invitee.active = False
         await status_db.commit()
-
     with pytest.raises(ValidationFailure, match="exact active username"):
         await invite_workspace_member(
-            async_db,
-            owner,
-            workspace_id,
-            invitee.username,
-            WorkspaceRole.viewer,
+            async_db, owner, workspace_id, invitee.username, WorkspaceRole.viewer
         )
     assert (
         await async_db.scalar(
@@ -798,8 +754,6 @@ async def test_old_workspace_invitations_cannot_restore_access(async_db, members
     with pytest.raises(ResourceNotFound, match="invitation"):
         await accept_workspace_invitation(async_db, invitee, workspace_id, first_token)
     member = await accept_workspace_invitation(async_db, invitee, workspace_id, second_token)
-
-    # Cover a pending token left by an interrupted or older admission transaction.
     second.accepted_at = None
     second.revoked_at = None
     await async_db.commit()
@@ -814,7 +768,6 @@ async def test_old_workspace_invitations_cannot_restore_access(async_db, members
         await require_workspace_action(
             async_db, invitee, workspace_id, ResourceAction.workspace_read
         )
-
     if membership_action == "terminate":
         _new, new_token = await invite_workspace_member(
             async_db, owner, workspace_id, invitee.username, WorkspaceRole.viewer
@@ -848,7 +801,7 @@ async def test_pdf_viewer_hides_managed_project_contexts_from_nonparticipants(as
             project_id=managed_project.id,
             item_id=item.id,
             added_by=owner.id,
-        ),
+        )
     ])
     await async_db.commit()
 
@@ -897,22 +850,14 @@ async def test_admins_only_workspace_creation_requires_explicit_owner_username(a
     administrator.role = "administrator"
     initial_owner = await _user(async_db, "workspace-assigned-owner")
     await async_db.commit()
-
     with pytest.raises(PermissionDenied):
         await create_workspace(
-            async_db,
-            initial_owner,
-            "Unauthorized",
-            owner_username=initial_owner.username,
+            async_db, initial_owner, "Unauthorized", owner_username=initial_owner.username
         )
     with pytest.raises(ValidationFailure, match="owner_username is required"):
         await create_workspace(async_db, administrator, "Missing owner")
-
     created_by_admin = await create_workspace(
-        async_db,
-        administrator,
-        "Creator-owned",
-        owner_username=administrator.username,
+        async_db, administrator, "Creator-owned", owner_username=administrator.username
     )
     assert created_by_admin.created_by == administrator.id
     assert (
@@ -924,12 +869,8 @@ async def test_admins_only_workspace_creation_requires_explicit_owner_username(a
         )
         == administrator.id
     )
-
     created = await create_workspace(
-        async_db,
-        administrator,
-        "Admin-created",
-        owner_username=initial_owner.username,
+        async_db, administrator, "Admin-created", owner_username=initial_owner.username
     )
     assert created.created_by == administrator.id
     assert (
@@ -950,7 +891,6 @@ async def test_admins_only_workspace_creation_requires_explicit_owner_username(a
         )
         is None
     )
-
     assert (
         await async_db.scalar(
             select(WorkspaceMember.id).where(
@@ -968,12 +908,12 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
 ):
     owner = await _user(async_db, "purge-owner")
     workspace_id = fixture_workspace_id(owner)
-    item = Item(workspace_id=workspace_id, title="Purged search term", created_by=owner.id)
-    project = Project(
+    item = Item(
         workspace_id=workspace_id,
-        name="Purged Project",
         created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Purged search term"},
     )
+    project = Project(workspace_id=workspace_id, name="Purged Project", created_by=owner.id)
     tag = Tag(
         workspace_id=workspace_id,
         name="Purged Tag",
@@ -1028,10 +968,7 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
     )
     async_db.add_all([
         ProjectItem(
-            workspace_id=workspace_id,
-            project_id=project.id,
-            item_id=item.id,
-            added_by=owner.id,
+            workspace_id=workspace_id, project_id=project.id, item_id=item.id, added_by=owner.id
         ),
         ItemTag(workspace_id=workspace_id, item_id=item.id, tag_id=tag.id),
         Attachment(
@@ -1069,9 +1006,8 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
     ])
     await search_index(async_db).index_item(async_db, item.id)
     await async_db.commit()
-    item_id, project_id, tag_id = item.id, project.id, tag.id
+    item_id, project_id, tag_id = (item.id, project.id, tag.id)
     annotation_ids = (annotation.id, reply.id)
-
     with pytest.raises(PermissionDenied):
         await delete_workspace(async_db, owner, workspace_id)
     await archive_workspace(async_db, owner, workspace_id)
@@ -1085,7 +1021,6 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
         days=get_settings().workspace_delete_retention_days + 1
     )
     await async_db.commit()
-
     monkeypatch.setattr("quirebase.workspaces.workflows.AsyncSessionLocal", async_session_factory)
     await delete_workspace(async_db, owner, workspace_id)
     async with async_session_factory() as check_db:
@@ -1097,13 +1032,11 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
         assert await check_db.get(PdfAnnotationReply, annotation_ids[1]) is None
         deletion_event = await check_db.scalar(
             select(AuditEvent).where(
-                AuditEvent.workspace_id == workspace_id,
-                AuditEvent.action == "workspace.delete",
+                AuditEvent.workspace_id == workspace_id, AuditEvent.action == "workspace.delete"
             )
         )
         assert deletion_event is not None
         assert await search_index(check_db).search(check_db, "Purged") == []
-
     cleanup = fake_durable_operations.enqueues[-1]
     assert cleanup["workflow_name"] == "workspaces.cleanup_deleted_objects"
     assert set(cleanup["attributes"]["object_keys"]) == {
@@ -1146,17 +1079,22 @@ async def test_workspace_context_and_lineage_query_are_explicit(async_db):
     other = await _user(async_db, "context-other")
     workspace_id = fixture_workspace_id(owner)
     context = await resolve_workspace_context(async_db, owner, workspace_id)
-
     assert context.actor_id == owner.id
     assert context.workspace_id == workspace_id
     assert ResourceAction.item_update in context.allowed_actions
     require_action(context, ResourceAction.item_update)
-
-    item = Item(workspace_id=workspace_id, title="Scoped", created_by=owner.id)
-    foreign = Item(workspace_id=fixture_workspace_id(other), title="Foreign", created_by=other.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Scoped"},
+    )
+    foreign = Item(
+        workspace_id=fixture_workspace_id(other),
+        created_by=other.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Foreign"},
+    )
     async_db.add_all([item, foreign])
     await async_db.commit()
-
     statement = workspace_select(Item, context).where(Item.id.in_([item.id, foreign.id]))
     assert [row.id for row in (await async_db.scalars(statement)).all()] == [item.id]
     assert await get_item(async_db, context, foreign.id) is None
@@ -1176,17 +1114,12 @@ async def test_managed_project_loaders_require_participation_or_workspace_govern
     )
     await async_db.commit()
     project = await create_project(
-        async_db,
-        owner,
-        fixture_workspace_id(owner),
-        "Members only",
-        ProjectParticipation.managed,
+        async_db, owner, fixture_workspace_id(owner), "Members only", ProjectParticipation.managed
     )
     context = await resolve_workspace_context(async_db, outsider, fixture_workspace_id(owner))
     assert await get_project(async_db, context, project.id) is None
     with pytest.raises(ResourceUnavailable, match="Project not found"):
         await require_project(async_db, context, project.id)
-
     owner_context = await resolve_workspace_context(async_db, owner, fixture_workspace_id(owner))
     assert await get_project(async_db, owner_context, project.id) is not None
     assert (await require_project(async_db, owner_context, project.id)).project.id == project.id
@@ -1211,7 +1144,6 @@ async def test_workspace_roles_are_the_only_item_authority(async_db):
         )
     )
     await async_db.commit()
-
     await require_workspace_action(
         async_db, viewer, fixture_workspace_id(owner), ResourceAction.workspace_read
     )
@@ -1235,8 +1167,7 @@ async def test_workspace_authorization_refreshes_cached_membership(async_session
         )
         db.add(membership)
         await db.commit()
-        owner_id, editor_id, membership_id = owner.id, editor.id, membership.id
-
+        owner_id, editor_id, membership_id = (owner.id, editor.id, membership.id)
     async with async_session_factory() as stale_db:
         cached_actor = await stale_db.get(User, editor_id)
         assert cached_actor is not None
@@ -1244,14 +1175,12 @@ async def test_workspace_authorization_refreshes_cached_membership(async_session
             stale_db, cached_actor, workspace_id, ResourceAction.item_update
         )
         await stale_db.commit()
-
         async with async_session_factory() as governor_db:
             governor = await governor_db.get(User, owner_id)
             assert governor is not None
             await set_workspace_member_role(
                 governor_db, governor, workspace_id, membership_id, WorkspaceRole.viewer
             )
-
         with pytest.raises(PermissionDenied):
             await require_workspace_action(
                 stale_db, cached_actor, workspace_id, ResourceAction.item_update
@@ -1285,11 +1214,7 @@ async def test_managed_project_is_visible_only_to_participants_and_workspace_gov
             ProjectParticipation.managed,
         )
     project = await create_project(
-        async_db,
-        owner,
-        fixture_workspace_id(owner),
-        "Scoped",
-        ProjectParticipation.managed,
+        async_db, owner, fixture_workspace_id(owner), "Scoped", ProjectParticipation.managed
     )
     assert [
         row[0].id
@@ -1306,7 +1231,6 @@ async def test_managed_project_is_visible_only_to_participants_and_workspace_gov
             await resolve_workspace_context(async_db, outsider, fixture_workspace_id(owner)),
         )
     )[0] == []
-
     with pytest.raises(ResourceUnavailable, match="Project not found"):
         await require_project_context(
             async_db,
@@ -1364,7 +1288,11 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
     project = await create_project(
         async_db, owner, workspace_id, "Managed editor mutations", ProjectParticipation.managed
     )
-    item = Item(workspace_id=workspace_id, title="Managed mutation Item", created_by=owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Managed mutation Item"},
+    )
     async_db.add(item)
     await async_db.commit()
     assert (
@@ -1372,7 +1300,6 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
             async_db, await resolve_workspace_context(async_db, editor, workspace_id)
         )
     )[0] == []
-
     with pytest.raises(ResourceUnavailable, match="Project not found"):
         await update_project_settings(
             async_db,
@@ -1389,7 +1316,6 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
         await set_project_state(async_db, editor, workspace_id, project.id, ProjectState.archived)
     await async_db.refresh(project)
     assert project.state is ProjectState.active
-
     await add_project_participant(async_db, owner, workspace_id, project.id, editor.username)
     await update_project_settings(
         async_db,
@@ -1404,8 +1330,7 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
     assert (
         await async_db.scalar(
             select(ProjectItem.id).where(
-                ProjectItem.project_id == project.id,
-                ProjectItem.item_id == item.id,
+                ProjectItem.project_id == project.id, ProjectItem.item_id == item.id
             )
         )
         is not None
@@ -1414,8 +1339,7 @@ async def test_managed_project_mutations_use_resource_actions(async_db):
     assert (
         await async_db.scalar(
             select(ProjectItem.id).where(
-                ProjectItem.project_id == project.id,
-                ProjectItem.item_id == item.id,
+                ProjectItem.project_id == project.id, ProjectItem.item_id == item.id
             )
         )
         is None
@@ -1437,12 +1361,10 @@ async def test_project_settings_projection_lists_allowed_participation_targets(a
     )
     await async_db.commit()
     project = await create_project(async_db, owner, workspace_id, "Participation projection")
-
     editor_context = await resolve_workspace_context(async_db, editor, workspace_id)
     editor_decisions = project_decisions(editor_context, project, is_participating=False)
     assert ResourceAction.project_update in editor_decisions.allowed
     assert set(project_participation_changes(editor_context, project)) == {"workspace", "open"}
-
     owner_context = await resolve_workspace_context(async_db, owner, workspace_id)
     assert (
         ResourceAction.project_update
@@ -1485,7 +1407,6 @@ async def test_open_project_participation_rejects_read_only_workspaces(async_db,
     )
     workspace = await async_db.get(Workspace, workspace_id)
     assert workspace is not None
-
     if read_only_mode == "archived":
         workspace.state = WorkspaceState.archived
     else:
@@ -1499,8 +1420,7 @@ async def test_open_project_participation_rejects_read_only_workspaces(async_db,
     assert (
         await async_db.scalar(
             select(ProjectParticipant.id).where(
-                ProjectParticipant.project_id == project.id,
-                ProjectParticipant.user_id == editor.id,
+                ProjectParticipant.project_id == project.id, ProjectParticipant.user_id == editor.id
             )
         )
         is None
@@ -1508,8 +1428,7 @@ async def test_open_project_participation_rejects_read_only_workspaces(async_db,
     assert (
         await async_db.scalar(
             select(ProjectParticipant.id).where(
-                ProjectParticipant.project_id == project.id,
-                ProjectParticipant.user_id == owner.id,
+                ProjectParticipant.project_id == project.id, ProjectParticipant.user_id == owner.id
             )
         )
         is not None
@@ -1547,15 +1466,16 @@ async def test_dashboard_uses_participation_instead_of_governance_visibility(asy
         for project in (projects[1], projects[3])
     ])
     await async_db.commit()
-
     context = await resolve_workspace_context(async_db, actor, workspace_id)
     directory = (await list_workspace_projects(async_db, context))[0]
     assert {project.id for project, _, _ in directory} == {project.id for project in projects}
     assert (
         next(
-            is_participating
-            for project, _, is_participating in directory
-            if project.id == projects[4].id
+            (
+                is_participating
+                for project, _, is_participating in directory
+                if project.id == projects[4].id
+            )
         )
         is False
     )
@@ -1580,14 +1500,17 @@ async def test_project_filtered_library_search_obeys_project_participation(async
             invited_by=owner.id,
         )
     )
-    item = Item(workspace_id=workspace_id, title="Visible library Item", created_by=owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Visible library Item"},
+    )
     async_db.add(item)
     await async_db.commit()
     project = await create_project(
         async_db, owner, workspace_id, "Restricted working set", ProjectParticipation.managed
     )
     await add_item_to_project(async_db, owner, workspace_id, project.id, item.id)
-
     library_items, *_ = await search_library(async_db, outsider, workspace_id)
     assert item.id in {row.id for row in library_items}
     with pytest.raises(ResourceUnavailable, match="Project not found"):
@@ -1639,21 +1562,12 @@ async def test_project_discussion_uses_participation_and_resource_actions(async_
         )
     )
     await async_db.commit()
-
     with pytest.raises(ResourceUnavailable, match="Project not found"):
         await add_project_discussion_message(
-            async_db,
-            outsider,
-            fixture_workspace_id(owner),
-            project.id,
-            "Unauthorized note",
+            async_db, outsider, fixture_workspace_id(owner), project.id, "Unauthorized note"
         )
     message = await add_project_discussion_message(
-        async_db,
-        reviewer,
-        fixture_workspace_id(owner),
-        project.id,
-        "Review note",
+        async_db, reviewer, fixture_workspace_id(owner), project.id, "Review note"
     )
     assert message.project_id == project.id
     assert [
@@ -1707,7 +1621,11 @@ async def test_discussion_moderation_is_workspace_governance_with_audited_reason
             invited_by=owner.id,
         ),
     ])
-    item = Item(workspace_id=workspace_id, title="Moderated Item", created_by=owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Moderated Item"},
+    )
     async_db.add(item)
     await async_db.commit()
     message = await add_discussion_message(
@@ -1725,7 +1643,6 @@ async def test_discussion_moderation_is_workspace_governance_with_audited_reason
     assert (
         discussion_message_view(message, owner_context, writable=False).authorization.allowed == []
     )
-
     assert action_allowed(
         await resolve_workspace_context(async_db, owner, workspace_id),
         ResourceAction.item_discussion_delete,
@@ -1875,7 +1792,6 @@ async def test_reply_mutations_authorize_roots_before_locking_children(
     elif read_only_root == "project":
         project.state = ProjectState.archived
     await async_db.commit()
-
     locked_tables = []
 
     def record_locks(execution):
@@ -1915,7 +1831,6 @@ async def test_reply_mutations_authorize_roots_before_locking_children(
             if scope is AnnotationScope.project:
                 expected.extend(["projects", "project_items"])
             expected.append("pdf_annotations")
-            # Repeated root checks are harmless once the root locks are held.
             first_locks = list(dict.fromkeys(locked_tables))
             assert first_locks[: len(expected)] == expected
     finally:
@@ -1931,7 +1846,6 @@ async def test_private_annotation_author_can_manage_own_replies(async_db):
     annotation.scope = AnnotationScope.private
     annotation.project_item_id = None
     await async_db.commit()
-
     assert await editable_annotation_reply_ids(
         async_db, author, workspace_id, [reply], {annotation.id: annotation}
     ) == {reply.id}
@@ -1941,7 +1855,6 @@ async def test_private_annotation_author_can_manage_own_replies(async_db):
         )
         == set()
     )
-
     created = await create_annotation_reply(
         async_db,
         author,
@@ -1961,13 +1874,7 @@ async def test_private_annotation_author_can_manage_own_replies(async_db):
         AnnotationReplyUpdate(version=created["version"], body="Updated private reply"),
     )
     await delete_annotation_reply(
-        async_db,
-        author,
-        workspace_id,
-        item.id,
-        annotation.id,
-        private_reply_id,
-        updated["version"],
+        async_db, author, workspace_id, item.id, annotation.id, private_reply_id, updated["version"]
     )
     restored = await restore_annotation_reply(
         async_db,
@@ -1987,15 +1894,13 @@ async def test_repeated_project_item_add_is_idempotent(async_db):
     project = await create_project(async_db, owner, fixture_workspace_id(owner), "Working set")
     item = Item(
         workspace_id=fixture_workspace_id(owner),
-        title="Assigned once",
         created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Assigned once"},
     )
     async_db.add(item)
     await async_db.commit()
-
     await add_item_to_project(async_db, owner, fixture_workspace_id(owner), project.id, item.id)
     await add_item_to_project(async_db, owner, fixture_workspace_id(owner), project.id, item.id)
-
     rows = (
         await async_db.scalars(
             select(ProjectItem).where(
@@ -2012,15 +1917,11 @@ async def test_repeated_project_item_add_is_idempotent(async_db):
 async def test_project_item_rejects_cross_workspace_lineage(async_db):
     first = await _user(async_db, "first")
     second = await _user(async_db, "second")
-    project = Project(
-        workspace_id=fixture_workspace_id(first),
-        name="First",
-        created_by=first.id,
-    )
+    project = Project(workspace_id=fixture_workspace_id(first), name="First", created_by=first.id)
     item = Item(
         workspace_id=fixture_workspace_id(second),
-        title="Second",
         created_by=second.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Second"},
     )
     async_db.add_all([project, item])
     await async_db.flush()
@@ -2041,14 +1942,15 @@ async def test_project_annotation_requires_revision_and_project_item_for_same_it
     owner, _viewer, item, project, revision, annotation, _reply = await _shared_annotation_context(
         async_db, "annotation-item-constraint"
     )
-    other = Item(workspace_id=item.workspace_id, title="Other Item", created_by=owner.id)
+    other = Item(
+        workspace_id=item.workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Other Item"},
+    )
     async_db.add(other)
     await async_db.flush()
     other_project_item = ProjectItem(
-        workspace_id=item.workspace_id,
-        project_id=project.id,
-        item_id=other.id,
-        added_by=owner.id,
+        workspace_id=item.workspace_id, project_id=project.id, item_id=other.id, added_by=owner.id
     )
     async_db.add(other_project_item)
     await async_db.commit()
@@ -2106,7 +2008,6 @@ async def test_instance_admin_is_not_implicit_workspace_member(async_db):
     admin = await _user(async_db, "instance-admin")
     admin.role = "administrator"
     await async_db.commit()
-
     with pytest.raises(WorkspaceMembershipRequired):
         await require_workspace_action(
             async_db, admin, fixture_workspace_id(owner), ResourceAction.workspace_read
@@ -2133,12 +2034,10 @@ async def test_owner_must_transfer_before_suspension(async_db):
         )
     )
     assert owner_member is not None
-
     with pytest.raises(PermissionDenied):
         await suspend_workspace_member(
             async_db, owner, fixture_workspace_id(owner), owner_member.id
         )
-
     await transfer_workspace_ownership(
         async_db, owner, fixture_workspace_id(owner), successor_member.id
     )
@@ -2172,14 +2071,9 @@ async def test_workspace_admin_cannot_appoint_an_admin(async_db):
     )
     async_db.add_all([admin_member, candidate_member])
     await async_db.commit()
-
     with pytest.raises(PermissionDenied):
         await set_workspace_member_role(
-            async_db,
-            admin,
-            fixture_workspace_id(owner),
-            candidate_member.id,
-            WorkspaceRole.admin,
+            async_db, admin, fixture_workspace_id(owner), candidate_member.id, WorkspaceRole.admin
         )
 
 
@@ -2202,7 +2096,6 @@ async def test_workspace_admin_cannot_suspend_another_admin(async_db):
     )
     async_db.add_all([actor_member, target_member])
     await async_db.commit()
-
     with pytest.raises(PermissionDenied):
         await suspend_workspace_member(
             async_db, actor, fixture_workspace_id(owner), target_member.id
@@ -2238,18 +2131,15 @@ async def test_termination_clears_project_participation_without_affecting_access
         editor.id,
         editor_member.id,
     )
-
     assert (
         await async_db.scalar(
             select(ProjectParticipant.id).where(
-                ProjectParticipant.project_id == project_id,
-                ProjectParticipant.user_id == owner_id,
+                ProjectParticipant.project_id == project_id, ProjectParticipant.user_id == owner_id
             )
         )
         is None
     )
     await terminate_workspace_member(async_db, owner, workspace_id, editor_membership_id)
-
     assert (
         await async_db.scalar(
             select(ProjectParticipant.id).where(
@@ -2283,7 +2173,6 @@ async def test_managed_project_participants_are_independent_of_workspace_governa
         ),
     ])
     await async_db.commit()
-
     project = await create_project(
         async_db, owner, workspace_id, "Governed direction", ProjectParticipation.managed
     )
@@ -2384,8 +2273,6 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         )
         is None
     )
-
-    # Model a stale legacy association under a Workspace-visible Project.
     async_db.add(
         ProjectParticipant(
             workspace_id=workspace_id,
@@ -2395,7 +2282,6 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         )
     )
     await async_db.commit()
-
     opened = await open_project_workspace(
         async_db, await resolve_workspace_context(async_db, owner, workspace_id), project.id
     )
@@ -2411,7 +2297,6 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         )
         is not None
     )
-
     await update_project_settings(
         async_db,
         owner,
@@ -2431,14 +2316,12 @@ async def test_workspace_project_has_implicit_participation_and_no_member_rows(a
         ).all()
     )
     assert members == {owner.id}
-
     await join_project(async_db, editor, workspace_id, project.id)
     await leave_project(async_db, editor, workspace_id, project.id)
     assert (
         await async_db.scalar(
             select(ProjectParticipant.id).where(
-                ProjectParticipant.project_id == project.id,
-                ProjectParticipant.user_id == editor.id,
+                ProjectParticipant.project_id == project.id, ProjectParticipant.user_id == editor.id
             )
         )
         is None
@@ -2487,10 +2370,7 @@ async def test_workspace_ownership_transfer_preserves_project_participation(asyn
     successor = await _user(async_db, "participation-manager-successor")
     workspace_id = fixture_workspace_id(owner)
     editor_membership = WorkspaceMember(
-        workspace_id=workspace_id,
-        user_id=editor.id,
-        role=WorkspaceRole.editor,
-        invited_by=owner.id,
+        workspace_id=workspace_id, user_id=editor.id, role=WorkspaceRole.editor, invited_by=owner.id
     )
     successor_membership = WorkspaceMember(
         workspace_id=workspace_id,
@@ -2500,7 +2380,6 @@ async def test_workspace_ownership_transfer_preserves_project_participation(asyn
     )
     async_db.add_all([editor_membership, successor_membership])
     await async_db.commit()
-
     project = await create_project(async_db, editor, workspace_id, "Open direction")
     await update_project_settings(
         async_db,
@@ -2521,7 +2400,6 @@ async def test_workspace_ownership_transfer_preserves_project_participation(asyn
         ).all()
     )
     assert members == {editor.id}
-
     await transfer_workspace_ownership(async_db, owner, workspace_id, successor_membership.id)
     members_after = set(
         (
@@ -2537,17 +2415,14 @@ async def test_workspace_ownership_transfer_preserves_project_participation(asyn
         async_db,
         successor,
         workspace_id,
-        (
-            await async_db.scalar(
-                select(WorkspaceMember.id).where(
-                    WorkspaceMember.workspace_id == workspace_id,
-                    WorkspaceMember.user_id == owner.id,
-                    WorkspaceMember.terminated_at.is_(None),
-                )
+        await async_db.scalar(
+            select(WorkspaceMember.id).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == owner.id,
+                WorkspaceMember.terminated_at.is_(None),
             )
         ),
     )
-    # Workspace ownership remains authoritative. The open Project remains visible to all members.
     await set_project_state(async_db, successor, workspace_id, project.id, ProjectState.archived)
     await set_project_state(async_db, successor, workspace_id, project.id, ProjectState.active)
     context = await require_project_context(
@@ -2633,7 +2508,7 @@ async def test_project_annotation_bundle_hides_managed_content_from_nonmembers(a
     async_db.add_all([visible, hidden, archived, private])
     await async_db.commit()
     assert {row.id for row in await _own_annotations(async_db, former_member, revision)} == {
-        private.id,
+        private.id
     }
     assert (
         await async_db.scalar(
@@ -2671,7 +2546,7 @@ async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role
         original_pdf = document.tobytes()
     revision_key, revision_size = await put_pdf_object(original_pdf)
     revision.file = FileObject(
-        **(revision.file.to_dict() | {"filename": revision_key, "size": revision_size})
+        **revision.file.to_dict() | {"filename": revision_key, "size": revision_size}
     )
     payload = NotePayload.model_validate(shared.payload).model_dump(mode="json")
     shared.payload = payload
@@ -2699,7 +2574,6 @@ async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role
         for state in ("visible", "locked", "private"):
             records[state].hidden_at = now
     await async_db.commit()
-
     review = await list_document_annotations(
         async_db, actor, item.workspace_id, item.id, revision.id, project_ids=(project.id,)
     )
@@ -2709,7 +2583,6 @@ async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role
             for state, record in records.items()
             if state not in {"deleted", "other-private"}
         }
-
     exported = await export_revision_pdf(
         async_db, actor, item.workspace_id, item.id, revision.id, project_id=project.id
     )
@@ -2725,7 +2598,11 @@ async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role
 async def test_item_organize_omits_deleted_projects(async_db):
     owner = await _user(async_db, "organize-deleted-owner")
     workspace_id = fixture_workspace_id(owner)
-    item = Item(workspace_id=workspace_id, title="Organize target", created_by=owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Organize target"},
+    )
     async_db.add(item)
     await async_db.commit()
     project = await create_project(async_db, owner, workspace_id, "Deleted project")
@@ -2737,7 +2614,6 @@ async def test_item_organize_omits_deleted_projects(async_db):
         ItemSection.organize,
     )
     assert project.id in {option.project.id for option in before.projects}
-
     await delete_project(async_db, owner, workspace_id, project.id, project.name)
     after = await open_item_section(
         async_db,
@@ -2760,9 +2636,8 @@ async def test_governance_freeze_is_read_only_and_unfreeze_preserves_lifecycle(a
     if archived:
         await archive_workspace(async_db, owner, workspace_id)
     workspace = await async_db.get(Workspace, workspace_id)
-    state, archived_at = workspace.state, workspace.archived_at
+    state, archived_at = (workspace.state, workspace.archived_at)
     await freeze_workspace_governance(async_db, admin, workspace_id)
-
     for action in (ResourceAction.workspace_read, ResourceAction.workspace_export):
         await require_workspace_action(async_db, owner, workspace_id, action)
     for action in (
@@ -2778,7 +2653,6 @@ async def test_governance_freeze_is_read_only_and_unfreeze_preserves_lifecycle(a
         await delete_workspace(async_db, owner, workspace_id)
     with pytest.raises(WorkspaceMembershipRequired):
         await require_workspace_action(async_db, admin, workspace_id, ResourceAction.workspace_read)
-
     await unfreeze_workspace_governance(async_db, admin, workspace_id)
     assert workspace.state is state
     assert workspace.archived_at == archived_at
@@ -2799,13 +2673,11 @@ async def test_workspace_governance_rechecks_instance_admin_authority(
     admin.role = "administrator"
     await async_db.commit()
     workspace_id = fixture_workspace_id(owner)
-
     async with async_session_factory() as authority_db:
         current_admin = await authority_db.get(User, admin.id)
         assert current_admin is not None
         current_admin.role = "member"
         await authority_db.commit()
-
     if operation == "freeze":
         governance_call = freeze_workspace_governance(async_db, admin, workspace_id)
     elif operation == "unfreeze":
@@ -2816,7 +2688,6 @@ async def test_workspace_governance_rechecks_instance_admin_authority(
         )
     with pytest.raises(ResourceNotFound, match="Workspace not found"):
         await governance_call
-
     action = {
         "freeze": "admin.workspace.freeze",
         "unfreeze": "admin.workspace.unfreeze",
@@ -2830,9 +2701,7 @@ async def test_workspace_reindex_payload_carries_actor_and_workspace(
     async_db, fake_durable_operations
 ):
     owner = await _user(async_db, "reindex-owner")
-
     workflow_id = await dispatch_workspace_reindex(async_db, owner, fixture_workspace_id(owner))
-
     enqueue = fake_durable_operations.enqueues[-1]
     assert enqueue["workflow_name"] == "operations.reindex_workspace"
     assert enqueue["args"] == (workflow_id, owner.id, fixture_workspace_id(owner))
@@ -2852,19 +2721,15 @@ async def test_break_glass_is_one_shot_read_only_and_audited(async_db):
     async_db.add(
         Item(
             workspace_id=fixture_workspace_id(owner),
-            title="Sensitive title",
             created_by=owner.id,
+            work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Sensitive title"},
         )
     )
     await async_db.commit()
-
     items = await read_workspace_items_break_glass(
-        async_db,
-        admin,
-        fixture_workspace_id(owner),
-        "Investigate customer-reported data loss",
+        async_db, admin, fixture_workspace_id(owner), "Investigate customer-reported data loss"
     )
-    assert [item.title for item in items] == ["Sensitive title"]
+    assert [item.work.get("title") for item in items] == ["Sensitive title"]
     with pytest.raises(WorkspaceMembershipRequired):
         await require_workspace_action(
             async_db, admin, fixture_workspace_id(owner), ResourceAction.workspace_read
@@ -2894,13 +2759,11 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
     )
     item = Item(
         workspace_id=fixture_workspace_id(owner),
-        title="Moderated item",
         created_by=author.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Moderated item"},
     )
     project = Project(
-        workspace_id=fixture_workspace_id(owner),
-        name="Moderated project",
-        created_by=author.id,
+        workspace_id=fixture_workspace_id(owner), name="Moderated project", created_by=author.id
     )
     async_db.add_all([item, project])
     await async_db.flush()
@@ -2938,17 +2801,9 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
     )
     async_db.add(annotation)
     await async_db.commit()
-
     moderated = await moderate_document_annotation(
-        async_db,
-        owner,
-        fixture_workspace_id(owner),
-        item.id,
-        annotation.id,
-        "hide",
-        1,
+        async_db, owner, fixture_workspace_id(owner), item.id, annotation.id, "hide", 1
     )
-
     assert moderated["body"] == "Authored body"
     assert moderated["moderated_by"] == owner.id
     assert moderated["hidden_at"] is not None
@@ -3006,7 +2861,6 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
             ItemSection.overview,
         )
         assert overview.annotation_count == expected_count
-        # Moderation affects browsing, while export always excludes hidden marks.
         assert (
             await select_visible_annotations(
                 async_db, reader, fixture_workspace_id(owner), revision.id, item.id, project.id
@@ -3031,16 +2885,9 @@ async def test_moderated_own_annotation_does_not_project_moderation_actions(
     ) = await _shared_annotation_context(async_db, f"own-{moderation_field}")
     setattr(annotation, moderation_field, datetime.now(UTC))
     await async_db.commit()
-
     review = await list_document_annotations(
-        async_db,
-        author,
-        fixture_workspace_id(author),
-        item.id,
-        page=1,
-        per_page=20,
+        async_db, author, fixture_workspace_id(author), item.id, page=1, per_page=20
     )
-
     assert review.annotations[0]["mine"] is True
     assert review.annotations[0]["authorization"]["allowed"] == []
 
@@ -3074,7 +2921,6 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
         reply.author_id = reviewer.id
         author = reviewer
         await async_db.commit()
-
     author_review = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
@@ -3087,7 +2933,6 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
         await moderate_document_annotation(
             async_db, author, workspace_id, item.id, annotation.id, "hide", 1
         )
-
     membership = await async_db.scalar(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -3097,23 +2942,15 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     assert membership is not None
     membership.role = WorkspaceRole.admin
     await async_db.commit()
-
     with pytest.raises(ResourceUnavailable, match="Annotation not found"):
         await delete_document_annotation(
-            async_db,
-            administrator,
-            workspace_id,
-            item.id,
-            annotation.id,
-            annotation.version,
+            async_db, administrator, workspace_id, item.id, annotation.id, annotation.version
         )
-
     with pytest.raises(VersionConflict) as conflict:
         await moderate_document_annotation(
             async_db, administrator, workspace_id, item.id, annotation.id, "delete", 2
         )
     assert conflict.value.current_version == 1
-
     deleted = await moderate_document_annotation(
         async_db, administrator, workspace_id, item.id, annotation.id, "delete", 1
     )
@@ -3123,17 +2960,10 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     assert stored is not None
     assert stored.deleted_at is not None
     assert stored.deleted_by_moderation is True
-
     with pytest.raises(ResourceUnavailable, match="Annotation not found"):
         await restore_document_annotation(
-            async_db,
-            administrator,
-            workspace_id,
-            item.id,
-            annotation.id,
-            deleted["version"],
+            async_db, administrator, workspace_id, item.id, annotation.id, deleted["version"]
         )
-
     with pytest.raises(ResourceUnavailable, match="Annotation not found"):
         await restore_document_annotation(
             async_db, author, workspace_id, item.id, annotation.id, deleted["version"]
@@ -3160,7 +2990,6 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
         )
         is None
     )
-
     event = await async_db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "annotation.moderate.delete",
@@ -3219,7 +3048,6 @@ async def test_author_can_restore_self_deleted_annotation_and_replies(
                 annotation.version,
             )
         assert annotation.moderated_by == moderator.id
-
     original_version = annotation.version
     await delete_document_annotation(
         async_db, author, workspace_id, item.id, annotation.id, original_version
@@ -3272,7 +3100,11 @@ async def test_permanent_document_deletion_is_an_editor_decision(async_db, fake_
             invited_by=owner.id,
         ),
     ])
-    item = Item(workspace_id=workspace_id, title="Governed Documents", created_by=owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Governed Documents"},
+    )
     async_db.add(item)
     await async_db.flush()
     revision = FileRevision(
@@ -3301,17 +3133,14 @@ async def test_permanent_document_deletion_is_an_editor_decision(async_db, fake_
     )
     async_db.add_all([revision, attachment])
     await async_db.commit()
-
     with pytest.raises(PermissionDenied):
         await delete_file_revision(async_db, reviewer, workspace_id, item.id, revision.id)
     with pytest.raises(PermissionDenied):
         await delete_attachment(async_db, reviewer, workspace_id, item.id, attachment.id)
     assert await async_db.get(FileRevision, revision.id) is not None
     assert await async_db.get(Attachment, attachment.id) is not None
-
     await delete_attachment(async_db, editor, workspace_id, item.id, attachment.id)
     await delete_file_revision(async_db, editor, workspace_id, item.id, revision.id)
-
     events = (
         await async_db.scalars(
             select(AuditEvent).where(
@@ -3331,7 +3160,6 @@ async def test_annotation_reads_return_non_editable_flags_for_viewers_and_archiv
         async_db, "read-only-annotations"
     )
     workspace_id = fixture_workspace_id(author)
-
     visible = list(
         (
             await list_document_annotations(
@@ -3343,7 +3171,6 @@ async def test_annotation_reads_return_non_editable_flags_for_viewers_and_archiv
     assert visible[0]["editable"] is False
     assert visible[0]["replies"][0]["id"] == reply.id
     assert visible[0]["replies"][0]["editable"] is False
-
     with pytest.raises(ResourceUnavailable):
         await update_document_annotation(
             async_db,
@@ -3394,7 +3221,6 @@ async def test_annotation_reads_return_non_editable_flags_for_viewers_and_archiv
     assert reply.body == "Shared reply"
     assert reply.version == 1
     assert reply.deleted_at is None
-
     await archive_workspace(async_db, author, workspace_id)
     archived = list(
         (
@@ -3420,7 +3246,6 @@ async def test_archived_project_blocks_mutating_existing_annotations(async_db):
     )
     workspace_id = fixture_workspace_id(author)
     await set_project_state(async_db, author, workspace_id, project.id, ProjectState.archived)
-
     visible = list(
         (
             await list_document_annotations(
@@ -3494,7 +3319,6 @@ async def test_project_restore_requires_writable_workspace(async_db):
     await async_db.commit()
     with pytest.raises(WorkspaceLifecycleError):
         await set_project_state(async_db, author, workspace_id, project.id, ProjectState.active)
-
     workspace.state = WorkspaceState.active
     workspace.governance_frozen_at = datetime.now(UTC)
     workspace.governance_frozen_by = author.id
@@ -3514,7 +3338,6 @@ async def test_deleted_project_annotations_are_excluded_from_item_review(async_d
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
     assert [entry["id"] for entry in before.annotations] == [annotation.id]
-
     await delete_project(async_db, author, workspace_id, project.id, project.name)
     after = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
@@ -3529,7 +3352,11 @@ async def test_committed_object_cleanup_survives_workspace_archive_and_role_chan
 ):
     owner = await _user(async_db, "cleanup-after-access-change")
     workspace_id = fixture_workspace_id(owner)
-    item = Item(workspace_id=workspace_id, title="Cleanup item", created_by=owner.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Cleanup item"},
+    )
     stored = await get_object_store().put_object(
         uuid4(), ObjectSuffix.BINARY, b"obsolete attachment", max_bytes=1024
     )
@@ -3549,7 +3376,6 @@ async def test_committed_object_cleanup_survives_workspace_archive_and_role_chan
     )
     async_db.add(attachment)
     await async_db.commit()
-
     await delete_attachment(async_db, owner, workspace_id, item.id, attachment.id)
     await async_db.commit()
     cleanup = fake_durable_operations.enqueues[-1]
@@ -3557,14 +3383,12 @@ async def test_committed_object_cleanup_survives_workspace_archive_and_role_chan
     await archive_workspace(async_db, owner, workspace_id)
     membership = await async_db.scalar(
         select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == owner.id,
+            WorkspaceMember.workspace_id == workspace_id, WorkspaceMember.user_id == owner.id
         )
     )
     assert membership is not None
     membership.role = WorkspaceRole.viewer
     await async_db.commit()
-
     deleted = await delete_unreferenced_objects_step(
         owner.id, workspace_id, [stored.key], cleanup["workflow_id"]
     )
@@ -3601,7 +3425,6 @@ async def test_annotation_export_status_and_file_are_requester_only(
         output={"revision_id": "private-revision", "object_key": "private.pdf"},
         attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
     )
-
     assert (await get_export_status(async_db, requester, workspace_id, workflow_id))[
         "state"
     ] == "succeeded"
@@ -3618,7 +3441,11 @@ async def test_export_download_uses_the_persisted_descriptor_and_enforces_expiry
 ):
     requester = await _user(async_db, f"descriptor-export-{artifact_state}")
     workspace_id = fixture_workspace_id(requester)
-    item = Item(workspace_id=workspace_id, title="Descriptor export", created_by=requester.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=requester.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Descriptor export"},
+    )
     async_db.add(item)
     await async_db.flush()
     store = get_object_store()
@@ -3659,7 +3486,6 @@ async def test_export_download_uses_the_persisted_descriptor_and_enforces_expiry
         output={"revision_id": revision.id, "object_key": "obsolete-export.pdf"},
         attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
     )
-
     if artifact_state == "available":
         response = await get_export_file(async_db, requester, workspace_id, workflow_id)
         assert (await collect_body(response.body)).getvalue() == content
@@ -3675,7 +3501,11 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
 ):
     requester = await _user(async_db, "project-export-requester")
     workspace_id = fixture_workspace_id(requester)
-    item = Item(workspace_id=workspace_id, title="Project export", created_by=requester.id)
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=requester.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Project export"},
+    )
     project = Project(workspace_id=workspace_id, name="Project export", created_by=requester.id)
     async_db.add_all([item, project])
     await async_db.flush()
@@ -3695,27 +3525,19 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
         ),
     )
     assignment = ProjectItem(
-        workspace_id=workspace_id,
-        project_id=project.id,
-        item_id=item.id,
-        added_by=requester.id,
+        workspace_id=workspace_id, project_id=project.id, item_id=item.id, added_by=requester.id
     )
     async_db.add_all([revision, assignment])
     await async_db.commit()
     original_assignment_id = assignment.id
-
     await async_db.delete(assignment)
     await async_db.commit()
     async_db.add(
         ProjectItem(
-            workspace_id=workspace_id,
-            project_id=project.id,
-            item_id=item.id,
-            added_by=requester.id,
+            workspace_id=workspace_id, project_id=project.id, item_id=item.id, added_by=requester.id
         )
     )
     await async_db.commit()
-
     workflow_id = f"annotation-export:{uuid4()}"
     fake_durable_operations.workflows[workflow_id] = WorkflowSummary(
         id=workflow_id,
@@ -3734,7 +3556,6 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
         },
         attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
     )
-
     with pytest.raises(ResourceUnavailable, match="project item not found"):
         await get_export_file(async_db, requester, workspace_id, workflow_id)
 
@@ -3753,28 +3574,26 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     )
     source = Item(
         workspace_id=fixture_workspace_id(actor),
-        title="Detached source",
-        abstract="metadata copy",
-        authors=[
-            {
-                "display_name": "Research; Council",
-                "family_name": "Research; Council",
-                "given_name": None,
-                "is_corresponding": False,
-            }
-        ],
-        editors=[
-            {
-                "display_name": "Wang, Wei",
-                "family_name": "Wang",
-                "given_name": "Wei",
-                "is_corresponding": False,
-            }
-        ],
-        keywords=["Alpha; beta"],
-        urls=["https://example.test/source"],
-        custom_fields={"nested": {"names": ["original"]}},
         created_by=actor.id,
+        work={
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Detached source",
+            "description": "metadata copy",
+            "contributors": [
+                {
+                    "type": "Organization",
+                    "organization": {"name": "Research; Council"},
+                    "roles": ["Author"],
+                },
+                {
+                    "type": "Person",
+                    "person": {"family_name": "Wang", "given_name": "Wei"},
+                    "roles": ["Author"],
+                },
+            ],
+            "subjects": [{"subject": v} for v in ["Alpha; beta"]],
+        },
     )
     async_db.add(source)
     await async_db.flush()
@@ -3825,7 +3644,6 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     )
     async_db.add_all([source_revision, source_attachment])
     await async_db.commit()
-
     store = get_object_store()
 
     class TransactionCheckingStore:
@@ -3840,30 +3658,18 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
         async def delete(self, *args, **kwargs):
             return await store.delete(*args, **kwargs)
 
-    monkeypatch.setattr(
-        "quirebase.documents.copying.get_object_store",
-        TransactionCheckingStore,
-    )
-
+    monkeypatch.setattr("quirebase.documents.copying.get_object_store", TransactionCheckingStore)
     copied = await copy_item_to_workspace(
-        async_db,
-        actor,
-        fixture_workspace_id(actor),
-        fixture_workspace_id(target_owner),
-        source.id,
+        async_db, actor, fixture_workspace_id(actor), fixture_workspace_id(target_owner), source.id
     )
     copied_revision = await async_db.scalar(
         select(FileRevision).where(FileRevision.item_id == copied.id)
     )
-
     assert copied.id != source.id
     assert copied.workspace_id == fixture_workspace_id(target_owner)
-    assert copied.title == source.title
-    for field in ("authors", "editors", "keywords", "urls", "custom_fields"):
-        assert getattr(copied, field) == getattr(source, field)
-        assert getattr(copied, field) is not getattr(source, field)
-    assert copied.authors[0] is not source.authors[0]
-    assert copied.custom_fields["nested"] is not source.custom_fields["nested"]
+    assert copied.work.get("title") == source.work.get("title")
+    assert copied.work == source.work and copied.work is not source.work
+    assert copied.work["contributors"][0] is not source.work["contributors"][0]
     assert copied_revision is not None
     assert copied_revision.file.path != source_revision.file.path
     assert await get_object_store().exists(source_revision.file.path)
@@ -3911,8 +3717,8 @@ async def test_cross_workspace_copy_preserves_objects_after_ambiguous_commit(asy
     )
     source = Item(
         workspace_id=fixture_workspace_id(actor),
-        title="Ambiguous commit source",
         created_by=actor.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Ambiguous commit source"},
     )
     async_db.add(source)
     await async_db.flush()
@@ -3935,7 +3741,6 @@ async def test_cross_workspace_copy_preserves_objects_after_ambiguous_commit(asy
         )
     )
     await async_db.commit()
-
     real_commit = async_db.commit
     commit_count = 0
 
@@ -3947,20 +3752,14 @@ async def test_cross_workspace_copy_preserves_objects_after_ambiguous_commit(asy
             raise ConnectionError("commit acknowledgement lost")
 
     monkeypatch.setattr(async_db, "commit", commit_then_lose_acknowledgement)
-
     with pytest.raises(ConnectionError, match="acknowledgement lost"):
         await copy_item_to_workspace(
-            async_db,
-            actor,
-            source.workspace_id,
-            target_workspace_id,
-            source.id,
+            async_db, actor, source.workspace_id, target_workspace_id, source.id
         )
-
     copied = await async_db.scalar(
         select(Item).where(
             Item.workspace_id == target_workspace_id,
-            Item.title == "Ambiguous commit source",
+            Item.work["title"].as_string() == "Ambiguous commit source",
         )
     )
     assert copied is not None
@@ -3984,8 +3783,8 @@ async def test_cross_workspace_copy_rejects_pending_file_revision(async_db):
     )
     source = Item(
         workspace_id=fixture_workspace_id(actor),
-        title="Pending source",
         created_by=actor.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Pending source"},
     )
     async_db.add(source)
     await async_db.flush()
@@ -4005,7 +3804,6 @@ async def test_cross_workspace_copy_rejects_pending_file_revision(async_db):
         )
     )
     await async_db.commit()
-
     with pytest.raises(ValidationFailure, match="must be ready"):
         await copy_item_to_workspace(
             async_db, actor, source.workspace_id, fixture_workspace_id(target_owner), source.id
@@ -4049,10 +3847,7 @@ async def test_annotation_list_filters_multiple_sources_and_revisions_without_wi
     await async_db.flush()
     assignments = [
         ProjectItem(
-            workspace_id=workspace_id,
-            project_id=source.id,
-            item_id=item.id,
-            added_by=owner.id,
+            workspace_id=workspace_id, project_id=source.id, item_id=item.id, added_by=owner.id
         )
         for source in (second_project, restricted_project)
     ]
@@ -4081,7 +3876,6 @@ async def test_annotation_list_filters_multiple_sources_and_revisions_without_wi
     hidden.hidden_at = datetime.now(UTC)
     async_db.add_all([private, other_private, second, restricted, old_private, hidden])
     await async_db.commit()
-
     all_sources = await list_document_annotations(async_db, viewer, workspace_id, item.id)
     assert {entry["id"] for entry in all_sources.annotations} == {
         shared.id,
@@ -4135,22 +3929,12 @@ async def test_annotation_list_filters_multiple_sources_and_revisions_without_wi
     )
     assert [entry["id"] for entry in project_only.annotations] == [second.id]
     private_only = await list_document_annotations(
-        async_db,
-        viewer,
-        workspace_id,
-        item.id,
-        scope=AnnotationScope.private,
+        async_db, viewer, workspace_id, item.id, scope=AnnotationScope.private
     )
     assert {entry["id"] for entry in private_only.annotations} == {private.id, old_private.id}
     pages = [
         await list_document_annotations(
-            async_db,
-            viewer,
-            workspace_id,
-            item.id,
-            revision.id,
-            page=page,
-            per_page=1,
+            async_db, viewer, workspace_id, item.id, revision.id, page=page, per_page=1
         )
         for page in (1, 2, 3)
     ]
@@ -4159,11 +3943,7 @@ async def test_annotation_list_filters_multiple_sources_and_revisions_without_wi
     for project_ids in ((restricted_project.id,), (project.id, restricted_project.id)):
         with pytest.raises(ResourceUnavailable):
             await list_document_annotations(
-                async_db,
-                viewer,
-                workspace_id,
-                item.id,
-                project_ids=project_ids,
+                async_db, viewer, workspace_id, item.id, project_ids=project_ids
             )
     with pytest.raises(ResourceNotFound):
         await list_document_annotations(async_db, viewer, workspace_id, item.id, "unknown")
@@ -4219,9 +3999,7 @@ async def test_annotation_list_rechecks_project_visibility_after_loading_source_
             nonlocal changed
             result = await execute(statement, *args, **kwargs)
             columns = getattr(statement, "column_descriptions", ())
-            if not changed and columns and columns[0]["expr"] is Project:
-                # Source choices have been read, but count and annotation queries
-                # must observe the other Session's committed visibility change.
+            if not changed and columns and (columns[0]["expr"] is Project):
                 async with async_session_factory() as writer:
                     admin = await writer.get(User, owner.id)
                     assert admin is not None
@@ -4255,7 +4033,6 @@ async def test_annotation_list_rechecks_project_visibility_after_loading_source_
         assert [reply["id"] for reply in result.annotations[0]["replies"]] == [private_reply.id]
         assert result.total == 1
         assert result.next_cursor is None
-    # Revocation removes visibility, while the authored records remain stored.
     async with async_session_factory() as observer:
         assert await observer.get(PdfAnnotation, shared.id) is not None
         assert await observer.get(PdfAnnotationReply, shared_reply.id) is not None
@@ -4282,9 +4059,7 @@ async def test_annotation_list_survives_revision_deletion_during_response_assemb
             nonlocal deleted
             result = await execute(statement, *args, **kwargs)
             columns = getattr(statement, "column_descriptions", ())
-            if not deleted and columns and columns[0]["expr"] is PdfAnnotation:
-                # The reader already owns ORM objects; cascade deletion in another
-                # Session must not invalidate the metadata needed for its response.
+            if not deleted and columns and (columns[0]["expr"] is PdfAnnotation):
                 async with async_session_factory() as writer:
                     deleting_user = await writer.get(User, owner.id)
                     assert deleting_user is not None
@@ -4308,7 +4083,6 @@ async def test_annotation_list_survives_revision_deletion_during_response_assemb
         assert [record["id"] for record in result.annotations] == [shared.id]
         assert result.annotations[0]["revision_name"] == revision_name
         assert result.next_cursor is None
-        # A later read observes the committed cascade instead of the earlier page.
         after = await list_document_annotations(reader, reading_user, workspace_id, item.id)
         assert after.annotations == ()
         assert after.revisions == ()
@@ -4418,12 +4192,7 @@ async def test_annotation_cursor_traversal_survives_changes_between_pages(async_
         )
     else:
         await delete_document_annotation(
-            async_db,
-            owner,
-            workspace_id,
-            item.id,
-            ordered[99].id,
-            ordered[99].version,
+            async_db, owner, workspace_id, item.id, ordered[99].id, ordered[99].version
         )
     second = await list_document_annotations(
         async_db,

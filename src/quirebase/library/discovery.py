@@ -4,14 +4,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from inquiro import SearchClause, SearchQuery
-from inquiro.metadata import clean_identifier_value
+from inquiro.work import contributor_name, work_authors, work_doi
 
 from quirebase.access import require_workspace_membership
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.library.activity import (
-    get_matching_accessible_item_identifiers,
-    record_discovery_search_audit,
-)
+from quirebase.library.activity import record_discovery_search_audit
 from quirebase.library.providers import search_candidates
 from quirebase.models import User
 
@@ -41,7 +38,6 @@ class CandidateView:
     publication_date: str | None = None
     doi: str | None = None
     abstract: str | None = None
-    imported: bool = False
 
 
 @dataclass(frozen=True)
@@ -89,14 +85,6 @@ async def search_candidate_records(
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
     reloaded_user = (await require_workspace_membership(db, reloaded_user, workspace_id)).actor
-    candidate_identifiers = {
-        (identifier.provider, identifier.value)
-        for candidate in result.results
-        for identifier in candidate.identifiers
-    }
-    accessible_identifiers = await get_matching_accessible_item_identifiers(
-        db, reloaded_user, workspace_id, candidate_identifiers
-    )
     page_view = CandidatePageView(
         provider=result.provider,
         results=tuple(
@@ -104,21 +92,15 @@ async def search_candidate_records(
                 provider=candidate.provider,
                 identifier_provider=candidate.lookup_identifier.provider,
                 identifier=candidate.lookup_identifier.value,
-                title=candidate.title,
-                authors="; ".join(author.display_name for author in candidate.authors or ())
+                title=candidate.work.get("title", ""),
+                authors="; ".join(
+                    contributor_name(author) for author in work_authors(candidate.work)
+                )
                 or None,
-                publication_title=candidate.publication_title,
-                publication_date=candidate.publication_date,
-                doi=candidate.doi,
-                abstract=candidate.abstract,
-                imported=any(
-                    (
-                        identifier.provider.strip().lower(),
-                        clean_identifier_value(identifier.provider, identifier.value),
-                    )
-                    in accessible_identifiers
-                    for identifier in candidate.identifiers
-                ),
+                publication_title=candidate.work.get("container", {}).get("title"),
+                publication_date=candidate.work.get("date_published"),
+                doi=work_doi(candidate.work),
+                abstract=candidate.work.get("description"),
             )
             for candidate in result.results
         ),

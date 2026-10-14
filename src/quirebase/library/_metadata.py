@@ -1,63 +1,33 @@
-"""Map neutral bibliographic snapshots onto Library-owned persistence."""
+"""Library business validation over the external Commonmeta Work contract."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING
+import json
+from copy import deepcopy
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any
 
 from inquiro.bibliography import generate_default_citation_key
-from inquiro.metadata import (
-    MetadataUpdate as MetadataWrite,
-)
-from inquiro.metadata import (
-    MetadataValidationError,
-    merge_metadata_values,
-    metadata_bibliography_record,
-    metadata_from_values,
-    metadata_values,
-)
-from inquiro.metadata import (
-    normalize_identifier_pairs as _normalize_identifier_pairs,
-)
-from inquiro.models import Affiliation, Contributor, CustomField, JsonValue, ResourceLink
-from inquiro.models import BibliographicMetadata as ItemMetadata
-from inquiro.models import Identifier as ExternalIdentifier
 from inquiro.richtext import convert_rich_text
+from inquiro.work import (
+    InvalidWork,
+    contributor_name,
+    work_authors,
+    work_doi,
+    work_id_identifier,
+    work_schema,
+)
+from pydantic import ValidationError
 
 from quirebase.core.errors import ValidationFailure
-from quirebase.models import MAX_CITATION_KEY_LENGTH
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
     from uuid import UUID
 
-    from quirebase.models import Item, ItemIdentifier
+    from quirebase.models import Item
 
-__all__ = [
-    "Affiliation",
-    "Contributor",
-    "CustomField",
-    "ExternalIdentifier",
-    "ItemMetadata",
-    "ItemWriteResult",
-    "JsonValue",
-    "MetadataWrite",
-    "ResourceLink",
-    "candidate_write",
-    "generate_citation_key",
-    "metadata_from_item",
-    "metadata_write",
-    "normalize_identifier_pairs",
-]
-
-MAX_TITLE_TEXT_LENGTH = 1000
-_TEXT_LIMITS = {
-    "volume": 100,
-    "issue": 100,
-    "pages": 100,
-    "place_published": 255,
-    "citation_key": MAX_CITATION_KEY_LENGTH,
-}
+from inquiro.work_models import Work
 
 
 @dataclass(frozen=True)
@@ -66,74 +36,153 @@ class ItemWriteResult:
     version: int
 
 
-def normalize_identifier_pairs(pairs: Sequence[tuple[str, str]]) -> list[tuple[str, str]]:
+def metadata_write(work: Work | dict[str, Any]) -> dict[str, Any]:
     try:
-        normalized = _normalize_identifier_pairs(pairs)
-    except MetadataValidationError as error:
+        if isinstance(work, Work):
+            work = work.model_dump(mode="json", exclude_none=True)
+        validated = Work.model_validate(work).model_dump(mode="json", exclude_none=True)
+    except (InvalidWork, ValidationError) as error:
         raise ValidationFailure(str(error)) from error
-    for provider, value in normalized:
-        if len(provider) > 40:
-            raise ValidationFailure("identifier provider is too long")
-        if len(value) > 500:
-            raise ValidationFailure("identifier value is too long")
-    return normalized
-
-
-def _storage_values(write: MetadataWrite) -> MetadataWrite:
-    for name, limit in _TEXT_LIMITS.items():
-        value = write.values.get(name)
-        if isinstance(value, str) and len(value) > limit:
-            raise ValidationFailure(
-                f"{'Citation key' if name == 'citation_key' else name} is too long"
-            )
-    title = write.values.get("title")
-    if (
-        isinstance(title, str)
-        and len(convert_rich_text(title, source="html", target="text")) > MAX_TITLE_TEXT_LENGTH
-    ):
+    title = convert_rich_text(validated.get("title", ""), source="html", target="text").strip()
+    if not title:
+        raise ValidationFailure("title is required")
+    if len(title) > 1000:
         raise ValidationFailure("title is too long")
-    if write.identifiers is not None:
-        normalize_identifier_pairs(write.identifiers)
-    return write
+    if published := validated.get("date_published"):
+        try:
+            if "T" in published:
+                datetime.fromisoformat(published)
+            else:
+                parts = [int(part) for part in published.split("-")]
+                date(*(parts + [1] * (3 - len(parts))))
+        except ValueError as error:
+            raise ValidationFailure("publication date must be a valid calendar date") from error
+    if len(json.dumps(validated, ensure_ascii=False).encode("utf-8")) > 1024 * 1024:
+        raise ValidationFailure("Work metadata is limited to 1 MiB")
+    return {"work": validated}
 
 
-def _item_snapshot(item: Item, identifiers: Mapping[str, str]) -> ItemMetadata:
-    values = {
-        field.name: getattr(item, field.name)
-        for field in fields(ItemMetadata)
-        if field.name not in {"identifiers", "doi"}
-    }
-    values["identifiers"] = dict(identifiers)
-    try:
-        return metadata_from_values(values)
-    except MetadataValidationError as error:
-        raise ValidationFailure(str(error)) from error
+def metadata_from_item(item: Item) -> Work:
+    return Work.model_validate(item.work)
 
 
-def metadata_from_item(item: Item, identifiers: Sequence[ItemIdentifier]) -> ItemMetadata:
-    return _item_snapshot(item, {row.provider: row.value for row in identifiers})
+def validate_citation_key(key: str | None) -> str | None:
+    if key is not None and (not isinstance(key, str) or len(key) > 128):
+        raise ValidationFailure("Citation key is too long or invalid")
+    return key
 
 
-def metadata_write(metadata: ItemMetadata) -> MetadataWrite:
-    try:
-        return _storage_values(metadata_values(metadata))
-    except MetadataValidationError as error:
-        raise ValidationFailure(str(error)) from error
-
-
-def candidate_write(
-    item: Item, record: dict, *, merge: bool, existing_identifiers: dict[str, str]
-) -> MetadataWrite:
-    try:
-        return _storage_values(
-            merge_metadata_values(_item_snapshot(item, existing_identifiers), record, merge=merge)
+def candidate_write(item: Item, work: dict, *, merge: bool) -> dict[str, Any]:
+    result = deepcopy(item.work) if merge else {}
+    for key, value in work.items():
+        if merge and key == "contributors" and value:
+            credits = deepcopy(result.get(key, []))
+            for incoming in value:
+                matches = [
+                    index for index, credit in enumerate(credits) if _same_credit(credit, incoming)
+                ]
+                if len(matches) > 1 and (roles := set(incoming.get("roles", []))):
+                    # One person can have separate Author and Editor credits.
+                    # Prefer the same role set, then a credit retaining extra local roles.
+                    # A unique shared-role match also permits upstream role extensions.
+                    exact_roles = [
+                        index for index in matches if set(credits[index].get("roles", [])) == roles
+                    ]
+                    matches = (
+                        exact_roles
+                        or [
+                            index
+                            for index in matches
+                            if roles <= set(credits[index].get("roles", []))
+                        ]
+                        or [
+                            index
+                            for index in matches
+                            if roles & set(credits[index].get("roles", []))
+                        ]
+                    )
+                if len(matches) == 1:
+                    index = matches[0]
+                    credit = credits[index]
+                    entity = "person" if incoming["type"] == "Person" else "organization"
+                    credits[index] = {
+                        **credit,
+                        **deepcopy(incoming),
+                        entity: _merge_facts(credit.get(entity, {}), incoming.get(entity, {})),
+                        "roles": list(
+                            dict.fromkeys([*credit.get("roles", []), *incoming.get("roles", [])])
+                        ),
+                    }
+                elif not any(
+                    _merge_facts(credits[index], incoming) == credits[index] for index in matches
+                ):
+                    # Ambiguous credits must not accumulate an already represented
+                    # contribution on every unchanged Provider sync.
+                    credits.append(deepcopy(incoming))
+            result[key] = credits
+        elif merge and isinstance(value, (list, dict)):
+            result[key] = _merge_facts(result.get(key), value)
+        elif merge and key == "id" and value.startswith("urn:uuid:"):
+            result.setdefault(key, value)
+        else:
+            result[key] = deepcopy(value)
+    if merge and (previous_id := item.work.get("id")) and result.get("id") != previous_id:
+        result["identifiers"] = _merge_facts(
+            result.get("identifiers", []), [work_id_identifier(previous_id)]
         )
-    except MetadataValidationError as error:
-        raise ValidationFailure(str(error)) from error
+    return metadata_write(result)
+
+
+def _same_credit(local: dict, incoming: dict) -> bool:
+    if local["type"] != incoming["type"]:
+        return False
+    left = local.get(local["type"].lower(), {})
+    right = incoming.get(incoming["type"].lower(), {})
+    if left.get("id") and right.get("id"):
+        return left["id"] == right["id"]
+    # Complete credit names distinguish people sharing name parts, including
+    # Jr/Sr. Use those supplied facts before falling back to family/given names.
+    if left.get("name") and right.get("name") and left["name"] != right["name"]:
+        return False
+    if left.get("family_name") and right.get("family_name"):
+        return (left["family_name"], left.get("given_name")) == (
+            right["family_name"],
+            right.get("given_name"),
+        )
+    return bool(left.get("name")) and left.get("name") == right.get("name")
+
+
+def _merge_facts(local, incoming):
+    """Keep omitted and additional local facts during a Provider merge."""
+    if isinstance(local, dict) and isinstance(incoming, dict):
+        result = deepcopy(local)
+        for key, value in incoming.items():
+            result[key] = _merge_facts(result.get(key), value)
+        return result
+    if isinstance(local, list) and isinstance(incoming, list):
+        merged = deepcopy(local)
+        for value in incoming:
+            if value not in merged:
+                merged.append(deepcopy(value))
+        return merged
+    return deepcopy(incoming)
 
 
 def generate_citation_key(item: Item) -> str:
-    return generate_default_citation_key(
-        metadata_bibliography_record(metadata_from_item(item, ())),
-        max_length=MAX_CITATION_KEY_LENGTH,
-    )
+    return generate_default_citation_key(item.work, max_length=128)
+
+
+def get_work_schema() -> dict:
+    return deepcopy(work_schema())
+
+
+def item_summary(item: Item) -> dict:
+    return {
+        "id": item.id,
+        "title_html": item.work.get("title", ""),
+        "authors": "; ".join(contributor_name(row) for row in work_authors(item.work)) or None,
+        "publication_date": item.work.get("date_published"),
+        "publication_title": item.work.get("container", {}).get("title"),
+        "doi": work_doi(item.work),
+        "version": item.version,
+    }

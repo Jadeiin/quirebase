@@ -12,9 +12,11 @@ from uuid import uuid4
 import pymupdf
 import pytest
 from app_helpers import json_payload
+from commonmeta.author_utils import get_one_author
+from commonmeta.base_utils import compact
 from import_helpers import pdf_import_batch_data
-from inquiro import CandidateRecord, Contributor, Identifier
-from item_helpers import contributor_values, metadata_list_values
+from inquiro import CandidateRecord, Identifier
+from item_helpers import contributor_values, metadata_list_values, work_identifier
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from storage_helpers import local_object_path
@@ -30,7 +32,7 @@ from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
     _pdf_import_inputs,
-    check_pdf_import_doi,
+    check_pdf_import_eligibility,
     discard_import_batch,
     extract_pdf_import_doi,
     finalize_pdf_import_batch,
@@ -43,7 +45,6 @@ from quirebase.models import (
     AuditEvent,
     ImportBatch,
     Item,
-    ItemIdentifier,
     ItemRead,
     ItemTag,
     Project,
@@ -62,11 +63,17 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
     return CandidateRecord(
         provider="crossref",
         lookup_identifier=Identifier("doi", identifier),
-        title=title,
-        authors=tuple(Contributor(name.strip()) for name in authors.split(";"))
-        if authors is not None
-        else None,
-        identifiers=(Identifier("doi", identifier),),
+        work=compact({
+            "id": f"https://doi.org/{identifier}",
+            "type": "Document",
+            "title": title,
+            "contributors": tuple(
+                get_one_author({"name": name.strip()}) for name in authors.split(";")
+            )
+            if authors is not None
+            else None,
+            "identifiers": [work_identifier("doi", identifier)],
+        }),
     )
 
 
@@ -79,28 +86,28 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
         db, async_session_factory, tmp_path, monkeypatch
     )
     base = f"/api/v1/workspaces/{item.workspace_id}"
-    item.authors = [
-        {
-            "display_name": "Smith, John",
-            "family_name": "Smith",
-            "given_name": "John",
-            "is_corresponding": True,
-        }
-    ]
-    item.keywords = ["Alpha; beta", "Robotics", "Robotics"]
+    item.work = {
+        **item.work,
+        "contributors": [
+            {
+                "type": "Person",
+                "person": {"family_name": "Smith", "given_name": "John"},
+                "roles": ["Author", "CorrespondingAuthor"],
+            }
+        ],
+        "subjects": [{"subject": "Alpha; beta"}, {"subject": "Robotics"}],
+    }
     await db.commit()
     try:
         response = await client.get(f"{base}/items/facets", params={"keyword_exact": "Alpha; beta"})
         assert response.status_code == 200
         assert response.json() == {
-            "authors": [
-                {"last_name": "Smith", "first_name": "John", "item_count": 1, "suffix": None}
-            ],
+            "authors": [{"last_name": "Smith", "first_name": "John", "item_count": 1}],
             "keywords": [
                 {"value": "Alpha; beta", "item_count": 1},
                 {"value": "Robotics", "item_count": 1},
             ],
-            "reference_types": [{"value": item.reference_type.value, "item_count": 1}],
+            "reference_types": [{"value": item.work["type"], "item_count": 1}],
         }
         matches = await client.get(
             f"{base}/items", params={"author_last_name": "Smith", "author_first_name": "John"}
@@ -114,9 +121,9 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
 async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, monkeypatch) -> None:
     pending = _pdf_import_inputs(batch.staged_files)
 
-    async def check(batch_id, candidate, detected_doi):
+    async def check(batch_id, candidate):
         async with session_factory() as worker_db:
-            return await check_pdf_import_doi(worker_db, batch_id, candidate, detected_doi)
+            return await check_pdf_import_eligibility(worker_db, batch_id, candidate)
 
     async def lookup(batch_id, candidate, detected_doi):
         async with session_factory() as worker_db:
@@ -125,24 +132,13 @@ async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, mon
     async def finalize(actor_id, workspace_id, batch_id, workflow_id, records, errors):
         async with session_factory() as worker_db:
             result = await finalize_pdf_import_batch(
-                worker_db,
-                actor_id,
-                workspace_id,
-                batch_id,
-                workflow_id,
-                records,
-                errors,
+                worker_db, actor_id, workspace_id, batch_id, workflow_id, records, errors
             )
             await worker_db.commit()
             return result
 
     async def cleanup(
-        _workflow_name,
-        _actor_id,
-        _workspace_id,
-        keys,
-        ignore_workflow_id=None,
-        **_options,
+        _workflow_name, _actor_id, _workspace_id, keys, ignore_workflow_id=None, **_options
     ):
         async with session_factory() as worker_db:
             await delete_unreferenced_objects(
@@ -151,22 +147,16 @@ async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, mon
         return f"cleanup:{batch.id}"
 
     monkeypatch.setattr(library_workflows, "extract_pdf_import_doi_step", extract_pdf_import_doi)
-    monkeypatch.setattr(library_workflows, "check_pdf_import_doi_step", check)
+    monkeypatch.setattr(library_workflows, "check_pdf_import_eligibility_step", check)
     monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", lookup)
     monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
     monkeypatch.setattr(library_workflows, "enqueue_child_workflow", cleanup)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
-    await workflow_body(
-        batch.actor_id,
-        batch.workspace_id,
-        batch.id,
-        batch.workflow_id,
-        pending,
-    )
+    await workflow_body(batch.actor_id, batch.workspace_id, batch.id, batch.workflow_id, pending)
     operations = durable_operations()
     workflow = await operations.get(batch.workflow_id)
     if workflow is not None and hasattr(operations, "workflows"):
-        operations.workflows[batch.workflow_id] = replace(  # type: ignore[attr-defined]
+        operations.workflows[batch.workflow_id] = replace(
             workflow, state="succeeded", raw_status="SUCCESS"
         )
     await db.refresh(batch)
@@ -210,17 +200,13 @@ async def test_pdf_import_revalidates_user_after_provider_io(
             await administrator_db.commit()
         return provider_candidate(identifier, "Stale authorization candidate")
 
-    monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        deactivate_during_lookup,
-    )
-
+    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", deactivate_during_lookup)
     preview = await stage_pdf_import_batch(
         db,
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/deactivated"), "deactivated.pdf")],
-        max_bytes=100_000,
+        max_bytes=100000,
     )
     batch = await db.get(ImportBatch, preview.id)
     await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
@@ -295,7 +281,7 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
             (published_pdf_bytes("10.1000/retry-authorized"), "candidate.pdf"),
             (pdf_bytes(), "missing-doi.pdf"),
         ],
-        max_bytes=100_000,
+        max_bytes=100000,
     )
     batch = await async_db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)
@@ -306,7 +292,6 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
     assert batch.errors[0]["code"] == "authorization_revoked"
     for key in keys:
         assert await get_object_store().exists(key)
-
     workspace = await async_db.get(Workspace, workspace_id)
     assert workspace is not None
     workspace.state = WorkspaceState.active
@@ -340,7 +325,7 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/retry"), "retry.pdf")],
-        max_bytes=100_000,
+        max_bytes=100000,
     )
     batch = await db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)[0]
@@ -348,11 +333,9 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
         "quirebase.library.imports.lookup_candidate",
         AsyncMock(side_effect=UpstreamServiceError("provider temporarily unavailable")),
     )
-
     async with async_session_factory() as worker_db:
         with pytest.raises(UpstreamServiceError, match="temporarily unavailable"):
             await prepare_pdf_import_candidate(worker_db, batch.id, pending)
-
     assert local_object_path(pending["_pdf"]["object_key"]).exists()
 
 
@@ -389,15 +372,11 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
         )
         async_db.add(batch)
         await async_db.commit()
-
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
         assert preview.json()["status"] == "failed"
-
         retried = await client.post(
-            f"{workspace_base}/imports/{batch.id}/retry",
-            json=json_payload({}),
+            f"{workspace_base}/imports/{batch.id}/retry", json=json_payload({})
         )
-
         assert retried.status_code == 200
         await async_db.refresh(batch)
         assert batch.status == "pending"
@@ -407,7 +386,6 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
         assert enqueue["workflow_id"] == batch.workflow_id
         assert enqueue["queue_name"] == "library.import"
         assert await get_object_store().exists(stored.key)
-
         assert not await library_workflows.fail_pdf_import_batch_step(
             batch.id, "prepare-pdf-import:old"
         )
@@ -460,11 +438,9 @@ async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow
     )
     async_db.add(batch)
     await async_db.commit()
-
     await retry_pdf_import_batch(async_db, editor, workspace_id, batch.id)
     await async_db.refresh(batch)
     enqueue = fake_durable_operations.enqueues[-1]
-
     assert batch.actor_id == editor.id
     assert enqueue["args"][0] == editor.id
     assert enqueue["attributes"]["actor_id"] == str(editor.id)
@@ -473,13 +449,7 @@ async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow
         await import_batch_api(workspace_id, batch.id, editor, async_db)
     ).workflow_id == batch.workflow_id
     assert await finalize_pdf_import_batch(
-        async_db,
-        editor.id,
-        workspace_id,
-        batch.id,
-        batch.workflow_id,
-        pending,
-        [],
+        async_db, editor.id, workspace_id, batch.id, batch.workflow_id, pending, []
     )
     assert batch.status == "ready"
 
@@ -487,11 +457,7 @@ async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     ("workflow_state", "raw_status"),
-    [
-        ("cancelled", "CANCELLED"),
-        ("failed", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"),
-        (None, None),
-    ],
+    [("cancelled", "CANCELLED"), ("failed", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"), (None, None)],
 )
 async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_pending(
     async_db,
@@ -540,22 +506,16 @@ async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_
             )
             workflow = fake_durable_operations.workflows[old_workflow_id]
             fake_durable_operations.workflows[old_workflow_id] = replace(
-                workflow,
-                state=workflow_state,
-                raw_status=raw_status,
+                workflow, state=workflow_state, raw_status=raw_status
             )
-
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
         assert preview.status_code == 200
         assert preview.json()["status"] == "failed"
         await async_db.refresh(batch)
         assert batch.status == "failed"
-
         retried = await client.post(
-            f"{workspace_base}/imports/{batch.id}/retry",
-            json=json_payload({}),
+            f"{workspace_base}/imports/{batch.id}/retry", json=json_payload({})
         )
-
         assert retried.status_code == 200
         await async_db.refresh(batch)
         assert batch.status == "pending"
@@ -568,11 +528,7 @@ async def test_terminal_or_missing_pdf_import_workflow_can_retry_while_batch_is_
 
 @pytest.mark.anyio
 async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_import_retry(
-    async_db,
-    async_session_factory,
-    fake_durable_operations,
-    tmp_path,
-    monkeypatch,
+    async_db, async_session_factory, fake_durable_operations, tmp_path, monkeypatch
 ):
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
@@ -605,17 +561,12 @@ async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_impor
         async_db.add(batch)
         await async_db.commit()
         await fake_durable_operations.enqueue(
-            "library.prepare_pdf_import",
-            queue_name="library.import",
-            workflow_id=old_workflow_id,
+            "library.prepare_pdf_import", queue_name="library.import", workflow_id=old_workflow_id
         )
         old_workflow = fake_durable_operations.workflows[old_workflow_id]
         fake_durable_operations.workflows[old_workflow_id] = replace(
-            old_workflow,
-            state="failed",
-            raw_status="MAX_RECOVERY_ATTEMPTS_EXCEEDED",
+            old_workflow, state="failed", raw_status="MAX_RECOVERY_ATTEMPTS_EXCEEDED"
         )
-
         preview_observed_terminal = asyncio.Event()
         release_preview = asyncio.Event()
         original_get = fake_durable_operations.get
@@ -634,13 +585,11 @@ async def test_stale_preview_convergence_does_not_overwrite_concurrent_pdf_impor
         monkeypatch.setattr(fake_durable_operations, "get", interleaved_get)
         preview_task = asyncio.create_task(client.get(f"{workspace_base}/imports/{batch.id}"))
         await preview_observed_terminal.wait()
-
         retried = await client.post(
             f"{workspace_base}/imports/{batch.id}/retry", json=json_payload({})
         )
         release_preview.set()
         preview = await preview_task
-
         assert retried.status_code == 200
         assert preview.status_code == 200
         await async_db.refresh(batch)
@@ -676,7 +625,7 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/cancelled"), "cancelled.pdf")],
-        max_bytes=100_000,
+        max_bytes=100000,
     )
     batch = await db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)[0]
@@ -685,7 +634,6 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
         await provider_started.wait()
         importing.cancel()
         release_provider.set()
-
         with pytest.raises(asyncio.CancelledError):
             await importing
     staged_keys = set(get_settings().object_dir.rglob("*.pdf")) - objects_before
@@ -711,25 +659,27 @@ async def test_dashboard_sidebar_limits_and_recent_reading(
             db.add(
                 Item(
                     workspace_id=item.workspace_id,
-                    title=f"Dashboard paper {number}",
                     created_by=item.created_by,
                     created_at=baseline + timedelta(days=number),
+                    work={
+                        "id": f"urn:uuid:{uuid4()}",
+                        "type": "Document",
+                        "title": f"Dashboard paper {number}",
+                    },
                 )
             )
         await db.commit()
-
         dashboard = await client.get(f"{workspace_base}/dashboard")
         assert dashboard.status_code == 200
         assert len(dashboard.json()["new_items"]) == 10
         titles = [row["title_html"] for row in dashboard.json()["new_items"]]
         assert "Dashboard paper 11" in titles
         assert "Dashboard paper 0" not in titles
-
         opened = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert opened.status_code == 200
         assert await db.get(ItemRead, (item.created_by, item.id)) is not None
         refreshed = await client.get(f"{workspace_base}/dashboard")
-        assert refreshed.json()["recent_items"][0]["item"]["title_html"] == item.title
+        assert refreshed.json()["recent_items"][0]["item"]["title_html"] == item.work.get("title")
         assert (await client.get("/api/v1/source")).status_code == 404
     finally:
         await client.aclose()
@@ -751,14 +701,13 @@ async def test_item_page_validates_access_before_recording_read(
     await provision_initial_workspace(db, other_user)
     private_item = Item(
         workspace_id=fixture_workspace_id(other_user),
-        title="Private paper",
         created_by=other_user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Private paper"},
     )
     db.add(private_item)
     await db.commit()
     private_item_id = private_item.id
     reader_id = item.created_by
-
     missing_item_id = uuid4()
     try:
         assert (
@@ -790,14 +739,10 @@ async def test_library_pagination_filters_and_bulk_actions(
             created_by=original.created_by,
         )
         second_project = Project(
-            workspace_id=original.workspace_id,
-            name="Reading queue",
-            created_by=original.created_by,
+            workspace_id=original.workspace_id, name="Reading queue", created_by=original.created_by
         )
         tag = Tag(
-            workspace_id=original.workspace_id,
-            name="Methods",
-            created_by=original.created_by,
+            workspace_id=original.workspace_id, name="Methods", created_by=original.created_by
         )
         db.add_all([project, second_project, tag])
         await db.flush()
@@ -805,15 +750,24 @@ async def test_library_pagination_filters_and_bulk_actions(
         for number in range(30):
             item = Item(
                 workspace_id=original.workspace_id,
-                title=f"Library paper {number:02d}",
-                abstract="This abstract should be optional." if number == 0 else None,
-                authors=contributor_values(
-                    "Alice Researcher" if number % 2 == 0 else "Bob Scientist"
-                ),
-                keywords=metadata_list_values("imaging" if number % 3 == 0 else "simulation"),
-                publication_date="2025" if number % 2 == 0 else "2024",
                 created_by=original.created_by,
                 updated_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=number),
+                work={
+                    "id": f"urn:uuid:{uuid4()}",
+                    "type": "Document",
+                    "title": f"Library paper {number:02d}",
+                    "description": "This abstract should be optional." if number == 0 else "",
+                    "date_published": "2025" if number % 2 == 0 else "2024",
+                    "contributors": contributor_values(
+                        "Alice Researcher" if number % 2 == 0 else "Bob Scientist"
+                    ),
+                    "subjects": [
+                        {"subject": v}
+                        for v in metadata_list_values(
+                            "imaging" if number % 3 == 0 else "simulation"
+                        )
+                    ],
+                },
             )
             db.add(item)
             await db.flush()
@@ -829,7 +783,6 @@ async def test_library_pagination_filters_and_bulk_actions(
                     ),
                 ])
         await db.commit()
-
         first_page = await client.get(f"{workspace_base}/items")
         assert first_page.status_code == 200
         assert first_page.json()["offset"] == 0
@@ -839,7 +792,6 @@ async def test_library_pagination_filters_and_bulk_actions(
         second_page = await client.get(f"{workspace_base}/items?offset=25")
         assert second_page.status_code == 200
         assert "Library paper 00" in second_page.text
-
         filtered = await client.get(
             f"{workspace_base}/items?author=Alice&year=2025&keyword=imaging"
         )
@@ -851,7 +803,6 @@ async def test_library_pagination_filters_and_bulk_actions(
         )
         assert "Library paper 00" in project_filter.text
         assert "Library paper 02" not in project_filter.text
-
         tagged = await client.post(
             f"{workspace_base}/items/bulk",
             json=json_payload({
@@ -864,7 +815,6 @@ async def test_library_pagination_filters_and_bulk_actions(
         organized = await client.get(f"{workspace_base}/items/{selected[0].id}/organize")
         assert organized.status_code == 200
         assert "Priority" in {tag["name"] for tag in organized.json()["tags"]}
-
         assigned = await client.post(
             f"{workspace_base}/items/bulk",
             json=json_payload({
@@ -881,50 +831,38 @@ async def test_library_pagination_filters_and_bulk_actions(
             for row in (
                 await client.get(f"{workspace_base}/items?project={second_project.id}")
             ).json()["items"]
-        } == set(
-            map(
-                str,
-                {
-                    selected[0].id,
-                    selected[1].id,
-                },
-            )
-        )
-
+        } == set(map(str, {selected[0].id, selected[1].id}))
         exported = await client.post(
             f"{workspace_base}/items/bibliography",
             json=json_payload({
-                "file_format": "endnote",
+                "file_format": "commonmeta",
                 "item_ids": [selected[0].id, selected[1].id],
             }),
         )
         assert exported.status_code == 200
-        assert "quirebase-export.enw" in exported.headers["content-disposition"]
+        assert "quirebase-export.json" in exported.headers["content-disposition"]
         assert "Library paper 00" in exported.text
         assert "This abstract should be optional." in exported.text
-
         native_checkbox_export = await client.post(
             f"{workspace_base}/items/bibliography",
             json=json_payload({
-                "file_format": "endnote",
+                "file_format": "csl-json",
                 "item_ids": [selected[0].id],
                 "include_abstract": True,
             }),
         )
         assert native_checkbox_export.status_code == 200
         assert "This abstract should be optional." in native_checkbox_export.text
-
         exported_without_abstract = await client.post(
             f"{workspace_base}/items/bibliography",
             json=json_payload({
-                "file_format": "endnote",
+                "file_format": "csl-json",
                 "item_ids": [selected[0].id],
                 "include_abstract": False,
             }),
         )
         assert exported_without_abstract.status_code == 200
         assert "This abstract should be optional." not in exported_without_abstract.text
-
         pdf_archive = await client.post(
             f"{workspace_base}/items/documents/archive",
             json=json_payload({"item_ids": [original.id]}),
@@ -938,20 +876,15 @@ async def test_library_pagination_filters_and_bulk_actions(
                 "Paper/manifest.json",
                 "manifest.json",
             ]
-
         annotated_pdf_archive = await client.post(
             f"{workspace_base}/items/documents/archive",
-            json=json_payload({
-                "item_ids": [original.id],
-                "include_annotations": True,
-            }),
+            json=json_payload({"item_ids": [original.id], "include_annotations": True}),
         )
         assert annotated_pdf_archive.status_code == 200
         assert (
             "quirebase-selected-annotated-pdfs.zip"
             in annotated_pdf_archive.headers["content-disposition"]
         )
-
         deleted = await client.post(
             f"{workspace_base}/items/bulk",
             json=json_payload({
@@ -981,9 +914,7 @@ async def test_pdf_import_batch_previews_before_creating_items(
             "quirebase.library.imports.lookup_candidate",
             AsyncMock(
                 side_effect=lambda identifier, _provider, _settings: provider_candidate(
-                    identifier,
-                    f"Article {identifier.rsplit('/', 1)[-1]}",
-                    authors="P. Author",
+                    identifier, f"Article {identifier.rsplit('/', 1)[-1]}", authors="P. Author"
                 )
             ),
         )
@@ -1007,11 +938,12 @@ async def test_pdf_import_batch_previews_before_creating_items(
         assert preview.status_code == 202
         assert (
             await db.scalar(
-                select(func.count()).select_from(Item).where(Item.title.like("Article %"))
+                select(func.count())
+                .select_from(Item)
+                .where(Item.work["title"].as_string().like("Article %"))
             )
             == 0
         )
-
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
@@ -1027,25 +959,23 @@ async def test_pdf_import_batch_previews_before_creating_items(
             "Article second",
         ]
         assert all(
-            candidate["metadata"]["authors"][0]["display_name"] == "P. Author"
+            candidate["metadata"]["contributors"][0]["person"]["family_name"] == "Author"
             for candidate in candidates
         )
         assert "_source_id" not in preview.text and "object_key" not in preview.text
-
         committed = await client.post(
-            f"{workspace_base}/imports/{batch.id}/commit",
-            json=json_payload({}),
+            f"{workspace_base}/imports/{batch.id}/commit", json=json_payload({})
         )
         assert committed.status_code == 200
         first = await db.scalar(
             select(Item)
             .options(selectinload(Item.revisions))
-            .where(Item.identifier_links.any(provider="doi", value="10.1000/first"))
+            .where(Item.work["id"].as_string() == "https://doi.org/10.1000/first")
         )
         second = await db.scalar(
             select(Item)
             .options(selectinload(Item.revisions))
-            .where(Item.identifier_links.any(provider="doi", value="10.1000/second"))
+            .where(Item.work["id"].as_string() == "https://doi.org/10.1000/second")
         )
         assert first is not None and second is not None
         assert first.revisions[0].file.metadata["original_name"] == "first.pdf"
@@ -1096,16 +1026,14 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
         assert "missing-doi.pdf" in preview.text
         assert any(error["code"] == "missing_doi" for error in batch.errors)
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
-
         committed = await client.post(
-            f"{workspace_base}/imports/{batch.id}/commit",
-            json=json_payload({}),
+            f"{workspace_base}/imports/{batch.id}/commit", json=json_payload({})
         )
         assert committed.status_code == 200
         article = await db.scalar(
             select(Item)
             .options(selectinload(Item.revisions))
-            .where(Item.identifier_links.any(provider="doi", value="10.1000/valid"))
+            .where(Item.work["id"].as_string() == "https://doi.org/10.1000/valid")
         )
         assert article is not None
         assert article.revisions[0].file.metadata["original_name"] == "valid.pdf"
@@ -1115,27 +1043,24 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
 
 
 @pytest.mark.anyio
-async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
+async def test_pdf_import_batch_warns_and_accepts_an_accessible_duplicate_doi(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, item, _revision = await authenticated_async_client(
+    client, item, _ = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
-    workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
-    db.add(
-        ItemIdentifier(
-            workspace_id=item.workspace_id,
-            item_id=item.id,
-            provider="doi",
-            value="10.1000/existing",
-        )
-    )
+    workspace_id = item.workspace_id
+    item.work = {**item.work, "id": "https://doi.org/10.1000/existing"}
     await db.commit()
-    objects_before = set(get_settings().object_dir.rglob("*.pdf"))
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidate",
+        AsyncMock(return_value=provider_candidate("10.1000/existing", "Duplicate candidate")),
+    )
+    base = f"/api/v1/workspaces/{workspace_id}"
     try:
         preview = await client.post(
-            f"{workspace_base}/imports/pdfs",
+            f"{base}/imports/pdfs",
             files=[
                 (
                     "pdfs",
@@ -1149,16 +1074,22 @@ async def test_pdf_import_batch_rejects_an_accessible_duplicate_doi(
         )
         assert preview.status_code == 202
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
-        assert batch is not None
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
-        preview = await client.get(f"{workspace_base}/imports/{batch.id}")
-        assert "duplicate.pdf" in preview.text
-        assert any(error["code"] == "existing_doi" for error in batch.errors)
-        assert batch.records == []
-        assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before
+        assert len(batch.records) == 1
+        assert not batch.errors
+        response = await client.post(f"{base}/imports/{batch.id}/commit", json={})
+        assert response.status_code == 200
+        assert (
+            await db.scalar(
+                select(func.count()).select_from(Item).where(Item.workspace_id == workspace_id)
+            )
+            == 2
+        )
+        assert (
+            await client.post(f"{base}/imports/{batch.id}/commit", json={})
+        ).json() == response.json()
     finally:
         await client.aclose()
-        get_settings.cache_clear()
 
 
 @pytest.mark.anyio
@@ -1200,7 +1131,6 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
         assert batch is not None
         pending_key = batch.staged_files[0].path
         assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
-
         discarded = await client.delete(f"{workspace_base}/imports/{batch.id}")
         assert discarded.status_code == 200
         assert await db.get(ImportBatch, batch.id) is None
@@ -1238,19 +1168,9 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         for filename in ("first-copy.pdf", "second-copy.pdf"):
             preview = await client.post(
                 f"{workspace_base}/imports/pdfs",
-                files=[
-                    (
-                        "pdfs",
-                        (
-                            filename,
-                            BytesIO(shared_pdf),
-                            "application/pdf",
-                        ),
-                    )
-                ],
+                files=[("pdfs", (filename, BytesIO(shared_pdf), "application/pdf"))],
             )
             assert preview.status_code == 202
-
         batches = list(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
@@ -1267,7 +1187,6 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         second_path = local_object_path(second_pdf.path)
         assert first_path.is_file()
         assert second_path.is_file()
-
         discarded = await client.delete(f"{workspace_base}/imports/{batches[0].id}")
         assert discarded.status_code == 200
         await document_workflows.delete_unreferenced_objects_step(
@@ -1275,16 +1194,14 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         )
         assert not first_path.exists()
         assert second_path.is_file()
-
         committed = await client.post(
-            f"{workspace_base}/imports/{batches[1].id}/commit",
-            json=json_payload({}),
+            f"{workspace_base}/imports/{batches[1].id}/commit", json=json_payload({})
         )
         assert committed.status_code == 200
         imported = await db.scalar(
             select(Item)
             .options(selectinload(Item.revisions))
-            .where(Item.identifier_links.any(provider="doi", value="10.1000/shared-staged"))
+            .where(Item.work["id"].as_string() == "https://doi.org/10.1000/shared-staged")
         )
         assert imported is not None
         assert local_object_path(imported.revisions[0].file.path).is_file()
@@ -1302,18 +1219,8 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
         db, async_session_factory, tmp_path, monkeypatch
     )
     pdf = published_pdf_bytes("10.1000/in-flight-staged")
-    discarded = await stage_pdf(
-        db,
-        pdf,
-        "discarded-copy.pdf",
-        100_000,
-    )
-    in_flight = await stage_pdf(
-        db,
-        pdf,
-        "in-flight.pdf",
-        100_000,
-    )
+    discarded = await stage_pdf(db, pdf, "discarded-copy.pdf", 100000)
+    in_flight = await stage_pdf(db, pdf, "in-flight.pdf", 100000)
     assert discarded.object_key != in_flight.object_key
     discarded_path = local_object_path(discarded.object_key)
     object_path = local_object_path(in_flight.object_key)
@@ -1335,7 +1242,6 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
     )
     db.add(batch)
     await db.flush()
-
     try:
         async with async_session_factory() as cleanup_db:
             assert await delete_unreferenced_objects(cleanup_db, (discarded.object_key,)) == (
@@ -1343,7 +1249,6 @@ async def test_cleanup_preserves_object_referenced_by_an_uncommitted_pdf_import_
             )
         assert not discarded_path.exists()
         assert object_path.is_file()
-
         await db.commit()
         async with async_session_factory() as cleanup_db:
             assert await delete_unreferenced_objects(cleanup_db, (in_flight.object_key,)) == ()
@@ -1368,7 +1273,7 @@ async def test_cleanup_preserves_object_reserved_by_active_pdf_import_workflow(
         user,
         fixture_workspace_id(user),
         [(published_pdf_bytes("10.1000/active-reservation"), "reserved.pdf")],
-        max_bytes=100_000,
+        max_bytes=100000,
     )
     batch = await db.get(ImportBatch, preview.id)
     workflow_id = batch.workflow_id
@@ -1376,11 +1281,9 @@ async def test_cleanup_preserves_object_reserved_by_active_pdf_import_workflow(
     object_path = local_object_path(object_key)
     await db.delete(batch)
     await db.commit()
-
     async with async_session_factory() as cleanup_db:
         assert await delete_unreferenced_objects(cleanup_db, (object_key,)) == ()
     assert object_path.is_file()
-
     fake_durable_operations.workflows.pop(workflow_id)
     async with async_session_factory() as cleanup_db:
         assert await delete_unreferenced_objects(cleanup_db, (object_key,)) == (object_key,)
@@ -1388,7 +1291,7 @@ async def test_cleanup_preserves_object_reserved_by_active_pdf_import_workflow(
 
 
 @pytest.mark.anyio
-async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
+async def test_commit_pdf_import_batch_allows_doi_created_after_preview(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
@@ -1420,7 +1323,6 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
                 ],
             )
             assert preview.status_code == 202
-
         batches = list(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
@@ -1431,23 +1333,20 @@ async def test_commit_pdf_import_batch_rechecks_doi_after_stale_preview(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
         first = await client.post(
-            f"{workspace_base}/imports/{batches[0].id}/commit",
-            json=json_payload({}),
+            f"{workspace_base}/imports/{batches[0].id}/commit", json=json_payload({})
         )
         assert first.status_code == 200
-
         stale = await client.post(
-            f"{workspace_base}/imports/{batches[1].id}/commit",
-            json=json_payload({}),
+            f"{workspace_base}/imports/{batches[1].id}/commit", json=json_payload({})
         )
-        assert stale.status_code == 409
+        assert stale.status_code == 200
         assert (
             await db.scalar(
                 select(func.count())
                 .select_from(Item)
-                .where(Item.identifier_links.any(provider="doi", value="10.1000/stale-preview"))
+                .where(Item.work["id"].as_string() == "https://doi.org/10.1000/stale-preview")
             )
-            == 1
+            == 2
         )
         assert await db.get(ImportBatch, batches[1].id) is not None
     finally:

@@ -3,37 +3,41 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from inquiro.canonical import (
-    first_text,
-)
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import first_text
 from inquiro.identifiers import parse_isbn
 from inquiro.models import (
     CandidateNotFound,
     CandidatePage,
     CandidateRecord,
-    Contributor,
     Identifier,
     ProviderConfig,
     ProviderUnavailable,
-    ResourceLink,
     SearchQuery,
 )
 from inquiro.providers._contracts import ProviderDefinition
 from inquiro.providers._payload import (
     boolean_query,
     keyword_values,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
     text_contributors,
     unique_links,
 )
-from inquiro.reference_types import ReferenceType
 
 if TYPE_CHECKING:
     from inquiro.transport import BoundedTransport
 
 
-def _links(record: dict, value: str) -> tuple[ResourceLink, ...]:
+def _links(record: dict, value: str) -> tuple[dict, ...]:
     links = [
-        ResourceLink(
+        source_link(
             first_text(record.get("url")) or f"https://openlibrary.org/isbn/{value}",
             kind="landing_page",
         )
@@ -46,11 +50,11 @@ def _links(record: dict, value: str) -> tuple[ResourceLink, ...]:
     }
     for ebook in record.get("ebooks", []):
         if url := first_text(ebook.get("preview_url")):
-            links.append(ResourceLink(url, kind="landing_page"))
+            links.append(source_link(url, kind="landing_page"))
         for format_name, entry in (ebook.get("formats") or {}).items():
             if isinstance(entry, dict) and (url := first_text(entry.get("url"))):
                 links.append(
-                    ResourceLink(url, kind="full_text", media_type=media_types.get(format_name))
+                    source_link(url, kind="full_text", media_type=media_types.get(format_name))
                 )
     return unique_links(*links)
 
@@ -69,8 +73,7 @@ class OpenLibraryLookupAdapter:
         try:
             payload = json.loads(
                 await client.get(
-                    f"{endpoint}/api/books",
-                    {"bibkeys": key, "format": "json", "jscmd": "data"},
+                    f"{endpoint}/api/books", {"bibkeys": key, "format": "json", "jscmd": "data"}
                 )
             )
         except (json.JSONDecodeError, TypeError) as error:
@@ -81,32 +84,44 @@ class OpenLibraryLookupAdapter:
         return CandidateRecord(
             provider="openlibrary",
             lookup_identifier=identifier,
-            title=first_text(record.get("title")) or "",
-            abstract=None,
-            authors=tuple(
-                Contributor(
-                    name,
-                    identifiers=(Identifier("openlibrary", url),)
-                    if (url := first_text(author.get("url")))
-                    else (),
+            work=compact({
+                "id": source_work_id((Identifier("isbn", value),)),
+                "type": "Book",
+                "title": first_text(record.get("title")) or "",
+                "description": None,
+                "contributors": tuple(
+                    source_credit(
+                        name,
+                        identifiers=(Identifier("openlibrary", url),)
+                        if (url := first_text(author.get("url")))
+                        else (),
+                    )
+                    for author in record.get("authors", [])
+                    if (name := first_text(author.get("name")))
                 )
-                for author in record.get("authors", [])
-                if (name := first_text(author.get("name")))
-            )
-            if "authors" in record
-            else None,
-            keywords=keyword_values([
-                entry["name"] for entry in record["subjects"] if entry.get("name")
-            ])
-            if "subjects" in record
-            else None,
-            publication_date=first_text(record.get("publish_date")),
-            publisher=first_text([
-                publisher.get("name") for publisher in record.get("publishers", [])
-            ]),
-            urls=_links(record, value),
-            identifiers=(Identifier("isbn", value),),
-            reference_type=ReferenceType.book,
+                or None,
+                "date_published": first_text(record.get("publish_date")),
+                "identifiers": source_identifiers((Identifier("isbn", value),)),
+                "subjects": source_subjects(
+                    (
+                        keyword_values([
+                            entry["name"] for entry in record["subjects"] if entry.get("name")
+                        ])
+                        if "subjects" in record
+                        else None
+                    )
+                    or ()
+                ),
+                "publisher": {
+                    "name": first_text([
+                        publisher.get("name") for publisher in record.get("publishers", [])
+                    ])
+                }
+                if first_text([publisher.get("name") for publisher in record.get("publishers", [])])
+                else None,
+                "url": source_landing_url(_links(record, value)),
+                "files": source_files(_links(record, value)),
+            }),
         )
 
 
@@ -156,11 +171,15 @@ class OpenLibrarySearchAdapter:
                 CandidateRecord(
                     provider="openlibrary",
                     lookup_identifier=Identifier("isbn", isbns[0]),
-                    identifiers=(Identifier("isbn", isbns[0]),),
-                    title=doc.get("title"),
-                    authors=text_contributors(doc.get("author_name")),
-                    publication_title=first_text(doc.get("publisher")),
-                    publication_date=str(doc.get("first_publish_year") or "") or None,
+                    work=compact({
+                        "id": source_work_id((Identifier("isbn", isbns[0]),)),
+                        "type": "Book",
+                        "title": doc.get("title"),
+                        "contributors": text_contributors(doc.get("author_name")),
+                        "date_published": str(doc.get("first_publish_year") or "") or None,
+                        "identifiers": source_identifiers((Identifier("isbn", isbns[0]),)),
+                        "publisher": compact({"name": first_text(doc.get("publisher"))}),
+                    }),
                 )
             )
         return CandidatePage("openlibrary", tuple(results), total, request.page, request.per_page)

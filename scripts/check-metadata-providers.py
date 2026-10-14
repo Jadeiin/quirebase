@@ -23,11 +23,7 @@ async def main() -> None:
                 {
                     "provider": record.provider,
                     "lookup_identifier": asdict(record.lookup_identifier),
-                    "identifiers": [asdict(identity) for identity in record.identifiers],
-                    "title": record.title,
-                    "authors": [asdict(author) for author in record.authors]
-                    if record.authors is not None
-                    else None,
+                    "work": record.work,
                 },
                 ensure_ascii=False,
             )

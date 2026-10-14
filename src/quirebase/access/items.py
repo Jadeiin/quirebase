@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Select, select
-from sqlalchemy.orm import selectinload
 
 from quirebase.access.context import WorkspaceContext, require_workspace_action
 from quirebase.access.scope import workspace_select
@@ -37,13 +36,7 @@ def workspace_items_query(ctx: WorkspaceContext) -> Select[tuple[Item]]:
 async def get_item(db: AsyncSession, ctx: WorkspaceContext, item_id: UUID) -> Item | None:
     """Load an Item by id inside an already-resolved Workspace context."""
 
-    return await db.scalar(
-        workspace_select(Item, ctx)
-        .options(
-            selectinload(Item.identifier_links),
-        )
-        .where(Item.id == item_id)
-    )
+    return await db.scalar(workspace_select(Item, ctx).options().where(Item.id == item_id))
 
 
 async def get_item_for_update(
@@ -52,12 +45,7 @@ async def get_item_for_update(
     """Load an Item root with a row lock for a mutation boundary."""
 
     return await db.scalar(
-        workspace_select(Item, ctx)
-        .options(
-            selectinload(Item.identifier_links),
-        )
-        .where(Item.id == item_id)
-        .with_for_update()
+        workspace_select(Item, ctx).options().where(Item.id == item_id).with_for_update()
     )
 
 
@@ -142,9 +130,7 @@ async def require_accessible_items(
         (
             await db.scalars(
                 select(Item)
-                .options(
-                    selectinload(Item.identifier_links),
-                )
+                .options()
                 .where(Item.workspace_id == workspace_id, Item.id.in_(requested))
             )
         ).all()

@@ -126,7 +126,11 @@ async def test_single_and_bulk_actions_evaluate_independent_grants(
     async_db.add(
         WorkspaceMember(workspace_id=workspace_id, user_id=actor.id, role=WorkspaceRole.editor)
     )
-    bulk_item = Item(workspace_id=workspace_id, title="Bulk", created_by=actor.id)
+    bulk_item = Item(
+        workspace_id=workspace_id,
+        created_by=actor.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Bulk"},
+    )
     project = Project(workspace_id=workspace_id, name="Option", created_by=actor.id)
     async_db.add_all([bulk_item, project])
     await async_db.commit()

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from types import SimpleNamespace
 
 import httpx2
 import pytest
 from inquiro import Identifier
-from inquiro.bibliography import BibliographyRecord, record_to_csl_json
+from inquiro.bibliography import export_bibliography_records, work_to_csl_json
 from inquiro.canonical import normalize_publication_date
+from inquiro.work import work_doi, work_identifiers
 from inquiro_provider_helpers import provider_runtime
 
 pytestmark = pytest.mark.anyio
@@ -53,13 +55,14 @@ def test_upstream_dates_preserve_only_the_available_precision(source, expected):
     ],
 )
 def test_csl_projection_uses_the_same_date_precision_contract(publication_date, issued):
-    bibliography = BibliographyRecord(
-        citation_key="date",
-        reference_type="article-journal",
-        title="Publication precision",
-        publication_date=publication_date,
-    )
-    assert record_to_csl_json(bibliography).get("issued") == issued
+    bibliography = {
+        "id": "urn:uuid:cf281c3d-c96f-4ce6-a6f1-17460c42e79b",
+        "type": "JournalArticle",
+        "title": "Publication precision",
+        "date_published": normalize_publication_date(publication_date),
+    }
+    bibliography = {key: value for key, value in bibliography.items() if value is not None}
+    assert work_to_csl_json(bibliography).get("issued") == issued
 
 
 async def test_datacite_preserves_explicit_names_organizations_and_subject_boundaries():
@@ -100,22 +103,21 @@ async def test_datacite_preserves_explicit_names_organizations_and_subject_bound
     ) as runtime:
         record = await runtime.lookup("10.1000/structured", provider="datacite")
 
-    organization, person = record.authors
-    assert organization.kind == "organization"
-    assert organization.bibliographic_name.family_name == "World Health Organization"
-    assert organization.bibliographic_name.given_name is None
-    assert (person.family_name, person.given_name) == ("de la Cruz", "Juan")
-    assert person.bibliographic_name.display_name() == "de la Cruz, Juan"
-    assert person.identifiers == (Identifier("orcid", "https://orcid.org/0000-0002-1825-0097"),)
-    assert person.affiliations[0].identifiers == (Identifier("ror", "https://ror.org/03yrm5c26"),)
-    assert record.keywords == ("Alpha; beta",)
-    assert record.publisher == "Example Publisher"
-    assert record.publication_title is None
+    organization, credit = record.work["contributors"]
+    assert organization["type"] == "Organization"
+    assert organization["organization"]["name"] == "World Health Organization"
+    person = credit["person"]
+    assert (person["family_name"], person["given_name"]) == ("de la Cruz", "Juan")
+    assert person["id"] == "https://orcid.org/0000-0002-1825-0097"
+    assert person["affiliations"][0]["identifier"] == "https://ror.org/03yrm5c26"
+    assert record.work["subjects"] == [{"subject": "Alpha; beta"}]
+    assert record.work["publisher"]["name"] == "Example Publisher"
+    assert "container" not in record.work
 
 
 async def test_openalex_preserves_authorship_affiliation_mapping_and_pdf_metadata():
     payload = {
-        "id": "https://openalex.org/W123",
+        "id": "https://openalex.org/W1230000000",
         "display_name": "Authorships",
         "authorships": [
             {
@@ -150,6 +152,7 @@ async def test_openalex_preserves_authorship_affiliation_mapping_and_pdf_metadat
                 "institutions": [{"display_name": "Research Institute", "country_code": "US"}],
             },
         ],
+        "best_oa_location": {"pdf_url": "https://example.test/download?format=pdf"},
         "primary_location": {
             "landing_page_url": "https://example.test/article",
             "pdf_url": "https://example.test/download?format=pdf",
@@ -161,26 +164,19 @@ async def test_openalex_preserves_authorship_affiliation_mapping_and_pdf_metadat
     async with provider_runtime(
         transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json=payload))
     ) as runtime:
-        record = await runtime.lookup("W123", provider="openalex")
+        record = await runtime.lookup("W1230000000", provider="openalex")
 
-    ada, grace, katherine = record.authors
-    assert ada.family_name is None and ada.given_name is None
-    assert ada.bibliographic_name.family_name == "Lovelace"
-    assert ada.is_corresponding is True and grace.is_corresponding is None
-    assert ada.affiliations[0].name == "Example University"
-    assert ada.affiliations[0].raw_name == "Research Lab, Example University"
-    assert ada.affiliations[0].identifiers == (
-        Identifier("openalex", "https://openalex.org/I123"),
-        Identifier("ror", "https://ror.org/03yrm5c26"),
-    )
-    assert grace.affiliations[0].name == "Other Institute"
-    assert katherine.affiliations[0].name == "Research Institute"
-    assert katherine.affiliations[0].identifiers == ()
-    assert katherine.affiliations[0].country_code == "US"
-    assert len(ada.affiliations) == 1
-    pdf = next(link for link in record.urls if link.kind == "full_text")
-    assert pdf.media_type == "application/pdf"
-    assert (pdf.version, pdf.license, pdf.is_open_access) == ("publishedVersion", "cc-by", True)
+    ada, _grace, katherine = [credit["person"] for credit in record.work["contributors"]]
+    assert (ada["family_name"], ada["given_name"]) == ("Lovelace", "Ada")
+    assert ada["affiliations"][0]["identifier"] == "https://ror.org/03yrm5c26"
+    assert katherine["affiliations"][0]["name"] == "Research Institute"
+    assert record.work["url"] == "https://example.test/article"
+    assert record.work["files"][0] == {
+        "url": "https://example.test/download?format=pdf",
+        "mime_type": "application/pdf",
+    }
+    assert "CorrespondingAuthor" not in record.work["contributors"][0]["roles"]
+    assert record.diagnostics
 
 
 async def test_crossref_keeps_link_purpose_and_version_without_guessing_media_type():
@@ -203,13 +199,11 @@ async def test_crossref_keeps_link_purpose_and_version_without_guessing_media_ty
         transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json=payload))
     ) as runtime:
         record = await runtime.lookup("10.1000/links")
-    pdf, unknown = [link for link in record.urls if link.kind == "full_text"]
-    assert (pdf.media_type, pdf.version, pdf.intended_application) == (
-        "application/pdf",
-        "vor",
-        "text-mining",
-    )
-    assert unknown.media_type is None
+
+    pdf, unknown = record.work["files"]
+    assert pdf == {"url": "https://example.test/download", "mime_type": "application/pdf"}
+    assert unknown == {"url": "https://example.test/unknown.pdf"}
+    assert record.diagnostics
 
 
 async def test_pubmed_fetch_returns_complete_names_collectives_and_affiliations():
@@ -231,18 +225,45 @@ async def test_pubmed_fetch_returns_complete_names_collectives_and_affiliations(
 
     async with provider_runtime(transport=httpx2.MockTransport(response)) as runtime:
         record = await runtime.lookup("42", provider="pubmed")
-    person, organization = record.authors
-    assert (person.family_name, person.given_name) == ("de la Cruz", "Juan")
-    assert person.display_name == "Juan de la Cruz"
-    assert person.affiliations[0].name == "Example University"
-    assert person.affiliations[0].identifiers == (Identifier("ror", "https://ror.org/03yrm5c26"),)
-    assert organization.kind == "organization"
-    assert record.title == "Names with <i>structure</i>"
-    assert record.abstract == "RESULTS: Preserved <sup>2</sup>"
-    assert record.publication_date == "2025-10-09"
-    assert record.pages is None
-    assert record.keywords == ("Alpha; beta",)
-    assert Identifier("pmcid", "PMC123") in record.identifiers
+
+    person, organization = record.work["contributors"]
+    assert (person["person"]["family_name"], person["person"]["given_name"]) == (
+        "de la Cruz",
+        "Juan",
+    )
+    assert person["person"]["affiliations"][0]["identifier"] == "https://ror.org/03yrm5c26"
+    assert organization["type"] == "Organization"
+    assert record.work["title"] == "Names with <i>structure</i>"
+    assert record.work["description"] == "RESULTS: Preserved <sup>2</sup>"
+    assert record.work["date_published"] == "2025-10-09"
+    assert record.work["subjects"] == [{"subject": "Alpha; beta"}]
+    assert ("pmcid", "PMC123") in work_identifiers(record.work)
+
+
+async def test_pubmed_suffixes_distinguish_authors_in_citation_exports():
+    xml = """<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>42</PMID><Article>
+    <ArticleTitle>Generational names</ArticleTitle><AuthorList>
+    <Author><LastName>Smith</LastName><ForeName>John</ForeName><Suffix>Jr</Suffix></Author>
+    <Author><LastName>Smith</LastName><ForeName>John</ForeName><Suffix>Sr</Suffix></Author>
+    </AuthorList></Article></MedlineCitation></PubmedArticle></PubmedArticleSet>"""
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, text=xml))
+    ) as runtime:
+        record = await runtime.lookup("42", provider="pubmed")
+    snapshot = deepcopy(record.work)
+    authors = work_to_csl_json(record.work)["author"]
+    assert authors == [
+        {"family": "Smith", "given": "John", "suffix": "Jr"},
+        {"family": "Smith", "given": "John", "suffix": "Sr"},
+    ]
+    assert [credit["person"]["family_name"] for credit in record.work["contributors"]] == [
+        "Smith",
+        "Smith",
+    ]
+    for file_format in ("bibtex", "ris"):
+        output = export_bibliography_records([record.work], file_format)
+        assert "Jr" in output and "Sr" in output
+    assert record.work == snapshot
 
 
 @pytest.mark.parametrize(
@@ -272,20 +293,12 @@ async def test_pubmed_uses_valid_elocation_doi_when_article_id_is_missing(
         transport=httpx2.MockTransport(lambda _: httpx2.Response(200, text=xml))
     ) as runtime:
         record = await runtime.lookup("42", provider="pubmed")
-    assert record.doi == expected
-    assert [identity.value for identity in record.identifiers if identity.provider == "doi"] == (
-        [expected] if expected else []
-    )
-    assert [link.url for link in record.urls if link.url.startswith("https://doi.org/")] == (
-        [f"https://doi.org/{expected}"] if expected else []
-    )
-    bibliography = BibliographyRecord(
-        citation_key="elocation",
-        reference_type="article-journal",
-        title=record.title,
-        doi=record.doi,
-    )
-    assert record_to_csl_json(bibliography).get("DOI") == expected
+
+    assert work_doi(record.work) == expected
+    assert sorted(
+        value for namespace, value in work_identifiers(record.work) if namespace == "doi"
+    ) == ([expected] if expected else [])
+    assert work_to_csl_json(record.work).get("DOI") == expected
 
 
 async def test_pubmed_preserves_xml_literal_text_and_true_inline_markup():
@@ -299,12 +312,13 @@ async def test_pubmed_preserves_xml_literal_text_and_true_inline_markup():
     ) as runtime:
         record = await runtime.lookup("42", provider="pubmed")
 
-    assert record.title == (
-        "List&lt;T&gt; &amp; &lt;i&gt;literal&lt;/i&gt; <i>real &lt;tag&gt;</i> tail &lt;U&gt;"
+    assert (
+        record.work["title"]
+        == "List&lt;T&gt; &amp; &lt;i&gt;literal&lt;/i&gt; <i>real &lt;tag&gt;</i> tail &lt;U&gt;"
     )
-    assert record.abstract == (
-        "RESULTS &lt;i&gt;literal&lt;/i&gt;: "
-        "List&lt;T&gt; &amp; &lt;i&gt;literal&lt;/i&gt; <sup>2</sup> tail &lt;U&gt;"
+    assert (
+        record.work["description"]
+        == "RESULTS &lt;i&gt;literal&lt;/i&gt;: List&lt;T&gt; &amp; &lt;i&gt;literal&lt;/i&gt; <sup>2</sup> tail &lt;U&gt;"
     )
 
 
@@ -321,7 +335,8 @@ async def test_pubmed_date_components_do_not_turn_ranges_into_single_dates(month
         transport=httpx2.MockTransport(lambda _: httpx2.Response(200, text=xml))
     ) as runtime:
         record = await runtime.lookup("42", provider="pubmed")
-    assert record.publication_date == expected
+
+    assert record.work.get("date_published") == expected
 
 
 @pytest.mark.parametrize(
@@ -341,14 +356,9 @@ async def test_pubmed_medline_date_ranges_preserve_common_precision(medline_date
         transport=httpx2.MockTransport(lambda _: httpx2.Response(200, text=xml))
     ) as runtime:
         record = await runtime.lookup("42", provider="pubmed")
-    assert record.publication_date == expected
-    bibliography = BibliographyRecord(
-        citation_key="range",
-        reference_type=record.reference_type,
-        title=record.title,
-        publication_date=record.publication_date,
-    )
-    assert record_to_csl_json(bibliography).get("issued") == issued
+
+    assert record.work.get("date_published") == expected
+    assert work_to_csl_json(record.work).get("issued") == issued
 
 
 @pytest.mark.parametrize("is_chapter", [True, False])
@@ -393,31 +403,27 @@ async def test_pubmed_book_fetch_preserves_record_type_and_author_roles(
 
     async with provider_runtime(transport=httpx2.MockTransport(response)) as runtime:
         record = await runtime.lookup("43", provider="pubmed")
+
     assert record.provider == "pubmed"
     assert record.lookup_identifier == Identifier("pmid", "43")
-    assert record.reference_type == ("chapter" if is_chapter else "book")
-    assert record.title == ("Chapter <i>title</i>" if is_chapter else "Book <i>title</i>")
-    assert record.publication_date == "2024-02"
-    assert record.publication_title == ("Book title" if is_chapter else None)
-    assert record.publisher == "Example Press"
-    assert record.volume == "2"
-    assert record.pages == ("12-18" if is_chapter else None)
-    assert record.abstract == "SUMMARY: Book <sup>2</sup> summary"
-    assert record.keywords == ("Alpha; beta",)
-    assert record.doi == "10.1000/book-record"
-    assert Identifier("pmid", "43") in record.identifiers
-    assert Identifier("doi", "10.1000/book-record") in record.identifiers
-    assert len(record.identifiers) == len(set(record.identifiers))
-    assert record.urls[0].url == "https://pubmed.ncbi.nlm.nih.gov/43/"
-    assert len(record.authors) == 1
-    author = record.authors[0]
-    assert author.kind == "person"
+    assert record.work["type"] == ("BookChapter" if is_chapter else "Book")
+    assert record.work["title"] == ("Chapter <i>title</i>" if is_chapter else "Book <i>title</i>")
+    assert record.work["date_published"] == "2024-02"
+    assert record.work["container"].get("title") == ("Book title" if is_chapter else None)
+    assert record.work["publisher"]["name"] == "Example Press"
+    assert record.work["container"]["volume"] == "2"
+    assert record.work["container"].get("first_page") == ("12-18" if is_chapter else None)
+    assert record.work["description"] == "SUMMARY: Book <sup>2</sup> summary"
+    assert record.work["subjects"] == [{"subject": "Alpha; beta"}]
+    assert work_identifiers(record.work) == {("pmid", "43"), ("doi", "10.1000/book-record")}
+    assert record.work["url"] == "https://pubmed.ncbi.nlm.nih.gov/43/"
+    person = record.work["contributors"][0]["person"]
+    assert (person["family_name"], person["given_name"]) == (
+        ("de la Cruz", "Juan") if is_chapter else ("Writer", "Ada")
+    )
     if is_chapter:
-        assert (author.family_name, author.given_name) == ("de la Cruz", "Juan")
-        assert author.identifiers == (Identifier("orcid", "0000-0002-1825-0097"),)
-        assert author.affiliations[0].name == "Example University"
-    else:
-        assert (author.family_name, author.given_name) == ("Writer", "Ada")
+        assert person["id"] == "https://orcid.org/0000-0002-1825-0097"
+        assert person["affiliations"][0]["name"] == "Example University"
 
 
 async def test_ieee_uses_declared_pdf_links_and_author_affiliations():
@@ -440,12 +446,12 @@ async def test_ieee_uses_declared_pdf_links_and_author_affiliations():
         transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json=payload)),
     ) as runtime:
         record = await runtime.lookup("1234567", provider="ieee")
-    assert record.authors[0].affiliations[0].name == "Research Institute"
-    assert record.keywords == ("Alpha; beta",)
-    assert {link.media_type for link in record.urls if link.kind == "full_text"} == {
-        "application/pdf",
-        "text/html",
-    }
+
+    assert (
+        record.work["contributors"][0]["person"]["affiliations"][0]["name"] == "Research Institute"
+    )
+    assert record.work["subjects"] == [{"subject": "Alpha; beta"}]
+    assert {file["mime_type"] for file in record.work["files"]} == {"application/pdf", "text/html"}
 
 
 @pytest.mark.parametrize(
@@ -479,7 +485,7 @@ async def test_nasa_ads_maps_affiliations_using_original_author_positions(
         transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json=payload)),
     ) as runtime:
         record = await runtime.lookup("2025ApJ...123..456A", provider="nasa_ads")
-    assert [author.display_name for author in record.authors] == ["Doe, Jane", "Roe, John"]
-    assert [
-        author.affiliations[0].name if author.affiliations else None for author in record.authors
-    ] == expected
+
+    people = [credit["person"] for credit in record.work["contributors"]]
+    assert [person["name"] for person in people] == ["Doe, Jane", "Roe, John"]
+    assert [person.get("affiliations", [{}])[0].get("name") for person in people] == expected

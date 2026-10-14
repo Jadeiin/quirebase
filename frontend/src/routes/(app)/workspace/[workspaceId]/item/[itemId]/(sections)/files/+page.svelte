@@ -12,11 +12,7 @@
 	} from '#lib/features/item/files/mutations.js';
 	import ItemFilesSection from '#lib/features/item/files/ItemFilesSection.svelte';
 	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
-	import {
-		itemDetailsQuery,
-		itemFilesQuery,
-		itemOverviewQuery
-	} from '#lib/features/item/queries.js';
+	import { itemFilesQuery, itemOverviewQuery } from '#lib/features/item/queries.js';
 	import type { FileRow } from '#lib/features/item/types.js';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import { msg, t } from '#lib/i18n.js';
@@ -32,7 +28,6 @@
 	const workflows = getWorkflowCenter();
 	const workspaceApi = $derived(createWorkspaceApi(params.workspaceId));
 	const overview = createQuery(() => itemOverviewQuery(params.workspaceId, params.itemId));
-	const details = createQuery(() => itemDetailsQuery(params.workspaceId, params.itemId, true));
 	const files = createQuery(() => itemFilesQuery(params.workspaceId, params.itemId, true));
 
 	async function trackDocument(workflowId: string) {
@@ -121,13 +116,13 @@
 	onConfirm={confirmDeleteFile}
 />
 <ItemSectionState
-	loading={files.isPending || details.isPending}
-	failed={files.isError || details.isError}
+	loading={files.isPending || overview.isPending}
+	failed={files.isError || overview.isError}
 >
 	<ItemFilesSection
 		itemId={params.itemId}
 		data={files.data!}
-		details={details.data}
+		metadata={overview.data!.metadata}
 		canEdit={can(overview.data?.authorization, 'file.manage')}
 		canDelete={can(overview.data?.authorization, 'file.delete')}
 		busy={fileUpload.isPending || fileRemoteUpload.isPending || fileDelete.isPending}

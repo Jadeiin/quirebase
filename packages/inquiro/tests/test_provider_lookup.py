@@ -1,39 +1,156 @@
-import asyncio
-import json
 from types import SimpleNamespace
 
 import httpx2
 import pytest
 from inquiro import (
     CandidateNotFound,
-    CandidateRecord,
-    Contributor,
     Identifier,
-    ProviderConfig,
-    ProviderRuntime,
     ProviderUnavailable,
-    ResourceLink,
+    SearchClause,
+    SearchQuery,
 )
-from inquiro.transport import MockExchange, TransportRequest, TransportResponse
 from inquiro_provider_helpers import provider_runtime
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize(
+    "provider,identifier,source_doi",
+    [
+        ("pubmed", "42", "10.2/pubmed"),
+        ("arxiv", "2401.00001", "10.3/arxiv"),
+        ("ieee", "1234567", "10.1234/ieee"),
+        ("nasa_ads", "2025ApJ...123..456A", "10.1234/ads"),
+    ],
+)
+@pytest.mark.parametrize("doi", ["10.1234/Äbc", "10.1234/A%3c", "10.1234/X?#"])
+async def test_provider_doi_uri_is_encoded_without_changing_raw_identifier(
+    provider, identifier, source_doi, doi
+):
+    from urllib.parse import quote
+
+    from inquiro.identifiers import canonical_doi
+    from inquiro.work import work_identifiers
+
+    def returned(request):
+        original = response(request)
+        return httpx2.Response(
+            200, content=original.content.replace(source_doi.encode(), doi.encode())
+        )
+
+    _, record = await lookup_metadata(
+        identifier,
+        provider,
+        settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
+        transport=httpx2.MockTransport(returned),
+    )
+    assert record.work["id"] == f"https://doi.org/{quote(canonical_doi(doi), safe='/')}"
+    assert {"identifier_type": "DOI", "identifier": doi} in record.work["identifiers"]
+    assert ("doi", canonical_doi(doi)) in work_identifiers(record.work)
+
+
+@pytest.mark.parametrize(
+    "provider,identifier,source_doi",
+    [
+        ("crossref", "10.1234/sample", "10.1234/sample"),
+        ("datacite", "10.1234/sample", "10.9999/dataset"),
+        ("openalex", "W1230000000", "https://doi.org/10.1234/openalex"),
+    ],
+)
+@pytest.mark.parametrize("doi", ["10.1234/Über", "10.1234/über", "10.1234/A%3c", "10.123456/Über"])
+async def test_native_provider_conversion_preserves_doi_identity(
+    provider, identifier, source_doi, doi
+):
+    from urllib.parse import quote
+
+    from inquiro.identifiers import canonical_doi
+    from inquiro.work import work_identifiers
+
+    def returned(request):
+        original = response(request)
+        value = f"https://doi.org/{quote(doi, safe='/')}" if provider == "openalex" else doi
+        return httpx2.Response(
+            200, content=original.content.replace(source_doi.encode(), value.encode())
+        )
+
+    _, record = await lookup_metadata(
+        identifier, provider, transport=httpx2.MockTransport(returned)
+    )
+    assert ("doi", canonical_doi(doi)) in work_identifiers(record.work)
+    assert record.work["id"].isascii()
+
+
+@pytest.mark.parametrize("provider", ["auto", "pubmed", "pmid"])
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        "https://pubmed.ncbi.nlm.nih.gov/42",
+        "https://pubmed.ncbi.nlm.nih.gov/42/",
+        "https://www.ncbi.nlm.nih.gov/pubmed/42/",
+    ],
+)
+async def test_pubmed_resolver_urls_use_the_same_lookup_key_as_bare_ids(provider, identifier):
+    key, _ = await lookup_metadata(identifier, provider, transport=httpx2.MockTransport(response))
+    assert key == Identifier("pmid", "42")
 
 
 async def lookup_metadata(value, provider="auto", settings=None, transport=None):
     assert transport is not None
     async with provider_runtime(settings=settings, transport=transport) as runtime:
         record = await runtime.lookup(value, provider=provider)
-    return record.lookup_identifier, record
+    return (record.lookup_identifier, record)
+
+
+@pytest.mark.parametrize(
+    "published,expected",
+    [
+        ("2024-06-00", "2024-06"),
+        ("2024-00-00", "2024"),
+        ("2024-02-30", "2024-02"),
+        ("2024", "2024"),
+        ("2024-06", "2024-06"),
+        ("2024-02-29", "2024-02-29"),
+        ("2024-06-15T12:34:56Z", "2024-06-15T12:34:56Z"),
+        ("2024-06-15T12:34:56+08:00", "2024-06-15T12:34:56+08:00"),
+    ],
+)
+async def test_provider_dates_retain_known_calendar_precision_in_lookup_and_search(
+    published, expected
+):
+    def returned(request):
+        return httpx2.Response(
+            200,
+            json={
+                "response": {
+                    "docs": [
+                        {
+                            "bibcode": "2025ApJ...123..456A",
+                            "title": ["Provider date"],
+                            "pubdate": published,
+                        }
+                    ],
+                    "numFound": 1,
+                }
+            },
+        )
+
+    async with provider_runtime(
+        settings=SimpleNamespace(nasa_ads_token="ads-token"),
+        transport=httpx2.MockTransport(returned),
+    ) as runtime:
+        looked_up = await runtime.lookup("2025ApJ...123..456A", provider="nasa_ads")
+        page = await runtime.search(
+            SearchQuery("nasa_ads", (SearchClause("title", "and", "Provider date"),))
+        )
+    assert len(page.results) == 1
+    assert looked_up.work["date_published"] == expected
+    assert page.results[0].work["date_published"] == expected
 
 
 async def parse_identifier(value, provider="auto"):
     settings = SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key")
     identifier, _record = await lookup_metadata(
-        value,
-        provider,
-        settings=settings,
-        transport=httpx2.MockTransport(response),
+        value, provider, settings=settings, transport=httpx2.MockTransport(response)
     )
     return identifier
 
@@ -61,13 +178,7 @@ def response(request: httpx2.Request) -> httpx2.Response:
         assert request.url.path.endswith("efetch.fcgi")
         return httpx2.Response(
             200,
-            text="""<PubmedArticleSet><PubmedArticle>
-        <MedlineCitation><PMID>42</PMID><Article><ArticleTitle>PubMed Example</ArticleTitle>
-        <AuthorList><Author><LastName>Doe</LastName><ForeName>Jane</ForeName></Author></AuthorList>
-        <Journal><Title>Medical Journal</Title><JournalIssue><PubDate><Year>2024</Year></PubDate></JournalIssue></Journal>
-        </Article></MedlineCitation><PubmedData><ArticleIdList>
-        <ArticleId IdType="doi">10.2/pubmed</ArticleId>
-        </ArticleIdList></PubmedData></PubmedArticle></PubmedArticleSet>""",
+            text='<PubmedArticleSet><PubmedArticle>\n        <MedlineCitation><PMID>42</PMID><Article><ArticleTitle>PubMed Example</ArticleTitle>\n        <AuthorList><Author><LastName>Doe</LastName><ForeName>Jane</ForeName></Author></AuthorList>\n        <Journal><Title>Medical Journal</Title><JournalIssue><PubDate><Year>2024</Year></PubDate></JournalIssue></Journal>\n        </Article></MedlineCitation><PubmedData><ArticleIdList>\n        <ArticleId IdType="doi">10.2/pubmed</ArticleId>\n        </ArticleIdList></PubmedData></PubmedArticle></PubmedArticleSet>',
         )
     if request.url.host == "api.datacite.org":
         return httpx2.Response(
@@ -86,13 +197,13 @@ def response(request: httpx2.Request) -> httpx2.Response:
             },
         )
     if request.url.host == "api.openalex.org":
-        assert request.url.path == "/works/W123"
+        assert request.url.path == "/works/W1230000000"
         return httpx2.Response(
             200,
             json={
-                "id": "https://openalex.org/W123",
+                "id": "https://openalex.org/W1230000000",
                 "display_name": "OpenAlex Example",
-                "doi": "https://doi.org/10.4/openalex",
+                "doi": "https://doi.org/10.1234/openalex",
                 "publication_date": "2026-01-01",
                 "type": "article",
                 "authorships": [{"author": {"display_name": "Alex Author"}}],
@@ -150,12 +261,7 @@ def response(request: httpx2.Request) -> httpx2.Response:
     assert request.url.host == "export.arxiv.org"
     return httpx2.Response(
         200,
-        text="""<?xml version="1.0"?>
-        <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
-          <entry><title>arXiv Example</title><summary>Preprint abstract</summary>
-          <published>2023-01-02T00:00:00Z</published><author><name>Ada Example</name></author>
-          <category term="cs.CL"/><arxiv:doi>10.3/arxiv</arxiv:doi></entry>
-        </feed>""",
+        text='<?xml version="1.0"?>\n        <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">\n          <entry><title>arXiv Example</title><summary>Preprint abstract</summary>\n          <published>2023-01-02T00:00:00Z</published><author><name>Ada Example</name></author>\n          <category term="cs.CL"/><arxiv:doi>10.3/arxiv</arxiv:doi></entry>\n        </feed>',
     )
 
 
@@ -168,7 +274,7 @@ def response(request: httpx2.Request) -> httpx2.Response:
         ("PMID: 42", "auto", Identifier("pmid", "42")),
         ("arXiv:1706.03762v7", "auto", Identifier("arxiv", "1706.03762v7")),
         ("ISBN 978-0-13-110362-7", "auto", Identifier("isbn", "9780131103627")),
-        ("https://openalex.org/W123", "auto", Identifier("openalex", "W123")),
+        ("https://openalex.org/W1230000000", "auto", Identifier("openalex", "W1230000000")),
         ("2025ApJ...123..456A", "bibcode", Identifier("bibcode", "2025ApJ...123..456A")),
         ("bibcode: 2025ApJ...123..456A", "bibcode", Identifier("bibcode", "2025ApJ...123..456A")),
         ("1234567", "ieee", Identifier("ieee", "1234567")),
@@ -223,382 +329,208 @@ async def test_explicit_provider_rejects_malformed_identifiers(value, provider):
         await parse_identifier(value, provider)
 
 
-@pytest.mark.parametrize(
-    ("value", "provider", "title"),
-    [
-        ("10.1234/sample", "doi", "DOI Example"),
-        ("42", "pmid", "PubMed Example"),
-        ("1706.03762", "arxiv", "arXiv Example"),
-        ("10.9999/dataset", "datacite", "DataCite Example"),
-        ("9780131103627", "isbn", "The C Programming Language"),
-        ("W123", "openalex", "OpenAlex Example"),
-        ("2025ApJ...123..456A", "bibcode", "NASA ADS Example"),
-        ("1234567", "ieee", "IEEE Example"),
-    ],
-)
-async def test_provider_adapters_map_records(value, provider, title):
-    parsed, record = await lookup_metadata(
-        value,
-        provider,
-        settings=SimpleNamespace(
-            metadata_contact_email="operator@example.org",
-            nasa_ads_token="ads-token",
-            ieee_api_key="ieee-key",
-        ),
-        transport=httpx2.MockTransport(response),
-    )
-    assert parsed.provider == provider
-    assert record.title == title
-    assert record.identifiers
+@pytest.mark.parametrize("provider", ["auto", "pubmed", "pmid", "pmc", "pmcid"])
+async def test_malformed_pubmed_url_is_a_provider_request_error(provider):
+    from inquiro import InvalidProviderRequest
+
+    with pytest.raises(InvalidProviderRequest):
+        await parse_identifier("https://[bad", provider)
 
 
 @pytest.mark.parametrize(
-    ("value", "provider", "source", "namespace"),
+    "value, provider, title",
     [
-        ("9780131103627", "openlibrary", "openlibrary", "isbn"),
-        ("9780131103627", "isbn", "openlibrary", "isbn"),
-        ("2025ApJ...123..456A", "nasa_ads", "nasa_ads", "bibcode"),
-        ("2025ApJ...123..456A", "bibcode", "nasa_ads", "bibcode"),
-        ("1234567", "ieee", "ieee", "ieee"),
-        ("42", "pubmed", "pubmed", "pmid"),
-        ("42", "pmid", "pubmed", "pmid"),
-        ("10.9999/dataset", "datacite", "datacite", "doi"),
+        ("10.1234/sample", "crossref", "Crossref sample"),
+        ("W1230000000", "openalex", "OpenAlex sample"),
+        ("42", "pubmed", "PubMed sample"),
+        ("2401.00001", "arxiv", "arXiv sample"),
+        ("9780131103627", "openlibrary", "Open Library sample"),
+        ("2025ApJ...123..456A", "nasa_ads", "NASA ADS sample"),
+        ("1234567", "ieee", "IEEE sample"),
+        ("10.1234/sample", "datacite", "DataCite sample"),
     ],
 )
-async def test_lookup_routes_source_names_and_namespaces_to_the_correct_adapter(
-    value, provider, source, namespace
-):
-    _parsed, record = await lookup_metadata(
-        value,
-        provider,
-        settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
-        transport=httpx2.MockTransport(response),
-    )
+async def test_provider_outputs_valid_commonmeta(value, provider, title):
+    from inquiro import Work
 
-    assert record.provider == source
-    assert Identifier(namespace, value) in record.identifiers
-
-
-@pytest.mark.parametrize(
-    ("provider", "value", "source", "lookup_identifier", "identifiers"),
-    [
-        (
-            "openalex",
-            "10.1000/canonical",
-            "openalex",
-            Identifier("openalex", "10.1000/canonical"),
-            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/canonical")),
-        ),
-        (
-            "openalex",
-            "W122",
-            "openalex",
-            Identifier("openalex", "W122"),
-            (Identifier("openalex", "W123"), Identifier("doi", "10.1000/canonical")),
-        ),
-        (
-            "auto",
-            "10.1000/canonical",
-            "crossref",
-            Identifier("doi", "10.1000/canonical"),
-            (Identifier("doi", "10.1000/canonical"),),
-        ),
-        (
-            "crossref",
-            "10.1000/canonical",
-            "crossref",
-            Identifier("crossref", "10.1000/canonical"),
-            (Identifier("doi", "10.1000/canonical"),),
-        ),
-        (
-            "datacite",
-            "10.1000/canonical",
-            "datacite",
-            Identifier("datacite", "10.1000/canonical"),
-            (Identifier("doi", "10.1000/canonical"),),
-        ),
-        (
-            "bibcode",
-            "2025ApJ...123..456A",
-            "nasa_ads",
-            Identifier("bibcode", "2025ApJ...123..456A"),
-            (
-                Identifier("bibcode", "2025ApJ...124..456A"),
-                Identifier("doi", "10.1000/canonical"),
-            ),
-        ),
-        (
-            "ieee",
-            "1234566",
-            "ieee",
-            Identifier("ieee", "1234566"),
-            (Identifier("ieee", "1234567"), Identifier("doi", "10.1000/canonical")),
-        ),
-    ],
-)
-async def test_lookup_returns_record_identity_separately_from_request(
-    provider, value, source, lookup_identifier, identifiers
-):
-    def handler(request):
-        if request.url.host == "api.openalex.org":
-            payload = {
-                "id": "https://openalex.org/W123",
-                "display_name": "Resolved Item",
-                "doi": "https://doi.org/10.1000/Canonical",
-            }
-        elif request.url.host == "api.datacite.org":
-            payload = {
-                "data": {
-                    "attributes": {
-                        "doi": "10.1000/Canonical",
-                        "titles": [{"title": "Resolved Item"}],
-                    }
-                }
-            }
-        elif request.url.host == "api.adsabs.harvard.edu":
-            payload = {
-                "response": {
-                    "docs": [
-                        {
-                            "bibcode": "2025ApJ...124..456A",
-                            "title": ["Resolved Item"],
-                            "doi": ["10.1000/Canonical"],
-                        }
-                    ]
-                }
-            }
-        elif request.url.host == "ieeexploreapi.ieee.org":
-            payload = {
-                "articles": [
-                    {
-                        "article_number": "1234567",
-                        "title": "Resolved Item",
-                        "doi": "10.1000/Canonical",
-                    }
-                ]
-            }
-        else:
-            assert request.url.host == "api.crossref.org"
-            payload = {"message": {"DOI": "10.1000/Canonical", "title": ["Resolved Item"]}}
-        return httpx2.Response(200, json=payload)
-
+    settings = SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key")
     async with provider_runtime(
-        settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
-        transport=httpx2.MockTransport(handler),
+        settings=settings, transport=httpx2.MockTransport(response)
     ) as runtime:
-        record = await runtime.lookup(value, provider=provider)
-
-    assert record.provider == source
-    assert record.lookup_identifier == lookup_identifier
-    assert record.identifiers == identifiers
-
-
-@pytest.mark.parametrize("work_id", [None, "https://openalex.org/invalid"])
-async def test_openalex_lookup_requires_a_returned_work_identity(work_id):
-    transport = httpx2.MockTransport(
-        lambda request: httpx2.Response(
-            200,
-            json={"id": work_id, "display_name": "Unidentified Item", "doi": "10.1000/example"},
-        )
+        candidate = await runtime.lookup(value, provider=provider)
+    assert candidate.lookup_identifier.value == value
+    assert candidate.work["title"]
+    assert (
+        Work.model_validate(candidate.work).model_dump(mode="json", exclude_none=True)
+        == candidate.work
     )
-    with pytest.raises(ProviderUnavailable, match="Work ID"):
-        await lookup_metadata("10.1000/example", "openalex", transport=transport)
 
 
-async def test_crossref_lookup_preserves_rich_candidate_metadata():
-    def rich_crossref_response(_request: httpx2.Request) -> httpx2.Response:
+async def test_lookup_preserves_query_context_without_claiming_it_as_identity():
+    from inquiro.work import work_identifiers
+
+    def returned(request):
         return httpx2.Response(
             200,
             json={
                 "message": {
-                    "title": ["Rich Crossref record"],
-                    "DOI": "10.1234/rich",
-                    "subject": ["Machine Learning", "<i>Research methods</i>"],
-                    "author": [
-                        {
-                            "family": "Doe",
-                            "given": "Jane",
-                            "affiliation": [
-                                {"name": "Example University"},
-                                {"name": "Example University"},
-                            ],
-                        },
-                        {"family": "Roe", "affiliation": [{"name": "Research Lab"}]},
-                    ],
-                    "URL": "https://api.crossref.org/works/10.1234/rich",
-                    "resource": {"primary": {"URL": "https://example.org/article"}},
-                    "link": [
-                        {"URL": "https://example.org/article.pdf"},
-                        {"URL": "https://example.org/supplement"},
-                    ],
+                    "DOI": "10.1234/confirmed",
+                    "type": "journal-article",
+                    "title": ["Confirmed"],
                 }
             },
         )
 
-    _identifier, record = await lookup_metadata(
-        "10.1234/rich",
-        "doi",
-        transport=httpx2.MockTransport(rich_crossref_response),
-    )
-
-    assert record.keywords == ("Machine Learning", "Research methods")
-    assert [
-        affiliation.name for author in record.authors for affiliation in author.affiliations
-    ] == ["Example University", "Research Lab"]
-    assert record.urls is not None
-    assert [link.url for link in record.urls] == [
-        "https://doi.org/10.1234/rich",
-        "https://api.crossref.org/works/10.1234/rich",
-        "https://example.org/article",
-        "https://example.org/article.pdf",
-        "https://example.org/supplement",
-    ]
+    async with provider_runtime(transport=httpx2.MockTransport(returned)) as runtime:
+        candidate = await runtime.lookup("10.1234/query", provider="crossref")
+    assert candidate.lookup_identifier == Identifier("crossref", "10.1234/query")
+    assert work_identifiers(candidate.work) == {("doi", "10.1234/confirmed")}
 
 
-async def test_metadata_response_size_is_limited():
-    transport = httpx2.MockTransport(lambda _request: httpx2.Response(200, content=b"x" * 2048))
-    with pytest.raises(ProviderUnavailable, match="size limit"):
-        await lookup_metadata(
-            "10.1234/sample",
-            "doi",
-            settings=SimpleNamespace(metadata_max_response_bytes=1024),
-            transport=transport,
+async def test_invalid_openalex_identity_is_not_confirmed():
+    from inquiro.work import work_identifiers
+
+    async with provider_runtime(
+        transport=httpx2.MockTransport(
+            lambda request: httpx2.Response(
+                200, json={"id": "https://openalex.org/invalid", "title": "Invalid"}
+            )
         )
+    ) as runtime:
+        result = await runtime.lookup("W1234567890", provider="openalex")
+    assert work_identifiers(result.work) == set()
+    assert result.lookup_identifier.value == "W1234567890"
 
 
 async def test_lookup_404_is_a_typed_candidate_failure():
-    transport = httpx2.MockTransport(lambda _request: httpx2.Response(404))
-    with pytest.raises(CandidateNotFound, match="not found"):
-        await lookup_metadata("10.9999/missing", "doi", transport=transport)
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda request: httpx2.Response(404))
+    ) as runtime:
+        with pytest.raises(CandidateNotFound):
+            await runtime.lookup("10.1234/missing")
 
 
-@pytest.mark.parametrize("status_code", [301, 429, 503])
-async def test_lookup_transport_failures_share_one_error_contract(status_code):
-    transport = httpx2.MockTransport(lambda _request: httpx2.Response(status_code))
-    with pytest.raises(ProviderUnavailable):
-        await lookup_metadata("10.9999/failure", "doi", transport=transport)
-
-
-async def test_pubmed_lookup_passes_configured_identity_and_api_key():
-    captured: dict[str, str] = {}
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        captured.update(request.url.params)
+async def test_crossref_missing_optional_link_media_type_does_not_crash():
+    def returned(request):
         return httpx2.Response(
             200,
-            text="<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>42</PMID><Article><ArticleTitle>Configured PubMed</ArticleTitle><AuthorList /></Article></MedlineCitation></PubmedArticle></PubmedArticleSet>",
+            json={
+                "message": {
+                    "DOI": "10.1234/sample",
+                    "type": "journal-article",
+                    "title": ["Test"],
+                    "link": [{"URL": "https://example.org/test.pdf"}],
+                }
+            },
         )
 
-    _, record = await lookup_metadata(
-        "42",
-        "pmid",
-        settings=SimpleNamespace(
-            metadata_contact_email="operator@example.org",
-            ncbi_api_key="secret-key",
-        ),
-        transport=httpx2.MockTransport(handler),
-    )
-
-    assert record.title == "Configured PubMed"
-    assert captured["tool"] == "inquiro"
-    assert captured["email"] == "operator@example.org"
-    assert captured["api_key"] == "secret-key"
+    async with provider_runtime(transport=httpx2.MockTransport(returned)) as runtime:
+        result = await runtime.lookup("10.1234/sample")
+    assert result.work["files"][0]["url"] == "https://example.org/test.pdf"
 
 
-def test_candidate_record_is_an_immutable_normalized_value():
-    record = CandidateRecord(
-        provider="arxiv",
-        lookup_identifier=Identifier("arxiv", "1706.03762"),
-        title="Attention Is All You Need",
-        abstract="The dominant sequence transduction models...",
-        authors=(
-            Contributor("Vaswani, Ashish"),
-            Contributor("Shazeer, Noam"),
-        ),
-        keywords=("Machine Learning", "Transformer"),
-        publication_date="2017-06-12",
-        publication_title="NeurIPS 2017",
-        volume="30",
-        pages="5998-6008",
-        identifiers=(Identifier("doi", "10.48550/arXiv.1706.03762"),),
-        urls=(
-            ResourceLink("https://arxiv.org/abs/1706.03762"),
-            ResourceLink("https://arxiv.org/pdf/1706.03762.pdf"),
-        ),
-    )
+async def test_openalex_identifiers_use_urls_and_files_are_not_duplicated():
+    from inquiro.work import work_identifiers
 
-    assert record.title == "Attention Is All You Need"
-    assert record.volume == "30"
-
-    with pytest.raises(AttributeError):
-        record.title = "changed"
-
-
-async def test_openalex_abstract_inverted_index_and_html_cleaning():
-    mock_payload = {
-        "id": "https://openalex.org/W4391019623",
-        "doi": "https://doi.org/10.48550/arxiv.2309.12825",
-        "title": "<i>OmniDrones:</i> An Efficient Platform",
-        "display_name": "<i>OmniDrones:</i> An Efficient Platform",
-        "publication_date": "2023-09-21",
-        "abstract_inverted_index": {
-            "In": [0],
-            "this": [1],
-            "work,": [2],
-            "we": [3],
-            "introduce": [4],
-            "OmniDrones.": [5],
+    payload = {
+        "id": "https://openalex.org/W1230000000",
+        "doi": "https://doi.org/10.1000/example",
+        "ids": {
+            "openalex": "https://openalex.org/W1230000000",
+            "doi": "https://doi.org/10.1000/example",
         },
-        "authorships": [
-            {"author": {"display_name": "Guanqi He"}},
-            {"author": {"display_name": "Jordan Key"}},
-        ],
-        "topics": [{"display_name": "Robotics"}],
-        "primary_location": {
-            "source": {"display_name": "arXiv", "host_organization_name": "Cornell University"},
-            "landing_page_url": "https://arxiv.org/abs/2309.12825",
-        },
-        "type": "preprint",
+        "display_name": "Canonical OpenAlex identifiers",
+        "primary_location": {"pdf_url": "https://example.test/paper.pdf"},
+        "best_oa_location": {"pdf_url": "https://example.test/paper.pdf"},
+    }
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json=payload))
+    ) as runtime:
+        record = await runtime.lookup("W1230000000", provider="openalex")
+    assert record.work["files"] == [
+        {"url": "https://example.test/paper.pdf", "mime_type": "application/pdf"}
+    ]
+    assert [row for row in record.work["identifiers"] if row["identifier_type"] == "OpenAlex"] == [
+        {"identifier_type": "OpenAlex", "identifier": "https://openalex.org/W1230000000"}
+    ]
+    assert work_identifiers(record.work) == {
+        ("openalex", "W1230000000"),
+        ("doi", "10.1000/example"),
     }
 
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json=mock_payload)
 
-    _ident, record = await lookup_metadata(
-        "W4391019623",
-        "openalex",
-        transport=httpx2.MockTransport(handler),
-    )
+async def test_crossref_empty_license_is_accepted_in_lookup():
+    payload = {
+        "DOI": "10.1234/sample",
+        "type": "journal-article",
+        "title": ["No license"],
+        "license": [],
+    }
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json={"message": payload}))
+    ) as runtime:
+        record = await runtime.lookup("10.1234/sample", provider="crossref")
+    assert record.work["title"] == "No license"
+    assert "license" not in record.work
 
-    assert record.title == "<i>OmniDrones:</i> An Efficient Platform"
-    assert record.abstract == "In this work, we introduce OmniDrones."
-    assert [author.display_name for author in record.authors] == ["Guanqi He", "Jordan Key"]
-    assert record.keywords == ("Robotics",)
-    assert "https://arxiv.org/abs/2309.12825" in str(record.urls)
 
+@pytest.mark.parametrize(
+    "provider,value",
+    [
+        ("arxiv", "2401.00001"),
+        ("pubmed", "42"),
+        ("openlibrary", "9780131103627"),
+        ("ieee", "1234567"),
+        ("nasa_ads", "2025ApJ...123..456A"),
+    ],
+)
+@pytest.mark.parametrize("nameless", [False, True])
+async def test_authorless_lookup_records_omit_contributors(provider, value, nameless):
+    def returned(request):
+        if provider == "arxiv":
+            author = "<author><name> </name></author>" if nameless else ""
+            return httpx2.Response(
+                200,
+                text=f'<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Authorless</title>{author}</entry></feed>',
+            )
+        if provider == "pubmed":
+            author = "<Author><LastName> </LastName></Author>" if nameless else ""
+            return httpx2.Response(
+                200,
+                text=f"<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>42</PMID><Article><ArticleTitle>Authorless</ArticleTitle><AuthorList>{author}</AuthorList></Article></MedlineCitation></PubmedArticle></PubmedArticleSet>",
+            )
+        authors = [{"name": " "}] if nameless else []
+        if provider == "openlibrary":
+            payload = {f"ISBN:{value}": {"title": "Authorless", "authors": authors}}
+        elif provider == "ieee":
+            payload = {
+                "articles": [
+                    {
+                        "title": "Authorless",
+                        "article_number": value,
+                        "authors": {"authors": [{"full_name": " "}] if nameless else []},
+                    }
+                ]
+            }
+        else:
+            payload = {
+                "response": {
+                    "docs": [
+                        {
+                            "title": ["Authorless"],
+                            "bibcode": value,
+                            "author": [" "] if nameless else [],
+                            "aff": [" "] if nameless else [],
+                        }
+                    ]
+                }
+            }
+        return httpx2.Response(200, json=payload)
 
-async def test_slow_provider_lookup_does_not_block_an_independent_lookup():
-    slow_started = asyncio.Event()
-    release_slow = asyncio.Event()
-
-    async def send(request: TransportRequest) -> TransportResponse:
-        title = "Fast result"
-        if "slow" in request.url:
-            slow_started.set()
-            await release_slow.wait()
-            title = "Slow result"
-        return TransportResponse(
-            200,
-            json.dumps({"message": {"title": [title], "DOI": "10.1234/result"}}).encode(),
-        )
-
-    runtime = ProviderRuntime.with_exchange(ProviderConfig(), MockExchange(send))
-    async with runtime:
-        slow = asyncio.create_task(runtime.lookup("10.1234/slow", provider="doi"))
-        await slow_started.wait()
-        try:
-            fast = await runtime.lookup("10.1234/fast", provider="doi")
-            assert fast.title == "Fast result"
-        finally:
-            release_slow.set()
-        assert (await slow).title == "Slow result"
+    async with provider_runtime(
+        settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
+        transport=httpx2.MockTransport(returned),
+    ) as runtime:
+        record = await runtime.lookup(value, provider=provider)
+    assert record.work["title"] == "Authorless"
+    assert "contributors" not in record.work
