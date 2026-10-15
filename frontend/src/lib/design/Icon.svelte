@@ -98,5 +98,9 @@
 		/>
 	{:else if name === 'moon'}
 		<path d="M20.5 14.2A8 8 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
+	{:else if name === 'check'}
+		<path d="m5 13 4 4L19 7" />
+	{:else if name === 'file'}
+		<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" /><path d="M14 3v5h5" />
 	{/if}
 </svg>

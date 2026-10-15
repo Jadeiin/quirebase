@@ -716,7 +716,7 @@ async def test_import_previews_do_not_read_stored_items(persistence_db, monkeypa
     from quirebase.core.config import get_settings
     from quirebase.library.imports import (
         check_pdf_import_eligibility,
-        stage_identifier_import_batch,
+        stage_identifiers_import_batch,
     )
 
     db = persistence_db
@@ -766,8 +766,8 @@ async def test_import_previews_do_not_read_stored_items(persistence_db, monkeypa
                 for error in preview.errors
             )
         elif source == "identifier":
-            preview = await stage_identifier_import_batch(
-                db, actor, workspace_id, "10.1234/shared", settings=get_settings()
+            preview = await stage_identifiers_import_batch(
+                db, actor, workspace_id, ["10.1234/shared"], settings=get_settings()
             )
             assert len(preview.records) == 1 and not preview.errors
         else:

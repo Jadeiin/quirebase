@@ -12,7 +12,7 @@
 	import Pagination from '#lib/design/Pagination.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { invalidateItemAnnotations } from '#lib/query/invalidation.js';
-	import { t } from '#lib/i18n.js';
+	import { t, msg, type MessageKey } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { itemAnnotationsQuery } from '../queries';
@@ -41,6 +41,14 @@
 	);
 	const workspaceRevisionId = $derived(revision === 'all' ? revisions[0]?.id : revision);
 	const moderationActions = ['hide', 'archive', 'restore', 'lock', 'unlock', 'delete'] as const;
+	const moderationLabels = {
+		hide: msg('Hide'),
+		archive: msg('Archive'),
+		restore: msg('Restore'),
+		lock: msg('Lock'),
+		unlock: msg('Unlock'),
+		delete: msg('Delete')
+	} as const satisfies Record<(typeof moderationActions)[number], MessageKey>;
 	const authorizationActions = {
 		hide: 'project_annotation.hide',
 		archive: 'project_annotation.archive',
@@ -165,12 +173,13 @@
 									size="sm"
 									variant="danger"
 									disabled={moderating !== ''}
-									onclick={() => requestDelete(annotation)}>{$t('Delete')}</Button
+									onclick={() => requestDelete(annotation)}>{$t(moderationLabels[action])}</Button
 								>{:else}<Button
 									size="sm"
 									variant="tonal"
 									disabled={moderating !== ''}
-									onclick={() => void moderate(annotation, action)}>{action}</Button
+									onclick={() => void moderate(annotation, action)}
+									>{$t(moderationLabels[action])}</Button
 								>{/if}
 						{/each}
 					</div>{/if}

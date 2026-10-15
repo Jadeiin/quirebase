@@ -12,7 +12,7 @@ from quirebase.library import (
     commit_import_batch,
     create_item,
     search_library,
-    stage_identifier_import_batch,
+    stage_identifiers_import_batch,
     sync_metadata_from_upstream,
 )
 from quirebase.models import ImportBatch, Item, User
@@ -64,7 +64,7 @@ async def test_import_preserves_complete_work_in_preview_and_confirmation(
     monkeypatch.setattr(
         "quirebase.library.imports.lookup_candidate", AsyncMock(return_value=candidate)
     )
-    preview = await stage_identifier_import_batch(db, actor, workspace_id, "W123", "openalex")
+    preview = await stage_identifiers_import_batch(db, actor, workspace_id, ["W123"], "openalex")
     assert preview.records[0].metadata.model_dump(mode="json") == work
     assert (await db.get(ImportBatch, preview.id)).records[0]["work"] == work
     ids = await commit_import_batch(db, actor, workspace_id, preview.id)
@@ -84,7 +84,7 @@ async def test_pubmed_suffixes_are_retained_in_standard_person_names(persistence
             return await runtime.lookup(value, provider=provider)
 
     monkeypatch.setattr("quirebase.library.imports.lookup_candidate", lookup)
-    preview = await stage_identifier_import_batch(db, actor, workspace_id, "42", "pubmed")
+    preview = await stage_identifiers_import_batch(db, actor, workspace_id, ["42"], "pubmed")
     people = [credit.person for credit in preview.records[0].metadata.contributors]
     assert [person.name for person in people] == ["John Smith Jr", "John Smith Sr"]
     ids = await commit_import_batch(db, actor, workspace_id, preview.id)

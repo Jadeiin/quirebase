@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from advanced_alchemy.types import FileObject
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
+    detect_bibliography_format,
     parse_bibliography_records,
 )
 from inquiro.identifiers import canonical_doi
@@ -47,6 +48,7 @@ from .identifiers import _create_items_from_candidates
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from inquiro import CandidateRecord
     from inquiro.bibliography import BibliographyExportOptions
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,6 +76,7 @@ class ImportDiagnostic:
     row: int | None = None
     filename: str | None = None
     code: str | None = None
+    identifier: str | None = None
 
 
 @dataclass(frozen=True)
@@ -115,6 +118,7 @@ def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPrev
 
 
 MAX_PDF_IMPORT_FILES = 50
+MAX_IDENTIFIER_IMPORT_ENTRIES = 50
 _WORKFLOW_NOT_LOOKED_UP = object()
 
 
@@ -150,17 +154,22 @@ def _pdf_import_inputs(files: list[FileObject]) -> list[dict]:
 
 
 async def stage_import_batch(
-    db: AsyncSession, user: User, workspace_id: UUID, file_bytes: bytes, file_format: str
+    db: AsyncSession, user: User, workspace_id: UUID, file_bytes: bytes, file_format: str = "auto"
 ) -> ImportBatchPreview:
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
-    if file_format not in SUPPORTED_FORMATS:
-        raise ValidationFailure("format must be bibtex, ris, csl-json, or commonmeta")
+    if file_format not in {"auto", *SUPPORTED_FORMATS}:
+        raise ValidationFailure("format must be auto, bibtex, ris, csl-json, or commonmeta")
     if len(file_bytes) > 5 * 1024 * 1024:
         raise SizeLimitExceeded("bibliography files are limited to 5 MiB")
     try:
         contents = file_bytes.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         raise ValidationFailure("bibliography must be UTF-8") from error
+    if file_format == "auto":
+        try:
+            file_format = detect_bibliography_format(contents)
+        except ValueError as error:
+            raise ValidationFailure(str(error)) from error
     typed_records, errors = parse_bibliography_records(contents, file_format)
     records = []
     for record in typed_records:
@@ -187,53 +196,94 @@ async def stage_import_batch(
     return _import_batch_preview(batch, user.id)
 
 
-async def stage_identifier_import_batch(
+async def stage_identifiers_import_batch(
     db: AsyncSession,
     user: User,
     workspace_id: UUID,
-    identifier: str,
+    identifiers: Sequence[str],
     provider: str = "auto",
     settings: Settings | None = None,
 ) -> ImportBatchPreview:
+    """Look up a bounded batch, retaining successful siblings in input order."""
     from quirebase.operations.settings import get_effective_settings_model
 
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
+    if not identifiers or len(identifiers) > MAX_IDENTIFIER_IMPORT_ENTRIES:
+        raise ValidationFailure(
+            f"an identifier import batch requires 1 to {MAX_IDENTIFIER_IMPORT_ENTRIES} entries"
+        )
+    if any(not value.strip() or len(value) > 500 for value in identifiers):
+        raise ValidationFailure("each identifier must contain 1 to 500 characters")
     user_id = user.id
     effective_settings = settings or await get_effective_settings_model(db)
-    # Settings are a short read; release its transaction before external I/O.
     await db.rollback()
-    record = await lookup_candidate(identifier, provider, effective_settings)
+    semaphore = asyncio.Semaphore(3)
+
+    async def lookup(
+        value: str,
+    ) -> CandidateRecord | ValidationFailure | ResourceNotFound | UpstreamServiceError:
+        async with semaphore:
+            try:
+                return await lookup_candidate(value.strip(), provider, effective_settings)
+            except (ValidationFailure, ResourceNotFound, UpstreamServiceError) as error:
+                return error
+
+    # TaskGroup cancels and joins outstanding requests on cancellation or an unexpected
+    # failure. No database session is shared with the concurrent Provider requests.
+    async with asyncio.TaskGroup() as group:
+        tasks = [group.create_task(lookup(value)) for value in identifiers]
     reloaded_user = await db.get(User, user_id)
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
-    user = (
-        await require_workspace_action(db, reloaded_user, workspace_id, ResourceAction.item_create)
-    ).actor
-    rec_dict = metadata_write(record.work)
+    await require_workspace_action(db, reloaded_user, workspace_id, ResourceAction.item_create)
+    records, errors, providers = [], [], []
+    for row, (value, task) in enumerate(zip(identifiers, tasks, strict=True), 1):
+        result = task.result()
+        context = {"row": row, "identifier": value.strip()}
+        if isinstance(result, (ValidationFailure, ResourceNotFound, UpstreamServiceError)):
+            code = {
+                ValidationFailure: "invalid_identifier",
+                ResourceNotFound: "metadata_not_found",
+                UpstreamServiceError: "provider_unavailable",
+            }[type(result)]
+            errors.append({**context, "code": code, "message": str(result)})
+            continue
+        try:
+            records.append(metadata_write(result.work))
+        except ValidationFailure as error:
+            errors.append({**context, "code": "invalid_metadata", "message": str(error)})
+            continue
+        providers.append(result.provider)
+        errors.extend(
+            {**context, "severity": "warning", "code": "provider_limitations", "message": message}
+            for message in result.diagnostics
+        )
     batch = ImportBatch(
         workspace_id=workspace_id,
-        actor_id=user.id,
+        actor_id=user_id,
         file_format="metadata",
-        records=[rec_dict],
-        errors=[
-            {"severity": "warning", "code": "provider_limitations", "message": message}
-            for message in record.diagnostics
-        ],
+        records=records,
+        errors=errors,
     )
     db.add(batch)
     await db.flush()
     record_event(
         db,
-        user.id,
-        "metadata.lookup",
+        user_id,
+        "metadata.import.preview",
         "import_batch",
         batch.id,
-        detail={"provider": record.provider, "lookup_provider": provider},
+        detail={
+            "requested": len(identifiers),
+            "candidates": len(records),
+            "providers": providers,
+            "lookup_provider": provider,
+        },
         workspace_id=workspace_id,
         authorization_resource_action=ResourceAction.item_create.value,
     )
     await db.commit()
-    return _import_batch_preview(batch, user.id)
+    return _import_batch_preview(batch, user_id)
 
 
 async def stage_pdf_import_batch(

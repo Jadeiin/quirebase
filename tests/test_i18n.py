@@ -56,6 +56,7 @@ def test_translated_catalog_does_not_leave_english_copy():
         "RIS",
         "URL",
         "{kind} · {size} KB",
+        "{size} KB",
         "{size} MB",
     }
     untranslated = [

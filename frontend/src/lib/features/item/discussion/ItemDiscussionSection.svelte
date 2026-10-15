@@ -44,6 +44,8 @@
 			<label
 				>{$t('Add message')}<textarea class="textarea" name="body" rows="4" required
 				></textarea></label
-			><Button variant="filled" disabled={busy}>{$t('Post message')}</Button>
+			><Button variant="filled" class="justify-self-start" disabled={busy}
+				>{$t('Post message')}</Button
+			>
 		</form>{/if}
 </Panel>

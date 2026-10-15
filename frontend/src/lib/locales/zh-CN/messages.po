@@ -56,6 +56,11 @@ msgid "{count, plural, one {# Tag} other {# Tags}}"
 msgstr "{count, plural, other {# 个标签}}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "{count} / 50 identifiers"
+msgstr "{count} / 50 个标识符"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "{count} selected"
 msgstr "已选择 {count} 项"
@@ -64,6 +69,11 @@ msgstr "已选择 {count} 项"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "{kind} · {size} KB"
 msgstr "{kind} · {size} KB"
+
+#. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+msgid "{size} KB"
+msgstr "{size} KB"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -251,6 +261,11 @@ msgstr "添加参与者"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "Add PDF revision"
 msgstr "添加 PDF 修订"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Add records using identifiers, bibliography files, PDFs, or the metadata editor."
+msgstr "通过标识符、书目文件、PDF 或元数据编辑器添加条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -503,6 +518,7 @@ msgid "Apply JSON changes before saving."
 msgstr "请先应用 JSON 修改，再保存。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Archive"
@@ -570,6 +586,11 @@ msgstr "关联的文件、标注以及此条目与项目的关联也会一并删
 #: src/lib/domain-labels.ts
 msgid "Attachment"
 msgstr "附件"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Attachment file"
+msgstr "附件文件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -644,6 +665,11 @@ msgstr "后台任务（{count}）"
 #: src/lib/features/account/Account.svelte
 msgid "Base endpoint"
 msgstr "基础端点"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Bibliography"
+msgstr "书目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -751,11 +777,6 @@ msgid "BREAK GLASS · read-only item inspection"
 msgstr "BREAK GLASS · 条目只读审查"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
-msgstr "通过标识符、文献目录或已发表的 PDF 将记录导入 Quirebase。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Browse the complete accessible taxonomy."
 msgstr "浏览所有可访问的标签分类。"
@@ -833,11 +854,6 @@ msgstr "修改密码"
 #: src/lib/features/tools/Tools.svelte
 msgid "Check for duplicates"
 msgstr "检查重复项"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Check records and diagnostics"
-msgstr "检查记录与诊断信息"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/maintenance/+page.svelte
@@ -922,6 +938,17 @@ msgid "Choose date for {label}"
 msgstr "选择{label}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Choose file"
+msgstr "选择文件"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Choose files"
+msgstr "选择文件"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Choose how Quirebase looks and speaks to you."
 msgstr "选择 Quirebase 的显示与语言方式。"
@@ -930,11 +957,6 @@ msgstr "选择 Quirebase 的显示与语言方式。"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Choose PDF revisions to package with saved download preferences."
 msgstr "选择要按已保存的下载偏好打包的 PDF 版本。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Choose PDFs more than once to add them to the same batch."
-msgstr "可多次选择 PDF，将它们加入同一批次。"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -1027,11 +1049,6 @@ msgid "Close"
 msgstr "关闭"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Close editor"
-msgstr "关闭编辑器"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Closed"
 msgstr "关闭"
@@ -1065,6 +1082,11 @@ msgstr "合集"
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Commit"
 msgstr "提交"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Commit or discard the current Import Batch before starting another import."
+msgstr "请先提交或丢弃当前导入批次，再开始新的导入。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -1253,11 +1275,6 @@ msgstr "创建工作区"
 #: src/lib/features/auth/Invitation.svelte
 msgid "Create account"
 msgstr "创建账号"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Create an Item manually"
-msgstr "手动创建条目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1635,11 +1652,6 @@ msgid "DOI, files, or PDFs"
 msgstr "DOI、文件或 PDF"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "DOI, PMID, or arXiv ID"
-msgstr "DOI、PMID 或 arXiv ID"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
@@ -1681,6 +1693,11 @@ msgstr "下载原始文件"
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Download with annotations"
 msgstr "下载含标注的文件"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Drop PDFs here or choose them; choosing more later adds to the same batch."
+msgstr "将 PDF 拖拽到此处或选择文件；之后继续选择会加入同一批次。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -1771,9 +1788,20 @@ msgid "Enter an Item title."
 msgstr "请输入条目标题。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Enter metadata by hand when no import source applies."
+msgstr "没有可用的导入来源时，可手动录入元数据。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Entry"
 msgstr "条目"
+
+#. Import diagnostic severity.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Error"
+msgstr "错误"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -1908,11 +1936,6 @@ msgstr "失败的工作流"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Family name"
 msgstr "姓氏"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Fetch one record from DOI, PubMed, arXiv, and other scholarly providers."
-msgstr "从 DOI、PubMed、arXiv 等学术数据源获取一条记录。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2086,6 +2109,11 @@ msgstr "请求头"
 msgid "Healthcare"
 msgstr "医疗机构"
 
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Hide"
+msgstr "隐藏"
+
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -2114,10 +2142,6 @@ msgstr "标识符 URI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Identifier, file, or PDFs"
-msgstr "标识符、文件或 PDF"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Identifiers"
 msgstr "标识符列表"
@@ -2139,9 +2163,19 @@ msgid "Import"
 msgstr "导入"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import a bibliography"
+msgstr "导入书目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Import Items"
 msgstr "导入条目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import methods"
+msgstr "导入方式"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2735,8 +2769,13 @@ msgid "Location"
 msgstr "位置"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Lock"
+msgstr "锁定"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Look up an identifier"
+msgid "Look up identifiers"
 msgstr "查询标识符"
 
 #. js-lingui-explicit-id
@@ -3190,6 +3229,11 @@ msgid "No projects yet."
 msgstr "暂无项目。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "No records in this batch"
+msgstr "该批次中没有记录"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "No sessions."
 msgstr "暂无登录会话。"
@@ -3309,11 +3353,6 @@ msgid "Open Library tools"
 msgstr "打开文献库工具"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Open metadata editor"
-msgstr "打开元数据编辑器"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "Open PDF"
 msgstr "打开 PDF"
@@ -3362,6 +3401,11 @@ msgstr "操作"
 #: src/lib/features/discovery/Discovery.svelte
 msgid "OR"
 msgstr "或"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Or paste bibliography data"
+msgstr "或粘贴书目数据"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -3461,6 +3505,11 @@ msgid "Password changed"
 msgstr "密码已更改"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Paste up to 50 identifiers, one per line. Each record is looked up separately."
+msgstr "最多粘贴 50 个标识符，每行一个，分别查询各条记录。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Patent"
 msgstr "专利"
@@ -3470,6 +3519,11 @@ msgstr "专利"
 #: src/lib/domain-labels.ts
 msgid "PDF"
 msgstr "PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "PDF file"
+msgstr "PDF 文件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3500,6 +3554,11 @@ msgstr "已扫描 PDF 中的 DOI"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "PDF URL"
 msgstr "PDF 地址"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "PDFs"
+msgstr "PDF 文件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -4052,11 +4111,16 @@ msgstr "相关性"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove"
 msgstr "移除"
+
+#. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Remove {name}"
+msgstr "移除 {name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -4078,6 +4142,11 @@ msgstr "请移除元数据标准之外的字段。"
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 msgid "Remove message"
 msgstr "移除消息"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Remove the chosen file to paste bibliography data instead."
+msgstr "移除已选文件即可改为粘贴书目数据。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -4140,6 +4209,7 @@ msgid "Resources"
 msgstr "资源"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Restore"
 msgstr "还原"
@@ -4182,6 +4252,11 @@ msgstr "评审助理"
 #: src/lib/features/tools/Tools.svelte
 msgid "Review duplicates, maintain Tags, and install Citation Styles."
 msgstr "审核重复条目、维护标签并安装引文样式。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Review the diagnostics below for details."
+msgstr "查看下方诊断以了解详情。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -4304,11 +4379,6 @@ msgstr "保存名称"
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Save new annotations to"
 msgstr "新批注保存到"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Save only when you approve"
-msgstr "确认后再保存"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4593,6 +4663,11 @@ msgid "Software"
 msgstr "软件"
 
 #. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+msgid "Some files were skipped because they are duplicates, unsupported, or over the batch limit."
+msgstr "部分文件已跳过，因为它们重复、不受支持或超出批次限制。"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Something went wrong. Try again."
 msgstr "发生错误，请重试。"
@@ -4617,11 +4692,6 @@ msgstr "来源标签"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Sponsor"
 msgstr "赞助者"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Stage many records from a reference manager export."
-msgstr "从文献管理器的导出文件中暂存多条记录。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -4728,6 +4798,11 @@ msgstr "补充文件"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Supplements: {state}"
 msgstr "补充材料：{state}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet."
+msgstr "支持 BibTeX、RIS、CSL-JSON 和 Commonmeta，最大 5 MiB。暂不支持已排版的参考文献文本。"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
@@ -5305,6 +5380,11 @@ msgid "Unknown publication"
 msgstr "未知出版物"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Unlock"
+msgstr "解锁"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Untitled"
 msgstr "无标题"
@@ -5327,8 +5407,8 @@ msgstr "更新日期"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Upload a bibliography"
-msgstr "上传文献目录"
+msgid "Upload a reference manager export or paste structured bibliography data."
+msgstr "上传文献管理软件导出的文件，或粘贴结构化书目数据。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -5387,6 +5467,11 @@ msgid "Use comma-separated native field names. Field exclusions apply only to Bi
 msgstr "用逗号分隔格式原生字段名。字段排除仅适用于 BibTeX 和 CSL-JSON；标识和类型字段必须保留。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:."
+msgstr "支持 DOI、PMID、arXiv、ISBN、OpenAlex 标识符及其支持的链接。ISBN-10 请添加 ISBN: 前缀。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Use latest version and keep draft"
 msgstr "使用最新版本并保留草稿"
@@ -5395,11 +5480,6 @@ msgstr "使用最新版本并保留草稿"
 #: src/lib/features/account/Account.svelte
 msgid "Use Streamable HTTP. Never put an API Token in the URL."
 msgstr "使用 Streamable HTTP。切勿将 API 令牌放入 URL。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Use the metadata editor when no import source is available."
-msgstr "没有可用导入来源时，可使用元数据编辑器。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -5517,6 +5597,12 @@ msgstr "卷号"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Volume / Issue"
 msgstr "卷 / 期"
+
+#. Import diagnostic severity.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Warning"
+msgstr "警告"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts

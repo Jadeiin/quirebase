@@ -25,6 +25,8 @@ const labels = {
 	pending: msg({ message: 'Pending', comment: 'Workflow or record state.' }),
 	ready: msg({ message: 'Ready', comment: 'Workflow or record state.' }),
 	failed: msg({ message: 'Failed', comment: 'Workflow or record state.' }),
+	error: msg({ message: 'Error', comment: 'Import diagnostic severity.' }),
+	warning: msg({ message: 'Warning', comment: 'Import diagnostic severity.' }),
 	committed: msg({ message: 'Committed', comment: 'Import Batch state.' }),
 	running: msg({ message: 'Running', comment: 'Workflow or record state.' }),
 	succeeded: msg({ message: 'Succeeded', comment: 'Workflow or record state.' }),

@@ -126,6 +126,11 @@ if (dashboardPdfDependencies.length) {
 // The earlier locked build measures 638.2 KiB raw / 177.4 KiB gzip for the shell (formerly
 // 523.2 / 163.7), including 164.0 KiB CSS / 18.8 KiB gzip. Refresh route budgets
 // against that build with about 2% headroom; never load the calendar in the shell.
+// The Import redesign, FileUpload pickers and localized action labels add about 2.3 KiB
+// raw CSS (Skeleton preset utilities and base-layer token/select rules) and 2.4 KiB raw /
+// 0.9 KiB gzip ICU catalog entries to every route graph; FileUpload itself stays in the
+// Import and Item files route chunks and never enters the Item overview graph. The Item
+// overview budget is refreshed deliberately against that measurement with about 2% headroom.
 if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 	throw new Error('DatePicker code leaked into the application shell');
 }
@@ -158,8 +163,8 @@ enforce(
 	'Item overview route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)'),
 	{
-		raw: 801000,
-		gzip: 229000
+		raw: 822000,
+		gzip: 235000
 	}
 );
 enforce(
@@ -174,8 +179,8 @@ enforce(
 	'Item files route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files'),
 	{
-		raw: 807000,
-		gzip: 232000
+		raw: 868000,
+		gzip: 250000
 	}
 );
 enforce(
@@ -211,8 +216,8 @@ enforce('Admin users route', routeBundle('/(app)/admin/users'), {
 	gzip: 205000
 });
 enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
-	raw: 747000,
-	gzip: 213000
+	raw: 763000,
+	gzip: 216000
 });
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
 	raw: 709000,

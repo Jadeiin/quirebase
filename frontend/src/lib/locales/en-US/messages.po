@@ -56,6 +56,11 @@ msgid "{count, plural, one {# Tag} other {# Tags}}"
 msgstr "{count, plural, one {# Tag} other {# Tags}}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "{count} / 50 identifiers"
+msgstr "{count} / 50 identifiers"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "{count} selected"
 msgstr "{count} selected"
@@ -64,6 +69,11 @@ msgstr "{count} selected"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "{kind} · {size} KB"
 msgstr "{kind} · {size} KB"
+
+#. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+msgid "{size} KB"
+msgstr "{size} KB"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -251,6 +261,11 @@ msgstr "Add participant"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "Add PDF revision"
 msgstr "Add PDF revision"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Add records using identifiers, bibliography files, PDFs, or the metadata editor."
+msgstr "Add records using identifiers, bibliography files, PDFs, or the metadata editor."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -503,6 +518,7 @@ msgid "Apply JSON changes before saving."
 msgstr "Apply JSON changes before saving."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Archive"
@@ -570,6 +586,11 @@ msgstr "Associated files, annotations, and assignments of this Item to Projects 
 #: src/lib/domain-labels.ts
 msgid "Attachment"
 msgstr "Attachment"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Attachment file"
+msgstr "Attachment file"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -644,6 +665,11 @@ msgstr "Background tasks ({count})"
 #: src/lib/features/account/Account.svelte
 msgid "Base endpoint"
 msgstr "Base endpoint"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Bibliography"
+msgstr "Bibliography"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -751,11 +777,6 @@ msgid "BREAK GLASS · read-only item inspection"
 msgstr "BREAK GLASS · read-only item inspection"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
-msgstr "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Browse the complete accessible taxonomy."
 msgstr "Browse the complete accessible taxonomy."
@@ -833,11 +854,6 @@ msgstr "Change password"
 #: src/lib/features/tools/Tools.svelte
 msgid "Check for duplicates"
 msgstr "Check for duplicates"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Check records and diagnostics"
-msgstr "Check records and diagnostics"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/maintenance/+page.svelte
@@ -922,6 +938,17 @@ msgid "Choose date for {label}"
 msgstr "Choose date for {label}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Choose file"
+msgstr "Choose file"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Choose files"
+msgstr "Choose files"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Choose how Quirebase looks and speaks to you."
 msgstr "Choose how Quirebase looks and speaks to you."
@@ -930,11 +957,6 @@ msgstr "Choose how Quirebase looks and speaks to you."
 #: src/lib/features/item/ItemActions.svelte
 msgid "Choose PDF revisions to package with saved download preferences."
 msgstr "Choose PDF revisions to package with saved download preferences."
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Choose PDFs more than once to add them to the same batch."
-msgstr "Choose PDFs more than once to add them to the same batch."
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -1027,11 +1049,6 @@ msgid "Close"
 msgstr "Close"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Close editor"
-msgstr "Close editor"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Closed"
 msgstr "Closed"
@@ -1065,6 +1082,11 @@ msgstr "Collection"
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Commit"
 msgstr "Commit"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Commit or discard the current Import Batch before starting another import."
+msgstr "Commit or discard the current Import Batch before starting another import."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -1253,11 +1275,6 @@ msgstr "Create a workspace"
 #: src/lib/features/auth/Invitation.svelte
 msgid "Create account"
 msgstr "Create account"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Create an Item manually"
-msgstr "Create an Item manually"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1635,11 +1652,6 @@ msgid "DOI, files, or PDFs"
 msgstr "DOI, files, or PDFs"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "DOI, PMID, or arXiv ID"
-msgstr "DOI, PMID, or arXiv ID"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
@@ -1681,6 +1693,11 @@ msgstr "Download original"
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Download with annotations"
 msgstr "Download with annotations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Drop PDFs here or choose them; choosing more later adds to the same batch."
+msgstr "Drop PDFs here or choose them; choosing more later adds to the same batch."
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -1771,9 +1788,20 @@ msgid "Enter an Item title."
 msgstr "Enter an Item title."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Enter metadata by hand when no import source applies."
+msgstr "Enter metadata by hand when no import source applies."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Entry"
 msgstr "Entry"
+
+#. Import diagnostic severity.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Error"
+msgstr "Error"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -1908,11 +1936,6 @@ msgstr "Failed workflows"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Family name"
 msgstr "Family name"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Fetch one record from DOI, PubMed, arXiv, and other scholarly providers."
-msgstr "Fetch one record from DOI, PubMed, arXiv, and other scholarly providers."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2086,6 +2109,11 @@ msgstr "Header"
 msgid "Healthcare"
 msgstr "Healthcare"
 
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Hide"
+msgstr "Hide"
+
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -2114,10 +2142,6 @@ msgstr "Identifier URI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Identifier, file, or PDFs"
-msgstr "Identifier, file, or PDFs"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Identifiers"
 msgstr "Identifiers"
@@ -2139,9 +2163,19 @@ msgid "Import"
 msgstr "Import"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import a bibliography"
+msgstr "Import a bibliography"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Import Items"
 msgstr "Import Items"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import methods"
+msgstr "Import methods"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2735,9 +2769,14 @@ msgid "Location"
 msgstr "Location"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Lock"
+msgstr "Lock"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Look up an identifier"
-msgstr "Look up an identifier"
+msgid "Look up identifiers"
+msgstr "Look up identifiers"
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
@@ -3190,6 +3229,11 @@ msgid "No projects yet."
 msgstr "No projects yet."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "No records in this batch"
+msgstr "No records in this batch"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "No sessions."
 msgstr "No sessions."
@@ -3309,11 +3353,6 @@ msgid "Open Library tools"
 msgstr "Open Library tools"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Open metadata editor"
-msgstr "Open metadata editor"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "Open PDF"
 msgstr "Open PDF"
@@ -3362,6 +3401,11 @@ msgstr "Operation"
 #: src/lib/features/discovery/Discovery.svelte
 msgid "OR"
 msgstr "OR"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Or paste bibliography data"
+msgstr "Or paste bibliography data"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -3461,6 +3505,11 @@ msgid "Password changed"
 msgstr "Password changed"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Paste up to 50 identifiers, one per line. Each record is looked up separately."
+msgstr "Paste up to 50 identifiers, one per line. Each record is looked up separately."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Patent"
 msgstr "Patent"
@@ -3470,6 +3519,11 @@ msgstr "Patent"
 #: src/lib/domain-labels.ts
 msgid "PDF"
 msgstr "PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "PDF file"
+msgstr "PDF file"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3500,6 +3554,11 @@ msgstr "PDF scanned for a DOI"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "PDF URL"
 msgstr "PDF URL"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "PDFs"
+msgstr "PDFs"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -4052,11 +4111,16 @@ msgstr "Relevance"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove"
 msgstr "Remove"
+
+#. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Remove {name}"
+msgstr "Remove {name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -4078,6 +4142,11 @@ msgstr "Remove fields that are not part of the metadata standard."
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 msgid "Remove message"
 msgstr "Remove message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Remove the chosen file to paste bibliography data instead."
+msgstr "Remove the chosen file to paste bibliography data instead."
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -4140,6 +4209,7 @@ msgid "Resources"
 msgstr "Resources"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Restore"
 msgstr "Restore"
@@ -4182,6 +4252,11 @@ msgstr "Review assistant"
 #: src/lib/features/tools/Tools.svelte
 msgid "Review duplicates, maintain Tags, and install Citation Styles."
 msgstr "Review duplicates, maintain Tags, and install Citation Styles."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Review the diagnostics below for details."
+msgstr "Review the diagnostics below for details."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -4304,11 +4379,6 @@ msgstr "Save name"
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Save new annotations to"
 msgstr "Save new annotations to"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Save only when you approve"
-msgstr "Save only when you approve"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4593,6 +4663,11 @@ msgid "Software"
 msgstr "Software"
 
 #. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+msgid "Some files were skipped because they are duplicates, unsupported, or over the batch limit."
+msgstr "Some files were skipped because they are duplicates, unsupported, or over the batch limit."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
@@ -4617,11 +4692,6 @@ msgstr "Source Tag"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Sponsor"
 msgstr "Sponsor"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Stage many records from a reference manager export."
-msgstr "Stage many records from a reference manager export."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -4728,6 +4798,11 @@ msgstr "Supplements"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Supplements: {state}"
 msgstr "Supplements: {state}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet."
+msgstr "Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet."
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
@@ -5305,6 +5380,11 @@ msgid "Unknown publication"
 msgstr "Unknown publication"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Unlock"
+msgstr "Unlock"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Untitled"
 msgstr "Untitled"
@@ -5327,8 +5407,8 @@ msgstr "Updated date"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Upload a bibliography"
-msgstr "Upload a bibliography"
+msgid "Upload a reference manager export or paste structured bibliography data."
+msgstr "Upload a reference manager export or paste structured bibliography data."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -5387,6 +5467,11 @@ msgid "Use comma-separated native field names. Field exclusions apply only to Bi
 msgstr "Use comma-separated native field names. Field exclusions apply only to BibTeX and CSL-JSON; identity and type fields are required."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:."
+msgstr "Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Use latest version and keep draft"
 msgstr "Use latest version and keep draft"
@@ -5395,11 +5480,6 @@ msgstr "Use latest version and keep draft"
 #: src/lib/features/account/Account.svelte
 msgid "Use Streamable HTTP. Never put an API Token in the URL."
 msgstr "Use Streamable HTTP. Never put an API Token in the URL."
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Use the metadata editor when no import source is available."
-msgstr "Use the metadata editor when no import source is available."
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -5517,6 +5597,12 @@ msgstr "Volume"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Volume / Issue"
 msgstr "Volume / Issue"
+
+#. Import diagnostic severity.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Warning"
+msgstr "Warning"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts

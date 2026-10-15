@@ -12,7 +12,7 @@ from workspace_helpers import provision_initial_workspace
 from quirebase.library import (
     commit_import_batch,
     create_item,
-    stage_identifier_import_batch,
+    stage_identifiers_import_batch,
     sync_metadata_from_upstream,
 )
 from quirebase.models import AuditEvent, Item, User
@@ -61,8 +61,8 @@ async def test_ads_provider_dates_remain_usable_for_import_and_sync(
         ),
     )
     settings = get_settings().model_copy(update={"nasa_ads_token": "ads-token"})
-    batch = await stage_identifier_import_batch(
-        db, actor, workspace_id, bibcode, provider="nasa_ads", settings=settings
+    batch = await stage_identifiers_import_batch(
+        db, actor, workspace_id, [bibcode], provider="nasa_ads", settings=settings
     )
     assert batch.records[0].metadata.date_published == expected
     imported = await commit_import_batch(db, actor, workspace_id, batch.id)
@@ -148,15 +148,19 @@ async def test_provider_lookup_aliases_preserve_canonical_identifiers(
         ),
     )
     if operation == "import":
-        batch = await stage_identifier_import_batch(
-            db, actor, workspace_id, lookup_value, provider=provider
+        batch = await stage_identifiers_import_batch(
+            db, actor, workspace_id, [lookup_value], provider=provider
         )
         errors = batch.errors
         assert all(error.severity == "warning" for error in errors)
         assert batch.file_format == "metadata"
-        event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "metadata.lookup"))
+        event = await db.scalar(
+            select(AuditEvent).where(AuditEvent.action == "metadata.import.preview")
+        )
         assert event.detail == {
-            "provider": "crossref" if provider == "auto" else provider,
+            "requested": 1,
+            "candidates": 1,
+            "providers": ["crossref" if provider == "auto" else provider],
             "lookup_provider": provider,
         }
         await commit_import_batch(db, actor, workspace_id, batch.id)

@@ -45,10 +45,9 @@ export function fileUploadMutationOptions(
 						);
 			await trackDocument(workflow.id);
 		},
-		onSuccess: async (_result, { form }) => {
-			form.reset();
-			await invalidateItemFiles(queryClient, workspaceId, itemId);
-		}
+		// The caller resets the form after success so file pickers clear while
+		// they are enabled; see `upload` in the files route.
+		onSuccess: () => invalidateItemFiles(queryClient, workspaceId, itemId)
 	});
 }
 
@@ -87,10 +86,8 @@ export function fileRemoteUploadMutationOptions(
 						);
 			await trackDocument(workflow.id);
 		},
-		onSuccess: async (_result, { form }) => {
-			form.reset();
-			await invalidateItemFiles(queryClient, workspaceId, itemId);
-		}
+		// The caller resets the form after success so URL fields clear there.
+		onSuccess: () => invalidateItemFiles(queryClient, workspaceId, itemId)
 	});
 }
 

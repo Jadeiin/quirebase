@@ -1,31 +1,47 @@
-# Discovery: Online metadata lookup and external search
+# Import references and search online
 
-The Import page accepts known DOI, PMID, arXiv, OpenAlex, and ISBN identifiers. Automatic detection chooses the Provider. Results enter an import preview and are not written until the user confirms.
+Use **Import** to add references from identifiers, bibliography data or PDFs, or enter their
+details manually. Use **Discovery** to search online when you have a title, author or topic.
 
-Online Search is a Discovery workflow separate from Import. It accepts fielded clauses using provider-supported AND, OR, or NOT combinations, plus source-specific sorting, year bounds, and pagination. OpenAlex only permits OR between adjacent conditions on the same field; the application rejects unsupported cross-field OR instead of changing its meaning. Discovery results are never trusted as import payloads: selecting a candidate submits only its provider and identifier, refetches the complete record, and enters the same preview-before-commit flow.
+The Import page offers four tabs:
 
-DOIs are queried first through Crossref and fall back to DataCite when Crossref has no record. PMID Lookup uses NCBI PubMed EFetch XML, arXiv uses its Atom API, ISBN uses Open Library, and OpenAlex IDs use the Works API. Explicit lookups also support NASA ADS (source `nasa_ads`, Identifier Namespace `bibcode`) and IEEE Xplore (`ieee`). Source names and their Identifier Namespaces both select the lookup adapter; IEEE's external API still uses its native `article_number` field. Discovery supports OpenAlex, Crossref, PubMed, PMC, arXiv, Open Library, NASA ADS, and IEEE Xplore. PMC supports Discovery and document acquisition by `pmcid`, but has no metadata lookup adapter. Provider metadata can be incomplete and should be reviewed before confirmation.
+| Tab | What you can add |
+| --- | --- |
+| Identifiers | Up to 50 DOI, PMID, arXiv, OpenAlex or ISBN identifiers, one per line |
+| Bibliography | An uploaded file or pasted BibTeX, RIS, CSL-JSON or Commonmeta data |
+| PDFs | Published PDFs, with a preview of the metadata found for each file |
+| Manual creation | Reference details entered in the metadata editor |
 
-BibTeX and BibLaTeX recognize Item Identifier Namespaces declared by Inquiro's fixed Provider catalog. DOI has its own field. ISSN identifies a journal and remains a custom bibliography field; it does not claim an Item identity. An `eprint` with a recognized `archiveprefix` uses that archive's Identifier Namespace (for example, `PubMed` becomes `pmid`). Unrecognized or unspecified archives remain custom fields.
+For identifier lookup, leave the data source on **Auto detect**, or choose a source explicitly.
+Supported identifier links, such as DOI and PubMed URLs, can also be pasted. Add the `ISBN:`
+prefix to ISBN-10 values so they can be distinguished from PubMed IDs:
 
-Set `INQUIRO_CONTACT_EMAIL` to a monitored operator address. `INQUIRO_NCBI_API_KEY` and `INQUIRO_OPENALEX_API_KEY` are optional; `INQUIRO_NASA_ADS_TOKEN` and `INQUIRO_IEEE_API_KEY` are required to query NASA ADS and IEEE Xplore respectively. Timeouts and maximum response size are controlled with `INQUIRO_TIMEOUT_SECONDS` and `INQUIRO_MAX_RESPONSE_BYTES`.
+```text
+10.1073/pnas.92.6.2288
+https://pubmed.ncbi.nlm.nih.gov/11607519/
+arXiv:2304.08030
+ISBN:0674016394
+```
 
-The implementation does not resolve arbitrary URLs or landing pages. It connects only to fixed HTTPS Provider endpoints; redirects are rejected. Queries are authenticated application actions, result pages are bounded, search terms are not written to audit events, and imports require preview confirmation.
+Bibliography data must use UTF-8 and be no larger than 5 MiB. The format is detected
+automatically; choose it explicitly if detection is ambiguous. EndNote XML and references
+copied from a formatted bibliography are not currently supported. Export BibTeX or RIS from
+your reference manager instead.
 
-Run deterministic Provider tests with
-`uv run pytest -q packages/inquiro/tests/test_provider_lookup.py packages/inquiro/tests/test_provider_search.py`.
-Run the Quirebase integration tests with
-`uv run pytest -q tests/test_metadata_lookup.py tests/test_online_search.py`. The diagnostic script
-requires internet access and may fail when an upstream service is unavailable or rate-limits the
-deployment.
+Review the preview before confirming an import. References are saved only after confirmation.
+If some entries fail, the preview shows which ones need attention while keeping the successful
+entries available. Refreshing the preview page preserves the prepared references.
 
-Official API documentation:
+Online search supports fielded queries, publication-year limits, sorting and multiple result
+pages. Available options depend on the selected source. Where supported, combine conditions
+with **AND**, **OR** or **NOT**. OpenAlex permits **OR** only between adjacent conditions on the
+same field. Select a result to review its details before adding it.
 
-- Crossref REST API: <https://www.crossref.org/documentation/retrieve-metadata/rest-api/>
-- DataCite single DOI retrieval: <https://support.datacite.org/docs/api-get-doi>
-- NCBI E-utilities (PubMed & PMC): <https://www.ncbi.nlm.nih.gov/books/NBK25499/>
-- arXiv API: <https://info.arxiv.org/help/api/user-manual.html>
-- OpenAlex authentication and rate limits: <https://help.openalex.org/api/authentication/>
-- Open Library Search API: <https://openlibrary.org/dev/docs/api/search>
-- NASA ADS API: <https://github.com/adsabs/adsabs-dev-api>
-- IEEE Xplore API: <https://developer.ieee.org/>
+Sources include Crossref, DataCite, Commonmeta, PubMed, PMC, arXiv, OpenAlex, Open Library,
+NASA ADS and IEEE Xplore. Their lookup and search capabilities differ; the choices shown in
+the interface reflect what is available. PMC supports online search, but PMCID lookup is not
+currently supported. Some sources require administrator configuration before they can be used.
+
+General website and article landing-page URLs are not currently supported for metadata lookup.
+Use a supported identifier or enter the reference manually. Metadata from online sources may
+be incomplete, so check titles, contributors and publication details before saving.

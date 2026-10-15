@@ -1105,7 +1105,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/imports/identifier': {
+	'/api/v1/workspaces/{workspace_id}/imports/identifiers': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1114,8 +1114,8 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Stage Identifier Import */
-		post: operations['imports.stage_identifier_import'];
+		/** Stage Identifiers Import */
+		post: operations['imports.stage_identifiers_import'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3914,10 +3914,10 @@ export interface components {
 				| 'Wikidata'
 				| 'Other';
 		};
-		/** IdentifierImportRequest */
-		IdentifierImportRequest: {
-			/** Identifier */
-			identifier: string;
+		/** IdentifiersImportRequest */
+		IdentifiersImportRequest: {
+			/** Identifiers */
+			identifiers: string[];
 			/**
 			 * Provider
 			 * @default auto
@@ -3972,6 +3972,8 @@ export interface components {
 			filename?: string | null;
 			/** Code */
 			code?: string | null;
+			/** Identifier */
+			identifier?: string | null;
 		};
 		/** ImportSource */
 		ImportSource: {
@@ -6905,7 +6907,10 @@ export interface components {
 		stage_bibliography_import: {
 			/** Bibliography */
 			bibliography: string;
-			/** File Format */
+			/**
+			 * File Format
+			 * @default auto
+			 */
 			file_format: string;
 		};
 		/** Body_imports.stage_pdf_import */
@@ -10145,7 +10150,7 @@ export interface operations {
 			};
 		};
 	};
-	'imports.stage_identifier_import': {
+	'imports.stage_identifiers_import': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -10156,7 +10161,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['IdentifierImportRequest'];
+				'application/json': components['schemas']['IdentifiersImportRequest'];
 			};
 		};
 		responses: {

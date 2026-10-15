@@ -107,7 +107,7 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 			}
 		});
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/imports/identifier', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/imports/identifiers', (route) =>
 		route.fulfill({ json: { id: 'batch-discovery', status: 'ready', records: [], errors: [] } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/imports/batch-discovery', (route) =>

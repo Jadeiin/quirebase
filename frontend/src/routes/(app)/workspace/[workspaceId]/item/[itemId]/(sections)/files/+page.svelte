@@ -49,29 +49,35 @@
 		fileDeleteMutationOptions(params.workspaceId, params.itemId, queryClient)
 	);
 
-	function track(promise: Promise<unknown>) {
+	function track(promise: Promise<unknown>): Promise<boolean> {
 		mutationError = '';
-		void promise.catch((error) => {
-			if (isDownloadCancelled(error)) return;
-			mutationError = apiErrorMessage(error, $t('Unable to save changes'));
-		});
+		return promise.then(
+			() => true,
+			(error) => {
+				if (isDownloadCancelled(error)) return false;
+				mutationError = apiErrorMessage(error, $t('Unable to save changes'));
+				return false;
+			}
+		);
 	}
 
-	function upload(event: SubmitEvent, kind: 'revision' | 'attachment') {
+	async function upload(event: SubmitEvent, kind: 'revision' | 'attachment') {
 		event.preventDefault();
 		const form = event.currentTarget as HTMLFormElement;
-		track(fileUpload.mutateAsync({ form, kind }));
+		// Reset only after success and only once the pickers are interactive
+		// again, so a queued replacement selection is never discarded silently.
+		if (await track(fileUpload.mutateAsync({ form, kind }))) form.reset();
 	}
 
-	function uploadFromUrl(event: SubmitEvent, kind: 'revision' | 'attachment') {
+	async function uploadFromUrl(event: SubmitEvent, kind: 'revision' | 'attachment') {
 		event.preventDefault();
 		const form = event.currentTarget as HTMLFormElement;
-		track(fileRemoteUpload.mutateAsync({ form, kind }));
+		if (await track(fileRemoteUpload.mutateAsync({ form, kind }))) form.reset();
 	}
 
 	function downloadFile(file: FileRow) {
 		if (!workspace.can('workspace.export')) return;
-		track(
+		void track(
 			file.kind === 'revision'
 				? workspaceApi.downloadGet(
 						'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content',
@@ -102,7 +108,7 @@
 		confirmFileOpen = false;
 		if (!file) return;
 		if (!workspace.can('file.delete')) return;
-		track(fileDelete.mutateAsync({ file }));
+		void track(fileDelete.mutateAsync({ file }));
 	}
 </script>
 

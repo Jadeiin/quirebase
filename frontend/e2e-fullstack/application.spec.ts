@@ -45,7 +45,7 @@ test('creates, edits, and finds duplicate-capable Commonmeta Items through the r
 	const revisedTitle = 'Revised full-stack smoke Item';
 
 	await page.goto(`/workspace/${workspaceId}/import`);
-	await page.getByRole('button', { name: 'Open metadata editor' }).click();
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
 	await page.getByLabel('Title', { exact: true }).fill(initialTitle);
 	await page.getByRole('button', { name: 'Edit standard metadata JSON' }).click();
 	const json = page.getByRole('textbox', { name: 'Metadata', exact: true });
@@ -144,7 +144,7 @@ test('creates, edits, and finds duplicate-capable Commonmeta Items through the r
 	await expect(page.getByRole('link', { name: revisedTitle })).toBeVisible();
 
 	await page.goto(`/workspace/${workspaceId}/import`);
-	await page.getByRole('button', { name: 'Open metadata editor' }).click();
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
 	await page.getByLabel('Title', { exact: true }).fill('Duplicate smoke Item');
 	await page.getByRole('button', { name: 'Edit standard metadata JSON' }).click();
 	await page
@@ -175,6 +175,7 @@ test('runs a staged PDF Import through the durable worker', async ({ page }) => 
 	const workspaceId = await signIn(page);
 
 	await page.goto(`/workspace/${workspaceId}/import`);
+	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
 	await page.locator('input[name="pdfs"]').setInputFiles({
 		name: 'fullstack-smoke.pdf',
 		mimeType: 'application/pdf',
@@ -183,7 +184,7 @@ test('runs a staged PDF Import through the durable worker', async ({ page }) => 
 	await page.getByRole('button', { name: 'Stage PDFs' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Import preview' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Commit' })).toBeEnabled({ timeout: 30_000 });
 	await expect(page.getByRole('heading', { name: 'Diagnostics' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Commit' })).toBeDisabled();
 	await expect(page.getByText('fullstack-smoke.pdf')).toBeVisible();
 });

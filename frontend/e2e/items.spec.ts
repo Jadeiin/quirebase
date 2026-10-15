@@ -1174,14 +1174,14 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 	await expect(
 		page.getByText('My own annotation').locator('..').getByLabel('Moderator actions')
 	).toHaveCount(0);
-	await page.getByRole('button', { name: 'hide', exact: true }).click();
+	await page.getByRole('button', { name: 'Hide', exact: true }).click();
 	await expect(page.getByText('Updated by another moderator')).toBeVisible();
 	await expect(
 		page.getByText(/Latest state refreshed; review it and explicitly retry/)
 	).toBeVisible();
 	await expect.poll(() => moderationBodies).toEqual([{ action: 'hide', version: 1 }]);
 
-	await page.getByRole('button', { name: 'hide', exact: true }).click();
+	await page.getByRole('button', { name: 'Hide', exact: true }).click();
 	await expect
 		.poll(() => moderationBodies)
 		.toEqual([
@@ -1198,6 +1198,102 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 			{ action: 'hide', version: 2 },
 			{ action: 'delete', version: 2 }
 		]);
+});
+
+test('Item file uploads keep the accepted file after dismissing or rejecting a chooser', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Files Item' },
+				latest_revision: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/documents', (route) =>
+		route.fulfill({ json: { item_id: 'item-1', files: [] } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1', (route) =>
+		route.fulfill({
+			json: {
+				id: 'item-1',
+				title_html: 'Files Item',
+				version: 1,
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
+				},
+				abstract_html: null
+			}
+		})
+	);
+	let uploadBody = '';
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/revisions', (route) => {
+		uploadBody = route.request().postData() ?? '';
+		return route.fulfill({ status: 202, json: { id: 'workflow-1' } });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/workflows/workflow-1', (route) =>
+		route.fulfill({ json: { id: 'workflow-1', state: 'succeeded', error: null } })
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1/files');
+	const input = page.locator('input[name="pdf"]');
+	await input.setInputFiles({
+		name: 'cancel-probe.pdf',
+		mimeType: 'application/pdf',
+		buffer: minimalPdf()
+	});
+
+	// Opening the chooser again and dismissing it must not drop the accepted file:
+	// the picker clears the hidden input so re-selecting the same file still fires
+	// `input`, then restores the accepted files before the dialog opens.
+	await Promise.all([
+		page.waitForEvent('filechooser'),
+		page.getByRole('button', { name: 'PDF file', exact: true }).click()
+	]);
+	expect(await input.evaluate((element: HTMLInputElement) => element.files?.length ?? 0)).toBe(1);
+	expect(await input.evaluate((element: HTMLInputElement) => element.files?.[0]?.name ?? '')).toBe(
+		'cancel-probe.pdf'
+	);
+
+	// An unsupported selection is rejected and reported, and the hidden input must
+	// keep matching the accepted file instead of submitting the rejected one.
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		await input.setInputFiles({
+			name: 'notes.txt',
+			mimeType: 'text/plain',
+			buffer: Buffer.from('not a pdf')
+		});
+		await expect(page.getByText('cancel-probe.pdf', { exact: true })).toBeVisible();
+		expect(
+			await input.evaluate((element: HTMLInputElement) => element.files?.[0]?.name ?? '')
+		).toBe('cancel-probe.pdf');
+	}
+	await page.getByRole('button', { name: 'Remove cancel-probe.pdf', exact: true }).click();
+	expect(await input.evaluate((element: HTMLInputElement) => element.files?.length ?? 0)).toBe(0);
+	await expect(page.getByRole('button', { name: 'Upload PDF' })).toBeDisabled();
+	await input.setInputFiles({
+		name: 'cancel-probe.pdf',
+		mimeType: 'application/pdf',
+		buffer: minimalPdf()
+	});
+
+	await page.getByRole('button', { name: 'Upload PDF' }).click();
+	await expect.poll(() => uploadBody).toContain('cancel-probe.pdf');
+	expect(uploadBody).not.toContain('notes.txt');
 });
 
 test('Item file uploads wait for durable processing before refreshing', async ({ page }) => {
@@ -1276,11 +1372,16 @@ test('Item file uploads wait for durable processing before refreshing', async ({
 		buffer: minimalPdf()
 	});
 	await page.getByRole('button', { name: 'Upload PDF' }).click();
+	await expect(page.locator('input[name="pdf"]')).toBeDisabled();
+	await expect(page.locator('input[name="attachment"]')).toBeDisabled();
 	await expect.poll(() => workflowReads).toBeGreaterThan(1);
 	await expect(page.getByText('paper.pdf')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(1);
 	await expect(page.getByText('Document processing completed')).toBeVisible();
 	await expect(page.getByRole('button', { name: /Background tasks/ })).toBeVisible();
+	await expect(page.locator('input[name="pdf"]')).toBeEnabled();
+	await expect(page.locator('input[name="attachment"]')).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Upload PDF' })).toBeDisabled();
 });
 
 test('Item file uploads settle with an error toast when status polling fails', async ({ page }) => {
@@ -1517,7 +1618,7 @@ test('manual Item creation submits the standard Work and separate Citation Key',
 		})
 	);
 	await page.goto('/workspace/workspace-1/import');
-	await page.getByRole('button', { name: 'Open metadata editor' }).click();
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
 	await page.getByLabel('Title', { exact: true }).fill(metadata.title);
 	await page.getByLabel('Reference type').selectOption('Book');
 	const date = page.getByRole('textbox', { name: 'Publication date', exact: true });
@@ -1872,7 +1973,7 @@ test('publication calendar preserves precision, supports keyboard selection and 
 }) => {
 	await mockSession(page);
 	await page.goto('/workspace/workspace-1/import');
-	await page.getByRole('button', { name: 'Open metadata editor' }).click();
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
 	const date = page.getByRole('textbox', { name: 'Publication date', exact: true });
 	const precision = page.getByLabel('Date precision');
 	const calendar = page.getByRole('application', {

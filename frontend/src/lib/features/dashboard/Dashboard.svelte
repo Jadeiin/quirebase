@@ -231,7 +231,7 @@
 				<div class="grid grid-cols-1 gap-2">
 					{#each dashboard.data?.projects ?? [] as project (project.id)}
 						<a
-							class="flex items-center justify-between gap-3 rounded-lg bg-surface-200-800 px-3.5 py-3 no-underline hover:bg-primary-50-950"
+							class="flex items-center justify-between gap-3 rounded-lg border border-surface-300-700 px-3.5 py-3 no-underline transition-colors hover:border-primary-700-300 hover:bg-primary-50-950"
 							href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
 							><strong class="text-sm">{project.name}</strong><span
 								class="text-xs text-surface-600-400">{$t(domainLabel(project.participation))}</span

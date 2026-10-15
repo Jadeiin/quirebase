@@ -12,6 +12,7 @@ const baseSelectors = new Set([
 	"[data-theme='quirebase']",
 	'body',
 	'a',
+	'select',
 	'h1',
 	'h2',
 	'h3',

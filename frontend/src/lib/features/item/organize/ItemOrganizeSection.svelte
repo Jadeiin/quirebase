@@ -86,14 +86,14 @@
 					</p>
 				</div>
 				<input
-					class="input w-auto min-w-36 border border-surface-300-700 field-sm"
+					class="input w-auto min-w-36 field-sm"
 					bind:value={tagFilter}
 					placeholder={$t('Filter Tags')}
 				/>
 			</div>
-			<div class="gap-x-6 sm:columns-2 2xl:columns-3">
+			<div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 2xl:grid-cols-3">
 				{#each groups as group (group.letter)}
-					<div class="mb-4 break-inside-avoid last:mb-0">
+					<div>
 						<h3 class="mb-2 text-xs font-bold tracking-[0.12em] text-surface-600-400 uppercase">
 							{group.letter}
 						</h3>
@@ -104,7 +104,7 @@
 									as="button"
 									type="button"
 									variant={assigned ? 'primary' : 'surface'}
-									class={`cursor-pointer border ${assigned ? 'border-primary-700-300' : 'border-surface-300-700'}`}
+									class={`cursor-pointer ${assigned ? 'border-primary-700-300' : ''}`}
 									disabled={busy || !canUseTags}
 									aria-pressed={assigned}
 									onclick={() => onToggleTag(tag.id, assigned)}
@@ -163,9 +163,11 @@
 						as="button"
 						type="button"
 						variant="primary"
-						class="cursor-pointer border border-primary-700-300/20"
+						class="cursor-pointer"
 						disabled={busy || !canUseTags}
-						onclick={() => onToggleTag(tag.id, true)}>{tag.name} ×</Badge
+						aria-label={$t('Remove {name}', { name: tag.name })}
+						onclick={() => onToggleTag(tag.id, true)}
+						>{tag.name}<span aria-hidden="true"> ×</span></Badge
 					>
 				{:else}
 					<span class="text-sm text-surface-600-400">{$t('No tags')}</span>
@@ -173,13 +175,11 @@
 			</div>
 			{#if canCreateTags}<form class="mt-3 flex items-center gap-2" onsubmit={onAddTag}>
 					<input
-						class="input min-w-0 flex-1 border border-surface-300-700 field-sm"
+						class="input min-w-0 flex-1 field-sm"
 						name="name"
 						placeholder={$t('New tag')}
 						required
-					/><Button size="sm" class="shrink-0 border border-surface-300-700" disabled={busy}
-						>{$t('Add tag')}</Button
-					>
+					/><Button size="sm" class="shrink-0" disabled={busy}>{$t('Add tag')}</Button>
 				</form>{/if}
 		</Panel>
 		<Panel>
@@ -187,7 +187,7 @@
 				<h2 class="m-0">{$t('Tag Recommendations')}</h2>
 				<Button
 					size="sm"
-					class="shrink-0 border border-surface-300-700"
+					class="shrink-0"
 					disabled={busy || !can(data.authorization, 'item.update')}
 					onclick={onRefresh}>{$t('Refresh')}</Button
 				>
@@ -216,9 +216,7 @@
 				class="mt-3 flex items-center gap-2 border-t border-surface-300-700 pt-3 text-xs text-surface-600-400"
 			>
 				{$t('State')}
-				<Badge class="border border-surface-300-700"
-					>{$t(domainLabel(data.tag_matrix.recommendation_state))}</Badge
-				>
+				<Badge>{$t(domainLabel(data.tag_matrix.recommendation_state))}</Badge>
 			</div>
 		</Panel>
 	</div>

@@ -73,7 +73,7 @@ from quirebase.library.imports import (
     get_import_batch_preview,
     import_staging_object_keys,
     retry_pdf_import_batch,
-    stage_identifier_import_batch,
+    stage_identifiers_import_batch,
     stage_import_batch,
     stage_pdf_import_batch,
 )
@@ -205,7 +205,7 @@ __all__ = [
     "search_candidate_records",
     "search_library",
     "select_builtin_citation_styles",
-    "stage_identifier_import_batch",
+    "stage_identifiers_import_batch",
     "stage_import_batch",
     "stage_pdf_import_batch",
     "sync_metadata_from_upstream",

@@ -14,7 +14,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.errors import PermissionDenied, WorkspaceMembershipRequired
 from quirebase.library import export_accessible_bibliography, find_duplicates
 from quirebase.library.discovery import DiscoveryClause, search_candidate_records
-from quirebase.library.imports import stage_identifier_import_batch, stage_pdf_import_batch
+from quirebase.library.imports import stage_identifiers_import_batch, stage_pdf_import_batch
 from quirebase.models import (
     ImportBatch,
     Item,
@@ -114,7 +114,7 @@ async def test_identifier_import_rechecks_create_after_provider_io(
 
     monkeypatch.setattr("quirebase.library.imports.lookup_candidate", lookup)
     with pytest.raises(PermissionDenied):
-        await stage_identifier_import_batch(async_db, member, workspace_id, "10.1000/revoked")
+        await stage_identifiers_import_batch(async_db, member, workspace_id, ["10.1000/revoked"])
     assert await async_db.scalar(select(func.count()).select_from(ImportBatch)) == 0
 
 

@@ -6,7 +6,9 @@ import json
 import re
 import unicodedata
 from dataclasses import dataclass
+from functools import lru_cache
 from io import StringIO
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -15,6 +17,7 @@ from bibtexparser.bibdatabase import BibDatabase, as_text
 from bibtexparser.bibtexexpression import BibtexExpression
 from bibtexparser.bparser import BibTexParser
 from bibtexparser.bwriter import BibTexWriter
+from commonmeta.schema_utils import schema_file_path
 
 from inquiro._commonmeta_adapters import bibtex_writer_entry, ris_writer_record
 from inquiro.bibliography.keys import evaluate_citation_key_formula, suffixed_citation_key
@@ -28,6 +31,7 @@ from inquiro.work import (
     validate_work,
     work_authors,
     work_doi,
+    work_schema,
 )
 
 SUPPORTED_FORMATS = ("bibtex", "ris", "csl-json", "commonmeta")
@@ -45,6 +49,55 @@ class ParsedRecord:
     work: dict
     citation_key: str | None = None
     row: int | None = None
+
+
+@lru_cache(maxsize=1)
+def _json_bibliography_types() -> dict[str, list[str]]:
+    # Use the same bundled schemas as Work and CSL record validation. Detection
+    # checks only the discriminator so malformed siblings retain row diagnostics.
+    csl_schema = json.loads(Path(schema_file_path("csl")).read_text(encoding="utf-8"))
+    return {
+        "commonmeta": work_schema()["$defs"]["type"]["enum"],
+        "csl-json": csl_schema["items"]["properties"]["type"]["enum"],
+    }
+
+
+def _json_format_votes(rows: list[Any]) -> set[str]:
+    return {
+        file_format
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("type"), str)
+        for file_format, types in _json_bibliography_types().items()
+        if row["type"] in types
+    }
+
+
+def detect_bibliography_format(content: str) -> str:
+    """Recognize local interchange syntax without fetching metadata or guessing citations."""
+    content = content.lstrip("\ufeff \t\r\n")
+    if re.search(r"(?m)^[ \t]*@[A-Za-z]+\s*[{(]", content):
+        return "bibtex"
+    if re.search(r"(?m)^[ \t]*TY[ \t]+-", content):
+        return "ris"
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "Could not detect bibliography format. Choose a format or provide BibTeX, RIS, "
+            "CSL-JSON or Commonmeta; formatted reference text is not supported."
+        ) from error
+    rows = parsed if isinstance(parsed, list) else [parsed]
+    # Examine every typed record so an invalid sibling cannot misclassify the whole
+    # file; records without a recognized type stay available for per-row diagnostics.
+    formats = _json_format_votes(rows)
+    if not formats:
+        raise ValueError(
+            "Could not detect a JSON bibliography format. Choose CSL-JSON or Commonmeta "
+            "explicitly; records without a recognized type are reported as diagnostics."
+        )
+    if len(formats) > 1:
+        raise ValueError("JSON format is ambiguous; choose CSL-JSON or Commonmeta explicitly")
+    return formats.pop()
 
 
 def _bibtex_inputs(content: str) -> list[tuple[dict | None, str | None]]:

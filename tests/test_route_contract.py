@@ -142,6 +142,41 @@ async def test_oversized_bibliography_upload_returns_payload_too_large(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("contents", "expected_format"),
+    [
+        (b"@article{x,title={Detected record}}", "bibtex"),
+        (b"TY  - JOUR\r\nTI  - Detected record\r\nER  -", "ris"),
+        (b'[{"id":"local-key","type":"book","title":"Detected record"}]', "csl-json"),
+        (
+            b'[{"id":"urn:uuid:test","type":"Book","title":"Detected record"},null]',
+            "commonmeta",
+        ),
+    ],
+)
+async def test_bibliography_upload_auto_detects_without_a_format_parameter(
+    async_db, async_session_factory, tmp_path, monkeypatch, contents, expected_format
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    try:
+        response = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/imports/bibliography",
+            files={"bibliography": ("pasted-bibliography.txt", contents, "text/plain")},
+        )
+        assert response.status_code == 201, response.text
+        preview = response.json()
+        assert preview["file_format"] == expected_format
+        assert len(preview["records"]) == 1
+        assert preview["records"][0]["metadata"]["title"] == "Detected record"
+        if expected_format == "commonmeta":
+            assert preview["errors"][0]["row"] == 2
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_tag_rename_conceals_missing_and_foreign_tags(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):

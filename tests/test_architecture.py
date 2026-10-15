@@ -206,7 +206,7 @@ LIBRARY_FACADE_OPERATIONS = {
     "resolve_style_xml",
     "search_candidate_records",
     "select_builtin_citation_styles",
-    "stage_identifier_import_batch",
+    "stage_identifiers_import_batch",
     "stage_import_batch",
     "stage_pdf_import_batch",
 }

@@ -1,16 +1,19 @@
 <script lang="ts">
 	import { bibliographyFormats } from '#lib/export-preferences.js';
 	import { resolve } from '$app/paths';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onDestroy, onMount } from 'svelte';
-	import { SvelteMap } from 'svelte/reactivity';
+	import { Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import type { components } from '#lib/api/schema.js';
 	import Panel from '#lib/design/Panel.svelte';
 	import Notice from '#lib/design/Notice.svelte';
+	import Badge from '#lib/design/Badge.svelte';
+	import FilePicker from '#lib/design/FilePicker.svelte';
+	import Icon from '#lib/design/Icon.svelte';
 	import ImportBatchPreview from '#lib/features/import/ImportBatchPreview.svelte';
 	import ImportSourceForm from '#lib/features/import/ImportSourceForm.svelte';
 	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
@@ -18,27 +21,57 @@
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import { invalidateLibrary } from '#lib/query/invalidation.js';
 	import { msg, t } from '#lib/i18n.js';
-	import Button from '#lib/design/Button.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	type ImportBatch = components['schemas']['ImportBatchPreview'];
+	const identifierExamples = [
+		'10.1073/pnas.92.6.2288',
+		'https://pubmed.ncbi.nlm.nih.gov/11607519/',
+		'arXiv:2304.08030',
+		'ISBN:0674016394'
+	].join('\n');
 
-	let identifier = $state('');
+	let identifiers = $state('');
+	let sourceTab = $state('identifiers');
+	// Skeleton's Tabs.Content keeps inactive panels mounted, so gate the metadata
+	// editor behind first activation: mounting it starts the schema request and
+	// loads the lazily imported editor even when the user never opens the tab.
+	// Keep it mounted afterwards so in-progress drafts survive tab switches.
+	let manualMounted = $state(false);
+	let bibliographyText = $state('');
+	let bibliographyFile = $state<File | null>(null);
+	let bibliographyFormat = $state('auto');
 	let provider = $state('auto');
 	let batch = $state<ImportBatch | null>(null);
+	const hasStagedBatch = $derived(batch !== null && batch.status !== 'committed');
 	let error = $state('');
 	let busy = $state(false);
 	let previewPage = $state(1);
-	let manualOpen = $state(false);
 	let metadataErrors = $state<components['schemas']['ErrorField'][]>([]);
 	let pdfFiles = $state<File[]>([]);
-	let pdfInput = $state<HTMLInputElement>();
+	let pdfPicker = $state<{ clearFiles: () => void } | null>(null);
 	let pollingAbort: AbortController | null = null;
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	const providers = createQuery(() => discoveryProvidersQuery(workspaceId));
+	const currentStep = $derived(batch === null ? 1 : batch.status === 'committed' ? 3 : 2);
+	const identifierEntries = $derived(
+		identifiers
+			.split(/\r\n?|\n/)
+			.map((value) => value.trim())
+			.filter(Boolean)
+	);
+
+	function stepChipClass(index: number): string {
+		const base =
+			'grid size-6 shrink-0 grid-cols-1 place-items-center rounded-full text-xs font-bold';
+		if (index + 1 === currentStep)
+			return `${base} bg-primary-700-300 text-primary-contrast-700-300`;
+		if (index + 1 < currentStep) return `${base} bg-primary-50-950 text-primary-800-200`;
+		return `${base} bg-surface-200-800 text-surface-600-400`;
+	}
 	$effect(() => {
 		if (
 			providers.data &&
@@ -78,8 +111,19 @@
 
 	function acceptBatch(next: ImportBatch) {
 		stopPolling();
+		if (batch?.id !== next.id) {
+			sourceTab =
+				next.file_format === 'pdf'
+					? 'pdfs'
+					: next.file_format === 'metadata'
+						? 'identifiers'
+						: 'bibliography';
+		}
 		batch = next;
 		previewPage = 1;
+		const url = new URL(page.url.href);
+		url.searchParams.set('batch', next.id);
+		replaceState(url, page.state);
 		if (next.status === 'pending') {
 			if (next.workflow_id) void followWorkflow(next.id, next.workflow_id);
 			else void followBatch(next.id);
@@ -164,14 +208,14 @@
 		}
 	}
 
-	async function importIdentifier() {
-		if (!workspace.can('item.create') || !providers.data) return;
+	async function importIdentifiers() {
+		if (!workspace.can('item.create') || !providers.data || busy || hasStagedBatch) return;
 		busy = true;
 		error = '';
 		try {
 			acceptBatch(
-				await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/identifier', {
-					body: { identifier, provider }
+				await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/identifiers', {
+					body: { identifiers: identifierEntries, provider }
 				})
 			);
 		} catch (reason) {
@@ -182,12 +226,21 @@
 	}
 
 	async function upload(event: Event, kind: 'bibliography' | 'pdfs') {
-		if (!workspace.can('item.create')) return;
+		if (!workspace.can('item.create') || busy || hasStagedBatch) return;
 		const form = event.currentTarget as HTMLFormElement;
 		busy = true;
 		error = '';
 		try {
 			const body = new FormData(form);
+			if (kind === 'bibliography') {
+				body.delete('bibliography');
+				body.set('file_format', bibliographyFormat);
+				body.append(
+					'bibliography',
+					bibliographyFile ??
+						new File([bibliographyText], 'pasted-bibliography.txt', { type: 'text/plain' })
+				);
+			}
 			if (kind === 'pdfs') {
 				body.delete('pdfs');
 				for (const file of pdfFiles) body.append('pdfs', file);
@@ -198,11 +251,8 @@
 					: await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/bibliography', {
 							body
 						});
+			if (kind === 'pdfs') pdfPicker?.clearFiles();
 			acceptBatch(uploaded);
-			if (kind === 'pdfs') {
-				pdfFiles = [];
-				if (pdfInput) pdfInput.value = '';
-			}
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Upload failed'));
 		} finally {
@@ -210,20 +260,8 @@
 		}
 	}
 
-	function addPdfFiles(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const files = new SvelteMap(
-			pdfFiles.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file] as const)
-		);
-		for (const file of input.files ?? []) {
-			files.set(`${file.name}:${file.size}:${file.lastModified}`, file);
-		}
-		pdfFiles = [...files.values()];
-	}
-
-	function removePdf(file: File) {
-		pdfFiles = pdfFiles.filter((candidate) => candidate !== file);
-		if (pdfFiles.length === 0 && pdfInput) pdfInput.value = '';
+	function setBibliographyFiles(files: File[]) {
+		bibliographyFile = files[0] ?? null;
 	}
 
 	async function retry() {
@@ -274,6 +312,9 @@
 			});
 			stopPolling();
 			batch = null;
+			const url = new URL(page.url.href);
+			url.searchParams.delete('batch');
+			replaceState(url, page.state);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to discard Import'));
 		} finally {
@@ -285,7 +326,7 @@
 		metadata: components['schemas']['ItemDetailView']['metadata'],
 		citationKey: string
 	) {
-		if (!workspace.can('item.create')) return;
+		if (!workspace.can('item.create') || busy || hasStagedBatch) return;
 		busy = true;
 		error = '';
 		metadataErrors = [];
@@ -317,162 +358,223 @@
 		</p>
 		<h1 class="mb-2">{$t('Import')}</h1>
 		<p class="mb-0 max-w-2xl text-surface-600-400">
-			{$t('Bring records into Quirebase from an identifier, a bibliography, or published PDFs.')}
+			{$t('Add records using identifiers, bibliography files, PDFs, or the metadata editor.')}
 		</p>
 	</div>
 </div>
-<ol
-	class="mb-5 grid list-none grid-cols-1 gap-px overflow-hidden rounded-xl border border-surface-300-700 bg-surface-300-700 p-0 sm:grid-cols-3"
->
-	{#each [{ number: '1', title: $t('Choose a source'), text: $t('Identifier, file, or PDFs') }, { number: '2', title: $t('Review the preview'), text: $t('Check records and diagnostics') }, { number: '3', title: $t('Commit to Library'), text: $t('Save only when you approve') }] as step (step.number)}
-		<li class="flex items-center gap-3 bg-surface-50-950 px-4 py-3">
+<ol class="mb-6 flex list-none flex-wrap items-center p-0">
+	{#each [{ number: '1', title: $t('Choose a source') }, { number: '2', title: $t('Review the preview') }, { number: '3', title: $t('Commit to Library') }] as step, index (step.number)}
+		<li class="flex items-center" aria-current={index + 1 === currentStep ? 'step' : undefined}>
+			<span class={stepChipClass(index)}
+				>{#if index + 1 < currentStep}<Icon name="check" size={13} />{:else}{step.number}{/if}</span
+			>
 			<span
-				class="grid size-7 shrink-0 grid-cols-1 place-items-center rounded-full bg-primary-50-950 text-xs font-bold text-primary-800-200"
-				>{step.number}</span
+				class="ml-2 text-sm"
+				class:font-semibold={index + 1 === currentStep}
+				class:text-surface-600-400={index + 1 !== currentStep}>{step.title}</span
 			>
-			<span class="min-w-0"
-				><strong class="block text-sm">{step.title}</strong><small class="text-surface-600-400"
-					>{step.text}</small
-				></span
-			>
+			{#if index < 2}<span
+					class="mx-3 hidden h-px w-6 bg-surface-300-700 sm:block"
+					aria-hidden="true"
+				></span>{/if}
 		</li>
 	{/each}
 </ol>
 {#if error}<Notice variant="error">{error}</Notice>{/if}
-{#if workspace.can('item.create')}<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-		<ImportSourceForm
-			icon="search"
-			title={$t('Look up an identifier')}
-			description={$t('Fetch one record from DOI, PubMed, arXiv, and other scholarly providers.')}
-			busy={busy || providers.isPending || providers.isError}
-			submitLabel={$t('Preview metadata')}
-			onsubmit={(event) => {
-				event.preventDefault();
-				importIdentifier();
-			}}
-		>
-			<label
-				>{$t('DOI, PMID, or arXiv ID')}<input
-					class="input"
-					bind:value={identifier}
-					placeholder="DOI, PMID, arXiv ID…"
-					required
-				/></label
-			>
-			<label
-				>{$t('Data source')}<select
-					class="select"
-					bind:value={provider}
-					disabled={providers.isPending || providers.isError}
-				>
-					<option value="auto">{$t('Auto detect')}</option>
-					{#each providers.data?.lookup ?? [] as option (option.id)}
-						<option value={option.id}>{option.name}</option>
-					{/each}
-				</select></label
-			>
-			{#if providers.isError}<Notice variant="error"
-					>{apiErrorMessage(providers.error, $t('Unable to load Import options'))}</Notice
-				>{/if}
-		</ImportSourceForm>
-		<ImportSourceForm
-			icon="library"
-			title={$t('Upload a bibliography')}
-			description={$t('Stage many records from a reference manager export.')}
-			{busy}
-			submitLabel={$t('Preview bibliography')}
-			onsubmit={(event) => {
-				event.preventDefault();
-				upload(event, 'bibliography');
-			}}
-		>
-			<label
-				>{$t('Bibliography file')}<input
-					class="input"
-					type="file"
-					name="bibliography"
-					required
-				/></label
-			>
-			<label
-				>{$t('File format')}<select class="select" name="file_format">
-					{#each bibliographyFormats.filter((choice) => choice.importable) as choice (choice.value)}
-						<option value={choice.value}>{$t(choice.label)}</option>
-					{/each}
-				</select></label
-			>
-		</ImportSourceForm>
-		<ImportSourceForm
-			icon="import"
-			title={$t('Import published PDFs')}
-			description={$t('Extract metadata and keep the papers together in one Import Batch.')}
-			{busy}
-			submitLabel={$t('Stage PDFs')}
-			submitDisabled={pdfFiles.length === 0}
-			onsubmit={(event) => {
-				event.preventDefault();
-				upload(event, 'pdfs');
-			}}
-		>
-			<label
-				>{$t('PDF files')}<input
-					class="input"
-					type="file"
-					name="pdfs"
-					accept="application/pdf,.pdf"
-					multiple
-					required={pdfFiles.length === 0}
-					bind:this={pdfInput}
-					onchange={addPdfFiles}
-				/></label
-			>
-			<p class="text-sm text-surface-600-400">
-				{$t('Choose PDFs more than once to add them to the same batch.')}
-			</p>
-			{#if pdfFiles.length}<ul
-					class="m-0 grid min-w-0 list-none grid-cols-1 gap-2 p-0"
-					aria-live="polite"
-				>
-					{#each pdfFiles as file (`${file.name}:${file.size}:${file.lastModified}`)}<li
-							class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-surface-300-700 px-3 py-2 text-sm"
-						>
-							<span class="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span><Button
-								class="shrink-0"
-								type="button"
-								onclick={() => removePdf(file)}>{$t('Remove')}</Button
-							>
-						</li>{/each}
-				</ul>{/if}
-		</ImportSourceForm>
-	</div>
-	<section
-		class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-surface-400-600 bg-surface-50-950 px-5 py-4"
+{#if workspace.can('item.create')}
+	<Tabs
+		value={sourceTab}
+		onValueChange={(details) => {
+			sourceTab = details.value ?? 'identifiers';
+			if (sourceTab === 'manual') manualMounted = true;
+		}}
 	>
-		<div>
-			<h2 class="mb-1">{$t('Create an Item manually')}</h2>
-			<p class="mb-0 text-sm text-surface-600-400">
-				{$t('Use the metadata editor when no import source is available.')}
-			</p>
-		</div>
-		<Button onclick={() => (manualOpen = !manualOpen)}
-			>{manualOpen ? $t('Close editor') : $t('Open metadata editor')}</Button
-		>
-	</section>
-	{#if manualOpen}
-		<Panel class="mt-4 grid grid-cols-1 gap-3">
-			<div>
-				<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('Manual creation')}</p>
-				<h2>{$t('New Item metadata')}</h2>
-			</div>
-			<ItemMetadataForm
-				metadata={emptyMetadata}
-				serverErrors={metadataErrors}
-				{busy}
-				submitLabel={$t('Create Item')}
-				onsubmit={createItem}
-			/>
-		</Panel>
-	{/if}
+		<Tabs.List class="mb-4 max-w-full overflow-x-auto" aria-label={$t('Import methods')}>
+			<Tabs.Indicator class="bg-primary-700-300" />
+			{#each [['identifiers', 'search', $t('Identifiers')], ['bibliography', 'library', $t('Bibliography')], ['pdfs', 'import', $t('PDFs')], ['manual', 'plus', $t('Manual creation')]] as [value, icon, label] (value)}
+				<Tabs.Trigger
+					{value}
+					class="flex items-center gap-2 whitespace-nowrap data-selected:text-primary-700-300"
+				>
+					<Icon name={icon} size={16} />{label}
+				</Tabs.Trigger>
+			{/each}
+		</Tabs.List>
+		{#if hasStagedBatch}
+			<Notice
+				>{$t('Commit or discard the current Import Batch before starting another import.')}</Notice
+			>
+		{/if}
+		<Tabs.Content value="identifiers">
+			<ImportSourceForm
+				icon="search"
+				title={$t('Look up identifiers')}
+				description={$t(
+					'Paste up to 50 identifiers, one per line. Each record is looked up separately.'
+				)}
+				busy={busy || hasStagedBatch || providers.isPending || providers.isError}
+				submitLabel={$t('Preview metadata')}
+				submitDisabled={identifierEntries.length === 0 || identifierEntries.length > 50}
+				onsubmit={(event) => {
+					event.preventDefault();
+					importIdentifiers();
+				}}
+			>
+				<div class="grid min-w-0 grid-cols-1 gap-1.5">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<label for="import-identifiers">{$t('Identifiers')}</label>
+						<Badge
+							variant={identifierEntries.length > 50 ? 'error' : 'surface'}
+							class="tabular-nums"
+							aria-live="polite"
+						>
+							{$t('{count} / 50 identifiers', { count: identifierEntries.length })}
+						</Badge>
+					</div>
+					<textarea
+						id="import-identifiers"
+						class="textarea"
+						bind:value={identifiers}
+						rows="7"
+						placeholder={identifierExamples}
+						aria-describedby="import-identifiers-help"
+						required></textarea>
+					<p id="import-identifiers-help" class="mb-0 text-sm text-surface-600-400">
+						{$t(
+							'Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:.'
+						)}
+					</p>
+				</div>
+				<label
+					>{$t('Data source')}<select
+						class="select"
+						bind:value={provider}
+						disabled={providers.isPending || providers.isError}
+					>
+						<option value="auto">{$t('Auto detect')}</option>
+						{#each providers.data?.lookup ?? [] as option (option.id)}
+							<option value={option.id}>{option.name}</option>
+						{/each}
+					</select></label
+				>
+				{#if providers.isError}<Notice variant="error"
+						>{apiErrorMessage(providers.error, $t('Unable to load Import options'))}</Notice
+					>{/if}
+			</ImportSourceForm>
+		</Tabs.Content>
+		<Tabs.Content value="bibliography">
+			<ImportSourceForm
+				icon="library"
+				title={$t('Import a bibliography')}
+				description={$t('Upload a reference manager export or paste structured bibliography data.')}
+				busy={busy || hasStagedBatch}
+				submitLabel={$t('Preview bibliography')}
+				submitDisabled={!bibliographyFile && !bibliographyText.trim()}
+				onsubmit={(event) => {
+					event.preventDefault();
+					upload(event, 'bibliography');
+				}}
+			>
+				<div class="grid min-w-0 grid-cols-1 gap-3">
+					<FilePicker
+						name="bibliography"
+						label={$t('Bibliography file')}
+						actionLabel={$t('Choose file')}
+						accept={['.bib', '.bibtex', '.ris', '.json', 'application/json', 'text/plain']}
+						disabled={hasStagedBatch}
+						onFilesChange={setBibliographyFiles}
+					/>
+					{#if bibliographyFile}
+						<p class="mb-0 text-sm text-surface-600-400">
+							{$t('Remove the chosen file to paste bibliography data instead.')}
+						</p>
+					{:else}
+						<label>
+							{$t('Or paste bibliography data')}
+							<textarea
+								class="textarea"
+								bind:value={bibliographyText}
+								rows="6"
+								placeholder={'@article{...}'}
+								aria-describedby="bibliography-help"></textarea>
+						</label>
+					{/if}
+					<p id="bibliography-help" class="mb-0 text-sm text-surface-600-400">
+						{$t(
+							'Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet.'
+						)}
+					</p>
+				</div>
+				<label
+					>{$t('File format')}<select
+						class="select"
+						name="file_format"
+						bind:value={bibliographyFormat}
+					>
+						<option value="auto">{$t('Auto detect')}</option>
+						{#each bibliographyFormats.filter((choice) => choice.importable) as choice (choice.value)}
+							<option value={choice.value}>{$t(choice.label)}</option>
+						{/each}
+					</select></label
+				>
+			</ImportSourceForm>
+		</Tabs.Content>
+		<Tabs.Content value="pdfs">
+			<ImportSourceForm
+				icon="import"
+				title={$t('Import published PDFs')}
+				description={$t('Extract metadata and keep the papers together in one Import Batch.')}
+				busy={busy || hasStagedBatch}
+				submitLabel={$t('Stage PDFs')}
+				submitDisabled={pdfFiles.length === 0}
+				onsubmit={(event) => {
+					event.preventDefault();
+					upload(event, 'pdfs');
+				}}
+			>
+				<div class="grid min-w-0 grid-cols-1 gap-3">
+					<FilePicker
+						bind:this={pdfPicker}
+						name="pdfs"
+						label={$t('PDF files')}
+						hint={$t('Drop PDFs here or choose them; choosing more later adds to the same batch.')}
+						actionLabel={$t('Choose files')}
+						accept={['application/pdf', '.pdf']}
+						multiple
+						maxFiles={50}
+						required={pdfFiles.length === 0}
+						disabled={hasStagedBatch}
+						onFilesChange={(files) => (pdfFiles = files)}
+					/>
+				</div>
+			</ImportSourceForm>
+		</Tabs.Content>
+		<Tabs.Content value="manual">
+			{#if manualMounted}
+				<Panel class="grid grid-cols-1 gap-4">
+					<div class="flex items-start gap-3">
+						<span
+							class="grid size-10 shrink-0 grid-cols-1 place-items-center rounded-lg bg-primary-50-950 text-primary-800-200"
+							><Icon name="plus" size={20} /></span
+						>
+						<div class="min-w-0">
+							<h2 class="mb-1">{$t('New Item metadata')}</h2>
+							<p class="mb-0 text-sm text-surface-600-400">
+								{$t('Enter metadata by hand when no import source applies.')}
+							</p>
+						</div>
+					</div>
+					<ItemMetadataForm
+						metadata={emptyMetadata}
+						serverErrors={metadataErrors}
+						busy={busy || hasStagedBatch}
+						submitLabel={$t('Create Item')}
+						onsubmit={createItem}
+					/>
+				</Panel>
+			{/if}
+		</Tabs.Content>
+	</Tabs>
 {/if}
 {#if batch}
 	<ImportBatchPreview

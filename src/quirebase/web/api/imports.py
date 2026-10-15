@@ -11,14 +11,14 @@ from quirebase.library import (
     discard_import_batch,
     get_import_batch_preview,
     retry_pdf_import_batch,
-    stage_identifier_import_batch,
+    stage_identifiers_import_batch,
     stage_import_batch,
     stage_pdf_import_batch,
 )
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.common import OkView
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.import_schemas import IdentifierImportRequest
+from quirebase.web.api.import_schemas import IdentifiersImportRequest
 from quirebase.web.uploads import upload_chunks
 
 router = APIRouter(tags=["Imports"])
@@ -34,25 +34,25 @@ async def stage_bibliography_import(
     user: ApiUser,
     db: Database,
     bibliography: Annotated[UploadFile, File()],
-    file_format: Annotated[str, Form()],
+    file_format: Annotated[str, Form()] = "auto",
 ):
     raw = await bibliography.read(5 * 1024 * 1024 + 1)
     return await stage_import_batch(db, user, workspace_id, raw, file_format)
 
 
 @router.post(
-    "/imports/identifier",
+    "/imports/identifiers",
     response_model=ImportBatchPreview,
     status_code=status.HTTP_201_CREATED,
 )
-async def stage_identifier_import(
-    workspace_id: UUID, data: IdentifierImportRequest, user: ApiUser, db: Database
+async def stage_identifiers_import(
+    workspace_id: UUID, data: IdentifiersImportRequest, user: ApiUser, db: Database
 ):
-    return await stage_identifier_import_batch(
+    return await stage_identifiers_import_batch(
         db,
         user,
         workspace_id,
-        data.identifier,
+        data.identifiers,
         data.provider,
         settings=await get_effective_settings_model(db),
     )

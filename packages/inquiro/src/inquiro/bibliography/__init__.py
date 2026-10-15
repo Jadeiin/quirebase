@@ -15,6 +15,7 @@ from inquiro.bibliography.formats import (
     BIBLIOGRAPHY_EXTENSIONS,
     BIBLIOGRAPHY_MEDIA_TYPES,
     SUPPORTED_FORMATS,
+    detect_bibliography_format,
     export_bibliography_records,
     parse_bibliography_records,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "builtin_style_catalog",
     "builtin_style_xml",
     "citation_key_suffix",
+    "detect_bibliography_format",
     "evaluate_citation_key_formula",
     "export_bibliography_records",
     "extract_year",

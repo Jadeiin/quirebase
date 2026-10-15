@@ -330,7 +330,7 @@ async def test_discovery_search_preserves_sparse_condition_rows(
 
 @pytest.mark.anyio
 async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypatch):
-    from quirebase.library.imports import stage_identifier_import_batch
+    from quirebase.library.imports import stage_identifiers_import_batch
     from quirebase.models import User
 
     monkeypatch.setenv("INQUIRO_NASA_ADS_TOKEN", "ads-token")
@@ -384,16 +384,16 @@ async def test_fallback_identifiers_can_be_staged_for_import(async_db, monkeypat
     await db.flush()
     await provision_initial_workspace(db, user)
     await db.commit()
-    batch_nasa = await stage_identifier_import_batch(
-        db, user, fixture_workspace_id(user), "2025ApJ...123..456A", "bibcode"
+    batch_nasa = await stage_identifiers_import_batch(
+        db, user, fixture_workspace_id(user), ["2025ApJ...123..456A"], "bibcode"
     )
     records_nasa = batch_nasa.records
     errors_nasa = batch_nasa.errors
     assert not errors_nasa
     assert len(records_nasa) == 1
     assert batch_nasa.file_format == "metadata"
-    batch_ieee = await stage_identifier_import_batch(
-        db, user, fixture_workspace_id(user), "9876543", "ieee"
+    batch_ieee = await stage_identifiers_import_batch(
+        db, user, fixture_workspace_id(user), ["9876543"], "ieee"
     )
     records_ieee = batch_ieee.records
     errors_ieee = batch_ieee.errors

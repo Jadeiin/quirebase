@@ -22,7 +22,7 @@ from quirebase.access import resolve_workspace_context
 from quirebase.core.config import get_settings
 from quirebase.library import ItemMetadataData, ItemOverviewData, ItemSection, open_item_section
 from quirebase.library.identifiers import sync_metadata_from_upstream
-from quirebase.library.imports import commit_import_batch, stage_identifier_import_batch
+from quirebase.library.imports import commit_import_batch, stage_identifiers_import_batch
 from quirebase.models import AuditEvent, Item, User
 
 OA_CORPUS_OPENALEX_PAYLOAD = {
@@ -129,11 +129,11 @@ async def test_seam2_oa_corpus_batch_import_and_relational_mapping(async_db, mon
             settings=settings, transport=httpx2.MockTransport(mock_handler)
         ),
     )
-    batch = await stage_identifier_import_batch(
+    batch = await stage_identifiers_import_batch(
         db,
         user,
         fixture_workspace_id(user),
-        identifier="10.3390/ejihpe13110181",
+        identifiers=["10.3390/ejihpe13110181"],
         provider="openalex",
     )
     records = batch.records

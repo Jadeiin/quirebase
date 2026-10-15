@@ -406,7 +406,7 @@ test('shows schema loading failures and retries the authorized endpoint', async 
 		})
 	);
 	await page.goto('/workspace/workspace-1/import');
-	await page.getByRole('button', { name: 'Open metadata editor' }).click();
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
 	await expect(page.getByText('Unable to load metadata editor.')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Create Item' })).toHaveCount(0);
 	await page.unroute('**/api/v1/workspaces/*/metadata/schema');

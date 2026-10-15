@@ -300,8 +300,8 @@
 			>{$t('Copy to Workspace')}</Button
 		>{/if}
 	{#if can(overview.authorization, 'item.delete')}<Button
-			variant="danger"
-			onclick={() => show('danger')}>{$t('More')}</Button
+			class="inline-flex items-center gap-2"
+			onclick={() => show('danger')}><Icon name="more" /> {$t('More')}</Button
 		>{/if}
 </div>
 

@@ -14,6 +14,152 @@ test('identifier Import uses configured provider choices', async ({ page }) => {
 	await expect(source).toBeEnabled();
 });
 
+test('Import methods use separate keyboard accessible tabs and preserve drafts', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.goto('/workspace/workspace-1/import');
+	const tabs = page.getByRole('tablist', { name: 'Import methods' });
+	await expect(tabs.getByRole('tab')).toHaveText([
+		'Identifiers',
+		'Bibliography',
+		'PDFs',
+		'Manual creation'
+	]);
+	await expect(page.getByRole('tabpanel')).toHaveCount(1);
+	await expect(page.getByRole('tab', { name: 'Identifiers', exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await page
+		.getByRole('textbox', { name: 'Identifiers', exact: true })
+		.fill('10.1000/first\nISBN:0674016394');
+	await page.getByRole('tab', { name: 'Identifiers', exact: true }).focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(page.getByRole('tab', { name: 'Bibliography', exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(page.getByRole('heading', { name: 'Look up identifiers' })).not.toBeVisible();
+	await page
+		.getByRole('textbox', { name: 'Or paste bibliography data' })
+		.fill('@article{x,title={Draft}}');
+	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stage PDFs' })).toBeVisible();
+	await page.getByRole('tab', { name: 'Identifiers', exact: true }).click();
+	await expect(page.getByRole('textbox', { name: 'Identifiers', exact: true })).toHaveValue(
+		'10.1000/first\nISBN:0674016394'
+	);
+	await page.getByRole('tab', { name: 'Bibliography', exact: true }).click();
+	await expect(page.getByRole('textbox', { name: 'Or paste bibliography data' })).toHaveValue(
+		'@article{x,title={Draft}}'
+	);
+});
+
+test('manual Import mounts the schema editor on first activation and retains its draft', async ({
+	page
+}) => {
+	await mockSession(page);
+	let schemaRequests = 0;
+	page.on('request', (request) => {
+		if (request.url().endsWith('/metadata/schema')) schemaRequests += 1;
+	});
+	await page.goto('/workspace/workspace-1/import');
+	await expect(page.getByRole('button', { name: 'PDF files', exact: true })).not.toBeVisible();
+	await expect(page.getByRole('combobox', { name: 'Data source' })).toBeEnabled();
+	expect(schemaRequests).toBe(0);
+	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'PDF files', exact: true })).toBeVisible();
+	expect(schemaRequests).toBe(0);
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
+	const title = page.getByLabel('Title', { exact: true });
+	await title.fill('Manual draft');
+	expect(schemaRequests).toBe(1);
+	await page.getByRole('tab', { name: 'Identifiers', exact: true }).click();
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
+	await expect(title).toHaveValue('Manual draft');
+	expect(schemaRequests).toBe(1);
+});
+
+test('identifier Import sends one batch and displays partial failures', async ({ page }) => {
+	await mockSession(page);
+	let body: unknown;
+	const preview = {
+		id: 'batch-identifiers',
+		file_format: 'metadata',
+		status: 'ready',
+		workflow_id: null,
+		records: [{ metadata: { id: 'urn:uuid:test', type: 'Book', title: 'Imported book' } }],
+		errors: [
+			{
+				row: 2,
+				identifier: 'invalid',
+				severity: 'error',
+				code: 'invalid_identifier',
+				message: 'Unrecognized identifier'
+			}
+		]
+	};
+	await page.route('**/api/v1/workspaces/workspace-1/imports/identifiers', (route) => {
+		body = route.request().postDataJSON();
+		return route.fulfill({ status: 201, json: preview });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/imports/batch-identifiers', (route) =>
+		route.fulfill({ json: route.request().method() === 'DELETE' ? { ok: true } : preview })
+	);
+	await page.goto('/workspace/workspace-1/import');
+	await page
+		.getByRole('textbox', { name: 'Identifiers', exact: true })
+		.fill(' ISBN:0674016394 \n\ninvalid');
+	await page.getByRole('button', { name: 'Preview metadata' }).click();
+	await expect
+		.poll(() => body)
+		.toEqual({ identifiers: ['ISBN:0674016394', 'invalid'], provider: 'auto' });
+	await expect(page.getByText('Imported book', { exact: true })).toBeVisible();
+	await expect(page.getByText('Unrecognized identifier', { exact: true })).toBeVisible();
+	await expect(page.getByText('invalid', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Commit', exact: true })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Preview metadata' })).toBeDisabled();
+	await expect(page).toHaveURL(/\?batch=batch-identifiers$/);
+	await page.reload();
+	await expect(page.getByText('Imported book', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Discard', exact: true }).click();
+	await expect(page).toHaveURL(/\/import$/);
+	await expect(page.getByRole('heading', { name: 'Import preview' })).toHaveCount(0);
+	await page.getByRole('textbox', { name: 'Identifiers', exact: true }).fill('42');
+	await expect(page.getByRole('button', { name: 'Preview metadata' })).toBeEnabled();
+});
+
+test('bibliography Import submits pasted content with automatic format detection', async ({
+	page
+}) => {
+	await mockSession(page);
+	let body = '';
+	await page.route('**/api/v1/workspaces/workspace-1/imports/bibliography', (route) => {
+		body = route.request().postData() ?? '';
+		return route.fulfill({
+			status: 201,
+			json: {
+				id: 'batch-bibliography',
+				file_format: 'bibtex',
+				status: 'ready',
+				workflow_id: null,
+				records: [],
+				errors: [{ severity: 'error', message: 'Invalid record' }]
+			}
+		});
+	});
+	await page.goto('/workspace/workspace-1/import');
+	await page.getByRole('tab', { name: 'Bibliography', exact: true }).click();
+	await page
+		.getByRole('textbox', { name: 'Or paste bibliography data' })
+		.fill('@article{x,title={Pasted record}}');
+	await page.getByRole('button', { name: 'Preview bibliography' }).click();
+	await expect.poll(() => body).toContain('@article{x,title={Pasted record}}');
+	expect(body).toContain('name="file_format"\r\n\r\nauto');
+	await expect(page.getByRole('button', { name: 'Commit', exact: true })).toBeDisabled();
+});
+
 test('pending PDF imports refresh until they can be committed', async ({ page }) => {
 	await mockSession(page);
 	let previewRequests = 0;
@@ -76,6 +222,7 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 	});
 
 	await page.goto('/workspace/workspace-1/import');
+	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
 	await page.locator('input[name="pdfs"]').setInputFiles({
 		name: 'paper.pdf',
 		mimeType: 'application/pdf',
@@ -144,6 +291,7 @@ test('PDF import accumulates and deduplicates repeated file selections', async (
 		});
 	});
 	await page.goto('/workspace/workspace-1/import');
+	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
 	const input = page.locator('input[name="pdfs"]');
 	await input.setInputFiles({
 		name: 'first.pdf',

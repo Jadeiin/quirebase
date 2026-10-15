@@ -102,9 +102,9 @@
 		try {
 			const batch = await workspace.api.request(
 				'POST',
-				'/workspaces/{workspace_id}/imports/identifier',
+				'/workspaces/{workspace_id}/imports/identifiers',
 				{
-					body: { identifier: candidate.identifier, provider: candidate.identifier_provider }
+					body: { identifiers: [candidate.identifier], provider: candidate.identifier_provider }
 				}
 			);
 			await goto(
