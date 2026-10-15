@@ -15,12 +15,12 @@
 	import RichText from '#lib/design/RichText.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { tagsQuery } from '#lib/features/tags/queries.js';
+	import { citationStylesQuery, duplicateScanQuery } from '#lib/features/tools/queries.js';
 	import {
-		citationStylesQuery,
-		duplicateScanQuery,
-		toolKeys
-	} from '#lib/features/tools/queries.js';
-	import { invalidateLibrary, invalidateTags } from '#lib/query/invalidation.js';
+		invalidateCitationStyles,
+		invalidateLibrary,
+		invalidateTags
+	} from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
@@ -182,7 +182,7 @@
 			});
 			styleName = '';
 			styleCsl = '';
-			await queryClient.invalidateQueries({ queryKey: toolKeys.all(workspaceId) });
+			await invalidateCitationStyles(queryClient, workspaceId);
 			notice = $t('Citation Style added');
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to add Citation Style'));
@@ -211,7 +211,7 @@
 					params: { path: { style_id: style.key } }
 				}
 			);
-			await queryClient.invalidateQueries({ queryKey: toolKeys.all(workspaceId) });
+			await invalidateCitationStyles(queryClient, workspaceId);
 			notice = $t('Citation Style deleted');
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to delete Citation Style'));

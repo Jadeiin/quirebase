@@ -87,6 +87,10 @@ export async function runLibraryBulkMutation(
 	if (input.action === 'add_project' && input.projectId) {
 		invalidations.push(invalidateProject(queryClient, workspaceId));
 	}
+	if (input.action === 'delete') {
+		// Deleting Items also removes them from their Projects.
+		invalidations.push(invalidateProject(queryClient, workspaceId));
+	}
 	if (input.action === 'add_tag') {
 		invalidations.push(invalidateTags(queryClient, workspaceId));
 	}

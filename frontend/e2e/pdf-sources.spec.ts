@@ -429,3 +429,93 @@ test('Undo of a deleted annotation reveals its hidden source', async ({ page }) 
 	await expect(page.getByRole('checkbox', { name: 'Second Project', exact: true })).toBeChecked();
 	await sources.click();
 });
+
+test('PDF annotation sources refresh after an Item joins a Project', async ({ page }) => {
+	const state = await sourceReader(page);
+	// Only First Project contains the Item until the Organize assignment below.
+	state.projects = state.projects.filter((project) => project.id === 'project-1');
+	let assigned = false;
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Reader item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Reader item', version: 1 },
+				latest_revision: null,
+				authorization: { allowed: ['project_item.manage'] },
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/organize', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-1', title_html: 'Reader item', version: 1 },
+				authorization: { allowed: ['project_item.manage'] },
+				tags: [],
+				projects: [
+					{
+						id: 'project-1',
+						name: 'First Project',
+						assigned: true,
+						participation: 'open',
+						is_participating: true
+					},
+					{
+						id: 'project-2',
+						name: 'Second Project',
+						assigned,
+						participation: 'open',
+						is_participating: false
+					}
+				],
+				tag_matrix: {
+					groups: [],
+					assigned_ids: [],
+					recommended_ids: [],
+					suggested_names: [],
+					suggested_single_words: [],
+					suggested_phrases: [],
+					recommendation_state: 'ready',
+					recommendation_error: null
+				}
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-2/items/item-1', (route) => {
+		assigned = true;
+		state.projects.push({ id: 'project-2', name: 'Second Project', editable: true });
+		return route.fulfill({ json: { ok: true } });
+	});
+
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeAttached();
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await expect(page.getByRole('checkbox', { name: 'First Project', exact: true })).toBeVisible();
+	await expect(page.getByRole('checkbox', { name: 'Second Project', exact: true })).toHaveCount(0);
+	await sources.click();
+
+	// Add the Item to Second Project without leaving the SPA session.
+	await page.getByRole('link', { name: 'Item', exact: true }).click();
+	await expect(page).toHaveURL(/\/item\/item-1$/);
+	await page.getByRole('link', { name: 'Organize', exact: true }).click();
+	await expect(page).toHaveURL(/\/item\/item-1\/organize$/);
+	await page.getByText('Other open Projects').click();
+	await page.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect.poll(() => assigned).toBe(true);
+
+	// Reopening the reader inside the same session shows the new source.
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1\/pdf\/revision-1$/);
+	await sources.click();
+	await expect(page.getByRole('checkbox', { name: 'Second Project', exact: true })).toBeVisible();
+});

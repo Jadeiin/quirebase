@@ -25,7 +25,7 @@
 	} from '#lib/export-preferences.js';
 	import { itemFilesQuery } from '#lib/features/item/queries.js';
 	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
-	import { invalidateLibrary } from '#lib/query/invalidation.js';
+	import { invalidateLibrary, invalidateProject } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
@@ -248,7 +248,12 @@
 				params: { path: { item_id: itemId } },
 				body: { confirmation: 'delete' }
 			});
-			await invalidateLibrary(queryClient, workspaceId);
+			// Deletion also removes the Item from its Projects, changing their
+			// counts, lists and reader sources.
+			await Promise.all([
+				invalidateLibrary(queryClient, workspaceId),
+				invalidateProject(queryClient, workspaceId)
+			]);
 			await goto(resolve(workspaceHref(workspaceId, 'library')));
 		}, $t('Item deleted'));
 	}

@@ -314,3 +314,68 @@ test('Citation Key preview loads without a Workspace and follows formula and ASC
 	);
 	await expect(page.getByLabel('Default CSL style')).not.toBeVisible();
 });
+
+test('installing a Citation Style refreshes the Account style catalog', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/account', (route) =>
+		route.fulfill({
+			json: {
+				user: { id: 'user-1', username: 'reader', role: 'member' },
+				sessions: [],
+				api_tokens: []
+			}
+		})
+	);
+	await page.route('**/api/v1/account/citation-key-preview*', (route) =>
+		route.fulfill({ json: { key: 'Reader2026' } })
+	);
+	let installed = false;
+	await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) => {
+		if (route.request().method() === 'POST') {
+			installed = true;
+			return route.fulfill({ status: 201, json: { id: 'style-1' } });
+		}
+		const url = new URL(route.request().url());
+		const query = (url.searchParams.get('query') ?? '').toLowerCase();
+		const include = url.searchParams.get('include');
+		const styles = [
+			{ key: 'apa', name: 'APA' },
+			...(installed ? [{ key: 'style-1', name: 'House style' }] : [])
+		];
+		return route.fulfill({
+			json: {
+				styles: styles.filter(
+					(style) => style.name.toLowerCase().includes(query) || style.key === include
+				)
+			}
+		});
+	});
+
+	await page.goto('/workspace/workspace-1/tools');
+	await expect(page.getByRole('button', { name: 'Check for duplicates' })).toBeVisible();
+
+	// Cache the Account catalog for the Research Workspace.
+	await page.getByRole('button', { name: /reader/i }).click();
+	await page.getByRole('menuitem', { name: 'Account settings' }).click();
+	await expect(page).toHaveURL(/\/account$/);
+	const style = page.getByLabel('Default CSL style');
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await expect(style.getByRole('option', { name: 'APA', exact: true })).toBeVisible();
+	await expect(style.getByRole('option', { name: 'House style', exact: true })).toHaveCount(0);
+
+	// Install a custom style from the Workspace Tools.
+	await page.goBack();
+	await expect(page).toHaveURL(/\/tools$/);
+	await page.getByRole('tab', { name: 'Citation Styles' }).click();
+	await page.getByLabel('Style name').fill('House style');
+	await page.getByLabel('CSL XML').fill('<style version="1.0"></style>');
+	await page.getByRole('button', { name: 'Install Citation Style' }).click();
+	await expect.poll(() => installed).toBe(true);
+
+	// The cached Account catalog refreshes without a reload.
+	await page.getByRole('button', { name: /reader/i }).click();
+	await page.getByRole('menuitem', { name: 'Account settings' }).click();
+	await expect(page).toHaveURL(/\/account$/);
+	await chooseSearchOption(page, 'Workspace for citation style', 'Research');
+	await expect(style.getByRole('option', { name: 'House style', exact: true })).toBeVisible();
+});

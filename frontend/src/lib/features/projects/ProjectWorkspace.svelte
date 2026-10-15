@@ -294,7 +294,12 @@
 			$t('Project deleted'),
 			false
 		);
-		if (deleted) await goto(resolve(workspaceHref(workspaceId, 'projects')));
+		if (deleted) {
+			// Deletion removes the Project from every cached directory and
+			// selector, including reader annotation sources.
+			await invalidateProject(queryClient, workspaceId);
+			await goto(resolve(workspaceHref(workspaceId, 'projects')));
+		}
 	}
 
 	async function addDiscussion(event: SubmitEvent) {

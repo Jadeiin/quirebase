@@ -265,6 +265,37 @@ test('an archived Project with delete authority exposes its delete control', asy
 	await expect(page.getByText('Permanently delete this Project?')).toBeVisible();
 });
 
+test('deleting a Project refreshes the cached Project directory', async ({ page }) => {
+	await mockWorkspaceRole(page, 'admin', ['workspace.read', 'project.delete']);
+	let deleted = false;
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/projects\?.*/, (route) =>
+		route.fulfill({ json: directoryPage(deleted ? [] : [project], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) => {
+		if (route.request().method() === 'DELETE') {
+			deleted = true;
+			return route.fulfill({ json: { ok: true } });
+		}
+		return route.fulfill({
+			json: { ...project, authorization: { allowed: ['project.delete'] } }
+		});
+	});
+
+	await page.goto('/workspace/workspace-1/projects');
+	await expect(page.getByRole('link').filter({ hasText: project.name })).toBeVisible();
+	await page.getByRole('link').filter({ hasText: project.name }).click();
+	await expect(page).toHaveURL(/\/projects\/project-1$/);
+	await page.getByRole('button', { name: 'Delete Project' }).click();
+	await page.getByLabel('Project name').fill(project.name);
+	await page.getByRole('dialog').getByRole('button', { name: 'Delete Project' }).click();
+	await expect.poll(() => deleted).toBe(true);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);
+	await expect(page.getByRole('link').filter({ hasText: project.name })).toHaveCount(0);
+});
+
 test('Workspace admin moderates managed Project Discussion with an audited reason', async ({
 	page
 }) => {

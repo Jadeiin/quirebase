@@ -313,6 +313,12 @@ Annotations have exactly two scopes:
 Workspace owner/admin may moderate another author's Project Annotation through operations such as
 hide, archive, lock, restore or delete. Moderation must not rewrite authored content or attribution.
 
+The reader's displayed and creation Annotation sources are a cached selector over Project lineage.
+Project create, rename, deletion, lifecycle or participation changes and ProjectItem changes
+invalidate the cached reader configuration, so a linked Project's name and editability cannot
+linger. Likewise, Item deletion refreshes the Project directories that counted it, and Item
+metadata or File changes refresh that Item's cached reader projection.
+
 ### Lifecycle
 
 Workspace and Project have only `active` and `archived` lifecycle states. Deletion physically

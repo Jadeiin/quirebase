@@ -4,8 +4,10 @@ import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export const pdfReaderKeys = {
 	all: (workspaceId: string) => [...workspaceKeys.root(workspaceId), 'pdf-reader'] as const,
+	item: (workspaceId: string, itemId: string) =>
+		[...pdfReaderKeys.all(workspaceId), itemId] as const,
 	viewer: (workspaceId: string, itemId: string, revisionId: string) =>
-		[...pdfReaderKeys.all(workspaceId), itemId, revisionId] as const
+		[...pdfReaderKeys.item(workspaceId, itemId), revisionId] as const
 };
 
 export function pdfViewerQuery(workspaceId: string, itemId: string, revisionId: string) {

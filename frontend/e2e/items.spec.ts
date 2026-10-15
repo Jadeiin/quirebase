@@ -2311,6 +2311,200 @@ test('Project item counts refresh after an Item assignment', async ({ page }) =>
 	await expect(page.getByText('1 Item')).toBeVisible();
 });
 
+test('Project item counts refresh after an Item deletion', async ({ page }) => {
+	await mockSession(page);
+	let deleted = false;
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Item', version: 1 },
+				latest_revision: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1', (route) => {
+		if (route.request().method() === 'DELETE') {
+			deleted = true;
+			return route.fulfill({ json: { ok: true } });
+		}
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/items\?.*/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/projects\?.*/, (route) =>
+		route.fulfill({
+			json: {
+				items: [
+					{
+						id: 'project-1',
+						name: 'Alpha',
+						item_count: deleted ? 0 : 1,
+						state: 'active',
+						participation: 'open',
+						is_participating: false,
+						description: '',
+						allowed_participation_changes: [],
+						authorization: { allowed: ['workspace.read'] }
+					}
+				],
+				total: 1,
+				limit: 25,
+				offset: 0
+			}
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1');
+	// Cache the Project directory before the deletion.
+	await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);
+	await expect(page.getByText('1 Item')).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1$/);
+
+	await page.getByRole('button', { name: 'More', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByRole('button', { name: 'Delete Item permanently' }).click();
+	await dialog.getByRole('button', { name: 'Delete Item permanently' }).click();
+	await expect.poll(() => deleted).toBe(true);
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library$/);
+	await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);
+	await expect(page.getByText('0 Items')).toBeVisible();
+});
+
+test('Library file filters refresh after an Item file upload', async ({ page }) => {
+	await mockSession(page);
+	let uploaded = false;
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Files Item', version: 1 },
+				latest_revision: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/documents', (route) =>
+		route.fulfill({
+			json: {
+				item_id: 'item-1',
+				files: uploaded
+					? [
+							{
+								id: 'revision-1',
+								kind: 'revision',
+								original_name: 'paper.pdf',
+								mime_type: 'application/pdf',
+								size: 100,
+								created_at: '2026-01-01T00:00:00Z',
+								processing_state: 'ready'
+							}
+						]
+					: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1', (route) =>
+		route.fulfill({
+			json: {
+				id: 'item-1',
+				title_html: 'Files Item',
+				version: 1,
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Files Item'
+				},
+				abstract_html: null
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/revisions', (route) =>
+		route.fulfill({ status: 202, json: { id: 'workflow-1' } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/workflows/workflow-1', (route) => {
+		uploaded = true;
+		return route.fulfill({ json: { id: 'workflow-1', state: 'succeeded', error: null } });
+	});
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/items\?.*/, (route) => {
+		const hasFiles = new URL(route.request().url()).searchParams.get('has_files');
+		if (hasFiles !== 'true') return route.fulfill({ json: directoryPage([], route) });
+		return route.fulfill({
+			json: directoryPage(
+				uploaded
+					? [
+							{
+								id: 'item-1',
+								title_html: 'Files Item',
+								authors: null,
+								publication_date: null,
+								publication_title: null,
+								doi: null,
+								version: 1
+							}
+						]
+					: [],
+				route
+			)
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+
+	async function showLibraryWithFiles() {
+		await page.getByRole('link', { name: 'Library', exact: true }).first().click();
+		await expect(page).toHaveURL(/\/workspace\/workspace-1\/library$/);
+		await page.getByRole('button', { name: 'Filters' }).click();
+		await page.getByRole('combobox', { name: 'Files', exact: true }).selectOption('true');
+		await page.getByRole('button', { name: 'Search', exact: true }).click();
+		await expect(page).toHaveURL(/has_files=true/);
+	}
+
+	await page.goto('/workspace/workspace-1/item/item-1/files');
+	await showLibraryWithFiles();
+	await expect(page.getByText('0 Items')).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1\/files$/);
+
+	await page.locator('input[name="pdf"]').setInputFiles({
+		name: 'paper.pdf',
+		mimeType: 'application/pdf',
+		buffer: minimalPdf()
+	});
+	await page.getByRole('button', { name: 'Upload PDF' }).click();
+	await expect(page.getByText('Document processing completed')).toBeVisible();
+
+	await showLibraryWithFiles();
+	await expect(page.getByText('Files Item')).toBeVisible();
+});
+
 test('Tag renames refresh Item tag projections', async ({ page }) => {
 	await mockSession(page);
 	let renamed = false;

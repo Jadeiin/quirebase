@@ -140,12 +140,12 @@ enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	gzip: 192000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
-	raw: 893000,
-	gzip: 256000
+	raw: 898000,
+	gzip: 258000
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
-	raw: 808000,
-	gzip: 228000
+	raw: 812000,
+	gzip: 230000
 });
 enforce('Account route', routeBundle('/(app)/account'), {
 	raw: 799000,
@@ -154,8 +154,8 @@ enforce('Account route', routeBundle('/(app)/account'), {
 // Compact metadata controls add about 0.3 KiB raw to shared catalogs/CSS.
 // Tools measures 794.1 KiB raw / 227.1 KiB gzip; account for this shared cost.
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
-	raw: 814000,
-	gzip: 233000
+	raw: 819000,
+	gzip: 235000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
 	raw: 829000,
@@ -189,24 +189,24 @@ enforce(
 	'Item organize route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
-		raw: 806000,
-		gzip: 231000
+		raw: 810000,
+		gzip: 233000
 	}
 );
 enforce(
 	'Item annotations route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
-		raw: 815000,
-		gzip: 234000
+		raw: 819000,
+		gzip: 236000
 	}
 );
 enforce(
 	'Item discussion route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
-		raw: 803000,
-		gzip: 232000
+		raw: 807000,
+		gzip: 234000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {

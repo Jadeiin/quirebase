@@ -677,3 +677,90 @@ test('the annotation source panel stays above the comment sidebar', async ({ pag
 		)
 	).toBe(true);
 });
+
+test('PDF reader header follows Item metadata changes', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+		route.fulfill({
+			json: {
+				search: [],
+				lookup: [{ id: 'datacite', name: 'DataCite', identifier_namespaces: ['doi'] }],
+				max_search_clauses: 5
+			}
+		})
+	);
+	let synchronized = false;
+	const title = () => (synchronized ? 'Synchronized title' : 'Old title');
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'https://doi.org/10.1000/reader',
+					type: 'Other',
+					title: title(),
+					identifiers: [{ identifier_type: 'DOI', identifier: '10.1000/reader' }]
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: title(), version: 1, doi: '10.1000/reader' },
+				latest_revision: null,
+				authorization: { allowed: ['item.update', 'workspace.export', 'item.delete'] },
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/metadata/sync', (route) => {
+		synchronized = true;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/viewer',
+		(route) =>
+			route.fulfill({
+				json: {
+					item: { id: 'item-1', title_html: title(), version: 1 },
+					editable: true,
+					annotation_author: 'reader',
+					revision: {
+						id: 'revision-1',
+						original_name: 'paper.pdf',
+						page_count: 1,
+						processing_state: 'ready',
+						page_geometry: [[0, 0, 300, 400]],
+						content_url: '/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/content'
+					},
+					projects: []
+				}
+			})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations**', (route) =>
+		route.fulfill({ json: annotationList([]) })
+	);
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/content',
+		(route) => route.fulfill({ contentType: 'application/pdf', body: minimalPdf() })
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('0 annotations loaded')).toBeAttached();
+	await expect(page.getByText('Old title')).toBeVisible();
+
+	await page.getByRole('link', { name: 'Item', exact: true }).click();
+	await expect(page).toHaveURL(/\/item\/item-1$/);
+	await page.getByRole('button', { name: 'Record tools', exact: true }).click();
+	await page
+		.getByRole('dialog', { name: 'Item actions' })
+		.getByLabel('Provider', { exact: true })
+		.selectOption('datacite');
+	await page.getByRole('button', { name: 'Autoupdate' }).click();
+	await expect.poll(() => synchronized).toBe(true);
+	await page
+		.getByRole('dialog', { name: 'Item actions' })
+		.getByRole('button', { name: 'Close' })
+		.click();
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1\/pdf\/revision-1$/);
+	await expect(page.getByText('Synchronized title')).toBeVisible();
+});
