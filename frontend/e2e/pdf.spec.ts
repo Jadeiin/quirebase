@@ -539,3 +539,53 @@ test.describe('touch-first PDF reader', () => {
 		await expect(page.locator('[data-epdf-i="mode:annotate"]')).toBeVisible();
 	});
 });
+
+test('deleting a reader annotation refreshes the Item overview count', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	const state = await mockScopeReader(page, true);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Reader item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Reader item', version: 1 },
+				latest_revision: {
+					id: 'revision-1',
+					original_name: 'paper.pdf',
+					size: 100,
+					processing_state: 'ready'
+				},
+				authorization: { allowed: ['workspace.export'] },
+				copy_targets: [],
+				counts: {
+					revisions: 1,
+					attachments: 0,
+					annotations: state.deletedIds.length ? 0 : 1,
+					discussion: 0
+				},
+				tags: []
+			}
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1');
+	const annotationsCount = page
+		.locator('span:text-is("Annotations")')
+		.locator('xpath=preceding-sibling::strong');
+	await expect(annotationsCount).toHaveText('1');
+	await page.getByRole('link', { name: 'Read PDF' }).click();
+	await expect(page).toHaveURL(/\/item\/item-1\/pdf\/revision-1$/);
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+	await expect
+		.poll(() => selectReaderAnnotation(page, 'annotation-private'))
+		.toBe('annotation:annotation-private');
+	await page.locator('[data-epdf-i="delete-annotation"] button').click();
+	await expect.poll(() => state.deletedIds).toEqual(['annotation-private']);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/item\/item-1$/);
+	await expect(annotationsCount).toHaveText('0');
+});

@@ -35,7 +35,8 @@
 		pageGeometry,
 		sources,
 		writeProject,
-		onstatus
+		onstatus,
+		onsaved
 	} = $props<{
 		itemId: string;
 		workspaceId: string;
@@ -49,6 +50,7 @@
 		sources: AnnotationSources;
 		writeProject: string;
 		onstatus?: (status: string, failed: boolean, reason?: unknown) => void;
+		onsaved?: () => void;
 	}>();
 
 	const disabledCategories = [
@@ -156,6 +158,7 @@
 				break;
 			case 'saved':
 				onstatus($t('Saved'), false);
+				onsaved?.();
 				break;
 			case 'sync-failed':
 				onstatus(apiErrorMessage(status.reason, $t('Annotation sync failed')), true, status.reason);

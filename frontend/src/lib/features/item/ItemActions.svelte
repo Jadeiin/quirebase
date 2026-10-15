@@ -29,7 +29,6 @@
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
-	import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger' | 'copy';
 
@@ -271,9 +270,7 @@
 					body: { target_workspace_id: targetWorkspaceId }
 				}
 			);
-			await queryClient.invalidateQueries({
-				queryKey: workspaceKeys.items(copied.target_workspace_id)
-			});
+			await invalidateLibrary(queryClient, copied.target_workspace_id);
 			copiedItemUrl = resolve(
 				workspaceHref(copied.target_workspace_id, `item/${copied.target_item_id}`)
 			);

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import type { components } from '#lib/api/schema.js';
@@ -11,6 +11,7 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { invalidateItemAnnotations } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
@@ -21,6 +22,7 @@
 	let { itemId } = $props<{ itemId: string }>();
 	const { workspaceId } = getWorkspaceContext();
 	const workspace = getWorkspaceContext();
+	const queryClient = useQueryClient();
 	let revision = $state('all');
 	let source = $state('all');
 	let page = $state(1);
@@ -70,10 +72,10 @@
 					body: { action, version: annotation.version }
 				}
 			);
-			await annotations.refetch();
+			await invalidateItemAnnotations(queryClient, workspaceId, itemId);
 		} catch (reason) {
 			if (reason instanceof ApiError && reason.status === 409) {
-				await annotations.refetch();
+				await invalidateItemAnnotations(queryClient, workspaceId, itemId);
 				moderationError =
 					'This Annotation changed since it was loaded. Latest state refreshed; review it and explicitly retry if the action is still appropriate.';
 			} else moderationError = apiErrorMessage(reason, 'Unable to moderate Annotation');

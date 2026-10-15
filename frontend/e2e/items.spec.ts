@@ -1,7 +1,7 @@
 import { chooseSearchOption } from './helpers';
 import { directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
-import { minimalPdf, mockSession } from './helpers';
+import { minimalPdf, mockSession, workspaceView } from './helpers';
 
 const editableItemAuthorization = {
 	allowed: [
@@ -723,6 +723,200 @@ test('cross-Workspace copy uses the server-provided eligible destinations', asyn
 		'href',
 		'/workspace/workspace-2/item/item-copy-result'
 	);
+});
+
+test('cross-Workspace copy refreshes the target Workspace dashboard and Library', async ({
+	page
+}) => {
+	await mockSession(page);
+	const sourceItem = {
+		id: 'item-copy',
+		title_html: 'Copy source',
+		authors: null,
+		publication_date: null,
+		publication_title: null,
+		doi: null,
+		version: 1
+	};
+	const copiedItem = { ...sourceItem, id: 'item-copy-result' };
+	let copied = false;
+	await page.route('**/api/v1/workspaces/workspace-2/dashboard', (route) =>
+		route.fulfill({
+			json: {
+				new_items: copied ? [copiedItem] : [],
+				recent_items: [],
+				projects: [],
+				project_count: 0,
+				session_count: 0
+			}
+		})
+	);
+	await page.route(/\/api\/v1\/workspaces\/workspace-2\/items(\?|$)/, (route) => {
+		const items = copied ? [copiedItem] : [];
+		return route.fulfill({ json: { items, total: items.length, limit: 25, offset: 0 } });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-copy/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Copy source'
+				},
+				citation_key: null,
+				item: sourceItem,
+				latest_revision: null,
+				authorization: { allowed: ['workspace.export'] },
+				copy_targets: [{ id: 'workspace-2', name: 'Archive' }],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-copy', (route) =>
+		route.fulfill({
+			json: {
+				...sourceItem,
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Copy source'
+				},
+				abstract_html: null
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-copy/copy', (route) => {
+		copied = true;
+		return route.fulfill({
+			json: {
+				source_workspace_id: 'workspace-1',
+				source_item_id: 'item-copy',
+				target_workspace_id: 'workspace-2',
+				target_item_id: 'item-copy-result'
+			}
+		});
+	});
+
+	await page.goto('/workspace/workspace-1/item/item-copy');
+	// Warm the target Workspace projections so the copy has to invalidate cached views.
+	await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+	await page.getByRole('menuitem', { name: /Archive/ }).click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-2$/);
+	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-2\/library$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/workspace\/workspace-2$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/item\/item-copy$/);
+
+	await page.getByRole('button', { name: 'Copy to Workspace' }).click();
+	await chooseSearchOption(page, 'Target Workspace', 'Archive');
+	await page.getByRole('button', { name: 'Create copy' }).click();
+	await expect(page.getByRole('link', { name: 'Open copy' })).toBeVisible();
+	await page.keyboard.press('Escape');
+
+	await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+	await page.getByRole('menuitem', { name: /Archive/ }).click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-2$/);
+	await expect(page.getByText('Copy source')).toBeVisible();
+	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-2\/library$/);
+	await expect(page.getByText('Copy source')).toBeVisible();
+});
+
+test('creating a Workspace refreshes cached Item copy destinations', async ({ page }) => {
+	await mockSession(page);
+	const sourceItem = {
+		id: 'item-copy',
+		title_html: 'Copy source',
+		authors: null,
+		publication_date: null,
+		publication_title: null,
+		doi: null,
+		version: 1
+	};
+	let workspaceCreated = false;
+	await page.route('**/api/v1/workspaces/creation-availability', (route) =>
+		route.fulfill({ json: { allowed: true, owner_username_required: false } })
+	);
+	await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) => {
+		if (route.request().method() === 'POST') {
+			workspaceCreated = true;
+			return route.fulfill({ status: 201, json: { id: 'workspace-new' } });
+		}
+		return route.fulfill({
+			json: directoryPage(
+				[
+					workspaceView('workspace-1', 'Research'),
+					workspaceView('workspace-2', 'Archive'),
+					...(workspaceCreated ? [workspaceView('workspace-new', 'New Workspace')] : [])
+				],
+				route
+			)
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-new', (route) =>
+		route.fulfill({ json: workspaceView('workspace-new', 'New Workspace') })
+	);
+	await page.route('**/api/v1/workspaces/workspace-new/dashboard', (route) =>
+		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-copy/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Copy source'
+				},
+				citation_key: null,
+				item: sourceItem,
+				latest_revision: null,
+				authorization: { allowed: ['workspace.export'] },
+				copy_targets: workspaceCreated
+					? [
+							{ id: 'workspace-2', name: 'Archive' },
+							{ id: 'workspace-new', name: 'New Workspace' }
+						]
+					: [{ id: 'workspace-2', name: 'Archive' }],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-copy', (route) =>
+		route.fulfill({
+			json: {
+				...sourceItem,
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Copy source'
+				},
+				abstract_html: null
+			}
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-copy');
+	await page.getByRole('button', { name: 'Copy to Workspace' }).click();
+	await page.getByRole('combobox', { name: 'Target Workspace', exact: true }).click();
+	await expect(page.getByRole('option')).toHaveCount(2);
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+
+	await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Manage workspaces' }).click();
+	await page.getByLabel('Workspace name').fill('New Workspace');
+	await page.getByRole('button', { name: 'Create workspace' }).click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-new$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/item\/item-copy$/);
+
+	await page.getByRole('button', { name: 'Copy to Workspace' }).click();
+	await page.getByRole('combobox', { name: 'Target Workspace', exact: true }).click();
+	await expect(page.getByRole('option', { name: 'New Workspace', exact: true })).toBeVisible();
 });
 
 test('Item annotation review spans every PDF revision', async ({ page }) => {
@@ -1797,4 +1991,298 @@ test('Overview and Files share Work without detail requests and localize publica
 	});
 	await expect(page.getByText('期刊论文', { exact: true })).toBeVisible();
 	await expect(page.getByText('期刊', { exact: true })).toBeVisible();
+});
+
+test('Dashboard read history refreshes after opening an Item', async ({ page }) => {
+	await mockSession(page);
+	const item = {
+		id: 'item-1',
+		title_html: 'Read item',
+		authors: null,
+		publication_date: null,
+		publication_title: null,
+		doi: null,
+		version: 1
+	};
+	let read = false;
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+		route.fulfill({
+			json: {
+				new_items: [item],
+				recent_items: read ? [{ item, last_read_at: '2026-01-01T00:00:00Z' }] : [],
+				projects: [],
+				project_count: 0,
+				session_count: 0
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) => {
+		// Opening an Item section records the read that feeds "Continue reading".
+		read = true;
+		return route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Read item'
+				},
+				citation_key: null,
+				item,
+				latest_revision: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		});
+	});
+
+	await page.goto('/workspace/workspace-1');
+	await expect(page.getByText('Open an Item to start your reading history.')).toBeVisible();
+	await page.getByRole('link', { name: /Read item/ }).click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/item\/item-1$/);
+	await page.getByRole('link', { name: 'Dashboard', exact: true }).first().click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1$/);
+	await expect(page.getByText('Open an Item to start your reading history.')).toHaveCount(0);
+});
+
+test('Tools Tag counts refresh after an Item tag assignment', async ({ page }) => {
+	await mockSession(page);
+	let assigned = false;
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Item', version: 1 },
+				latest_revision: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/organize', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-1', title_html: 'Item', version: 1 },
+				authorization: editableItemAuthorization,
+				tags: assigned ? [{ id: 'tag-1', name: 'Methods' }] : [],
+				projects: [],
+				tag_matrix: {
+					groups: [{ letter: 'M', tags: [{ id: 'tag-1', name: 'Methods' }], names: ['Methods'] }],
+					assigned_ids: assigned ? ['tag-1'] : [],
+					recommended_ids: [],
+					suggested_names: [],
+					suggested_single_words: [],
+					suggested_phrases: [],
+					recommendation_state: 'ready',
+					recommendation_error: null
+				}
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/tags', (route) => {
+		assigned = true;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/tags\?.*/, (route) =>
+		route.fulfill({
+			json: {
+				items: [
+					{
+						id: 'tag-1',
+						name: 'Methods',
+						accessible_item_count: assigned ? 1 : 0,
+						authorization: { allowed: ['tag.manage'] }
+					}
+				],
+				total: 1,
+				limit: 20,
+				offset: 0
+			}
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1/organize');
+	await page.getByRole('link', { name: 'Tools', exact: true }).first().click();
+	await page.getByRole('tab', { name: 'Manage Tags' }).click();
+	await expect(page.getByText('0 Items')).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1\/organize$/);
+	await page.getByRole('button', { name: 'Methods', exact: true }).click();
+	await expect.poll(() => assigned).toBe(true);
+	await page.getByRole('link', { name: 'Tools', exact: true }).first().click();
+	await page.getByRole('tab', { name: 'Manage Tags' }).click();
+	await expect(page.getByText('1 Item')).toBeVisible();
+});
+
+test('Project item counts refresh after an Item assignment', async ({ page }) => {
+	await mockSession(page);
+	let assigned = false;
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Item', version: 1 },
+				latest_revision: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/organize', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-1', title_html: 'Item', version: 1 },
+				authorization: editableItemAuthorization,
+				tags: [],
+				projects: [
+					{
+						id: 'project-1',
+						name: 'Alpha',
+						assigned,
+						participation: 'open',
+						is_participating: false
+					}
+				],
+				tag_matrix: {
+					groups: [],
+					assigned_ids: [],
+					recommended_ids: [],
+					suggested_names: [],
+					suggested_single_words: [],
+					suggested_phrases: [],
+					recommendation_state: 'ready',
+					recommendation_error: null
+				}
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/items/item-1', (route) => {
+		assigned = true;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/projects\?.*/, (route) =>
+		route.fulfill({
+			json: {
+				items: [
+					{
+						id: 'project-1',
+						name: 'Alpha',
+						item_count: assigned ? 1 : 0,
+						state: 'active',
+						participation: 'open',
+						is_participating: false,
+						description: '',
+						allowed_participation_changes: [],
+						authorization: { allowed: ['workspace.read'] }
+					}
+				],
+				total: 1,
+				limit: 25,
+				offset: 0
+			}
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1/organize');
+	await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
+	await expect(page.getByText('0 Items')).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1\/organize$/);
+	await page.getByText('Other open Projects').click();
+	await page.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect.poll(() => assigned).toBe(true);
+	await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
+	await expect(page.getByText('1 Item')).toBeVisible();
+});
+
+test('Tag renames refresh Item tag projections', async ({ page }) => {
+	await mockSession(page);
+	let renamed = false;
+	const tagName = () => (renamed ? 'Methods renamed' : 'Methods');
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Item'
+				},
+				citation_key: null,
+				item: { id: 'item-1', title_html: 'Item', version: 1 },
+				latest_revision: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/organize', (route) =>
+		route.fulfill({
+			json: {
+				item: { id: 'item-1', title_html: 'Item', version: 1 },
+				authorization: editableItemAuthorization,
+				tags: [{ id: 'tag-1', name: tagName() }],
+				projects: [],
+				tag_matrix: {
+					groups: [{ letter: 'M', tags: [{ id: 'tag-1', name: tagName() }], names: [tagName()] }],
+					assigned_ids: ['tag-1'],
+					recommended_ids: [],
+					suggested_names: [],
+					suggested_single_words: [],
+					suggested_phrases: [],
+					recommendation_state: 'ready',
+					recommendation_error: null
+				}
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/tags/tag-1', (route) => {
+		renamed = true;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/tags\?.*/, (route) =>
+		route.fulfill({
+			json: {
+				items: [
+					{
+						id: 'tag-1',
+						name: tagName(),
+						accessible_item_count: 1,
+						authorization: { allowed: ['tag.manage'] }
+					}
+				],
+				total: 1,
+				limit: 20,
+				offset: 0
+			}
+		})
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1/organize');
+	await expect(page.getByRole('button', { name: 'Methods', exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Tools', exact: true }).first().click();
+	await page.getByRole('tab', { name: 'Manage Tags' }).click();
+	await page.getByRole('button', { name: 'Rename', exact: true }).click();
+	await page.getByLabel('New Tag name').fill('Methods renamed');
+	await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
+	await expect(page.getByText('Tag renamed')).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL(/\/item\/item-1\/organize$/);
+	await expect(page.getByRole('button', { name: 'Methods renamed', exact: true })).toBeVisible();
 });

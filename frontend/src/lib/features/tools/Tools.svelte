@@ -14,12 +14,13 @@
 	import PromptDialog from '#lib/design/PromptDialog.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
-	import { tagKeys, tagsQuery } from '#lib/features/tags/queries.js';
+	import { tagsQuery } from '#lib/features/tags/queries.js';
 	import {
 		citationStylesQuery,
 		duplicateScanQuery,
 		toolKeys
 	} from '#lib/features/tools/queries.js';
+	import { invalidateLibrary, invalidateTags } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
@@ -88,13 +89,20 @@
 		notice = '';
 		try {
 			await operation();
-			await queryClient.invalidateQueries({ queryKey: tagKeys.all(workspaceId) });
+			// Rename, delete and merge also change each Item's Tag projections.
+			await Promise.all([
+				invalidateTags(queryClient, workspaceId),
+				invalidateLibrary(queryClient, workspaceId)
+			]);
 			notice = success;
 			return true;
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Tag action failed'));
 			if (reason instanceof ApiError && reason.code === 'tag_conflict') {
-				await queryClient.invalidateQueries({ queryKey: tagKeys.all(workspaceId) });
+				await Promise.all([
+					invalidateTags(queryClient, workspaceId),
+					invalidateLibrary(queryClient, workspaceId)
+				]);
 			}
 			return false;
 		} finally {

@@ -10,6 +10,7 @@
 	import { msg, t } from '#lib/i18n.js';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import { invalidateWorkspaces } from '#lib/query/invalidation.js';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 
@@ -82,8 +83,7 @@
 					? governanceMembers.refetch()
 					: directoryMembers.refetch(),
 				workspace.can('workspace_invitation.read') ? invitations.refetch() : Promise.resolve(),
-				client.invalidateQueries({ queryKey: workspaceKeys.root(workspace.workspaceId) }),
-				client.invalidateQueries({ queryKey: workspaceKeys.list() })
+				invalidateWorkspaces(client)
 			]);
 			return true;
 		} catch (reason) {

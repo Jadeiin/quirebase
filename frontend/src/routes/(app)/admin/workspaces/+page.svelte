@@ -8,6 +8,7 @@
 	import RichText from '#lib/design/RichText.svelte';
 	import { adminWorkspacesQuery } from '#lib/features/admin/queries.js';
 	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { invalidateWorkspaces } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import type { components } from '#lib/api/schema.js';
@@ -37,7 +38,8 @@
 				});
 			await Promise.all([
 				workspaces.refetch(),
-				queryClient.invalidateQueries({ queryKey: ['admin'] })
+				queryClient.invalidateQueries({ queryKey: ['admin'] }),
+				invalidateWorkspaces(queryClient)
 			]);
 		} catch (failure) {
 			error = apiErrorMessage(failure, 'Workspace governance action failed');

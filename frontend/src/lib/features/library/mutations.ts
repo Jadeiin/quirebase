@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
-import { invalidateLibrary, invalidateProject } from '#lib/query/invalidation.js';
+import { invalidateLibrary, invalidateProject, invalidateTags } from '#lib/query/invalidation.js';
 import {
 	bibliographyExportParameters,
 	bibliographyFilename,
@@ -86,6 +86,9 @@ export async function runLibraryBulkMutation(
 	const invalidations = [invalidateLibrary(queryClient, workspaceId)];
 	if (input.action === 'add_project' && input.projectId) {
 		invalidations.push(invalidateProject(queryClient, workspaceId));
+	}
+	if (input.action === 'add_tag') {
+		invalidations.push(invalidateTags(queryClient, workspaceId));
 	}
 	await Promise.all(invalidations);
 }

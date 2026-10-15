@@ -22,4 +22,21 @@ describe('workspaceKeys', () => {
 			'discussions'
 		]);
 	});
+
+	it('nests every Workspace-scoped key under the invalidatable Workspace prefix', () => {
+		const keys = [
+			workspaceKeys.root('workspace-a'),
+			workspaceKeys.items('workspace-a'),
+			workspaceKeys.item('workspace-a', 'item-1'),
+			workspaceKeys.projects('workspace-a'),
+			workspaceKeys.project('workspace-a', 'project-1'),
+			workspaceKeys.members('workspace-a'),
+			workspaceKeys.governanceMembers('workspace-a'),
+			workspaceKeys.invitations('workspace-a'),
+			workspaceKeys.mutation('workspace-a', 'metadata', 'item-1')
+		];
+		for (const key of keys) {
+			expect(key.slice(0, workspaceKeys.all().length)).toEqual(workspaceKeys.all());
+		}
+	});
 });

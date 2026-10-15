@@ -375,7 +375,9 @@ a separate decision and explicit share resource.
 
 Item copy selectors receive only destinations currently satisfying both copy decisions, rather
 than unusable options with empty grants. This read model is a hint; the copy command rechecks
-current source and destination authority before committing.
+current source and destination authority before committing. The Web UI caches selectors with the
+Item overview, so Workspace directory, lifecycle, membership or governance changes invalidate
+every Workspace-scoped projection instead of leaving an outdated destination list visible.
 
 Instance-global resources may include User/authentication, system/provider configuration, external
 bibliographic metadata cache and workflow infrastructure. Audit Events are instance-global records,

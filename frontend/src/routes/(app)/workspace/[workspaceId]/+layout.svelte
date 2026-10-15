@@ -5,7 +5,7 @@
 	import { onMount } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError, onWorkspaceConflict, onWorkspaceUnavailable } from '#lib/api/client.js';
-	import { workspaceKeys } from '#lib/workspaces/keys.js';
+	import { invalidateWorkspaces } from '#lib/query/invalidation.js';
 	import WorkspaceProvider from '#lib/workspaces/WorkspaceProvider.svelte';
 	import { workspaceListQuery, workspaceQuery } from '#lib/workspaces/queries.js';
 	import { clearDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
@@ -49,10 +49,7 @@
 		});
 		const unregisterConflict = onWorkspaceConflict((failedWorkspaceId) => {
 			if (failedWorkspaceId !== workspaceId) return;
-			void Promise.all([
-				queryClient.invalidateQueries({ queryKey: workspaceKeys.root(workspaceId) }),
-				queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
-			]);
+			void invalidateWorkspaces(queryClient);
 		});
 		return () => {
 			unregisterUnavailable();

@@ -1,6 +1,10 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
-import { invalidateItemOrganize, invalidateProject } from '#lib/query/invalidation.js';
+import {
+	invalidateItemOrganize,
+	invalidateProject,
+	invalidateTags
+} from '#lib/query/invalidation.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 import type { OrganizeView } from '../types';
 
@@ -44,7 +48,9 @@ export function projectAssignmentMutationOptions(
 				: api.request('PUT', '/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}', {
 						params: { path: { project_id: project.id, item_id: itemId } }
 					}),
-		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId),
+		// Project lists and details expose item_count; invalidateProject also
+		// refreshes this Item's organize and overview projections.
+		onSuccess: () => invalidateProject(queryClient, workspaceId),
 		onError: async (reason) => {
 			if (reason instanceof ApiError && reason.code === 'project_lifecycle_error') {
 				await Promise.all([
@@ -71,7 +77,10 @@ export function addTagMutationOptions(
 			}),
 		onSuccess: async (_saved, { form }) => {
 			form.reset();
-			await invalidateItemOrganize(queryClient, workspaceId, itemId);
+			await Promise.all([
+				invalidateItemOrganize(queryClient, workspaceId, itemId),
+				invalidateTags(queryClient, workspaceId)
+			]);
 		}
 	});
 }
@@ -93,7 +102,11 @@ export function toggleTagMutationOptions(
 					new_names: []
 				}
 			}),
-		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId)
+		onSuccess: () =>
+			Promise.all([
+				invalidateItemOrganize(queryClient, workspaceId, itemId),
+				invalidateTags(queryClient, workspaceId)
+			])
 	});
 }
 
@@ -110,7 +123,11 @@ export function suggestedTagMutationOptions(
 				params: { path: { item_id: itemId } },
 				body: { add_tag_ids: [], remove_tag_ids: [], new_names: [name] }
 			}),
-		onSuccess: () => invalidateItemOrganize(queryClient, workspaceId, itemId)
+		onSuccess: () =>
+			Promise.all([
+				invalidateItemOrganize(queryClient, workspaceId, itemId),
+				invalidateTags(queryClient, workspaceId)
+			])
 	});
 }
 

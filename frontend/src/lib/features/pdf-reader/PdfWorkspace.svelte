@@ -2,12 +2,13 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Menu, Popover, Portal } from '@skeletonlabs/skeleton-svelte';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError, isDownloadCancelled } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Icon from '#lib/design/Icon.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import { pdfViewerQuery } from '#lib/features/pdf-reader/queries.js';
+	import { invalidateItemAnnotations } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import EmbeddedPdfViewer from '#lib/pdf/EmbeddedPdfViewer.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -16,6 +17,7 @@
 	let { itemId, revisionId } = $props<{ itemId: string; revisionId: string }>();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
+	const queryClient = useQueryClient();
 	let exportProjectId = $state('');
 	let includePrivate = $state(true);
 	let visibleProjects = $state(page.url.searchParams.getAll('project_id'));
@@ -294,6 +296,7 @@
 							void viewer.refetch();
 						}
 					}}
+					onsaved={() => void invalidateItemAnnotations(queryClient, workspaceId, itemId)}
 				/>{/key}{/if}
 	</div>
 </div>

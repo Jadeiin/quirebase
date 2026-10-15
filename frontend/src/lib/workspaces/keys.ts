@@ -1,6 +1,8 @@
 export const workspaceKeys = {
 	list: () => ['workspaces'] as const,
 	creationAvailability: () => ['workspace-creation-availability'] as const,
+	/** Every cached Workspace-scoped projection, across all Workspaces. */
+	all: () => ['workspace'] as const,
 	root: (workspaceId: string) => ['workspace', workspaceId] as const,
 	items: (workspaceId: string) => [...workspaceKeys.root(workspaceId), 'items'] as const,
 	item: (workspaceId: string, itemId: string) =>

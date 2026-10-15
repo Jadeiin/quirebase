@@ -9,8 +9,8 @@
 	import Pagination from '#lib/design/Pagination.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import { t } from '#lib/i18n.js';
+	import { invalidateWorkspaces } from '#lib/query/invalidation.js';
 	import { getSession } from '#lib/session.js';
-	import { workspaceKeys } from '#lib/workspaces/keys.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import {
 		defaultWorkspacePreference,
@@ -58,10 +58,7 @@
 					...(needsOwnerUsername ? { owner_username: requestedOwner } : {})
 				}
 			});
-			await queryClient.invalidateQueries({
-				queryKey: workspaceKeys.list(),
-				refetchType: 'all'
-			});
+			await invalidateWorkspaces(queryClient);
 			const createdForCurrentUser =
 				!needsOwnerUsername || requestedOwner === session.data?.user?.username;
 			if (createdForCurrentUser) {
