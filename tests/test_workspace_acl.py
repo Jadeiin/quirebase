@@ -3575,6 +3575,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     source = Item(
         workspace_id=fixture_workspace_id(actor),
         created_by=actor.id,
+        citation_key="detached-source",
         work={
             "id": f"urn:uuid:{uuid4()}",
             "type": "Document",
@@ -3669,6 +3670,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     assert copied.workspace_id == fixture_workspace_id(target_owner)
     assert copied.work.get("title") == source.work.get("title")
     assert copied.work == source.work and copied.work is not source.work
+    assert copied.citation_key == source.citation_key
     assert copied.work["contributors"][0] is not source.work["contributors"][0]
     assert copied_revision is not None
     assert copied_revision.file.path != source_revision.file.path

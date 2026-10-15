@@ -25,6 +25,10 @@ returns the locked official schema after Workspace authorization. The Web UI laz
 Advanced JSON edits must pass original-schema validation and be applied before saving. Work is
 also copied deeply between Workspaces.
 
+Library's single write seam validates every persisted payload even when the caller already holds
+a typed Work, because Pydantic copies can bypass validation. Provider merge, Import confirmation
+and metadata rescan all normalize through that same seam.
+
 The editor selects `$defs.work`, retaining only the official `$schema`, `$id`, `$defs` and `$ref`
 context. The registry's array root is not merged into the Work. The upstream Draft 2020-12
 converter supplies a Draft-07 rendering schema; an independent `@cfworker/json-schema` 4.1.1

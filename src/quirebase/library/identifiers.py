@@ -18,7 +18,7 @@ from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import FileRevision, Item, User
 from quirebase.search import search_index
 
-from ._metadata import candidate_write, generate_citation_key, validate_citation_key
+from ._metadata import candidate_write, generate_citation_key, metadata_write, validate_citation_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -71,7 +71,7 @@ async def rescan_pdf_doi(
                     "identifier_type": "DOI",
                     "identifier": found_doi,
                 })
-                item.work = candidate_write(item, work, merge=False)["work"]
+                item.work = metadata_write(work)["work"]
                 item.updated_by = user.id
                 item.updated_at = datetime.now(UTC)
                 item.version += 1
@@ -98,7 +98,7 @@ async def _merge_metadata_work(
     work: dict,
 ) -> Item:
     item = await require_editable_item(db, user, item.workspace_id, item.id)
-    write = candidate_write(item, work, merge=True)
+    write = candidate_write(work, current=item.work)
     item.work = write["work"]
     if not item.citation_key:
         item.citation_key = generate_citation_key(item)
@@ -224,12 +224,15 @@ async def sync_metadata_from_upstream(
 async def _create_items_from_candidates(
     db: AsyncSession, workspace_id: UUID, actor_id: UUID, records: Sequence[dict]
 ) -> list[Item]:
-    items = []
-    for record in records:
-        item = Item(work={}, workspace_id=workspace_id, created_by=actor_id)
-        item.work = candidate_write(item, record["work"], merge=False)["work"]
-        item.citation_key = validate_citation_key(record.get("citation_key"))
-        items.append(item)
+    items = [
+        Item(
+            work=metadata_write(record["work"])["work"],
+            citation_key=validate_citation_key(record.get("citation_key")),
+            workspace_id=workspace_id,
+            created_by=actor_id,
+        )
+        for record in records
+    ]
     db.add_all(items)
     await db.flush()
     for item in items:

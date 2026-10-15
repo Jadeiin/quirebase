@@ -294,7 +294,7 @@ async def test_partial_provider_sync_preserves_local_facts(persistence_db):
         contributors=[{"type": "Person", "person": {"family_name": "Smith"}, "roles": ["Author"]}],
         subjects=[{"subject": "Provider topic"}],
     )
-    merged = candidate_write(item, incoming, merge=True)["work"]
+    merged = candidate_write(incoming, current=item.work)["work"]
     assert merged["id"] == local["id"]
     assert merged["contributors"][0] == local["contributors"][0]
     assert merged["relations"] == local["relations"]
@@ -379,7 +379,7 @@ async def test_provider_merge_keeps_local_credit_ids_and_affiliations(persistenc
         ],
         "funding_references": [{"funder_name": "Provider Foundation"}],
     }
-    merged = candidate_write(item, incoming, merge=True)["work"]
+    merged = candidate_write(incoming, current=item.work)["work"]
     assert len(merged["contributors"]) == 1
     merged_credit = merged["contributors"][0]
     assert merged_credit["person"]["id"] == credit["person"]["id"]
@@ -430,7 +430,7 @@ async def test_provider_merge_preserves_suffix_distinguished_authors_across_repe
     created = await create_item(db, actor, workspace_id, work(contributors=credits))
     item = await db.get(Item, created.item_id)
     for _ in range(3):
-        merged = candidate_write(item, {"contributors": incoming}, merge=True)["work"]
+        merged = candidate_write({"contributors": incoming}, current=item.work)["work"]
         assert len(merged["contributors"]) == 2
         assert [credit["person"]["name"] for credit in merged["contributors"]] == [
             "John Smith Jr",
@@ -461,7 +461,7 @@ async def test_provider_merge_does_not_conflate_shared_display_names(persistence
     created = await create_item(db, actor, workspace_id, work(contributors=credits))
     item = await db.get(Item, created.item_id)
     for _ in range(3):
-        merged = candidate_write(item, {"contributors": credits}, merge=True)["work"]
+        merged = candidate_write({"contributors": credits}, current=item.work)["work"]
         assert merged["contributors"] == credits
         item.work = merged
         await db.commit()
@@ -503,7 +503,7 @@ async def test_provider_merge_preserves_separate_author_editor_credits_on_repeat
     incoming["contributors"][0]["person"]["affiliations"] = [{"name": "Provider Institute"}]
     original = deepcopy(incoming)
     for _ in range(3):
-        merged = candidate_write(item, incoming, merge=True)["work"]
+        merged = candidate_write(incoming, current=item.work)["work"]
         assert len(merged["contributors"]) == 2
         author, editor = merged["contributors"]
         expected_roles = list(
@@ -539,7 +539,7 @@ async def test_provider_merge_does_not_append_already_represented_ambiguous_cred
     created = await create_item(db, actor, workspace_id, work(contributors=credits))
     item = await db.get(Item, created.item_id)
     for _ in range(3):
-        merged = candidate_write(item, {"contributors": [incoming]}, merge=True)["work"]
+        merged = candidate_write({"contributors": [incoming]}, current=item.work)["work"]
         assert merged["contributors"] == credits
         item.work = merged
         await db.commit()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
@@ -20,15 +20,10 @@ from quirebase.models import (
 )
 from quirebase.search import search_index
 
-from ._metadata import metadata_write, validate_citation_key
-
 if TYPE_CHECKING:
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-_ITEM_FIELDS = ("work", "citation_key")
 
 
 async def copy_item_to_workspace(
@@ -45,9 +40,8 @@ async def copy_item_to_workspace(
     await require_workspace_action(db, actor, source_workspace_id, ResourceAction.workspace_export)
     source = await require_readable_item(db, actor, source_workspace_id, item_id)
     source_version = source.version
-    item_fields: dict[str, Any] = deepcopy({
-        field: getattr(source, field) for field in _ITEM_FIELDS
-    })
+    source_work = deepcopy(source.work)
+    source_citation_key = source.citation_key
     documents = await prepare_item_document_copy(db, source_workspace_id, item_id)
     await require_workspace_action(db, actor, target_workspace_id, ResourceAction.item_create)
 
@@ -97,15 +91,15 @@ async def copy_item_to_workspace(
         if (
             current_source is None
             or current_source.version != source_version
-            or any(getattr(current_source, field) != value for field, value in item_fields.items())
+            or current_source.work != source_work
+            or current_source.citation_key != source_citation_key
         ):
             raise ValidationFailure("source Item changed while its files were copied")
-        item_fields["work"] = metadata_write(item_fields["work"])["work"]
-        item_fields["citation_key"] = validate_citation_key(item_fields["citation_key"])
         target = Item(
             workspace_id=target_workspace_id,
             created_by=current_actor.id,
-            **item_fields,
+            work=source_work,
+            citation_key=source_citation_key,
         )
         db.add(target)
         await db.flush()

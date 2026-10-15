@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
 from quirebase.library import ItemMetadataData, Work, item_summary
+from quirebase.models import MAX_CITATION_KEY_LENGTH
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
@@ -123,13 +124,13 @@ class ItemUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_version: int = Field(ge=1)
     metadata: Work
-    citation_key: str | None = Field(default=None, max_length=128)
+    citation_key: str | None = Field(default=None, max_length=MAX_CITATION_KEY_LENGTH)
 
 
 class ItemCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     metadata: Work
-    citation_key: str | None = Field(default=None, max_length=128)
+    citation_key: str | None = Field(default=None, max_length=MAX_CITATION_KEY_LENGTH)
 
 
 class CrossWorkspaceCopyRequest(BaseModel):

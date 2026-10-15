@@ -21,6 +21,7 @@ from inquiro.work import (
 from pydantic import ValidationError
 
 from quirebase.core.errors import ValidationFailure
+from quirebase.models import MAX_CITATION_KEY_LENGTH
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -37,6 +38,12 @@ class ItemWriteResult:
 
 
 def metadata_write(work: Work | dict[str, Any]) -> dict[str, Any]:
+    """Validate the standard Work contract and apply Library's own limits.
+
+    A typed ``Work`` is validated again on purpose: ``model_copy(update=...)``
+    and attribute assignment bypass Pydantic validation, so this write seam
+    keeps the persisted payload canonical instead of trusting its callers.
+    """
     try:
         if isinstance(work, Work):
             work = work.model_dump(mode="json", exclude_none=True)
@@ -67,15 +74,20 @@ def metadata_from_item(item: Item) -> Work:
 
 
 def validate_citation_key(key: str | None) -> str | None:
-    if key is not None and (not isinstance(key, str) or len(key) > 128):
+    if key is not None and (not isinstance(key, str) or len(key) > MAX_CITATION_KEY_LENGTH):
         raise ValidationFailure("Citation key is too long or invalid")
     return key
 
 
-def candidate_write(item: Item, work: dict, *, merge: bool) -> dict[str, Any]:
-    result = deepcopy(item.work) if merge else {}
+def candidate_write(work: dict[str, Any], *, current: dict[str, Any]) -> dict[str, Any]:
+    """Merge one Provider or Import candidate Work into the persisted Work.
+
+    The merge preserves omitted and additional local facts, then applies the
+    same Library policy as any other write.
+    """
+    result = deepcopy(current)
     for key, value in work.items():
-        if merge and key == "contributors" and value:
+        if key == "contributors" and value:
             credits = deepcopy(result.get(key, []))
             for incoming in value:
                 matches = [
@@ -120,13 +132,13 @@ def candidate_write(item: Item, work: dict, *, merge: bool) -> dict[str, Any]:
                     # contribution on every unchanged Provider sync.
                     credits.append(deepcopy(incoming))
             result[key] = credits
-        elif merge and isinstance(value, (list, dict)):
+        elif isinstance(value, (list, dict)):
             result[key] = _merge_facts(result.get(key), value)
-        elif merge and key == "id" and value.startswith("urn:uuid:"):
+        elif key == "id" and value.startswith("urn:uuid:"):
             result.setdefault(key, value)
         else:
             result[key] = deepcopy(value)
-    if merge and (previous_id := item.work.get("id")) and result.get("id") != previous_id:
+    if (previous_id := current.get("id")) and result.get("id") != previous_id:
         result["identifiers"] = _merge_facts(
             result.get("identifiers", []), [work_id_identifier(previous_id)]
         )
@@ -169,7 +181,7 @@ def _merge_facts(local, incoming):
 
 
 def generate_citation_key(item: Item) -> str:
-    return generate_default_citation_key(item.work, max_length=128)
+    return generate_default_citation_key(item.work, max_length=MAX_CITATION_KEY_LENGTH)
 
 
 def get_work_schema() -> dict:
