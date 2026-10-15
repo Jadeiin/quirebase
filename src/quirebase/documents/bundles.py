@@ -32,6 +32,7 @@ from quirebase.core.timezones import annotation_export_timezone
 from quirebase.documents.annotations import select_visible_annotations
 from quirebase.documents.pdf import export_annotations
 from quirebase.models import (
+    AnnotationScope,
     Attachment,
     FileRevision,
     Item,
@@ -466,7 +467,8 @@ async def _record_revision_pdf_export(
     revision_id: UUID,
     *,
     include_annotations: bool,
-    project_id: UUID | None,
+    scope: AnnotationScope | None,
+    project_ids: tuple[UUID, ...] | None,
 ) -> None:
     record_event(
         db,
@@ -477,7 +479,8 @@ async def _record_revision_pdf_export(
         detail={
             "item_id": item_id,
             "include_annotations": include_annotations,
-            "project_id": project_id,
+            "scope": scope.value if scope is not None else None,
+            "project_ids": [str(project_id) for project_id in project_ids or ()],
         },
         workspace_id=workspace_id,
         authorization_resource_action=ResourceAction.workspace_export.value,
@@ -493,14 +496,17 @@ async def export_revision_pdf(
     revision_id: UUID,
     *,
     include_annotations: bool = True,
-    project_id: UUID | None = None,
+    scope: AnnotationScope | None = None,
+    project_ids: tuple[UUID, ...] | None = None,
     timezone: str | None = None,
 ) -> ExportedRevision:
     revision = await require_revision(db, user, workspace_id, revision_id)
     if revision.item_id != item_id:
         raise ResourceNotFound("revision not found for item")
     annotations = (
-        await select_visible_annotations(db, user, workspace_id, revision.id, item_id, project_id)
+        await select_visible_annotations(
+            db, user, workspace_id, revision.id, item_id, scope=scope, project_ids=project_ids
+        )
         if include_annotations
         else []
     )
@@ -509,7 +515,8 @@ async def export_revision_pdf(
         target = _temporary_path(prefix="quirebase-export-", suffix=".pdf")
         try:
             author_names = {user.id: user.username}
-            if project_id:
+            if scope is not AnnotationScope.private:
+                # A Project selection can include other members' Annotations.
                 rows = (
                     await db.execute(
                         select(User.id, User.username).where(
@@ -547,7 +554,8 @@ async def export_revision_pdf(
             item_id,
             revision_id,
             include_annotations=include_annotations,
-            project_id=project_id,
+            scope=scope,
+            project_ids=project_ids,
         )
     except BaseException:
         if annotations:

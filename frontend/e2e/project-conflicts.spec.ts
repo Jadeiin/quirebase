@@ -2,7 +2,7 @@ import { tagPage, chooseSearchOption } from './helpers';
 import { directoryPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import type { AnnotationPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
-import { annotationList, minimalPdf, mockSession } from './helpers';
+import { annotationList, minimalPdf, mockSession, setAnnotationWriteSource } from './helpers';
 
 function trackWorkspaceReads(page: Page) {
 	const reads: string[] = [];
@@ -510,8 +510,7 @@ for (const operation of ['create', 'update', 'reply', 'version']) {
 
 		await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1?project_id=project-1');
 		await expect(page.getByText('2 annotations loaded')).toBeAttached();
-		const destination = page.getByRole('combobox', { name: 'New annotation source', exact: true });
-		await destination.selectOption('project-1');
+		await setAnnotationWriteSource(page, 'Shared');
 		const modeSelector = page.locator('[data-epdf-i="mode-select-button"] button');
 		await expect(modeSelector).toBeVisible();
 		const initialWorkspaceReads = [...workspaceReads];
@@ -540,10 +539,12 @@ for (const operation of ['create', 'update', 'reply', 'version']) {
 		if (operation === 'reply') expect(writes[0]).toContain('/replies/reply-1');
 		await expect.poll(() => annotationReads).toBeGreaterThan(1);
 		const readonly = operation !== 'version';
-		await expect(destination.locator('option[value="project-1"]')).toHaveJSProperty(
-			'disabled',
-			readonly
-		);
+		const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+		await sources.click();
+		if (readonly)
+			await expect(page.getByRole('radio', { name: 'Shared', exact: true })).toBeDisabled();
+		else await expect(page.getByRole('radio', { name: 'Shared', exact: true })).toBeEnabled();
+		await sources.click();
 		if (await page.getByText('private note', { exact: true }).isVisible()) {
 			// Creating a note opens a mobile drawer; dismiss its backdrop before using the toolbar.
 			await page.locator('embedpdf-container .bg-bg-overlay').click({ position: { x: 5, y: 5 } });
@@ -588,7 +589,7 @@ for (const operation of ['create', 'update', 'reply', 'version']) {
 		expect(viewerReads).toBe(readonly ? 2 : 1);
 		expect(contentReads).toBe(initialContentReads);
 		expect(workspaceReads).toEqual(initialWorkspaceReads);
-		await destination.selectOption('');
+		await setAnnotationWriteSource(page, 'Private annotations');
 		await modeSelector.click();
 		await expect(page.getByRole('menuitem', { name: 'Annotate', exact: true })).toBeEnabled();
 	});

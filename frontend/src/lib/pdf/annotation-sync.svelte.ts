@@ -6,6 +6,7 @@ import type {
 } from '@embedpdf/svelte-pdf-viewer';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { createWorkspaceApi } from '#lib/api/client.js';
+import { annotationSourceFilters } from '#lib/pdf/annotation-sources.js';
 import {
 	canonicalAnnotationId,
 	canonicalAnnotationFromView,
@@ -45,6 +46,7 @@ export type AnnotationSyncOptions = {
 	initialWriteProject: string;
 	onStatus: (status: AnnotationSyncStatus) => void;
 	onCommentPanel?: () => void;
+	onRevealSource?: (projectId: string) => void;
 };
 
 export function createAnnotationSync(options: AnnotationSyncOptions) {
@@ -84,12 +86,7 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 							path: { item_id: options.itemId },
 							query: {
 								revision_id: options.documentId,
-								scope: !sources.includePrivate
-									? 'project'
-									: !sources.projectIds.length
-										? 'private'
-										: undefined,
-								project_id: sources.projectIds.length ? sources.projectIds : undefined,
+								...annotationSourceFilters(sources.includePrivate, sources.projectIds),
 								pagination: 'cursor',
 								cursor,
 								per_page: 100
@@ -251,6 +248,12 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 							...saved.replies.map((reply) => adapter.vendorReplyFromCanonical(saved, reply))
 						]);
 					}
+				} else if (options.onRevealSource) {
+					// Creating into a hidden source must not make the new Annotation
+					// vanish: reveal the destination and keep the object until the
+					// source reload reconciles it.
+					importedIds.set(objectId, saved.page_index);
+					options.onRevealSource(saved.scope === 'private' ? '' : (saved.project_id ?? ''));
 				} else scope.purgeAnnotation(saved.page_index, objectId);
 			} else if (event.type === 'update') {
 				const existing = records.get(id);

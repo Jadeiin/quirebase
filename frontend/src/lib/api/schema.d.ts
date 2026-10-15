@@ -12447,7 +12447,9 @@ export interface operations {
 		parameters: {
 			query?: {
 				include_annotations?: boolean;
-				project_id?: string | null;
+				scope?: components['schemas']['AnnotationScope'] | null;
+				/** @description Repeat to select multiple readable Projects linked to this Item. */
+				project_id?: string[] | null;
 				timezone?: string | null;
 			};
 			header?: never;

@@ -2584,7 +2584,7 @@ async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role
             if state not in {"deleted", "other-private"}
         }
     exported = await export_revision_pdf(
-        async_db, actor, item.workspace_id, item.id, revision.id, project_id=project.id
+        async_db, actor, item.workspace_id, item.id, revision.id, project_ids=(project.id,)
     )
     exported_pdf = (await collect_body(exported.body)).getvalue()
     with pymupdf.open(stream=exported_pdf, filetype="pdf") as document:
@@ -2592,6 +2592,106 @@ async def test_revision_pdf_export_excludes_moderated_annotations(async_db, role
     assert contents == ({"Shared note", "locked", "private"} if include_visible else set())
     if not include_visible:
         assert exported_pdf == original_pdf
+
+
+@pytest.mark.anyio
+async def test_revision_pdf_export_follows_selected_annotation_sources(async_db):
+    owner, viewer, item, project, revision, shared, _reply = await _shared_annotation_context(
+        async_db, "pdf-export-sources"
+    )
+    workspace_id = item.workspace_id
+    second = Project(workspace_id=workspace_id, name="Second", created_by=owner.id)
+    async_db.add(second)
+    await async_db.flush()
+    second_item = ProjectItem(
+        workspace_id=workspace_id, project_id=second.id, item_id=item.id, added_by=owner.id
+    )
+    async_db.add(second_item)
+    await async_db.flush()
+    payload = NotePayload.model_validate({
+        "type": "note",
+        "rect": {"x": 1, "y": 1, "width": 1, "height": 1},
+    }).model_dump(mode="json")
+    shared.payload = payload
+    async_db.add_all([
+        PdfAnnotation(
+            workspace_id=workspace_id,
+            file_revision_id=revision.id,
+            item_id=item.id,
+            page_index=0,
+            author_id=owner.id,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.private,
+            body="Own private",
+            payload=payload,
+        ),
+        PdfAnnotation(
+            workspace_id=workspace_id,
+            file_revision_id=revision.id,
+            item_id=item.id,
+            page_index=0,
+            author_id=owner.id,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.project,
+            project_item_id=second_item.id,
+            body="Second note",
+            payload=payload,
+        ),
+        PdfAnnotation(
+            workspace_id=workspace_id,
+            file_revision_id=revision.id,
+            item_id=item.id,
+            page_index=0,
+            author_id=viewer.id,
+            kind=AnnotationKind.note,
+            scope=AnnotationScope.project,
+            project_item_id=second_item.id,
+            body="Member note",
+            payload=payload,
+        ),
+    ])
+    with pymupdf.open() as document:
+        document.new_page(width=300, height=400)
+        original_pdf = document.tobytes()
+    revision_key, revision_size = await put_pdf_object(original_pdf)
+    revision.file = FileObject(
+        **revision.file.to_dict() | {"filename": revision_key, "size": revision_size}
+    )
+    await async_db.commit()
+
+    async def exported_contents(*, scope=None, project_ids=None) -> set[str]:
+        exported = await export_revision_pdf(
+            async_db,
+            owner,
+            workspace_id,
+            item.id,
+            revision.id,
+            scope=scope,
+            project_ids=project_ids,
+        )
+        body = (await collect_body(exported.body)).getvalue()
+        with pymupdf.open(stream=body, filetype="pdf") as document:
+            return {annotation.info["content"] for annotation in document[0].annots() or ()}
+
+    # No filter exports the caller's private Annotations plus every linked Project's.
+    assert await exported_contents() == {"Own private", "Shared note", "Second note", "Member note"}
+    # Private scope excludes Project Annotations.
+    assert await exported_contents(scope=AnnotationScope.private) == {"Own private"}
+    # Project selection adds the selected Projects to private Annotations.
+    assert await exported_contents(project_ids=(project.id,)) == {"Own private", "Shared note"}
+    assert await exported_contents(project_ids=(project.id, second.id)) == {
+        "Own private",
+        "Shared note",
+        "Second note",
+        "Member note",
+    }
+    # Project scope exports only the selected Project, including other members' Annotations.
+    assert await exported_contents(scope=AnnotationScope.project, project_ids=(second.id,)) == {
+        "Second note",
+        "Member note",
+    }
+    with pytest.raises(ResourceUnavailable):
+        await exported_contents(project_ids=(uuid4(),))
 
 
 @pytest.mark.anyio
@@ -2863,7 +2963,12 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
         assert overview.annotation_count == expected_count
         assert (
             await select_visible_annotations(
-                async_db, reader, fixture_workspace_id(owner), revision.id, item.id, project.id
+                async_db,
+                reader,
+                fixture_workspace_id(owner),
+                revision.id,
+                item.id,
+                project_ids=(project.id,),
             )
             == []
         )

@@ -4,7 +4,7 @@ import re
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 
@@ -36,7 +36,7 @@ from quirebase.library import (
     acquire_remote_pdf,
     open_item_section,
 )
-from quirebase.models import AttachmentRole
+from quirebase.models import AnnotationScope, AttachmentRole
 from quirebase.operations.settings import get_effective_setting, get_effective_settings_model
 from quirebase.web.api.annotation_schemas import DocumentListView, document_list_view
 from quirebase.web.api.common import OkView, WriteResult
@@ -562,7 +562,11 @@ async def export_revision_pdf_route(
     user: ApiUser,
     db: Database,
     include_annotations: bool = True,
-    project_id: UUID | None = None,
+    scope: AnnotationScope | None = None,
+    project_id: Annotated[
+        list[UUID] | None,
+        Query(description="Repeat to select multiple readable Projects linked to this Item."),
+    ] = None,
     timezone: str | None = None,
 ):
     exported = await export_revision_pdf(
@@ -572,7 +576,8 @@ async def export_revision_pdf_route(
         item_id,
         revision_id,
         include_annotations=include_annotations,
-        project_id=project_id,
+        scope=scope,
+        project_ids=tuple(project_id) if project_id is not None else None,
         timezone=timezone,
     )
     return StreamingResponse(

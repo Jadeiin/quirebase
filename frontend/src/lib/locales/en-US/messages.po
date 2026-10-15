@@ -442,11 +442,6 @@ msgid "Annotations"
 msgstr "Annotations"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Annotations to include"
-msgstr "Annotations to include"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Annotations: {state}"
 msgstr "Annotations: {state}"
@@ -1325,11 +1320,6 @@ msgstr "CSL-JSON"
 #: src/lib/features/account/Account.svelte
 msgid "Current password"
 msgstr "Current password"
-
-#. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Current PDF"
-msgstr "Current PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -3016,11 +3006,6 @@ msgid "NCBI API key"
 msgstr "NCBI API key"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "New annotation source"
-msgstr "New annotation source"
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "New Item metadata"
@@ -3728,16 +3713,6 @@ msgid "Private annotations"
 msgstr "Private annotations"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Private annotations and project: {name}"
-msgstr "Private annotations and project: {name}"
-
-#. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Private annotations only"
-msgstr "Private annotations only"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Proceedings"
 msgstr "Proceedings"
@@ -4324,6 +4299,11 @@ msgstr "Save metadata"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Save name"
 msgstr "Save name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Save new annotations to"
+msgstr "Save new annotations to"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -5481,6 +5461,11 @@ msgstr "Users, storage, audit, settings, and durable operations."
 #: src/lib/features/item/ItemActions.svelte
 msgid "Uses the defaults saved in your Account export preferences."
 msgstr "Uses the defaults saved in your Account export preferences."
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Uses the displayed annotation sources."
+msgstr "Uses the displayed annotation sources."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts

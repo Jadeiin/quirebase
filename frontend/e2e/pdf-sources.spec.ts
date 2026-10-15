@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { AnnotationPlugin, CommandsPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
-import { annotationList, minimalPdf, mockSession, setAnnotationSource } from './helpers';
+import {
+	annotationList,
+	minimalPdf,
+	mockSession,
+	setAnnotationSource,
+	setAnnotationWriteSource
+} from './helpers';
 
 async function sourceReader(page: Page, privateCount = 1) {
 	await mockSession(page);
@@ -142,6 +148,11 @@ async function sourceReader(page: Page, privateCount = 1) {
 		const body = request.postDataJSON();
 		state.writes.push(body);
 		if (request.method() === 'POST') {
+			if (url.pathname.endsWith('/restore')) {
+				const id = url.pathname.split('/').at(-2)!;
+				state.deletedIds = state.deletedIds.filter((deleted) => deleted !== id);
+				return route.fulfill({ json: rows.find((candidate) => candidate.id === id)! });
+			}
 			if (rows.some((row) => row.id === body.id))
 				return route.fulfill({ status: 409, json: { message: 'Annotation UUID reserved' } });
 			const row = { ...makeAnnotation(body.id, body.project_id), ...body };
@@ -178,15 +189,11 @@ test('PDF overlays private and two Projects, while writes keep independent desti
 	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 	await expect(page.getByText('1 annotation loaded')).toBeAttached();
 	const contentLoads = state.contentLoads;
-	await page
-		.getByRole('combobox', { name: 'New annotation source', exact: true })
-		.selectOption('project-1');
+	await setAnnotationWriteSource(page, 'First Project');
 	await expect(page.getByText('2 annotations loaded')).toBeAttached();
 	await setAnnotationSource(page, 'Second Project');
 	await expect(page.getByText('3 annotations loaded')).toBeAttached();
-	await page
-		.getByRole('combobox', { name: 'New annotation source', exact: true })
-		.selectOption('project-1');
+	await setAnnotationWriteSource(page, 'First Project');
 	await editOrCreate(page);
 	await expect.poll(() => state.writes.length).toBe(1);
 	expect(state.writes[0]).toMatchObject({ body: 'Edited original source', version: 1 });
@@ -202,7 +209,7 @@ test('PDF overlays private and two Projects, while writes keep independent desti
 	await expect.poll(() => state.writes.length).toBe(2);
 	expect(state.writes[1]).toMatchObject({ scope: 'project', project_id: 'project-1' });
 	await expect(page.getByText('Saved', { exact: true })).toBeAttached();
-	await page.getByRole('combobox', { name: 'New annotation source', exact: true }).selectOption('');
+	await setAnnotationWriteSource(page, 'Private annotations');
 	await editOrCreate(page, 'new-private');
 	await expect.poll(() => state.writes.length).toBe(3);
 	expect(state.writes[2]).toMatchObject({ scope: 'private', project_id: null });
@@ -304,9 +311,7 @@ test('PDF clears display and write sources after their Project becomes unavailab
 	const state = await sourceReader(page);
 	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 	await expect(page.getByText('1 annotation loaded')).toBeAttached();
-	await page
-		.getByRole('combobox', { name: 'New annotation source', exact: true })
-		.selectOption('project-2');
+	await setAnnotationWriteSource(page, 'Second Project');
 	await expect(page.getByText('2 annotations loaded')).toBeAttached();
 	const reads = state.viewerReads;
 	await page.clock.install();
@@ -322,11 +327,105 @@ test('PDF clears display and write sources after their Project becomes unavailab
 		}
 	});
 	await expect.poll(() => state.viewerReads).toBeGreaterThan(reads);
-	await expect(
-		page.getByRole('combobox', { name: 'New annotation source', exact: true })
-	).toHaveValue('');
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await expect(page.getByRole('radio', { name: 'Private annotations', exact: true })).toBeChecked();
+	await sources.click();
 	await expect(page.getByText('1 annotation loaded')).toBeAttached();
 	expect(new URLSearchParams(state.readQueries.at(-1)).has('project_id')).toBe(false);
 	await setAnnotationSource(page, 'First Project');
 	await expect(page.getByText('2 annotations loaded')).toBeAttached();
+});
+
+test('the annotation write destination is an explicit labelled control', async ({ page }) => {
+	const state = await sourceReader(page);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeAttached();
+
+	// The annotation panel owns the write destination as an explicit radio group.
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await expect(page.getByText('Save new annotations to')).toBeVisible();
+	const destination = page.getByRole('radio', { name: 'First Project', exact: true });
+	await expect(page.getByRole('radio', { name: 'Private annotations', exact: true })).toBeChecked();
+	await destination.check();
+
+	// Choosing a destination also displays its source.
+	await expect(page.getByRole('checkbox', { name: 'First Project', exact: true })).toBeChecked();
+	await expect(page.getByText('2 annotations loaded')).toBeAttached();
+	await sources.click();
+	await expect(page.getByText('Save new annotations to')).toBeHidden();
+
+	// Display Second Project too, so its Annotation can seed the created object.
+	await setAnnotationSource(page, 'Second Project');
+	await expect(page.getByText('3 annotations loaded')).toBeAttached();
+
+	// New annotations are written to the chosen destination.
+	await editOrCreate(page, 'new-write-destination');
+	await expect.poll(() => state.writes.length).toBe(1);
+	expect(state.writes[0]).toMatchObject({ scope: 'project', project_id: 'project-1' });
+});
+
+test('a new annotation reveals its hidden write destination instead of disappearing', async ({
+	page
+}) => {
+	const state = await sourceReader(page);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeAttached();
+
+	// Write into First Project, load its second source for the object template,
+	// then hide the destination's overlay again.
+	await setAnnotationWriteSource(page, 'First Project');
+	await setAnnotationSource(page, 'Second Project');
+	await expect(page.getByText('3 annotations loaded')).toBeAttached();
+	await setAnnotationSource(page, 'First Project', false);
+	await expect(page.getByText('2 annotations loaded')).toBeAttached();
+
+	await editOrCreate(page, 'revealed-annotation');
+	await expect.poll(() => state.writes.length).toBe(1);
+	expect(state.writes[0]).toMatchObject({ scope: 'project', project_id: 'project-1' });
+
+	// The destination is displayed again, so the new Annotation stays visible.
+	await expect(page.getByText('4 annotations loaded')).toBeAttached();
+	await expect.poll(async () => (await readerIds(page)).includes('revealed-annotation')).toBe(true);
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await expect(page.getByRole('checkbox', { name: 'First Project', exact: true })).toBeChecked();
+	await sources.click();
+});
+
+async function selectReaderAnnotation(page: Page, id: string) {
+	return page.locator('embedpdf-container').evaluate(async (element, annotationId) => {
+		const registry = await (element as HTMLElement & { registry: Promise<PluginRegistry> })
+			.registry;
+		const annotations = registry
+			.getPlugin<AnnotationPlugin>('annotation')!
+			.provides()
+			.forDocument('revision-1');
+		annotations.deselectAnnotation();
+		annotations.selectAnnotation(0, `annotation:${annotationId}`);
+		return annotations.getSelectedAnnotation()?.object.id ?? null;
+	}, id);
+}
+
+test('Undo of a deleted annotation reveals its hidden source', async ({ page }) => {
+	const state = await sourceReader(page);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1?project_id=project-2');
+	await expect(page.getByText('2 annotations loaded')).toBeAttached();
+
+	// Delete the Project Annotation, then hide its source.
+	await expect.poll(() => selectReaderAnnotation(page, 'shared-2')).toBe('annotation:shared-2');
+	await page.locator('[data-epdf-i="delete-annotation"] button').click();
+	await expect.poll(() => state.deletedIds).toEqual(['shared-2']);
+	await setAnnotationSource(page, 'Second Project', false);
+	await expect(page.getByText('1 annotation loaded')).toBeAttached();
+
+	// Undo restores the Annotation and reveals its source so the restore is perceptible.
+	await historyAction(page, 'undo');
+	await expect(page.getByText('2 annotations loaded')).toBeAttached();
+	await expect.poll(async () => (await readerIds(page)).includes('annotation:shared-2')).toBe(true);
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await expect(page.getByRole('checkbox', { name: 'Second Project', exact: true })).toBeChecked();
+	await sources.click();
 });

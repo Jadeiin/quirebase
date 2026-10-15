@@ -233,45 +233,47 @@ async def select_visible_annotations(
     workspace_id: UUID,
     revision_id: UUID,
     item_id: UUID,
-    project_id: UUID | None = None,
+    *,
+    scope: AnnotationScope | None = None,
+    project_ids: tuple[UUID, ...] | None = None,
 ) -> list[PdfAnnotation]:
-    """Load exportable annotations: own private ones, plus a project's.
+    """Load exportable Annotations for one displayed source selection.
 
-    Exports exclude hidden and archived annotations even for moderators.
+    Selection mirrors the Annotation list: without filters the caller's private
+    Annotations plus every discoverable Project's, ``scope=private`` excludes
+    Project Annotations and ``scope=project`` excludes private ones. Hidden and
+    archived Annotations stay excluded even for moderators.
     """
     workspace = await require_workspace_action(
         db, user, workspace_id, ResourceAction.workspace_read
     )
-    project_item_ids = None
-    if project_id:
-        await require_project_context(
-            db, user, workspace_id, project_id, ResourceAction.workspace_read
+    if project_ids is not None:
+        visible_project_ids = set(
+            (
+                await db.scalars(
+                    select(ProjectItem.project_id).where(
+                        ProjectItem.workspace_id == workspace_id,
+                        ProjectItem.item_id == item_id,
+                        ProjectItem.project_id.in_(discoverable_project_ids_query(workspace)),
+                    )
+                )
+            ).all()
         )
-        project_item = await db.scalar(
-            select(ProjectItem).where(
-                ProjectItem.workspace_id == workspace_id,
-                ProjectItem.project_id == project_id,
-                ProjectItem.item_id == item_id,
-            )
-        )
-        if project_item is None:
+        if not set(project_ids) <= visible_project_ids:
             raise ResourceUnavailable("ProjectItem not found")
-        project_item_ids = (project_item.id,)
     return list(
         (
             await db.scalars(
-                select(PdfAnnotation)
+                _browsable_annotations(
+                    workspace,
+                    item_id,
+                    revision_id=revision_id,
+                    scope=scope,
+                    project_ids=project_ids,
+                )
                 .where(
-                    PdfAnnotation.file_revision_id == revision_id,
-                    PdfAnnotation.workspace_id == workspace_id,
-                    PdfAnnotation.deleted_at.is_(None),
                     PdfAnnotation.hidden_at.is_(None),
                     PdfAnnotation.archived_at.is_(None),
-                    visible_annotation_scope_predicate(
-                        workspace,
-                        project_item_ids=project_item_ids,
-                        include_project=project_id is not None,
-                    ),
                 )
                 .order_by(PdfAnnotation.created_at, PdfAnnotation.id)
             )
@@ -497,8 +499,8 @@ def _browsable_annotations(
 ) -> Select[tuple[PdfAnnotation]]:
     """Complete browse rules, with Project discovery rechecked by each statement.
 
-    Browse includes hidden/archived records for moderators. Export deliberately
-    keeps its separate, stricter selection rules in select_visible_annotations.
+    Browse includes hidden/archived records for moderators. Export reuses this
+    selection with its stricter visible-Annotation filter.
     """
     project_items = select(ProjectItem.id).where(
         ProjectItem.workspace_id == context.workspace_id,

@@ -38,7 +38,9 @@ The reader may overlay the author's private Annotations and multiple readable Pr
 Displayed sources are independent of the single destination selected for newly authored
 Annotations. Updates and Replies retain the existing root's source. This does not duplicate an
 Annotation across Projects or introduce shared ownership. Item Annotation lists display source
-names, filter by source and revision, and preserve Project context when opening the reader.
+names, filter by source and revision, and preserve Project context when opening the reader. The
+synchronous annotated-PDF export reuses the displayed source selection instead of offering a
+second scope choice, so the downloaded PDF matches the overlaid Annotations.
 
 REST uses one paginated `GET /workspaces/{workspace_id}/items/{item_id}/annotations` collection
 for both the reader and the Item page. `revision_id` restricts the File Revision; `scope` selects
@@ -52,9 +54,12 @@ prevent loading the next page. Each request evaluates current visibility; this i
 snapshot of authorization or content.
 
 After a complete source refresh, the reader invalidates cached records absent from that source.
-Records from hidden sources remain available to session history, and replayed objects stay hidden
-when their source is unselected. Display, creation and export source selections are reconciled
-against the current viewer Project choices on initial load and configuration refresh.
+Records from hidden sources remain available to session history. Creating or restoring an
+Annotation whose source is not displayed reveals that source instead of leaving the object
+invisible, so a live creation and an Undo stay equally perceptible; the displayed-source
+selection, and with it the annotated-PDF export scope, follows that reveal. Display and creation
+source selections are reconciled against the current viewer Project choices on initial load and
+configuration refresh; the annotated-PDF export follows the displayed selection.
 
 EmbedPDF's public creation controls and per-object read-only flags project backend permissions.
 Its built-in comment sidebar exposes only a document-wide mutation gate; Quirebase does not patch

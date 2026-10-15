@@ -191,6 +191,13 @@ export async function setAnnotationSource(page: Page, name: string, checked = tr
 	await sources.click();
 }
 
+export async function setAnnotationWriteSource(page: Page, name: string) {
+	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await sources.click();
+	await page.getByRole('radio', { name, exact: true }).check();
+	await sources.click();
+}
+
 export function directoryPage(items: unknown[], route: Route) {
 	const params = new URL(route.request().url()).searchParams;
 	const limit = Number(params.get('limit') ?? 25);

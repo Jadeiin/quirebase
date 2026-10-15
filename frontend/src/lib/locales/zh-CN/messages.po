@@ -442,11 +442,6 @@ msgid "Annotations"
 msgstr "批注"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Annotations to include"
-msgstr "要包含的批注"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Annotations: {state}"
 msgstr "批注：{state}"
@@ -1325,11 +1320,6 @@ msgstr "CSL-JSON"
 #: src/lib/features/account/Account.svelte
 msgid "Current password"
 msgstr "当前密码"
-
-#. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Current PDF"
-msgstr "当前 PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -3016,11 +3006,6 @@ msgid "NCBI API key"
 msgstr "NCBI API 密钥"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "New annotation source"
-msgstr "新批注来源"
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "新条目元数据"
@@ -3728,16 +3713,6 @@ msgid "Private annotations"
 msgstr "私人批注"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Private annotations and project: {name}"
-msgstr "私人批注和项目：{name}"
-
-#. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Private annotations only"
-msgstr "仅私有批注"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Proceedings"
 msgstr "会议论文集"
@@ -4324,6 +4299,11 @@ msgstr "保存元数据"
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Save name"
 msgstr "保存名称"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Save new annotations to"
+msgstr "新批注保存到"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -5481,6 +5461,11 @@ msgstr "管理用户、存储、审计、设置和持久操作。"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Uses the defaults saved in your Account export preferences."
 msgstr "使用账号导出偏好中保存的默认值。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Uses the displayed annotation sources."
+msgstr "使用当前显示的批注来源。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts

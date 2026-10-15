@@ -36,7 +36,8 @@
 		sources,
 		writeProject,
 		onstatus,
-		onsaved
+		onsaved,
+		onRevealSource
 	} = $props<{
 		itemId: string;
 		workspaceId: string;
@@ -51,6 +52,7 @@
 		writeProject: string;
 		onstatus?: (status: string, failed: boolean, reason?: unknown) => void;
 		onsaved?: () => void;
+		onRevealSource?: (projectId: string) => void;
 	}>();
 
 	const disabledCategories = [
@@ -133,7 +135,8 @@
 		initialWriteProject: writeProject,
 		onStatus: reportStatus,
 		onCommentPanel: () =>
-			uiApi?.forDocument(documentId).setActiveSidebar('right', 'main', 'comment-panel')
+			uiApi?.forDocument(documentId).setActiveSidebar('right', 'main', 'comment-panel'),
+		onRevealSource: (projectId) => onRevealSource?.(projectId)
 	});
 
 	function reportStatus(status: AnnotationSyncStatus) {

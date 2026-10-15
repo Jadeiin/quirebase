@@ -153,31 +153,23 @@ for (const projectEditable of [false, true]) {
 		);
 		await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
 		await expect(page.getByText('0 annotations loaded')).toBeAttached();
-		const destination = page.getByLabel('New annotation source');
 		await expectAnnotationMode(page, true);
 		const loadedContentRequests = contentRequests;
 		await setAnnotationSource(page, 'Shared');
 		await expect.poll(() => annotationRequests.at(-1)).toContain('project_id=project-1');
 		await expectAnnotationMode(page, true);
-		if (projectEditable)
-			await expect(destination.locator('option[value="project-1"]')).toHaveJSProperty(
-				'disabled',
-				false
-			);
-		else
-			await expect(destination.locator('option[value="project-1"]')).toHaveJSProperty(
-				'disabled',
-				true
-			);
-		await expect(destination.locator('option[value="project-archived"]')).toHaveJSProperty(
-			'disabled',
-			true
-		);
+		const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+		await sources.click();
+		const destination = page.getByRole('radio', { name: 'Shared', exact: true });
+		if (projectEditable) await expect(destination).toBeEnabled();
+		else await expect(destination).toBeDisabled();
+		await expect(page.getByRole('radio', { name: 'Archived', exact: true })).toBeDisabled();
 		if (projectEditable) {
-			await destination.selectOption('project-1');
-			await expectAnnotationMode(page, true);
-			await destination.selectOption('');
+			await destination.check();
+			await page.getByRole('radio', { name: 'Private annotations', exact: true }).check();
 		}
+		await sources.click();
+		await expectAnnotationMode(page, true);
 		await setAnnotationSource(page, 'Archived');
 		await expect.poll(() => annotationRequests.at(-1)).toContain('project_id=project-archived');
 		await expectAnnotationMode(page, true);
@@ -487,8 +479,8 @@ test('PDF restores creation tools after remounting in a read-only Project', asyn
 	const sources = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
 	await sources.click();
 	await expect(page.getByRole('checkbox', { name: 'Archived', exact: true })).toBeChecked();
+	await expect(page.getByRole('radio', { name: 'Private annotations', exact: true })).toBeChecked();
 	await sources.click();
-	await expect(page.getByLabel('New annotation source')).toHaveValue('');
 	await expectAnnotationMode(page, true);
 });
 
@@ -588,4 +580,100 @@ test('deleting a reader annotation refreshes the Item overview count', async ({ 
 	await page.goBack();
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/item\/item-1$/);
 	await expect(annotationsCount).toHaveText('0');
+});
+
+test('annotated download follows the displayed annotation sources', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await mockScopeReader(page, true);
+	const exports: string[] = [];
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/items/item-1/revisions/revision-1/export**',
+		(route) => {
+			exports.push(new URL(route.request().url()).search);
+			return route.fulfill({ contentType: 'application/pdf', body: minimalPdf() });
+		}
+	);
+
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+
+	// The download menu has no annotation-scope selector; it follows the displayed sources.
+	const downloadTrigger = page.getByRole('button', { name: 'Download', exact: true });
+	await downloadTrigger.click();
+	await expect(page.getByText('Annotations to include')).toHaveCount(0);
+	await expect(page.getByText('Current PDF')).toHaveCount(0);
+
+	// Both reader panels share one frame design, and the two-item menu stays compact.
+	const menuContent = page.locator(`[id="${await downloadTrigger.getAttribute('aria-controls')}"]`);
+	const menuBox = (await menuContent.boundingBox())!;
+	const annotationsTrigger = page.getByRole('button', {
+		name: 'Displayed annotation sources',
+		exact: true
+	});
+	await annotationsTrigger.click();
+	const annotationsContent = page.locator(
+		`[id="${await annotationsTrigger.getAttribute('aria-controls')}"]`
+	);
+	expect(await menuContent.evaluate((element) => getComputedStyle(element).borderRadius)).toBe(
+		await annotationsContent.evaluate((element) => getComputedStyle(element).borderRadius)
+	);
+	expect(menuBox.width).toBeLessThanOrEqual((await annotationsContent.boundingBox())!.width);
+	await annotationsTrigger.click();
+
+	await downloadTrigger.click();
+	await page.getByRole('button', { name: 'Download with annotations' }).click();
+	await expect.poll(() => exports.at(-1)).toContain('scope=private');
+	await page.keyboard.press('Escape');
+
+	// Displaying a Project adds it to the export alongside private annotations.
+	await setAnnotationSource(page, 'Shared');
+	await page.getByRole('button', { name: 'Download', exact: true }).click();
+	await page.getByRole('button', { name: 'Download with annotations' }).click();
+	await expect.poll(() => exports.at(-1)).toContain('project_id=project-1');
+	expect(exports.at(-1)).not.toContain('scope=');
+	await page.keyboard.press('Escape');
+
+	// Hiding private annotations exports only the displayed Projects.
+	await setAnnotationSource(page, 'Private annotations', false);
+	await page.getByRole('button', { name: 'Download', exact: true }).click();
+	await page.getByRole('button', { name: 'Download with annotations' }).click();
+	await expect.poll(() => exports.at(-1)).toContain('scope=project');
+	expect(exports.at(-1)).toContain('project_id=project-1');
+	await page.keyboard.press('Escape');
+
+	// With nothing displayed there is nothing to export.
+	await setAnnotationSource(page, 'Shared', false);
+	await page.getByRole('button', { name: 'Download', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Download with annotations' })).toBeDisabled();
+});
+
+test('the annotation source panel stays above the comment sidebar', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await mockScopeReader(page, true);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+	await page.getByRole('button', { name: 'Comment', exact: true }).click();
+	const pageHeading = page.getByText('Page 1', { exact: true });
+	await expect(pageHeading).toBeVisible();
+
+	const trigger = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
+	await trigger.click();
+	const panel = page.locator(`[id="${await trigger.getAttribute('aria-controls')}"]`);
+	const panelBox = (await panel.boundingBox())!;
+	const headingBox = (await pageHeading.boundingBox())!;
+	// The panel and the sidebar header overlap; the panel must stay on top.
+	expect(headingBox.x).toBeLessThan(panelBox.x + panelBox.width);
+	const point = {
+		x: Math.max(panelBox.x, headingBox.x) + 8,
+		y: Math.max(panelBox.y, headingBox.y) + 4
+	};
+	expect(
+		await page.evaluate(
+			({ x, y }) =>
+				Boolean(
+					document.elementFromPoint(x, y)?.closest('[data-scope="popover"][data-part="content"]')
+				),
+			point
+		)
+	).toBe(true);
 });

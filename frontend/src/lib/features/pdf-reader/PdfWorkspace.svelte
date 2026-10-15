@@ -11,6 +11,7 @@
 	import { invalidateItemAnnotations } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import EmbeddedPdfViewer from '#lib/pdf/EmbeddedPdfViewer.svelte';
+	import { annotationSourceFilters } from '#lib/pdf/annotation-sources.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
@@ -18,7 +19,6 @@
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	const queryClient = useQueryClient();
-	let exportProjectId = $state('');
 	let includePrivate = $state(true);
 	let visibleProjects = $state(page.url.searchParams.getAll('project_id'));
 	let writeProject = $state('');
@@ -36,7 +36,6 @@
 		const available = visibleProjects.filter((id) => readableProjects.has(id));
 		if (available.length !== visibleProjects.length) visibleProjects = available;
 		if (writeProject && !readableProjects.has(writeProject)) writeProject = '';
-		if (exportProjectId && !readableProjects.has(exportProjectId)) exportProjectId = '';
 	});
 	const editable = $derived(
 		writeProject
@@ -50,9 +49,14 @@
 			: visibleProjects.filter((id) => id !== projectId);
 	}
 
-	function selectWriteProject(projectId: string) {
+	function showSource(projectId: string) {
 		if (projectId) showProject(projectId, true);
 		else includePrivate = true;
+	}
+
+	function selectWriteProject(projectId: string) {
+		writeProject = projectId;
+		showSource(projectId);
 	}
 
 	async function download(operation: Promise<void>) {
@@ -90,7 +94,7 @@
 						query: {
 							include_annotations: true,
 							timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-							project_id: exportProjectId || undefined
+							...annotationSourceFilters(includePrivate, visibleProjects)
 						}
 					}
 				},
@@ -138,9 +142,10 @@
 					<span class="hidden sm:inline-flex"><Icon name="chevron-down" size={14} /></span>
 				</Popover.Trigger>
 				<Portal>
-					<Popover.Positioner class="z-100">
+					<!-- Zag's popper copies the content's computed z-index onto its positioner. -->
+					<Popover.Positioner>
 						<Popover.Content
-							class="max-h-72 w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-md border border-surface-300-700 bg-surface-50-950 p-3 text-sm shadow-xl"
+							class="z-100 max-h-72 w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-md border border-surface-300-700 bg-surface-50-950 p-3 text-sm shadow-xl"
 						>
 							<Popover.Title class="mb-3 text-xs font-semibold text-surface-600-400"
 								>{$t('Displayed annotation sources')}</Popover.Title
@@ -161,25 +166,35 @@
 									>
 								{/each}
 							</div>
+							<div class="mt-4 grid grid-cols-1 gap-2 border-t border-surface-300-700 pt-3">
+								<p class="m-0 text-xs font-semibold text-surface-600-400">
+									{$t('Save new annotations to')}
+								</p>
+								<label class="flex min-w-0 items-center gap-2">
+									<input
+										type="radio"
+										name="annotation-write-source"
+										checked={writeProject === ''}
+										disabled={!viewer.data.editable}
+										onchange={() => selectWriteProject('')}
+									/>{$t('Private annotations')}
+								</label>
+								{#each viewer.data.projects as project (project.id)}
+									<label class="flex min-w-0 items-center gap-2">
+										<input
+											type="radio"
+											name="annotation-write-source"
+											checked={writeProject === project.id}
+											disabled={!project.editable}
+											onchange={() => selectWriteProject(project.id)}
+										/><span class="min-w-0 wrap-break-word">{project.name}</span>
+									</label>
+								{/each}
+							</div>
 						</Popover.Content>
 					</Popover.Positioner>
 				</Portal>
 			</Popover>
-			<label class="min-w-0 shrink-0">
-				<span class="sr-only">{$t('New annotation source')}</span>
-				<select
-					class="min-h-9 w-28 truncate rounded-md border border-surface-300-700 bg-surface-100-900 px-2 py-1 text-xs text-surface-900-100 sm:w-40"
-					title={$t('New annotation source')}
-					bind:value={writeProject}
-					onchange={(event) => selectWriteProject(event.currentTarget.value)}
-				>
-					<option value="" disabled={!viewer.data.editable}>{$t('Private annotations')}</option>
-					{#each viewer.data.projects as project (project.id)}<option
-							value={project.id}
-							disabled={!project.editable}>{project.name}</option
-						>{/each}
-				</select>
-			</label>
 		{/if}
 		<Menu positioning={{ placement: 'bottom-end', gutter: 6 }}>
 			<Menu.Trigger
@@ -190,49 +205,30 @@
 				<span class="hidden sm:inline-flex"><Icon name="chevron-down" size={14} /></span>
 			</Menu.Trigger>
 			<Portal>
-				<Menu.Positioner class="z-100">
+				<!-- Zag's popper copies the content's computed z-index onto its positioner. -->
+				<Menu.Positioner>
 					<Menu.Content
-						class="z-1000 w-[min(22rem,calc(100vw-1rem))] border-surface-300-700 p-1.5 shadow-xl"
+						class="z-1000 max-w-[calc(100vw-1.5rem)] gap-0 rounded-md border border-surface-300-700 bg-surface-50-950 p-1 shadow-xl"
 					>
-						<div class="px-2.5 py-2 text-xs font-bold tracking-wide text-surface-600-400 uppercase">
-							{$t('Current PDF')}
-						</div>
 						<Menu.Item
 							value="download-original"
-							class="cursor-pointer text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+							class="cursor-pointer p-0 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 						>
 							<button
 								type="button"
-								class="w-full cursor-pointer px-2.5 py-2 text-left"
+								class="w-full cursor-pointer px-2.5 py-1.5 text-left whitespace-nowrap"
 								onclick={downloadOriginal}>{$t('Download original')}</button
 							>
 						</Menu.Item>
-						<div class="m-1 h-px bg-surface-300-700"></div>
-						<label
-							class="grid grid-cols-1 gap-1.5 px-2.5 py-2 text-xs font-medium text-surface-700-300"
-						>
-							{$t('Annotations to include')}
-							<select
-								class="min-h-9 rounded-md border border-surface-300-700 bg-surface-100-900 px-2 text-sm text-surface-900-100"
-								bind:value={exportProjectId}
-							>
-								<option value="">{$t('Private annotations only')}</option>
-								{#each viewer.data?.projects ?? [] as project (project.id)}
-									<option value={project.id}
-										>{$t('Private annotations and project: {name}', {
-											name: project.name
-										})}</option
-									>
-								{/each}
-							</select>
-						</label>
 						<Menu.Item
 							value="download-annotated"
-							class="cursor-pointer text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+							class="cursor-pointer p-0 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 						>
 							<button
 								type="button"
-								class="w-full cursor-pointer px-2.5 py-2 text-left"
+								class="disabled:text-surface-500-400 w-full cursor-pointer px-2.5 py-1.5 text-left whitespace-nowrap disabled:cursor-not-allowed"
+								disabled={!includePrivate && !visibleProjects.length}
+								title={$t('Uses the displayed annotation sources.')}
 								onclick={downloadAnnotated}>{$t('Download with annotations')}</button
 							>
 						</Menu.Item>
@@ -297,6 +293,7 @@
 						}
 					}}
 					onsaved={() => void invalidateItemAnnotations(queryClient, workspaceId, itemId)}
+					onRevealSource={showSource}
 				/>{/key}{/if}
 	</div>
 </div>
