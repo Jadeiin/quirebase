@@ -10,6 +10,21 @@ import {
 } from './metadata-draft.js';
 
 it.each([
+	[{ given_name: 'Ada', family_name: 'Lovelace' }, 'Ada Lovelace'],
+	[{ name: '', given_name: 'Xiang', family_name: 'Yu' }, 'Xiang Yu'],
+	[{ name: null, given_name: 'Juan', family_name: 'de la Cruz' }, 'Juan de la Cruz'],
+	[{ name: 'Wang Wei', given_name: 'Wei', family_name: 'Wang' }, 'Wang Wei'],
+	[{ given_name: 'Ada' }, 'Ada'],
+	[{ family_name: 'Lovelace' }, 'Lovelace'],
+	[{}, '']
+])(
+	'displays contributor names in reading order when no full name is supplied: %j',
+	(person, name) => {
+		expect(contributorName({ type: 'Person', person })).toBe(name);
+	}
+);
+
+it.each([
 	['10.1000/PRIMARY', '10.1000/primary'],
 	[' DOI: 10.1000/Primary ', '10.1000/primary'],
 	['HTTPS://DX.DOI.ORG/10.1000/PRIMARY', '10.1000/primary'],

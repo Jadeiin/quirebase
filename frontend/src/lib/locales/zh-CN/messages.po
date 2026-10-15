@@ -243,9 +243,15 @@ msgid "Add entry"
 msgstr "添加记录"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/AddField.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Add field"
 msgstr "添加字段"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/AddField.svelte
+msgid "Add field to {label}"
+msgstr "为{label}添加字段"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
@@ -2934,6 +2940,7 @@ msgstr "消息"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/schema-editor/AddField.svelte
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Metadata"
 msgstr "元数据"
@@ -4606,6 +4613,11 @@ msgstr "设置已保存"
 #: src/lib/features/tools/Tools.svelte
 msgid "Shared identifier"
 msgstr "共享标识符"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Show all fields"
+msgstr "显示全部字段"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte

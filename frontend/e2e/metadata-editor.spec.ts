@@ -31,10 +31,14 @@ const work = {
 	subjects: [{ subject: 'Research methods' }]
 };
 
-async function openEditor(page: Page, failure?: 409 | 422) {
+async function openEditor(
+	page: Page,
+	failure?: 409 | 422,
+	metadata: Record<string, unknown> = work
+) {
 	await mockSession(page);
 	let version = 4;
-	let saved: Record<string, unknown> = structuredClone(work);
+	let saved: Record<string, unknown> = structuredClone(metadata);
 	const requests: Record<string, unknown>[] = [];
 	await page.route('**/api/v1/workspaces/workspace-1/items/editor/overview', (route) =>
 		route.fulfill({
@@ -93,15 +97,96 @@ async function openEditor(page: Page, failure?: 409 | 422) {
 		});
 	});
 	await page.goto('/workspace/workspace-1/item/editor/metadata');
-	await expect(page.getByLabel('Title', { exact: true })).toHaveValue(work.title);
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue(String(metadata.title));
 	return requests;
 }
+
+test('uses given and family names in contributor summaries without changing the Work', async ({
+	page
+}) => {
+	const metadata = {
+		...work,
+		contributors: [
+			{
+				type: 'Person',
+				person: { given_name: 'Ada', family_name: 'Lovelace' },
+				roles: ['Author']
+			}
+		]
+	};
+	const requests = await openEditor(page, undefined, metadata);
+	const section = page.locator('[data-work-group="contributors"]');
+	await expect(section.locator(':scope > summary')).toContainText('Ada Lovelace');
+	await section.locator(':scope > summary').click();
+	await expect(
+		section.locator('[data-layout="array-item"]').getByText('Ada Lovelace', { exact: true })
+	).toBeVisible();
+	await page.getByRole('button', { name: 'Save metadata' }).click();
+	await expect.poll(() => requests[0]).toMatchObject({ metadata });
+});
+
+test('opens a reference-rich Work without blocking the editor', async ({ page }) => {
+	const metadata = {
+		...work,
+		contributors: Array.from({ length: 30 }, (_, index) => ({
+			...work.contributors[0],
+			person: {
+				name: `Researcher ${index}`,
+				affiliations: [{ name: 'University' }, { name: 'Research Institute' }]
+			}
+		})),
+		references: Array.from({ length: 100 }, (_, index) => ({
+			id: `https://doi.org/10.1000/reference-${index}`,
+			reference: `Referenced study ${index}`
+		}))
+	};
+	const started = Date.now();
+	const requests = await openEditor(page, undefined, metadata);
+	await test.info().attach('metadata-open-performance', {
+		body: JSON.stringify({
+			elapsedMs: Date.now() - started,
+			controls: await page.locator('input, select, textarea').count(),
+			nodes: await page.locator('*').count()
+		}),
+		contentType: 'application/json'
+	});
+	// Bound actual rendering work instead of asserting a machine-dependent time limit.
+	await expect(page.locator('[id^="root_contributors_"]')).toHaveCount(0);
+	await expect(page.locator('[id^="root_references_"]')).toHaveCount(0);
+	expect(await page.locator('input, select, textarea').count()).toBeLessThan(100);
+	await page.getByLabel('Title', { exact: true }).fill('Updated reference-rich Work');
+	expect(await readJson(page)).toEqual({ ...metadata, title: 'Updated reference-rich Work' });
+	await page.getByRole('button', { name: 'Save metadata' }).click();
+	await expect
+		.poll(() => requests[0])
+		.toMatchObject({
+			metadata: { ...metadata, title: 'Updated reference-rich Work' }
+		});
+
+	const contributors = await openGroup(page, 'Contributors');
+	const name = page.locator('#root_contributors_0_person_name');
+	await expect(name).toHaveValue('Researcher 0');
+	await expect(page.locator('#root_contributors_0_person_country')).toHaveCount(0);
+	await expect(page.locator('#root_contributors_0_person_affiliations_0_name')).toHaveCount(0);
+	await name.fill('Edited credit');
+	await contributors.locator(':scope > summary').click();
+	await expect(name).toHaveCount(1);
+	await expect(name).toBeHidden();
+	await contributors.locator(':scope > summary').click();
+	await expect(name).toHaveValue('Edited credit');
+	const expected = structuredClone(metadata);
+	expected.title = 'Updated reference-rich Work';
+	expected.contributors[0].person.name = 'Edited credit';
+	expect(await readJson(page)).toEqual(expected);
+});
 
 async function openGroup(page: Page, name: string) {
 	const summary =
 		name === 'Additional metadata'
 			? page.locator('summary').filter({ hasText: /^Additional metadata$/ })
-			: page.locator('[data-work-group] > summary').filter({ hasText: new RegExp(`^${name}$`) });
+			: page
+					.locator('[data-work-group] > summary')
+					.filter({ has: page.getByText(name, { exact: true }) });
 	await summary.click();
 	return summary.locator('..');
 }
@@ -217,6 +302,205 @@ test('opens without mutation and preserves identities during contributor and ide
 		.poll(() => requests[0])
 		.toEqual({ expected_version: 4, metadata: expected, citation_key: 'Ada2024' });
 	expect(errors).toEqual([]);
+});
+
+test('shows populated metadata and summaries while optional empty fields stay out of the way', async ({
+	page
+}) => {
+	const requests = await openEditor(page);
+	const summary = page.locator('[data-work-group="contributors"] > summary');
+	await expect(summary).toContainText('Ada Researcher');
+	await expect(summary).toContainText('(1)');
+	await expect(page.locator('#root_description')).toBeHidden();
+	await expect(page.locator('#root_container_description')).toBeHidden();
+	const editor = page.locator('form').filter({ has: page.locator('#root_title') });
+	const compactCount = await editor
+		.locator('input:visible, select:visible, textarea:visible')
+		.count();
+	await page.screenshot({ path: test.info().outputPath('compact-editor.png'), fullPage: true });
+	await page.getByLabel('Show all fields', { exact: true }).check();
+	const fullCount = await editor.locator('input:visible, select:visible, textarea:visible').count();
+	expect(fullCount).toBeGreaterThan(compactCount + 8);
+	await test.info().attach('visible-field-counts', {
+		body: JSON.stringify({ compact: compactCount, full: fullCount }),
+		contentType: 'application/json'
+	});
+	await expect(page.locator('#root_description')).toBeVisible();
+	await expect(page.locator('#root_container_description')).toBeVisible();
+	await page.getByLabel('Show all fields', { exact: true }).uncheck();
+	await expect(page.locator('#root_description')).toBeHidden();
+	expect(await readJson(page)).toEqual(work);
+	await page.getByRole('button', { name: 'Save metadata' }).click();
+	await expect
+		.poll(() => requests[0])
+		.toEqual({ expected_version: 4, metadata: work, citation_key: 'Ada2024' });
+});
+
+test('adds one optional field within its object and retains edited fields when compacted', async ({
+	page
+}) => {
+	const requests = await openEditor(page);
+	await openGroup(page, 'Contributors');
+	const country = page.locator('#root_contributors_0_person_country');
+	const person = page
+		.locator('[data-layout="object-field"]')
+		.filter({ has: page.locator('#root_contributors_0_person_name') })
+		.last();
+	await expect(page.locator('#root_contributors_0_person_name')).toBeVisible();
+	await expect(country).toBeHidden();
+	await expect(page.locator('#root_contributors_0_person_description')).toBeHidden();
+	await page.screenshot({
+		path: test.info().outputPath('compact-contributor.png'),
+		fullPage: true
+	});
+	await person
+		.getByRole('combobox', { name: 'Add field to Person', exact: true })
+		.selectOption('country');
+	await expect(country).toBeVisible();
+	await expect(country).toBeFocused();
+	await expect(page.locator('#root_contributors_0_person_description')).toBeHidden();
+	await country.fill('GB');
+	await page.getByLabel('Show all fields', { exact: true }).check();
+	await page.getByLabel('Show all fields', { exact: true }).uncheck();
+	await expect(country).toHaveValue('GB');
+	await expect(country).toBeVisible();
+	await expect(page.locator('#root_contributors_0_person_description')).toBeHidden();
+	await country.fill('');
+	await expect(country).toBeVisible();
+	await expect(country).toBeFocused();
+	await country.fill('GB');
+	const expected = structuredClone(work);
+	Object.assign(expected.contributors[0].person, { country: 'GB' });
+	expect(await readJson(page)).toEqual(expected);
+	await page.getByRole('button', { name: 'Save metadata' }).click();
+	await expect.poll(() => requests[0]).toMatchObject({ metadata: expected });
+});
+
+for (const countryState of ['revealed', 'cleared'] as const) {
+	test(`keeps ${countryState} optional fields with their contributor when entries move`, async ({
+		page
+	}) => {
+		const metadata = {
+			...work,
+			contributors: [
+				{ type: 'Person', person: { name: 'Ada Researcher' }, roles: ['Author'] },
+				{
+					type: 'Person',
+					person: {
+						name: 'Grace Researcher',
+						...(countryState === 'cleared' ? { country: 'GB' } : {})
+					},
+					roles: ['Author']
+				}
+			]
+		};
+		const requests = await openEditor(page, undefined, metadata);
+		const contributors = await openGroup(page, 'Contributors');
+		const grace = contributors
+			.locator('[data-layout="array-item"]')
+			.filter({ has: page.getByText('Grace Researcher', { exact: true }) });
+		if (countryState === 'cleared') {
+			await page.locator('#root_contributors_1_person_country').fill('');
+		} else {
+			await grace
+				.getByRole('combobox', { name: 'Add field to Person', exact: true })
+				.selectOption('country');
+		}
+		await expect(page.locator('#root_contributors_1_person_country')).toBeVisible();
+		await grace.getByRole('button', { name: 'Move up', exact: true }).click();
+		await expect(page.locator('#root_contributors_0_person_name')).toHaveValue('Grace Researcher');
+		await expect(page.locator('#root_contributors_0_person_country')).toBeVisible();
+		await expect(page.locator('#root_contributors_1_person_country')).toBeHidden();
+		await grace.getByRole('button', { name: 'Move down', exact: true }).click();
+		await expect(page.locator('#root_contributors_1_person_country')).toBeVisible();
+		await expect(page.locator('#root_contributors_0_person_country')).toBeHidden();
+		const ada = contributors
+			.locator('[data-layout="array-item"]')
+			.filter({ has: page.getByText('Ada Researcher', { exact: true }) });
+		await ada.getByRole('button', { name: 'Remove entry', exact: true }).click();
+		await expect(page.locator('#root_contributors_0_person_name')).toHaveValue('Grace Researcher');
+		await expect(page.locator('#root_contributors_0_person_country')).toBeVisible();
+		await page.locator('#root_contributors_0_person_country').fill('GB');
+		expect(await readJson(page)).toEqual({
+			...work,
+			contributors: [
+				{ type: 'Person', person: { name: 'Grace Researcher', country: 'GB' }, roles: ['Author'] }
+			]
+		});
+		await grace.getByRole('button', { name: 'Remove entry', exact: true }).click();
+		await contributors.getByRole('button', { name: 'Add entry', exact: true }).click();
+		await page.locator('#root_contributors_0_type').selectOption('Person');
+		await page.locator('#root_contributors_0_person_name').fill('New Researcher');
+		await expect(page.locator('#root_contributors_0_person_country')).toBeHidden();
+		const expected = await readJson(page);
+		expect(expected.contributors).toHaveLength(1);
+		expect(expected.contributors[0].person).toEqual({ name: 'New Researcher' });
+		await page.getByRole('button', { name: 'Save metadata' }).click();
+		await expect.poll(() => requests[0]).toMatchObject({ metadata: expected });
+	});
+}
+
+test('keeps nested field visibility and section state through inner and outer reordering', async ({
+	page
+}) => {
+	const metadata = {
+		...work,
+		contributors: ['Ada', 'Grace'].map((name) => ({
+			type: 'Person',
+			person: { name, affiliations: [{ name: `${name} Lab` }, { name: `${name} University` }] },
+			roles: ['Author']
+		}))
+	};
+	await openEditor(page, undefined, metadata);
+	const contributors = await openGroup(page, 'Contributors');
+	const grace = contributors
+		.locator('[data-layout="array-item"]')
+		.filter({ has: page.getByText('Grace', { exact: true }) });
+	const affiliations = grace.locator('summary').filter({ hasText: /^Affiliations/ });
+	await affiliations.click();
+	const university = grace
+		.locator('[data-layout="array-item"]')
+		.filter({ has: page.getByText('Grace University', { exact: true }) });
+	await university.getByRole('combobox', { name: /^Add field to / }).selectOption('role');
+	await university.getByRole('button', { name: 'Move up', exact: true }).click();
+	await expect(page.locator('#root_contributors_1_person_affiliations_0_role')).toBeVisible();
+	await expect(page.locator('#root_contributors_1_person_affiliations_1_role')).toBeHidden();
+	await affiliations.click();
+	await grace
+		.locator(':scope > [data-layout="array-item-controls"]')
+		.getByRole('button', { name: 'Move up', exact: true })
+		.click();
+	await expect(page.locator('#root_contributors_0_person_name')).toHaveValue('Grace');
+	await expect(page.locator('#root_contributors_0_person_affiliations_0_role')).toBeHidden();
+	await affiliations.click();
+	await expect(page.locator('#root_contributors_0_person_affiliations_0_role')).toBeVisible();
+	await expect(page.locator('#root_contributors_0_person_affiliations_1_role')).toBeHidden();
+	await page.locator('#root_contributors_0_person_affiliations_0_role').fill('Researcher');
+	expect((await readJson(page)).contributors[0].person.affiliations).toEqual([
+		{ name: 'Grace University', role: 'Researcher' },
+		{ name: 'Grace Lab' }
+	]);
+});
+
+test('adds optional sections without creating data and focuses a single new scalar field', async ({
+	page
+}) => {
+	const requests = await openEditor(page);
+	const add = page.getByRole('combobox', { name: 'Add field to Metadata', exact: true });
+	await add.selectOption('files');
+	const files = page
+		.locator('[data-metadata-field]')
+		.filter({ has: page.getByText('Files', { exact: true }) });
+	await expect(files.getByRole('button', { name: 'Add entry', exact: true })).toBeFocused();
+	expect(await readJson(page)).toEqual(work);
+	await add.selectOption('description');
+	await expect(page.locator('#root_description')).toBeFocused();
+	await page.locator('#root_description').fill('A concise abstract');
+	await expect(page.locator('#root_language')).toBeHidden();
+	await page.getByRole('button', { name: 'Save metadata' }).click();
+	await expect
+		.poll(() => requests[0])
+		.toMatchObject({ metadata: { ...work, description: 'A concise abstract' } });
 });
 
 test('adds, reorders and removes nested entries without injecting null or empty required arrays', async ({
@@ -351,13 +635,9 @@ test('adapts desktop columns to available space and keeps the localized mobile e
 	expect(Math.abs(publicationTitle.y - publicationType.y)).toBeLessThan(4);
 	expect(publicationTitle.width).toBeGreaterThan(200);
 	expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-	await page
-		.locator('summary')
-		.filter({ hasText: /^Publication$/ })
-		.locator('..')
-		.screenshot({
-			path: test.info().outputPath('desktop.png')
-		});
+	await page.locator('[data-work-group="container"]').screenshot({
+		path: test.info().outputPath('desktop.png')
+	});
 	await page.setViewportSize({ width: 390, height: 844 });
 	const mobileType = (await page.locator('#root_container_type').boundingBox())!;
 	const mobileTitle = (await page.locator('#root_container_title').boundingBox())!;
@@ -384,6 +664,12 @@ test('adapts desktop columns to available space and keeps the localized mobile e
 	).toHaveCount(1);
 	await expect(page.getByRole('button', { name: '添加记录', exact: true }).first()).toBeVisible();
 	await expect(page.getByLabel('Contributor roles', { exact: true })).toHaveCount(0);
+	await expect(page.getByRole('combobox', { name: '为元数据添加字段', exact: true })).toBeVisible();
+	await expect(
+		page
+			.getByRole('combobox', { name: '为元数据添加字段', exact: true })
+			.getByRole('option', { name: '语言', exact: true })
+	).toHaveCount(1);
 });
 
 test('can discard a conflicted draft explicitly and load the latest server metadata', async ({
@@ -415,27 +701,42 @@ test('shows schema loading failures and retries the authorized endpoint', async 
 	await expect(page.getByLabel('Title', { exact: true })).toBeVisible();
 });
 
-test('opens collapsed ancestors when a nested field fails server validation', async ({ page }) => {
-	await openEditor(page);
-	await page.route('**/api/v1/workspaces/workspace-1/items/editor', (route) =>
-		route.fulfill({
-			status: 422,
-			json: {
-				code: 'validation_failed',
-				message: 'Rejected',
-				fields: [
-					{
-						path: ['body', 'metadata', 'contributors', 0, 'person', 'affiliations', 0, 'name'],
-						code: 'value_error',
-						message: 'Invalid affiliation'
-					}
-				]
-			}
-		})
-	);
-	await expect(page.locator('#root_contributors_0_person_affiliations_0_name')).toBeHidden();
-	await page.getByRole('button', { name: 'Save metadata' }).click();
-	await expect(page.locator('#root_contributors_0_person_affiliations_0_name')).toBeVisible();
-	await expect(page.locator('#root_contributors_0_person_affiliations_0_name')).toBeFocused();
-	expect(await readJson(page)).toEqual(work);
-});
+for (const field of ['affiliation', 'empty optional field', 'relation'] as const) {
+	test(`reveals ${field} and opens its ancestors after server validation`, async ({ page }) => {
+		await openEditor(page);
+		const path =
+			field === 'affiliation'
+				? ['contributors', 0, 'person', 'affiliations', 0, 'name']
+				: field === 'relation'
+					? ['relations', 0, 'id']
+					: ['contributors', 0, 'person', 'country'];
+		const input = page.locator(`#root_${path.join('_')}`);
+		await page.route('**/api/v1/workspaces/workspace-1/items/editor', (route) =>
+			route.fulfill({
+				status: 422,
+				json: {
+					code: 'validation_failed',
+					message: 'Rejected',
+					fields: [
+						{
+							path: ['body', 'metadata', ...path],
+							code: 'value_error',
+							message: 'Invalid affiliation'
+						}
+					]
+				}
+			})
+		);
+		await expect(input).toBeHidden();
+		await page.getByRole('button', { name: 'Save metadata' }).click();
+		await expect(input).toBeVisible();
+		await expect(input).toBeFocused();
+		expect(await readJson(page)).toEqual(work);
+		const section = page.locator('details').filter({ has: input }).first();
+		await section.locator(':scope > summary').click();
+		await expect(input).toBeHidden();
+		await page.getByRole('button', { name: 'Save metadata' }).click();
+		await expect(input).toBeVisible();
+		await expect(input).toBeFocused();
+	});
+}

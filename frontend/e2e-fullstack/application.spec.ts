@@ -78,22 +78,13 @@ test('creates, edits, and finds duplicate-capable Commonmeta Items through the r
 	await expect(page.getByRole('heading', { name: initialTitle })).toBeVisible();
 	await page.getByRole('link', { name: 'Metadata', exact: true }).click();
 	await page.getByLabel('Title', { exact: true }).fill(revisedTitle);
-	await page
-		.locator('[data-work-group] > summary')
-		.filter({ hasText: /^Contributors$/ })
-		.click();
+	await page.locator('[data-work-group="contributors"] > summary').click();
 	await page.locator('#root_contributors_0_person_name').fill('Ada Revised');
 	await page.locator('#root_contributors_0_type').selectOption('Organization');
 	await page.locator('#root_contributors_0_organization_name').fill('Research Council');
-	await page
-		.locator('[data-work-group] > summary')
-		.filter({ hasText: /^Funding references$/ })
-		.click();
+	await page.locator('[data-work-group="funding_references"] > summary').click();
 	await page.locator('#root_funding_references_0_funder_name').fill('Revised Foundation');
-	await page
-		.locator('[data-work-group] > summary')
-		.filter({ hasText: /^Identifiers$/ })
-		.click();
+	await page.locator('[data-work-group="identifiers"] > summary').click();
 	await page.locator('#root_identifiers_1_identifier').fill('10.1000/revised-third');
 	await page.getByRole('button', { name: 'Save metadata' }).click();
 	await expect(page.getByRole('heading', { name: revisedTitle })).toBeVisible();

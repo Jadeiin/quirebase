@@ -366,6 +366,24 @@ def test_lookup_aliases_and_malformed_values_do_not_become_identity_matches():
     )
 
 
+@pytest.mark.parametrize(
+    ("person", "expected"),
+    [
+        ({"given_name": "Ada", "family_name": "Lovelace"}, "Ada Lovelace"),
+        ({"name": "", "given_name": "Xiang", "family_name": "Yu"}, "Xiang Yu"),
+        ({"name": None, "given_name": "Juan", "family_name": "de la Cruz"}, "Juan de la Cruz"),
+        ({"name": "Wang Wei", "given_name": "Wei", "family_name": "Wang"}, "Wang Wei"),
+        ({"given_name": "Ada"}, "Ada"),
+        ({"family_name": "Lovelace"}, "Lovelace"),
+        ({}, ""),
+    ],
+)
+def test_contributor_display_name_uses_reading_order_without_a_full_name(person, expected):
+    from inquiro.work import contributor_name
+
+    assert contributor_name({"type": "Person", "person": person}) == expected
+
+
 def test_contributor_type_selects_active_names_keys_and_writer_credits_without_losing_work():
     from inquiro.bibliography.keys import evaluate_citation_key_formula
     from inquiro.work import contributor_name, writer_work

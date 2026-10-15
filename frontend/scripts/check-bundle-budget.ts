@@ -151,8 +151,10 @@ enforce('Account route', routeBundle('/(app)/account'), {
 	raw: 799000,
 	gzip: 226000
 });
+// Compact metadata controls add about 0.3 KiB raw to shared catalogs/CSS.
+// Tools measures 794.1 KiB raw / 227.1 KiB gzip; account for this shared cost.
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
-	raw: 813000,
+	raw: 814000,
 	gzip: 233000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {

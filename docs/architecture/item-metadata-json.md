@@ -41,15 +41,28 @@ The adapter disables automatic minimum-array, empty-object and const defaults. O
 validation conditions without a branch selector that deletes data. Nested arrays support explicit
 addition, removal and reordering; removing the last entry omits an optional field. Field titles,
 enums, array controls and validation messages use Lingui. Desktop editing uses two columns for
-primary controls and Identifier/Funding panels; nested scalar fields use two or three columns based
-on their own container width. Titles, descriptions and complex object fields span their section,
-while repeated entries can appear side by side when space permits. Narrow layouts use one column
-without horizontal overflow. Section summaries supply the group title once, and action buttons
+primary controls and Identifier/Funding panels; nested scalar fields use intrinsic Grid tracks based
+on their available width, without nested size containment. Titles, descriptions and complex object
+fields span their section, while repeated entries can appear side by side when space permits.
+Narrow layouts use one column without horizontal overflow. Section summaries supply the group title
+once, and action buttons
 retain a compact width. Nested objects and arrays (including contributor affiliations) default to
-collapsed, with their fields kept mounted so closing a section never changes the Work. Person and
-Organization name fields remain visible. Field errors open all collapsed ancestors; expanded state
-survives language changes. Overview shares the editor’s enum translations, deduplicates affiliation
-names only for display and includes Container details. PDF URL input uses a Skeleton Combobox with
+collapsed. Section controls mount on first expansion and remain mounted after closing; hidden
+optional controls are not mounted. The complete Work lives in the form state independently
+of these controls, so untouched sections remain available for validation, JSON editing and saving.
+Active Person and Organization name fields remain visible; inactive entity facts stay available
+in a collapsed section.
+Optional empty controls are hidden by default. Each object offers an Add field selector that reveals
+one official-schema property and focuses its control; Show all fields exposes all optional controls.
+Previously populated or explicitly revealed controls remain visible when cleared. Array controls
+remap this state and pending expansion requests on moves, removal and copying, including nested
+entries; deleted entries cannot transfer their field state to later additions. These presentation
+choices never add, prune or sanitize Work values, and schema validation still checks the complete draft.
+Section summaries show entry counts and a short content preview, while nested lists use separators
+instead of additional card borders. Field errors reveal hidden fields and open all collapsed
+ancestors; expanded state survives language changes. Overview shares the editor’s enum translations,
+deduplicates affiliation names only for display and includes Container details. PDF URL input uses a
+Skeleton Combobox with
 unique HTTP(S) candidates from Work.files and supports manually entered URLs. Item bibliography
 actions expose CSL citation, BibTeX, RIS, CSL-JSON and Commonmeta, matching Account defaults.
 Switching Item identity resets the PDF URL and search drafts, including cached-page navigation.
@@ -79,6 +92,10 @@ John Smith Jr and John Smith Sr remain separate, and repeated unchanged syncs me
 affiliations and roles without increasing author counts.
 Matching display names also cannot override conflicting supplied family/given parts, so two
 people credited as A. Smith remain distinct when their given names differ.
+When both given and family names are supplied, the same complete name can also match different
+splits of a compound surname, such as Hossein / Bonyan Khamseh and Hossein Bonyan / Khamseh.
+This exact comparison never overrides conflicting entity IDs or supplied full names. Matching
+credits retain the local given/family split while adding Provider identifiers, affiliations and roles.
 When the same entity matches separate role credits, merging prefers an identical role set, then
 a credit containing all incoming roles. When neither exists, a unique credit sharing an incoming
 role can receive upstream role extensions while preserving its local roles and affiliations.

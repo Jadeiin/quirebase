@@ -113,6 +113,7 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
             f"{base}/items", params={"author_last_name": "Smith", "author_first_name": "John"}
         )
         assert matches.status_code == 200 and matches.json()["total"] == 1
+        assert matches.json()["items"][0]["authors"] == "John Smith"
         assert (await client.get(f"{base}/items/facets", params={"limit": 0})).status_code == 422
     finally:
         await client.aclose()

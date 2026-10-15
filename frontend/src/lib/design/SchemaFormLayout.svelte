@@ -15,12 +15,13 @@
 	const row = $derived(
 		type.endsWith('title-row') || type === 'array-item-controls' || type === 'multi-field-controls'
 	);
-	// Nested objects size their own columns instead of inheriting a viewport breakpoint.
+	// Intrinsic tracks follow available width without size-containment invalidation
+	// when a hidden field is revealed inside a collapsed details element.
 	const presentation = $derived.by(() => {
 		if (type === 'field') return 'grid w-full grid-cols-1 gap-2';
-		if (type === 'object-field') return '@container/schema grid w-full grid-cols-1 gap-4';
+		if (type === 'object-field') return 'grid w-full grid-cols-1 gap-4';
 		if (type === 'object-properties')
-			return 'grid w-full grid-cols-1 items-start gap-4 @min-[24rem]/schema:grid-cols-2 @min-[48rem]/schema:grid-cols-3';
+			return 'grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,max(11rem,calc((100%_-_2rem)/3))),1fr))] items-start gap-4';
 		if (type === 'object-property') {
 			const wide =
 				['object', 'array'].includes(String(config.schema.type)) ||
@@ -28,11 +29,13 @@
 			return wide ? 'col-span-full w-full' : 'w-full';
 		}
 		if (type === 'array-field')
-			return '@container/schema-array grid w-full grid-cols-1 gap-4 [&>button]:justify-self-start';
+			return 'grid w-full grid-cols-1 gap-4 [&>button]:justify-self-start';
 		if (type === 'array-items')
-			return 'grid w-full grid-cols-1 items-start gap-4 @min-[48rem]/schema-array:grid-cols-[repeat(auto-fit,minmax(22rem,1fr))]';
+			return 'grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] items-start gap-4';
 		if (type === 'array-item')
-			return 'grid w-full grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3';
+			return config.path.length > 2
+				? 'grid w-full grid-cols-1 gap-3 border-t border-surface-300-700 pt-3'
+				: 'grid w-full grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3';
 		if (column) return 'grid w-full grid-cols-1 gap-4';
 		if (row) return 'flex flex-wrap items-center gap-2';
 		return 'w-full';

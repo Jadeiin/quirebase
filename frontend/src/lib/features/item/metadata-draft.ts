@@ -20,7 +20,7 @@ export function contributorName(row: Record<string, unknown>): string {
 	const entity = object(row[row.type === 'Organization' ? 'organization' : 'person']);
 	return (
 		text(entity.name) ||
-		[text(entity.family_name), text(entity.given_name)].filter(Boolean).join(', ')
+		[text(entity.given_name), text(entity.family_name)].filter(Boolean).join(' ')
 	);
 }
 

@@ -34,8 +34,12 @@
 	import WorkFields from './WorkFields.svelte';
 	import TextWidget from './TextWidget.svelte';
 	import MultiSelectWidget from './MultiSelectWidget.svelte';
+	import CompactObject from './CompactObject.svelte';
+	import ArrayItemField from './ArrayItemField.svelte';
+	import { createFieldVisibility } from './field-visibility.svelte.js';
 	import { isRequiredOnlyUnion, workSchemas, workValidator } from './schema.js';
 	import { editorTranslation, enumLabels } from './labels.js';
+	import { fieldSummary } from './summary.js';
 
 	let {
 		metadata,
@@ -72,12 +76,15 @@
 	const initial = structuredClone($state.snapshot(metadata));
 	// svelte-ignore state_referenced_locally
 	const initialKey = citationKey;
+	const visibility = createFieldVisibility();
 	const form = createForm<Metadata>({
 		schema: schemas.rendering,
 		theme: overrideByRecord(skeletonTheme, {
 			textWidget: TextWidget,
 			checkboxesWidget: MultiSelectWidget,
 			objectPropertyField: PropertyField,
+			arrayItemField: ArrayItemField,
+			objectTemplate: CompactObject,
 			layout: SchemaFormLayout
 		}),
 		get translation() {
@@ -134,7 +141,9 @@
 				void $activeLocale;
 				return enumLabels(config.schema);
 			},
-			enumValueMapperBuilder: () => () => new StringEnumValueMapperBuilder()
+			enumValueMapperBuilder: () => () => new StringEnumValueMapperBuilder(),
+			itemTitle: () => (title: string, index: number, _fixedCount: number, value: unknown) =>
+				fieldSummary(value) || `${title} ${index + 1}`
 		}),
 		onSubmit: (value) => {
 			if (busy) return;
@@ -191,6 +200,7 @@
 	}
 	async function focusError(issue: ValidationError | undefined) {
 		if (!issue || !element) return;
+		visibility.reveal(issue.path);
 		await tick();
 		const id = getIdByPath(form, issue.path);
 		const container =
@@ -224,6 +234,7 @@
 				return;
 			}
 			setValue(form, parsed as Metadata);
+			visibility.reset();
 			revision += 1;
 			updateErrors(form, []);
 			errors = [];
@@ -246,6 +257,10 @@
 		class="m-0 grid min-w-0 grid-cols-1 gap-4 border-0 p-0 [&>button]:justify-self-start"
 		disabled={busy}
 	>
+		<label class="flex w-fit items-center gap-2 text-sm">
+			<input type="checkbox" bind:checked={visibility.showAll} />
+			{$t('Show all fields')}
+		</label>
 		{#key revision}<Content />{/key}
 		<label class="max-w-md"
 			>{$t('Citation key')}<input

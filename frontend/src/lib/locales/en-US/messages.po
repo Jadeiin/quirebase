@@ -243,9 +243,15 @@ msgid "Add entry"
 msgstr "Add entry"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/AddField.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Add field"
 msgstr "Add field"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/AddField.svelte
+msgid "Add field to {label}"
+msgstr "Add field to {label}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
@@ -2934,6 +2940,7 @@ msgstr "Messages"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/schema-editor/AddField.svelte
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Metadata"
 msgstr "Metadata"
@@ -4606,6 +4613,11 @@ msgstr "Settings saved"
 #: src/lib/features/tools/Tools.svelte
 msgid "Shared identifier"
 msgstr "Shared identifier"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Show all fields"
+msgstr "Show all fields"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte

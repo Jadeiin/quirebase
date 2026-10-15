@@ -394,6 +394,38 @@ async def test_provider_merge_keeps_local_credit_ids_and_affiliations(persistenc
     ]
 
 
+async def test_provider_merge_keeps_conflicting_ids_despite_equivalent_joined_names(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    original = {
+        "type": "Person",
+        "person": {
+            "id": "https://orcid.org/0000-0002-1292-8987",
+            "given_name": "Hossein",
+            "family_name": "Bonyan Khamseh",
+            "affiliations": [{"name": "Local Institute"}],
+        },
+        "roles": ["Author"],
+    }
+    incoming = {
+        "type": "Person",
+        "person": {
+            "id": "https://orcid.org/0000-0002-7294-6626",
+            "given_name": "Hossein Bonyan",
+            "family_name": "Khamseh",
+            "affiliations": [{"name": "Other Institute"}],
+        },
+        "roles": ["Author"],
+    }
+    created = await create_item(db, actor, workspace_id, work(contributors=[original]))
+    item = await db.get(Item, created.item_id)
+    for _ in range(3):
+        merged = candidate_write({"contributors": [incoming]}, current=item.work)["work"]
+        assert merged["contributors"] == [original, incoming]
+        item.work = merged
+        await db.commit()
+
+
 @pytest.mark.parametrize("reverse", [False, True])
 async def test_provider_merge_preserves_suffix_distinguished_authors_across_repeated_syncs(
     persistence_db, reverse

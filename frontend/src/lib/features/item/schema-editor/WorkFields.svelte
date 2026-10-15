@@ -10,8 +10,13 @@
 	import ObjectField from '@sjsf/form/fields/object/object-field.svelte';
 	import { fieldTitle } from './labels.js';
 	import { t, activeLocale } from '#lib/i18n.js';
+	import AddField from './AddField.svelte';
+	import { getFieldVisibility, hasFieldValue } from './field-visibility.svelte.js';
+	import { fieldSummary } from './summary.js';
+	import LazySection from './LazySection.svelte';
 	let { config, value = $bindable(), translate }: ComponentProps['objectField'] = $props();
 	const ctx = getFormContext();
+	const visibility = getFieldVisibility();
 	const obj = createObjectContext({
 		ctx,
 		config: () => config,
@@ -39,8 +44,16 @@
 		return fieldTitle(path, fallback);
 	}
 	const fields = $derived(obj.propertiesOrder());
-	let expanded = $state<Record<string, boolean>>({ container: true });
+	let expanded = $state<Record<string, boolean>>({});
 	let additionalExpanded = $state(false);
+	const additionalReveal = $derived(
+		Math.max(
+			0,
+			...fields
+				.filter((name) => !primary.includes(name))
+				.map((name) => visibility.expansion([name]))
+		)
+	);
 </script>
 
 {#if config.path.length}
@@ -52,42 +65,67 @@
 		{translate}
 	/>
 {:else}
-	<div class="@container/work min-w-0">
-		<div class="grid min-w-0 grid-cols-1 items-start gap-5 @min-[40rem]/work:grid-cols-2">
+	<div class="min-w-0">
+		<div
+			class="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,max(18rem,calc(50%_-_0.625rem))),1fr))] items-start gap-5"
+		>
 			{#each primary.filter((name) => fields.includes(name)) as property (property)}
+				{@const cfg = obj.propertyConfig(config, property, false)}
 				{#if ['title', 'type', 'date_published', 'description'].includes(property)}
 					<div
-						class={['title', 'description'].includes(property)
-							? 'col-span-full min-w-0'
-							: 'min-w-0'}
+						class={!visibility.isVisible(cfg, value?.[property])
+							? 'hidden'
+							: ['title', 'description'].includes(property)
+								? 'col-span-full min-w-0'
+								: 'min-w-0'}
 					>
 						{@render field(property)}
 					</div>
 				{:else}
-					{@const cfg = obj.propertyConfig(config, property, false)}
-					<details
+					{#if property === 'container'}<AddField {config} {value} />{/if}
+					{@const preview = fieldSummary(value?.[property])}
+					{@const count = Array.isArray(value?.[property]) ? value[property].length : undefined}
+					<LazySection
 						data-work-group={property}
+						reveal={visibility.expansion(cfg.path)}
 						class={`min-w-0 rounded-lg border border-surface-300-700 p-4 ${['container', 'contributors', 'subjects'].includes(property) ? 'col-span-full' : ''}`}
-						bind:open={() => expanded[property] ?? false, (next) => (expanded[property] = next)}
+						bind:open={
+							() =>
+								expanded[property] ??
+								(property === 'container' && hasFieldValue(value?.[property])),
+							(next) => (expanded[property] = next)
+						}
 					>
-						<summary class="cursor-pointer font-medium">{title(cfg.path, cfg.title)}</summary>
+						{#snippet summary()}<summary class="min-w-0 cursor-pointer font-medium">
+								<span>{title(cfg.path, cfg.title)}</span>
+								{#if count !== undefined}<span class="ml-2 text-sm font-normal text-surface-600-400"
+										>({count})</span
+									>{/if}
+								{#if preview}<span
+										class="mt-1 block truncate text-sm font-normal text-surface-600-400"
+										title={preview}>{preview}</span
+									>{/if}
+							</summary>{/snippet}
 						<div class="mt-4 min-w-0">{@render field(property)}</div>
-					</details>
+					</LazySection>
 				{/if}
 			{/each}
-			<details
+			<LazySection
 				bind:open={additionalExpanded}
-				class="@container/schema col-span-full min-w-0 rounded-lg border border-surface-300-700 p-4"
+				reveal={additionalReveal}
+				class="col-span-full min-w-0 rounded-lg border border-surface-300-700 p-4"
 			>
-				<summary class="cursor-pointer font-medium">{$t('Additional metadata')}</summary>
+				{#snippet summary()}<summary class="cursor-pointer font-medium"
+						>{$t('Additional metadata')}</summary
+					>{/snippet}
 				<div
-					class="mt-4 grid min-w-0 grid-cols-1 items-start gap-4 @min-[24rem]/schema:grid-cols-2 @min-[48rem]/schema:grid-cols-3"
+					class="mt-4 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,max(11rem,calc((100%_-_2rem)/3))),1fr))] items-start gap-4"
 				>
 					{#each fields.filter((name) => !primary.includes(name)) as property (property)}{@render field(
 							property
 						)}{/each}
 				</div>
-			</details>
+			</LazySection>
 		</div>
 	</div>
 {/if}

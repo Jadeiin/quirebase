@@ -117,10 +117,20 @@ def candidate_write(work: dict[str, Any], *, current: dict[str, Any]) -> dict[st
                     index = matches[0]
                     credit = credits[index]
                     entity = "person" if incoming["type"] == "Person" else "organization"
+                    local_entity = credit.get(entity, {})
+                    incoming_entity = incoming.get(entity, {})
+                    merged_entity = _merge_facts(local_entity, incoming_entity)
+                    if entity == "person" and _same_joined_person_name(
+                        local_entity, incoming_entity
+                    ):
+                        # Different readers can split a compound surname differently.
+                        # Keep the local spelling while enriching this same credit.
+                        for part in ("given_name", "family_name"):
+                            merged_entity[part] = local_entity[part]
                     credits[index] = {
                         **credit,
                         **deepcopy(incoming),
-                        entity: _merge_facts(credit.get(entity, {}), incoming.get(entity, {})),
+                        entity: merged_entity,
                         "roles": list(
                             dict.fromkeys([*credit.get("roles", []), *incoming.get("roles", [])])
                         ),
@@ -145,6 +155,14 @@ def candidate_write(work: dict[str, Any], *, current: dict[str, Any]) -> dict[st
     return metadata_write(result)
 
 
+def _same_joined_person_name(left: dict, right: dict) -> bool:
+    left_parts = (left.get("given_name"), left.get("family_name"))
+    right_parts = (right.get("given_name"), right.get("family_name"))
+    return all((*left_parts, *right_parts)) and (
+        f"{left_parts[0]} {left_parts[1]}" == f"{right_parts[0]} {right_parts[1]}"
+    )
+
+
 def _same_credit(local: dict, incoming: dict) -> bool:
     if local["type"] != incoming["type"]:
         return False
@@ -160,7 +178,7 @@ def _same_credit(local: dict, incoming: dict) -> bool:
         return (left["family_name"], left.get("given_name")) == (
             right["family_name"],
             right.get("given_name"),
-        )
+        ) or _same_joined_person_name(left, right)
     return bool(left.get("name")) and left.get("name") == right.get("name")
 
 
