@@ -23,9 +23,9 @@ test('DOI source selector uses configured lookup capabilities', async ({ page })
 			json: {
 				search: [],
 				lookup: [
-					{ id: 'commonmeta', name: 'Commonmeta hosted', identifier_namespace: 'doi' },
-					{ id: 'crossref', name: 'Crossref', identifier_namespace: 'doi' },
-					{ id: 'pubmed', name: 'PubMed', identifier_namespace: 'pmid' }
+					{ id: 'commonmeta', name: 'Commonmeta hosted', identifier_namespaces: ['doi'] },
+					{ id: 'crossref', name: 'Crossref', identifier_namespaces: ['doi'] },
+					{ id: 'pubmed', name: 'PubMed', identifier_namespaces: ['pmid'] }
 				],
 				max_search_clauses: 5
 			}
@@ -263,7 +263,7 @@ for (const [primary, namespace, value, provider, identifierType, secondary] of [
 				route.fulfill({
 					json: {
 						search: [],
-						lookup: [{ id: provider, name: provider, identifier_namespace: namespace }],
+						lookup: [{ id: provider, name: provider, identifier_namespaces: [namespace] }],
 						max_search_clauses: 5
 					}
 				})
@@ -343,8 +343,8 @@ for (const repeated of [false, true]) {
 				json: {
 					search: [],
 					lookup: [
-						{ id: 'pubmed', name: 'PubMed', identifier_namespace: 'pmid' },
-						{ id: 'openlibrary', name: 'Open Library', identifier_namespace: 'isbn' }
+						{ id: 'pubmed', name: 'PubMed', identifier_namespaces: ['pmid'] },
+						{ id: 'openlibrary', name: 'Open Library', identifier_namespaces: ['isbn'] }
 					],
 					max_search_clauses: 5
 				}
@@ -1728,7 +1728,7 @@ test('Metadata synchronization refreshes the editor draft and Overview details',
 		route.fulfill({
 			json: {
 				search: [],
-				lookup: [{ id: 'datacite', name: 'DataCite', identifier_namespace: 'doi' }],
+				lookup: [{ id: 'datacite', name: 'DataCite', identifier_namespaces: ['doi'] }],
 				max_search_clauses: 5
 			}
 		})
@@ -1881,7 +1881,7 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 		route.fulfill({
 			json: {
 				search: [],
-				lookup: [{ id: 'openalex', name: 'OpenAlex', identifier_namespace: 'doi' }],
+				lookup: [{ id: 'openalex', name: 'OpenAlex', identifier_namespaces: ['openalex', 'doi'] }],
 				max_search_clauses: 5
 			}
 		})

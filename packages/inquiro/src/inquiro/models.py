@@ -13,7 +13,7 @@ class ProviderChoice:
     id: str
     name: str
     sorts: tuple[SearchSort, ...] = ()
-    identifier_namespace: str | None = None
+    identifier_namespaces: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

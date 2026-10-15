@@ -192,7 +192,13 @@ uses `best_oa_location` for PDF links and does not retain corresponding-author f
 institution text or location access/version flags; lookup reports that limitation. We do not
 maintain a second OpenAlex metadata shape or repair those fields in its adapter.
 
-Provider choices expose each lookup's identifier namespace from the existing Inquiro catalog.
+Before conversion, a nonempty OpenAlex `raw_author_name` supplies the work's credited name;
+the resolved author profile's `display_name` is only a fallback. ORCID and institution mapping
+remain supplied by the upstream reader. This keeps profile-name variants from changing the
+published author list during Import or Provider sync.
+
+Provider choices expose each lookup's accepted identifier namespaces from the existing Inquiro
+catalog, including DOI lookup through OpenAlex as well as its own Work IDs.
 Metadata sources uses those configured capabilities to render sync actions, while unsupported
 identifiers remain visible. Identifier display rows are deduplicated without modifying the Work;
 repeated standard identifier rows remain valid storage and export values.

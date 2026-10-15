@@ -11,15 +11,23 @@
 	let {
 		value = $bindable(''),
 		label,
+		hideLabel = false,
 		emptyLabel,
 		disabled = false,
-		manageOnly = false
+		manageOnly = false,
+		valueBy = 'id',
+		allowCustomValue = false,
+		class: className = ''
 	} = $props<{
 		value?: string;
 		label: string;
+		hideLabel?: boolean;
 		emptyLabel: string;
 		disabled?: boolean;
 		manageOnly?: boolean;
+		valueBy?: 'id' | 'name';
+		allowCustomValue?: boolean;
+		class?: string;
 	}>();
 
 	const { workspaceId } = getWorkspaceContext();
@@ -38,15 +46,17 @@
 	}));
 	const selection = createQuery(() => ({
 		...tagsQuery(workspaceId, '', 0, 1, value),
-		enabled: Boolean(value)
+		enabled: valueBy === 'id' && Boolean(value)
 	}));
 	const selectedLabel = $derived(
-		selection.data?.items[0]?.name ?? tags.data?.find((tag) => tag.id === value)?.name
+		valueBy === 'name'
+			? value
+			: (selection.data?.items[0]?.name ?? tags.data?.find((tag) => tag.id === value)?.name)
 	);
 	const options = $derived(
 		((search?.trim() ?? '') === submittedSearch ? (tags.data ?? []) : [])
 			.filter((tag) => !manageOnly || can(tag.authorization, 'tag.manage'))
-			.map((tag) => ({ value: tag.id, label: tag.name }))
+			.map((tag) => ({ value: valueBy === 'name' ? tag.name : tag.id, label: tag.name }))
 	);
 </script>
 
@@ -55,9 +65,12 @@
 	bind:search
 	bind:open
 	{label}
+	{hideLabel}
+	class={className}
 	{selectedLabel}
 	{emptyLabel}
 	{disabled}
+	{allowCustomValue}
 	{options}
 	filterOptions={false}
 	loading={tags.isFetching || (search?.trim() ?? '') !== submittedSearch}

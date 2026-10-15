@@ -19,10 +19,12 @@
 </script>
 
 {#if value.includes('T')}
-	<label>{$t('Publication date')}<input class="input" {...inputAttributes} bind:value /></label>
+	<label class="grid grid-cols-1 gap-2 text-xs font-medium"
+		>{$t('Publication date')}<input class="input" {...inputAttributes} bind:value /></label
+	>
 {:else}
 	<div class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2">
-		<label
+		<label class="grid grid-cols-1 gap-2 text-xs font-medium"
 			>{$t('Date precision')}<select class="select" value={precision} onchange={changePrecision}>
 				<option value="year">{$t('Year')}</option>
 				<option value="month">{$t('Year and month')}</option>

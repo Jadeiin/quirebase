@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import httpx2
 import pytest
-from inquiro import Identifier
+from inquiro import Identifier, SearchClause, SearchQuery
 from inquiro.bibliography import export_bibliography_records, work_to_csl_json
 from inquiro.canonical import normalize_publication_date
-from inquiro.work import work_doi, work_identifiers
+from inquiro.work import read_work, work_doi, work_identifiers
 from inquiro_provider_helpers import provider_runtime
 
 pytestmark = pytest.mark.anyio
@@ -177,6 +177,64 @@ async def test_openalex_preserves_authorship_affiliation_mapping_and_pdf_metadat
     }
     assert "CorrespondingAuthor" not in record.work["contributors"][0]["roles"]
     assert record.diagnostics
+
+
+@pytest.mark.parametrize("operation", ["lookup", "search"])
+@pytest.mark.parametrize(
+    "raw_name,expected_given",
+    [("Xiang Yu", "Xiang"), (None, "Xiang Yang"), ("", "Xiang Yang"), ("   ", "Xiang Yang")],
+)
+async def test_openalex_uses_the_work_byline_before_the_resolved_author_name(
+    operation, raw_name, expected_given
+):
+    # This name mismatch occurs on DOI 10.1016/j.conengprac.2024.105898.
+    payload = {
+        "id": "https://openalex.org/W4392452505",
+        "doi": "https://doi.org/10.1016/j.conengprac.2024.105898",
+        "display_name": "Authorship names",
+        "authorships": [
+            {
+                "raw_author_name": raw_name,
+                "author": {
+                    "display_name": "Xiang Yang Yu",
+                    "orcid": "https://orcid.org/0000-0002-9005-3733",
+                },
+                "institutions": [
+                    {"display_name": "Beihang University", "ror": "https://ror.org/00wk2mp56"}
+                ],
+            }
+        ],
+    }
+    original = deepcopy(payload)
+    response = payload if operation == "lookup" else {"results": [payload], "meta": {"count": 1}}
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json=response))
+    ) as runtime:
+        if operation == "lookup":
+            record = await runtime.lookup("10.1016/j.conengprac.2024.105898", provider="openalex")
+        else:
+            record = (
+                await runtime.search(
+                    SearchQuery("openalex", (SearchClause("any", "and", "names"),))
+                )
+            ).results[0]
+
+    (credit,) = record.work["contributors"]
+    assert credit["person"] == {
+        "given_name": expected_given,
+        "family_name": "Yu",
+        "id": "https://orcid.org/0000-0002-9005-3733",
+        "affiliations": [
+            {
+                "name": "Beihang University",
+                "identifier": "https://ror.org/00wk2mp56",
+                "identifier_type": "ROR",
+            }
+        ],
+    }
+    assert credit["roles"] == ["Author"]
+    assert read_work(payload, "openalex")["contributors"] == [credit]
+    assert payload == original
 
 
 async def test_crossref_keeps_link_purpose_and_version_without_guessing_media_type():

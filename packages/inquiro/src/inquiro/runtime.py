@@ -75,7 +75,10 @@ def metadata_provider_choices(config: ProviderConfig = ProviderConfig()) -> Meta
             ProviderChoice(
                 provider.name,
                 provider.display_name or provider.name,
-                identifier_namespace=provider.identifier_namespace,
+                identifier_namespaces=(
+                    provider.identifier_namespace,
+                    *provider.additional_lookup_namespaces,
+                ),
             )
             for provider in builtin_providers()
             if provider.lookup_adapter is not None and provider.has_credentials(config, "lookup")

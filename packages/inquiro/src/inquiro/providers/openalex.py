@@ -199,6 +199,7 @@ OPENALEX_PROVIDER = ProviderDefinition(
     name="openalex",
     display_name="OpenAlex",
     identifier_namespace="openalex",
+    additional_lookup_namespaces=("doi",),
     identifier_parser=parse_openalex,
     auto_detect_identifier=True,
     search_adapter=OpenAlexSearchAdapter(),

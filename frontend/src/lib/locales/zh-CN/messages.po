@@ -1984,6 +1984,7 @@ msgstr "正式分析"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/BulkActions.svelte
 msgid "Format"
 msgstr "格式"
 
@@ -4545,6 +4546,11 @@ msgid "Select Project"
 msgstr "选择项目"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Select Tag"
+msgstr "选择标签"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Select this page"
 msgstr "选择本页"
@@ -4854,11 +4860,6 @@ msgstr "标签已删除"
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Tag matrix"
 msgstr "标签矩阵"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Tag name"
-msgstr "标签名称"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte

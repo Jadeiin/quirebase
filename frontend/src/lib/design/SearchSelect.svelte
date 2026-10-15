@@ -11,6 +11,7 @@
 		search = $bindable<string | null>(null),
 		open = $bindable(false),
 		label,
+		hideLabel = false,
 		selectedLabel,
 		options,
 		placeholder = '',
@@ -29,6 +30,7 @@
 		search?: string | null;
 		open?: boolean;
 		label: string;
+		hideLabel?: boolean;
 		selectedLabel?: string;
 		options: Option[];
 		placeholder?: string;
@@ -104,7 +106,7 @@
 		if (!details.open || details.reason === 'trigger-click') search = null;
 	}}
 >
-	<Combobox.Label>{label}</Combobox.Label>
+	<Combobox.Label class={hideLabel ? 'sr-only' : ''}>{label}</Combobox.Label>
 	<Combobox.Control>
 		<Combobox.Input placeholder={placeholder || emptyLabel} class="pr-10">
 			{#snippet element(attributes)}<input

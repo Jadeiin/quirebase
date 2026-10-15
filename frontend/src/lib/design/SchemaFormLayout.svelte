@@ -17,6 +17,7 @@
 	);
 	// Nested objects size their own columns instead of inheriting a viewport breakpoint.
 	const presentation = $derived.by(() => {
+		if (type === 'field') return 'grid w-full grid-cols-1 gap-2';
 		if (type === 'object-field') return '@container/schema grid w-full grid-cols-1 gap-4';
 		if (type === 'object-properties')
 			return 'grid w-full grid-cols-1 items-start gap-4 @min-[24rem]/schema:grid-cols-2 @min-[48rem]/schema:grid-cols-3';

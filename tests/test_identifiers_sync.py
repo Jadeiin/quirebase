@@ -3,9 +3,12 @@ from __future__ import annotations
 import asyncio
 from uuid import uuid4
 
+import httpx2
 import pytest
 from advanced_alchemy.types import FileObject
 from inquiro import CandidateRecord, Identifier
+from inquiro.work import contributor_name, work_authors
+from provider_helpers import provider_runtime
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -105,6 +108,96 @@ async def test_provider_sync_allows_existing_identifiers_and_preserves_partial_f
     assert item.citation_key == "ManualKey"
     assert item.version == created.version + 1
     assert any(row.action == "item.sync_upstream" for row in await db.scalars(select(AuditEvent)))
+
+
+@pytest.mark.parametrize("include_orcids", [False, True])
+async def test_crossref_openalex_sync_preserves_the_published_author_list(
+    persistence_db, monkeypatch, include_orcids
+):
+    db = persistence_db
+    actor, workspace_id = await setup(db)
+    doi = "10.1016/j.conengprac.2024.105898"
+    # Condensed from the Crossref and OpenAlex responses for this DOI. OpenAlex's
+    # resolved author profile differs from the work's raw byline for Xiang Yu.
+    authors = [
+        ("Qianyuan", "Liu", None),
+        ("Shangke", "Lyu", "0000-0002-8302-6630"),
+        ("Kexin", "Guo", "0000-0002-0459-5027"),
+        ("Jianliang", "Wang", "0000-0002-7265-4391"),
+        ("Xiang", "Yu", "0000-0002-9005-3733"),
+        ("Lei", "Guo", "0000-0002-3061-2337"),
+    ]
+    crossref = {
+        "DOI": doi,
+        "type": "journal-article",
+        "title": [
+            "A coordinated framework of aerial manipulator for safe and compliant physical interaction"
+        ],
+        "author": [
+            {
+                "given": given,
+                "family": family,
+                **({"ORCID": f"https://orcid.org/{orcid}"} if orcid else {}),
+            }
+            for given, family, orcid in authors
+        ],
+    }
+    openalex = {
+        "id": "https://openalex.org/W4392452505",
+        "doi": f"https://doi.org/{doi}",
+        "display_name": crossref["title"][0],
+        "authorships": [
+            {
+                "raw_author_name": f"{given} {family}",
+                "author": {
+                    "display_name": "Xiang Yang Yu" if given == "Xiang" else f"{given} {family}",
+                    **({"orcid": f"https://orcid.org/{orcid}"} if orcid else {}),
+                },
+                "institutions": [
+                    {"display_name": "Beihang University", "ror": "https://ror.org/00wk2mp56"}
+                ],
+            }
+            for given, family, orcid in authors
+        ],
+    }
+
+    def response(request):
+        payload = openalex if request.url.host == "api.openalex.org" else {"message": crossref}
+        return httpx2.Response(200, json=payload)
+
+    def runtime(settings=None):
+        return provider_runtime(settings=settings, transport=httpx2.MockTransport(response))
+
+    monkeypatch.setattr("quirebase.library.providers.provider_runtime", runtime)
+    async with runtime() as source:
+        local = (await source.lookup(doi, provider="crossref")).work
+    if not include_orcids:
+        for credit in local["contributors"]:
+            credit["person"].pop("id", None)
+    local["contributors"][4]["roles"].append("CorrespondingAuthor")
+    local["contributors"][4]["person"]["affiliations"] = [{"name": "Local Institute"}]
+    expected_names = [contributor_name(credit) for credit in work_authors(local)]
+    created = await create_item(db, actor, workspace_id, local)
+    version = created.version
+    for provider in ("openalex", "openalex", "crossref"):
+        item = await sync_metadata_from_upstream(
+            db, actor, workspace_id, created.item_id, version, provider, doi
+        )
+        await db.refresh(item)
+        credits = work_authors(item.work)
+        assert [contributor_name(credit) for credit in credits] == expected_names
+        assert credits[4]["person"]["id"] == "https://orcid.org/0000-0002-9005-3733"
+        assert credits[4]["roles"] == ["Author", "CorrespondingAuthor"]
+        assert credits[4]["person"]["affiliations"] == [
+            {"name": "Local Institute"},
+            {
+                "name": "Beihang University",
+                "identifier": "https://ror.org/00wk2mp56",
+                "identifier_type": "ROR",
+            },
+        ]
+        version += 1
+        assert item.version == version
 
 
 async def test_provider_roundtrip_cannot_overwrite_concurrent_item_revision(

@@ -1984,6 +1984,7 @@ msgstr "Formal analysis"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/BulkActions.svelte
 msgid "Format"
 msgstr "Format"
 
@@ -4545,6 +4546,11 @@ msgid "Select Project"
 msgstr "Select Project"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Select Tag"
+msgstr "Select Tag"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Select this page"
 msgstr "Select this page"
@@ -4854,11 +4860,6 @@ msgstr "Tag deleted"
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Tag matrix"
 msgstr "Tag matrix"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Tag name"
-msgstr "Tag name"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte

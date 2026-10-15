@@ -52,10 +52,9 @@ async def test_commonmeta_lookup_fetches_and_preserves_the_complete_work(identif
 
 def test_commonmeta_is_explicit_lookup_only_and_does_not_replace_default_doi_routing():
     choices = metadata_provider_choices()
-    assert (
-        next(choice for choice in choices.lookup if choice.id == "commonmeta").identifier_namespace
-        == "doi"
-    )
+    assert next(
+        choice for choice in choices.lookup if choice.id == "commonmeta"
+    ).identifier_namespaces == ("doi",)
     assert "commonmeta" not in {choice.id for choice in choices.search}
 
 

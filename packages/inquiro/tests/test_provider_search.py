@@ -39,14 +39,12 @@ def test_provider_options_follow_capabilities_and_configured_credentials(configu
     assert "cited" not in search["arxiv"].sorts
     assert "configured-token" not in repr(asdict(options))
     assert "configured-key" not in repr(asdict(options))
-    namespaces = {
-        choice.id: getattr(choice, "identifier_namespace", None) for choice in options.lookup
-    }
+    namespaces = {choice.id: choice.identifier_namespaces for choice in options.lookup}
     for provider, namespace in {
-        "crossref": "doi",
-        "openlibrary": "isbn",
-        "pubmed": "pmid",
-        "openalex": "openalex",
+        "crossref": ("doi",),
+        "openlibrary": ("isbn",),
+        "pubmed": ("pmid",),
+        "openalex": ("openalex", "doi"),
     }.items():
         assert namespaces[provider] == namespace
 

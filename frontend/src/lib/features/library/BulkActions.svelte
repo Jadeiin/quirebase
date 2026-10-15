@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { bibliographyFormats } from '#lib/export-preferences.js';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
+	import TagSelect from '#lib/features/tags/TagSelect.svelte';
 	import { can } from '#lib/authorization/can.js';
 	import type { LibraryProject } from '#lib/features/library/queries.js';
 	import { t } from '#lib/i18n.js';
@@ -45,7 +46,12 @@
 		class="sticky top-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary-700-300/30 bg-surface-50-950 p-3 shadow-lg"
 	>
 		<strong class="mr-2">{$t('{count} selected', { count: selectedCount })}</strong>
-		<select class="input w-auto min-w-36" bind:value={bulkAction} aria-label={$t('Bulk action')}>
+		<select
+			class="select h-8 w-auto min-w-36"
+			bind:value={bulkAction}
+			aria-label={$t('Bulk action')}
+			disabled={busy}
+		>
 			<option value="">{$t('Choose action')}</option>
 			{#if canRunBulkAction(workspace.can, 'add_project')}<option value="add_project"
 					>{$t('Add to Project')}</option
@@ -65,8 +71,9 @@
 		</select>
 		{#if bulkAction === 'add_project'}
 			<SearchSelect
-				class="w-auto min-w-48"
+				class="w-full min-w-48 sm:w-56"
 				label={$t('Select Project')}
+				hideLabel
 				emptyLabel={$t('Select Project')}
 				bind:value={bulkProject}
 				disabled={busy}
@@ -76,13 +83,20 @@
 				}))}
 			/>
 		{/if}
-		{#if bulkAction === 'add_tag'}<input
-				class="input w-auto min-w-36"
+		{#if bulkAction === 'add_tag'}<TagSelect
+				class="w-full min-w-48 sm:w-56"
+				label={$t('Select Tag')}
+				emptyLabel={$t('Select Tag')}
+				hideLabel
+				valueBy="name"
+				allowCustomValue
+				disabled={busy}
 				bind:value={bulkTag}
-				placeholder={$t('Tag name')}
 			/>{/if}
 		{#if bulkAction === 'bibliography'}<select
-				class="input w-auto min-w-36"
+				class="select h-8 w-auto min-w-36"
+				aria-label={$t('Format')}
+				disabled={busy}
 				bind:value={exportFormat}
 			>
 				{#each bibliographyFormats as choice (choice.value)}

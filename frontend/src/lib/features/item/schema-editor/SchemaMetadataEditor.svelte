@@ -236,7 +236,12 @@
 	}
 </script>
 
-<form class="grid min-w-0 grid-cols-1 gap-4" bind:this={element} onsubmit={submit} novalidate>
+<form
+	class="grid min-w-0 grid-cols-1 gap-4 [&_select:not([multiple])]:h-8"
+	bind:this={element}
+	onsubmit={submit}
+	novalidate
+>
 	<fieldset
 		class="m-0 grid min-w-0 grid-cols-1 gap-4 border-0 p-0 [&>button]:justify-self-start"
 		disabled={busy}

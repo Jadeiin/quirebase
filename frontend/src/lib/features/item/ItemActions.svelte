@@ -64,7 +64,7 @@
 		enabled: open && section === 'sources'
 	}));
 	const doiProviders = $derived(
-		providers.data?.lookup.filter((choice) => choice.identifier_namespace === 'doi') ?? []
+		providers.data?.lookup.filter((choice) => choice.identifier_namespaces.includes('doi')) ?? []
 	);
 	$effect(() => {
 		if (
@@ -85,8 +85,8 @@
 			)
 			.map((row) => ({
 				...row,
-				lookupProvider: providers.data?.lookup.find(
-					(choice) => choice.identifier_namespace === row.provider
+				lookupProvider: providers.data?.lookup.find((choice) =>
+					choice.identifier_namespaces.includes(row.provider)
 				)?.id
 			}))
 	);
@@ -431,16 +431,17 @@
 										</p>
 									</div>
 									{#each revisions as revision (revision.id)}<label
-											class="flex items-center gap-3 rounded-lg border border-surface-300-700 p-3"
+											class="flex min-w-0 items-start gap-3 rounded-lg border border-surface-300-700 p-3"
 											><input
 												type="checkbox"
+												class="mt-1 shrink-0"
 												checked={selectedRevisions.has(revision.id)}
 												onchange={() =>
 													selectedRevisions.has(revision.id)
 														? selectedRevisions.delete(revision.id)
 														: selectedRevisions.add(revision.id)}
-											/><span
-												><strong>{revision.original_name}</strong><small
+											/><span class="min-w-0 flex-1"
+												><strong class="block wrap-anywhere">{revision.original_name}</strong><small
 													class="block text-surface-600-400"
 													>{$t(domainLabel(revision.processing_state ?? 'pending'))}</small
 												></span
@@ -489,7 +490,7 @@
 											</div>
 											<div class="flex flex-wrap items-center gap-2">
 												<select
-													class="input w-auto min-w-36 border border-surface-300-700"
+													class="select h-8 w-auto min-w-36"
 													bind:value={doiProvider}
 													aria-label={$t('Provider')}
 												>

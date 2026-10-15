@@ -74,6 +74,7 @@ class ProviderDefinition:
     credential_setting: str | None = None
     credential_environment: str | None = None
     credential_capabilities: frozenset[ProviderCapability] = frozenset({"lookup", "search"})
+    additional_lookup_namespaces: tuple[str, ...] = ()
 
     def accepts_identifier(self, provider: str) -> bool:
         return provider in {self.name, self.identifier_namespace}

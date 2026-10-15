@@ -73,6 +73,16 @@ def _native_provider_input(payload: dict, source: str) -> tuple[dict, str]:
         raise TypeError("OpenAlex ids must be a JSON object")
     if identifiers.get("doi"):
         identifiers["doi"] = _doi_reader_uri(identifiers["doi"]).lower()
+    # UPSTREAM(commonmeta-py 0.309): the OpenAlex reader uses resolved author
+    # profile names instead of this work's byline, which can credit a different
+    # name or append a duplicate during sync. Keep its ID/affiliation mapping.
+    for credit in result.get("authorships") or []:
+        raw_name = credit.get("raw_author_name")
+        if isinstance(raw_name, str) and raw_name.strip():
+            credit["author"] = {
+                **(credit.get("author") or {}),
+                "display_name": raw_name.strip(),
+            }
     work = read_openalex(result)
     if doi := identifiers.get("doi"):
         # UPSTREAM(commonmeta-py 0.309): OpenAlex's secondary DOI normalizer drops

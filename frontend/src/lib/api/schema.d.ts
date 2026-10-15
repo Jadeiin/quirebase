@@ -5525,8 +5525,11 @@ export interface components {
 			 * @default []
 			 */
 			sorts: components['schemas']['SearchSort'][];
-			/** Identifier Namespace */
-			identifier_namespace?: string | null;
+			/**
+			 * Identifier Namespaces
+			 * @default []
+			 */
+			identifier_namespaces: string[];
 		};
 		/** Publisher */
 		Publisher: {
