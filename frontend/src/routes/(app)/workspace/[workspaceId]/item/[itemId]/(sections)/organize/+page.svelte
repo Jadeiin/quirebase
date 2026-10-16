@@ -67,8 +67,15 @@
 		});
 	}
 
-	function toggleProject(project: OrganizeView['projects'][number]) {
-		track(projectAssignment.mutateAsync({ project }));
+	async function toggleProject(project: OrganizeView['projects'][number]): Promise<boolean> {
+		mutationError = '';
+		try {
+			await projectAssignment.mutateAsync({ project });
+			return true;
+		} catch (reason) {
+			mutationError = apiErrorMessage(reason, $t('Unable to save changes'));
+			return false;
+		}
 	}
 
 	function addTag(event: SubmitEvent) {
@@ -93,13 +100,16 @@
 
 {#if mutationError}<Notice variant="error">{mutationError}</Notice>{/if}
 <ItemSectionState loading={organize.isPending} failed={organize.isError}>
-	<ItemOrganizeSection
-		data={organize.data!}
-		{busy}
-		onToggleProject={toggleProject}
-		onAddTag={addTag}
-		onToggleTag={toggleTagAssignment}
-		onAddSuggestedTag={addSuggestedTag}
-		onRefresh={refreshTagRecommendations}
-	/>
+	{#key `${params.workspaceId}:${params.itemId}`}
+		<ItemOrganizeSection
+			data={organize.data!}
+			{busy}
+			error={mutationError}
+			onToggleProject={toggleProject}
+			onAddTag={addTag}
+			onToggleTag={toggleTagAssignment}
+			onAddSuggestedTag={addSuggestedTag}
+			onRefresh={refreshTagRecommendations}
+		/>
+	{/key}
 </ItemSectionState>

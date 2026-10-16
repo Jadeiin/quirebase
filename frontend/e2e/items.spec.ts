@@ -17,6 +17,87 @@ const editableItemAuthorization = {
 	]
 };
 
+test('Organize removal confirms destructive effects and keeps failed confirmations open', async ({
+	page
+}) => {
+	await mockSession(page);
+	let assigned = true;
+	let removals = 0;
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				id: 'item-1',
+				version: 1,
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Annotated Item'
+				},
+				citation_key: null,
+				latest_revision_id: null,
+				authorization: editableItemAuthorization,
+				copy_targets: [],
+				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
+				tags: []
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/organize', (route) =>
+		route.fulfill({
+			json: {
+				authorization: editableItemAuthorization,
+				projects: [
+					{
+						id: 'project-1',
+						name: 'Reading Project',
+						assigned,
+						is_participating: true,
+						participation: 'workspace'
+					}
+				],
+				tag_matrix: {
+					groups: [],
+					assigned_ids: [],
+					recommended_ids: [],
+					suggested_names: [],
+					recommendation_state: 'ready',
+					recommendation_error: null
+				}
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/items/item-1', (route) => {
+		removals += 1;
+		if (removals === 1)
+			return route.fulfill({
+				status: 500,
+				json: { code: 'internal_error', message: 'Failed to remove Item' }
+			});
+		assigned = false;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/item/item-1/organize');
+	const remove = page.getByRole('button', { name: 'Remove', exact: true });
+	await remove.click();
+	const dialog = page.getByRole('dialog', { name: 'Remove Item from Project?', exact: true });
+	await expect(dialog).toContainText('Removing this Item from Reading Project permanently deletes');
+	await expect(dialog).toContainText('all of its Project Annotations and Replies in this Project');
+	await expect(dialog).toContainText(
+		'The Item, its files, private Annotations and other Projects are preserved.'
+	);
+	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(dialog).toBeHidden();
+	expect(removals).toBe(0);
+	await remove.click();
+	await dialog.getByRole('button', { name: 'Remove from Project' }).click();
+	await expect(dialog).toContainText('Something went wrong. Try again.');
+	expect(removals).toBe(1);
+	await dialog.getByRole('button', { name: 'Remove from Project' }).click();
+	await expect(dialog).toBeHidden();
+	expect(removals).toBe(2);
+	await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
+});
+
 test('DOI sources load on demand and synchronize their own snapshot version', async ({ page }) => {
 	await mockSession(page);
 	let sourceRequests = 0;

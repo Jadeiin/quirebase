@@ -82,7 +82,9 @@ _DEFINITIONS = (
         "projects.add_project_item", "Add a visible Item to a Project.", ToolEffect.WRITE
     ),
     McpToolDefinition(
-        "projects.remove_project_item", "Remove an Item from a Project.", ToolEffect.DESTRUCTIVE
+        "projects.remove_project_item",
+        "Remove an Item from a Project, permanently deleting its Project Annotations and Replies.",
+        ToolEffect.DESTRUCTIVE,
     ),
     McpToolDefinition(
         "projects.add_project_participant", "Add a managed Project participant.", ToolEffect.WRITE

@@ -11,10 +11,14 @@ from import_helpers import pdf_import_batch_data
 from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.accounts import update_user_status
 from quirebase.core import workflows
+from quirebase.core.errors import ResourceUnavailable, WorkspaceMembershipRequired
 from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store
 from quirebase.documents import enqueue_object_cleanup
 from quirebase.documents import workflows as document_workflows
+from quirebase.documents.exports import create_export_job
+from quirebase.documents.schemas import ExportCreate
 from quirebase.library import workflows as library_workflows
 from quirebase.models import (
     Attachment,
@@ -25,10 +29,15 @@ from quirebase.models import (
     ObjectIntegrityScan,
     Project,
     ProjectItem,
+    ProjectParticipation,
     User,
+    WorkspaceMember,
+    WorkspaceRole,
 )
 from quirebase.operations import health
 from quirebase.operations import workflows as operation_workflows
+from quirebase.projects import add_project_participant, create_project, remove_project_participant
+from quirebase.workspaces import terminate_workspace_member
 
 
 async def _provisioned_user(db, username: str) -> User:
@@ -707,6 +716,98 @@ async def test_project_annotation_export_rejects_replaced_assignment(async_db, m
                 "project_item_id": original_assignment_id,
             },
         )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("revocation", "denied_error"),
+    [
+        ("membership_terminated", WorkspaceMembershipRequired),
+        ("account_deactivated", WorkspaceMembershipRequired),
+        ("project_participation_removed", ResourceUnavailable),
+    ],
+)
+async def test_annotation_export_finalizer_rechecks_current_authority(
+    async_db, async_session_factory, revocation, denied_error
+):
+    owner = await _provisioned_user(async_db, "export-governor")
+    owner.role = "administrator"
+    actor = User(username="export-editor", password_hash="unused")
+    async_db.add(actor)
+    await async_db.flush()
+    workspace_id = fixture_workspace_id(owner)
+    membership = WorkspaceMember(
+        workspace_id=workspace_id, user_id=actor.id, role=WorkspaceRole.editor
+    )
+    item = Item(
+        workspace_id=workspace_id,
+        created_by=owner.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Queued export"},
+    )
+    async_db.add_all([membership, item])
+    await async_db.flush()
+    revision = FileRevision(
+        workspace_id=workspace_id,
+        item_id=item.id,
+        created_by=owner.id,
+        file=FileObject(
+            backend="documents",
+            filename="aa/bb/source.pdf",
+            size=42,
+            content_type="application/pdf",
+            metadata={"original_name": "source.pdf"},
+        ),
+    )
+    async_db.add(revision)
+    await async_db.commit()
+    project = await create_project(
+        async_db, owner, workspace_id, "Managed export", ProjectParticipation.managed
+    )
+    await add_project_participant(async_db, owner, workspace_id, project.id, actor.username)
+    assignment = ProjectItem(
+        workspace_id=workspace_id,
+        project_id=project.id,
+        item_id=item.id,
+        added_by=owner.id,
+    )
+    async_db.add(assignment)
+    await async_db.commit()
+    workflow_id = await create_export_job(
+        async_db,
+        actor,
+        workspace_id,
+        item.id,
+        ExportCreate(revision_id=revision.id, project_id=project.id),
+    )
+    await async_db.commit()
+    owner_id, actor_id, membership_id, project_id = owner.id, actor.id, membership.id, project.id
+    result = {
+        "filename": "artifact.pdf",
+        "object_key": "aa/bb/revoked-artifact.pdf",
+        "size_bytes": 42,
+        "revision_id": revision.id,
+        "project_id": project.id,
+        "project_item_id": assignment.id,
+    }
+
+    async with async_session_factory() as governance_db:
+        governor = await governance_db.get(User, owner_id)
+        if revocation == "membership_terminated":
+            await terminate_workspace_member(governance_db, governor, workspace_id, membership_id)
+        elif revocation == "account_deactivated":
+            await update_user_status(governance_db, governor, actor_id, False)
+        else:
+            await remove_project_participant(
+                governance_db, governor, workspace_id, project_id, actor_id
+            )
+
+    with pytest.raises(denied_error):
+        await document_workflows.record_annotation_export_artifact(
+            workflow_id, actor_id, workspace_id, project_id, result
+        )
+
+    async with async_session_factory() as verification_db:
+        assert await verification_db.get(ExportArtifact, workflow_id) is None
 
 
 @pytest.mark.anyio

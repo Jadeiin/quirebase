@@ -4186,6 +4186,18 @@ msgid "Remove filter {name}"
 msgstr "Remove filter {name}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Remove from Project"
+msgstr "Remove from Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Remove Item from Project?"
+msgstr "Remove Item from Project?"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 msgid "Remove message"
@@ -4195,6 +4207,12 @@ msgstr "Remove message"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Remove the chosen file to paste bibliography data instead."
 msgstr "Remove the chosen file to paste bibliography data instead."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
+msgstr "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte

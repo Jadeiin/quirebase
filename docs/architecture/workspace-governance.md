@@ -362,6 +362,13 @@ Workspace Items, their files, private Annotations and other Projects remain. Roo
 in-flight stale mutations, and Audit Events retain the deleted Project ID without a live-resource
 foreign key. Workspace permanent deletion retains its stronger archive and retention requirements.
 
+Removing an Item from a Project physically deletes its ProjectItem association and permanently
+cascades to that association's Project Annotations and Replies across all File Revisions,
+including soft-deleted, hidden or archived Annotations. The canonical Item, files, private
+Annotations and other Projects remain. Both Web removal entry points must explain this
+irreversible effect and obtain confirmation before issuing the existing DELETE request. This
+warning applies to every removal, so annotations added after the page was loaded are covered.
+
 Project archive/restore, Workspace-member suspend/reactivate and role setting, invitation revoke,
 and instance governance freeze/unfreeze tolerate retries after reaching the requested state.
 They still acquire their roots and recheck current authority before returning success; a repeat

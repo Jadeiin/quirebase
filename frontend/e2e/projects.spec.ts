@@ -973,9 +973,8 @@ test('participant selection reaches later member pages and clears after adding',
 	await expect(add).toBeDisabled();
 });
 
-test('Project Item pages recover after removing the last Item and support search', async ({
-	page
-}) => {
+test('Project Item removal confirms, retries and recovers the last page', async ({ page }) => {
+	let removals = 0;
 	let assigned = Array.from({ length: 26 }, (_, index) => ({
 		id: `item-${index}`,
 		title_html: `Assigned Item ${String(index).padStart(2, '0')}`,
@@ -1008,6 +1007,12 @@ test('Project Item pages recover after removing the last Item and support search
 		});
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/items/item-25', (route) => {
+		removals += 1;
+		if (removals === 1)
+			return route.fulfill({
+				status: 500,
+				json: { code: 'internal_error', message: 'Failed to remove Item' }
+			});
 		assigned = assigned.filter((item) => item.id !== 'item-25');
 		return route.fulfill({ json: { ok: true } });
 	});
@@ -1017,6 +1022,23 @@ test('Project Item pages recover after removing the last Item and support search
 	const last = page.getByRole('link', { name: 'Assigned Item 25', exact: true }).locator('..');
 	await expect(last).toBeVisible();
 	await last.getByRole('button', { name: 'Remove', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Remove Item from Project?', exact: true });
+	await expect(dialog).toContainText(
+		'permanently deletes all of its Project Annotations and Replies in this Project'
+	);
+	await expect(dialog).toContainText(
+		'The Item, its files, private Annotations and other Projects are preserved.'
+	);
+	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(dialog).toBeHidden();
+	expect(removals).toBe(0);
+	await last.getByRole('button', { name: 'Remove', exact: true }).click();
+	await dialog.getByRole('button', { name: 'Remove from Project' }).click();
+	await expect(dialog).toContainText('Something went wrong. Try again.');
+	expect(removals).toBe(1);
+	await dialog.getByRole('button', { name: 'Remove from Project' }).click();
+	await expect(dialog).toBeHidden();
+	expect(removals).toBe(2);
 	await expect(pager.getByText('Page 1 of 1')).toBeVisible();
 	await expect(page.getByText('Assigned Item 00', { exact: true })).toBeVisible();
 	expect(requests.some((request) => request.offset === 25)).toBe(true);

@@ -4186,6 +4186,18 @@ msgid "Remove filter {name}"
 msgstr "移除筛选条件 {name}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Remove from Project"
+msgstr "从项目移除"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Remove Item from Project?"
+msgstr "将条目移出项目？"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 msgid "Remove message"
@@ -4195,6 +4207,12 @@ msgstr "移除消息"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Remove the chosen file to paste bibliography data instead."
 msgstr "移除已选文件即可改为粘贴书目数据。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
+msgstr "将此条目移出“{name}”后，该项目中此条目的所有项目批注及回复都会被永久删除，且无法撤销。条目、文件、私有批注及其他项目会保留。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte

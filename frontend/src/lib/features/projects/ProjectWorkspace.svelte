@@ -7,6 +7,7 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { can as isAllowed, type AuthorizationAction } from '#lib/authorization/can.js';
 	import type { components } from '#lib/api/schema.js';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import Icon from '#lib/design/Icon.svelte';
@@ -59,6 +60,8 @@
 			selectedMember = undefined;
 			settingsDialogOpen = false;
 			deleteDialogOpen = false;
+			removeItemDialogOpen = false;
+			pendingRemoveItem = undefined;
 		}
 	});
 	$effect(() => {
@@ -118,6 +121,8 @@
 		{ projectId: string; changes: components['schemas']['ProjectSettingsRequest'] } | undefined
 	>();
 	let deleteDialogOpen = $state(false);
+	let removeItemDialogOpen = $state(false);
+	let pendingRemoveItem = $state<{ projectId: string; itemId: string }>();
 	let moderationMessageId = $state<string | null>(null);
 	let moderationDialogOpen = $state(false);
 
@@ -323,6 +328,33 @@
 			// selector, including reader annotation sources.
 			await invalidateProject(queryClient, workspaceId);
 			await goto(resolve(workspaceHref(workspaceId, 'projects')));
+		}
+	}
+
+	async function confirmRemoveItem() {
+		const target = pendingRemoveItem;
+		if (
+			!target ||
+			busy ||
+			target.projectId !== projectId ||
+			!can('project_item.manage') ||
+			project?.state !== 'active'
+		)
+			return;
+		const removed = await mutate(
+			() =>
+				workspace.api.request(
+					'DELETE',
+					'/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}',
+					{
+						params: { path: { project_id: target.projectId, item_id: target.itemId } }
+					}
+				),
+			$t('Item removed from Project')
+		);
+		if (removed) {
+			removeItemDialogOpen = false;
+			pendingRemoveItem = undefined;
 		}
 	}
 
@@ -582,16 +614,11 @@
 							></a
 						>{#if can('project_item.manage')}<Button
 								disabled={busy || project.state !== 'active'}
-								onclick={() =>
-									void mutate(
-										() =>
-											workspace.api.request(
-												'DELETE',
-												'/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}',
-												{ params: { path: { project_id: projectId, item_id: item.id } } }
-											),
-										$t('Item removed from Project')
-									)}>{$t('Remove')}</Button
+								onclick={() => {
+									error = '';
+									pendingRemoveItem = { projectId, itemId: item.id };
+									removeItemDialogOpen = true;
+								}}>{$t('Remove')}</Button
 							>{/if}
 					</ItemRow>{:else}<p class="text-surface-600-400">
 						{itemSearch ? $t('No matching Items.') : $t('No Items in this Project.')}
@@ -787,6 +814,17 @@
 		</Dialog>
 	{/if}
 
+	<ConfirmDialog
+		bind:open={removeItemDialogOpen}
+		title={$t('Remove Item from Project?')}
+		body={$t(
+			'Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.',
+			{ name: project?.name ?? '' }
+		) + (removeItemDialogOpen && error ? ` ${error}` : '')}
+		confirmLabel={$t('Remove from Project')}
+		{busy}
+		onConfirm={() => void confirmRemoveItem()}
+	/>
 	<PromptDialog
 		bind:open={deleteDialogOpen}
 		title={$t('Permanently delete this Project?')}

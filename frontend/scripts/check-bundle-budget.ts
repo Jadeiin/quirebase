@@ -130,11 +130,12 @@ enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
 	raw: 921000,
-	gzip: 258000
+	// Includes the shared, localized destructive-detachment warning.
+	gzip: 259000
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes the shared pagination styles and consistent control borders.
-	raw: 813000,
+	raw: 814000,
 	gzip: 230000
 });
 enforce('Account route', routeBundle('/(app)/account'), {
@@ -143,7 +144,7 @@ enforce('Account route', routeBundle('/(app)/account'), {
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 	// Includes the shared pagination styles and consistent control borders.
-	raw: 820000,
+	raw: 821000,
 	gzip: 235000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
@@ -179,7 +180,8 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
 		raw: 827000,
-		gzip: 233000
+		// Organize now includes the destructive-detachment confirmation dialog.
+		gzip: 235000
 	}
 );
 enforce(
@@ -187,7 +189,7 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
 		// Shared pagination includes page-size controls and a localized result range.
-		raw: 822000,
+		raw: 823000,
 		gzip: 236000
 	}
 );
@@ -196,7 +198,7 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
 		// Includes the shared pagination styles.
-		raw: 809000,
+		raw: 810000,
 		gzip: 234000
 	}
 );
@@ -206,7 +208,7 @@ enforce('Admin overview route', routeBundle('/(app)/admin'), {
 	gzip: 201000
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
-	raw: 717000,
+	raw: 718000,
 	gzip: 205000
 });
 enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
@@ -242,6 +244,6 @@ const openedEditor = mergeGraphs(
 );
 enforce('Metadata editor when open', bundleSize(graphFiles(openedEditor)), {
 	// Includes the shared pagination styles.
-	raw: 1052000,
+	raw: 1053000,
 	gzip: 307000
 });

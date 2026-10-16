@@ -120,6 +120,8 @@ Items.
 **ProjectItem**:
 An association placing an Item from the same Workspace in a Project working set. ProjectItem
 does not grant Item access or any Workspace authority.
+Removing it permanently deletes the Project Annotations and Replies bound to that association.
+The canonical Item, its files, private Annotations and other Project associations remain.
 
 **Document**:
 Stored file content associated with an Item, represented by a File Revision or

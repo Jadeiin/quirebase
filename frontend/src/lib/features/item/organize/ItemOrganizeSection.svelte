@@ -2,17 +2,19 @@
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { can } from '#lib/authorization/can.js';
 	import Badge from '#lib/design/Badge.svelte';
+	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import { t } from '#lib/i18n.js';
 	import type { components } from '#lib/api/schema.js';
 	import type { OrganizeView } from '../types';
 	import Button from '#lib/design/Button.svelte';
 
-	let { data, busy, onToggleProject, onAddTag, onToggleTag, onAddSuggestedTag, onRefresh } =
+	let { data, busy, error, onToggleProject, onAddTag, onToggleTag, onAddSuggestedTag, onRefresh } =
 		$props<{
 			data: OrganizeView;
 			busy: boolean;
-			onToggleProject: (project: OrganizeView['projects'][number]) => void;
+			error: string;
+			onToggleProject: (project: OrganizeView['projects'][number]) => Promise<boolean>;
 			onAddTag: (event: SubmitEvent) => void;
 			onToggleTag: (tagId: string, assigned: boolean) => void;
 			onAddSuggestedTag: (name: string) => void;
@@ -21,6 +23,8 @@
 
 	let tagFilter = $state('');
 	let projectFilter = $state('');
+	let removeProjectDialogOpen = $state(false);
+	let pendingRemoveProject = $state<OrganizeView['projects'][number]>();
 	const primaryProjects = $derived(
 		data.projects.filter(
 			(project: OrganizeView['projects'][number]) =>
@@ -62,6 +66,22 @@
 			}))
 			.filter((group: components['schemas']['TagMatrixGroupView']) => group.tags.length)
 	);
+
+	function toggleProject(project: OrganizeView['projects'][number]) {
+		if (busy || !canManageProjects) return;
+		if (project.assigned) {
+			pendingRemoveProject = project;
+			removeProjectDialogOpen = true;
+		} else void onToggleProject(project);
+	}
+
+	async function confirmRemoveProject() {
+		if (!pendingRemoveProject || busy || !canManageProjects) return;
+		if (await onToggleProject(pendingRemoveProject)) {
+			removeProjectDialogOpen = false;
+			pendingRemoveProject = undefined;
+		}
+	}
 </script>
 
 {#snippet projectRows(projects: OrganizeView['projects'])}
@@ -73,7 +93,7 @@
 					variant={project.assigned ? 'tonal' : 'primary'}
 					size="sm"
 					disabled={busy || !canManageProjects}
-					onclick={() => onToggleProject(project)}
+					onclick={() => toggleProject(project)}
 				>
 					{project.assigned ? $t('Remove') : $t('Add')}
 				</Button>
@@ -228,3 +248,15 @@
 		</Panel>
 	</div>
 </div>
+
+<ConfirmDialog
+	bind:open={removeProjectDialogOpen}
+	title={$t('Remove Item from Project?')}
+	body={$t(
+		'Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.',
+		{ name: pendingRemoveProject?.name ?? '' }
+	) + (removeProjectDialogOpen && error ? ` ${error}` : '')}
+	confirmLabel={$t('Remove from Project')}
+	{busy}
+	onConfirm={() => void confirmRemoveProject()}
+/>
