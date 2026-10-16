@@ -7,8 +7,6 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from inquiro import Identifier as MetadataLookupIdentifier
-from inquiro.work import work_identifiers
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import selectinload
 
@@ -79,7 +77,6 @@ class ItemOverviewData(ItemSectionData):
     message_count: int
     tags: tuple[Tag, ...]
     updater: User | None
-    primary_lookup_identifier: MetadataLookupIdentifier | None = None
 
 
 @dataclass(frozen=True)
@@ -100,7 +97,6 @@ class ProjectAssignmentOption:
 
 @dataclass(frozen=True)
 class ItemOrganizationData(ItemSectionData):
-    tags: tuple[Tag, ...]
     projects: tuple[ProjectAssignmentOption, ...]
     assigned_project_ids: frozenset[UUID]
     tag_matrix: TagMatrix
@@ -160,12 +156,6 @@ async def _open_overview(
     attachment_count = await count_item_attachments(db, item.workspace_id, item.id)
 
     tags = await _assigned_tags(db, item)
-    # This is query context for the current authorized Item. Keep recognition
-    # and comparison in Inquiro, including URI forms and aliases already in Work.
-    missing_primary = work_identifiers({"id": item.work.get("id", "")}) - work_identifiers({
-        "identifiers": item.work.get("identifiers", [])
-    })
-    primary = next(iter(missing_primary), None)
     return ItemOverviewData(
         item=item,
         revisions=revisions[:1],
@@ -175,7 +165,6 @@ async def _open_overview(
         message_count=message_count,
         tags=tags,
         updater=await db.get(User, item.updated_by) if item.updated_by else None,
-        primary_lookup_identifier=MetadataLookupIdentifier(*primary) if primary else None,
     )
 
 
@@ -202,7 +191,6 @@ async def _open_files(db: AsyncSession, context: WorkspaceContext, item: Item) -
 async def _open_organize(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemOrganizationData:
-    tags = await _assigned_tags(db, item)
     project_options = tuple(
         ProjectAssignmentOption(project, participating)
         for project, participating in await list_item_organize_projects(db, context)
@@ -222,7 +210,6 @@ async def _open_organize(
     return ItemOrganizationData(
         item=item,
         revisions=await list_item_revisions(db, item.workspace_id, item.id),
-        tags=tags,
         projects=project_options,
         assigned_project_ids=assigned_project_ids,
         tag_matrix=await get_tag_matrix_for_item(db, item),

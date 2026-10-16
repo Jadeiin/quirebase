@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { mockSession } from './helpers';
+import { mockMetadataSources, mockSession } from './helpers';
 
 const work = {
 	id: 'https://doi.org/10.1000/editor',
@@ -43,13 +43,14 @@ async function openEditor(
 	await page.route('**/api/v1/workspaces/workspace-1/items/editor/overview', (route) =>
 		route.fulfill({
 			json: {
-				item: { id: 'editor', title_html: saved.title, version },
+				id: 'editor',
+				version,
 				metadata: saved,
 				citation_key: 'Ada2024',
 				authorization: { allowed: ['item.update'] },
 				copy_targets: [],
 				tags: [],
-				latest_revision: null,
+				latest_revision_id: null,
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
 			}
 		})
@@ -89,7 +90,6 @@ async function openEditor(
 		return route.fulfill({
 			json: {
 				id: 'editor',
-				title_html: saved.title,
 				version,
 				metadata: saved,
 				citation_key: 'Ada2024'
@@ -208,13 +208,14 @@ for (const dirty of [false, true]) {
 		await page.route('**/api/v1/workspaces/workspace-1/items/other/overview', (route) =>
 			route.fulfill({
 				json: {
-					item: { id: 'other', title_html: other.title, version: 4 },
+					id: 'other',
+					version: 4,
 					metadata: other,
 					citation_key: 'OtherKey',
 					authorization: { allowed: ['item.update'] },
 					copy_targets: [],
 					tags: [],
-					latest_revision: null,
+					latest_revision_id: null,
 					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 }
 				}
 			})
@@ -227,7 +228,6 @@ for (const dirty of [false, true]) {
 			return route.fulfill({
 				json: {
 					id: 'other',
-					title_html: other.title,
 					version: 4,
 					metadata: other,
 					citation_key: 'OtherKey'
@@ -587,6 +587,65 @@ test('uses original schema validation even when native validation is bypassed an
 	await page.getByRole('button', { name: 'Save metadata' }).click();
 	await expect(page.getByText('Apply JSON changes before saving.')).toBeVisible();
 	expect(requests).toHaveLength(0);
+});
+
+test('metadata-save conflicts invalidate cached sources before the next synchronization', async ({
+	page
+}) => {
+	const requests = await openEditor(page, 409);
+	let sourceRequests = 0;
+	await mockMetadataSources(page, 'editor', () => {
+		sourceRequests += 1;
+		return {
+			version: requests.length ? 5 : 4,
+			sources: [
+				{
+					namespace: 'doi',
+					value: requests.length ? '10.1000/revised' : '10.1000/editor',
+					providers: [{ id: 'crossref', name: 'Crossref' }]
+				}
+			]
+		};
+	});
+	const synchronizations: Record<string, unknown>[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/items/editor/metadata/sync', (route) => {
+		const body = route.request().postDataJSON();
+		synchronizations.push(body);
+		return body.expected_version === 5
+			? route.fulfill({ json: { ok: true } })
+			: route.fulfill({
+					status: 409,
+					json: { code: 'version_conflict', message: 'Stale sources' }
+				});
+	});
+	await page.getByRole('button', { name: 'Record tools', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Item actions' });
+	await expect(dialog.getByText('10.1000/editor', { exact: true })).toBeVisible();
+	expect(sourceRequests).toBe(1);
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+
+	await page.getByLabel('Title', { exact: true }).fill('My draft');
+	await page.getByLabel('Citation key', { exact: true }).fill('MyKey');
+	await page.getByRole('button', { name: 'Save metadata' }).click();
+	await expect(
+		page.getByText(
+			'This Item changed since it was loaded. Your draft was preserved; review the latest metadata.',
+			{ exact: true }
+		)
+	).toBeVisible();
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('My draft');
+	await expect(page.getByLabel('Citation key', { exact: true })).toHaveValue('MyKey');
+	await expect(page.getByRole('button', { name: 'Save metadata' })).toBeDisabled();
+
+	await page.getByRole('button', { name: 'Record tools', exact: true }).click();
+	await expect(dialog.getByText('10.1000/revised', { exact: true })).toBeVisible();
+	expect(sourceRequests).toBe(2);
+	await dialog.getByLabel('Provider', { exact: true }).selectOption('crossref');
+	await dialog.getByRole('button', { name: 'Autoupdate', exact: true }).click();
+	await expect
+		.poll(() => synchronizations)
+		.toEqual([{ expected_version: 5, provider: 'crossref', uid: '10.1000/revised' }]);
+	await expect(dialog.getByText('Metadata synchronized', { exact: true })).toBeVisible();
 });
 
 for (const failure of [409, 422] as const) {

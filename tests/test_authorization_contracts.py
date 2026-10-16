@@ -197,11 +197,12 @@ async def test_item_http_surfaces_hide_managed_project_without_hiding_canonical_
             assert str(hidden.id) not in response.text, path
             assert hidden.name not in response.text, path
         organize = (await client.get(f"{base}/items/{item.id}/organize")).json()
-        assert organize["item"]["id"] == str(item.id)
+        assert "item" not in organize
         assert [(row["id"], row["assigned"]) for row in organize["projects"]] == [
             (str(visible.id), True)
         ]
         overview = (await client.get(f"{base}/items/{item.id}/overview")).json()
+        assert overview["id"] == str(item.id)
         assert overview["counts"]["annotations"] == 1
         annotation_view = (await client.get(f"{base}/items/{item.id}/annotations")).json()
         assert [row["id"] for row in annotation_view["annotations"]] == [str(annotations[0].id)]

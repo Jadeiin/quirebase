@@ -264,7 +264,14 @@ async def test_item_sections_separate_page_responsibilities(
         workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
         summary = await client.get(f"{workspace_base}/items/{item.id}/overview")
         assert summary.status_code == 200
-        assert summary.json()["latest_revision"]["id"] == str(revision.id)
+        assert summary.json()["latest_revision_id"] == str(revision.id)
+        assert summary.json()["id"] == str(item.id)
+        assert summary.json()["metadata"] == item.work
+        assert "item" not in summary.json()
+        assert "latest_revision" not in summary.json()
+        detail = await client.get(f"{workspace_base}/items/{item.id}")
+        assert set(detail.json()) == {"id", "version", "metadata", "citation_key"}
+        assert detail.json()["metadata"] == item.work
         assert summary.json()["thumbnail"] is None
         assert summary.json()["tags"] == json_payload([{"id": tag.id, "name": "User priority"}])
         assert summary.json()["metadata"]["identifiers"] == item.work["identifiers"]

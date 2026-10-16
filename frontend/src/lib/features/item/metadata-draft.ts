@@ -48,35 +48,16 @@ export function workKeywords(work: Metadata): string[] {
 	];
 }
 
-export function doiComparisonKey(value: string): string {
-	let cleaned = value.trim();
-	const resolver = /^https?:\/\/(?:dx\.)?doi\.org\//i.exec(cleaned);
-	if (resolver) {
-		cleaned = cleaned.slice(resolver[0].length);
-		try {
-			// Decode resolver paths once, leaving bare DOI percent sequences literal.
-			cleaned = decodeURIComponent(cleaned.replace(/%(?![0-9a-f]{2})/gi, '%25'));
-		} catch {
-			// Keep undecodable octets distinct, matching Inquiro's DOI comparison.
-		}
-	}
-	return cleaned.replace(/^doi:\s*/i, '').replace(/[A-Z]/g, (letter) => letter.toLowerCase());
-}
-
-export function identifierRows(
-	work: Metadata,
-	primaryLookup?: components['schemas']['ItemOverviewView']['primary_lookup_identifier']
-): { provider: string; value: string }[] {
-	const rows = [
-		...(primaryLookup ? [primaryLookup] : []),
-		...objects(work.identifiers).map((row) => ({
-			provider: text(
-				row.identifier_type === 'Other' ? row.scheme : row.identifier_type
-			).toLowerCase(),
-			value: text(row.identifier)
-		}))
+export function identifierRows(work: Metadata): { namespace: string; value: string }[] {
+	const rows = objects(work.identifiers).map((row) => ({
+		namespace: text(
+			row.identifier_type === 'Other' ? row.scheme : row.identifier_type
+		).toLowerCase(),
+		value: text(row.identifier)
+	}));
+	return [
+		...new Map(rows.map((row) => [JSON.stringify([row.namespace, row.value]), row])).values()
 	];
-	return [...new Map(rows.map((row) => [JSON.stringify([row.provider, row.value]), row])).values()];
 }
 
 export function pdfFileUrls(work: Metadata | undefined): string[] {

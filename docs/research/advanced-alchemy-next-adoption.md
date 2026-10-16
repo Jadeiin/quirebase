@@ -32,11 +32,6 @@ frontend build directory. Subsequent [CI at dd9118e](https://github.com/Jadeiin/
 passed live PostgreSQL, controlled concurrency and S3 object-store contracts. Direct browser S3/CORS
 configuration remains a deployment-specific requirement.
 
-An isolated same-lock build of the previous commit already exceeded six bundle budgets. This
-follow-up adds about 1.1 KiB raw / 0.3 KiB gzip to the shared shell, mostly localized directory copy;
-Library controls add about 1.4 KiB raw / 0.5 KiB gzip. Affected budgets now reflect the measured
-application without adding libraries or broadening the PDF dependency boundary.
-
 ## Recommendation
 
 | Priority | Native capability | Complete application use case | Expected benefit |

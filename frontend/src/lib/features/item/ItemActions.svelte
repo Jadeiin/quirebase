@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { doiComparisonKey, identifierRows } from './metadata-draft.js';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -23,8 +22,7 @@
 		readExportPreferences,
 		type ExportPreferences
 	} from '#lib/export-preferences.js';
-	import { itemFilesQuery } from '#lib/features/item/queries.js';
-	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
+	import { itemFilesQuery, itemMetadataSourcesQuery } from '#lib/features/item/queries.js';
 	import { invalidateLibrary, invalidateProject } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -59,16 +57,16 @@
 	);
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
 	const copyDestinations = $derived(overview.copy_targets);
-	const providers = createQuery(() => ({
-		...discoveryProvidersQuery(workspaceId),
-		enabled: open && section === 'sources'
-	}));
-	const doiProviders = $derived(
-		providers.data?.lookup.filter((choice) => choice.identifier_namespaces.includes('doi')) ?? []
+	const sources = createQuery(() =>
+		itemMetadataSourcesQuery(workspaceId, itemId, open && section === 'sources')
 	);
+	const doiSource = $derived(
+		sources.data?.sources.find((row) => row.namespace === 'doi' && row.providers.length)
+	);
+	const doiProviders = $derived(doiSource?.providers ?? []);
 	$effect(() => {
 		if (
-			providers.data &&
+			sources.data &&
 			doiProvider !== 'auto' &&
 			!doiProviders.some((choice) => choice.id === doiProvider)
 		) {
@@ -76,19 +74,7 @@
 		}
 	});
 	const externalIdentifiers = $derived(
-		identifierRows(overview.metadata, overview.primary_lookup_identifier)
-			.filter(
-				(row) =>
-					row.provider !== 'doi' ||
-					!overview.item.doi ||
-					doiComparisonKey(row.value) !== doiComparisonKey(overview.item.doi)
-			)
-			.map((row) => ({
-				...row,
-				lookupProvider: providers.data?.lookup.find((choice) =>
-					choice.identifier_namespaces.includes(row.provider)
-				)?.id
-			}))
+		sources.data?.sources.filter((row) => row !== doiSource) ?? []
 	);
 
 	onMount(() => {
@@ -197,13 +183,15 @@
 	}
 
 	function synchronize(provider: string, uid: string) {
+		if (!sources.data) return;
+		const expectedVersion = sources.data.version;
 		void action(async () => {
 			await workspaceContext.api.request(
 				'POST',
 				'/workspaces/{workspace_id}/items/{item_id}/metadata/sync',
 				{
 					params: { path: { item_id: itemId } },
-					body: { expected_version: overview.item.version, provider, uid }
+					body: { expected_version: expectedVersion, provider, uid }
 				}
 			);
 			await onchanged();
@@ -284,12 +272,12 @@
 </script>
 
 <div class="flex flex-wrap gap-2">
-	{#if overview.latest_revision}<Button
+	{#if overview.latest_revision_id}<Button
 			as="a"
 			variant="filled"
 			class="inline-flex items-center gap-2"
 			href={resolve(
-				workspaceHref(workspaceId, `item/${itemId}/pdf/${overview.latest_revision.id}`)
+				workspaceHref(workspaceId, `item/${itemId}/pdf/${overview.latest_revision_id}`)
 			)}>{$t('Read PDF')}</Button
 		>{#if can(overview.authorization, 'workspace.export')}<Button
 				class="inline-flex items-center gap-2"
@@ -340,7 +328,7 @@
 							>
 						{/if}
 
-						{#if overview.latest_revision && can(overview.authorization, 'workspace.export')}
+						{#if overview.latest_revision_id && can(overview.authorization, 'workspace.export')}
 							<Tabs.Trigger
 								class="whitespace-nowrap data-selected:text-primary-700-300"
 								value="documents">{$t('Documents')}</Tabs.Trigger
@@ -485,51 +473,64 @@
 											{$t('Refresh this record from an upstream identifier.')}
 										</p>
 									</div>
-									{#if overview.item.doi}<div
-											class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+									{#if sources.isPending}
+										<p>{$t('Loading…')}</p>
+									{:else if sources.isError}
+										<Notice variant="error"
+											>{apiErrorMessage(
+												sources.error,
+												$t('Could not load metadata sources.')
+											)}</Notice
 										>
-											<div>
-												<strong>DOI</strong><span class="block text-sm text-surface-600-400"
-													>{overview.item.doi}</span
-												>
-											</div>
-											<div class="flex flex-wrap items-center gap-2">
-												<select
-													class="select h-8 w-auto min-w-36"
-													bind:value={doiProvider}
-													aria-label={$t('Provider')}
-												>
-													<option value="auto">{$t('Auto detect')}</option>
-													{#each doiProviders as choice (choice.id)}
-														<option value={choice.id}>{choice.name}</option>
-													{/each}
-												</select>
-												<Button
-													disabled={busy}
-													onclick={() => synchronize(doiProvider, overview.item.doi!)}
-													>{$t('Autoupdate')}</Button
-												>
-											</div>
-										</div>{:else if overview.latest_revision}<Button
-											disabled={busy}
-											onclick={rescanDoi}>{$t('Rescan PDF for DOI')}</Button
-										>{/if}
-									{#each externalIdentifiers as identifier (JSON.stringify( [identifier.provider, identifier.value] ))}<div
-											class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
-										>
-											<div>
-												<strong>{identifier.provider.toUpperCase()}</strong><span
-													class="block text-sm text-surface-600-400">{identifier.value}</span
-												>
-											</div>
-											{#if identifier.lookupProvider}
-												<Button
-													disabled={busy}
-													onclick={() => synchronize(identifier.lookupProvider!, identifier.value)}
-													>{$t('Autoupdate')}</Button
-												>
-											{/if}
-										</div>{/each}
+										<Button onclick={() => sources.refetch()}>{$t('Retry')}</Button>
+									{:else}
+										{#if doiSource}<div
+												class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+											>
+												<div>
+													<strong>DOI</strong><span class="block text-sm text-surface-600-400"
+														>{doiSource.value}</span
+													>
+												</div>
+												<div class="flex flex-wrap items-center gap-2">
+													<select
+														class="select h-8 w-auto min-w-36"
+														bind:value={doiProvider}
+														aria-label={$t('Provider')}
+													>
+														<option value="auto">{$t('Auto detect')}</option>
+														{#each doiProviders as choice (choice.id)}
+															<option value={choice.id}>{choice.name}</option>
+														{/each}
+													</select>
+													<Button
+														disabled={busy}
+														onclick={() => synchronize(doiProvider, doiSource!.value)}
+														>{$t('Autoupdate')}</Button
+													>
+												</div>
+											</div>{:else if overview.latest_revision_id}<Button
+												disabled={busy}
+												onclick={rescanDoi}>{$t('Rescan PDF for DOI')}</Button
+											>{/if}
+										{#each externalIdentifiers as identifier (JSON.stringify( [identifier.namespace, identifier.value] ))}<div
+												class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+											>
+												<div>
+													<strong>{identifier.namespace.toUpperCase()}</strong><span
+														class="block text-sm text-surface-600-400">{identifier.value}</span
+													>
+												</div>
+												{#if identifier.providers[0]?.id}
+													<Button
+														disabled={busy}
+														onclick={() =>
+															synchronize(identifier.providers[0].id, identifier.value)}
+														>{$t('Autoupdate')}</Button
+													>
+												{/if}
+											</div>{/each}
+									{/if}
 									<div class="border-t border-surface-300-700 pt-4">
 										<Button disabled={busy} onclick={regenerateCitationKey}
 											>{$t('Regenerate citation key')}</Button

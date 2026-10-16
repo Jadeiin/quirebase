@@ -10,6 +10,8 @@ export const itemKeys = {
 	detail: (workspaceId: string, itemId: string) => workspaceKeys.item(workspaceId, itemId),
 	overview: (workspaceId: string, itemId: string) =>
 		[...itemKeys.detail(workspaceId, itemId), 'overview'] as const,
+	metadataSources: (workspaceId: string, itemId: string) =>
+		[...itemKeys.detail(workspaceId, itemId), 'metadata-sources'] as const,
 	files: (workspaceId: string, itemId: string) =>
 		[...itemKeys.detail(workspaceId, itemId), 'files'] as const,
 	organize: (workspaceId: string, itemId: string) =>
@@ -39,19 +41,6 @@ export function itemOverviewQuery(workspaceId: string, itemId: string) {
 	});
 }
 
-export function itemDetailsQuery(workspaceId: string, itemId: string, enabled: boolean) {
-	const api = createWorkspaceApi(workspaceId);
-	return queryOptions({
-		queryKey: itemKeys.detail(workspaceId, itemId),
-		enabled,
-		queryFn: ({ signal }) =>
-			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}', {
-				params: { path: { item_id: itemId } },
-				signal
-			})
-	});
-}
-
 export function itemFilesQuery(workspaceId: string, itemId: string, enabled = true) {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
@@ -59,6 +48,19 @@ export function itemFilesQuery(workspaceId: string, itemId: string, enabled = tr
 		enabled,
 		queryFn: ({ signal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/documents', {
+				params: { path: { item_id: itemId } },
+				signal
+			})
+	});
+}
+
+export function itemMetadataSourcesQuery(workspaceId: string, itemId: string, enabled: boolean) {
+	const api = createWorkspaceApi(workspaceId);
+	return queryOptions({
+		queryKey: itemKeys.metadataSources(workspaceId, itemId),
+		enabled,
+		queryFn: ({ signal }) =>
+			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/metadata/sources', {
 				params: { path: { item_id: itemId } },
 				signal
 			})

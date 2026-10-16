@@ -1,4 +1,4 @@
-import type { QueryClient, QueryKey } from '@tanstack/svelte-query';
+import { matchQuery, type QueryClient, type QueryKey } from '@tanstack/svelte-query';
 import { exportPreferenceKeys } from '#lib/features/account/queries.js';
 import { dashboardKeys } from '#lib/features/dashboard/queries.js';
 import { itemKeys } from '#lib/features/item/queries.js';
@@ -10,7 +10,10 @@ import { toolKeys } from '#lib/features/tools/queries.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 async function invalidate(queryClient: QueryClient, keys: QueryKey[]) {
-	await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+	// Overlapping scopes must refresh each query once, without cancelling and restarting it.
+	await queryClient.invalidateQueries({
+		predicate: (query) => keys.some((queryKey) => matchQuery({ queryKey }, query))
+	});
 }
 
 export function invalidateItem(queryClient: QueryClient, workspaceId: string, itemId: string) {

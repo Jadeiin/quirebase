@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Combobox, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
+	import { Combobox, Dialog, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -7,8 +7,9 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { can as isAllowed, type AuthorizationAction } from '#lib/authorization/can.js';
 	import type { components } from '#lib/api/schema.js';
-	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
+	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import Button from '#lib/design/Button.svelte';
+	import Icon from '#lib/design/Icon.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import Panel from '#lib/design/Panel.svelte';
@@ -52,6 +53,8 @@
 			memberSearch = '';
 			selectedMemberId = '';
 			selectedMember = undefined;
+			settingsDialogOpen = false;
+			deleteDialogOpen = false;
 		}
 	});
 	$effect(() => {
@@ -102,6 +105,7 @@
 		})
 	);
 	let body = $state('');
+	let settingsDialogOpen = $state(false);
 	let settingsName = $state('');
 	let settingsDescription = $state('');
 	let settingsParticipation = $state<components['schemas']['ProjectParticipation']>('workspace');
@@ -119,6 +123,21 @@
 			pendingSettings = undefined;
 		}
 	});
+
+	$effect(() => {
+		if (!can('project.update')) settingsDialogOpen = false;
+	});
+
+	function openSettings() {
+		if (!project || !can('project.update')) return;
+		participationDialogOpen = false;
+		pendingSettings = undefined;
+		settingsName = project.name;
+		settingsDescription = project.description;
+		settingsParticipation = project.participation;
+		error = '';
+		settingsDialogOpen = true;
+	}
 
 	$effect(() => {
 		if (!project) return;
@@ -178,7 +197,7 @@
 			return;
 		participationDialogOpen = false;
 		pendingSettings = undefined;
-		await mutate(
+		const saved = await mutate(
 			() =>
 				workspace.api.request('PATCH', '/workspaces/{workspace_id}/projects/{project_id}', {
 					params: { path: { project_id: targetProjectId } },
@@ -186,6 +205,7 @@
 				}),
 			$t('Project settings saved')
 		);
+		if (saved) settingsDialogOpen = false;
 	}
 
 	async function saveSettings(event: SubmitEvent) {
@@ -370,25 +390,46 @@
 </script>
 
 <section class="grid grid-cols-1 gap-6">
-	<a
-		class="text-sm text-primary-700-300 no-underline"
-		href={resolve(workspaceHref(workspaceId, 'projects'))}>← {$t('Projects')}</a
-	>
-	{#if error}<Notice variant="error">{error}</Notice>{/if}
+	<div class="flex flex-wrap items-center justify-between gap-3">
+		<a
+			class="text-sm text-primary-700-300 no-underline"
+			href={resolve(workspaceHref(workspaceId, 'projects'))}>← {$t('Projects')}</a
+		>
+		{#if project}
+			<div class="ml-auto flex flex-wrap justify-end gap-2">
+				{#if can('project.update')}
+					<Button variant="tonal" size="sm" disabled={busy} onclick={openSettings}>
+						<Icon name="settings" size={16} />{$t('Project settings')}
+					</Button>
+				{/if}
+				{#if can('project.delete')}
+					<Button
+						variant="danger"
+						size="sm"
+						disabled={busy}
+						onclick={() => (deleteDialogOpen = true)}>{$t('Delete Project')}</Button
+					>
+				{/if}
+			</div>
+		{/if}
+	</div>
+	{#if error && !settingsDialogOpen}<Notice variant="error">{error}</Notice>{/if}
 	{#if notice}<Notice>{notice}</Notice>{/if}
 	{#if detail.isPending}<p>{$t('Loading Project…')}</p>
 	{:else if detail.isError || !project}<Notice variant="error"
 			>{$t('Unable to load Project.')}</Notice
 		>
 	{:else}
-		<SectionHeader>
+		<SectionHeader class="flex-col items-stretch sm:flex-row sm:items-start">
 			<div>
 				<p class="mb-1 text-sm text-primary-700-300">
 					{$t(domainLabel(project.state))} · {$t(domainLabel(project.participation))} · {project.item_count}
 					{$t('Items')}
 				</p>
-				<h1>{project.name}</h1>
-				<p class="text-surface-600-400">{project.description || $t('No description')}</p>
+				<h1 class="wrap-anywhere">{project.name}</h1>
+				<p class="wrap-anywhere text-surface-600-400">
+					{project.description || $t('No description')}
+				</p>
 			</div>
 			{#snippet actions()}
 				<div class="flex flex-wrap gap-2">
@@ -418,72 +459,6 @@
 				</div>
 			{/snippet}
 		</SectionHeader>
-
-		{#if can('project.update')}
-			<Panel>
-				<form class="grid grid-cols-1 gap-3 md:grid-cols-2" onsubmit={saveSettings}>
-					<h2 class="text-xl font-semibold md:col-span-2">{$t('Project settings')}</h2>
-					<label class="grid grid-cols-1 gap-1"
-						>{$t('Name')}<input
-							class="input"
-							bind:value={settingsName}
-							required
-							maxlength="240"
-						/></label
-					>
-					<label class="grid grid-cols-1 gap-1"
-						>{$t('Participation')}<select class="select" bind:value={settingsParticipation}
-							>{#if project.participation === 'workspace' || project.allowed_participation_changes.includes('workspace')}<option
-									value="workspace">{$t(domainLabel('workspace'))}</option
-								>{/if}{#if project.participation === 'open' || project.allowed_participation_changes.includes('open')}<option
-									value="open">{$t(domainLabel('open'))}</option
-								>{/if}{#if project.participation === 'managed' || project.allowed_participation_changes.includes('managed')}<option
-									value="managed">{$t(domainLabel('managed'))}</option
-								>{/if}</select
-						></label
-					>
-					{#if settingsParticipation !== project.participation}
-						<p class="text-sm text-surface-600-400 md:col-span-2">
-							{#if settingsParticipation === 'workspace'}
-								{$t('All active Workspace members will participate in this Project.')}
-							{:else if settingsParticipation === 'managed' && project.participation === 'workspace'}
-								{$t(
-									'A managed Project starts with no participants; Workspace owners/admins can add them.'
-								)}
-							{:else if project.participation === 'workspace'}
-								{$t(
-									'Switching from Workspace-wide participation starts with you as the first participant.'
-								)}
-							{:else}
-								{$t(
-									'Switching between open and managed participation preserves current participants.'
-								)}
-							{/if}
-						</p>
-					{/if}
-					<label class="grid grid-cols-1 gap-1 md:col-span-2"
-						>{$t('Description')}<textarea class="textarea min-h-24" bind:value={settingsDescription}
-						></textarea></label
-					>
-					<div class="flex flex-wrap gap-2 md:col-span-2">
-						<Button
-							disabled={busy ||
-								!settingsName.trim() ||
-								(settingsParticipation !== project.participation &&
-									!project.allowed_participation_changes.includes(settingsParticipation))}
-							>{$t('Save Project settings')}</Button
-						>
-					</div>
-				</form>
-			</Panel>
-		{/if}
-		{#if can('project.delete')}
-			<Panel>
-				<Button variant="danger" disabled={busy} onclick={() => (deleteDialogOpen = true)}
-					>{$t('Delete Project')}</Button
-				>
-			</Panel>
-		{/if}
 
 		<Panel>
 			<h2>{$t('Participation')}</h2>
@@ -672,18 +647,126 @@
 			{/if}
 		</Panel>
 	{/if}
-	<ConfirmDialog
-		bind:open={participationDialogOpen}
-		title={$t('Clear Project participant selection?')}
-		body={$t(
-			'All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them.'
-		)}
-		confirmLabel={$t('Clear selection and save')}
-		{busy}
-		onConfirm={() => {
-			if (pendingSettings) void applySettings(pendingSettings.projectId, pendingSettings.changes);
-		}}
-	/>
+	{#if project && can('project.update')}
+		<Dialog
+			open={settingsDialogOpen}
+			onOpenChange={(details) => {
+				settingsDialogOpen = details.open;
+				if (!details.open) {
+					participationDialogOpen = false;
+					pendingSettings = undefined;
+				}
+			}}
+		>
+			<Portal>
+				<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
+				<Dialog.Positioner class="fixed inset-0 z-71 grid grid-cols-1 place-items-center p-4">
+					<Dialog.Content
+						class="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-container border border-surface-300-700 bg-surface-50-950 p-5 shadow-2xl"
+					>
+						<SectionHeader>
+							<Dialog.Title class="text-lg font-bold"
+								>{participationDialogOpen
+									? $t('Clear Project participant selection?')
+									: $t('Project settings')}</Dialog.Title
+							>
+							{#snippet actions()}
+								<DialogCloseButton />
+							{/snippet}
+						</SectionHeader>
+						{#if error}<Notice variant="error" class="mb-4">{error}</Notice>{/if}
+						{#if participationDialogOpen}
+							<p class="text-sm text-surface-600-400">
+								{$t(
+									'All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them.'
+								)}
+							</p>
+							<div class="mt-5 flex flex-wrap justify-end gap-2">
+								<Button
+									variant="tonal"
+									disabled={busy}
+									onclick={() => {
+										participationDialogOpen = false;
+										pendingSettings = undefined;
+									}}>{$t('Cancel')}</Button
+								>
+								<Button
+									variant="danger-filled"
+									disabled={busy}
+									onclick={() => {
+										if (pendingSettings)
+											void applySettings(pendingSettings.projectId, pendingSettings.changes);
+									}}>{$t('Clear selection and save')}</Button
+								>
+							</div>
+						{:else}
+							<form class="grid grid-cols-1 gap-3 sm:grid-cols-2" onsubmit={saveSettings}>
+								<label class="grid grid-cols-1 gap-1"
+									>{$t('Name')}<input
+										class="input"
+										bind:value={settingsName}
+										required
+										maxlength="240"
+									/></label
+								>
+								<label class="grid grid-cols-1 gap-1"
+									>{$t('Participation')}<select class="select" bind:value={settingsParticipation}
+										>{#if project.participation === 'workspace' || project.allowed_participation_changes.includes('workspace')}<option
+												value="workspace">{$t(domainLabel('workspace'))}</option
+											>{/if}{#if project.participation === 'open' || project.allowed_participation_changes.includes('open')}<option
+												value="open">{$t(domainLabel('open'))}</option
+											>{/if}{#if project.participation === 'managed' || project.allowed_participation_changes.includes('managed')}<option
+												value="managed">{$t(domainLabel('managed'))}</option
+											>{/if}</select
+									></label
+								>
+								{#if settingsParticipation !== project.participation}
+									<p class="text-sm text-surface-600-400 sm:col-span-2">
+										{#if settingsParticipation === 'workspace'}
+											{$t('All active Workspace members will participate in this Project.')}
+										{:else if settingsParticipation === 'managed' && project.participation === 'workspace'}
+											{$t(
+												'A managed Project starts with no participants; Workspace owners/admins can add them.'
+											)}
+										{:else if project.participation === 'workspace'}
+											{$t(
+												'Switching from Workspace-wide participation starts with you as the first participant.'
+											)}
+										{:else}
+											{$t(
+												'Switching between open and managed participation preserves current participants.'
+											)}
+										{/if}
+									</p>
+								{/if}
+								<label class="grid grid-cols-1 gap-1 sm:col-span-2"
+									>{$t('Description')}<textarea
+										class="textarea min-h-24"
+										bind:value={settingsDescription}></textarea></label
+								>
+								<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
+									<Button
+										type="button"
+										variant="tonal"
+										disabled={busy}
+										onclick={() => (settingsDialogOpen = false)}>{$t('Cancel')}</Button
+									>
+									<Button
+										disabled={busy ||
+											!settingsName.trim() ||
+											(settingsParticipation !== project.participation &&
+												!project.allowed_participation_changes.includes(settingsParticipation))}
+										>{$t('Save Project settings')}</Button
+									>
+								</div>
+							</form>
+						{/if}
+					</Dialog.Content>
+				</Dialog.Positioner>
+			</Portal>
+		</Dialog>
+	{/if}
+
 	<PromptDialog
 		bind:open={deleteDialogOpen}
 		title={$t('Permanently delete this Project?')}

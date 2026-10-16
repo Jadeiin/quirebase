@@ -96,10 +96,14 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
             }
         ],
         "subjects": [{"subject": "Alpha; beta"}, {"subject": "Robotics"}],
+        "container": {"title": "Journal & 特刊"},
     }
     await db.commit()
     try:
-        response = await client.get(f"{base}/items/facets", params={"keyword_exact": "Alpha; beta"})
+        response = await client.get(
+            f"{base}/items/facets",
+            params={"keyword_exact": "Alpha; beta", "publication_title": "Journal & 特刊"},
+        )
         assert response.status_code == 200
         assert response.json() == {
             "authors": [{"last_name": "Smith", "first_name": "John", "item_count": 1}],
@@ -114,6 +118,12 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
         )
         assert matches.status_code == 200 and matches.json()["total"] == 1
         assert matches.json()["items"][0]["authors"] == "John Smith"
+        assert (
+            await client.get(f"{base}/items", params={"publication_title": "Journal & 特刊"})
+        ).json()["total"] == 1
+        assert (await client.get(f"{base}/items", params={"publication_title": "Journal"})).json()[
+            "total"
+        ] == 0
         assert (await client.get(f"{base}/items/facets", params={"limit": 0})).status_code == 422
     finally:
         await client.aclose()
@@ -815,7 +825,16 @@ async def test_library_pagination_filters_and_bulk_actions(
         assert tagged.status_code == 200
         organized = await client.get(f"{workspace_base}/items/{selected[0].id}/organize")
         assert organized.status_code == 200
-        assert "Priority" in {tag["name"] for tag in organized.json()["tags"]}
+        matrix = organized.json()["tag_matrix"]
+        assert "Priority" in {
+            tag["name"]
+            for group in matrix["groups"]
+            for tag in group["tags"]
+            if tag["id"] in matrix["assigned_ids"]
+        }
+        assert "item" not in organized.json() and "tags" not in organized.json()
+        assert all("names" not in group for group in matrix["groups"])
+        assert "suggested_single_words" not in matrix and "suggested_phrases" not in matrix
         assigned = await client.post(
             f"{workspace_base}/items/bulk",
             json=json_payload({

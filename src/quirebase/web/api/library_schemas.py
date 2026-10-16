@@ -33,9 +33,10 @@ class BulkActionRequest(BaseModel):
     confirmation: str = ""
 
 
-class ItemDetailView(ItemSearchView):
+class ItemDetailView(BaseModel):
+    id: UUID
+    version: int
     metadata: Work
-    abstract_html: str | None
     citation_key: str | None
 
 
@@ -87,9 +88,9 @@ def item_search_view(item: Any) -> ItemSearchView:
 def item_detail_view(view: ItemMetadataData) -> ItemDetailView:
     item = view.item
     return ItemDetailView(
-        **item_search_view(item).model_dump(),
+        id=item.id,
+        version=item.version,
         metadata=view.metadata,
-        abstract_html=item.work.get("description"),
         citation_key=item.citation_key,
     )
 

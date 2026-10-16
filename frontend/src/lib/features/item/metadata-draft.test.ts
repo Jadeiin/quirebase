@@ -3,7 +3,6 @@ import {
 	contributorName,
 	contributorAffiliations,
 	identifierRows,
-	doiComparisonKey,
 	pdfFileUrls,
 	workKeywords,
 	type Metadata
@@ -23,23 +22,6 @@ it.each([
 		expect(contributorName({ type: 'Person', person })).toBe(name);
 	}
 );
-
-it.each([
-	['10.1000/PRIMARY', '10.1000/primary'],
-	[' DOI: 10.1000/Primary ', '10.1000/primary'],
-	['HTTPS://DX.DOI.ORG/10.1000/PRIMARY', '10.1000/primary'],
-	['https://doi.org/10.1000/pr%69mary', '10.1000/primary'],
-	['https://doi.org/10.1000/%C3%9Cber', '10.1000/Über'],
-	['10.1000/Über', '10.1000/Über'],
-	['10.1000/über', '10.1000/über'],
-	['10.1000/A%3c', '10.1000/a%3c'],
-	['https://doi.org/10.1000/A%253c', '10.1000/a%3c'],
-	['https://doi.org/10.1000/A%3c', '10.1000/a<'],
-	['https://doi.org/10.1000/%FF', '10.1000/%ff'],
-	['https://doi.org/10.1000/A%3c%invalid', '10.1000/a<%invalid']
-])('compares DOI spelling %s as %s without conflating distinct identifiers', (value, expected) => {
-	expect(doiComparisonKey(value)).toBe(expected);
-});
 
 it('projects the selected contributor entity while preserving both entity snapshots', () => {
 	const credit = {
@@ -127,25 +109,9 @@ it('deduplicates identifier display rows and preserves the complete Work', () =>
 	} as Metadata;
 	const original = structuredClone(metadata);
 	expect(identifierRows(metadata)).toEqual([
-		{ provider: 'pmid', value: '42' },
-		{ provider: 'pmid', value: '43' },
-		{ provider: 'local registry', value: '42' }
+		{ namespace: 'pmid', value: '42' },
+		{ namespace: 'pmid', value: '43' },
+		{ namespace: 'local registry', value: '42' }
 	]);
-	expect(metadata).toEqual(original);
-});
-
-it('combines backend primary lookup context with identifier display without changing the Work', () => {
-	const metadata = {
-		id: 'https://pubmed.ncbi.nlm.nih.gov/42/',
-		type: 'Preprint',
-		identifiers: [{ identifier_type: 'PMID', identifier: '42' }]
-	} as Metadata;
-	const original = structuredClone(metadata);
-	expect(identifierRows(metadata, { provider: 'pmid', value: '42' })).toEqual([
-		{ provider: 'pmid', value: '42' }
-	]);
-	expect(
-		identifierRows({ id: metadata.id, type: metadata.type }, { provider: 'pmid', value: '42' })
-	).toEqual([{ provider: 'pmid', value: '42' }]);
 	expect(metadata).toEqual(original);
 });

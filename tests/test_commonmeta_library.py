@@ -10,6 +10,7 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import VersionConflict, WorkspaceMembershipRequired, WorkspaceUnavailable
 from quirebase.library import (
+    LibraryFilter,
     copy_item_to_workspace,
     create_item,
     find_duplicates,
@@ -329,6 +330,58 @@ async def test_search_facets_read_work_and_author_roles(persistence_db):
     assert (
         await search_library(db, actor, workspace_id, author="Smith", keyword_exact="Graph; theory")
     )[1] == 1
+
+
+async def test_publication_filters_share_exact_candidates_pagination_and_facets(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    publication = 'Journal & 特刊; 50%_ "Q"'
+    matching = []
+    for index, title in enumerate((
+        publication,
+        publication,
+        publication + " supplement",
+        publication.lower(),
+    )):
+        result = await create_item(
+            db,
+            actor,
+            workspace_id,
+            work(
+                f"Record {index}",
+                container={"title": title},
+                date_published="2024-06-15",
+                subjects=[{"subject": "Graph; theory"}],
+                contributors=[{"type": "Person", "person": {"name": "Ada"}, "roles": ["Author"]}],
+            ),
+        )
+        if index < 2:
+            matching.append(result.item_id)
+    other, other_workspace = await owner(db)
+    await create_item(db, other, other_workspace, work(container={"title": publication}))
+    pages = []
+    for offset in (0, 1):
+        rows, total = await search_library(
+            db,
+            actor,
+            workspace_id,
+            publication_title=publication,
+            limit=1,
+            offset=offset,
+            year="2024",
+            reference_type="Dataset",
+            keyword_exact="Graph; theory",
+            author_last_name="Ada",
+            author_first_name="",
+        )
+        assert total == 2
+        pages.extend(item.id for item in rows)
+    assert set(pages) == set(matching)
+    facets = await get_library_facets(
+        db, actor, workspace_id, LibraryFilter(publication_title=publication)
+    )
+    assert [(row.last_name, row.item_count) for row in facets.authors] == [("Ada", 2)]
+    assert [(row.value, row.item_count) for row in facets.keywords] == [("Graph; theory", 2)]
 
 
 async def test_concurrent_creation_allows_shared_identifiers(persistence_sessions):

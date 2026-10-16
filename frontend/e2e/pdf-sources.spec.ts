@@ -444,8 +444,9 @@ test('PDF annotation sources refresh after an Item joins a Project', async ({ pa
 					title: 'Reader item'
 				},
 				citation_key: null,
-				item: { id: 'item-1', title_html: 'Reader item', version: 1 },
-				latest_revision: null,
+				id: 'item-1',
+				version: 1,
+				latest_revision_id: null,
 				authorization: { allowed: ['project_item.manage'] },
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
@@ -456,9 +457,7 @@ test('PDF annotation sources refresh after an Item joins a Project', async ({ pa
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/organize', (route) =>
 		route.fulfill({
 			json: {
-				item: { id: 'item-1', title_html: 'Reader item', version: 1 },
 				authorization: { allowed: ['project_item.manage'] },
-				tags: [],
 				projects: [
 					{
 						id: 'project-1',
@@ -480,8 +479,6 @@ test('PDF annotation sources refresh after an Item joins a Project', async ({ pa
 					assigned_ids: [],
 					recommended_ids: [],
 					suggested_names: [],
-					suggested_single_words: [],
-					suggested_phrases: [],
 					recommendation_state: 'ready',
 					recommendation_error: null
 				}

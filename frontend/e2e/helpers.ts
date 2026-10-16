@@ -1,5 +1,18 @@
 import type { Page, Route } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+import type { components } from '../src/lib/api/schema.js';
+
+export async function mockMetadataSources(
+	page: Page,
+	itemId: string,
+	view:
+		| components['schemas']['ItemMetadataSourcesView']
+		| (() => components['schemas']['ItemMetadataSourcesView'])
+) {
+	await page.route(`**/api/v1/workspaces/workspace-1/items/${itemId}/metadata/sources`, (route) =>
+		route.fulfill({ json: typeof view === 'function' ? view() : view })
+	);
+}
 
 const workSchema = JSON.parse(
 	execFileSync(

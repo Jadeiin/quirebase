@@ -140,6 +140,7 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "keyword_exact",
         "author_last_name",
         "author_first_name",
+        "publication_title",
     }
     assert set(tools["library.get_item_facets"].parameters["properties"]) == (
         set(tools["library.search_items"].parameters["properties"]) - {"offset", "sort"}

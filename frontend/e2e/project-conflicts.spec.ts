@@ -31,12 +31,12 @@ test('Organize prioritizes working contexts without restricting other Project as
 					title: 'Reading Item'
 				},
 				citation_key: null,
-				item: { id: 'item-1', title_html: 'Reading Item', version: 1 },
-				latest_revision: null,
+				id: 'item-1',
+				version: 1,
+				latest_revision_id: null,
 				authorization: { allowed: [] },
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 				tags: [],
-
 				copy_targets: []
 			}
 		})
@@ -83,7 +83,6 @@ test('Organize prioritizes working contexts without restricting other Project as
 			json: {
 				authorization: { allowed: ['project_item.manage'] },
 				projects,
-				tags: [],
 				tag_matrix: {
 					groups: [],
 					assigned_ids: [],
@@ -140,12 +139,12 @@ for (const assigned of [false, true]) {
 						title: 'Reading Item'
 					},
 					citation_key: null,
-					item: { id: 'item-1', title_html: 'Reading Item', version: 1 },
-					latest_revision: null,
+					id: 'item-1',
+					version: 1,
+					latest_revision_id: null,
 					authorization: { allowed: [] },
 					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 					tags: [],
-
 					copy_targets: []
 				}
 			})
@@ -165,7 +164,6 @@ for (const assigned of [false, true]) {
 									is_participating: true
 								}
 							],
-					tags: [],
 					tag_matrix: {
 						groups: [],
 						assigned_ids: [],

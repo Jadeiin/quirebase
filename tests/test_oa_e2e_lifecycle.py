@@ -335,8 +335,10 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         item_version = item.version
         resp = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")
         assert resp.status_code == 200
-        assert resp.json()["title_html"] == item.work.get("title")
-        assert resp.json()["doi"] == "10.3390/ejihpe13110181"
+        assert resp.json()["metadata"]["title"] == item.work.get("title")
+        assert {"identifier_type": "DOI", "identifier": "10.3390/ejihpe13110181"} in resp.json()[
+            "metadata"
+        ]["identifiers"]
         edit_resp = await client.put(
             f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}",
             json=json_payload({
@@ -377,7 +379,7 @@ async def test_seam5_oa_corpus_web_workspace_and_editing_roundtrip(
         assert edit_resp.status_code == 200
         edited = await client.get(f"/api/v1/workspaces/{seed_item.workspace_id}/items/{item_id}")
         assert (
-            edited.json()["title_html"]
+            edited.json()["metadata"]["title"]
             == "Drivers and Consequences of ChatGPT Use in Higher Education: Key Stakeholder Perspectives"
         )
         workspace_id = seed_item.workspace_id

@@ -54,6 +54,7 @@ class LibraryFilter:
     keyword_exact: str | None = None
     author_last_name: str | None = None
     author_first_name: str | None = None
+    publication_title: str | None = None
 
 
 async def _library_query(
@@ -105,6 +106,10 @@ async def _library_query(
         )
     if filters.reference_type is not None:
         item_query = item_query.where(Item.work["type"].as_string() == filters.reference_type)
+    if filters.publication_title is not None:
+        item_query = item_query.where(
+            Item.work["container"]["title"].as_string() == filters.publication_title
+        )
     if filters.keyword.strip():
         item_query = item_query.where(keyword_condition(db, filters.keyword.strip(), exact=False))
     if filters.keyword_exact is not None:
@@ -150,6 +155,7 @@ async def search_library(
     keyword_exact: str | None = None,
     author_last_name: str | None = None,
     author_first_name: str | None = None,
+    publication_title: str | None = None,
 ) -> tuple[list[Item], int]:
     item_query = await _library_query(
         db,
@@ -167,6 +173,7 @@ async def search_library(
             keyword_exact=keyword_exact,
             author_last_name=author_last_name,
             author_first_name=author_first_name,
+            publication_title=publication_title,
         ),
     )
     expression = {

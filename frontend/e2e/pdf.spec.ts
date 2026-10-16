@@ -1,3 +1,4 @@
+import { mockMetadataSources } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import type { AnnotationPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
 import { minimalPdf, mockSession, annotationList, setAnnotationSource } from './helpers';
@@ -544,13 +545,9 @@ test('deleting a reader annotation refreshes the Item overview count', async ({ 
 					title: 'Reader item'
 				},
 				citation_key: null,
-				item: { id: 'item-1', title_html: 'Reader item', version: 1 },
-				latest_revision: {
-					id: 'revision-1',
-					original_name: 'paper.pdf',
-					size: 100,
-					processing_state: 'ready'
-				},
+				id: 'item-1',
+				version: 1,
+				latest_revision_id: 'revision-1',
 				authorization: { allowed: ['workspace.export'] },
 				copy_targets: [],
 				counts: {
@@ -680,15 +677,16 @@ test('the annotation source panel stays above the comment sidebar', async ({ pag
 
 test('PDF reader header follows Item metadata changes', async ({ page }) => {
 	await mockSession(page);
-	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
-		route.fulfill({
-			json: {
-				search: [],
-				lookup: [{ id: 'datacite', name: 'DataCite', identifier_namespaces: ['doi'] }],
-				max_search_clauses: 5
+	await mockMetadataSources(page, 'item-1', {
+		version: 1,
+		sources: [
+			{
+				namespace: 'doi',
+				value: '10.1000/reader',
+				providers: [{ id: 'datacite', name: 'DataCite' }]
 			}
-		})
-	);
+		]
+	});
 	let synchronized = false;
 	const title = () => (synchronized ? 'Synchronized title' : 'Old title');
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
@@ -701,8 +699,9 @@ test('PDF reader header follows Item metadata changes', async ({ page }) => {
 					identifiers: [{ identifier_type: 'DOI', identifier: '10.1000/reader' }]
 				},
 				citation_key: null,
-				item: { id: 'item-1', title_html: title(), version: 1, doi: '10.1000/reader' },
-				latest_revision: null,
+				id: 'item-1',
+				version: 1,
+				latest_revision_id: null,
 				authorization: { allowed: ['item.update', 'workspace.export', 'item.delete'] },
 				copy_targets: [],
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },

@@ -445,12 +445,12 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 						title: 'Exportable'
 					},
 					citation_key: null,
-					item: { id: 'item-1', title_html: 'Exportable', version: 1 },
-					latest_revision: null,
+					id: 'item-1',
+					version: 1,
+					latest_revision_id: null,
 					authorization: { allowed: ['workspace.export'] },
 					counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
 					tags: [],
-
 					copy_targets: []
 				}
 			})

@@ -85,6 +85,7 @@ async def test_ads_provider_dates_remain_usable_for_import_and_sync(
     [
         ("openalex", REQUEST_DOI),
         ("openalex", "W1220000000"),
+        ("openalex", "https://openalex.org/W1220000000"),
         ("auto", REQUEST_DOI),
         ("crossref", REQUEST_DOI),
         ("datacite", REQUEST_DOI),

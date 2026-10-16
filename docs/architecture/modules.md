@@ -301,6 +301,11 @@ section composition. Effective participation requires an active User and current
 governance discovery of a managed Project does not imply participation. The adapter projects each independent
 Item capability from the resolved context, without metadata-edit or delete boolean mirrors.
 
+Library's `get_item_metadata_sources` supplies on-demand metadata synchronization choices from
+one authorized Work snapshot and its Item version. It uses Inquiro recognition, comparison and
+configured Provider capabilities, with no upstream I/O or reading-history mutation. This action
+read model belongs to `library.identifiers`; Overview carries no identifier lookup projections.
+
 Section composition consumes Documents-owned `DocumentInfo` values through
 `list_item_revisions`, `list_item_attachments` and `count_item_attachments`. These frozen summaries
 expose file names, sizes, media types and processing facts without FileObject descriptors or

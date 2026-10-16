@@ -10,6 +10,7 @@
 	import type { ItemOverview, ItemSection } from './queries';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { metadataFilterLinks } from './metadata-links.js';
 
 	let { itemId, overview, user, onChanged } = $props<{
 		itemId: string;
@@ -32,7 +33,8 @@
 		const candidate = page.url.pathname.split('/').filter(Boolean)[4];
 		return sectionKeys.find((key) => key === candidate) ?? 'overview';
 	});
-	const title = $derived(overview?.item.title_html);
+	const title = $derived(overview?.metadata.title);
+	const links = $derived(overview && metadataFilterLinks(workspaceId, overview.metadata));
 
 	function sectionPath(key: string) {
 		return workspaceHref(
@@ -51,10 +53,25 @@
 		<h1 class="max-w-4xl text-balance">
 			{#if title}<RichText html={title} />{:else}{$t('Item details')}{/if}
 		</h1>
-		{#if overview}<p class="mt-2 text-sm text-surface-700-300">
-				{overview.item.authors || $t('Unknown authors')}{#if overview.item.publication_title}
-					· {overview.item.publication_title}{/if}{#if overview.item.publication_date}
-					· {overview.item.publication_date}{/if}
+		{#if links}<p class="mt-2 text-sm text-surface-700-300">
+				{#each links.authors as author, index (index)}
+					{#if index > 0}{'; '}{/if}<a
+						href={resolve(author.href)}
+						title={$t('View Items by {name}', { name: author.label })}>{author.label}</a
+					>
+				{:else}{$t('Unknown authors')}{/each}
+				{#if links.publication.href}
+					· <a
+						href={resolve(links.publication.href)}
+						title={$t('View Items in {name}', { name: links.publication.label })}
+						>{links.publication.label}</a
+					>{/if}
+				{#if links.date.href}
+					· <a
+						href={resolve(links.date.href)}
+						title={$t('View Items published in {year}', { year: links.date.year })}
+						>{links.date.label}</a
+					>{/if}
 			</p>{/if}
 	</div>
 	{#if overview && user}{#key itemId}<ItemActions

@@ -142,16 +142,9 @@ The search projection includes the active contributor's credit name and supplied
 parts. Legacy NCBI URLs are interpreted by their resource path: `/pubmed/` identifies PubMed,
 while `/pmc/articles/` identifies PMC; unrelated paths do not supply a comparison identifier.
 
-A local SQLite probe on 2026-10-13 used 5,000 Works with an 8 KiB description each. Before removal,
-a single-record bibliography preview loaded all 5,000 Works (about 40 MiB of descriptions) and took
-41.9 ms; afterwards it performed no Item SELECT and took 7.0 ms (6.8 ms at 100 and 1,000 Items).
-This is a development measurement, not a production latency guarantee. Separate three-run median
-probes at 5,000 Items measured a 25-Item page at 21.5 ms, author suggestions at 25.8 ms, facets at
-143.6 ms and explicit identifier duplicates at 67.0 ms. Exact facets and name suggestions still
-scan matching JSON metadata inside the database; their output limits do not bound input work.
-No identifier projection, cache invalidation system or speculative JSON index was introduced.
-Evidence: `.cache/commonmeta-checks/metadata-perf-{before,after}.txt` and `metadata-scaling.txt`.
-These probes cover SQLite only; PostgreSQL performance remains unmeasured in this session.
+Bibliography preview formats the supplied Work without querying stored Items. Exact facets and
+name suggestions scan matching JSON metadata inside the database; their output limits do not bound
+input work.
 
 A Contributor's `type` selects its active Person or Organization for names, affiliations,
 Citation Keys, Provider credit matching, search, facets and typeahead. Both entity snapshots can
@@ -216,16 +209,41 @@ published author list during Import or Provider sync.
 
 Provider choices expose each lookup's accepted identifier namespaces from the existing Inquiro
 catalog, including DOI lookup through OpenAlex as well as its own Work IDs.
-Metadata sources uses those configured capabilities to render sync actions, while unsupported
-identifiers remain visible. Identifier display rows are deduplicated without modifying the Work;
-repeated standard identifier rows remain valid storage and export values.
-Authorized Item Overview responses include optional `primary_lookup_identifier` query context,
-using the existing Inquiro lookup-key type. Library derives it from the primary Work URI when that
-supported identity is absent from top-level identifiers, comparing both with Inquiro's rules.
-Metadata sources combines this context with identifier rows and configured lookup choices.
-Only the DOI already shown in the dedicated DOI panel is omitted from those rows, comparing
-resolver and bare spellings with the DOI normalization rules above. Secondary DOIs remain
-visible and selectable for sync.
+Item Overview contains the Work snapshot without separate DOI or primary-identifier projections.
+Overview and Metadata display identifiers directly from Work.id and top-level Work.identifiers,
+preserving source strings and keeping container, contributor and related-resource IDs separate.
+
+Metadata sources loads `/items/{item_id}/metadata/sources` only when its action panel opens.
+Library authorizes the Item and builds one transient source list from the current Work using
+Inquiro's identifier recognition and comparison rules, including supported primary URI forms.
+Each source supplies its namespace, normalized lookup value and configured Providers (for example,
+an OpenAlex URL becomes `W123`). Unrecognized or unsupported identifier rows retain their source
+values with no sync action. Equivalent identifiers are collapsed without modifying the stored
+Work, while distinct secondary DOIs remain selectable. The preferred DOI appears first, using
+Inquiro's existing selection rule.
+The response carries the Item version from the same snapshot, which the sync command uses for
+its expected-version check. Opening sources performs no upstream I/O and does not record an Item
+read. Its client query uses a stable Item-scoped key and is invalidated once with the Item after
+edits, sync and conflicts; a refreshed Overview version does not trigger another sources request.
+Provider matching and DOI comparison are not reimplemented in the browser.
+
+Item detail responses expose `id`, `version`, `metadata` and `citation_key`. Overview extends
+that same shape with authorization, counts, Tags, thumbnail, copy targets and `latest_revision_id`.
+Title, contributors, publication date, publication title, identifiers and description are read
+directly from the single Work snapshot. The Metadata page reuses the Overview query so its draft
+and expected version come from the same response. Library list responses retain their lightweight
+`ItemSearchView` without embedding complete Works.
+
+Item bibliographic links open the current Workspace Library with one exact filter: contributor
+name parts, publication year, `publication_title`, `reference_type`, Tag UUID or `keyword_exact`.
+Publication titles compare the complete `container.title` string; they do not merge journal
+identities or aliases. Author links use the existing Author-role name projection, including an
+explicit empty given-name parameter for single-field or organization names. Library URLs retain
+these exact values through search and pagination and expose removable applied-filter chips.
+
+Organize responses contain authorization, Projects and one Tag matrix. Assigned Tag display is
+derived from the complete matrix groups and `assigned_ids`; group names and separate suggestion
+category arrays are not repeated in the HTTP response.
 
 Temporary reader normalization and semantic guards for the pinned conversion defects live in
 Inquiro's private `_commonmeta_adapters.py`, outside Provider adapters and Library policy.

@@ -141,7 +141,7 @@
 	{:else}
 		{#if moderationError}<Notice variant="error">{moderationError}</Notice>{/if}
 		{#each displayed as annotation (annotation.id)}
-			<ItemRow>
+			<ItemRow class="min-w-0 grid-cols-1 wrap-anywhere">
 				<div class="flex flex-wrap justify-between gap-2">
 					<strong
 						>{$t(domainLabel(annotation.kind))} · {$t('page')}

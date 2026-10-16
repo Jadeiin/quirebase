@@ -1,3 +1,4 @@
+import { mockMetadataSources } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { chooseSearchOption, directoryPage, mockSession, tagPage } from './helpers';
 
@@ -70,11 +71,12 @@ async function item(page: Page, filename = 'paper.pdf') {
 			json: {
 				metadata,
 				citation_key: null,
-				item: { id: 'item-1', title_html: metadata.title, doi: '10.1000/test', version: 3 },
+				id: 'item-1',
+				version: 3,
 				authorization: { allowed: ['item.update', 'workspace.export'] },
 				copy_targets: [],
 				tags: [],
-				latest_revision: latest,
+				latest_revision_id: latest,
 				counts: { revisions: 1, attachments: 0, annotations: 0, discussion: 0 }
 			}
 		})
@@ -156,18 +158,19 @@ test('DOI metadata update uses OpenAlex through its advertised lookup capability
 	page
 }) => {
 	await item(page);
-	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
-		route.fulfill({
-			json: {
-				search: [],
-				lookup: [
-					{ id: 'crossref', name: 'Crossref', identifier_namespaces: ['doi'] },
-					{ id: 'openalex', name: 'OpenAlex', identifier_namespaces: ['openalex', 'doi'] }
-				],
-				max_search_clauses: 5
+	await mockMetadataSources(page, 'item-1', {
+		version: 3,
+		sources: [
+			{
+				namespace: 'doi',
+				value: '10.1000/test',
+				providers: [
+					{ id: 'crossref', name: 'Crossref' },
+					{ id: 'openalex', name: 'OpenAlex' }
+				]
 			}
-		})
-	);
+		]
+	});
 	let submitted: unknown;
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/metadata/sync', (route) => {
 		submitted = route.request().postDataJSON();
@@ -185,6 +188,51 @@ test('DOI metadata update uses OpenAlex through its advertised lookup capability
 });
 
 for (const width of [1440, 390]) {
+	test(`annotation filename stays inside its card at ${width}px`, async ({ page }) => {
+		await page.setViewportSize({ width, height: 1000 });
+		await item(page);
+		const filename = 'A'.repeat(220) + '.pdf';
+		await page.route('**/api/v1/workspaces/workspace-1/items/item-1/annotations*', (route) =>
+			route.fulfill({
+				json: {
+					revisions: [{ id: 'revision-1', original_name: filename }],
+					projects: [],
+					annotations: [
+						{
+							id: 'annotation-1',
+							revision_id: 'revision-1',
+							revision_name: filename,
+							scope: 'private',
+							page_index: 0,
+							kind: 'note',
+							body: 'Layout review note',
+							author_display_name: 'reader',
+							authorization: { allowed: [] },
+							replies: []
+						}
+					],
+					total: 1,
+					page: 1,
+					per_page: 50
+				}
+			})
+		);
+		await page.getByRole('link', { name: 'Annotations', exact: true }).click();
+		const row = page.getByText('Layout review note', { exact: true }).locator('..');
+		await expect(row.getByText(filename, { exact: false })).toBeVisible();
+		await page.evaluate(() => document.fonts.ready);
+		const overflow = await row.evaluate((element) => ({
+			width: element.clientWidth,
+			scroll: element.scrollWidth,
+			right: element.getBoundingClientRect().right,
+			pageWidth: document.documentElement.scrollWidth,
+			viewportWidth: document.documentElement.clientWidth
+		}));
+		expect(overflow.scroll, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width + 1);
+		expect(overflow.right).toBeLessThanOrEqual(overflow.viewportWidth);
+		expect(overflow.pageWidth).toBeLessThanOrEqual(overflow.viewportWidth);
+	});
+
 	test(`document download filename stays inside its row at ${width}px`, async ({ page }) => {
 		await page.setViewportSize({ width, height: 1000 });
 		const filename = 'A'.repeat(220) + '.pdf';

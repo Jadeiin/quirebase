@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from inquiro.identifiers import canonical_doi
-from inquiro.work import work_doi
+from inquiro.work import normalize_identifier, work_doi, work_identifiers
 from sqlalchemy import select, update
 
-from quirebase.access import ResourceAction
+from quirebase.access import ResourceAction, WorkspaceContext, get_item, require_action
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, VersionConflict
 from quirebase.documents.pdf import first_doi_from_text
-from quirebase.library.providers import lookup_candidate
+from quirebase.library.providers import get_metadata_provider_choices, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import FileRevision, Item, User
 from quirebase.search import search_index
@@ -27,6 +28,62 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
+
+
+@dataclass(frozen=True)
+class MetadataSourceProvider:
+    id: str
+    name: str
+
+
+@dataclass(frozen=True)
+class ItemMetadataSource:
+    namespace: str
+    value: str
+    providers: tuple[MetadataSourceProvider, ...]
+
+
+@dataclass(frozen=True)
+class ItemMetadataSources:
+    version: int
+    sources: tuple[ItemMetadataSource, ...]
+
+
+async def get_item_metadata_sources(
+    db: AsyncSession,
+    context: WorkspaceContext,
+    item_id: UUID,
+    *,
+    settings: Settings,
+) -> ItemMetadataSources:
+    """Resolve sync targets from one authorized Work snapshot without Provider I/O."""
+    require_action(context, ResourceAction.workspace_read)
+    item = await get_item(db, context, item_id)
+    if item is None:
+        raise ResourceUnavailable("Item not found")
+    identifiers = dict.fromkeys(sorted(work_identifiers({"id": item.work.get("id", "")})), True)
+    for row in item.work.get("identifiers", []):
+        namespace = (
+            row.get("scheme", "") if row["identifier_type"] == "Other" else row["identifier_type"]
+        )
+        normalized = normalize_identifier(namespace, row["identifier"])
+        pair = normalized or (namespace.lower(), row["identifier"])
+        identifiers[pair] = normalized is not None
+    primary_doi = work_doi(item.work)
+    choices = get_metadata_provider_choices(settings).lookup
+    sources = tuple(
+        ItemMetadataSource(
+            namespace=namespace,
+            value=value,
+            providers=tuple(
+                MetadataSourceProvider(choice.id, choice.name)
+                for choice in choices
+                if identifiers[namespace, value] and namespace in choice.identifier_namespaces
+            ),
+        )
+        for namespace, value in sorted(identifiers, key=lambda pair: pair != ("doi", primary_doi))
+    )
+    return ItemMetadataSources(version=item.version, sources=sources)
 
 
 async def rescan_pdf_doi(

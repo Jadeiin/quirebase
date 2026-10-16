@@ -60,6 +60,7 @@ from quirebase.library.discussions import (
 )
 from quirebase.library.facets import LibraryFacets, get_library_facets
 from quirebase.library.identifiers import (
+    get_item_metadata_sources,
     rescan_pdf_doi,
     sync_metadata_from_upstream,
 )
@@ -92,7 +93,6 @@ from quirebase.library.item_sections import (
     ItemSection,
     ItemSectionData,
     ItemSectionResult,
-    MetadataLookupIdentifier,
     ProjectAssignmentOption,
     open_item_section,
 )
@@ -141,7 +141,6 @@ __all__ = [
     "ItemWriteResult",
     "LibraryFacets",
     "LibraryFilter",
-    "MetadataLookupIdentifier",
     "MetadataProviderChoices",
     "ProjectAssignmentOption",
     "TagConflict",
@@ -176,6 +175,7 @@ __all__ = [
     "get_import_batch_preview",
     "get_item_citation_response",
     "get_item_citation_text_response",
+    "get_item_metadata_sources",
     "get_library_facets",
     "get_metadata_provider_choices",
     "get_storage_metrics",

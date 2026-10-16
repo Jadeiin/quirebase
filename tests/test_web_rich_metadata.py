@@ -90,7 +90,13 @@ async def test_http_api_tag_matrix_and_selection(
     assert response.status_code == 200
     organized = await client.get(f"{workspace_base}/items/{item_id}/organize")
     assert organized.status_code == 200
-    selected_tags = {tag["name"] for tag in organized.json()["tags"]}
+    matrix = organized.json()["tag_matrix"]
+    selected_tags = {
+        tag["name"]
+        for group in matrix["groups"]
+        for tag in group["tags"]
+        if tag["id"] in matrix["assigned_ids"]
+    }
     assert selected_tags == {
         "Machine Learning",
         "Natural Language Processing",

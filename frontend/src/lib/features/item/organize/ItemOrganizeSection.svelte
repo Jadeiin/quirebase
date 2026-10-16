@@ -45,6 +45,13 @@
 	const canUseTags = $derived(can(data.authorization, 'tag.use'));
 	const canCreateTags = $derived(canUseTags && can(data.authorization, 'tag.create'));
 	const canManageProjects = $derived(can(data.authorization, 'project_item.manage'));
+	const assignedTags = $derived(
+		data.tag_matrix.groups
+			.flatMap((group: components['schemas']['TagMatrixGroupView']) => group.tags)
+			.filter((tag: components['schemas']['ItemTagView']) =>
+				data.tag_matrix.assigned_ids.includes(tag.id)
+			)
+	);
 	const groups = $derived(
 		data.tag_matrix.groups
 			.map((group: components['schemas']['TagMatrixGroupView']) => ({
@@ -158,7 +165,7 @@
 				{$t('Tags currently assigned to this Item.')}
 			</p>
 			<div class="flex flex-wrap gap-1.5">
-				{#each data.tags as tag (tag.id)}
+				{#each assignedTags as tag (tag.id)}
 					<Badge
 						as="button"
 						type="button"

@@ -84,7 +84,7 @@
 			/>
 		{/key}
 	{:else}
-		<RichText html={item.title_html} />
+		<RichText html={item.metadata.title} />
 		<dl class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
 			<div>
 				<dt>{$t('Authors')}</dt>
@@ -128,11 +128,11 @@
 				<dt>{$t('Upstream identifiers')}</dt>
 				<dd>
 					{text(item.metadata.id)}{#each identifierRows(item.metadata) as row, index (index)}<div>
-							{row.provider}: {row.value}
+							{row.namespace}: {row.value}
 						</div>{/each}
 				</dd>
 			</div>
 		</dl>
-		{#if item.abstract_html}<RichText html={item.abstract_html} />{/if}
+		{#if item.metadata.description}<RichText html={item.metadata.description} />{/if}
 	{/if}
 </Panel>

@@ -29,12 +29,12 @@ async function projectActions(
 const overview = {
 	metadata: { id: 'urn:uuid:00000000-0000-4000-8000-000000000001', type: 'Other', title: 'Item' },
 	citation_key: null,
-	item: { id: 'item-1', title_html: 'Item', version: 1 },
-	latest_revision: null,
+	id: 'item-1',
+	version: 1,
+	latest_revision_id: null,
 	authorization: { allowed: [] },
 	counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 2 },
 	tags: [],
-
 	copy_targets: []
 };
 
@@ -289,12 +289,7 @@ test('Item actions follow export, file management and copy-target projections', 
 		route.fulfill({
 			json: {
 				...overview,
-				latest_revision: {
-					id: 'revision-1',
-					original_name: 'paper.pdf',
-					size: 100,
-					processing_state: 'ready'
-				},
+				latest_revision_id: 'revision-1',
 				authorization: { allowed: ['item.update'] },
 				copy_targets: []
 			}
@@ -304,7 +299,6 @@ test('Item actions follow export, file management and copy-target projections', 
 		route.fulfill({
 			json: {
 				id: 'item-1',
-				title_html: 'Item',
 				version: 1,
 				metadata: {
 					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
@@ -492,11 +486,8 @@ test('metadata version conflict allows explicitly loading the latest Item before
 		route.fulfill({
 			json: {
 				...overview,
-				item: {
-					id: 'item-1',
-					title_html: version === 1 ? 'Initial' : 'Updated elsewhere',
-					version
-				},
+				version,
+				metadata: { ...overview.metadata, title: version === 1 ? 'Initial' : 'Updated elsewhere' },
 				authorization: { allowed: ['item.update'] }
 			}
 		})
@@ -514,14 +505,13 @@ test('metadata version conflict allows explicitly loading the latest Item before
 		return route.fulfill({
 			json: {
 				id: 'item-1',
-				title_html: version === 1 ? 'Initial' : 'Updated elsewhere',
+
 				version,
 				metadata: {
 					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
 					type: 'Other',
 					title: version === 1 ? 'Initial' : 'Updated elsewhere'
-				},
-				abstract_html: null
+				}
 			}
 		});
 	});

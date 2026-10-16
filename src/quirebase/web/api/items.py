@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from dataclasses import asdict
 from uuid import UUID
 
 from fastapi import APIRouter
@@ -19,6 +20,7 @@ from quirebase.library import (
     ItemOverviewData,
     ItemSection,
     delete_item,
+    get_item_metadata_sources,
     open_item_section,
     regenerate_citation_key,
     regenerate_item_tag_recommendation,
@@ -31,11 +33,12 @@ from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.item_schemas import (
     DeleteConfirmationRequest,
+    ItemMetadataSourcesView,
     ItemOrganizeView,
     ItemOverviewView,
     MetadataSyncRequest,
 )
-from quirebase.web.api.library_schemas import AuthorSuggestionView, item_search_view
+from quirebase.web.api.library_schemas import AuthorSuggestionView
 from quirebase.workspaces import list_workspaces
 
 router = APIRouter(tags=["Items"])
@@ -69,7 +72,8 @@ async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
             if ResourceAction.item_create in target_actions:
                 copy_targets.append({"id": workspace.id, "name": workspace.name})
     return {
-        "item": item_search_view(view.item),
+        "id": view.item.id,
+        "version": view.item.version,
         "authorization": authorization_view(item_decisions(context)),
         "counts": {
             "revisions": view.revision_count,
@@ -80,21 +84,21 @@ async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
         "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
         "metadata": view.item.work,
         "citation_key": view.item.citation_key,
-        "primary_lookup_identifier": view.primary_lookup_identifier,
-        "latest_revision": (
-            {
-                "id": latest.id,
-                "original_name": latest.original_name,
-                "size": latest.size,
-                "page_count": latest.page_count,
-                "processing_state": latest.processing_state,
-            }
-            if latest
-            else None
-        ),
+        "latest_revision_id": latest.id if latest else None,
         "thumbnail": thumbnail,
         "copy_targets": copy_targets,
     }
+
+
+@router.get("/items/{item_id}/metadata/sources", response_model=ItemMetadataSourcesView)
+async def item_metadata_sources(
+    workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database
+):
+    return asdict(
+        await get_item_metadata_sources(
+            db, context, item_id, settings=await get_effective_settings_model(db)
+        )
+    )
 
 
 @router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
@@ -104,9 +108,7 @@ async def item_organize(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
         raise TypeError("item organize section mismatch")
     matrix = view.tag_matrix
     return {
-        "item": item_search_view(view.item),
         "authorization": authorization_view(item_decisions(context)),
-        "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
         "projects": [
             {
                 "id": project_option.project.id,
@@ -122,15 +124,12 @@ async def item_organize(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
                 {
                     "letter": group.letter,
                     "tags": [{"id": tag.id, "name": tag.name} for tag in group.tags],
-                    "names": list(group.names),
                 }
                 for group in matrix.groups
             ],
             "assigned_ids": sorted(matrix.assigned_ids),
             "recommended_ids": sorted(matrix.recommended_ids),
             "suggested_names": list(matrix.suggested_names),
-            "suggested_single_words": list(matrix.suggested_single_words),
-            "suggested_phrases": list(matrix.suggested_phrases),
             "recommendation_state": matrix.recommendation_state,
             "recommendation_error": matrix.recommendation_error,
         },

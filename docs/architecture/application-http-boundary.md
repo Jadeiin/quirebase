@@ -145,16 +145,8 @@ whole taxonomy. Tag mutations invalidate Tag lists, option searches and selected
 - Reactive Svelte state (runes) lives in `.svelte`, `.svelte.js` or `.svelte.ts` modules only;
   plain TypeScript modules never use runes, so the static build cannot ship an initializer that
   crashes the application shell at startup.
-- Skeleton Svelte brings Zag's state machines and a broader dependency graph. Production builds
-  must continue to tree-shake unused components, and frontend upgrades must check generated JS and
-  CSS sizes as well as accessibility behavior. The application-shell bundle budget in
-  `frontend/scripts/check-bundle-budget.ts` is raised deliberately when a maintained dependency
-  replaces hand-rolled code: once for the Toast, Popover and Tabs state machines, once for
-  `openapi-fetch`, which replaced the hand-written API client plumbing while keeping the
-  `apiRequest` contract, once for ICU-capable localization, and once for the supported Skeleton component stylesheet,
-  Progress and the additional route-specific controls. DatePicker remains excluded from the shell. The same script enforces per-route
-  budgets for the Library, Import, Item and Admin graphs so section ownership changes are measured
-  rather than assumed. Temml is imported only by the lazily loaded `rich-text-math` chunk, so the
-  many routes that never render inline math do not eagerly ship it.
-- This alpha cutover is forward-only: the former Bits UI dependency and global `.button`, `.field`,
-  `.panel` and related compatibility classes are removed in the same change.
+- Production builds must tree-shake unused components. Frontend upgrades check generated JS/CSS
+  sizes and accessibility behavior. `frontend/scripts/check-bundle-budget.ts` checks the shell,
+  route bundles and opened tools; budgets may be adjusted for justified dependency or feature
+  changes. DatePicker, the schema editor and the PDF reader stay outside the application shell.
+  Temml loads through the lazy `rich-text-math` chunk when inline math is rendered.

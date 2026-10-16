@@ -16,7 +16,8 @@
 	let { children } = $props();
 	const workspaceId = $derived(page.params.workspaceId ?? '');
 	const workspace = createQuery(() => workspaceQuery(workspaceId));
-	const workspaceList = createQuery(() => workspaceListQuery());
+	// Only recover() needs this list; WorkspaceMenu loads the directory for normal navigation.
+	const workspaceList = createQuery(() => ({ ...workspaceListQuery(), enabled: false }));
 	const queryClient = useQueryClient();
 	let recoveryStarted = $state(false);
 	let unavailable = $state(false);

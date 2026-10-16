@@ -8,6 +8,7 @@
 	import { metadataValueLabel } from '../metadata-labels.js';
 	import {
 		contributorAffiliations,
+		identifierRows,
 		object,
 		objects,
 		text,
@@ -15,6 +16,8 @@
 	} from '../metadata-draft.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { libraryHref } from '#lib/features/library/filters.js';
+	import { metadataFilterLinks } from '../metadata-links.js';
 
 	let { itemId, data } = $props<{
 		itemId: string;
@@ -34,6 +37,7 @@
 	}
 
 	const container = $derived(object(data.metadata.container));
+	const links = $derived(metadataFilterLinks(workspaceId, data.metadata));
 	const externalUrls = $derived([
 		...new Set(
 			[
@@ -53,11 +57,32 @@
 		return [
 			{
 				label: $t('Publication'),
-				value: text(container.title) || data.item.publication_title || '—'
+				value: links.publication.label || '—',
+				internalHref: links.publication.href,
+				hint: $t('View Items in {name}', { name: links.publication.label })
 			},
-			{ label: $t('Date'), value: data.item.publication_date || '—' },
-			{ label: 'DOI', value: data.item.doi || '—' },
-			{ label: $t('Type'), value: metadataValueLabel(text(data.metadata.type)) || '—' },
+			{
+				label: $t('Date'),
+				value: links.date.label || '—',
+				internalHref: links.date.href,
+				hint: $t('View Items published in {year}', { year: links.date.year })
+			},
+			{
+				label: $t('Upstream identifiers'),
+				value:
+					[
+						text(data.metadata.id),
+						...identifierRows(data.metadata).map((row) => `${row.namespace}: ${row.value}`)
+					]
+						.filter(Boolean)
+						.join('; ') || '—'
+			},
+			{
+				label: $t('Type'),
+				value: metadataValueLabel(links.type.value) || '—',
+				internalHref: links.type.href,
+				hint: $t('View Items of type {name}', { name: metadataValueLabel(links.type.value) })
+			},
 			{
 				label: $t('Volume / Issue'),
 				value: `${text(container.volume) || '—'} / ${text(container.issue) || '—'}`
@@ -139,7 +164,9 @@
 					<div class="min-w-0">
 						<dt class="text-surface-600-400">{row.label}</dt>
 						<dd class="m-0 mt-1 break-words">
-							{#if row.href && isSafeExternalUrl(row.href)}
+							{#if row.internalHref}
+								<a href={resolve(row.internalHref)} title={row.hint}>{row.value}</a>
+							{:else if row.href && isSafeExternalUrl(row.href)}
 								<a href={row.href} target="_blank" rel="external noreferrer">{row.value}</a>
 							{:else}{row.value}{/if}
 						</dd>
@@ -202,9 +229,11 @@
 			<h2 class="m-0 mb-4 text-lg">{$t('Tags')}</h2>
 			<div class="flex flex-wrap gap-2">
 				{#each data.tags as tag (tag.id)}
-					<span
+					<a
+						href={resolve(libraryHref(workspaceId, { tag: tag.id }))}
+						title={$t('View Items tagged {name}', { name: tag.name })}
 						class="rounded-full bg-primary-50-950 px-2.5 py-1 text-xs font-semibold text-primary-800-200"
-						>{tag.name}</span
+						>{tag.name}</a
 					>
 				{:else}
 					<span class="text-sm text-surface-600-400">{$t('No tags')}</span>
@@ -215,9 +244,11 @@
 			<h2 class="m-0 mb-4 text-lg">{$t('Keywords')}</h2>
 			<div class="flex flex-wrap gap-2">
 				{#each workKeywords(data.metadata) as keyword (keyword)}
-					<span
+					<a
+						href={resolve(libraryHref(workspaceId, { keyword_exact: keyword }))}
+						title={$t('View Items with keyword {name}', { name: keyword })}
 						class="rounded-full border border-surface-300-700 bg-surface-200-800 px-2.5 py-1 text-xs font-semibold"
-						>{keyword}</span
+						>{keyword}</a
 					>
 				{:else}
 					<span class="text-sm text-surface-600-400">{$t('No keywords.')}</span>

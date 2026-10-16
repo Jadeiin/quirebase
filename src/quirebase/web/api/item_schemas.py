@@ -4,10 +4,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from quirebase.library import MetadataLookupIdentifier, Work
 from quirebase.models import ProjectParticipation
 from quirebase.web.api.common import WorkspaceAuthorizationView
-from quirebase.web.api.library_schemas import ItemSearchView
+from quirebase.web.api.library_schemas import ItemDetailView, ItemSearchView
 
 
 class DeleteConfirmationRequest(BaseModel):
@@ -40,14 +39,6 @@ class ItemTagView(BaseModel):
     name: str
 
 
-class ItemLatestRevisionView(BaseModel):
-    id: UUID
-    original_name: str
-    size: int
-    page_count: int | None = None
-    processing_state: str
-
-
 class ItemThumbnailView(BaseModel):
     source_kind: str
     source_id: UUID
@@ -60,17 +51,29 @@ class ItemCopyTargetView(BaseModel):
     name: str
 
 
-class ItemOverviewView(BaseModel):
-    item: ItemSearchView
+class ItemOverviewView(ItemDetailView):
     authorization: WorkspaceAuthorizationView
     counts: ItemOverviewCountsView
     tags: list[ItemTagView]
-    metadata: Work
-    citation_key: str | None
-    primary_lookup_identifier: MetadataLookupIdentifier | None = None
-    latest_revision: ItemLatestRevisionView | None = None
+    latest_revision_id: UUID | None = None
     thumbnail: ItemThumbnailView | None = None
     copy_targets: list[ItemCopyTargetView]
+
+
+class MetadataSourceProviderView(BaseModel):
+    id: str
+    name: str
+
+
+class ItemMetadataSourceView(BaseModel):
+    namespace: str
+    value: str
+    providers: list[MetadataSourceProviderView]
+
+
+class ItemMetadataSourcesView(BaseModel):
+    version: int
+    sources: list[ItemMetadataSourceView]
 
 
 class ItemOrganizeProjectView(BaseModel):
@@ -84,7 +87,6 @@ class ItemOrganizeProjectView(BaseModel):
 class TagMatrixGroupView(BaseModel):
     letter: str
     tags: list[ItemTagView]
-    names: list[str]
 
 
 class TagMatrixView(BaseModel):
@@ -92,16 +94,12 @@ class TagMatrixView(BaseModel):
     assigned_ids: list[UUID]
     recommended_ids: list[UUID]
     suggested_names: list[str]
-    suggested_single_words: list[str]
-    suggested_phrases: list[str]
     recommendation_state: str
     recommendation_error: str | None = None
 
 
 class ItemOrganizeView(BaseModel):
-    item: ItemSearchView
     authorization: WorkspaceAuthorizationView
-    tags: list[ItemTagView]
     projects: list[ItemOrganizeProjectView]
     tag_matrix: TagMatrixView
 

@@ -9,7 +9,7 @@
 		createQuery,
 		useQueryClient
 	} from '@tanstack/svelte-query';
-	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { isDownloadCancelled } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
@@ -21,7 +21,15 @@
 		libraryBulkMutationOptions,
 		type LibraryBulkAction
 	} from '#lib/features/library/mutations.js';
-	import { libraryListQuery, librarySort } from '#lib/features/library/queries.js';
+	import { libraryListQuery } from '#lib/features/library/queries.js';
+	import {
+		librarySort,
+		readLibraryFilters,
+		libraryPage,
+		libraryHref,
+		type LibraryFilters as AppliedLibraryFilters
+	} from './filters.js';
+	import LibraryActiveFilters from './LibraryActiveFilters.svelte';
 	import { projectDetailQuery, projectOptionsQuery } from '#lib/features/projects/queries.js';
 	import { getSession } from '#lib/session.js';
 	import {
@@ -32,21 +40,9 @@
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { canRunBulkAction } from '#lib/workspaces/actions.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	const submitted = $derived({
-		query: page.url.searchParams.get('q')?.trim() ?? '',
-		tag: page.url.searchParams.get('tag') ?? '',
-		project: page.url.searchParams.get('project') ?? '',
-		year: page.url.searchParams.get('year')?.trim() ?? '',
-		keyword: page.url.searchParams.get('keyword')?.trim() ?? '',
-		author: page.url.searchParams.get('author')?.trim() ?? '',
-		sort: librarySort(page.url.searchParams.get('sort')),
-		has_files: page.url.searchParams.has('has_files')
-			? page.url.searchParams.get('has_files') === 'true'
-			: undefined
-	});
-	const pageNumber = $derived(Math.max(1, Number(page.url.searchParams.get('page') ?? '1') || 1));
+	const submitted = $derived(readLibraryFilters(page.url.searchParams));
+	const pageNumber = $derived(libraryPage(page.url.searchParams));
 	let query = $state(page.url.searchParams.get('q') ?? '');
 	let tag = $state(page.url.searchParams.get('tag') ?? '');
 	let project = $state(page.url.searchParams.get('project') ?? '');
@@ -91,7 +87,7 @@
 	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber));
 	const projects = createInfiniteQuery(() => projectOptionsQuery(workspaceId));
 	const selectedProject = createQuery(() => ({
-		...projectDetailQuery(workspaceId, submitted.project),
+		...projectDetailQuery(workspaceId, submitted.project ?? ''),
 		enabled: Boolean(submitted.project) && !projects.data?.some((p) => p.id === submitted.project)
 	}));
 	const projectChoices = $derived(
@@ -116,42 +112,35 @@
 		}
 	});
 
-	function parameters(nextPage = 1) {
-		const result = new SvelteURLSearchParams();
-		for (const [key, value] of Object.entries({
-			q: query.trim(),
+	function navigate(filters: AppliedLibraryFilters, nextPage = 1) {
+		selected.clear();
+		void goto(resolve(libraryHref(workspaceId, filters, nextPage)), { reset: false });
+	}
+
+	function search() {
+		navigate({
+			...submitted,
+			query: query.trim(),
 			tag,
 			project,
 			year: year.trim(),
 			keyword: keyword.trim(),
 			author: author.trim(),
-			sort: sort === 'updated' ? '' : sort,
-			has_files: fileFilter
-		})) {
-			if (value) result.set(key, value);
-		}
-		if (nextPage > 1) result.set('page', String(nextPage));
-		return result;
-	}
-
-	function updateUrl(nextPage = 1) {
-		const values = parameters(nextPage).toString();
-		selected.clear();
-		void goto(resolve(workspaceHref(workspaceId, values ? `library?${values}` : 'library')), {
-			reset: false
+			sort,
+			has_files: fileFilter ? fileFilter === 'true' : undefined
 		});
 	}
 
+	function removeFilters(keys: (keyof AppliedLibraryFilters)[]) {
+		const next = { ...submitted };
+		for (const key of keys) delete next[key];
+		navigate(next);
+	}
+
 	function clearFilters() {
-		query = '';
-		tag = '';
-		project = '';
-		year = '';
-		keyword = '';
-		author = '';
+		query = tag = project = year = keyword = author = fileFilter = '';
 		sort = 'updated';
-		fileFilter = '';
-		updateUrl();
+		navigate({});
 	}
 
 	function togglePageSelection(event: Event) {
@@ -231,9 +220,11 @@
 	bind:fileFilter
 	bind:filtersOpen
 	projects={projectChoices}
-	onSearch={() => updateUrl()}
+	onSearch={search}
 	onClear={clearFilters}
 />
+
+<LibraryActiveFilters filters={submitted} onRemove={removeFilters} />
 
 <BulkActions
 	selectedCount={selected.size}
@@ -274,5 +265,5 @@
 	{selected}
 	onTogglePage={togglePageSelection}
 	onToggleItem={toggleItem}
-	onPage={(next) => updateUrl(next)}
+	onPage={(next) => navigate(submitted, next)}
 />

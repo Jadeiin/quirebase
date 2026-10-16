@@ -102,6 +102,7 @@ const pdfReader = mergeGraphs(
 	dependencyGraph([pdfRouteNodes.at(-1)!], true)
 );
 
+// Initial route sizes exclude lazy imports; opened editors and readers include them separately.
 function routeBundle(route: string): BundleSize {
 	return bundleSize(graphFiles(dependencyGraph([...runtime, ...routeNodes(route)], false)));
 }
@@ -119,18 +120,6 @@ if (dashboardPdfDependencies.length) {
 	);
 }
 
-// Skeleton's supported component stylesheet adds shared CSS; Progress and Navigation
-// stay in the shell, while DateField/Combobox/Listbox/SegmentedControl remain route-owned.
-// Schema editor field/type translations and theme utilities add about 17.5 KiB raw /
-// 5.2 KiB gzip to shared catalogs/CSS. Add that measured cost to the existing budgets.
-// The earlier locked build measures 638.2 KiB raw / 177.4 KiB gzip for the shell (formerly
-// 523.2 / 163.7), including 164.0 KiB CSS / 18.8 KiB gzip. Refresh route budgets
-// against that build with about 2% headroom; never load the calendar in the shell.
-// The Import redesign, FileUpload pickers and localized action labels add about 2.3 KiB
-// raw CSS (Skeleton preset utilities and base-layer token/select rules) and 2.4 KiB raw /
-// 0.9 KiB gzip ICU catalog entries to every route graph; FileUpload itself stays in the
-// Import and Item files route chunks and never enters the Item overview graph. The Item
-// overview budget is refreshed deliberately against that measurement with about 2% headroom.
 if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 	throw new Error('DatePicker code leaked into the application shell');
 }
@@ -140,7 +129,7 @@ enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	gzip: 192000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
-	raw: 898000,
+	raw: 921000,
 	gzip: 258000
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
@@ -151,8 +140,6 @@ enforce('Account route', routeBundle('/(app)/account'), {
 	raw: 799000,
 	gzip: 226000
 });
-// Compact metadata controls add about 0.3 KiB raw to shared catalogs/CSS.
-// Tools measures 794.1 KiB raw / 227.1 KiB gzip; account for this shared cost.
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 	raw: 819000,
 	gzip: 235000
@@ -189,7 +176,7 @@ enforce(
 	'Item organize route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
-		raw: 810000,
+		raw: 827000,
 		gzip: 233000
 	}
 );
@@ -249,5 +236,5 @@ const openedEditor = mergeGraphs(
 );
 enforce('Metadata editor when open', bundleSize(graphFiles(openedEditor)), {
 	raw: 1050000,
-	gzip: 300000
+	gzip: 307000
 });

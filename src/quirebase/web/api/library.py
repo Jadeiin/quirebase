@@ -69,6 +69,7 @@ def library_filters(
     keyword_exact: str | None = None,
     author_last_name: str | None = None,
     author_first_name: str | None = None,
+    publication_title: str | None = None,
 ) -> LibraryFilter:
     return LibraryFilter(
         q=query,
@@ -82,6 +83,7 @@ def library_filters(
         keyword_exact=keyword_exact,
         author_last_name=author_last_name,
         author_first_name=author_first_name,
+        publication_title=publication_title,
     )
 
 
@@ -133,6 +135,7 @@ async def search_items(
         keyword_exact=filters.keyword_exact,
         author_last_name=filters.author_last_name,
         author_first_name=filters.author_first_name,
+        publication_title=filters.publication_title,
     )
     return LibrarySearchView(
         items=[item_search_view(item) for item in items],

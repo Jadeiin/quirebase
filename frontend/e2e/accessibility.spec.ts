@@ -72,16 +72,9 @@ test('Item detail has no high-impact accessibility violations', async ({ page })
 					container: { title: 'Journal' }
 				},
 				citation_key: null,
-				item: {
-					id: 'item-1',
-					title_html: '<i>Accessible</i> Item',
-					authors: 'A. Author',
-					publication_date: '2026',
-					publication_title: 'Journal',
-					doi: null,
-					version: 1
-				},
-				latest_revision: null,
+				id: 'item-1',
+				version: 1,
+				latest_revision_id: null,
 				authorization: {
 					allowed: [
 						'item.update',
@@ -103,18 +96,12 @@ test('Item detail has no high-impact accessibility violations', async ({ page })
 		route.fulfill({
 			json: {
 				id: 'item-1',
-				title_html: '<i>Accessible</i> Item',
-				authors: 'A. Author',
-				publication_date: '2026',
-				publication_title: 'Journal',
-				doi: null,
 				version: 1,
 				metadata: {
 					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
 					type: 'Other',
 					title: '<i>Accessible</i> Item'
-				},
-				abstract_html: null
+				}
 			}
 		})
 	);

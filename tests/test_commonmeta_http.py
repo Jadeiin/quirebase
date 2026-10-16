@@ -459,13 +459,31 @@ async def test_html_citation_download_sanitizes_stored_rich_text(
 @pytest.mark.parametrize(
     "primary,namespace,value,identifier_type,secondary",
     [
-        ("https://openalex.org/W123", "openalex", "W123", "OpenAlex", "https://openalex.org/W123"),
-        ("https://pubmed.ncbi.nlm.nih.gov/42/", "pmid", "42", "PMID", "42"),
-        ("https://arxiv.org/abs/2401.00001", "arxiv", "2401.00001", "arXiv", "2401.00001"),
+        (
+            "https://openalex.org/W123",
+            "openalex",
+            "W123",
+            "OpenAlex",
+            "https://openalex.org/W123",
+        ),
+        (
+            "https://pubmed.ncbi.nlm.nih.gov/42/",
+            "pmid",
+            "42",
+            "PMID",
+            "42",
+        ),
+        (
+            "https://arxiv.org/abs/2401.00001",
+            "arxiv",
+            "2401.00001",
+            "arXiv",
+            "2401.00001",
+        ),
     ],
 )
 @pytest.mark.parametrize("also_secondary", [False, True])
-async def test_overview_exposes_missing_primary_lookup_context(
+async def test_metadata_sources_resolve_primary_identifiers_without_overview_projections(
     async_db,
     async_session_factory,
     tmp_path,
@@ -497,9 +515,81 @@ async def test_overview_exposes_missing_primary_lookup_context(
         response = await client.get(f"{base}/{created.json()['id']}/overview")
         assert response.status_code == 200
         overview = response.json()
-        assert overview.get("primary_lookup_identifier") == (
-            None if also_secondary else {"provider": namespace, "value": value}
-        )
+        assert "primary_lookup_identifier" not in overview and "doi" not in overview
         assert overview["metadata"] == work
+        response = await client.get(f"{base}/{created.json()['id']}/metadata/sources")
+        assert response.status_code == 200
+        sources = response.json()
+        assert sources["version"] == overview["version"]
+        assert len(sources["sources"]) == 1
+        source = sources["sources"][0]
+        assert source["namespace"] == namespace and source["value"] == value
+        assert source["providers"]
+        assert (await client.get(f"{base}/{created.json()['id']}")).json()["metadata"] == work
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    ["10.1000/PRIMARY", "HTTPS://DX.DOI.ORG/10.1000/PRIMARY", "https://doi.org/10.1000/pr%69mary"],
+)
+async def test_metadata_sources_deduplicate_dois_and_match_configured_providers(
+    async_db, async_session_factory, tmp_path, monkeypatch, spelling
+):
+    client, seed, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    work = {
+        "id": "https://doi.org/10.1000/primary",
+        "type": "Dataset",
+        "title": "Metadata sources",
+        "identifiers": [
+            {"identifier_type": "DOI", "identifier": spelling},
+            {"identifier_type": "DOI", "identifier": "10.1000/secondary"},
+            {"identifier_type": "Other", "scheme": "doi", "identifier": "10.1000/secondary"},
+            {"identifier_type": "DOI", "identifier": "10.1000/Über"},
+            {"identifier_type": "DOI", "identifier": "10.1000/über"},
+            {"identifier_type": "OpenAlex", "identifier": "https://openalex.org/W456"},
+            {"identifier_type": "OpenAlex", "identifier": "W456"},
+            {"identifier_type": "Other", "scheme": "openalex", "identifier": "w456"},
+            {"identifier_type": "Other", "scheme": "Local registry", "identifier": "local-123"},
+            {"identifier_type": "Bibcode", "identifier": "2025ApJ...123..456A"},
+            {"identifier_type": "PMID", "identifier": "invalid"},
+        ],
+        "container": {
+            "identifiers": [{"identifier_type": "DOI", "identifier": "10.1000/container"}]
+        },
+    }
+    try:
+        base = f"/api/v1/workspaces/{seed.workspace_id}/items"
+        created = await client.post(base, json={"metadata": work})
+        assert created.status_code == 201
+        path = f"{base}/{created.json()['id']}"
+        response = await client.get(f"{path}/metadata/sources")
+        assert response.status_code == 200
+        sources = response.json()["sources"]
+        assert [(source["namespace"], source["value"]) for source in sources] == [
+            ("doi", "10.1000/primary"),
+            ("doi", "10.1000/secondary"),
+            ("doi", "10.1000/Über"),
+            ("doi", "10.1000/über"),
+            ("openalex", "W456"),
+            ("local registry", "local-123"),
+            ("bibcode", "2025ApJ...123..456A"),
+            ("pmid", "invalid"),
+        ]
+        assert {provider["id"] for provider in sources[0]["providers"]} >= {"crossref", "openalex"}
+        assert sources[4]["providers"] == [{"id": "openalex", "name": "OpenAlex"}]
+        assert all(source["providers"] == [] for source in sources[5:])
+        assert (await client.get(path)).json()["metadata"] == work
+        assert (await client.get(f"{base}/{uuid4()}/metadata/sources")).status_code == 404
+        assert (
+            await client.get(
+                f"/api/v1/workspaces/{uuid4()}/items/{created.json()['id']}/metadata/sources"
+            )
+        ).status_code == 404
+        client.cookies.clear()
+        assert (await client.get(f"{path}/metadata/sources")).status_code == 401
     finally:
         await client.aclose()

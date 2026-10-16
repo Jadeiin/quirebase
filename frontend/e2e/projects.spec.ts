@@ -63,6 +63,54 @@ test.beforeEach(async ({ page }) => {
 	});
 });
 
+for (const width of [1440, 390]) {
+	test(`Project settings opens from the upper-right actions at ${width}px`, async ({ page }) => {
+		await page.setViewportSize({ width, height: 1000 });
+		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+			route.fulfill({
+				json: {
+					...project,
+					authorization: { allowed: [...project.authorization.allowed, 'project.delete'] }
+				}
+			})
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+			route.fulfill({ json: [] })
+		);
+		await page.goto('/workspace/workspace-1/projects/project-1');
+		const heading = page.getByRole('heading', { name: project.name, exact: true });
+		const settings = page.getByRole('button', { name: 'Project settings', exact: true });
+		const remove = page.getByRole('button', { name: 'Delete Project', exact: true });
+		await expect(heading).toBeVisible();
+		await expect(page.getByLabel('Name', { exact: true })).toBeHidden();
+		const headingBox = (await heading.boundingBox())!;
+		const settingsBox = (await settings.boundingBox())!;
+		const deleteBox = (await remove.boundingBox())!;
+		expect(settingsBox.y).toBeLessThan(headingBox.y);
+		expect(deleteBox.y).toBeLessThan(headingBox.y);
+		expect(Math.abs(settingsBox.y - deleteBox.y)).toBeLessThan(2);
+		expect(deleteBox.x).toBeGreaterThan(settingsBox.x);
+		expect(deleteBox.x + deleteBox.width).toBeLessThanOrEqual(width);
+
+		await settings.click();
+		const dialog = page.getByRole('dialog', { name: 'Project settings', exact: true });
+		await expect(dialog).toBeVisible();
+		await dialog.getByLabel('Name', { exact: true }).fill('Unsaved draft');
+		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		await expect(heading).toBeVisible();
+		await settings.click();
+		await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue(project.name);
+		await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await remove.click();
+		await expect(
+			page.getByRole('dialog', { name: 'Permanently delete this Project?' })
+		).toBeVisible();
+	});
+}
+
 test('Workspace admins can open and govern managed Projects without being participants', async ({
 	page
 }) => {
@@ -170,6 +218,8 @@ test('Workspace viewers can read Project Discussion without mutation controls', 
 	await expect(page.getByText('Read-only project note')).toBeVisible();
 	await expect(page.getByPlaceholder('Write a message')).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Project settings', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Delete Project', exact: true })).toHaveCount(0);
 });
 
 for (const scenario of [
@@ -520,7 +570,8 @@ test('Project metadata can change independently of participation variants', asyn
 		route.fulfill({ json: [] })
 	);
 	await page.goto('/workspace/workspace-1/projects/project-1');
-	await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
+	await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'Project settings', exact: true })).toBeVisible();
 	await expect(page.getByLabel('Participation').locator('option')).toHaveCount(1);
 	await expect(page.getByLabel('Participation')).toHaveValue('managed');
 	await expect(page.getByRole('button', { name: 'Save Project settings' })).toBeEnabled();
@@ -544,6 +595,7 @@ test('switching an open Project to managed preserves the participant guidance', 
 		route.fulfill({ json: [] })
 	);
 	await page.goto('/workspace/workspace-1/projects/project-1');
+	await page.getByRole('button', { name: 'Project settings', exact: true }).click();
 	await page.getByLabel('Participation').selectOption('managed');
 	await expect(
 		page.getByText(
@@ -638,6 +690,7 @@ test('Workspace resource actions govern Project settings and managed participati
 
 	await page.goto('/workspace/workspace-1/projects/project-1');
 	await expect(page.getByRole('heading', { name: 'Research' })).toBeVisible();
+	await page.getByRole('button', { name: 'Project settings', exact: true }).click();
 	await page.getByLabel('Name', { exact: true }).fill('Renamed research');
 	await page.getByLabel('Description').fill('Updated');
 	await page.getByLabel('Participation').selectOption('managed');
@@ -750,9 +803,10 @@ for (const mode of ['open', 'managed']) {
 			route.fulfill({ json: [] })
 		);
 		await page.goto('/workspace/workspace-1/projects/project-1');
+		await page.getByRole('button', { name: 'Project settings', exact: true }).click();
 		await page.getByLabel('Participation').selectOption('workspace');
 		await page.getByRole('button', { name: 'Save Project settings' }).click();
-		const confirmation = page.getByRole('dialog');
+		const confirmation = page.getByRole('dialog', { name: 'Clear Project participant selection?' });
 		await expect(confirmation).toContainText('including suspended members');
 		expect(writes).toBe(0);
 		await confirmation.getByRole('button', { name: 'Cancel' }).click();
@@ -790,6 +844,7 @@ test('Project history navigation discards pending participant-clear changes', as
 	});
 	await page.getByRole('link', { name: 'Open Project A', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'project-a', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Project settings', exact: true }).click();
 	await page.getByLabel('Name', { exact: true }).fill('Unconfirmed Project A rename');
 	await page.getByLabel('Participation').selectOption('workspace');
 	await page.getByRole('button', { name: 'Save Project settings' }).click();
@@ -800,8 +855,9 @@ test('Project history navigation discards pending participant-clear changes', as
 	await expect(page).toHaveURL(/\/projects\/project-b$/);
 	await expect(confirmation).toHaveCount(0);
 	await expect(page.getByRole('heading', { name: 'project-b', exact: true })).toBeVisible();
+	await expect(page.getByRole('dialog', { name: 'Project settings', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Project settings', exact: true }).click();
 	await expect(page.getByLabel('Name', { exact: true })).toHaveValue('project-b');
-	await expect(page.getByText('researcher', { exact: true })).toBeVisible();
 	expect(patches).toEqual([]);
 	await page.getByLabel('Name', { exact: true }).fill('Unconfirmed Project B rename');
 	await page.getByLabel('Participation').selectOption('workspace');
@@ -812,6 +868,8 @@ test('Project history navigation discards pending participant-clear changes', as
 	await expect(page).toHaveURL(/\/projects\/project-a$/);
 	await expect(confirmation).toHaveCount(0);
 	await expect(page.getByRole('heading', { name: 'project-a', exact: true })).toBeVisible();
+	await expect(page.getByRole('dialog', { name: 'Project settings', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Project settings', exact: true }).click();
 	await expect(page.getByLabel('Name', { exact: true })).toHaveValue('project-a');
 	expect(patches).toEqual([]);
 	await page.getByLabel('Participation').selectOption('workspace');
