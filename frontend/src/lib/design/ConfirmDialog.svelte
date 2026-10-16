@@ -13,14 +13,14 @@
 		confirmLabel,
 		busy = false,
 		onConfirm
-	} = $props<{
+	}: {
 		open: boolean;
 		title: string;
 		body: string;
 		confirmLabel: string;
 		busy?: boolean;
 		onConfirm: () => void;
-	}>();
+	} = $props();
 </script>
 
 <Dialog {open} onOpenChange={(details) => (open = details.open)}>

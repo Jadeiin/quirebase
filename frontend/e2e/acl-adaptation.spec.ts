@@ -379,7 +379,7 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 	await page.getByLabel('Name', { exact: true }).fill('Renamed Research');
 	await page.getByRole('button', { name: 'Save name' }).click();
 	await expect(page.getByText('Workspace name updated')).toBeVisible();
-	await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await expect(page.getByRole('menuitem', { name: /Renamed Research/ })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await page.getByRole('button', { name: 'Reindex Workspace' }).click();

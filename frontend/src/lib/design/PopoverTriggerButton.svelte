@@ -9,13 +9,11 @@
 		class: className = '',
 		children,
 		...rest
-	} = $props<
-		{
-			variant?: ButtonVariant;
-			class?: string;
-			children: Snippet;
-		} & HTMLAttributes<HTMLElement>
-	>();
+	}: {
+		variant?: ButtonVariant;
+		class?: string;
+		children: Snippet;
+	} & HTMLAttributes<HTMLElement> = $props();
 </script>
 
 <Popover.Trigger class={`${buttonClass(variant)} ${className}`.trim()} {...rest}>

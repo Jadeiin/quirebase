@@ -38,7 +38,7 @@
 		onstatus,
 		onsaved,
 		onRevealSource
-	} = $props<{
+	}: {
 		itemId: string;
 		workspaceId: string;
 		documentId: string;
@@ -53,7 +53,7 @@
 		onstatus?: (status: string, failed: boolean, reason?: unknown) => void;
 		onsaved?: () => void;
 		onRevealSource?: (projectId: string) => void;
-	}>();
+	} = $props();
 
 	const disabledCategories = [
 		'document-open',
@@ -264,7 +264,7 @@
 		if (!documentReady) return;
 		if (!editable) {
 			commandsApi?.execute('mode:view', documentId);
-			annotationApi?.setActiveTool(null, documentId);
+			annotationApi?.forDocument(documentId).setActiveTool(null);
 		}
 		for (const category of annotationCreationCategories) {
 			if (editable) {

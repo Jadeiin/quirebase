@@ -123,6 +123,7 @@
 		previewPage = 1;
 		const url = new URL(page.url.href);
 		url.searchParams.set('batch', next.id);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- page.url is already a resolved pathname
 		const navigation = replaceState(url, page.state);
 		if (next.status === 'pending') {
 			if (next.workflow_id) void followWorkflow(next.id, next.workflow_id);
@@ -315,6 +316,7 @@
 			batch = null;
 			const url = new URL(page.url.href);
 			url.searchParams.delete('batch');
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- page.url is already a resolved pathname
 			await replaceState(url, page.state);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to discard Import'));

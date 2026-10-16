@@ -7,11 +7,11 @@
 		variant = 'filled',
 		class: className = '',
 		children
-	} = $props<{
+	}: {
 		variant?: ButtonVariant;
 		class?: string;
 		children: Snippet;
-	}>();
+	} = $props();
 </script>
 
 <Dialog.Trigger class={`${buttonClass(variant)} ${className}`.trim()}>

@@ -5,11 +5,11 @@
 		icon = 'library',
 		title,
 		detail = ''
-	} = $props<{
+	}: {
 		icon?: string;
 		title: string;
 		detail?: string;
-	}>();
+	} = $props();
 </script>
 
 <div class="grid min-h-56 grid-cols-1 place-items-center gap-2 p-8 text-center">

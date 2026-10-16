@@ -23,7 +23,7 @@
 		actionBusy,
 		onLogout,
 		workspaceId
-	} = $props<{
+	}: {
 		user?: components['schemas']['SessionUserView'] | null;
 		collapsed: boolean;
 		routeIsActive: (route: string) => boolean;
@@ -33,7 +33,7 @@
 		actionBusy: boolean;
 		onLogout: () => void;
 		workspaceId?: string;
-	}>();
+	} = $props();
 	const navItems = $derived(
 		navigation.map(
 			([section, label, icon]) =>

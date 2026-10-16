@@ -7,14 +7,21 @@
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 
-	let { messages, canWrite, busy, onAdd, onDelete, onModerate } = $props<{
+	let {
+		messages,
+		canWrite,
+		busy,
+		onAdd,
+		onDelete,
+		onModerate
+	}: {
 		messages: DiscussionMessage[];
 		canWrite: boolean;
 		busy: boolean;
 		onAdd: (event: SubmitEvent) => void;
 		onDelete: (messageId: string) => void;
 		onModerate: (messageId: string) => void;
-	}>();
+	} = $props();
 </script>
 
 <Panel class="mt-4">

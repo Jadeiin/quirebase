@@ -15,15 +15,19 @@
 		workspaceId,
 		compact = false,
 		mobile = false
-	} = $props<{
+	}: {
 		workspaceId?: string;
 		compact?: boolean;
 		mobile?: boolean;
-	}>();
+	} = $props();
 
 	const workspaces = createInfiniteQuery(() => workspaceOptionsQuery());
 	const current = createQuery(() => workspaceQuery(workspaceId ?? ''));
 	const currentWorkspace = $derived(current.data);
+	// Mirrors the visible text so the accessible name honours WCAG 2.5.3 (label in name).
+	const contextLabel = $derived(
+		currentWorkspace?.name ?? (workspaceId ? $t('Workspace') : $t('Choose workspace'))
+	);
 
 	function openWorkspace(nextId: string) {
 		if (nextId === workspaceId) return;
@@ -41,10 +45,11 @@
 					? 'size-10 justify-center rounded-lg'
 					: 'flex-1 gap-2.5 rounded-lg px-2 py-1.5 text-left'
 		}`}
-		aria-label={$t('Workspace')}
+		aria-label={compact ? `Quirebase ${contextLabel}` : undefined}
 		title={compact ? $t('Workspace') : undefined}
 	>
 		<span
+			aria-hidden="true"
 			class={`grid shrink-0 grid-cols-1 place-items-center rounded-xl bg-primary-50 font-serif font-extrabold text-primary-800 ${mobile ? 'size-7 text-base' : 'size-8 text-xl'}`}
 			>Q</span
 		>
@@ -55,7 +60,7 @@
 					>Quirebase</strong
 				>
 				<span class="truncate text-[0.68rem] text-surface-400">
-					{currentWorkspace?.name ?? (workspaceId ? $t('Workspace') : $t('Choose workspace'))}
+					{contextLabel}
 				</span>
 			</span>
 			<Icon name="chevron-down" size={15} />

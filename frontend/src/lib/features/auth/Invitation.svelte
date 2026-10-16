@@ -10,7 +10,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import { sessionQuery } from '#lib/session.js';
 	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
-	let { token } = $props<{ token: string }>();
+	let { token }: { token: string } = $props();
 	let password = $state('');
 	let error = $state('');
 	let busy = $state(false);

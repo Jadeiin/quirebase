@@ -26,7 +26,7 @@
 		onPage,
 		onPageSize,
 		onSort
-	} = $props<{
+	}: {
 		data?: LibrarySearch;
 		workspaceId: string;
 		isPending: boolean;
@@ -43,7 +43,7 @@
 		onPage: (page: number) => void;
 		onPageSize: (size: number) => void;
 		onSort: (sort: string) => void;
-	}>();
+	} = $props();
 </script>
 
 <Panel padding="none" class="mt-6">

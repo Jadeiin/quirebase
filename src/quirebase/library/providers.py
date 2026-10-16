@@ -24,7 +24,7 @@ from inquiro import (
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator, AsyncIterator
 
     from quirebase.core.config import Settings
 
@@ -60,7 +60,7 @@ def provider_runtime(settings: Settings) -> ProviderRuntime:
 @asynccontextmanager
 async def acquire_remote_pdf(
     source: str, settings: Settings, max_bytes: int
-) -> AsyncIterator[RemotePdf]:
+) -> AsyncGenerator[RemotePdf, None]:
     """Acquire and validate a remote PDF through the Library Provider interface."""
     config = replace(provider_config(settings), max_document_bytes=max_bytes)
     try:

@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mockSession, mockWorkspaces, workspaceView } from './helpers';
 
 async function switchWorkspace(page: Page, name: string) {
-	await page.getByRole('button', { name: 'Workspace' }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await page.getByRole('menuitem', { name: new RegExp(name) }).click();
 }
 
@@ -23,7 +23,7 @@ test('Workspace switching and governance live in the Quirebase menu, not the dai
 	await expect(mainNavigation.getByRole('link', { name: 'Workspace settings' })).toHaveCount(0);
 	await expect(mainNavigation.getByRole('link', { name: 'Switch workspace' })).toHaveCount(0);
 
-	await page.getByRole('button', { name: 'Workspace' }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await expect(page.getByRole('menuitem', { name: /Research/ })).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: /Archive/ })).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: 'Manage workspaces' })).toBeVisible();
@@ -48,9 +48,9 @@ test('mobile workspace controls stay under the brand menu rather than More', asy
 	);
 
 	await page.goto('/workspace/workspace-1');
-	await page.getByRole('button', { name: 'Workspace' }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await expect(page.getByRole('menuitem', { name: 'Workspace settings' })).toBeVisible();
-	await page.getByRole('button', { name: 'Workspace' }).press('Escape');
+	await page.getByRole('button', { name: 'Quirebase' }).press('Escape');
 	await page.getByRole('button', { name: 'More' }).click();
 	await expect(page.getByRole('menuitem', { name: 'Workspace settings' })).toHaveCount(0);
 	await expect(page.getByRole('menuitem', { name: 'Switch workspace' })).toHaveCount(0);
@@ -198,7 +198,7 @@ test('workspace creation submits an explicit owner and opens the Workspace when 
 
 	await expect(page).toHaveURL(/\/workspace\/workspace-created$/);
 	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-	await page.getByRole('button', { name: 'Workspace' }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await expect(page.getByRole('menuitem', { name: /New research/ })).toBeVisible();
 	expect(createBody).toEqual({ name: 'New research', owner_username: 'reader' });
 });
@@ -1007,9 +1007,7 @@ test('A preferred Workspace outside the first directory page opens directly and 
 	);
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/workspace\/workspace-27$/);
-	await expect(page.getByRole('button', { name: 'Workspace', exact: true })).toContainText(
-		'Workspace 27'
-	);
+	await expect(page.getByRole('button', { name: 'Quirebase' })).toContainText('Workspace 27');
 	await page.goto('/workspace');
 	await expect(
 		page.getByRole('link', { name: 'Open workspace Workspace 27', exact: true })

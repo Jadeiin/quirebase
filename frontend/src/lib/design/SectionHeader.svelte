@@ -8,12 +8,12 @@
 		actions,
 		class: className = '',
 		children
-	} = $props<{
+	}: {
 		spacing?: Spacing;
 		actions?: Snippet;
 		class?: string;
 		children: Snippet;
-	}>();
+	} = $props();
 
 	const spacingClass = $derived(spacing === 'compact' ? 'mb-3' : 'mb-6');
 </script>

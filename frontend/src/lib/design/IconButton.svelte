@@ -8,13 +8,13 @@
 		active = false,
 		disabled = false,
 		onclick
-	} = $props<{
+	}: {
 		label: string;
 		icon: string;
 		active?: boolean;
 		disabled?: boolean;
 		onclick?: (event: MouseEvent) => void;
-	}>();
+	} = $props();
 </script>
 
 <Tooltip openDelay={450} closeDelay={100} positioning={{ placement: 'bottom', gutter: 7 }}>

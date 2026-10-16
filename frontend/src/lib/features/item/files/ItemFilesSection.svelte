@@ -25,7 +25,7 @@
 		onUploadFromUrl,
 		onDownload,
 		onDelete
-	} = $props<{
+	}: {
 		itemId: string;
 		data: FilesView;
 		metadata: Metadata;
@@ -36,7 +36,7 @@
 		onUploadFromUrl: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
 		onDownload: (file: FileRow) => void;
 		onDelete: (file: FileRow) => void;
-	}>();
+	} = $props();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	const pdfOptions = $derived(pdfFileUrls(metadata).map((url) => ({ value: url, label: url })));

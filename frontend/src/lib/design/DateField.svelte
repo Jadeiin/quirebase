@@ -12,16 +12,17 @@
 		min = '0001-01-01',
 		max = '9999-12-31',
 		inputAttributes = {}
-	} = $props<{
+	}: {
 		value?: string;
 		precision?: 'year' | 'month' | 'day';
 		label: string;
 		min?: string;
 		max?: string;
 		inputAttributes?: HTMLInputAttributes;
-	}>();
+	} = $props();
 	let input = $state<HTMLInputElement>();
 	let portalTarget = $state<HTMLElement>();
+	const rangeTextId = $props.id();
 	onMount(() => {
 		portalTarget = input?.closest<HTMLElement>('[role="dialog"]') ?? undefined;
 	});
@@ -122,7 +123,7 @@
 						{#snippet children(calendar)}
 							{#if precision === 'day'}
 								<DatePicker.View view="day">
-									{@render viewControl()}
+									{@render viewControl(`${rangeTextId}-day`)}
 									<DatePicker.Table>
 										<DatePicker.TableHead
 											><DatePicker.TableRow>
@@ -144,7 +145,7 @@
 							{/if}
 							{#if precision !== 'year'}
 								<DatePicker.View view="month">
-									{@render viewControl()}
+									{@render viewControl(`${rangeTextId}-month`)}
 									<DatePicker.Table
 										><DatePicker.TableBody>
 											{#each calendar().getMonthsGrid( { columns: 3 } ) as months (months[0].value)}<DatePicker.TableRow
@@ -161,7 +162,7 @@
 								</DatePicker.View>
 							{/if}
 							<DatePicker.View view="year">
-								{@render viewControl()}
+								{@render viewControl(`${rangeTextId}-year`)}
 								<DatePicker.Table
 									><DatePicker.TableBody>
 										{#each calendar().getYearsGrid( { columns: 3 } ) as years (years[0].value)}<DatePicker.TableRow
@@ -183,12 +184,15 @@
 	</DatePicker>
 {/key}
 
-{#snippet viewControl()}
+{#snippet viewControl(textId: string)}
 	<DatePicker.ViewControl>
 		<DatePicker.PrevTrigger aria-label={$t('Previous calendar period')}
 			><Icon name="chevron-left" size={16} /></DatePicker.PrevTrigger
 		>
-		<DatePicker.ViewTrigger><DatePicker.RangeText /></DatePicker.ViewTrigger>
+		<!-- Name the trigger with its visible range text so WCAG 2.5.3 (label in name) holds. -->
+		<DatePicker.ViewTrigger aria-labelledby={textId}
+			><DatePicker.RangeText id={textId} /></DatePicker.ViewTrigger
+		>
 		<DatePicker.NextTrigger aria-label={$t('Next calendar period')}
 			><Icon name="chevron-right" size={16} /></DatePicker.NextTrigger
 		>

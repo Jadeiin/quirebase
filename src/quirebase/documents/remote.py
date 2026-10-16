@@ -21,7 +21,7 @@ from quirebase.core.errors import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator, AsyncIterator
 
 
 @dataclass(frozen=True)
@@ -107,7 +107,9 @@ async def _chunks(stream: IO[bytes]) -> AsyncIterator[bytes]:
 
 
 @asynccontextmanager
-async def acquire_remote_attachment(source: str, max_bytes: int) -> AsyncIterator[RemoteAttachment]:
+async def acquire_remote_attachment(
+    source: str, max_bytes: int
+) -> AsyncGenerator[RemoteAttachment, None]:
     """Download an arbitrary attachment with bounded transport and storage."""
     current_url = _validated_url(source)
     with tempfile.SpooledTemporaryFile(max_size=5_000_000, mode="w+b") as stream:

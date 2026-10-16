@@ -17,7 +17,7 @@
 		label,
 		busy = false,
 		class: className = ''
-	} = $props<{
+	}: {
 		page: number;
 		pageCount: number;
 		pageSize: number;
@@ -30,7 +30,7 @@
 		label: string;
 		busy?: boolean;
 		class?: string;
-	}>();
+	} = $props();
 
 	const triggerClass = buttonClass('icon', 'sm');
 	const pageSizes = $derived([...new Set([10, 20, 25, 50, 100, pageSize])].sort((a, b) => a - b));

@@ -12,14 +12,21 @@
 	import { mobileMoreNavigation, mobileNavigation, themeOptions } from './navigation';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	let { routeIsActive, user, readerRoute, themePreference, onThemeChange, workspaceId } = $props<{
+	let {
+		routeIsActive,
+		user,
+		readerRoute,
+		themePreference,
+		onThemeChange,
+		workspaceId
+	}: {
 		routeIsActive: (route: string) => boolean;
 		user?: components['schemas']['SessionUserView'] | null;
 		readerRoute: boolean;
 		workspaceId?: string;
 		themePreference: ThemePreference;
 		onThemeChange: (preference: ThemePreference) => void;
-	}>();
+	} = $props();
 	const mobileItems = $derived(
 		mobileNavigation.map(
 			([section, label, icon]) =>

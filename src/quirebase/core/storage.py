@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
-from collections.abc import AsyncIterable, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -254,7 +254,7 @@ class ObjectStore:
         return True
 
     @asynccontextmanager
-    async def materialize(self, key: str) -> AsyncIterator[Path]:
+    async def materialize(self, key: str) -> AsyncGenerator[Path, None]:
         self._validate_key(key)
         if self._local_root is not None:
             path = self._local_path(key)

@@ -17,7 +17,7 @@
 		requireMatch = '',
 		busy = false,
 		onConfirm
-	} = $props<{
+	}: {
 		open: boolean;
 		title: string;
 		body: string;
@@ -28,7 +28,7 @@
 		requireMatch?: string;
 		busy?: boolean;
 		onConfirm: (value: string) => void;
-	}>();
+	} = $props();
 
 	let value = $state('');
 	$effect(() => {

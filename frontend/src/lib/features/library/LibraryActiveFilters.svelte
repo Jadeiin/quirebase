@@ -7,10 +7,13 @@
 	import { t } from '#lib/i18n.js';
 	import type { LibraryFilters } from './filters.js';
 
-	let { filters, onRemove } = $props<{
+	let {
+		filters,
+		onRemove
+	}: {
 		filters: LibraryFilters;
 		onRemove: (keys: (keyof LibraryFilters)[]) => void;
-	}>();
+	} = $props();
 	const { workspaceId } = getWorkspaceContext();
 	const tag = createQuery(() => ({
 		...tagsQuery(workspaceId, '', 0, 1, filters.tag),
