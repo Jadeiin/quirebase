@@ -946,7 +946,7 @@ test('cross-Workspace copy refreshes the target Workspace dashboard and Library'
 
 	await page.goto('/workspace/workspace-1/item/item-copy');
 	// Warm the target Workspace projections so the copy has to invalidate cached views.
-	await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await page.getByRole('menuitem', { name: /Archive/ }).click();
 	await expect(page).toHaveURL(/\/workspace\/workspace-2$/);
 	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
@@ -962,7 +962,7 @@ test('cross-Workspace copy refreshes the target Workspace dashboard and Library'
 	await expect(page.getByRole('link', { name: 'Open copy' })).toBeVisible();
 	await page.keyboard.press('Escape');
 
-	await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await page.getByRole('menuitem', { name: /Archive/ }).click();
 	await expect(page).toHaveURL(/\/workspace\/workspace-2$/);
 	await expect(page.getByText('Copy source')).toBeVisible();
@@ -1053,7 +1053,7 @@ test('creating a Workspace refreshes cached Item copy destinations', async ({ pa
 	await page.keyboard.press('Escape');
 	await page.keyboard.press('Escape');
 
-	await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await page.getByRole('menuitem', { name: 'Manage workspaces' }).click();
 	await page.getByLabel('Workspace name').fill('New Workspace');
 	await page.getByRole('button', { name: 'Create workspace' }).click();

@@ -1,5 +1,5 @@
 <script lang="ts">
-	let { value, label } = $props<{ value: string | number; label: string }>();
+	let { value, label }: { value: string | number; label: string } = $props();
 </script>
 
 <div class="grid grid-cols-1 gap-1 rounded-base bg-surface-200-800 p-3">

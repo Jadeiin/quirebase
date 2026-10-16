@@ -2,7 +2,7 @@
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { Navigation } from '@skeletonlabs/skeleton-svelte';
 	import type { Snippet } from 'svelte';
-	let { label, children } = $props<{ label: string; children: Snippet }>();
+	let { label, children }: { label: string; children: Snippet } = $props();
 </script>
 
 <Navigation

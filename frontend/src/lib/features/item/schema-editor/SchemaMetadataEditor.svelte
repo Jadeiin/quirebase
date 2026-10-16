@@ -50,7 +50,7 @@
 		onsubmit,
 		ondirty,
 		serverErrors = []
-	} = $props<{
+	}: {
 		metadata: Metadata;
 		schema: Record<string, unknown>;
 		citationKey: string;
@@ -59,7 +59,7 @@
 		onsubmit: (metadata: Metadata, citationKey: string) => void;
 		ondirty?: (dirty: boolean) => void;
 		serverErrors?: components['schemas']['ErrorField'][];
-	}>();
+	} = $props();
 	// svelte-ignore state_referenced_locally
 	const schemas = workSchemas(schema);
 	const validate = workValidator(schemas.original);

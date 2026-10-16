@@ -12,7 +12,7 @@ from quirebase.mcp.server import create_mcp_server
 from quirebase.mcp.transport_security import McpOriginMiddleware, cors_origin_allowlist
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncGenerator, Callable
 
     from fastapi import FastAPI
     from fastmcp import FastMCP
@@ -83,7 +83,7 @@ def create_mcp_http_mount(
     )
 
     @asynccontextmanager
-    async def lifespan() -> AsyncIterator[None]:
+    async def lifespan() -> AsyncGenerator[None, None]:
         async with protocol_app.lifespan(protocol_app):
             yield
 

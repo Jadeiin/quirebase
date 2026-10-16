@@ -15,7 +15,7 @@
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	let { itemId, revisionId } = $props<{ itemId: string; revisionId: string }>();
+	let { itemId, revisionId }: { itemId: string; revisionId: string } = $props();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	const queryClient = useQueryClient();

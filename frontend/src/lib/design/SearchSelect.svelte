@@ -25,7 +25,7 @@
 		required = false,
 		footer,
 		class: className = ''
-	} = $props<{
+	}: {
 		value?: string;
 		search?: string | null;
 		open?: boolean;
@@ -44,7 +44,7 @@
 		required?: boolean;
 		footer?: Snippet;
 		class?: string;
-	}>();
+	} = $props();
 
 	let input = $state<HTMLInputElement>();
 	let footerElement = $state<HTMLDivElement>();

@@ -18,7 +18,7 @@
 		valueBy = 'id',
 		allowCustomValue = false,
 		class: className = ''
-	} = $props<{
+	}: {
 		value?: string;
 		label: string;
 		hideLabel?: boolean;
@@ -28,7 +28,7 @@
 		valueBy?: 'id' | 'name';
 		allowCustomValue?: boolean;
 		class?: string;
-	}>();
+	} = $props();
 
 	const { workspaceId } = getWorkspaceContext();
 	let open = $state(false);

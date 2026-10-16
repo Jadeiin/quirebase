@@ -10,7 +10,12 @@
 	type Workflow = components['schemas']['WorkflowSummaryView'];
 	type Operation = 'check_objects';
 
-	let { maintenance, operations, busy, onRun } = $props<{
+	let {
+		maintenance,
+		operations,
+		busy,
+		onRun
+	}: {
 		maintenance: {
 			storage: { items_count: number; total_disk_bytes: number };
 			workflows: Workflow[];
@@ -18,7 +23,7 @@
 		operations: ReadonlyArray<readonly [Operation, MessageKey]>;
 		busy: boolean;
 		onRun: (operation: Operation) => void;
-	}>();
+	} = $props();
 </script>
 
 <Panel class="grid grid-cols-1 gap-3">

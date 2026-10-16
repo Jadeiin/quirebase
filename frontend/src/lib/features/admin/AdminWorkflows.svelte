@@ -5,7 +5,7 @@
 	import type { components } from '#lib/api/schema.js';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 
-	let { workflows } = $props<{ workflows: components['schemas']['WorkflowSummaryView'][] }>();
+	let { workflows }: { workflows: components['schemas']['WorkflowSummaryView'][] } = $props();
 </script>
 
 <Panel class="mt-4">

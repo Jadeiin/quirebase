@@ -12,7 +12,7 @@
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
 
-	let { job, visible = true } = $props<{ job: TrackedJob; visible?: boolean }>();
+	let { job, visible = true }: { job: TrackedJob; visible?: boolean } = $props();
 	const center = getWorkflowCenter();
 	const status = createQuery(() =>
 		workflowStatusQuery(job.workspaceId, job.id, () => !job.outcome)

@@ -240,8 +240,8 @@ for (const width of [1280, 390]) {
 			route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 		);
 		await page.goto('/workspace/workspace-1');
-		await page.getByRole('button', { name: 'Workspace', exact: true }).click();
-		const menu = page.getByRole('menu', { name: 'Workspace', exact: true });
+		await page.getByRole('button', { name: 'Quirebase' }).click();
+		const menu = page.getByRole('menu', { name: 'Quirebase' });
 		await expect(menu).toBeVisible();
 		await expect(menu.getByRole('menuitem', { name: /A very long Workspace name/ })).toBeVisible();
 		await expect

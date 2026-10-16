@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from uuid import UUID
 
 ProgrammaticProtocol = Literal["http", "mcp"]
@@ -42,7 +42,7 @@ def programmatic_invocation(
     *,
     api_token_id: UUID | None = None,
     client_id: str | None = None,
-) -> Iterator[ProgrammaticInvocation]:
+) -> Generator[ProgrammaticInvocation, None, None]:
     """Bind source metadata while an inbound adapter invokes business behaviour."""
     invocation = ProgrammaticInvocation(
         protocol=protocol,

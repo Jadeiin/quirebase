@@ -22,13 +22,13 @@
 		busy,
 		onSubmit,
 		serverErrors = []
-	} = $props<{
+	}: {
 		item: ItemDetail;
 		canEdit: boolean;
 		busy: boolean;
 		serverErrors?: components['schemas']['ErrorField'][];
 		onSubmit: (item: ItemDetail, metadata: Metadata, citationKey: string) => Promise<boolean>;
-	}>();
+	} = $props();
 	// svelte-ignore state_referenced_locally
 	let editingItem = $state(structuredClone($state.snapshot(item)));
 	let editorRevision = $state(0);
@@ -84,7 +84,7 @@
 			/>
 		{/key}
 	{:else}
-		<RichText html={item.metadata.title} />
+		<RichText html={text(item.metadata.title)} />
 		<dl class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
 			<div>
 				<dt>{$t('Authors')}</dt>

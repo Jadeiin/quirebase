@@ -6,11 +6,11 @@
 		href,
 		current = false,
 		children
-	} = $props<{
+	}: {
 		href: string;
 		current?: boolean;
 		children: Snippet;
-	}>();
+	} = $props();
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -- callers resolve route ids before passing href -->

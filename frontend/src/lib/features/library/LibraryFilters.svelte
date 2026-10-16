@@ -22,7 +22,7 @@
 		projects = [],
 		onSearch,
 		onClear
-	} = $props<{
+	}: {
 		query: string;
 		tag: string;
 		project: string;
@@ -34,7 +34,7 @@
 		projects: LibraryProject[];
 		onSearch: () => void;
 		onClear: () => void;
-	}>();
+	} = $props();
 </script>
 
 <Panel

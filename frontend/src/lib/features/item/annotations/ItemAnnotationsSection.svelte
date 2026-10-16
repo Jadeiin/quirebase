@@ -19,7 +19,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 
-	let { itemId } = $props<{ itemId: string }>();
+	let { itemId }: { itemId: string } = $props();
 	const { workspaceId } = getWorkspaceContext();
 	const workspace = getWorkspaceContext();
 	const queryClient = useQueryClient();

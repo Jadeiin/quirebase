@@ -20,7 +20,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import { workspaceOptionsQuery } from '#lib/workspaces/queries.js';
 
-	let { userId } = $props<{ userId: string }>();
+	let { userId }: { userId: string } = $props();
 	let preferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	let citationKeyFormula = $state(defaultExportPreferences.citation.citationKeyFormula);
 	let citationKeyForceAscii = $state(defaultExportPreferences.citation.citationKeyForceAscii);

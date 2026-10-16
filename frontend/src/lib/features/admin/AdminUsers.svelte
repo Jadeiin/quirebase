@@ -20,7 +20,7 @@
 		onUpdateUserStatus,
 		onResetUserPassword,
 		onRevokeUserSessions
-	} = $props<{
+	}: {
 		users: Users;
 		busy: boolean;
 		invitationUrl: string;
@@ -30,7 +30,7 @@
 		onUpdateUserStatus: (user: User) => void;
 		onResetUserPassword: (event: SubmitEvent, userId: string) => void;
 		onRevokeUserSessions: (userId: string) => void;
-	}>();
+	} = $props();
 </script>
 
 <div class="grid grid-cols-1 gap-4 min-[800px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">

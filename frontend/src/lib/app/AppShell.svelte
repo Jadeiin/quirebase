@@ -30,7 +30,7 @@
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
 	import { isRouteActive } from './navigation';
 
-	let { children } = $props<{ children: Snippet }>();
+	let { children }: { children: Snippet } = $props();
 	const session = createQuery(() => sessionQuery());
 	setSession({ query: session, logout });
 	const workflowCenter = new WorkflowCenter();

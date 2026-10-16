@@ -6,12 +6,17 @@
 
 	type Settings = components['schemas']['AdminSettingsView'];
 
-	let { settings, fields, busy, onSave } = $props<{
+	let {
+		settings,
+		fields,
+		busy,
+		onSave
+	}: {
 		settings: Settings;
 		fields: ReadonlyArray<readonly [keyof Settings, MessageKey]>;
 		busy: boolean;
 		onSave: (event: SubmitEvent) => void;
-	}>();
+	} = $props();
 </script>
 
 <Panel class="grid grid-cols-1 gap-3">

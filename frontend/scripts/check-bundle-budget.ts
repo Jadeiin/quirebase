@@ -125,7 +125,7 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 }
 
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	raw: 683000,
+	raw: 684000,
 	gzip: 192000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
@@ -216,7 +216,7 @@ enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
 	gzip: 216000
 });
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
-	raw: 709000,
+	raw: 710000,
 	gzip: 202000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {

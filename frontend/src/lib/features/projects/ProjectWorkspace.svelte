@@ -30,7 +30,7 @@
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { workspaceKeys } from '#lib/workspaces/keys.js';
 
-	let { projectId } = $props<{ projectId: string }>();
+	let { projectId }: { projectId: string } = $props();
 	const workspace = getWorkspaceContext();
 	const workspaceId = workspace.workspaceId;
 	const queryClient = useQueryClient();

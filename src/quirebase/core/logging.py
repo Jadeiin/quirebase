@@ -9,13 +9,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
 
 _context: ContextVar[dict[str, str] | None] = ContextVar("quirebase_log_context", default=None)
 
 
 @contextmanager
-def log_context(**values: str | None) -> Iterator[None]:
+def log_context(**values: str | None) -> Generator[None, None, None]:
     current = dict(_context.get() or {})
     current.update({key: value for key, value in values.items() if value})
     token = _context.set(current)

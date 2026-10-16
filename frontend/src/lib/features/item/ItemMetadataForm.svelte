@@ -14,7 +14,7 @@
 		onsubmit,
 		ondirty,
 		serverErrors = []
-	} = $props<{
+	}: {
 		metadata: Metadata;
 		citationKey?: string;
 		busy?: boolean;
@@ -22,7 +22,7 @@
 		onsubmit: (metadata: Metadata, citationKey: string) => void;
 		ondirty?: (dirty: boolean) => void;
 		serverErrors?: components['schemas']['ErrorField'][];
-	}>();
+	} = $props();
 	const workspace = getWorkspaceContext();
 	const schema = createQuery(() => ({
 		queryKey: ['commonmeta-schema', workspace.workspaceId],

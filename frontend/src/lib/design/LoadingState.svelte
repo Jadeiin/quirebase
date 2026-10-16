@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Progress } from '@skeletonlabs/skeleton-svelte';
-	let { label, class: className = '' } = $props<{ label: string; class?: string }>();
+	let { label, class: className = '' }: { label: string; class?: string } = $props();
 </script>
 
 <Progress value={null} class={`max-w-sm text-sm text-surface-600-400 ${className}`.trim()}>

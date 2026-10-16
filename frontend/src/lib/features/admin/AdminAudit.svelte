@@ -5,7 +5,7 @@
 	import type { components } from '#lib/api/schema.js';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 
-	let { events } = $props<{ events: components['schemas']['AdminAuditEventView'][] }>();
+	let { events }: { events: components['schemas']['AdminAuditEventView'][] } = $props();
 </script>
 
 <Panel class="mt-4">

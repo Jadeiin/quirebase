@@ -12,12 +12,17 @@
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { metadataFilterLinks } from './metadata-links.js';
 
-	let { itemId, overview, user, onChanged } = $props<{
+	let {
+		itemId,
+		overview,
+		user,
+		onChanged
+	}: {
 		itemId: string;
 		overview?: ItemOverview;
 		user?: components['schemas']['SessionUserView'] | null;
 		onChanged: () => Promise<unknown>;
-	}>();
+	} = $props();
 
 	const labels: Record<ItemSection, MessageKey> = {
 		overview: msg('Overview'),

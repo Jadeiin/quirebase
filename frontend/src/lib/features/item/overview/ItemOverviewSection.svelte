@@ -19,10 +19,13 @@
 	import { libraryHref } from '#lib/features/library/filters.js';
 	import { metadataFilterLinks } from '../metadata-links.js';
 
-	let { itemId, data } = $props<{
+	let {
+		itemId,
+		data
+	}: {
 		itemId: string;
 		data: ItemOverviewView;
-	}>();
+	} = $props();
 
 	let imageLoadFailed = $state(false);
 	const { workspaceId } = getWorkspaceContext();

@@ -13,7 +13,7 @@
 		submitDisabled = false,
 		onsubmit,
 		children
-	} = $props<{
+	}: {
 		icon: string;
 		title: string;
 		description: string;
@@ -22,7 +22,7 @@
 		submitDisabled?: boolean;
 		onsubmit: (event: SubmitEvent) => void;
 		children: Snippet;
-	}>();
+	} = $props();
 </script>
 
 <Panel as="form" class="grid h-full min-w-0 grid-cols-1 gap-4" {onsubmit}>

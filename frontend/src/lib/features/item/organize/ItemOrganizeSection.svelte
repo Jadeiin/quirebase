@@ -9,17 +9,25 @@
 	import type { OrganizeView } from '../types';
 	import Button from '#lib/design/Button.svelte';
 
-	let { data, busy, error, onToggleProject, onAddTag, onToggleTag, onAddSuggestedTag, onRefresh } =
-		$props<{
-			data: OrganizeView;
-			busy: boolean;
-			error: string;
-			onToggleProject: (project: OrganizeView['projects'][number]) => Promise<boolean>;
-			onAddTag: (event: SubmitEvent) => void;
-			onToggleTag: (tagId: string, assigned: boolean) => void;
-			onAddSuggestedTag: (name: string) => void;
-			onRefresh: () => void;
-		}>();
+	let {
+		data,
+		busy,
+		error,
+		onToggleProject,
+		onAddTag,
+		onToggleTag,
+		onAddSuggestedTag,
+		onRefresh
+	}: {
+		data: OrganizeView;
+		busy: boolean;
+		error: string;
+		onToggleProject: (project: OrganizeView['projects'][number]) => Promise<boolean>;
+		onAddTag: (event: SubmitEvent) => void;
+		onToggleTag: (tagId: string, assigned: boolean) => void;
+		onAddSuggestedTag: (name: string) => void;
+		onRefresh: () => void;
+	} = $props();
 
 	let tagFilter = $state('');
 	let projectFilter = $state('');

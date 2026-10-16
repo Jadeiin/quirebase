@@ -30,12 +30,17 @@
 
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger' | 'copy';
 
-	let { itemId, overview, userId, onchanged } = $props<{
+	let {
+		itemId,
+		overview,
+		userId,
+		onchanged
+	}: {
 		itemId: string;
 		overview: ItemOverviewView;
 		userId: string;
 		onchanged: () => Promise<unknown>;
-	}>();
+	} = $props();
 	let open = $state(false);
 	let section = $state<ActionSection>('citation');
 	let busy = $state(false);

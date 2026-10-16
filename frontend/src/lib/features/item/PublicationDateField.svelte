@@ -2,10 +2,13 @@
 	import type { HTMLInputAttributes } from 'svelte/elements';
 	import DateField from '#lib/design/DateField.svelte';
 	import { t } from '#lib/i18n.js';
-	let { value = $bindable(''), inputAttributes = {} } = $props<{
+	let {
+		value = $bindable(''),
+		inputAttributes = {}
+	}: {
 		value?: string;
 		inputAttributes?: HTMLInputAttributes;
-	}>();
+	} = $props();
 	type Precision = 'year' | 'month' | 'day';
 	let precision = $state<Precision>(
 		value.length >= 10 ? 'day' : value.length === 7 ? 'month' : 'year'

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { hasInlineMath, projectRichText, projectRichTextAsync } from '#lib/design/rich-text.js';
 
-	let { html } = $props<{ html: string }>();
+	let { html }: { html: string } = $props();
 	type MathProjection = { source: string; result: string };
 
 	let mathProjection = $state.raw<MathProjection | null>(null);

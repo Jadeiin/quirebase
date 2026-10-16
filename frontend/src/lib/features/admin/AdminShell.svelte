@@ -12,7 +12,7 @@
 	import { setAdminFilters } from './filters';
 	import type { AdminFilters, AdminSection } from './queries';
 
-	let { children } = $props<{ children: Snippet }>();
+	let { children }: { children: Snippet } = $props();
 
 	const labels: Record<AdminSection, MessageKey> = {
 		overview: msg('Overview'),

@@ -3,12 +3,17 @@
 	import type { Snippet } from 'svelte';
 	import { t, type MessageKey } from '#lib/i18n.js';
 
-	let { loading, failed, label, children } = $props<{
+	let {
+		loading,
+		failed,
+		label,
+		children
+	}: {
 		loading: boolean;
 		failed: boolean;
 		label: MessageKey;
 		children: Snippet;
-	}>();
+	} = $props();
 </script>
 
 {#if loading}

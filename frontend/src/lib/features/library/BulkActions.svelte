@@ -19,7 +19,7 @@
 		busy,
 		onApply,
 		onClearSelection
-	} = $props<{
+	}: {
 		selectedCount: number;
 		bulkAction: string;
 		bulkProject: string;
@@ -29,7 +29,7 @@
 		busy: boolean;
 		onApply: () => void;
 		onClearSelection: () => void;
-	}>();
+	} = $props();
 	const workspace = getWorkspaceContext();
 	const assignableProjects: LibraryProject[] = $derived(
 		projects.filter((project: LibraryProject) => can(project.authorization, 'project_item.manage'))

@@ -6,7 +6,7 @@
 	import { t } from '#lib/i18n.js';
 	import type { components } from '#lib/api/schema.js';
 
-	let { overview } = $props<{ overview: components['schemas']['AdminOverviewView'] }>();
+	let { overview }: { overview: components['schemas']['AdminOverviewView'] } = $props();
 </script>
 
 <div class="grid grid-cols-2 gap-3 min-[800px]:grid-cols-4">
