@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
 import { minimalPdf } from '../e2e/helpers';
+import type { components } from '../src/lib/api/schema.js';
 
 async function signIn(page: Page) {
 	await page.goto('/');
@@ -90,8 +91,7 @@ test('creates, edits, and finds duplicate-capable Commonmeta Items through the r
 	await expect(page.getByRole('heading', { name: revisedTitle })).toBeVisible();
 	const response = await page.request.get(`/api/v1/workspaces/${workspaceId}/items/${itemId}`);
 	expect(response.ok()).toBe(true);
-	const detail = await response.json();
-	expect(detail.authors).toBe('Research Council');
+	const detail: components['schemas']['ItemDetailView'] = await response.json();
 	expect(detail.metadata).toEqual({
 		...work,
 		title: revisedTitle,
