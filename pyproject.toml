@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quirebase"
-version = "0.1.4"
+version = "0.2.0"
 description = "A collaborative, self-hosted research library"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -14,11 +14,11 @@ dependencies = [
   "casbin>=1.43,<2",
   "fastapi>=0.141.1,<1",
   "httpx2>=2.12,<3",
-  "inquiro==0.1.4",
+  "inquiro==0.2.0",
   "pymupdf>=1.28,<1.29",
   "pydantic-settings>=2.10,<3",
   "python-multipart>=0.0.20,<1",
-  "rubrica==0.1.4",
+  "rubrica==0.2.0",
   "sqlalchemy[asyncio,aiosqlite]>=2.0,<2.1",
   "typer>=0.16,<1",
   "uvicorn[standard]>=0.35,<1",
@@ -33,8 +33,8 @@ dependencies = [
 postgres = [
   "sqlalchemy[postgresql-psycopgbinary]>=2.0,<2.1",
 ]
-citation = ["inquiro[citation]==0.1.4"]
-keybert = ["rubrica[keybert]==0.1.4"]
+citation = ["inquiro[citation]==0.2.0"]
+keybert = ["rubrica[keybert]==0.2.0"]
 
 [tool.uv.workspace]
 members = ["packages/*"]

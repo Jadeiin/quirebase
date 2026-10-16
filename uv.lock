@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -1823,7 +1823,7 @@ wheels = [
 
 [[package]]
 name = "inquiro"
-version = "0.1.4"
+version = "0.2.0"
 source = { editable = "packages/inquiro" }
 dependencies = [
     { name = "citeproc-py" },
@@ -3756,7 +3756,7 @@ wheels = [
 
 [[package]]
 name = "quirebase"
-version = "0.1.4"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "advanced-alchemy", extra = ["argon2", "cli", "obstore", "uuid"] },
@@ -4109,7 +4109,7 @@ wheels = [
 
 [[package]]
 name = "rubrica"
-version = "0.1.4"
+version = "0.2.0"
 source = { editable = "packages/rubrica" }
 dependencies = [
     { name = "yake" },

@@ -1,3 +1,102 @@
+## 0.2.0 (2026-10-16)
+
+### BREAKING CHANGE
+
+- Admin overview recent_events and workflow lists now return
+limit/offset pages; failed_workflows is replaced by failed_workflow_count.
+- Item overview and organize responses use the current detail and Tag matrix shapes, removing redundant identifier, revision, and Tag projections.
+- ProviderChoice.identifier_namespace is replaced by
+identifier_namespaces in provider capability responses.
+- replace POST /imports/identifier with POST /imports/identifiers,
+using an identifiers array for both single-record and batch imports.
+- replace the previous Item metadata and identifier schema; rebuild existing alpha databases.
+- remove the annotation review endpoint and return a paginated
+envelope from the Item annotation collection.
+
+### Feat
+
+- **web**: unify pagination and enforce UI styling
+- **items**: unify metadata views and library navigation
+- **metadata**: streamline editor and stabilize author updates
+- **imports**: support batch lookup and tabbed import sources
+- **annotations**: follow displayed sources in exports and writes
+- **frontend**: edit structured contributors and upstream identifiers
+- **tags**: paginate tag listings and bound lookup queries
+- **persistence**: extend native AA directories and file workflows
+- **persistence**: integrate Alchemy repositories and services
+- **persistence**: adopt Alchemy values and bounded directories
+- **prototype**: integrate UUIDv7 audit bases and Alchemy use cases
+- **annotations**: support multiple sources and unify Item listings
+- **workspaces**: align ACL with workspace governance model
+- **authz**: replace built-in ACL with Casbin
+- **workspace**: add explicit discussion moderation
+- **workspaces**: migrate app to workspace-scoped access
+- **domain**: implement workspace ACL boundaries
+- **domain**: model workspaces as data-governance and ACL boundaries
+
+### Fix
+
+- **projects**: confirm destructive ProjectItem removal
+- **frontend**: refresh stale projections after Project and Item changes
+- **items**: align controls and preserve OpenAlex author bylines
+- **frontend**: refresh cached projections after cross-area changes
+- **annotations**: keep scope and project binding immutable
+- **concurrency**: handle bulk tag races and share upload locks
+- **web**: preserve Project reads and validate archive revisions
+- **acl**: enforce participant lineage and atomic mutations
+- **acl**: clarify participation and governance semantics
+- **persistence**: close UUID and durable replay gaps
+- **persistence**: complete native UUID and release validation
+- **storage**: bound signed downloads after signing completes
+- **acl**: scope conflict recovery and preserve audit provenance
+- prevent workspace deletion races and duplicate PDF loads
+- **ci**: decouple PostgreSQL tests from frontend build
+- **annotations**: filter PDF exports and lock reply roots before children
+- **workspaces**: tolerate concurrent deletion during owner lookup
+- **workspaces**: preserve PDF import retries and reader permissions
+- **workspaces**: scope export styles and honor PDF annotation permissions
+- **workspaces**: tighten authorization and project concurrency
+- correct workspace ACL projection and invitation audit
+- serialize annotation scope with project detachment
+- enforce annotation moderation and lifecycle capabilities
+- prevent workspace authorization and recovery races
+- resolve workspace ACL review findings
+- **workspace**: harden ACL concurrency boundaries
+- **workspace**: align ownership transfer lock order
+- align account invitation links with the invite route
+- restore archived Project discovery and discussion reads
+- **frontend**: gate workspace actions by effective capabilities
+- **access**: enforce project participation and private annotation replies
+
+### Refactor
+
+- **library**: simplify Item copy and metadata write seams
+- **metadata**: adopt Commonmeta Work for Item metadata
+- **inquiro**: centralize metadata provider capabilities
+- **library**: return typed import previews
+- **library**: persist structured metadata and scoped JSON facets
+- **workspaces**: delete owned roots and simplify lifecycle APIs
+- **inquiro**: centralize structured bibliographic metadata
+- **frontend**: adopt Skeleton controls and improve metadata editing
+- **metadata**: standardize item types and provider records
+- simplify annotations and unify reader controls
+- consolidate module ownership and migration tooling
+- **modularity**: centralize invariant and lifecycle ownership
+- **persistence**: use module-owned SQLAlchemy operations
+- **persistence**: restore native conflict writes
+- **persistence**: centralize concurrent writes in repositories
+- **projects**: unify participant terminology
+- **persistence**: enforce Advanced Alchemy boundaries
+- **library**: persist item aggregates with Alchemy services
+- **access**: clarify project discovery and participant contracts
+- **access**: simplify grants and validate Workspace integrity
+- **workspaces**: clarify participation and state commands
+- **projects**: simplify choices and settings contracts
+- **access**: align capabilities and collaboration choices
+- **access**: separate base grants from concrete variants
+- **access**: reuse read contexts and tighten policy projections
+- simplify audited layers and strengthen lifecycle tests
+
 ## 0.1.4 (2026-09-21)
 
 ### Feat
