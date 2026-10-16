@@ -15,6 +15,7 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
+	import { librarySort } from '#lib/features/library/filters.js';
 	import { memberOptionsQuery } from '#lib/workspaces/queries.js';
 	import PromptDialog from '#lib/design/PromptDialog.svelte';
 	import RichText from '#lib/design/RichText.svelte';
@@ -35,12 +36,15 @@
 	const detail = createQuery(() => projectDetailQuery(workspaceId, projectId));
 	const project = $derived(detail.data);
 	let itemPage = $state(1);
+	let itemPageSize = $state(25);
+	let itemSort = $state<'updated' | 'created' | 'title'>('updated');
 	let itemSearch = $state('');
 	const items = createQuery(() => ({
 		...libraryListQuery(
 			workspaceId,
-			{ query: itemSearch, project: projectId, tag: '', year: '', keyword: '', author: '' },
-			itemPage
+			{ query: itemSearch, project: projectId, sort: itemSort },
+			itemPage,
+			itemPageSize
 		),
 		enabled: Boolean(project)
 	}));
@@ -595,7 +599,23 @@
 			{/if}
 			<Pagination
 				page={itemPage}
-				pageCount={Math.max(1, Math.ceil((items.data?.total ?? 0) / (items.data?.limit ?? 25)))}
+				pageCount={Math.max(1, Math.ceil((items.data?.total ?? 0) / itemPageSize))}
+				pageSize={itemPageSize}
+				total={items.data?.total ?? 0}
+				onPageSize={(size) => {
+					itemPageSize = size;
+					itemPage = 1;
+				}}
+				sort={itemSort}
+				sortOptions={[
+					{ value: 'updated', label: $t('Recently updated') },
+					{ value: 'created', label: $t('Recently added') },
+					{ value: 'title', label: $t('Title') }
+				]}
+				onSort={(value) => {
+					itemSort = librarySort(value);
+					itemPage = 1;
+				}}
 				onPage={(page) => (itemPage = page)}
 				label={$t('Items pagination')}
 				busy={items.isFetching}

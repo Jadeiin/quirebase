@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest';
-import { libraryHref, libraryPage, libraryParameters, readLibraryFilters } from './filters.js';
+import {
+	libraryHref,
+	libraryPage,
+	libraryPageSize,
+	libraryParameters,
+	readLibraryFilters
+} from './filters.js';
 import { metadataFilterLinks } from '../item/metadata-links.js';
 import type { Metadata } from '../item/metadata-draft.js';
 
@@ -27,6 +33,24 @@ it('round-trips precise filters, empty given names, Unicode and URL punctuation'
 it.each(['NaN', 'Infinity', '-2', '0', ''])('keeps invalid page %s on page one', (page) => {
 	expect(libraryPage(new URLSearchParams({ page }))).toBe(1);
 });
+
+it.each([10, 20, 25, 50, 100])('round-trips page size %i with filters and the page', (pageSize) => {
+	const filters = { query: '研究 & ML', sort: 'title' as const, author_first_name: '' };
+	const url = new URL(`https://test/${libraryHref('workspace-1', filters, 3, pageSize)}`);
+	expect(libraryPageSize(url.searchParams)).toBe(pageSize);
+	expect(libraryPage(url.searchParams)).toBe(3);
+	expect(readLibraryFilters(url.searchParams)).toMatchObject(filters);
+	expect(url.searchParams.has('page_size')).toBe(pageSize !== 25);
+});
+
+it.each([null, '', 'NaN', 'Infinity', '-1', '0', '1.5', '15', '101', '1000'])(
+	'falls back to the default for unsupported page size %s',
+	(value) => {
+		expect(libraryPageSize(new URLSearchParams(value === null ? {} : { page_size: value }))).toBe(
+			25
+		);
+	}
+);
 
 it('builds author links from active entities and Author roles in record order', () => {
 	const metadata = {

@@ -111,7 +111,7 @@
 				</article>{/each}
 		</div>{:else}<p>{$t('No workspaces.')}</p>{/if}
 	<section
-		class="border-warning-500-300 grid max-w-3xl grid-cols-1 gap-3 rounded-container border p-5"
+		class="grid max-w-3xl grid-cols-1 gap-3 rounded-container border border-warning-500 p-5 dark:border-warning-300"
 	>
 		<h3 class="text-xl font-semibold">{$t('BREAK GLASS · read-only item inspection')}</h3>
 		<p>
@@ -144,7 +144,9 @@
 				<strong>{$t('BREAK GLASS')}</strong><span>{$t('Reason:')} {inspectionReason}</span><span
 					>{$t('Scope: Workspace')} {inspectionWorkspaceId} · {$t('Item list read-only')}</span
 				><span>{$t('Single response; no continuing access is granted')}</span
-				>{#each inspection as item (item.id)}<div class="border-surface-400-700 border-t pt-2">
+				>{#each inspection as item (item.id)}<div
+						class="border-t border-surface-400 pt-2 dark:border-surface-700"
+					>
 						<RichText html={item.title_html} /><small class="block text-surface-600-400"
 							>{item.authors ?? ''} · {item.publication_date ?? ''}</small
 						>

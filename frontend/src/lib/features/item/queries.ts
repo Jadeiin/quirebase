@@ -25,8 +25,9 @@ export const itemKeys = {
 		itemId: string,
 		revisionId: string,
 		source: string,
-		page: number
-	) => [...itemKeys.annotations(workspaceId, itemId), revisionId, source, page] as const
+		page: number,
+		pageSize = 50
+	) => [...itemKeys.annotations(workspaceId, itemId), revisionId, source, page, pageSize] as const
 };
 
 export function itemOverviewQuery(workspaceId: string, itemId: string) {
@@ -99,11 +100,12 @@ export function itemAnnotationsQuery(
 	revisionId: string,
 	source: string,
 	page: number,
-	enabled: boolean
+	enabled: boolean,
+	pageSize = 50
 ) {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: itemKeys.annotationList(workspaceId, itemId, revisionId, source, page),
+		queryKey: itemKeys.annotationList(workspaceId, itemId, revisionId, source, page, pageSize),
 		enabled,
 		queryFn: ({ signal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/items/{item_id}/annotations', {
@@ -111,6 +113,7 @@ export function itemAnnotationsQuery(
 					path: { item_id: itemId },
 					query: {
 						page,
+						per_page: pageSize,
 						revision_id: revisionId === 'all' ? undefined : revisionId,
 						scope: source === 'private' ? 'private' : source === 'all' ? undefined : 'project',
 						project_id: source !== 'all' && source !== 'private' ? [source] : undefined

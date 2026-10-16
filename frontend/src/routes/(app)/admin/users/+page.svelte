@@ -18,7 +18,7 @@
 	let error = $state('');
 	let notice = $state<MessageKey | null>(null);
 	let invitationUrl = $state('');
-	const { filters, setPage } = getAdminFilters();
+	const { filters, setPage, setPageSize } = getAdminFilters();
 	const users = createQuery(() => adminUsersQuery(filters(), true));
 	const adminMutation = createMutation(() => adminMutationOptions('users', () => users.refetch()));
 	const busy = $derived(adminMutation.isPending);
@@ -150,12 +150,14 @@
 		onResetUserPassword={resetUserPassword}
 		onRevokeUserSessions={revokeUserSessions}
 	/>
-	{#if pageCount > 1}
-		<Pagination
-			page={filters().page}
-			{pageCount}
-			label={$t('Administration pages')}
-			onPage={setPage}
-		/>
-	{/if}
+	<Pagination
+		page={filters().page}
+		{pageCount}
+		pageSize={filters().pageSize}
+		total={users.data?.total ?? 0}
+		busy={users.isFetching || busy}
+		onPageSize={setPageSize}
+		label={$t('Administration pages')}
+		onPage={setPage}
+	/>
 </AdminSectionState>

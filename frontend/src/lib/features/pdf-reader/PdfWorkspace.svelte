@@ -226,7 +226,7 @@
 						>
 							<button
 								type="button"
-								class="disabled:text-surface-500-400 w-full cursor-pointer px-2.5 py-1.5 text-left whitespace-nowrap disabled:cursor-not-allowed"
+								class="w-full cursor-pointer px-2.5 py-1.5 text-left whitespace-nowrap disabled:cursor-not-allowed disabled:text-surface-500 dark:disabled:text-surface-400"
 								disabled={!includePrivate && !visibleProjects.length}
 								title={$t('Uses the displayed annotation sources.')}
 								onclick={downloadAnnotated}>{$t('Download with annotations')}</button

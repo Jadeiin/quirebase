@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { tagPage, mockWorkspaces } from './helpers';
+import { tagPage, mockWorkspaces, directoryPage } from './helpers';
 
 async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
 	await mockWorkspaces(page);
@@ -115,14 +115,14 @@ test('Item detail has no high-impact accessibility violations', async ({ page })
 test('administration overview has no high-impact accessibility violations', async ({ page }) => {
 	await useDarkTheme(page);
 	await mockSession(page, 'administrator');
-	await page.route('**/api/v1/admin/overview', (route) =>
+	await page.route('**/api/v1/admin/overview?*', (route) =>
 		route.fulfill({
 			json: {
 				user_count: 1,
 				pending_invitation_count: 0,
 				storage: { items_count: 0, total_disk_bytes: 0 },
-				failed_workflows: [],
-				recent_events: []
+				failed_workflow_count: 0,
+				recent_events: directoryPage([], route)
 			}
 		})
 	);

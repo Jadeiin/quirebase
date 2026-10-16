@@ -345,8 +345,10 @@ msgid "Administration action failed"
 msgstr "管理操作失败"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/+page.svelte
 #: src/routes/(app)/admin/audit/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
+#: src/routes/(app)/admin/workflows/+page.svelte
 msgid "Administration pages"
 msgstr "管理页面分页"
 
@@ -3512,6 +3514,11 @@ msgid "Page {page} of {pageCount}"
 msgstr "第 {page} 页，共 {pageCount} 页"
 
 #. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Page Size"
+msgstr "每页数量"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Pages"
 msgstr "页码 (Pages)"
@@ -4042,12 +4049,14 @@ msgstr "最近操作"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Recently added"
 msgstr "最近新增"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Recently updated"
 msgstr "最近更新"
 
@@ -4663,6 +4672,11 @@ msgid "Show options for {label}"
 msgstr "显示{label}选项"
 
 #. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Showing {start}–{end} of {total}"
+msgstr "显示第 {start}–{end} 条，共 {total} 条"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in"
 msgstr "登录"
@@ -4725,9 +4739,13 @@ msgstr "发生错误，请重试。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/library/LibraryFilters.svelte
 msgid "Sort"
 msgstr "排序"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Sort By"
+msgstr "排序方式"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5133,7 +5151,8 @@ msgstr "此工作区路由不存在。"
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/schema-editor/labels.ts
-#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Title"
 msgstr "标题"
 

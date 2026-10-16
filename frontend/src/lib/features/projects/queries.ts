@@ -13,14 +13,15 @@ export function projectListQuery(
 	workspaceId: string,
 	view: 'mine' | 'joinable' | 'all' = 'all',
 	offset = 0,
-	search = ''
+	search = '',
+	pageSize = 25
 ) {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: [...projectKeys.lists(workspaceId, view), 'page', offset, search],
+		queryKey: [...projectKeys.lists(workspaceId, view), 'page', offset, search, pageSize],
 		queryFn: ({ signal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/projects', {
-				params: { query: { view, limit: 25, offset, search } },
+				params: { query: { view, limit: pageSize, offset, search } },
 				signal
 			})
 	});

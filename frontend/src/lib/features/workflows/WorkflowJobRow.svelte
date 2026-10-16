@@ -45,9 +45,9 @@
 		<span
 			class={[
 				'size-2.5 shrink-0 rounded-full',
-				state === 'succeeded' && 'bg-success-500-500',
-				(state === 'failed' || state === 'cancelled') && 'bg-error-500-500',
-				!state || !isTerminalWorkflowState(state) ? 'bg-primary-500-500' : ''
+				state === 'succeeded' && 'bg-success-500',
+				(state === 'failed' || state === 'cancelled') && 'bg-error-500',
+				!state || !isTerminalWorkflowState(state) ? 'bg-primary-500' : ''
 			]}
 			aria-hidden="true"
 		></span>

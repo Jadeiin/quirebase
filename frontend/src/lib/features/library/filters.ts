@@ -49,7 +49,16 @@ export function libraryPage(parameters: Pick<URLSearchParams, 'get'>): number {
 	return Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
 }
 
-export function libraryParameters(filters: LibraryFilters, page = 1): URLSearchParams {
+export function libraryPageSize(parameters: Pick<URLSearchParams, 'get'>): number {
+	const size = Number(parameters.get('page_size'));
+	return [10, 20, 25, 50, 100].includes(size) ? size : 25;
+}
+
+export function libraryParameters(
+	filters: LibraryFilters,
+	page = 1,
+	pageSize = 25
+): URLSearchParams {
 	const result = new URLSearchParams();
 	for (const key of ['query', 'tag', 'project', 'year', 'keyword', 'author', 'sort'] as const) {
 		const value = filters[key];
@@ -63,10 +72,16 @@ export function libraryParameters(filters: LibraryFilters, page = 1): URLSearchP
 		if (filters[key] !== undefined) result.set(key, filters[key]);
 	}
 	if (page > 1) result.set('page', String(page));
+	if (pageSize !== 25) result.set('page_size', String(pageSize));
 	return result;
 }
 
-export function libraryHref(workspaceId: string, filters: LibraryFilters = {}, page = 1) {
-	const query = libraryParameters(filters, page).toString();
+export function libraryHref(
+	workspaceId: string,
+	filters: LibraryFilters = {},
+	page = 1,
+	pageSize = 25
+) {
+	const query = libraryParameters(filters, page, pageSize).toString();
 	return workspaceHref(workspaceId, query ? `library?${query}` : 'library');
 }

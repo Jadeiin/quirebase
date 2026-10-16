@@ -36,10 +36,12 @@
 	let appliedFilterA = $state('');
 	let appliedFilterB = $state('');
 	let adminPage = $state(1);
+	let adminPageSize = $state<number | undefined>();
 
 	function filters(): AdminFilters {
 		return {
 			page: adminPage,
+			pageSize: adminPageSize ?? (section === 'overview' ? 10 : section === 'audit' ? 50 : 20),
 			search: appliedSearch,
 			filterA: appliedFilterA,
 			filterB: appliedFilterB
@@ -48,7 +50,11 @@
 	function setPage(nextPage: number) {
 		adminPage = nextPage;
 	}
-	setAdminFilters({ filters, setPage });
+	function setPageSize(size: number) {
+		adminPageSize = size;
+		adminPage = 1;
+	}
+	setAdminFilters({ filters, setPage, setPageSize });
 
 	function applyFilters(event: SubmitEvent) {
 		event.preventDefault();
@@ -98,11 +104,11 @@
 	<Panel as="form" class="mb-4 flex flex-wrap items-end gap-2" onsubmit={applyFilters}>
 		{#if section !== 'workflows'}
 			<label class="grow basis-64"
-				>{$t('Search')}<input class="input" bind:value={searchInput} /></label
+				>{$t('Search')}<input class="input h-8" bind:value={searchInput} /></label
 			>
 		{:else}
 			<label
-				>{$t('State')}<select class="input w-auto min-w-36" bind:value={filterA}
+				>{$t('State')}<select class="input h-8 w-auto min-w-36" bind:value={filterA}
 					><option value="">{$t('Any state')}</option><option value="pending"
 						>{$t('Pending')}</option
 					><option value="running">{$t('Running')}</option><option value="succeeded"
@@ -115,20 +121,22 @@
 		{/if}
 		{#if section === 'users'}
 			<label
-				>{$t('Role')}<select class="input w-auto min-w-36" bind:value={filterA}
+				>{$t('Role')}<select class="input h-8 w-auto min-w-36" bind:value={filterA}
 					><option value="">{$t('All roles')}</option><option value="member">{$t('Member')}</option
 					><option value="administrator">{$t('Administrator')}</option></select
 				></label
 			>
 			<label
-				>{$t('Status')}<select class="input w-auto min-w-36" bind:value={filterB}
+				>{$t('Status')}<select class="input h-8 w-auto min-w-36" bind:value={filterB}
 					><option value="">{$t('Any status')}</option><option value="true">{$t('Active')}</option
 					><option value="false">{$t('Disabled')}</option></select
 				></label
 			>
 		{:else if section === 'audit'}
-			<label>{$t('Action')}<input class="input w-auto min-w-36" bind:value={filterA} /></label>
-			<label>{$t('Target type')}<input class="input w-auto min-w-36" bind:value={filterB} /></label>
+			<label>{$t('Action')}<input class="input h-8 w-auto min-w-36" bind:value={filterA} /></label>
+			<label
+				>{$t('Target type')}<input class="input h-8 w-auto min-w-36" bind:value={filterB} /></label
+			>
 		{/if}
 		<Button variant="filled">{$t('Apply filters')}</Button>
 		<Button type="button" onclick={clearFilters}>{$t('Clear filters')}</Button>

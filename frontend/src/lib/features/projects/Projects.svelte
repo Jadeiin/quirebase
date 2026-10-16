@@ -27,12 +27,14 @@
 	const workspaceId = workspace.workspaceId;
 	const queryClient = useQueryClient();
 	let offset = $state(0);
+	let pageSize = $state(25);
 	let search = $state('');
 	let view = $state<'all' | 'mine' | 'joinable'>('all');
-	const projects = createQuery(() => projectListQuery(workspaceId, view, offset, search));
-	const pageCount = $derived(Math.max(1, Math.ceil((projects.data?.total ?? 0) / 25)));
+	const projects = createQuery(() => projectListQuery(workspaceId, view, offset, search, pageSize));
+	const pageCount = $derived(Math.max(1, Math.ceil((projects.data?.total ?? 0) / pageSize)));
 	$effect(() => {
-		if (projects.data && offset >= projects.data.total && offset > 0) offset = (pageCount - 1) * 25;
+		if (projects.data && offset >= projects.data.total && offset > 0)
+			offset = (pageCount - 1) * pageSize;
 	});
 	const joinable = $derived(
 		(projects.data?.items ?? []).filter(
@@ -359,10 +361,16 @@
 {/if}
 
 <Pagination
-	page={Math.floor(offset / 25) + 1}
+	page={Math.floor(offset / pageSize) + 1}
 	{pageCount}
+	{pageSize}
+	total={projects.data?.total ?? 0}
+	onPageSize={(size) => {
+		pageSize = size;
+		offset = 0;
+	}}
 	onPage={(page) => {
-		offset = (page - 1) * 25;
+		offset = (page - 1) * pageSize;
 	}}
 	busy={projects.isFetching}
 	label={$t('Projects')}

@@ -15,24 +15,34 @@
 		isPending,
 		isError,
 		pageNumber,
+		pageSize,
+		sort,
+		busy,
 		totalPages,
 		allPageSelected,
 		selected,
 		onTogglePage,
 		onToggleItem,
-		onPage
+		onPage,
+		onPageSize,
+		onSort
 	} = $props<{
 		data?: LibrarySearch;
 		workspaceId: string;
 		isPending: boolean;
 		isError: boolean;
 		pageNumber: number;
+		pageSize: number;
+		sort: string;
+		busy: boolean;
 		totalPages: number;
 		allPageSelected: boolean;
 		selected: Set<string>;
 		onTogglePage: (event: Event) => void;
 		onToggleItem: (id: string) => void;
 		onPage: (page: number) => void;
+		onPageSize: (size: number) => void;
+		onSort: (sort: string) => void;
 	}>();
 </script>
 
@@ -86,6 +96,22 @@
 				</article>
 			{/each}
 		</div>
-		<Pagination page={pageNumber} pageCount={totalPages} label={$t('Library pages')} {onPage} />
 	{/if}
+	<Pagination
+		page={pageNumber}
+		pageCount={totalPages}
+		{pageSize}
+		total={data?.total ?? 0}
+		{sort}
+		sortOptions={[
+			{ value: 'updated', label: $t('Recently updated') },
+			{ value: 'created', label: $t('Recently added') },
+			{ value: 'title', label: $t('Title') }
+		]}
+		{busy}
+		label={$t('Library pages')}
+		{onPage}
+		{onPageSize}
+		{onSort}
+	/>
 </Panel>

@@ -656,23 +656,26 @@ test('the annotation source panel stays above the comment sidebar', async ({ pag
 	const trigger = page.getByRole('button', { name: 'Displayed annotation sources', exact: true });
 	await trigger.click();
 	const panel = page.locator(`[id="${await trigger.getAttribute('aria-controls')}"]`);
-	const panelBox = (await panel.boundingBox())!;
-	const headingBox = (await pageHeading.boundingBox())!;
-	// The panel and the sidebar header overlap; the panel must stay on top.
-	expect(headingBox.x).toBeLessThan(panelBox.x + panelBox.width);
-	const point = {
-		x: Math.max(panelBox.x, headingBox.x) + 8,
-		y: Math.max(panelBox.y, headingBox.y) + 4
-	};
-	expect(
-		await page.evaluate(
-			({ x, y }) =>
-				Boolean(
-					document.elementFromPoint(x, y)?.closest('[data-scope="popover"][data-part="content"]')
-				),
-			point
-		)
-	).toBe(true);
+	await expect(panel).toBeVisible();
+	// Floating UI positions the panel after it opens. Wait for both the overlap and hit test.
+	await expect
+		.poll(async () => {
+			const panelBox = await panel.boundingBox();
+			const headingBox = await pageHeading.boundingBox();
+			if (!panelBox || !headingBox || headingBox.x >= panelBox.x + panelBox.width) return false;
+			const point = {
+				x: Math.max(panelBox.x, headingBox.x) + 8,
+				y: Math.max(panelBox.y, headingBox.y) + 4
+			};
+			return page.evaluate(
+				({ x, y }) =>
+					Boolean(
+						document.elementFromPoint(x, y)?.closest('[data-scope="popover"][data-part="content"]')
+					),
+				point
+			);
+		})
+		.toBe(true);
 });
 
 test('PDF reader header follows Item metadata changes', async ({ page }) => {

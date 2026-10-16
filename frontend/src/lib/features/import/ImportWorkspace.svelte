@@ -123,11 +123,12 @@
 		previewPage = 1;
 		const url = new URL(page.url.href);
 		url.searchParams.set('batch', next.id);
-		replaceState(url, page.state);
+		const navigation = replaceState(url, page.state);
 		if (next.status === 'pending') {
 			if (next.workflow_id) void followWorkflow(next.id, next.workflow_id);
 			else void followBatch(next.id);
 		}
+		return navigation;
 	}
 
 	async function followBatch(batchId: string) {
@@ -147,7 +148,7 @@
 				);
 				if (controller.signal.aborted || batch?.id !== batchId) return;
 				if (refreshed.status !== 'pending' || refreshed.workflow_id) {
-					acceptBatch(refreshed);
+					await acceptBatch(refreshed);
 					error = '';
 					return;
 				}
@@ -164,7 +165,7 @@
 		busy = true;
 		error = '';
 		try {
-			acceptBatch(
+			await acceptBatch(
 				await workspace.api.request('GET', '/workspaces/{workspace_id}/imports/{batch_id}', {
 					params: { path: { batch_id: batchId } }
 				})
@@ -201,7 +202,7 @@
 				}
 			);
 			if (controller.signal.aborted || batch?.id !== batchId) return;
-			acceptBatch(refreshed);
+			await acceptBatch(refreshed);
 			error = '';
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to refresh Import preview'));
@@ -213,7 +214,7 @@
 		busy = true;
 		error = '';
 		try {
-			acceptBatch(
+			await acceptBatch(
 				await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/identifiers', {
 					body: { identifiers: identifierEntries, provider }
 				})
@@ -252,7 +253,7 @@
 							body
 						});
 			if (kind === 'pdfs') pdfPicker?.clearFiles();
-			acceptBatch(uploaded);
+			await acceptBatch(uploaded);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Upload failed'));
 		} finally {
@@ -276,7 +277,7 @@
 					params: { path: { batch_id: batch.id } }
 				}
 			);
-			acceptBatch(result);
+			await acceptBatch(result);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to retry Import'));
 		} finally {
@@ -314,7 +315,7 @@
 			batch = null;
 			const url = new URL(page.url.href);
 			url.searchParams.delete('batch');
-			replaceState(url, page.state);
+			await replaceState(url, page.state);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to discard Import'));
 		} finally {
@@ -417,7 +418,7 @@
 				submitDisabled={identifierEntries.length === 0 || identifierEntries.length > 50}
 				onsubmit={(event) => {
 					event.preventDefault();
-					importIdentifiers();
+					void importIdentifiers();
 				}}
 			>
 				<div class="grid min-w-0 grid-cols-1 gap-1.5">
@@ -472,7 +473,7 @@
 				submitDisabled={!bibliographyFile && !bibliographyText.trim()}
 				onsubmit={(event) => {
 					event.preventDefault();
-					upload(event, 'bibliography');
+					void upload(event, 'bibliography');
 				}}
 			>
 				<div class="grid min-w-0 grid-cols-1 gap-3">
@@ -529,7 +530,7 @@
 				submitDisabled={pdfFiles.length === 0}
 				onsubmit={(event) => {
 					event.preventDefault();
-					upload(event, 'pdfs');
+					void upload(event, 'pdfs');
 				}}
 			>
 				<div class="grid min-w-0 grid-cols-1 gap-3">

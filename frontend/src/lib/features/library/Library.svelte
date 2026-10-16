@@ -26,6 +26,7 @@
 		librarySort,
 		readLibraryFilters,
 		libraryPage,
+		libraryPageSize,
 		libraryHref,
 		type LibraryFilters as AppliedLibraryFilters
 	} from './filters.js';
@@ -43,13 +44,13 @@
 
 	const submitted = $derived(readLibraryFilters(page.url.searchParams));
 	const pageNumber = $derived(libraryPage(page.url.searchParams));
+	const pageSize = $derived(libraryPageSize(page.url.searchParams));
 	let query = $state(page.url.searchParams.get('q') ?? '');
 	let tag = $state(page.url.searchParams.get('tag') ?? '');
 	let project = $state(page.url.searchParams.get('project') ?? '');
 	let year = $state(page.url.searchParams.get('year') ?? '');
 	let keyword = $state(page.url.searchParams.get('keyword') ?? '');
 	let author = $state(page.url.searchParams.get('author') ?? '');
-	let sort = $state(librarySort(page.url.searchParams.get('sort')));
 	let fileFilter = $state(page.url.searchParams.get('has_files') ?? '');
 	let filtersOpen = $state(false);
 	let selected = new SvelteSet<string>();
@@ -79,12 +80,11 @@
 		year = page.url.searchParams.get('year') ?? '';
 		keyword = page.url.searchParams.get('keyword') ?? '';
 		author = page.url.searchParams.get('author') ?? '';
-		sort = librarySort(page.url.searchParams.get('sort'));
 		fileFilter = page.url.searchParams.get('has_files') ?? '';
 		selected.clear();
 	});
 
-	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber));
+	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber, pageSize));
 	const projects = createInfiniteQuery(() => projectOptionsQuery(workspaceId));
 	const selectedProject = createQuery(() => ({
 		...projectDetailQuery(workspaceId, submitted.project ?? ''),
@@ -95,9 +95,7 @@
 			? [selectedProject.data, ...(projects.data ?? [])]
 			: (projects.data ?? [])
 	);
-	const totalPages = $derived(
-		Math.max(1, Math.ceil((library.data?.total ?? 0) / (library.data?.limit ?? 25)))
-	);
+	const totalPages = $derived(Math.max(1, Math.ceil((library.data?.total ?? 0) / pageSize)));
 	const allPageSelected = $derived(
 		((library.data?.items.length ?? 0) > 0 &&
 			library.data?.items.every((item) => selected.has(item.id))) ??
@@ -112,9 +110,9 @@
 		}
 	});
 
-	function navigate(filters: AppliedLibraryFilters, nextPage = 1) {
+	function navigate(filters: AppliedLibraryFilters, nextPage = 1, nextPageSize = pageSize) {
 		selected.clear();
-		void goto(resolve(libraryHref(workspaceId, filters, nextPage)), { reset: false });
+		void goto(resolve(libraryHref(workspaceId, filters, nextPage, nextPageSize)), { reset: false });
 	}
 
 	function search() {
@@ -126,7 +124,6 @@
 			year: year.trim(),
 			keyword: keyword.trim(),
 			author: author.trim(),
-			sort,
 			has_files: fileFilter ? fileFilter === 'true' : undefined
 		});
 	}
@@ -139,8 +136,7 @@
 
 	function clearFilters() {
 		query = tag = project = year = keyword = author = fileFilter = '';
-		sort = 'updated';
-		navigate({});
+		navigate({ sort: submitted.sort });
 	}
 
 	function togglePageSelection(event: Event) {
@@ -216,7 +212,6 @@
 	bind:year
 	bind:keyword
 	bind:author
-	bind:sort
 	bind:fileFilter
 	bind:filtersOpen
 	projects={projectChoices}
@@ -260,10 +255,15 @@
 	isPending={library.isPending ?? false}
 	isError={library.isError ?? false}
 	{pageNumber}
+	{pageSize}
+	sort={submitted.sort ?? 'updated'}
+	busy={library.isFetching}
 	{totalPages}
 	{allPageSelected}
 	{selected}
 	onTogglePage={togglePageSelection}
 	onToggleItem={toggleItem}
 	onPage={(next) => navigate(submitted, next)}
+	onPageSize={(size) => navigate(submitted, 1, size)}
+	onSort={(value) => navigate({ ...submitted, sort: librarySort(value) })}
 />

@@ -25,6 +25,7 @@
 	let nextClauseId = 2;
 	let provider = $state('openalex');
 	let sort = $state<Sort>('relevance');
+	let pageSize = $state(20);
 	let yearFrom = $state('');
 	let yearTo = $state('');
 	let clauses = $state<Clause[]>([{ id: 1, field: 'any', operator: 'and', term: '' }]);
@@ -76,7 +77,7 @@
 					provider,
 					clauses: clauses.map(({ field, operator, term }) => ({ field, operator, term })),
 					page,
-					per_page: 20,
+					per_page: pageSize,
 					sort,
 					year_from: yearFrom ? Number(yearFrom) : null,
 					year_to: yearTo ? Number(yearTo) : null
@@ -85,6 +86,7 @@
 			});
 		} catch (reason) {
 			if (controller.signal.aborted) return;
+			if (results) pageSize = results.per_page;
 			error = apiErrorMessage(reason, $t('Search failed'));
 		} finally {
 			if (searchAbort === controller) {
@@ -257,10 +259,16 @@
 	{:else}
 		<p class="text-surface-600-400">{$t('Search results will appear here.')}</p>
 	{/each}
-	{#if results && pageCount > 1}
+	{#if results}
 		<Pagination
 			page={results.page}
 			{pageCount}
+			{pageSize}
+			total={results.total}
+			onPageSize={(size) => {
+				pageSize = size;
+				void search();
+			}}
 			{busy}
 			label={$t('Discovery result pages')}
 			onPage={(next) => void search(next)}

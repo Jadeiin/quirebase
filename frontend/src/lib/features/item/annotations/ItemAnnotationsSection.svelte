@@ -26,12 +26,13 @@
 	let revision = $state('all');
 	let source = $state('all');
 	let page = $state(1);
+	let pageSize = $state(50);
 	let moderationError = $state('');
 	let moderating = $state('');
 	let confirmDeleteOpen = $state(false);
 	let pendingDelete = $state<components['schemas']['AnnotationView']>();
 	const annotations = createQuery(() =>
-		itemAnnotationsQuery(workspaceId, itemId, revision, source, page, true)
+		itemAnnotationsQuery(workspaceId, itemId, revision, source, page, true, pageSize)
 	);
 	const projects = $derived(annotations.data?.projects ?? []);
 	const revisions = $derived(annotations.data?.revisions ?? []);
@@ -198,16 +199,20 @@
 			)}>{$t('Open annotation workspace')}</Button
 		>
 	{/if}
-	{#if pageCount > 1}
-		<Pagination
-			{page}
-			{pageCount}
-			label={$t('Annotation pages')}
-			busy={annotations.isFetching}
-			class="mt-4"
-			onPage={(next) => (page = next)}
-		/>
-	{/if}
+	<Pagination
+		{page}
+		{pageCount}
+		{pageSize}
+		total={annotations.data?.total ?? 0}
+		onPageSize={(size) => {
+			pageSize = size;
+			page = 1;
+		}}
+		label={$t('Annotation pages')}
+		busy={annotations.isFetching}
+		class="mt-4"
+		onPage={(next) => (page = next)}
+	/>
 </Panel>
 <ConfirmDialog
 	bind:open={confirmDeleteOpen}

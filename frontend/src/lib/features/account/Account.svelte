@@ -290,7 +290,7 @@
 					class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(8rem,1fr)_8rem_auto]"
 					onsubmit={(event) => {
 						event.preventDefault();
-						createToken();
+						void createToken();
 					}}
 				>
 					<input

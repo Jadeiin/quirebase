@@ -345,8 +345,10 @@ msgid "Administration action failed"
 msgstr "Administration action failed"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/+page.svelte
 #: src/routes/(app)/admin/audit/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
+#: src/routes/(app)/admin/workflows/+page.svelte
 msgid "Administration pages"
 msgstr "Administration pages"
 
@@ -3512,6 +3514,11 @@ msgid "Page {page} of {pageCount}"
 msgstr "Page {page} of {pageCount}"
 
 #. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Page Size"
+msgstr "Page Size"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Pages"
 msgstr "Pages"
@@ -4042,12 +4049,14 @@ msgstr "Recent operations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Recently added"
 msgstr "Recently added"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Recently updated"
 msgstr "Recently updated"
 
@@ -4663,6 +4672,11 @@ msgid "Show options for {label}"
 msgstr "Show options for {label}"
 
 #. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Showing {start}–{end} of {total}"
+msgstr "Showing {start}–{end} of {total}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in"
 msgstr "Sign in"
@@ -4725,9 +4739,13 @@ msgstr "Something went wrong. Try again."
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/library/LibraryFilters.svelte
 msgid "Sort"
 msgstr "Sort"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Sort By"
+msgstr "Sort By"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5133,7 +5151,8 @@ msgstr "This workspace route does not exist."
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/schema-editor/labels.ts
-#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Title"
 msgstr "Title"
 

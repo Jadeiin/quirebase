@@ -40,3 +40,38 @@ it('sends explicit empty exact name parts while omitting blank broad filters', a
 		vi.unstubAllGlobals();
 	}
 });
+
+it('fetches different page sizes independently and uses the size to compute the offset', async () => {
+	const received: URL[] = [];
+	vi.stubGlobal('fetch', async (request: Request) => {
+		const url = new URL(request.url);
+		received.push(url);
+		return new Response(
+			JSON.stringify({
+				items: [],
+				total: 101,
+				limit: Number(url.searchParams.get('limit')),
+				offset: Number(url.searchParams.get('offset'))
+			})
+		);
+	});
+	const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+	try {
+		for (const size of [10, 50, 10]) {
+			await client.fetchQuery(libraryListQuery('workspace-1', { sort: 'title' }, 3, size));
+		}
+		expect(
+			received.map(({ searchParams }) => ({
+				limit: searchParams.get('limit'),
+				offset: searchParams.get('offset'),
+				sort: searchParams.get('sort')
+			}))
+		).toEqual([
+			{ limit: '10', offset: '20', sort: 'title' },
+			{ limit: '50', offset: '100', sort: 'title' }
+		]);
+	} finally {
+		client.clear();
+		vi.unstubAllGlobals();
+	}
+});

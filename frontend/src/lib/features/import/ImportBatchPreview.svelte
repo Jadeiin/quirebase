@@ -38,7 +38,7 @@
 		onPage: (page: number) => void;
 	} = $props();
 
-	const pageSize = 20;
+	let pageSize = $state(20);
 	const records = $derived(batch.records.slice((page - 1) * pageSize, page * pageSize));
 	const pageCount = $derived(Math.max(1, Math.ceil(batch.records.length / pageSize)));
 	const statusVariants = {
@@ -123,9 +123,19 @@
 				>{/if}
 		</ItemRow>
 	{/each}
-	{#if pageCount > 1}
-		<Pagination {page} {pageCount} label={$t('Import preview pages')} {onPage} />
-	{/if}
+	<Pagination
+		{page}
+		{pageCount}
+		{pageSize}
+		total={batch.records.length}
+		onPageSize={(size) => {
+			pageSize = size;
+			onPage(1);
+		}}
+		{busy}
+		label={$t('Import preview pages')}
+		{onPage}
+	/>
 	{#if batch.errors.length}
 		<section class="mt-4 grid grid-cols-1 gap-3">
 			<div class="flex items-center gap-2">

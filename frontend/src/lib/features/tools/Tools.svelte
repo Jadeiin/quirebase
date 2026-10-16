@@ -65,7 +65,7 @@
 	let renameOpen = $state(false);
 	let pendingStyle = $state<CitationStyle | null>(null);
 	let confirmStyleDeleteOpen = $state(false);
-	const pageSize = 20;
+	let pageSize = $state(20);
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
@@ -373,15 +373,19 @@
 							</div>
 						</ItemRow>
 					{:else}<p class="text-surface-600-400">{$t('No Tags match this filter.')}</p>{/each}{/if}
-				{#if tagPageCount > 1}
-					<Pagination
-						page={tagPage}
-						pageCount={tagPageCount}
-						busy={tags.isFetching}
-						label={$t('Tag pages')}
-						onPage={(next) => (tagPage = next)}
-					/>
-				{/if}
+				<Pagination
+					page={tagPage}
+					pageCount={tagPageCount}
+					{pageSize}
+					total={tags.data?.total ?? 0}
+					onPageSize={(size) => {
+						pageSize = size;
+						tagPage = 1;
+					}}
+					busy={tags.isFetching}
+					label={$t('Tag pages')}
+					onPage={(next) => (tagPage = next)}
+				/>
 			</Panel>
 			<Panel as="aside" class="grid grid-cols-1 gap-3 self-start">
 				<h2>{$t('Merge Tags')}</h2>

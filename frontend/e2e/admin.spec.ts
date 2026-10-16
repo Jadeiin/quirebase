@@ -277,9 +277,14 @@ test('break-glass inspection keeps the Workspace that authorized the displayed r
 
 test('admin workflow rows render their state contract', async ({ page }) => {
 	await mockSession(page, 'administrator');
-	await page.route('**/api/v1/admin/workflows', (route) =>
+	await page.route('**/api/v1/admin/workflows?*', (route) =>
 		route.fulfill({
-			json: { workflows: [{ id: 'workflow-1', name: 'backup', state: 'succeeded' }] }
+			json: {
+				items: [{ id: 'workflow-1', name: 'backup', state: 'succeeded' }],
+				total: 1,
+				limit: 20,
+				offset: 0
+			}
 		})
 	);
 

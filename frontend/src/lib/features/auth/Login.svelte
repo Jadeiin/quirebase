@@ -34,7 +34,7 @@
 		class="grid grid-cols-1 gap-3"
 		onsubmit={(event) => {
 			event.preventDefault();
-			submit();
+			void submit();
 		}}
 	>
 		<h1 class="m-0">Quirebase</h1>

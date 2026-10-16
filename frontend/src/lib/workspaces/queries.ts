@@ -2,12 +2,12 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/svelte-query';
 import { apiRequest, createWorkspaceApi } from '#lib/api/client.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
-export function workspaceListQuery(offset = 0, search = '') {
+export function workspaceListQuery(offset = 0, search = '', pageSize = 25) {
 	return queryOptions({
-		queryKey: [...workspaceKeys.list(), 'page', offset, search],
+		queryKey: [...workspaceKeys.list(), 'page', offset, search, pageSize],
 		queryFn: ({ signal }) =>
 			apiRequest('GET', '/workspaces', {
-				params: { query: { limit: 25, offset, search } },
+				params: { query: { limit: pageSize, offset, search } },
 				signal
 			}),
 		retry: false

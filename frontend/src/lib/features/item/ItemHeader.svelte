@@ -55,7 +55,8 @@
 		</h1>
 		{#if links}<p class="mt-2 text-sm text-surface-700-300">
 				{#each links.authors as author, index (index)}
-					{#if index > 0}{'; '}{/if}<a
+					{#if index > 0};
+					{/if}<a
 						href={resolve(author.href)}
 						title={$t('View Items by {name}', { name: author.label })}>{author.label}</a
 					>

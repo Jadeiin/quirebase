@@ -19,8 +19,13 @@
 	const client = useQueryClient();
 	const workflows = getWorkflowCenter();
 	let memberPage = $state(1);
+	let memberPageSize = $state(25);
 	let memberSearch = $state('');
-	const memberQuery = $derived({ limit: 25, offset: (memberPage - 1) * 25, search: memberSearch });
+	const memberQuery = $derived({
+		limit: memberPageSize,
+		offset: (memberPage - 1) * memberPageSize,
+		search: memberSearch
+	});
 	const directoryMembers = createQuery(() => ({
 		queryKey: [...workspaceKeys.members(workspace.workspaceId), memberQuery],
 		queryFn: ({ signal }: { signal: AbortSignal }) =>
@@ -472,9 +477,17 @@
 			Math.ceil(
 				((workspace.can('workspace_membership.read')
 					? governanceMembers.data?.total
-					: directoryMembers.data?.total) ?? 0) / 25
+					: directoryMembers.data?.total) ?? 0) / memberPageSize
 			)
 		)}
+		pageSize={memberPageSize}
+		total={(workspace.can('workspace_membership.read')
+			? governanceMembers.data?.total
+			: directoryMembers.data?.total) ?? 0}
+		onPageSize={(size) => {
+			memberPageSize = size;
+			memberPage = 1;
+		}}
 		onPage={(page) => (memberPage = page)}
 		label={$t('Members pagination')}
 		busy={directoryMembers.isFetching || governanceMembers.isFetching}

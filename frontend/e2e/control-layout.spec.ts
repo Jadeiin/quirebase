@@ -87,6 +87,51 @@ async function item(page: Page, filename = 'paper.pdf') {
 	await page.goto('/workspace/workspace-1/item/item-1');
 }
 
+for (const width of [1440, 390]) {
+	for (const mode of ['light', 'dark']) {
+		test(`admin filter controls have equal heights in ${mode} mode at ${width}px`, async ({
+			page
+		}) => {
+			await page.setViewportSize({ width, height: 1000 });
+			await mockSession(page, 'administrator');
+			await page.route('**/api/v1/admin/users*', (route) =>
+				route.fulfill({ json: { items: [], total: 0, limit: 20, offset: 0, invitations: [] } })
+			);
+			await page.goto('/admin/users');
+			const apply = page.getByRole('button', { name: 'Apply filters', exact: true });
+			const form = page.locator('form').filter({ has: apply });
+			const controls = form.locator('input, select, button');
+			await expect(controls).toHaveCount(5);
+			for (const control of await controls.all()) await expect(control).toBeVisible();
+			await page.evaluate(async (mode) => {
+				document.documentElement.dataset.mode = mode;
+				await document.fonts.ready;
+			}, mode);
+
+			await expect(async () => {
+				const boxes = await controls.evaluateAll((elements) =>
+					elements.map((element) => {
+						const { x, y, width, height } = element.getBoundingClientRect();
+						return { tag: element.tagName, x, y, width, height };
+					})
+				);
+				const heights = boxes.map((box) => box.height);
+				const details = JSON.stringify(boxes);
+				expect(Math.max(...heights) - Math.min(...heights), details).toBeLessThanOrEqual(1);
+				for (const box of boxes) {
+					expect(Math.abs(box.height - 32), details).toBeLessThanOrEqual(1);
+					expect(box.x, details).toBeGreaterThanOrEqual(0);
+					expect(box.x + box.width, details).toBeLessThanOrEqual(width + 1);
+				}
+				if (width === 1440) {
+					const tops = boxes.map((box) => box.y);
+					expect(Math.max(...tops) - Math.min(...tops), details).toBeLessThanOrEqual(1);
+				}
+			}).toPass({ timeout: 5000 });
+		});
+	}
+}
+
 test('bulk Tag action offers searchable existing Tags and submits their names', async ({
 	page
 }) => {

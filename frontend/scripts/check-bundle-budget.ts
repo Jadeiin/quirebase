@@ -133,7 +133,8 @@ enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), 
 	gzip: 258000
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
-	raw: 812000,
+	// Includes the shared pagination styles and consistent control borders.
+	raw: 813000,
 	gzip: 230000
 });
 enforce('Account route', routeBundle('/(app)/account'), {
@@ -141,7 +142,8 @@ enforce('Account route', routeBundle('/(app)/account'), {
 	gzip: 226000
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
-	raw: 819000,
+	// Includes the shared pagination styles and consistent control borders.
+	raw: 820000,
 	gzip: 235000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
@@ -184,7 +186,8 @@ enforce(
 	'Item annotations route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
-		raw: 819000,
+		// Shared pagination includes page-size controls and a localized result range.
+		raw: 822000,
 		gzip: 236000
 	}
 );
@@ -192,13 +195,15 @@ enforce(
 	'Item discussion route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
-		raw: 807000,
+		// Includes the shared pagination styles.
+		raw: 809000,
 		gzip: 234000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
-	raw: 695000,
-	gzip: 198000
+	// Includes Skeleton pagination and page-size controls.
+	raw: 710000,
+	gzip: 201000
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
 	raw: 717000,
@@ -213,8 +218,9 @@ enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
 	gzip: 202000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
-	raw: 693000,
-	gzip: 197000
+	// Includes Skeleton pagination and page-size controls.
+	raw: 709000,
+	gzip: 201000
 });
 enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
 	raw: 699000,
@@ -235,6 +241,7 @@ const openedEditor = mergeGraphs(
 	dependencyGraph([metadataEditorKey], true)
 );
 enforce('Metadata editor when open', bundleSize(graphFiles(openedEditor)), {
-	raw: 1050000,
+	// Includes the shared pagination styles.
+	raw: 1052000,
 	gzip: 307000
 });

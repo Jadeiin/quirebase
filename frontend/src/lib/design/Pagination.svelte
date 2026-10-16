@@ -7,32 +7,81 @@
 	let {
 		page,
 		pageCount,
+		pageSize,
+		total,
 		onPage,
+		onPageSize,
+		sort,
+		sortOptions = [],
+		onSort,
 		label,
 		busy = false,
 		class: className = ''
 	} = $props<{
 		page: number;
 		pageCount: number;
+		pageSize: number;
+		total: number;
 		onPage: (page: number) => void;
+		onPageSize: (pageSize: number) => void;
+		sort?: string;
+		sortOptions?: { value: string; label: string }[];
+		onSort?: (sort: string) => void;
 		label: string;
 		busy?: boolean;
 		class?: string;
 	}>();
 
 	const triggerClass = buttonClass('icon', 'sm');
+	const pageSizes = $derived([...new Set([10, 20, 25, 50, 100, pageSize])].sort((a, b) => a - b));
+	const start = $derived(total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total));
+	const end = $derived(Math.min(page * pageSize, total));
 </script>
 
 <nav
-	class={`border-t border-surface-300-700 bg-surface-100-900 px-2 py-3 sm:px-4 ${className}`.trim()}
+	class={`flex flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-surface-300-700 bg-surface-100-900 px-3 py-3 sm:justify-between sm:px-4 ${className}`.trim()}
 	aria-label={label}
+	aria-busy={busy}
 >
+	<div
+		class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-surface-700-300"
+	>
+		<label class="flex items-center gap-2 whitespace-nowrap">
+			{$t('Page Size')}
+			<select
+				class="select w-auto py-1 text-xs"
+				value={pageSize}
+				disabled={busy}
+				onchange={(event) => onPageSize(Number(event.currentTarget.value))}
+			>
+				{#each pageSizes as size (size)}<option value={size}>{size}</option>{/each}
+			</select>
+		</label>
+		{#if onSort && sortOptions.length}
+			<label class="flex items-center gap-2 whitespace-nowrap">
+				{$t('Sort By')}
+				<select
+					class="select w-auto max-w-52 py-1 text-xs"
+					value={sort}
+					disabled={busy}
+					onchange={(event) => onSort?.(event.currentTarget.value)}
+				>
+					{#each sortOptions as option (option.value)}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</select>
+			</label>
+		{/if}
+		<span class="whitespace-nowrap tabular-nums" aria-live="polite">
+			{$t('Showing {start}–{end} of {total}', { start, end, total })}
+		</span>
+	</div>
 	<Pagination
 		{page}
-		count={pageCount}
-		pageSize={1}
+		count={total}
+		{pageSize}
 		onPageChange={(details) => onPage(details.page)}
-		class="flex w-full items-center justify-center gap-1 rounded-none border-0 p-0"
+		class="flex items-center justify-center gap-1 rounded-none border-0 p-0"
 	>
 		<Pagination.FirstTrigger
 			type="button"
@@ -52,7 +101,7 @@
 			<Icon name="chevron-left" size={17} />
 		</Pagination.PrevTrigger>
 		<span
-			class="min-w-0 px-2 text-center text-xs font-medium text-surface-600-400 tabular-nums sm:min-w-24"
+			class="min-w-0 px-2 text-center text-xs font-medium text-surface-700-300 tabular-nums sm:min-w-24"
 			aria-live="polite"
 		>
 			{$t('Page {page} of {pageCount}', { page, pageCount })}

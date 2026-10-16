@@ -1,8 +1,10 @@
 import prettier from 'eslint-config-prettier';
 import path from 'node:path';
 import js from '@eslint/js';
+import { plugin as shadcn } from '@shadcn/lint';
 import lingui from 'eslint-plugin-lingui';
 import svelte from 'eslint-plugin-svelte';
+import tailwindcss from 'eslint-plugin-tailwindcss';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
 import ts from 'typescript-eslint';
@@ -50,7 +52,29 @@ export default defineConfig(
 	{
 		files: ['src/**/*.ts', 'src/**/*.svelte'],
 		ignores: ['src/**/*.test.ts', 'src/lib/api/schema.d.ts'],
+		plugins: { shadcn, tailwindcss },
+		languageOptions: {
+			parserOptions: {
+				projectService: true,
+				extraFileExtensions: ['.svelte']
+			}
+		},
+		settings: {
+			shadcn: {
+				componentImports: ['^#lib/design/'],
+				themeImports: ['^@skeletonlabs/']
+			},
+			tailwindcss: { cssConfigPath: path.resolve(import.meta.dirname, 'src/app.css') }
+		},
 		rules: {
+			'@typescript-eslint/no-floating-promises': 'error',
+			'tailwindcss/no-custom-classname': 'error',
+			'tailwindcss/no-contradicting-classname': 'error',
+			'shadcn/no-unknown-classes': 'error',
+			'shadcn/no-raw-colors': 'error',
+			'shadcn/no-inline-styles': 'error',
+			// Colors and shape use theme tokens; layout, typography, and motion stay flexible.
+			'shadcn/no-arbitrary-values': ['error', { deny: ['color', 'shape'] }],
 			'no-restricted-syntax': [
 				'error',
 				{
@@ -59,6 +83,54 @@ export default defineConfig(
 						'Use server-authored capabilities or allowed choices for behavior; principal roles are display metadata.'
 				}
 			]
+		}
+	},
+	{
+		files: ['src/**/*.svelte'],
+		ignores: ['src/lib/design/**'],
+		rules: {
+			'shadcn/require-static-classes': 'error',
+			'shadcn/no-restyle': [
+				'error',
+				{
+					componentImports: ['^#lib/design/Button\\.svelte$'],
+					allow: ['layout', 'gap-*']
+				}
+			]
+		}
+	},
+	{
+		files: ['src/lib/pdf/EmbeddedPdfViewer.svelte'],
+		rules: {
+			'shadcn/no-inline-styles': [
+				'error',
+				{
+					// EmbedPDF owns its viewer's inline sizing; other properties still use classes.
+					contracts: [{ pattern: '^PDFViewer$', allow: ['width', 'height'] }]
+				}
+			]
+		}
+	},
+	{
+		files: ['src/lib/design/Toast.svelte'],
+		rules: {
+			// This class is defined in the component's scoped <style> block.
+			'tailwindcss/no-custom-classname': ['error', { whitelist: ['^toast-progress$'] }]
+		}
+	},
+	{
+		files: ['src/lib/design/RichText.svelte'],
+		rules: {
+			// This class is defined in the component's scoped <style> block.
+			'tailwindcss/no-custom-classname': ['error', { whitelist: ['^rich-text$'] }]
+		}
+	},
+	{
+		files: ['src/lib/design/button-classes.ts'],
+		rules: {
+			// This module stores classes in a plain map, outside recognized class helpers.
+			'shadcn/no-raw-colors': ['error', { scanAllStrings: true }],
+			'shadcn/no-arbitrary-values': ['error', { deny: ['color', 'shape'], scanAllStrings: true }]
 		}
 	},
 	{

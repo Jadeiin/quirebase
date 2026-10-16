@@ -141,13 +141,9 @@ class WorkflowSummaryView(BaseModel):
 class AdminOverviewView(BaseModel):
     user_count: int
     pending_invitation_count: int
-    failed_workflows: list[WorkflowSummaryView]
+    failed_workflow_count: int
     storage: StorageMetricsView
-    recent_events: list[AdminAuditEventView]
-
-
-class AdminWorkflowsView(BaseModel):
-    workflows: list[WorkflowSummaryView]
+    recent_events: OffsetPagination[AdminAuditEventView]
 
 
 class AdminSettingsView(BaseModel):

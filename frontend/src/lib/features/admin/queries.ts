@@ -7,6 +7,7 @@ export type AdminSection =
 
 export type AdminFilters = {
 	page: number;
+	pageSize: number;
 	search: string;
 	filterA: string;
 	filterB: string;
@@ -20,7 +21,13 @@ export function adminOverviewQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('overview', filters),
 		enabled,
-		queryFn: ({ signal }) => apiRequest('GET', '/admin/overview', { signal })
+		queryFn: ({ signal }) =>
+			apiRequest('GET', '/admin/overview', {
+				params: {
+					query: { limit: filters.pageSize, offset: (filters.page - 1) * filters.pageSize }
+				},
+				signal
+			})
 	});
 }
 
@@ -32,8 +39,8 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 			apiRequest('GET', '/admin/users', {
 				params: {
 					query: {
-						limit: 20,
-						offset: (filters.page - 1) * 20,
+						limit: filters.pageSize,
+						offset: (filters.page - 1) * filters.pageSize,
 						search: filters.search,
 						role: filters.filterA,
 						active: filters.filterB ? filters.filterB === 'true' : undefined
@@ -60,8 +67,8 @@ export function adminAuditQuery(filters: AdminFilters, enabled = true) {
 			apiRequest('GET', '/admin/audit', {
 				params: {
 					query: {
-						limit: 50,
-						offset: (filters.page - 1) * 50,
+						limit: filters.pageSize,
+						offset: (filters.page - 1) * filters.pageSize,
 						search: filters.search,
 						action: filters.filterA,
 						target_type: filters.filterB
@@ -76,9 +83,17 @@ export function adminWorkflowsQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('workflows', filters),
 		enabled,
+		// Workflow states and totals can change while navigating history.
+		staleTime: 0,
 		queryFn: ({ signal }) =>
 			apiRequest('GET', '/admin/workflows', {
-				params: { query: { state: filters.filterA } },
+				params: {
+					query: {
+						state: filters.filterA,
+						limit: filters.pageSize,
+						offset: (filters.page - 1) * filters.pageSize
+					}
+				},
 				signal
 			})
 	});
@@ -104,6 +119,6 @@ export type AdminOverview = components['schemas']['AdminOverviewView'];
 export type AdminUsers = components['schemas']['AdminUsersView'];
 export type AdminWorkspaces = components['schemas']['AdminWorkspaceView'][];
 export type AdminAudit = components['schemas']['OffsetPagination_AdminAuditEventView_'];
-export type AdminWorkflows = components['schemas']['AdminWorkflowsView'];
+export type AdminWorkflows = components['schemas']['OffsetPagination_WorkflowSummaryView_'];
 export type AdminSettings = components['schemas']['AdminSettingsView'];
 export type AdminMaintenance = components['schemas']['AdminMaintenanceView'];

@@ -17,7 +17,6 @@
 		year = $bindable(''),
 		keyword = $bindable(''),
 		author = $bindable(''),
-		sort = $bindable<'updated' | 'created' | 'title'>('updated'),
 		fileFilter = $bindable(''),
 		filtersOpen = $bindable(false),
 		projects = [],
@@ -30,7 +29,6 @@
 		year: string;
 		keyword: string;
 		author: string;
-		sort: 'updated' | 'created' | 'title';
 		fileFilter: string;
 		filtersOpen: boolean;
 		projects: LibraryProject[];
@@ -87,14 +85,6 @@
 							>{$t('With files')}</option
 						>
 						<option value="false">{$t('Without files')}</option>
-					</select></label
-				>
-				<label
-					>{$t('Sort')}<select class="select" bind:value={sort}>
-						<option value="updated">{$t('Recently updated')}</option><option value="created"
-							>{$t('Recently added')}</option
-						>
-						<option value="title">{$t('Title')}</option>
 					</select></label
 				>
 			</div>

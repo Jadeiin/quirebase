@@ -23,12 +23,13 @@
 	import { domainLabel } from '#lib/domain-labels.js';
 
 	let offset = $state(0);
+	let pageSize = $state(25);
 	let search = $state('');
-	const workspaces = createQuery(() => workspaceListQuery(offset, search));
-	const pageCount = $derived(Math.max(1, Math.ceil((workspaces.data?.total ?? 0) / 25)));
+	const workspaces = createQuery(() => workspaceListQuery(offset, search, pageSize));
+	const pageCount = $derived(Math.max(1, Math.ceil((workspaces.data?.total ?? 0) / pageSize)));
 	$effect(() => {
 		if (workspaces.data && offset >= workspaces.data.total && offset > 0)
-			offset = (pageCount - 1) * 25;
+			offset = (pageCount - 1) * pageSize;
 	});
 	const creation = createQuery(() => workspaceCreationAvailabilityQuery());
 	const queryClient = useQueryClient();
@@ -122,7 +123,7 @@
 			<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
 				{#each workspaces.data.items as workspace (workspace.id)}
 					<a
-						class="group hover:border-primary-500-400 flex min-h-28 items-center justify-between gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5 text-inherit no-underline transition-colors hover:bg-primary-50-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+						class="group flex min-h-28 items-center justify-between gap-4 rounded-container border border-surface-300-700 bg-surface-50-950 p-5 text-inherit no-underline transition-colors hover:border-primary-500 hover:bg-primary-50-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:hover:border-primary-400"
 						href={resolve(workspaceHref(workspace.id))}
 						aria-label={$t('Open workspace {name}', { name: workspace.name })}
 						onclick={() => {
@@ -154,10 +155,16 @@
 			<Notice>{$t('No workspaces are available for this account yet.')}</Notice>
 		{/if}
 		<Pagination
-			page={Math.floor(offset / 25) + 1}
+			page={Math.floor(offset / pageSize) + 1}
 			{pageCount}
+			{pageSize}
+			total={workspaces.data?.total ?? 0}
+			onPageSize={(size) => {
+				pageSize = size;
+				offset = 0;
+			}}
 			onPage={(page) => {
-				offset = (page - 1) * 25;
+				offset = (page - 1) * pageSize;
 			}}
 			busy={workspaces.isFetching}
 			label={$t('Workspaces')}

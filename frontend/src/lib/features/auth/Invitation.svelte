@@ -72,7 +72,7 @@
 		class="grid grid-cols-1 gap-3"
 		onsubmit={(event) => {
 			event.preventDefault();
-			accept();
+			void accept();
 		}}
 	>
 		<h1>{$t('Join Quirebase')}</h1>

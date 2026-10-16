@@ -519,15 +519,15 @@ test('Library sort and file filters persist in navigation and use typed API filt
 		return route.fulfill({ json: directoryPage([], route) });
 	});
 	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('title');
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
-	await page.getByRole('combobox', { name: 'Sort', exact: true }).selectOption('title');
 	await page.getByRole('combobox', { name: 'Files', exact: true }).selectOption('false');
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
 	await expect.poll(() => requests.at(-1)).toEqual({ sort: 'title', files: 'false' });
 	await expect(page).toHaveURL(/sort=title&has_files=false/);
 	await page.reload();
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
-	await expect(page.getByRole('combobox', { name: 'Sort', exact: true })).toHaveValue('title');
+	await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue('title');
 	await expect(page.getByRole('combobox', { name: 'Files', exact: true })).toHaveValue('false');
 });
 

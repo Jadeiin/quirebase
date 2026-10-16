@@ -100,12 +100,19 @@ integrated with the Svelte workspace, but do not become a second general-purpose
 
 Skeleton's Svelte component stylesheet is loaded alongside the core primitives. Navigation owns
 sidebar, mobile and section-link presentation; SvelteKit still owns URL selection and `aria-current`.
-Pagination owns page changes behind the compact first/previous/next/last product pattern. Tabs owns
-local Account, Tools and Item-action sections. Combobox owns searchable Tag, Project and Workspace
-selection, Listbox owns the visible CSL style choices, SegmentedControl owns duplicate criteria,
+Pagination owns page changes through first/previous/next/last controls, a Page Size selector and the
+current result range. Library and Project Item lists expose server-side Sort By choices in the same
+bar. Library pagination keeps its page, Page Size and sorting in the URL and resets to page one when
+size or sorting changes. Tabs owns local Account, Tools and Item-action sections. Combobox owns
+searchable Tag, Project and Workspace selection, Listbox owns the visible CSL style choices,
+SegmentedControl owns duplicate criteria,
 Collapsible owns the Library filter disclosure, and Progress owns indeterminate loading feedback.
 Short fixed choices and native form inputs keep Skeleton's CSS primitives. Native details and
 asynchronous Tag assignment actions retain their current product semantics.
+
+Administrative event and workflow lists use server-side limit/offset pages. Workflow totals come
+from DBOS state aggregates, and overview statistics cover the complete record set independently of
+the displayed event page.
 
 `src/lib/design/DateField.svelte` adapts Skeleton DatePicker to ISO strings at year, month or day
 precision. Metadata chooses that precision; Library and Discovery choose only years. Calendar

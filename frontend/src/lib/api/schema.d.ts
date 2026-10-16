@@ -2282,11 +2282,10 @@ export interface components {
 			user_count: number;
 			/** Pending Invitation Count */
 			pending_invitation_count: number;
-			/** Failed Workflows */
-			failed_workflows: components['schemas']['WorkflowSummaryView'][];
+			/** Failed Workflow Count */
+			failed_workflow_count: number;
 			storage: components['schemas']['StorageMetricsView'];
-			/** Recent Events */
-			recent_events: components['schemas']['AdminAuditEventView'][];
+			recent_events: components['schemas']['OffsetPagination_AdminAuditEventView_'];
 		};
 		/** AdminSettingsView */
 		AdminSettingsView: {
@@ -2367,11 +2366,6 @@ export interface components {
 			total: number;
 			/** Invitations */
 			invitations: components['schemas']['AdminInvitationView'][];
-		};
-		/** AdminWorkflowsView */
-		AdminWorkflowsView: {
-			/** Workflows */
-			workflows: components['schemas']['WorkflowSummaryView'][];
 		};
 		/** AdminWorkspaceView */
 		AdminWorkspaceView: {
@@ -4343,6 +4337,20 @@ export interface components {
 		OffsetPagination_TagView_: {
 			/** Items */
 			items: components['schemas']['TagView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkflowSummaryView_: {
+			/** Items */
+			items: components['schemas']['WorkflowSummaryView'][];
 			/** Limit */
 			limit: number;
 			/** Offset */
@@ -7002,7 +7010,10 @@ export interface operations {
 	};
 	'admin.admin_overview': {
 		parameters: {
-			query?: never;
+			query?: {
+				limit?: number;
+				offset?: number;
+			};
 			header?: never;
 			path?: never;
 			cookie?: never;
@@ -7387,6 +7398,8 @@ export interface operations {
 		parameters: {
 			query?: {
 				state?: string;
+				limit?: number;
+				offset?: number;
 			};
 			header?: never;
 			path?: never;
@@ -7400,7 +7413,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['AdminWorkflowsView'];
+					'application/json': components['schemas']['OffsetPagination_WorkflowSummaryView_'];
 				};
 			};
 			/** @description Unprocessable Content */

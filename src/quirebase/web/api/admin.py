@@ -39,7 +39,6 @@ from quirebase.web.api.admin_schemas import (
     AdminUserCreateRequest,
     AdminUsersView,
     AdminUserView,
-    AdminWorkflowsView,
     AdminWorkspaceView,
     BreakGlassReadRequest,
     InvitationCreateRequest,
@@ -74,20 +73,30 @@ def _workflow_view(workflow) -> dict:
 
 
 @router.get("/overview", response_model=AdminOverviewView)
-async def admin_overview(user: ApiUser, db: Database):
+async def admin_overview(
+    user: ApiUser,
+    db: Database,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
     users = await list_users(db, user)
     invitations = await list_invitations(db, user)
     await require_system_action(db, user, SystemAction.workflows_read)
-    failed = await durable_operations().list(status="failed", limit=100)
-    events, _ = await query_events(db, user, limit=10)
+    workflow_counts = await durable_operations().state_counts()
+    events, total = await query_events(db, user, limit=limit, offset=offset)
     return {
         "user_count": len(users),
         "pending_invitation_count": sum(
             invitation.accepted_at is None for invitation in invitations
         ),
-        "failed_workflows": [_workflow_view(workflow) for workflow in failed],
+        "failed_workflow_count": workflow_counts.get("failed", 0),
         "storage": await get_storage_metrics(db, user),
-        "recent_events": result_converter.to_schema(events, schema_type=AdminAuditEventView).items,
+        "recent_events": result_converter.to_schema(
+            events,
+            total=total,
+            filters=[LimitOffset(limit=limit, offset=offset)],
+            schema_type=AdminAuditEventView,
+        ),
     }
 
 
@@ -205,18 +214,28 @@ async def admin_audit(
     )
 
 
-@router.get("/workflows", response_model=AdminWorkflowsView)
-async def admin_workflows(user: ApiUser, db: Database, state: str = ""):
+@router.get("/workflows", response_model=OffsetPagination[WorkflowSummaryView])
+async def admin_workflows(
+    user: ApiUser,
+    db: Database,
+    state: str = "",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
     await require_system_action(db, user, SystemAction.workflows_read)
     normalized = state.strip().casefold()
     if normalized not in {"", "pending", "running", "succeeded", "failed", "cancelled"}:
         raise ValidationFailure(f"unknown workflow state: {state}")
-    return {
-        "workflows": [
-            _workflow_view(row)
-            for row in await durable_operations().list(status=normalized, limit=100)
-        ]
-    }
+    operations = durable_operations()
+    rows = await operations.list(status=normalized, limit=limit, offset=offset)
+    counts = await operations.state_counts()
+    total = sum(count for state, count in counts.items() if not normalized or state == normalized)
+    return OffsetPagination(
+        items=[WorkflowSummaryView(**_workflow_view(row)) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/settings", response_model=AdminSettingsView)

@@ -8,22 +8,27 @@ import type { LibraryFilters } from './filters.js';
 export const libraryKeys = {
 	all: (workspaceId: string) => workspaceKeys.items(workspaceId),
 	lists: (workspaceId: string) => [...libraryKeys.all(workspaceId), 'list'] as const,
-	list: (workspaceId: string, filters: LibraryFilters, page: number) =>
-		[...libraryKeys.lists(workspaceId), filters, page] as const
+	list: (workspaceId: string, filters: LibraryFilters, page: number, pageSize = 25) =>
+		[...libraryKeys.lists(workspaceId), filters, page, pageSize] as const
 };
 
-export function libraryListQuery(workspaceId: string, filters: LibraryFilters, page: number) {
+export function libraryListQuery(
+	workspaceId: string,
+	filters: LibraryFilters,
+	page: number,
+	pageSize = 25
+) {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: libraryKeys.list(workspaceId, filters, page),
+		queryKey: libraryKeys.list(workspaceId, filters, page, pageSize),
 		queryFn: ({ signal }) =>
 			api.request('GET', '/workspaces/{workspace_id}/items', {
 				// Exact filters distinguish an explicit empty value from omission.
 				querySerializer: createQuerySerializer(),
 				params: {
 					query: {
-						limit: 25,
-						offset: (page - 1) * 25,
+						limit: pageSize,
+						offset: (page - 1) * pageSize,
 						query: filters.query || undefined,
 						tag: filters.tag || undefined,
 						project: filters.project || undefined,
