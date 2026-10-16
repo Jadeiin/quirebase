@@ -1,6 +1,7 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
-import { invalidateItemDiscussion } from '$lib/query/invalidation';
+import { createWorkspaceApi } from '#lib/api/client.js';
+import { invalidateItemDiscussion } from '#lib/query/invalidation.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type DiscussionCreateMutation = {
 	form: HTMLFormElement;
@@ -11,28 +12,61 @@ export type DiscussionDeleteMutation = {
 	messageId: string;
 };
 
-export function discussionCreateMutationOptions(itemId: string, queryClient: QueryClient) {
+export type DiscussionModerationMutation = DiscussionDeleteMutation & { reason: string };
+
+export function discussionCreateMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-discussion-create', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-discussion-create', itemId),
 		mutationFn: ({ body }: DiscussionCreateMutation) =>
-			apiRequest('POST', '/items/{item_id}/discussions', {
+			api.request('POST', '/workspaces/{workspace_id}/items/{item_id}/discussions', {
 				params: { path: { item_id: itemId } },
 				body: { body }
 			}),
 		onSuccess: async (_saved, { form }) => {
 			form.reset();
-			await invalidateItemDiscussion(queryClient, itemId);
+			await invalidateItemDiscussion(queryClient, workspaceId, itemId);
 		}
 	});
 }
 
-export function discussionDeleteMutationOptions(itemId: string, queryClient: QueryClient) {
+export function discussionDeleteMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
 	return mutationOptions({
-		mutationKey: ['item-discussion-delete', itemId],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-discussion-delete', itemId),
 		mutationFn: ({ messageId }: DiscussionDeleteMutation) =>
-			apiRequest('DELETE', '/items/{item_id}/discussions/{message_id}', {
+			api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}', {
 				params: { path: { item_id: itemId, message_id: messageId } }
 			}),
-		onSuccess: () => invalidateItemDiscussion(queryClient, itemId)
+		onSuccess: () => invalidateItemDiscussion(queryClient, workspaceId, itemId)
+	});
+}
+
+export function discussionModerationMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient
+) {
+	const api = createWorkspaceApi(workspaceId);
+	return mutationOptions({
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-discussion-moderate', itemId),
+		mutationFn: ({ messageId, reason }: DiscussionModerationMutation) =>
+			api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}/moderation',
+				{
+					params: { path: { item_id: itemId, message_id: messageId } },
+					body: { reason }
+				}
+			),
+		onSuccess: () => invalidateItemDiscussion(queryClient, workspaceId, itemId)
 	});
 }

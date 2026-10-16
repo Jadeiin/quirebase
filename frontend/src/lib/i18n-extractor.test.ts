@@ -3,7 +3,7 @@ import {
 	svelteExtractor,
 	typescriptExtractor,
 	type SvelteExtractedMessage
-} from '$lib/i18n-extractor';
+} from '#lib/i18n-extractor.js';
 
 function extract(source: string): SvelteExtractedMessage[] {
 	const messages: SvelteExtractedMessage[] = [];
@@ -41,12 +41,12 @@ describe('Svelte gettext extraction', () => {
 	it('extracts translator comments from message descriptors', () => {
 		const messages = extract(`
 			<script lang="ts">
-				const label = msg({ message: 'Owner', comment: 'Project member role.' });
+				const label = msg({ message: 'Owner', comment: 'Workspace member role.' });
 			</script>
 		`);
 
 		expect(messages.map(({ id, message, comment }) => ({ id, message, comment }))).toEqual([
-			{ id: 'Owner', message: 'Owner', comment: 'Project member role.' }
+			{ id: 'Owner', message: 'Owner', comment: 'Workspace member role.' }
 		]);
 	});
 
@@ -80,13 +80,13 @@ describe('TypeScript gettext extraction', () => {
 		const messages: SvelteExtractedMessage[] = [];
 		typescriptExtractor.extract(
 			'domain-labels.ts',
-			`const labels = { owner: msg({ message: 'Owner', comment: 'Project member role.' }) };`,
+			`const labels = { owner: msg({ message: 'Owner', comment: 'Workspace member role.' }) };`,
 			(message) => messages.push(message),
 			{} as never
 		);
 
 		expect(messages.map(({ id, message, comment }) => ({ id, message, comment }))).toEqual([
-			{ id: 'Owner', message: 'Owner', comment: 'Project member role.' }
+			{ id: 'Owner', message: 'Owner', comment: 'Workspace member role.' }
 		]);
 	});
 

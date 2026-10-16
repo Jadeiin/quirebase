@@ -1,107 +1,171 @@
 from __future__ import annotations
 
-import json
-import re
-from typing import Any
+from dataclasses import replace
+from typing import TYPE_CHECKING, Literal
 from xml.etree import ElementTree
 
-from inquiro.canonical import (
-    collect_urls,
-    first_text,
-)
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import first_text
 from inquiro.identifiers import normalize_doi, parse_arxiv
 from inquiro.models import (
     AcquiredDocument,
     CandidateNotFound,
-    ProviderRecord,
-    ProviderSearchPage,
-    ProviderSearchRecord,
+    CandidatePage,
+    CandidateRecord,
+    Identifier,
+    ProviderConfig,
     ProviderUnavailable,
-    SearchClause,
+    SearchQuery,
 )
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._contracts import ProviderDefinition
 from inquiro.providers._payload import (
     boolean_query,
+    source_affiliation,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
+    unique_links,
 )
+
+if TYPE_CHECKING:
+    from inquiro.transport import BoundedTransport
+_NAMESPACE = {
+    "atom": "http://www.w3.org/2005/Atom",
+    "arxiv": "http://arxiv.org/schemas/atom",
+    "opensearch": "http://a9.com/-/spec/opensearch/1.1/",
+}
+
+
+def _contributors(entry: ElementTree.Element) -> tuple[dict, ...] | None:
+    authors = []
+    for author in entry.findall("atom:author", _NAMESPACE):
+        name = first_text(author.findtext("atom:name", namespaces=_NAMESPACE))
+        if not name:
+            continue
+        affiliations = tuple(
+            source_affiliation(affiliation_name)
+            for node in author.findall("arxiv:affiliation", _NAMESPACE)
+            if (affiliation_name := first_text(node.text))
+        )
+        authors.append(source_credit(name, affiliations=affiliations or None))
+    return tuple(authors) or None
+
+
+def _links(entry: ElementTree.Element, value: str, doi: str | None) -> tuple[dict, ...]:
+    links = []
+    for node in entry.findall("atom:link", _NAMESPACE):
+        if not (url := first_text(node.get("href"))):
+            continue
+        media_type = node.get("type")
+        kind: Literal["full_text", "landing_page", "other"] = (
+            "full_text"
+            if node.get("title") == "pdf" or media_type == "application/pdf"
+            else "landing_page"
+            if node.get("rel") == "alternate" or node.get("title") == "doi"
+            else "other"
+        )
+        links.append(source_link(url, kind=kind, media_type=media_type))
+    for link in (
+        source_link(f"https://arxiv.org/abs/{value}", kind="landing_page"),
+        source_link(
+            f"https://arxiv.org/pdf/{value}.pdf", kind="full_text", media_type="application/pdf"
+        ),
+        source_link(f"https://doi.org/{doi}", kind="landing_page") if doi else None,
+    ):
+        if link and (not any(existing["url"] == link["url"] for existing in links)):
+            links.append(link)
+    return unique_links(*links)
+
+
+def _record(entry: ElementTree.Element, identifier: Identifier) -> CandidateRecord:
+    returned = entry.findtext("atom:id", default="", namespaces=_NAMESPACE)
+    confirmed = parse_arxiv(returned, "arxiv")
+    value = confirmed.value if confirmed else ""
+    summary = entry.findtext("atom:summary", default="", namespaces=_NAMESPACE)
+    if summary.strip().lower().startswith("error:"):
+        raise CandidateNotFound("arXiv returned an error entry")
+    doi = entry.findtext("arxiv:doi", default="", namespaces=_NAMESPACE) or None
+    doi_link = entry.find("atom:link[@title='doi']", _NAMESPACE)
+    if not doi and doi_link is not None:
+        doi = normalize_doi(doi_link.attrib.get("href", "")) or None
+    identifiers: dict[str, str] = {"arxiv": value} if value else {}
+    if doi:
+        identifiers["doi"] = doi
+    published = entry.findtext("atom:published", default="", namespaces=_NAMESPACE)
+    return CandidateRecord(
+        provider="arxiv",
+        lookup_identifier=identifier,
+        work=compact({
+            "id": source_work_id(
+                tuple((Identifier(key, value) for key, value in identifiers.items()))
+            ),
+            "type": "Preprint",
+            "title": first_text(entry.findtext("atom:title", default="", namespaces=_NAMESPACE))
+            or "",
+            "description": summary.strip() or None,
+            "contributors": _contributors(entry),
+            "date_published": published[:10] if published else None,
+            "identifiers": source_identifiers(
+                tuple((Identifier(key, value) for key, value in identifiers.items()))
+            ),
+            "subjects": source_subjects(
+                tuple(
+                    dict.fromkeys(
+                        term
+                        for category in entry.findall("atom:category", _NAMESPACE)
+                        if (term := first_text(category.get("term")))
+                    )
+                )
+                or ()
+            ),
+            "container": compact({
+                "title": first_text(
+                    entry.findtext("arxiv:journal_ref", default="", namespaces=_NAMESPACE)
+                )
+            }),
+            "url": source_landing_url(_links(entry, value, doi)),
+            "files": source_files(_links(entry, value, doi)),
+        }),
+    )
 
 
 class ArxivLookupAdapter:
     async def lookup(
-        self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
-    ) -> ProviderRecord:
-        body = await client._get(
-            endpoint,
-            {"id_list": value, "max_results": "1"},
-        )
+        self,
+        client: BoundedTransport,
+        identifier: Identifier,
+        settings: ProviderConfig,
+        *,
+        endpoint: str,
+    ) -> CandidateRecord:
+        value = identifier.value
+        body = await client.get(endpoint, {"id_list": value, "max_results": "1"})
         try:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
             raise ProviderUnavailable("arXiv returned invalid XML") from error
-        namespace = {
-            "atom": "http://www.w3.org/2005/Atom",
-            "arxiv": "http://arxiv.org/schemas/atom",
-        }
-        entry = root.find("atom:entry", namespace)
-        if entry is None or entry.find("atom:title", namespace) is None:
+        entry = root.find("atom:entry", _NAMESPACE)
+        if entry is None or entry.find("atom:title", _NAMESPACE) is None:
             raise CandidateNotFound("arXiv entry was not found")
-        summary = entry.findtext("atom:summary", default="", namespaces=namespace)
-        if summary.strip().lower().startswith("error:"):
-            raise CandidateNotFound("arXiv returned an error entry")
-        doi = entry.findtext("arxiv:doi", default="", namespaces=namespace) or None
-        doi_link = entry.find("atom:link[@title='doi']", namespace)
-        if not doi and doi_link is not None:
-            doi = normalize_doi(doi_link.attrib.get("href", "")) or None
-        identifiers: dict[str, str] = {"arxiv": value}
-        urls = collect_urls(
-            f"https://arxiv.org/abs/{value}",
-            f"https://arxiv.org/pdf/{value}.pdf",
-            f"https://doi.org/{doi}" if doi else None,
-        )
-        if doi:
-            identifiers["doi"] = doi
-        published = entry.findtext("atom:published", default="", namespaces=namespace)
-        return ProviderRecord(
-            title=first_text(entry.findtext("atom:title", default="", namespaces=namespace)) or "",
-            abstract=summary.strip() or None,
-            authors="; ".join(
-                author.findtext("atom:name", default="", namespaces=namespace).strip()
-                for author in entry.findall("atom:author", namespace)
-                if author.findtext("atom:name", default="", namespaces=namespace).strip()
-            )
-            or None,
-            keywords="; ".join(
-                category.attrib.get("term", "").strip()
-                for category in entry.findall("atom:category", namespace)
-                if category.attrib.get("term", "").strip()
-            )
-            or None,
-            publication_date=published[:10] if published else None,
-            publication_title=first_text(
-                entry.findtext("arxiv:journal_ref", default="", namespaces=namespace)
-            ),
-            doi=doi,
-            urls=urls,
-            identifiers=json.dumps(identifiers),
-            reference_type="preprint",
-        )
+        return _record(entry, identifier)
 
 
 class ArxivSearchAdapter:
     async def search(
         self,
-        client: ProviderContext,
-        clauses: list[SearchClause],
+        client: BoundedTransport,
+        request: SearchQuery,
         *,
-        page: int,
-        per_page: int,
-        sort: str,
-        year_from: int | None,
-        year_to: int | None,
-        settings: Any,
+        settings: ProviderConfig,
         endpoint: str,
-    ) -> ProviderSearchPage:
+    ) -> CandidatePage:
         query = boolean_query(
-            clauses,
+            request.clauses,
             {
                 "any": "all:",
                 "title": "ti:",
@@ -111,81 +175,50 @@ class ArxivSearchAdapter:
             },
             field_prefix=True,
         )
-        if year_from or year_to:
-            query += (
-                f" AND submittedDate:[{year_from or 1991}01010000 TO {year_to or 3000}12312359]"
-            )
+        if request.year_from or request.year_to:
+            query += f" AND submittedDate:[{request.year_from or 1991}01010000 TO {request.year_to or 3000}12312359]"
         params = {
             "search_query": query,
-            "start": str((page - 1) * per_page),
-            "max_results": str(per_page),
-            "sortBy": "submittedDate" if sort == "published" else "relevance",
+            "start": str((request.page - 1) * request.per_page),
+            "max_results": str(request.per_page),
+            "sortBy": "submittedDate" if request.sort == "published" else "relevance",
             "sortOrder": "descending",
         }
-        body = await client._get(endpoint, params)
+        body = await client.get(endpoint, params)
         try:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
             raise ProviderUnavailable("arXiv returned invalid XML") from error
-        namespace = {
-            "atom": "http://www.w3.org/2005/Atom",
-            "opensearch": "http://a9.com/-/spec/opensearch/1.1/",
-        }
         total = int(
-            root.findtext("opensearch:totalResults", default="0", namespaces=namespace) or "0"
+            root.findtext("opensearch:totalResults", default="0", namespaces=_NAMESPACE) or "0"
         )
         results = []
-        for entry in root.findall("atom:entry", namespace):
-            title = first_text(entry.findtext("atom:title", default="", namespaces=namespace))
+        for entry in root.findall("atom:entry", _NAMESPACE):
+            title = first_text(entry.findtext("atom:title", default="", namespaces=_NAMESPACE))
             if not title:
                 continue
-            entry_id = entry.findtext("atom:id", default="", namespaces=namespace)
-            arxiv_id = re.sub(r"^https?://arxiv\.org/abs/", "", entry_id).removesuffix(".pdf")
-            published = entry.findtext("atom:published", default="", namespaces=namespace)
-            authors = "; ".join(
-                author.findtext("atom:name", default="", namespaces=namespace).strip()
-                for author in entry.findall("atom:author", namespace)
-                if author.findtext("atom:name", default="", namespaces=namespace).strip()
-            )
-            results.append(
-                ProviderSearchRecord(
-                    provider="arxiv",
-                    identifier_provider="arxiv",
-                    identifier=arxiv_id,
-                    title=title,
-                    authors=authors or None,
-                    publication_title=entry.findtext(
-                        "arxiv:journal_ref",
-                        default=None,
-                        namespaces={"arxiv": "http://arxiv.org/schemas/atom"},
-                    )
-                    or "arXiv",
-                    publication_date=published[:10] if published else None,
-                )
-            )
-        return ProviderSearchPage("arxiv", results, total, page, per_page)
+            entry_id = entry.findtext("atom:id", default="", namespaces=_NAMESPACE)
+            if identifier := parse_arxiv(entry_id, "arxiv"):
+                record = _record(entry, identifier)
+                container = {"title": "arXiv", **record.work.get("container", {})}
+                results.append(replace(record, work={**record.work, "container": container}))
+        return CandidatePage("arxiv", tuple(results), total, request.page, request.per_page)
 
 
 class ArxivDocumentAdapter:
     async def acquire(
-        self,
-        client: ProviderContext,
-        value: str,
-        settings: Any,
-        *,
-        endpoint: str,
+        self, client: BoundedTransport, value: str, settings: ProviderConfig, *, endpoint: str
     ) -> AcquiredDocument:
         filename = f"{value.replace('/', '_')}.pdf"
-        return await client._download_pdf(
-            f"{endpoint}/{value}.pdf",
-            filename=filename,
-            provider="arxiv",
+        return await client.download_pdf(
+            f"{endpoint}/{value}.pdf", filename=filename, provider="arxiv"
         )
 
 
 ARXIV_PROVIDER = ProviderDefinition(
     name="arxiv",
-    identifier_aliases=("arxiv",),
+    display_name="arXiv",
+    identifier_namespace="arxiv",
     identifier_parser=parse_arxiv,
     auto_detect_identifier=True,
     search_adapter=ArxivSearchAdapter(),

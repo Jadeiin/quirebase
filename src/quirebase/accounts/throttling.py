@@ -3,12 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import case
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy import case, delete, select
 
 from quirebase.core.errors import DomainError
-from quirebase.core.timezones import as_utc
+from quirebase.core.persistence import conflict_insert
 from quirebase.models import LoginThrottle
 
 if TYPE_CHECKING:
@@ -27,37 +25,68 @@ class LoginThrottled(DomainError):
 
 
 async def check_login_throttle(db: AsyncSession, identity: str) -> None:
-    row = await db.get(LoginThrottle, identity)
-    if row is None:
-        return
-    started = as_utc(row.window_started_at)
-    if started + THROTTLE_WINDOW <= datetime.now(UTC):
-        await db.delete(row)
+    if await _check_login_throttle(db, identity):
         await db.commit()
-    elif row.failures >= THROTTLE_LIMIT:
+
+
+async def _check_login_throttle(db: AsyncSession, identity: str) -> bool:
+    """Check the limit and retire an expired window in the caller's transaction."""
+    row = await db.scalar(
+        select(LoginThrottle)
+        .where(LoginThrottle.identity_hash == identity)
+        .execution_options(populate_existing=True)
+    )
+    if row is None:
+        return False
+    cutoff = datetime.now(UTC) - THROTTLE_WINDOW
+    if row.window_started_at <= cutoff:
+        await db.execute(
+            delete(LoginThrottle).where(
+                LoginThrottle.identity_hash == identity, LoginThrottle.window_started_at <= cutoff
+            )
+        )
+        return True
+    if row.failures >= THROTTLE_LIMIT:
         raise LoginThrottled("too many login attempts; try again later")
+    return False
 
 
 async def record_login_failure(db: AsyncSession, identity: str) -> None:
-    now = datetime.now(UTC)
-    cutoff = now - THROTTLE_WINDOW
-    values = {"identity_hash": identity, "failures": 1, "window_started_at": now}
-    dialect = db.get_bind().dialect.name
-    insert = pg_insert(LoginThrottle) if dialect == "postgresql" else sqlite_insert(LoginThrottle)
-    expired = LoginThrottle.window_started_at <= cutoff
-    statement = insert.values(**values).on_conflict_do_update(
-        index_elements=[LoginThrottle.identity_hash],
-        set_={
-            "failures": case((expired, 1), else_=LoginThrottle.failures + 1),
-            "window_started_at": case((expired, now), else_=LoginThrottle.window_started_at),
-        },
-    )
-    await db.execute(statement)
+    await _record_login_failure(db, identity)
     await db.commit()
 
 
+async def _record_login_failure(db: AsyncSession, identity: str) -> None:
+    """Update the failure counter without completing the caller's transaction."""
+    now = datetime.now(UTC)
+    cutoff = now - THROTTLE_WINDOW
+    expired = LoginThrottle.window_started_at <= cutoff
+    statement = conflict_insert(db, LoginThrottle).values(
+        identity_hash=identity, failures=1, window_started_at=now
+    )
+    await db.scalar(
+        statement
+        .on_conflict_do_update(
+            index_elements=[LoginThrottle.identity_hash],
+            set_={
+                "failures": case((expired, 1), else_=LoginThrottle.failures + 1),
+                "window_started_at": case((expired, now), else_=LoginThrottle.window_started_at),
+            },
+        )
+        .returning(LoginThrottle)
+        .execution_options(populate_existing=True)
+    )
+
+
 async def clear_login_failures(db: AsyncSession, identity: str) -> None:
-    row = await db.get(LoginThrottle, identity)
-    if row:
-        await db.delete(row)
+    if await _clear_login_failures(db, identity):
         await db.commit()
+
+
+async def _clear_login_failures(db: AsyncSession, identity: str) -> bool:
+    cleared = await db.scalar(
+        delete(LoginThrottle)
+        .where(LoginThrottle.identity_hash == identity)
+        .returning(LoginThrottle.identity_hash)
+    )
+    return cleared is not None

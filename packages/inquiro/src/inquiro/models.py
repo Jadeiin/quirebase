@@ -2,7 +2,25 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import IO, Self
+from typing import IO, Literal, Self
+
+MAX_SEARCH_CLAUSES = 5
+type SearchSort = Literal["relevance", "published", "cited", "updated"]
+
+
+@dataclass(frozen=True)
+class ProviderChoice:
+    id: str
+    name: str
+    sorts: tuple[SearchSort, ...] = ()
+    identifier_namespaces: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class MetadataProviderChoices:
+    search: tuple[ProviderChoice, ...]
+    lookup: tuple[ProviderChoice, ...]
+    max_search_clauses: int = MAX_SEARCH_CLAUSES
 
 
 class InquiroError(Exception):
@@ -82,30 +100,20 @@ class AcquiredDocument:
 
 @dataclass(frozen=True)
 class Identifier:
+    """A provider-qualified lookup key or a namespaced confirmed identifier."""
+
     provider: str
     value: str
 
 
 @dataclass(frozen=True)
 class CandidateRecord:
+    """Provider provenance and lookup context around a standard Commonmeta Work."""
+
     provider: str
-    identifier: Identifier
-    title: str
-    abstract: str | None = None
-    authors: str | None = None
-    keywords: str | None = None
-    publication_date: str | None = None
-    publication_title: str | None = None
-    journal_abbreviation: str | None = None
-    volume: str | None = None
-    issue: str | None = None
-    pages: str | None = None
-    publisher: str | None = None
-    affiliation: str | None = None
-    doi: str | None = None
-    urls: str | None = None
-    identifiers: tuple[Identifier, ...] = ()
-    reference_type: str | None = None
+    lookup_identifier: Identifier
+    work: dict
+    diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -130,50 +138,6 @@ class SearchQuery:
 class CandidatePage:
     provider: str
     results: tuple[CandidateRecord, ...]
-    total: int
-    page: int
-    per_page: int
-
-
-@dataclass(frozen=True)
-class ProviderRecord:
-    """Normalized provider payload before the runtime attaches its identifier."""
-
-    title: str
-    abstract: str | None = None
-    authors: str | None = None
-    keywords: str | None = None
-    publication_date: str | None = None
-    publication_title: str | None = None
-    journal_abbreviation: str | None = None
-    volume: str | None = None
-    issue: str | None = None
-    pages: str | None = None
-    publisher: str | None = None
-    affiliation: str | None = None
-    doi: str | None = None
-    urls: str | None = None
-    identifiers: str | None = None
-    reference_type: str | None = None
-
-
-@dataclass(frozen=True)
-class ProviderSearchRecord:
-    provider: str
-    identifier_provider: str
-    identifier: str
-    title: str
-    authors: str | None = None
-    publication_title: str | None = None
-    publication_date: str | None = None
-    doi: str | None = None
-    abstract: str | None = None
-
-
-@dataclass(frozen=True)
-class ProviderSearchPage:
-    provider: str
-    results: tuple[ProviderSearchRecord, ...] | list[ProviderSearchRecord]
     total: int
     page: int
     per_page: int

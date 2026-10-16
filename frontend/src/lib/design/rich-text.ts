@@ -197,7 +197,7 @@ export function hasInlineMath(canonicalHtml: string): boolean {
 let pendingMathRenderer: Promise<MathRenderer> | undefined;
 
 function loadMathRenderer(): Promise<MathRenderer> {
-	pendingMathRenderer ??= import('$lib/design/rich-text-math').then(
+	pendingMathRenderer ??= import('#lib/design/rich-text-math.js').then(
 		({ renderMathHtml }) =>
 			(tex: string) => {
 				const parsed = new DOMParser().parseFromString(renderMathHtml(tex), 'text/html');

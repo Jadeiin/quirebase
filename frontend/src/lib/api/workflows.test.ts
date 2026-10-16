@@ -12,10 +12,14 @@ describe('waitForWorkflow', () => {
 		);
 		vi.stubGlobal('fetch', fetcher);
 
-		await expect(waitForWorkflow('workflow-1')).resolves.toMatchObject({ state: 'succeeded' });
+		await expect(
+			waitForWorkflow('workflow-1', { workspaceId: 'workspace-1' })
+		).resolves.toMatchObject({ state: 'succeeded' });
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		const request = fetcher.mock.calls[0][0];
-		expect(new URL(request.url).pathname).toBe('/api/v1/workflows/workflow-1');
+		expect(new URL(request.url).pathname).toBe(
+			'/api/v1/workspaces/workspace-1/workflows/workflow-1'
+		);
 		expect(request.method).toBe('GET');
 	});
 

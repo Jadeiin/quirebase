@@ -1,9 +1,9 @@
 <script lang="ts">
-	import Panel from '$lib/design/Panel.svelte';
-	import { dateTimeFormat } from '$lib/format';
-	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import { dateTimeFormat } from '#lib/format.js';
+	import { t } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	let { events } = $props<{ events: components['schemas']['AdminAuditEventView'][] }>();
 </script>
@@ -14,7 +14,22 @@
 		<ItemRow>
 			<strong>{event.action}</strong><span
 				>{event.target_type}{event.target_id ? ` · ${event.target_id}` : ''}</span
-			><span class="text-surface-600-400"
+			>
+			<span class="text-xs text-surface-600-400"
+				>{[
+					event.workspace_id ? `Workspace ${event.workspace_id}` : '',
+					event.project_id ? `Project ${event.project_id}` : '',
+					event.authorization_resource_action
+						? `Decision ${event.authorization_resource_action}`
+						: '',
+					event.authorization_role ? `Role ${event.authorization_role}` : '',
+					event.source ? `Source ${event.source}` : '',
+					event.result ? `Result ${event.result}` : ''
+				]
+					.filter(Boolean)
+					.join(' · ')}</span
+			>
+			<span class="text-surface-600-400"
 				>{event.actor_id
 					? `${$t('Actor: {actor}', { actor: event.actor_id })} · `
 					: ''}{$dateTimeFormat.format(new Date(event.created_at))}</span

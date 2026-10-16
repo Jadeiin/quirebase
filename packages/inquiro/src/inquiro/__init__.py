@@ -8,14 +8,17 @@ from inquiro.models import (
     InquiroError,
     InvalidPdfResponse,
     InvalidProviderRequest,
+    MetadataProviderChoices,
     PdfAccessDenied,
     PdfNotAvailable,
+    ProviderChoice,
     ProviderConfig,
     ProviderUnavailable,
     SearchClause,
     SearchQuery,
 )
-from inquiro.runtime import ProviderRuntime
+from inquiro.runtime import ProviderRuntime, metadata_provider_choices
+from inquiro.work_models import Work
 
 __all__ = [
     "AcquiredDocument",
@@ -27,11 +30,15 @@ __all__ = [
     "InquiroError",
     "InvalidPdfResponse",
     "InvalidProviderRequest",
+    "MetadataProviderChoices",
     "PdfAccessDenied",
     "PdfNotAvailable",
+    "ProviderChoice",
     "ProviderConfig",
     "ProviderRuntime",
     "ProviderUnavailable",
     "SearchClause",
     "SearchQuery",
+    "Work",
+    "metadata_provider_choices",
 ]

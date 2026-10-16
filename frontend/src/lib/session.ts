@@ -1,6 +1,6 @@
 import { queryOptions, type CreateQueryResult } from '@tanstack/svelte-query';
 import { createContext } from 'svelte';
-import { apiRequest, type SessionView } from '$lib/api/client';
+import { apiRequest, type SessionView } from '#lib/api/client.js';
 
 export function sessionQuery() {
 	return queryOptions({

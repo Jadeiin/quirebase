@@ -1,5 +1,5 @@
 import { derived } from 'svelte/store';
-import { activeLocale } from '$lib/i18n';
+import { activeLocale } from '#lib/i18n.js';
 
 export const dateFormat = derived(
 	activeLocale,

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Notice from '$lib/design/Notice.svelte';
+	import Notice from '#lib/design/Notice.svelte';
 
 	let { error = '', notice = '' } = $props<{ error?: string; notice?: string }>();
 </script>

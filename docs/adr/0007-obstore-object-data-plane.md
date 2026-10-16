@@ -1,6 +1,8 @@
-# ADR 0007: obstore object-storage data plane
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0007: obstore object-storage data plane
 
 ## Context
 

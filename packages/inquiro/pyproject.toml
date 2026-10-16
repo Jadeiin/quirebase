@@ -10,10 +10,14 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 dependencies = [
-  "bibtexparser>=2.0.0b9,<3",
-  "httpx2>=2.12,<3",
-  "pylatexenc>=2.11,<3",
-  "rispy>=0.10,<1",
+  "commonmeta-py==0.309",
+  "commonmeta-schema==1.0.1",
+  "pydantic>=2.12,<3",
+  "jsonschema-rs>=0.58.6,<0.59",
+  "citeproc-py>=0.10,<0.11",
+  "httpx2[socks]>=2.12,<3",
+  "pylatexenc>=2.10,<3",
+  "python-dateutil>=2.9,<3",
 ]
 
 [project.scripts]
@@ -21,7 +25,6 @@ inquiro = "inquiro.cli:main"
 
 [project.optional-dependencies]
 citation = [
-  "citeproc-py>=0.10,<0.11",
   "citeproc-py-styles>=0.1.6,<0.2",
 ]
 

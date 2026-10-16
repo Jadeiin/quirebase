@@ -1,6 +1,5 @@
 import asyncio
 import os
-import tempfile
 from uuid import UUID, uuid4
 
 import pymupdf
@@ -114,7 +113,9 @@ async def test_materialize_opens_with_pymupdf(object_store):
 
 
 @pytest.mark.anyio
-async def test_cancelled_owned_upload_cleans_temporary_input(object_store, tmp_path, monkeypatch):
+async def test_cancelled_owned_upload_cleans_partial_object(object_store):
+    object_id = uuid4()
+    key = object_key(object_id, ObjectSuffix.BINARY)
     started = asyncio.Event()
 
     async def blocked():
@@ -122,17 +123,11 @@ async def test_cancelled_owned_upload_cleans_temporary_input(object_store, tmp_p
         yield b"partial"
         await asyncio.Event().wait()
 
-    real_mkstemp = tempfile.mkstemp
-
-    def task_mkstemp(*, prefix, suffix=""):
-        return real_mkstemp(prefix=prefix, suffix=suffix, dir=tmp_path)
-
-    monkeypatch.setattr("quirebase.core.storage.tempfile.mkstemp", task_mkstemp)
     task = asyncio.create_task(
-        object_store.put_object(uuid4(), ObjectSuffix.BINARY, blocked(), max_bytes=100)
+        object_store.put_object(object_id, ObjectSuffix.BINARY, blocked(), max_bytes=100)
     )
     await started.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    assert not list(tmp_path.glob("quirebase-object-*"))
+    assert not await object_store.exists(key)

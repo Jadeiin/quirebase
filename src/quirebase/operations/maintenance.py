@@ -12,16 +12,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
 from quirebase.core.storage import get_object_store, is_managed_object_key
-from quirebase.core.workflows import (
-    durable_operations,
-    list_active_workflows,
+from quirebase.core.workflows import durable_operations
+from quirebase.documents import (
+    delete_unreferenced_objects,
+    list_expired_export_artifacts,
+    protected_object_keys,
+    retire_expired_export_artifacts,
 )
-from quirebase.models import Attachment, ExportArtifact, FileRevision, ImportBatch, User
+from quirebase.models import Attachment, FileRevision, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -238,54 +241,16 @@ async def cleanup_exports(db: AsyncSession | None = None, *, batch_size: int = 1
     if db is None:
         return removed
     artifacts = await list_expired_export_artifacts(db, batch_size)
-    await db.rollback()
     if not artifacts:
         return removed
-    result = await delete_export_artifact_objects(artifacts)
-    removed += result["removed"]
-    await delete_export_artifact_records(db, result["workflow_ids"])
+    keys = await retire_expired_export_artifacts(db, artifacts)
     await db.commit()
-    return removed
+    return removed + len(await delete_unreferenced_objects(db, keys))
 
 
 async def cleanup_local_exports(ttl_hours: int) -> int:
     cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
     return await asyncio.to_thread(_cleanup_exports, get_settings().export_dir, cutoff)
-
-
-async def list_expired_export_artifacts(db: AsyncSession, limit: int) -> tuple[dict[str, str], ...]:
-    rows = (
-        await db.execute(
-            select(ExportArtifact.workflow_id, ExportArtifact.object_key)
-            .where(ExportArtifact.expires_at <= datetime.now(UTC))
-            .order_by(ExportArtifact.expires_at, ExportArtifact.workflow_id)
-            .limit(limit)
-        )
-    ).all()
-    return tuple(
-        {"workflow_id": workflow_id, "object_key": object_key} for workflow_id, object_key in rows
-    )
-
-
-async def delete_export_artifact_objects(
-    artifacts: tuple[dict[str, str], ...],
-) -> dict[str, Any]:
-    store = get_object_store()
-    removed = 0
-    for artifact in artifacts:
-        if await store.delete(artifact["object_key"]):
-            removed += 1
-    return {
-        "workflow_ids": [artifact["workflow_id"] for artifact in artifacts],
-        "removed": removed,
-    }
-
-
-async def delete_export_artifact_records(db: AsyncSession, workflow_ids: list[str]) -> int:
-    if not workflow_ids:
-        return 0
-    await db.execute(delete(ExportArtifact).where(ExportArtifact.workflow_id.in_(workflow_ids)))
-    return len(workflow_ids)
 
 
 def _cleanup_exports(directory: Path, cutoff: datetime) -> int:
@@ -307,58 +272,44 @@ async def check_objects(db: AsyncSession) -> list[str]:
 
 async def scan_objects(
     db: AsyncSession, *, retention_hours: int | None = None
-) -> tuple[list[str], tuple[str, ...], dict[str, int]]:
+) -> tuple[list[str], tuple[str, ...], dict[str, dict]]:
     """Check references and find old orphans using one Object Store listing."""
     effective_hours = retention_hours or get_settings().object_orphan_retention_hours
     cutoff = datetime.now(UTC) - timedelta(hours=effective_hours)
     revisions = (
+        await db.execute(select(FileRevision.id, FileRevision.file, FileRevision.thumbnail))
+    ).all()
+    attachments = (
         await db.execute(
             select(
-                FileRevision.id,
-                FileRevision.object_key,
-                FileRevision.size,
-                FileRevision.thumbnail_object_key,
-                FileRevision.thumbnail_size,
+                Attachment.id,
+                Attachment.file["filename"].as_string().label("object_key"),
+                Attachment.file["size"].as_integer().label("size"),
             )
         )
     ).all()
-    attachments = (
-        await db.execute(select(Attachment.id, Attachment.object_key, Attachment.size))
-    ).all()
-    export_keys = set((await db.scalars(select(ExportArtifact.object_key))).all())
-    referenced = (
-        {revision.object_key for revision in revisions}
-        | {revision.thumbnail_object_key for revision in revisions if revision.thumbnail_object_key}
-        | {attachment.object_key for attachment in attachments}
-        | export_keys
-    )
-    for records in (await db.scalars(select(ImportBatch.records))).all():
-        referenced.update(_import_object_keys(records))
     await db.rollback()
-    active = await list_active_workflows()
-    active_keys = set().union(
-        *(
-            _workflow_owned_object_keys(workflow.attributes)
-            for workflow in active
-            if workflow.name != "documents.cleanup_objects"
-        )
-    )
     stored = {item.key: item async for item in get_object_store().iter_prefix("")}
+    protected = await protected_object_keys(db)
     errors: list[str] = []
-    thumbnail_sizes: dict[str, int] = {}
+    thumbnail_sizes: dict[str, dict] = {}
     for revision in revisions:
-        item = stored.get(revision.object_key)
+        item = stored.get(revision.file.path)
         if item is None:
             errors.append(f"{revision.id}: missing object")
-        elif item.size != revision.size:
+        elif item.size != revision.file.size:
             errors.append(f"{revision.id}: size mismatch")
-        if revision.thumbnail_object_key:
-            thumbnail = stored.get(revision.thumbnail_object_key)
+        descriptor = revision.thumbnail
+        if descriptor is not None:
+            thumbnail = stored.get(descriptor.path)
             if thumbnail is None:
                 errors.append(f"{revision.id}: missing thumbnail")
-            elif revision.thumbnail_size is None:
-                thumbnail_sizes[revision.id] = thumbnail.size
-            elif thumbnail.size != revision.thumbnail_size:
+            elif descriptor.size is None:
+                thumbnail_sizes[str(revision.id)] = {
+                    "path": descriptor.path,
+                    "size": thumbnail.size,
+                }
+            elif thumbnail.size != descriptor.size:
                 errors.append(f"{revision.id}: thumbnail size mismatch")
     for attachment in attachments:
         item = stored.get(attachment.object_key)
@@ -371,51 +322,9 @@ async def scan_objects(
         for item in stored.values()
         if is_managed_object_key(item.key)
         and item.last_modified < cutoff
-        and item.key not in referenced
-        and item.key not in active_keys
+        and item.key not in protected
     )
     return errors, candidates, thumbnail_sizes
-
-
-def _import_object_keys(records_json: str) -> set[str]:
-    try:
-        rows = json.loads(records_json)
-    except (json.JSONDecodeError, TypeError):
-        return set()
-    if not isinstance(rows, list):
-        return set()
-    return {
-        key
-        for row in rows
-        if isinstance(row, dict)
-        and isinstance((pdf := row.get("_pdf")), dict)
-        and isinstance((key := pdf.get("object_key")), str)
-    }
-
-
-async def _referenced_object_keys(db: AsyncSession) -> set[str]:
-    keys = set((await db.scalars(select(FileRevision.object_key))).all())
-    keys.update(
-        key for key in (await db.scalars(select(FileRevision.thumbnail_object_key))).all() if key
-    )
-    keys.update((await db.scalars(select(Attachment.object_key))).all())
-    for records in (await db.scalars(select(ImportBatch.records))).all():
-        keys.update(_import_object_keys(records))
-    return keys
-
-
-def _workflow_owned_object_keys(attributes: dict[str, Any] | None) -> set[str]:
-    if not attributes:
-        return set()
-    raw_keys = attributes.get("object_keys")
-    keys = (
-        {key for key in raw_keys if isinstance(key, str)}
-        if isinstance(raw_keys, (list, tuple))
-        else set()
-    )
-    if isinstance((key := attributes.get("object_key")), str):
-        keys.add(key)
-    return keys
 
 
 async def reconcile_objects(
@@ -429,35 +338,15 @@ async def reconcile_objects(
 async def delete_orphan_candidates(
     db: AsyncSession, candidates: tuple[str, ...]
 ) -> tuple[str, ...]:
-    """Recheck all candidate protections once, then delete remaining objects."""
-    if not candidates:
-        return ()
-    referenced = await _referenced_object_keys(db)
-    await db.rollback()
-    active = await list_active_workflows()
-    active_keys = set().union(
-        *(
-            _workflow_owned_object_keys(workflow.attributes)
-            for workflow in active
-            if workflow.name != "documents.cleanup_objects"
-        )
-    )
-    deleted: list[str] = []
-    store = get_object_store()
-    for key in candidates:
-        if key in referenced or key in active_keys:
-            continue
-        if await store.delete(key):
-            deleted.append(key)
-    return tuple(deleted)
+    """Let Documents recheck the scan's candidates immediately before physical deletion."""
+    return await delete_unreferenced_objects(db, candidates)
 
 
 async def get_backup_artifact(db: AsyncSession, admin: User, workflow_id: str) -> tuple[Path, str]:
-    from quirebase.core.errors import ResourceNotFound, ResourceUnavailable
+    from quirebase.access import SystemAction, require_system_action
+    from quirebase.core.errors import ResourceNotFound
 
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
-    del db
+    await require_system_action(db, admin, SystemAction.backup_read)
     workflow = await durable_operations().get(workflow_id)
     if (
         workflow is None

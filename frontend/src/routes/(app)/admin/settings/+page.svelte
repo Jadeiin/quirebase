@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { createMutation, createQuery } from '@tanstack/svelte-query';
-	import type { components } from '$lib/api/schema';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import AdminNotices from '$lib/features/admin/AdminNotices.svelte';
-	import AdminSectionState from '$lib/features/admin/AdminSectionState.svelte';
-	import AdminSettings from '$lib/features/admin/AdminSettings.svelte';
-	import { getAdminFilters } from '$lib/features/admin/filters';
-	import { adminMutationOptions } from '$lib/features/admin/mutations';
-	import { adminSettingsQuery } from '$lib/features/admin/queries';
-	import { msg, t, type MessageKey } from '$lib/i18n';
+	import type { components } from '#lib/api/schema.js';
+	import { apiRequest } from '#lib/api/client.js';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import AdminNotices from '#lib/features/admin/AdminNotices.svelte';
+	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
+	import AdminSettings from '#lib/features/admin/AdminSettings.svelte';
+	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { adminMutationOptions } from '#lib/features/admin/mutations.js';
+	import { adminSettingsQuery } from '#lib/features/admin/queries.js';
+	import { msg, t, type MessageKey } from '#lib/i18n.js';
 
 	type Settings = components['schemas']['AdminSettingsView'];
 
@@ -22,6 +22,8 @@
 	);
 	const busy = $derived(adminMutation.isPending);
 	const settingFields: ReadonlyArray<readonly [keyof Settings, MessageKey]> = [
+		['registration_policy', msg('Registration policy')],
+		['workspace_creation_policy', msg('Workspace creation policy')],
 		['metadata_contact_email', msg('Metadata contact email')],
 		['ncbi_api_key', msg('NCBI API key')],
 		['openalex_api_key', msg('OpenAlex API key')],

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from inquiro import (
     CandidateNotFound,
@@ -12,12 +11,14 @@ from inquiro import (
     DocumentRequest,
     InvalidPdfResponse,
     InvalidProviderRequest,
+    MetadataProviderChoices,
     PdfAccessDenied,
     PdfNotAvailable,
     ProviderConfig,
     ProviderRuntime,
     ProviderUnavailable,
     SearchQuery,
+    metadata_provider_choices,
 )
 
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
@@ -33,6 +34,10 @@ class RemotePdf:
     content: AsyncIterator[bytes]
     filename: str
     media_type: str
+
+
+def get_metadata_provider_choices(settings: Settings) -> MetadataProviderChoices:
+    return metadata_provider_choices(provider_config(settings))
 
 
 def provider_config(settings: Settings) -> ProviderConfig:
@@ -104,25 +109,3 @@ async def search_candidates(query: SearchQuery, settings: Settings) -> Candidate
         raise ResourceNotFound(str(error)) from error
     except ProviderUnavailable as error:
         raise UpstreamServiceError(str(error)) from error
-
-
-def candidate_record_values(record: CandidateRecord) -> dict[str, Any]:
-    identifiers = {identifier.provider: identifier.value for identifier in record.identifiers}
-    return {
-        "title": record.title,
-        "abstract": record.abstract,
-        "authors": record.authors,
-        "keywords": record.keywords,
-        "publication_date": record.publication_date,
-        "publication_title": record.publication_title,
-        "journal_abbreviation": record.journal_abbreviation,
-        "volume": record.volume,
-        "issue": record.issue,
-        "pages": record.pages,
-        "publisher": record.publisher,
-        "affiliation": record.affiliation,
-        "doi": record.doi,
-        "urls": record.urls,
-        "identifiers": json.dumps(identifiers) if identifiers else None,
-        "reference_type": record.reference_type,
-    }

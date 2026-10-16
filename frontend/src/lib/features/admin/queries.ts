@@ -1,12 +1,13 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
-import type { components } from '$lib/api/schema';
+import { apiRequest } from '#lib/api/client.js';
+import type { components } from '#lib/api/schema.js';
 
 export type AdminSection =
-	'overview' | 'users' | 'projects' | 'items' | 'audit' | 'workflows' | 'settings' | 'maintenance';
+	'overview' | 'users' | 'workspaces' | 'audit' | 'workflows' | 'settings' | 'maintenance';
 
 export type AdminFilters = {
 	page: number;
+	pageSize: number;
 	search: string;
 	filterA: string;
 	filterB: string;
@@ -20,7 +21,13 @@ export function adminOverviewQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('overview', filters),
 		enabled,
-		queryFn: ({ signal }) => apiRequest('GET', '/admin/overview', { signal })
+		queryFn: ({ signal }) =>
+			apiRequest('GET', '/admin/overview', {
+				params: {
+					query: { limit: filters.pageSize, offset: (filters.page - 1) * filters.pageSize }
+				},
+				signal
+			})
 	});
 }
 
@@ -32,7 +39,8 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 			apiRequest('GET', '/admin/users', {
 				params: {
 					query: {
-						page: filters.page,
+						limit: filters.pageSize,
+						offset: (filters.page - 1) * filters.pageSize,
 						search: filters.search,
 						role: filters.filterA,
 						active: filters.filterB ? filters.filterB === 'true' : undefined
@@ -43,40 +51,11 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 	});
 }
 
-export function adminProjectsQuery(filters: AdminFilters, enabled = true) {
+export function adminWorkspacesQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
-		queryKey: adminKeys.section('projects', filters),
+		queryKey: adminKeys.section('workspaces', filters),
 		enabled,
-		queryFn: ({ signal }) =>
-			apiRequest('GET', '/admin/projects', {
-				params: {
-					query: {
-						page: filters.page,
-						search: filters.search,
-						state: filters.filterA,
-						visibility: filters.filterB
-					}
-				},
-				signal
-			})
-	});
-}
-
-export function adminItemsQuery(filters: AdminFilters, enabled = true) {
-	return queryOptions({
-		queryKey: adminKeys.section('items', filters),
-		enabled,
-		queryFn: ({ signal }) =>
-			apiRequest('GET', '/admin/items', {
-				params: {
-					query: {
-						page: filters.page,
-						search: filters.search,
-						has_pdf: filters.filterA ? filters.filterA === 'true' : undefined
-					}
-				},
-				signal
-			})
+		queryFn: ({ signal }) => apiRequest('GET', '/admin/workspaces', { signal })
 	});
 }
 
@@ -88,7 +67,8 @@ export function adminAuditQuery(filters: AdminFilters, enabled = true) {
 			apiRequest('GET', '/admin/audit', {
 				params: {
 					query: {
-						page: filters.page,
+						limit: filters.pageSize,
+						offset: (filters.page - 1) * filters.pageSize,
 						search: filters.search,
 						action: filters.filterA,
 						target_type: filters.filterB
@@ -103,9 +83,17 @@ export function adminWorkflowsQuery(filters: AdminFilters, enabled = true) {
 	return queryOptions({
 		queryKey: adminKeys.section('workflows', filters),
 		enabled,
+		// Workflow states and totals can change while navigating history.
+		staleTime: 0,
 		queryFn: ({ signal }) =>
 			apiRequest('GET', '/admin/workflows', {
-				params: { query: { state: filters.filterA } },
+				params: {
+					query: {
+						state: filters.filterA,
+						limit: filters.pageSize,
+						offset: (filters.page - 1) * filters.pageSize
+					}
+				},
 				signal
 			})
 	});
@@ -129,9 +117,8 @@ export function adminMaintenanceQuery(filters: AdminFilters, enabled = true) {
 
 export type AdminOverview = components['schemas']['AdminOverviewView'];
 export type AdminUsers = components['schemas']['AdminUsersView'];
-export type AdminProjects = components['schemas']['AdminProjectsView'];
-export type AdminItems = components['schemas']['AdminItemsView'];
-export type AdminAudit = components['schemas']['AdminAuditView'];
-export type AdminWorkflows = components['schemas']['AdminWorkflowsView'];
+export type AdminWorkspaces = components['schemas']['AdminWorkspaceView'][];
+export type AdminAudit = components['schemas']['OffsetPagination_AdminAuditEventView_'];
+export type AdminWorkflows = components['schemas']['OffsetPagination_WorkflowSummaryView_'];
 export type AdminSettings = components['schemas']['AdminSettingsView'];
 export type AdminMaintenance = components['schemas']['AdminMaintenanceView'];

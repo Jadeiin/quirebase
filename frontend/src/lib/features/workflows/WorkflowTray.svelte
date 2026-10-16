@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { Popover, Portal } from '@skeletonlabs/skeleton-svelte';
-	import Icon from '$lib/design/Icon.svelte';
-	import PopoverCloseButton from '$lib/design/PopoverCloseButton.svelte';
-	import PopoverTriggerButton from '$lib/design/PopoverTriggerButton.svelte';
-	import { getWorkflowCenter } from '$lib/features/workflows/center.svelte';
-	import WorkflowJobRow from '$lib/features/workflows/WorkflowJobRow.svelte';
-	import { t } from '$lib/i18n';
+	import Icon from '#lib/design/Icon.svelte';
+	import PopoverCloseButton from '#lib/design/PopoverCloseButton.svelte';
+	import PopoverTriggerButton from '#lib/design/PopoverTriggerButton.svelte';
+	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
+	import WorkflowJobRow from '#lib/features/workflows/WorkflowJobRow.svelte';
+	import { t } from '#lib/i18n.js';
 
 	const center = getWorkflowCenter();
 	let panelOpen = $state(false);

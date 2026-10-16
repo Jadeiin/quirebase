@@ -1,26 +1,43 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Literal
 
-from inquiro.canonical import (
-    clean_rich_markup,
-    first_text,
-)
-from inquiro.identifiers import parse_article_number
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import clean_rich_markup, first_text
+from inquiro.identifiers import normalize_doi, parse_ieee
 from inquiro.models import (
     AcquiredDocument,
     CandidateNotFound,
+    CandidatePage,
+    CandidateRecord,
+    Identifier,
     PdfAccessDenied,
     PdfNotAvailable,
-    ProviderRecord,
-    ProviderSearchPage,
-    ProviderSearchRecord,
+    ProviderConfig,
     ProviderUnavailable,
     SearchClause,
+    SearchQuery,
 )
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._contracts import ProviderDefinition
+from inquiro.providers._payload import (
+    affiliation_values,
+    keyword_values,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
+    unique_links,
+)
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from inquiro.transport import BoundedTransport
 _IEEE_FIELDS = {
     "any": None,
     "title": '"Document Title"',
@@ -30,7 +47,7 @@ _IEEE_FIELDS = {
 }
 
 
-def _ieee_boolean_query(clauses: list[SearchClause]) -> str:
+def _ieee_boolean_query(clauses: Sequence[SearchClause]) -> str:
     parts = []
     for index, clause in enumerate(clauses):
         value = clause.term.replace('"', " ").replace("\\", " ").strip()
@@ -45,17 +62,102 @@ def _ieee_boolean_query(clauses: list[SearchClause]) -> str:
     return " ".join(parts)
 
 
+def _contributors(article: dict) -> tuple[dict, ...] | None:
+    entries = (article.get("authors") or {}).get("authors")
+    if not isinstance(entries, list):
+        return None
+    authors = []
+    for author in entries:
+        if not (name := first_text(author.get("full_name"))):
+            continue
+        affiliation = author.get("affiliation")
+        if isinstance(affiliation, (str, dict)):
+            affiliation = [affiliation]
+        orcid = first_text(author.get("orcid"))
+        authors.append(
+            source_credit(
+                display_name=name,
+                family_name=first_text(author.get("last_name")),
+                given_name=first_text(author.get("first_name")),
+                identifiers=(Identifier("orcid", orcid),) if orcid else (),
+                affiliations=affiliation_values(affiliation),
+            )
+        )
+    return tuple(authors) or None
+
+
+def _links(article: dict, article_number: str) -> tuple[dict, ...]:
+    links = [
+        source_link(f"https://ieeexplore.ieee.org/document/{article_number}", kind="landing_page")
+    ]
+    fields: tuple[tuple[str, Literal["landing_page", "full_text"], str | None], ...] = (
+        ("abstract_url", "landing_page", None),
+        ("html_url", "full_text", "text/html"),
+        ("pdf_url", "full_text", "application/pdf"),
+    )
+    for key, kind, media_type in fields:
+        if url := first_text(article.get(key)):
+            links.append(source_link(url, kind=kind, media_type=media_type))
+    return unique_links(*links)
+
+
+def _keywords(article: dict) -> tuple[str, ...] | None:
+    terms = article.get("index_terms")
+    if not isinstance(terms, dict):
+        return None
+    return keyword_values([
+        term
+        for collection in terms.values()
+        if isinstance(collection, dict)
+        for term in collection.get("terms", [])
+    ])
+
+
+def _record(article: dict, identifier: Identifier) -> CandidateRecord:
+    title = clean_rich_markup(first_text(article.get("title")))
+    if not title:
+        raise CandidateNotFound("IEEE Xplore article was not found")
+    doi = normalize_doi(first_text(article.get("doi")) or "") or None
+    article_number = first_text(article.get("article_number"))
+    identifiers = {"ieee": article_number}
+    if doi:
+        identifiers["doi"] = doi
+    return CandidateRecord(
+        provider="ieee",
+        lookup_identifier=identifier,
+        work=compact({
+            "id": source_work_id(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
+            ),
+            "type": "Other",
+            "title": title,
+            "description": clean_rich_markup(first_text(article.get("abstract"))),
+            "contributors": _contributors(article),
+            "date_published": first_text(article.get("publication_year")),
+            "identifiers": source_identifiers(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
+            ),
+            "subjects": source_subjects(_keywords(article) or ()),
+            "container": compact({"title": first_text(article.get("publication_title"))}),
+            "url": source_landing_url(_links(article, article_number) if article_number else None),
+            "files": source_files(_links(article, article_number) if article_number else None),
+        }),
+    )
+
+
 class IeeeLookupAdapter:
     async def lookup(
-        self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
-    ) -> ProviderRecord:
-        api_key = getattr(settings, "ieee_api_key", None) or ""
-        params = {
-            "apikey": api_key,
-            "format": "json",
-            "article_number": value,
-        }
-        body = await client._get(endpoint, params)
+        self,
+        client: BoundedTransport,
+        identifier: Identifier,
+        settings: ProviderConfig,
+        *,
+        endpoint: str,
+    ) -> CandidateRecord:
+        value = identifier.value
+        api_key = settings.ieee_api_key or ""
+        params = {"apikey": api_key, "format": "json", "article_number": value}
+        body = await client.get(endpoint, params)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -64,67 +166,38 @@ class IeeeLookupAdapter:
         if not articles:
             raise CandidateNotFound("IEEE Xplore article was not found")
         article = articles[0]
-        title = clean_rich_markup(first_text(article.get("title")))
-        if not title:
-            raise CandidateNotFound("IEEE Xplore article was not found")
-        doi = first_text(article.get("doi"))
-        article_number = first_text(article.get("article_number")) or value
-        identifiers = {"article_number": article_number}
-        if doi:
-            identifiers["doi"] = doi
-        authors = "; ".join(
-            author.get("full_name", "")
-            for author in (article.get("authors") or {}).get("authors", [])
-            if author.get("full_name")
-        )
-        return ProviderRecord(
-            title=title,
-            abstract=clean_rich_markup(first_text(article.get("abstract"))),
-            authors=authors or None,
-            keywords=None,
-            publication_date=first_text(article.get("publication_year")),
-            publication_title=first_text(article.get("publication_title")),
-            doi=doi,
-            urls=f"https://ieeexplore.ieee.org/document/{value}",
-            identifiers=json.dumps(identifiers),
-            reference_type="article",
-        )
+        return _record(article, identifier)
 
 
 class IeeeSearchAdapter:
     async def search(
         self,
-        client: ProviderContext,
-        clauses: list[SearchClause],
+        client: BoundedTransport,
+        request: SearchQuery,
         *,
-        page: int,
-        per_page: int,
-        sort: str,
-        year_from: int | None,
-        year_to: int | None,
-        settings: Any,
+        settings: ProviderConfig,
         endpoint: str,
-    ) -> ProviderSearchPage:
-        api_key = getattr(settings, "ieee_api_key", None) or ""
+    ) -> CandidatePage:
+        api_key = settings.ieee_api_key or ""
         params = {
             "apikey": api_key,
             "format": "json",
-            "querytext": _ieee_boolean_query(clauses),
-            "startRecord": str((page - 1) * per_page + 1),
-            "max_records": str(per_page),
+            "querytext": _ieee_boolean_query(request.clauses),
+            "startRecord": str((request.page - 1) * request.per_page + 1),
+            "max_records": str(request.per_page),
         }
-        if year_from:
-            params["start_year"] = str(year_from)
-        if year_to:
-            params["end_year"] = str(year_to)
-        if sort == "published":
+        if request.year_from:
+            params["start_year"] = str(request.year_from)
+        if request.year_to:
+            params["end_year"] = str(request.year_to)
+        if request.sort == "published":
             params["sort_field"] = "publication_year"
             params["sort_order"] = "desc"
-        elif sort == "cited":
+        elif request.sort == "cited":
             params["sort_field"] = "article_citations"
             params["sort_order"] = "desc"
         try:
-            payload = json.loads(await client._get(endpoint, params))
+            payload = json.loads(await client.get(endpoint, params))
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("IEEE Xplore returned invalid search results") from error
         results = []
@@ -138,43 +211,28 @@ class IeeeSearchAdapter:
             if identifier is None:
                 continue
             results.append(
-                ProviderSearchRecord(
-                    provider="ieee",
-                    identifier_provider="doi" if doi else "article_number",
-                    identifier=identifier,
-                    title=title,
-                    authors="; ".join(
-                        author.get("full_name", "")
-                        for author in (article.get("authors") or {}).get("authors", [])
-                        if author.get("full_name")
-                    )
-                    or None,
-                    publication_title=first_text(article.get("publication_title")),
-                    publication_date=first_text(article.get("publication_year")),
-                    abstract=first_text(article.get("abstract")),
+                _record(
+                    article,
+                    Identifier("doi", normalize_doi(doi))
+                    if doi
+                    else Identifier("ieee", identifier),
                 )
             )
-        return ProviderSearchPage(
-            "ieee", results, int(payload.get("total_records", len(results))), page, per_page
+        return CandidatePage(
+            "ieee",
+            tuple(results),
+            int(payload.get("total_records", len(results))),
+            request.page,
+            request.per_page,
         )
 
 
 class IeeeDocumentAdapter:
     async def acquire(
-        self,
-        client: ProviderContext,
-        value: str,
-        settings: Any,
-        *,
-        endpoint: str,
+        self, client: BoundedTransport, value: str, settings: ProviderConfig, *, endpoint: str
     ) -> AcquiredDocument:
-        body = await client._get(
-            endpoint,
-            {
-                "apikey": settings.ieee_api_key,
-                "format": "json",
-                "article_number": value,
-            },
+        body = await client.get(
+            endpoint, {"apikey": settings.ieee_api_key, "format": "json", "article_number": value}
         )
         try:
             payload = json.loads(body)
@@ -193,23 +251,19 @@ class IeeeDocumentAdapter:
         access_type = (first_text(article.get("accessType")) or "").lower()
         if access_type not in {"open access", "ephemera"}:
             raise PdfAccessDenied("IEEE Xplore PDF is not openly accessible")
-        # IEEE's /fulltext API returns structured article text; pdf_url is the PDF resource.
         pdf_url = first_text(article.get("pdf_url"))
         if not pdf_url:
             raise PdfNotAvailable("IEEE Xplore did not provide a PDF link")
-        return await client._download_pdf(
-            pdf_url,
-            filename=f"{value}.pdf",
-            provider="ieee",
-        )
+        return await client.download_pdf(pdf_url, filename=f"{value}.pdf", provider="ieee")
 
 
 IEEE_PROVIDER = ProviderDefinition(
     name="ieee",
     display_name="IEEE Xplore",
-    identifier_aliases=("article_number",),
-    identifier_parser=parse_article_number,
+    identifier_namespace="ieee",
+    identifier_parser=parse_ieee,
     search_adapter=IeeeSearchAdapter(),
+    search_sorts=("relevance", "published", "cited"),
     lookup_adapter=IeeeLookupAdapter(),
     document_adapter=IeeeDocumentAdapter(),
     endpoint="https://ieeexploreapi.ieee.org/api/v1/search/articles",

@@ -1,27 +1,31 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import DateField from '#lib/design/DateField.svelte';
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiRequest } from '$lib/api/client';
-	import { apiErrorMessage } from '$lib/api/errors';
-	import type { components } from '$lib/api/schema';
-	import Badge from '$lib/design/Badge.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import Pagination from '$lib/design/Pagination.svelte';
-	import Panel from '$lib/design/Panel.svelte';
-	import RichText from '$lib/design/RichText.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { discoveryProvidersQuery } from '$lib/features/discovery/queries';
-	import { t } from '$lib/i18n';
-	import Button from '$lib/design/Button.svelte';
+	import { apiErrorMessage } from '#lib/api/errors.js';
+	import type { components } from '#lib/api/schema.js';
+	import Notice from '#lib/design/Notice.svelte';
+	import Pagination from '#lib/design/Pagination.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import RichText from '#lib/design/RichText.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
+	import { t } from '#lib/i18n.js';
+	import Button from '#lib/design/Button.svelte';
+	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	type Results = components['schemas']['CandidatePageView'];
 	type Candidate = components['schemas']['CandidateView'];
 	type Clause = { id: number; field: string; operator: string; term: string };
+	type Sort = components['schemas']['ProviderChoice']['sorts'][number];
 
 	let nextClauseId = 2;
 	let provider = $state('openalex');
-	let sort = $state('relevance');
+	let sort = $state<Sort>('relevance');
+	let pageSize = $state(20);
 	let yearFrom = $state('');
 	let yearTo = $state('');
 	let clauses = $state<Clause[]>([{ id: 1, field: 'any', operator: 'and', term: '' }]);
@@ -31,9 +35,28 @@
 	let results = $state<Results | null>(null);
 	let searchAbort: AbortController | null = null;
 
-	const providers = createQuery(() => discoveryProvidersQuery());
+	const workspace = getWorkspaceContext();
+	const providers = createQuery(() => discoveryProvidersQuery(workspace.workspaceId));
+	const selectedProvider = $derived(
+		providers.data?.search.find((option) => option.id === provider)
+	);
+	const sortLabels = $derived({
+		relevance: $t('Relevance'),
+		published: $t('Publication date'),
+		cited: $t('Citation count'),
+		updated: $t('Updated')
+	});
+	$effect(() => {
+		if (!providers.data) return;
+		if (!selectedProvider) {
+			provider = providers.data.search[0]?.id ?? '';
+		} else if (!selectedProvider.sorts.includes(sort)) {
+			sort = selectedProvider.sorts[0];
+		}
+	});
 
 	function addClause() {
+		if (!providers.data || clauses.length >= providers.data.max_search_clauses) return;
 		clauses.push({ id: nextClauseId++, field: 'any', operator: 'and', term: '' });
 	}
 
@@ -42,18 +65,19 @@
 	}
 
 	async function search(page = 1) {
+		if (!selectedProvider) return;
 		searchAbort?.abort();
 		const controller = new AbortController();
 		searchAbort = controller;
 		busy = true;
 		error = '';
 		try {
-			results = await apiRequest('POST', '/discovery/search', {
+			results = await workspace.api.request('POST', '/workspaces/{workspace_id}/discovery/search', {
 				body: {
 					provider,
 					clauses: clauses.map(({ field, operator, term }) => ({ field, operator, term })),
 					page,
-					per_page: 20,
+					per_page: pageSize,
 					sort,
 					year_from: yearFrom ? Number(yearFrom) : null,
 					year_to: yearTo ? Number(yearTo) : null
@@ -62,6 +86,7 @@
 			});
 		} catch (reason) {
 			if (controller.signal.aborted) return;
+			if (results) pageSize = results.per_page;
 			error = apiErrorMessage(reason, $t('Search failed'));
 		} finally {
 			if (searchAbort === controller) {
@@ -72,14 +97,23 @@
 	}
 
 	async function review(candidate: Candidate) {
+		if (!workspace.can('item.create')) return;
 		const key = `${candidate.identifier_provider}:${candidate.identifier}`;
 		importing = key;
 		error = '';
 		try {
-			const batch = await apiRequest('POST', '/imports/identifier', {
-				body: { identifier: candidate.identifier, provider: candidate.identifier_provider }
-			});
-			await goto(resolve(`/import?batch=${encodeURIComponent(batch.id)}`));
+			const batch = await workspace.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/imports/identifiers',
+				{
+					body: { identifiers: [candidate.identifier], provider: candidate.identifier_provider }
+				}
+			);
+			await goto(
+				resolve(
+					workspaceHref(workspace.workspaceId, `import?batch=${encodeURIComponent(batch.id)}`)
+				)
+			);
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Import preview failed'));
 		} finally {
@@ -116,7 +150,7 @@
 		<label class="grid grid-cols-1 gap-1">
 			<span class="text-sm font-semibold">{$t('Provider')}</span>
 			<select class="select" bind:value={provider}>
-				{#each providers.data ?? [] as option (option.id)}
+				{#each providers.data?.search ?? [] as option (option.id)}
 					<option value={option.id}>{option.name}</option>
 				{/each}
 			</select>
@@ -124,19 +158,13 @@
 		<label class="grid grid-cols-1 gap-1">
 			<span class="text-sm font-semibold">{$t('Sort')}</span>
 			<select class="select" bind:value={sort}>
-				<option value="relevance">{$t('Relevance')}</option>
-				<option value="published">{$t('Publication date')}</option>
-				<option value="cited">{$t('Citation count')}</option>
+				{#each selectedProvider?.sorts ?? [] as option (option)}
+					<option value={option}>{sortLabels[option]}</option>
+				{/each}
 			</select>
 		</label>
-		<label class="grid grid-cols-1 gap-1">
-			<span class="text-sm font-semibold">{$t('From year')}</span>
-			<input class="input" type="number" min="1000" max="9999" bind:value={yearFrom} />
-		</label>
-		<label class="grid grid-cols-1 gap-1">
-			<span class="text-sm font-semibold">{$t('To year')}</span>
-			<input class="input" type="number" min="1000" max="9999" bind:value={yearTo} />
-		</label>
+		<DateField precision="year" label={$t('From year')} min="1000-01-01" bind:value={yearFrom} />
+		<DateField precision="year" label={$t('To year')} min="1000-01-01" bind:value={yearTo} />
 	</div>
 
 	<div class="grid grid-cols-1 gap-2" aria-label={$t('Search conditions')}>
@@ -169,11 +197,13 @@
 		{/each}
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
-		<Button type="button" disabled={clauses.length >= 5} onclick={addClause}
-			>{$t('Add condition')}</Button
+		<Button
+			type="button"
+			disabled={!providers.data || clauses.length >= providers.data.max_search_clauses}
+			onclick={addClause}>{$t('Add condition')}</Button
 		>
 		<span class="grow basis-64"></span>
-		<Button variant="filled" disabled={busy || providers.isPending}
+		<Button variant="filled" disabled={busy || !selectedProvider}
 			>{busy ? $t('Searching…') : $t('Search Discovery')}</Button
 		>
 	</div>
@@ -192,13 +222,13 @@
 				</p>{/if}
 		</div>
 	</SectionHeader>
+	{#if busy}<LoadingState label={$t('Searching…')} />{/if}
 	{#each results?.results ?? [] as candidate (`${candidate.provider}:${candidate.identifier_provider}:${candidate.identifier}`)}
 		<article class="border-b border-surface-300-700 py-5 last:border-0">
 			<div class="flex flex-wrap items-start justify-between gap-4">
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
 						<h3 class="mb-1 text-lg"><RichText html={candidate.title} /></h3>
-						{#if candidate.imported}<Badge variant="success">{$t('Already in Library')}</Badge>{/if}
 					</div>
 					<p class="mb-1 text-sm text-surface-700-300">
 						{candidate.authors ?? $t('Unknown contributors')}
@@ -217,7 +247,7 @@
 						>{candidate.identifier_provider}:{candidate.identifier}</code
 					>
 				</div>
-				{#if !candidate.imported}
+				{#if workspace.can('item.create')}
 					<Button variant="filled" disabled={importing !== ''} onclick={() => review(candidate)}
 						>{importing === `${candidate.identifier_provider}:${candidate.identifier}`
 							? $t('Preparing…')
@@ -229,10 +259,16 @@
 	{:else}
 		<p class="text-surface-600-400">{$t('Search results will appear here.')}</p>
 	{/each}
-	{#if results && pageCount > 1}
+	{#if results}
 		<Pagination
 			page={results.page}
 			{pageCount}
+			{pageSize}
+			total={results.total}
+			onPageSize={(size) => {
+				pageSize = size;
+				void search();
+			}}
 			{busy}
 			label={$t('Discovery result pages')}
 			onPage={(next) => void search(next)}

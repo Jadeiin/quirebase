@@ -1,13 +1,178 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from types import SimpleNamespace
 
 import httpx2
 import pytest
-from inquiro import Identifier, ProviderUnavailable, SearchClause, SearchQuery
+from inquiro import (
+    Identifier,
+    InvalidProviderRequest,
+    ProviderConfig,
+    ProviderUnavailable,
+    SearchClause,
+    SearchQuery,
+    metadata_provider_choices,
+)
+from inquiro.work import work_doi, work_identifiers
 from inquiro_provider_helpers import provider_runtime
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_provider_options_follow_capabilities_and_configured_credentials(configured):
+    options = metadata_provider_choices(
+        ProviderConfig(
+            nasa_ads_token="configured-token" if configured else None,
+            ieee_api_key="configured-key" if configured else None,
+        )
+    )
+    search = {choice.id: choice for choice in options.search}
+    lookup = {choice.id for choice in options.lookup}
+    assert ("nasa_ads" in search) is configured
+    assert ("ieee" in lookup) is configured
+    assert "datacite" in lookup and "datacite" not in search
+    assert "pmc" not in lookup and "pmc" in search
+    # The OpenAlex key is required for documents, not metadata.
+    assert "openalex" in search and "openalex" in lookup
+    assert "cited" not in search["arxiv"].sorts
+    assert "configured-token" not in repr(asdict(options))
+    assert "configured-key" not in repr(asdict(options))
+    namespaces = {choice.id: choice.identifier_namespaces for choice in options.lookup}
+    for provider, namespace in {
+        "crossref": ("doi",),
+        "openlibrary": ("isbn",),
+        "pubmed": ("pmid",),
+        "openalex": ("openalex", "doi"),
+    }.items():
+        assert namespaces[provider] == namespace
+
+
+@pytest.mark.parametrize("provider", ["arxiv", "pubmed", "pmc", "openlibrary"])
+async def test_unsupported_citation_sort_is_rejected_before_request(provider):
+    with pytest.raises(InvalidProviderRequest, match="sort is not supported"):
+        await search_metadata(provider, [SearchClause("any", "and", "test")], sort="cited")
+
+
+@pytest.mark.parametrize(
+    ("sort", "expected"),
+    [
+        ("relevance", "relevance_score:desc"),
+        ("published", "publication_date:desc"),
+        ("cited", "cited_by_count:desc"),
+    ],
+)
+async def test_openalex_transmits_the_selected_sort(sort, expected):
+    def respond(request):
+        assert request.url.params["sort"] == expected
+        return httpx2.Response(200, json={"results": [], "meta": {"count": 0}})
+
+    await search_metadata(
+        "openalex",
+        [SearchClause("any", "and", "test")],
+        sort=sort,
+        transport=httpx2.MockTransport(respond),
+    )
+
+
+@pytest.mark.parametrize(
+    ("provider", "value", "entry"),
+    [
+        (
+            "crossref",
+            "10.1000/shared",
+            {
+                "DOI": "https://doi.org/10.1000/shared",
+                "title": ["Shared <i>title</i>"],
+                "abstract": "Uses <sup>2</sup>",
+                "subject": ["Alpha; beta"],
+                "published-print": {"date-parts": [[2025, 2]]},
+                "type": "journal-article",
+            },
+        ),
+        (
+            "openalex",
+            "W1230000000",
+            {
+                "id": "https://openalex.org/W1230000000",
+                "doi": "https://doi.org/10.1000/shared",
+                "display_name": "Shared <i>title</i>",
+                "abstract_inverted_index": {"Uses": [0], "<sup>2</sup>": [1]},
+                "primary_topic": {
+                    "id": "https://openalex.org/T1234567890",
+                    "display_name": "Alpha; beta",
+                },
+                "publication_date": "2025-02",
+                "type": "article",
+            },
+        ),
+        (
+            "ieee",
+            "1234567",
+            {
+                "article_number": "1234567",
+                "doi": "https://doi.org/10.1000/shared",
+                "title": "Shared <i>title</i>",
+                "abstract": "Uses <sup>2</sup>",
+                "index_terms": {"author_terms": {"terms": ["Alpha; beta"]}},
+                "publication_year": "2025",
+            },
+        ),
+        (
+            "nasa_ads",
+            "2025ApJ...123..456A",
+            {
+                "bibcode": "2025ApJ...123..456A",
+                "doi": ["https://doi.org/10.1000/shared"],
+                "title": ["Shared <i>title</i>"],
+                "abstract": "Uses <sup>2</sup>",
+                "keyword": ["Alpha; beta"],
+                "pubdate": "2025-02",
+            },
+        ),
+    ],
+)
+async def test_lookup_and_search_preserve_the_same_upstream_record_metadata(provider, value, entry):
+    def respond(request):
+        if provider == "crossref":
+            payload = (
+                {"message": {"items": [entry], "total-results": 1}}
+                if request.url.path == "/works"
+                else {"message": entry}
+            )
+        elif provider == "openalex":
+            payload = (
+                {"results": [entry], "meta": {"count": 1}}
+                if request.url.path == "/works"
+                else entry
+            )
+        elif provider == "ieee":
+            payload = {"articles": [entry], "total_records": 1}
+        else:
+            payload = {"response": {"docs": [entry], "numFound": 1}}
+        return httpx2.Response(200, json=payload)
+
+    async with provider_runtime(
+        settings=SimpleNamespace(ieee_api_key="test", nasa_ads_token="test"),
+        transport=httpx2.MockTransport(respond),
+    ) as runtime:
+        lookup = await runtime.lookup(value, provider=provider)
+        page = await runtime.search(
+            SearchQuery(provider, (SearchClause("title", "and", "Shared"),))
+        )
+
+    assert len(page.results) == 1
+    searched = page.results[0]
+    assert searched.work["title"] == "Shared <i>title</i>"
+    assert searched.work.get("description") == "Uses <sup>2</sup>"
+    assert work_doi(searched.work) == "10.1000/shared"
+    assert [row["subject"] for row in searched.work.get("subjects", [])] == ["Alpha; beta"]
+    assert searched.work["type"] == lookup.work["type"]
+    lookup_metadata, search_metadata = lookup.work, searched.work
+    assert {key: value for key, value in search_metadata.items() if key != "id"} == {
+        key: value for key, value in lookup_metadata.items() if key != "id"
+    }
 
 
 async def search_metadata(
@@ -48,7 +213,7 @@ def search_response(request: httpx2.Request) -> httpx2.Response:
                     "total-results": 1,
                     "items": [
                         {
-                            "DOI": "10.1/crossref",
+                            "DOI": "10.1000/crossref",
                             "title": ["Crossref result"],
                             "author": [{"given": "Ada", "family": "Lovelace"}],
                             "container-title": ["Journal"],
@@ -115,9 +280,9 @@ def search_response(request: httpx2.Request) -> httpx2.Response:
             "meta": {"count": 1},
             "results": [
                 {
-                    "id": "https://openalex.org/W99",
+                    "id": "https://openalex.org/W9900000000",
                     "display_name": "OpenAlex result",
-                    "doi": "https://doi.org/10.1/openalex",
+                    "doi": "https://doi.org/10.1000/openalex",
                     "publication_date": "2026-02-01",
                     "type": "article",
                     "authorships": [{"author": {"display_name": "Open Author"}}],
@@ -154,8 +319,25 @@ async def test_search_adapters_normalize_results(provider, title):
         transport=httpx2.MockTransport(search_response),
     )
     assert page.total == 1
-    assert page.results[0].title == title
-    assert page.results[0].identifier
+    assert page.results[0].work["title"] == title
+    assert page.results[0].lookup_identifier
+    record = page.results[0]
+    if provider == "openlibrary":
+        import bibtexparser
+        from inquiro.bibliography import export_bibliography_records
+
+        assert record.work["type"] == "Book"
+        assert record.work["publisher"] == {"name": "Press"}
+        assert "container" not in record.work
+        exported = bibtexparser.loads(export_bibliography_records([record.work], "bibtex"))
+        assert exported.entries[0]["ENTRYTYPE"] == "book"
+        assert exported.entries[0]["publisher"] == "Press"
+        assert "journal" not in exported.entries[0]
+    assert (record.lookup_identifier.provider, record.lookup_identifier.value) in work_identifiers(
+        record.work
+    )
+    if work_doi(record.work):
+        assert ("doi", work_doi(record.work)) in work_identifiers(record.work)
 
 
 async def test_search_rejects_invalid_or_excessive_clauses():
@@ -163,7 +345,7 @@ async def test_search_rejects_invalid_or_excessive_clauses():
         await search_metadata("other", [SearchClause("any", "and", "term")])
     with pytest.raises(ValueError, match="unknown search provider"):
         await search_metadata("datacite", [SearchClause("any", "and", "term")])
-    with pytest.raises(ValueError, match="one to five"):
+    with pytest.raises(ValueError, match="one to 5"):
         await search_metadata("openalex", [SearchClause("any", "and", "term")] * 6)
     with pytest.raises(ValueError, match="clause is invalid"):
         await search_metadata("openalex", [SearchClause("private-field", "and", "term")])
@@ -184,7 +366,7 @@ async def test_openalex_resolves_publication_names_to_source_ids():
         settings=SimpleNamespace(openalex_api_key="test-key"),
         transport=httpx2.MockTransport(search_response),
     )
-    assert page.results[0].title == "OpenAlex result"
+    assert page.results[0].work["title"] == "OpenAlex result"
 
 
 async def test_openalex_supports_adjacent_or_on_same_field():
@@ -290,7 +472,7 @@ def extra_search_response(request: httpx2.Request) -> httpx2.Response:
                         "authors": [{"name": "Open Author"}],
                         "source": "PMC Journal",
                         "pubdate": "2025",
-                        "articleids": [{"idtype": "doi", "value": "10.1/pmc"}],
+                        "articleids": [{"idtype": "doi", "value": "10.1000/pmc"}],
                     }
                 }
             },
@@ -309,7 +491,7 @@ def extra_search_response(request: httpx2.Request) -> httpx2.Response:
                             "author": ["Astro Author"],
                             "pub": "ApJ",
                             "pubdate": "2025-01-01",
-                            "doi": ["10.1/nasa"],
+                            "doi": ["10.1000/nasa"],
                         }
                     ],
                 }
@@ -324,7 +506,7 @@ def extra_search_response(request: httpx2.Request) -> httpx2.Response:
             "articles": [
                 {
                     "title": "IEEE result",
-                    "doi": "10.1/ieee",
+                    "doi": "10.1000/ieee",
                     "publication_title": "IEEE Journal",
                     "publication_year": 2025,
                     "authors": {"authors": [{"full_name": "Ieee Author"}]},
@@ -338,7 +520,7 @@ def extra_search_response(request: httpx2.Request) -> httpx2.Response:
     ("provider", "title", "identifier_provider"),
     [
         ("pmc", "PMC result", "doi"),
-        ("nasa", "NASA ADS result", "doi"),
+        ("nasa_ads", "NASA ADS result", "doi"),
         ("ieee", "IEEE result", "doi"),
     ],
 )
@@ -350,8 +532,8 @@ async def test_extra_search_adapters_normalize_results(provider, title, identifi
         transport=httpx2.MockTransport(extra_search_response),
     )
     assert page.total == 1
-    assert page.results[0].title == title
-    assert page.results[0].identifier.provider == identifier_provider
+    assert page.results[0].work["title"] == title
+    assert page.results[0].lookup_identifier.provider == identifier_provider
 
 
 async def test_pmc_forwards_credentials_to_esearch_and_esummary():
@@ -372,7 +554,7 @@ async def test_pmc_forwards_credentials_to_esearch_and_esummary():
                         "authors": [{"name": "Auth"}],
                         "source": "PMC J",
                         "pubdate": "2025",
-                        "articleids": [{"idtype": "doi", "value": "10.1/pmc999"}],
+                        "articleids": [{"idtype": "doi", "value": "10.1000/pmc999"}],
                     }
                 }
             },
@@ -400,7 +582,7 @@ async def test_pmc_forwards_credentials_to_esearch_and_esummary():
 async def test_credentialed_sources_require_keys():
     with pytest.raises(ProviderUnavailable) as nasa_error:
         await search_metadata(
-            "nasa",
+            "nasa_ads",
             [SearchClause("title", "and", "term")],
             transport=httpx2.MockTransport(extra_search_response),
         )
@@ -454,12 +636,12 @@ async def test_extra_search_fallback_identifiers_without_doi():
         raise NotImplementedError(str(request.url))
 
     nasa_page = await search_metadata(
-        "nasa",
+        "nasa_ads",
         [SearchClause("title", "and", "machine learning")],
         settings=SimpleNamespace(nasa_ads_token="ads-token"),
         transport=httpx2.MockTransport(fallback_response),
     )
-    assert nasa_page.results[0].identifier == Identifier("bibcode", "2025ApJ...123..456A")
+    assert nasa_page.results[0].lookup_identifier == Identifier("bibcode", "2025ApJ...123..456A")
 
     ieee_page = await search_metadata(
         "ieee",
@@ -467,4 +649,114 @@ async def test_extra_search_fallback_identifiers_without_doi():
         settings=SimpleNamespace(ieee_api_key="ieee-key"),
         transport=httpx2.MockTransport(fallback_response),
     )
-    assert ieee_page.results[0].identifier == Identifier("article_number", "9876543")
+    assert ieee_page.results[0].lookup_identifier == Identifier("ieee", "9876543")
+
+
+@pytest.mark.parametrize("provider", ["pubmed", "pmc"])
+async def test_ncbi_search_retains_all_confirmed_identifiers_including_doi(provider):
+    def respond(request):
+        if request.url.path.endswith("esearch.fcgi"):
+            return httpx2.Response(200, json={"esearchresult": {"count": "1", "idlist": ["42"]}})
+        return httpx2.Response(
+            200,
+            json={
+                "result": {
+                    "42": {
+                        "title": "Confirmed identities",
+                        "articleids": [
+                            {"idtype": "doi", "value": "https://doi.org/10.1000/EXAMPLE"},
+                            {"idtype": "pmid", "value": "42"},
+                        ],
+                    }
+                }
+            },
+        )
+
+    page = await search_metadata(
+        provider,
+        [SearchClause("title", "and", "Confirmed")],
+        transport=httpx2.MockTransport(respond),
+    )
+    record = page.results[0]
+    assert dict(work_identifiers(record.work)) == {
+        "pmid": "42",
+        "doi": "10.1000/example",
+    }
+    assert work_doi(record.work) == "10.1000/example"
+    assert "doi" not in asdict(record)
+
+
+@pytest.mark.parametrize(
+    "provider", ["crossref", "nasa_ads", "openlibrary", "ieee", "pubmed", "pmc"]
+)
+@pytest.mark.parametrize("nameless", [False, True])
+async def test_search_keeps_authorless_records_and_their_siblings(provider, nameless):
+    def returned(request):
+        if provider == "crossref":
+            rows = [
+                {
+                    "DOI": f"10.1234/{index}",
+                    "title": [title],
+                    "type": "journal-article",
+                    "license": [],
+                }
+                for index, title in enumerate(["Authorless", "Sibling"])
+            ]
+            payload = {"message": {"total-results": 2, "items": rows}}
+        elif provider == "nasa_ads":
+            rows = [
+                {
+                    "bibcode": "2025ApJ...123..456A",
+                    "title": ["Authorless"],
+                    "author": [" "] if nameless else [],
+                },
+                {"bibcode": "2025ApJ...123..456B", "title": ["Sibling"], "author": ["Jane Smith"]},
+            ]
+            payload = {"response": {"numFound": 2, "docs": rows}}
+        elif provider == "openlibrary":
+            rows = [
+                {
+                    "title": "Authorless",
+                    "isbn": ["9780131103627"],
+                    "author_name": [" "] if nameless else [],
+                },
+                {"title": "Sibling", "isbn": ["9780131101630"], "author_name": ["Jane Smith"]},
+            ]
+            payload = {"numFound": 2, "docs": rows}
+        elif provider == "ieee":
+            rows = [
+                {
+                    "title": "Authorless",
+                    "article_number": "1234567",
+                    "authors": {"authors": [{"full_name": " "}] if nameless else []},
+                },
+                {
+                    "title": "Sibling",
+                    "article_number": "1234568",
+                    "authors": {"authors": [{"full_name": "Jane Smith"}]},
+                },
+            ]
+            payload = {"total_records": 2, "articles": rows}
+        elif request.url.path.endswith("esearch.fcgi"):
+            payload = {"esearchresult": {"count": "2", "idlist": ["42", "43"]}}
+        else:
+            payload = {
+                "result": {
+                    "42": {"title": "Authorless", "authors": [{"name": ""}] if nameless else []},
+                    "43": {"title": "Sibling", "authors": [{"name": "Jane Smith"}]},
+                }
+            }
+            for uid, summary in payload["result"].items():
+                summary["articleids"] = [{"idtype": "pmid", "value": uid}]
+        return httpx2.Response(200, json=payload)
+
+    page = await search_metadata(
+        provider,
+        [SearchClause("title", "and", "test")],
+        settings=SimpleNamespace(nasa_ads_token="ads-token", ieee_api_key="ieee-key"),
+        transport=httpx2.MockTransport(returned),
+    )
+    assert [record.work["title"] for record in page.results] == ["Authorless", "Sibling"]
+    assert "contributors" not in page.results[0].work
+    if provider != "crossref":
+        assert page.results[1].work["contributors"]

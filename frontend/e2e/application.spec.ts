@@ -1,10 +1,12 @@
+import { tagPage, directoryPage } from './helpers';
 import { expect, test } from '@playwright/test';
-import { mockSession } from './helpers';
+import { mockSession, mockWorkspaces } from './helpers';
 
 test('authenticated shell loads dashboard and navigates to Library', async ({ page }) => {
 	const pageErrors: string[] = [];
 	let sessionRequests = 0;
 	page.on('pageerror', (error) => pageErrors.push(error.message));
+	await mockWorkspaces(page);
 	await page.route('**/api/v1/session', (route) => {
 		sessionRequests += 1;
 		return route.fulfill({
@@ -14,11 +16,17 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 			}
 		});
 	});
-	await page.route('**/api/v1/dashboard', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
 	);
-	await page.route('**/api/v1/items*', (route) =>
-		route.fulfill({ json: { items: [], total: 0, page: 1, per_page: 25 } })
+	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 
 	await page.goto('/');
@@ -38,8 +46,55 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 	await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 });
 
+for (const [role, choices] of [
+	['owner', ['managed']],
+	['admin', ['workspace']],
+	['editor', ['open']],
+	['owner', []]
+] as const) {
+	test(`Dashboard New Project shortcut follows ${role}'s projected participation choices: ${choices.join(',') || 'none'}`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		const workspace = {
+			id: 'workspace-1',
+			name: 'Research',
+			owner_id: 'user-1',
+			state: 'active',
+			current_role: role,
+			governance_frozen: false,
+			allowed_project_participations: choices,
+			authorization: { allowed: ['workspace.read'] }
+		};
+		await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+			route.fulfill({ json: directoryPage([workspace], route) })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+			route.fulfill({ json: workspace })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+			route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/projects?view=*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
+		);
+		await page.goto('/workspace/workspace-1');
+		await expect(page.getByRole('heading', { name: 'Quick actions' })).toBeVisible();
+		const shortcut = page.getByRole('link', { name: /New Project/ });
+		if (choices.length > 0) {
+			await expect(shortcut).toBeVisible();
+			await shortcut.click();
+			await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);
+			await expect(page.getByRole('button', { name: 'New Project' })).toBeVisible();
+		} else {
+			await expect(shortcut).toHaveCount(0);
+		}
+	});
+}
+
 test('theme preference persists and system mode follows the browser', async ({ page }) => {
 	await page.emulateMedia({ colorScheme: 'dark' });
+	await mockWorkspaces(page);
 	await page.route('**/api/v1/session', (route) =>
 		route.fulfill({
 			json: {
@@ -48,12 +103,13 @@ test('theme preference persists and system mode follows the browser', async ({ p
 			}
 		})
 	);
-	await page.route('**/api/v1/dashboard', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
 	);
 
 	await page.goto('/');
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 
 	await page.getByRole('button', { name: /reader/i }).click();
 	await page.getByRole('menuitem', { name: 'Light theme' }).click();
@@ -64,6 +120,7 @@ test('theme preference persists and system mode follows the browser', async ({ p
 
 	await page.reload();
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'light');
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 	await page.getByRole('button', { name: /reader/i }).click();
 	await page.getByRole('menuitem', { name: 'Dark theme' }).click();
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
@@ -87,6 +144,7 @@ test('account menu keeps the active theme during client-side navigation', async 
 		if (request.resourceType() === 'document') documentRequests += 1;
 	});
 	await page.addInitScript(() => localStorage.setItem('quirebase:theme', 'dark'));
+	await mockWorkspaces(page);
 	await page.route('**/api/v1/session', (route) =>
 		route.fulfill({
 			json: {
@@ -95,7 +153,7 @@ test('account menu keeps the active theme during client-side navigation', async 
 			}
 		})
 	);
-	await page.route('**/api/v1/dashboard', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
 	);
 	await page.route('**/api/v1/account', (route) =>
@@ -125,7 +183,16 @@ test('mobile navigation keeps primary destinations visible and moves utilities i
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await mockSession(page, 'administrator');
-	await page.goto('/library');
+	await page.route('**/api/v1/workspaces/workspace-1/items*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	await page.goto('/workspace/workspace-1/library');
 
 	const navigation = page.getByRole('navigation', { name: 'Mobile navigation' });
 	await expect(navigation.getByRole('link', { name: 'Library' })).toBeVisible();
@@ -140,7 +207,7 @@ test('mobile navigation keeps primary destinations visible and moves utilities i
 test('desktop sidebar collapse persists across navigation reloads', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await mockSession(page);
-	await page.route('**/api/v1/dashboard', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 1 } })
 	);
 
@@ -153,4 +220,64 @@ test('desktop sidebar collapse persists across navigation reloads', async ({ pag
 	);
 	await page.reload();
 	await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+});
+
+for (const width of [1280, 390]) {
+	test(`Workspace menu contains long names without horizontal overflow at ${width}px`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width, height: 844 });
+		await mockSession(page);
+		const { workspaceView } = await import('./helpers');
+		const workspace = workspaceView('workspace-1', 'A very long Workspace name '.repeat(8));
+		await page.route(/\/api\/v1\/workspaces(?:\?.*)?$/, (route) =>
+			route.fulfill({ json: directoryPage([workspace], route) })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+			route.fulfill({ json: workspace })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+			route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+		);
+		await page.goto('/workspace/workspace-1');
+		await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+		const menu = page.getByRole('menu', { name: 'Workspace', exact: true });
+		await expect(menu).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: /A very long Workspace name/ })).toBeVisible();
+		await expect
+			.poll(() => menu.evaluate((element) => element.scrollWidth <= element.clientWidth))
+			.toBe(true);
+		const bounds = await menu.boundingBox();
+		expect(bounds!.x).toBeGreaterThanOrEqual(0);
+		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+	});
+}
+
+test('Appearance labels stay aligned when the selected theme changes', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('quirebase:theme', 'dark'));
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
+	);
+	await page.goto('/workspace/workspace-1');
+	for (const active of ['Dark theme', 'Light theme']) {
+		await page.getByRole('button', { name: /reader/i }).click();
+		for (const name of ['Light theme', 'Dark theme', 'System theme']) {
+			const item = page.getByRole('menuitem', { name });
+			await expect(item).toHaveAttribute('data-active', String(name === active));
+			await expect(item.locator('span').last()).toHaveText(name === active ? '✓' : '');
+		}
+		await expect
+			.poll(() =>
+				page.getByRole('menuitem', { name: /^(Light|Dark|System) theme$/ }).evaluateAll((items) => {
+					// Measure one layout frame; the menu can reposition while opening.
+					const positions = items.map(
+						(item) => item.querySelector('span.min-w-0')!.getBoundingClientRect().x
+					);
+					return Math.max(...positions) - Math.min(...positions);
+				})
+			)
+			.toBeLessThan(1);
+		await page.getByRole('menuitem', { name: 'Light theme' }).click();
+	}
 });

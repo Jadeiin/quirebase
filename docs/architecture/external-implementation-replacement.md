@@ -19,7 +19,7 @@
   `lookup_metadata` 与 `httpx.MockTransport` 契约测试完全不变。此后任何依赖替换
   （包括未来的 `habanero`）都退化为单文件 diff。
 - **接受 `python-slugify`**：替换 `documents/bundles.py` 的归档名 slug（纯进程内计算，
-  Unicode 转写收益真实）。`generate_bibtex_key` 先用固定期望用例钉住现状，再决定是否换。
+  Unicode 转写收益真实）。`generate_citation_key` 先用固定期望用例钉住现状，再决定是否换。
 - **拒绝 `python-doi`**：内部实现仅约 5 行（删除测试不成立），上游更严格的校验会改变
   `parse_identifier` 自动检测与 PDF DOI 召回，域内关键路径的行为风险大于收益。
 - **接受传输层统一迁移到 `httpx2`**：`httpx` 0.28.1 自 2024-12 起无发布（上游已事实停滞），
@@ -83,7 +83,7 @@
   `test_metadata_lookup.py` / `test_online_search.py` 的 MockTransport 契约
   与 `test_identifiers_sync.py` 间接钉住。
 - slug 知识分布：`documents/bundles.py` `_archive_name`（保留 CJK 的 `\w` 语义）与
-  `library/identifiers.py` `generate_bibtex_key`（ASCII 剥离）。两者是**不同的命名策略**
+  `library/identifiers.py` `generate_citation_key`（ASCII 剥离）。两者是**不同的命名策略**
   （可移植 zip 条目名 vs BibTeX 键稳定性），不应合并为一个共享 slug 模块——
   那正是 modules.md 拒绝的 generic shared-utilities package。
 
@@ -173,14 +173,14 @@ Provider API 变更 = 单文件 diff。删除测试通过：删掉某个 Provide
   AGPL-3.0-only 分发相容，SBOM 覆盖。
 - 依赖版本：`python-slugify>=8,<9`。
 
-### 阶段 2：`generate_bibtex_key` 现状钉住 + 可选内部替换
+### 阶段 2：`generate_citation_key` 现状钉住 + 可选内部替换
 
-- 先行测试：`library/identifiers.py` `generate_bibtex_key` 补固定期望用例
+- 先行测试：`library/identifiers.py` `generate_citation_key` 补固定期望用例
   （中文作者/标题、变音符号作者、无作者、无年份、停用词首词、全数字标题）。
   现行为（ASCII 剥离 + 首词大写）被测试钉住后才允许动内部。
 - 决策点：是否切换为 `slugify(..., allow_unicode=False)` 的转写行为
   （`café` → `Cafe` 而非 `caf`）。BibTeX key 是用户可见且历史存储于
-  `Item.bibtex_id` 的稳定标识；切换只影响新生成的 key。默认保守：保持 ASCII 剥离
+  `Item.citation_key` 的稳定标识；切换只影响新生成的 key。默认保守：保持 ASCII 剥离
   语义，仅在产品确认后启用转写。
 - 不把两个 slug 策略合并为共享模块（理由见"现状缝位"末条）。
 

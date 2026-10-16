@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
-	import Button from '$lib/design/Button.svelte';
-	import { buttonClass } from '$lib/design/button-classes';
-	import DialogCloseButton from '$lib/design/DialogCloseButton.svelte';
-	import SectionHeader from '$lib/design/SectionHeader.svelte';
-	import { t } from '$lib/i18n';
+	import Button from '#lib/design/Button.svelte';
+	import { buttonClass } from '#lib/design/button-classes.js';
+	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
+	import SectionHeader from '#lib/design/SectionHeader.svelte';
+	import { t } from '#lib/i18n.js';
 
 	let {
 		open = $bindable(false),

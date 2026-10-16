@@ -1,6 +1,8 @@
-# ADR 0001: capability evolution and controlled external integrations
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0001: capability evolution and controlled external integrations
 
 ## Context
 

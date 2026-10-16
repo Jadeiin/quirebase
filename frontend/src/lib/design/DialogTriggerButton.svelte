@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Dialog } from '@skeletonlabs/skeleton-svelte';
 	import type { Snippet } from 'svelte';
-	import { buttonClass, type ButtonVariant } from '$lib/design/button-classes';
+	import { buttonClass, type ButtonVariant } from '#lib/design/button-classes.js';
 
 	let {
 		variant = 'filled',

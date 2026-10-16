@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import asdict
 
 from inquiro import ProviderRuntime
 
@@ -20,14 +21,14 @@ async def main() -> None:
         print(
             json.dumps(
                 {
-                    "provider": record.identifier.provider,
-                    "identifier": record.identifier.value,
-                    "title": record.title,
-                    "authors": record.authors,
+                    "provider": record.provider,
+                    "lookup_identifier": asdict(record.lookup_identifier),
+                    "work": record.work,
                 },
                 ensure_ascii=False,
             )
         )
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -57,15 +57,33 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/dashboard': {
+	'/api/v1/workspaces': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Dashboard */
-		get: operations['dashboard.dashboard'];
+		/** Get Workspaces */
+		get: operations['workspaces.get_workspaces'];
+		put?: never;
+		/** Create User Workspace */
+		post: operations['workspaces.create_user_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/creation-availability': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Creation Availability */
+		get: operations['workspaces.get_workspace_creation_availability'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -74,7 +92,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/bulk': {
+	'/api/v1/workspace-invitations/{token}/accept': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -83,699 +101,42 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Apply Item Bulk Action */
-		post: operations['library.apply_item_bulk_action'];
+		/** Accept Workspace Invitation Api */
+		post: operations['workspaces.accept_workspace_invitation_api'];
 		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items': {
+	'/api/v1/workspaces/{workspace_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Search Items */
-		get: operations['library.search_items'];
-		put?: never;
-		/** Create Library Item */
-		post: operations['library.create_library_item'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Get Library Item */
-		get: operations['library.get_library_item'];
-		/** Update Library Item */
-		put: operations['library.update_library_item'];
-		post?: never;
-		/** Delete Library Item */
-		delete: operations['items.delete_library_item'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/citation': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Format Item Citation */
-		get: operations['library.format_item_citation'];
+		/** Get User Workspace */
+		get: operations['workspaces.get_user_workspace'];
 		put?: never;
 		post?: never;
-		delete?: never;
+		/** Delete User Workspace */
+		delete: operations['workspaces.delete_user_workspace'];
 		options?: never;
 		head?: never;
-		patch?: never;
+		/** Update User Workspace */
+		patch: operations['workspaces.update_user_workspace'];
 		trace?: never;
 	};
-	'/api/v1/tags': {
+	'/api/v1/account/citation-key-preview': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** List Tags */
-		get: operations['library.list_tags'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/tags': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		/** Set Item Tag Selection */
-		put: operations['library.set_item_tag_selection'];
-		/** Add Item Tag */
-		post: operations['library.add_item_tag'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/tags/{tag_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Remove Item Tag */
-		delete: operations['library.remove_item_tag'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/discussions': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Discussions */
-		get: operations['library.list_discussions'];
-		put?: never;
-		/** Create Discussion */
-		post: operations['library.create_discussion'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/discussions/{message_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Delete Discussion */
-		delete: operations['library.delete_discussion'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Export Item Selection */
-		post: operations['library_exports.export_item_selection'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/documents/archive': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Download Item Selection */
-		post: operations['library_exports.download_item_selection'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Export Library Bibliography */
-		get: operations['library_exports.export_library_bibliography'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/bibliography': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Bibliography Import */
-		post: operations['imports.stage_bibliography_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/identifier': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Identifier Import */
-		post: operations['imports.stage_identifier_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/pdfs': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Stage Pdf Import */
-		post: operations['imports.stage_pdf_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Import Batch */
-		get: operations['imports.import_batch'];
-		put?: never;
-		post?: never;
-		/** Discard Staged Import */
-		delete: operations['imports.discard_staged_import'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}/retry': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Retry Import Batch */
-		post: operations['imports.retry_import_batch'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/imports/{batch_id}/commit': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Commit Staged Import */
-		post: operations['imports.commit_staged_import'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Projects */
-		get: operations['projects.list_projects'];
-		put?: never;
-		/** Create User Project */
-		post: operations['projects.create_user_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/joinable': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Projects Available To Join */
-		get: operations['projects.list_projects_available_to_join'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Get Project */
-		get: operations['projects.get_project'];
-		put?: never;
-		post?: never;
-		/** Delete User Project */
-		delete: operations['projects.delete_user_project'];
-		options?: never;
-		head?: never;
-		/** Update Project */
-		patch: operations['projects.update_project'];
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/description': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Update Project Description Api */
-		post: operations['projects.update_project_description_api'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/archive': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Archive Project */
-		post: operations['projects.archive_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/restore': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Restore Project */
-		post: operations['projects.restore_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/visibility': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Set Project Visibility Api */
-		post: operations['projects.set_project_visibility_api'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/leave': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Leave User Project */
-		post: operations['projects.leave_user_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/join': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Join Public Project */
-		post: operations['projects.join_public_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/ownership/{user_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Transfer User Project */
-		post: operations['projects.transfer_user_project'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/items/{item_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		/** Add Project Item */
-		put: operations['projects.add_project_item'];
-		post?: never;
-		/** Remove Project Item */
-		delete: operations['projects.remove_project_item'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/members': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		/** Set Project Member */
-		put: operations['projects.set_project_member'];
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/projects/{project_id}/members/{user_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Remove Project Member */
-		delete: operations['projects.remove_project_member'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/review': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Review Annotations */
-		get: operations['annotations.review_annotations'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** List Annotations */
-		get: operations['annotations.list_annotations'];
-		put?: never;
-		/** Create Annotation */
-		post: operations['annotations.create_annotation'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Delete Annotation */
-		delete: operations['annotations.delete_annotation'];
-		options?: never;
-		head?: never;
-		/** Update Annotation */
-		patch: operations['annotations.update_annotation'];
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/restore': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Restore Annotation */
-		post: operations['annotations.restore_annotation'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Create Reply */
-		post: operations['annotations.create_reply'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Delete Reply */
-		delete: operations['annotations.delete_reply'];
-		options?: never;
-		head?: never;
-		/** Update Reply */
-		patch: operations['annotations.update_reply'];
-		trace?: never;
-	};
-	'/api/v1/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Restore Reply */
-		post: operations['annotations.restore_reply'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/discovery/search': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Search Discovery */
-		post: operations['discovery.search_discovery'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/discovery/providers': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Discovery Providers */
-		get: operations['discovery.discovery_providers'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/workflows/{workflow_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Workflow Status */
-		get: operations['workflows.workflow_status'];
+		/** Citation Key Preview */
+		get: operations['account.citation_key_preview'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -812,6 +173,23 @@ export interface paths {
 		put?: never;
 		/** Accept User Invitation */
 		post: operations['account.accept_user_invitation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/register': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Register Account */
+		post: operations['account.register_account'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1040,57 +418,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/admin/projects': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Admin Projects */
-		get: operations['admin.admin_projects'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/admin/items': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Admin Items */
-		get: operations['admin.admin_items'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/admin/items/{item_id}': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		post?: never;
-		/** Admin Delete Item */
-		delete: operations['admin.admin_delete_item'];
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/admin/audit': {
 		parameters: {
 			query?: never;
@@ -1160,6 +487,74 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/admin/workspaces': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Admin Workspaces */
+		get: operations['admin.admin_workspaces'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/workspaces/{workspace_id}/freeze': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Freeze Workspace */
+		post: operations['admin.admin_freeze_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/workspaces/{workspace_id}/unfreeze': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Unfreeze Workspace */
+		post: operations['admin.admin_unfreeze_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/workspaces/{workspace_id}/break-glass/items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Break Glass Items */
+		post: operations['admin.admin_break_glass_items'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/admin/maintenance/{operation}': {
 		parameters: {
 			query?: never;
@@ -1171,23 +566,6 @@ export interface paths {
 		put?: never;
 		/** Run Maintenance */
 		post: operations['admin.run_maintenance'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/admin/maintenance/backups/{workflow_id}/content': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Download Backup */
-		get: operations['admin.download_backup'];
-		put?: never;
-		post?: never;
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1211,7 +589,1000 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/bibliography': {
+	'/api/v1/workspaces/{workspace_id}/members': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Members */
+		get: operations['workspaces.get_workspace_members'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/governance/members': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Governance Members */
+		get: operations['workspaces.get_workspace_governance_members'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/invitations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Workspace Invitations */
+		get: operations['workspaces.get_workspace_invitations'];
+		put?: never;
+		/** Create Workspace Invitation */
+		post: operations['workspaces.create_workspace_invitation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/invitations/{invitation_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Revoke Workspace Invitation Api */
+		delete: operations['workspaces.revoke_workspace_invitation_api'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}/role': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Change Workspace Member Role */
+		put: operations['workspaces.change_workspace_member_role'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}/suspend': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Suspend Member */
+		post: operations['workspaces.suspend_member'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}/reactivate': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Reactivate Member */
+		post: operations['workspaces.reactivate_member'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/members/{membership_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Terminate Member */
+		delete: operations['workspaces.terminate_member'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/ownership/{membership_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Transfer Ownership */
+		post: operations['workspaces.transfer_ownership'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archive User Workspace */
+		post: operations['workspaces.archive_user_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore User Workspace */
+		post: operations['workspaces.restore_user_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/maintenance/reindex': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Reindex Workspace */
+		post: operations['workspaces.reindex_workspace'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/dashboard': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Dashboard */
+		get: operations['dashboard.dashboard'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/bulk': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Apply Item Bulk Action */
+		post: operations['library.apply_item_bulk_action'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Search Items */
+		get: operations['library.search_items'];
+		put?: never;
+		/** Create Library Item */
+		post: operations['library.create_library_item'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/facets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Item Facets */
+		get: operations['library.get_item_facets'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Library Item */
+		get: operations['library.get_library_item'];
+		/** Update Library Item */
+		put: operations['library.update_library_item'];
+		post?: never;
+		/** Delete Library Item */
+		delete: operations['items.delete_library_item'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/copy': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Copy Library Item */
+		post: operations['library.copy_library_item'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Format Item Citation */
+		get: operations['library.format_item_citation'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Tags */
+		get: operations['library.list_tags'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Set Item Tag Selection */
+		put: operations['library.set_item_tag_selection'];
+		/** Add Item Tag */
+		post: operations['library.add_item_tag'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/tags/{tag_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Remove Item Tag */
+		delete: operations['library.remove_item_tag'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Discussions */
+		get: operations['library.list_discussions'];
+		put?: never;
+		/** Create Discussion */
+		post: operations['library.create_discussion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Discussion */
+		delete: operations['library.delete_discussion'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/discussions/{message_id}/moderation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Moderate Discussion */
+		post: operations['library.moderate_discussion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/metadata/schema': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Commonmeta Schema */
+		get: operations['library.commonmeta_schema'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Export Item Selection */
+		post: operations['library_exports.export_item_selection'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/documents/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Download Item Selection */
+		post: operations['library_exports.download_item_selection'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Export Library Bibliography */
+		get: operations['library_exports.export_library_bibliography'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/bibliography': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Bibliography Import */
+		post: operations['imports.stage_bibliography_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/identifiers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Identifiers Import */
+		post: operations['imports.stage_identifiers_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/pdfs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stage Pdf Import */
+		post: operations['imports.stage_pdf_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/{batch_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Import Batch */
+		get: operations['imports.import_batch'];
+		put?: never;
+		post?: never;
+		/** Discard Staged Import */
+		delete: operations['imports.discard_staged_import'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/{batch_id}/retry': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Retry Import Batch */
+		post: operations['imports.retry_import_batch'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/imports/{batch_id}/commit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Commit Staged Import */
+		post: operations['imports.commit_staged_import'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Projects */
+		get: operations['projects.list_projects'];
+		put?: never;
+		/** Create User Project */
+		post: operations['projects.create_user_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Project */
+		get: operations['projects.get_project'];
+		put?: never;
+		post?: never;
+		/** Delete User Project */
+		delete: operations['projects.delete_user_project'];
+		options?: never;
+		head?: never;
+		/** Update Project */
+		patch: operations['projects.update_project'];
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archive Project */
+		post: operations['projects.archive_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore Project */
+		post: operations['projects.restore_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Add Project Item */
+		put: operations['projects.add_project_item'];
+		post?: never;
+		/** Remove Project Item */
+		delete: operations['projects.remove_project_item'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/join': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Join Project Api */
+		post: operations['projects.join_project_api'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/leave': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Leave Project Api */
+		post: operations['projects.leave_project_api'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/participants': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Add Project Participant */
+		post: operations['projects.add_project_participant'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/participants/{user_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Remove Project Participant */
+		delete: operations['projects.remove_project_participant'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List Project Discussions */
+		get: operations['projects.list_project_discussions'];
+		put?: never;
+		/** Create Project Discussion */
+		post: operations['projects.create_project_discussion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/discussions/{message_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Project Discussion */
+		delete: operations['projects.delete_project_discussion'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/projects/{project_id}/discussions/{message_id}/moderation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Moderate Project Discussion */
+		post: operations['projects.moderate_project_discussion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List Annotations
+		 * @description List authorized Annotations across revisions and sources.
+		 *
+		 *     With no filters, return all visible sources. Project selection also includes the caller's
+		 *     private Annotations unless scope=project; scope=private excludes Project Annotations.
+		 *     Revision and Project choices are independent of the applied filters.
+		 *     Use pagination=cursor to traverse by immutable ID, then pass next_cursor as cursor.
+		 *     Page mode orders by latest update; cursor mode avoids skips when content is edited or deleted.
+		 */
+		get: operations['annotations.list_annotations'];
+		put?: never;
+		/** Create Annotation */
+		post: operations['annotations.create_annotation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Annotation */
+		delete: operations['annotations.delete_annotation'];
+		options?: never;
+		head?: never;
+		/** Update Annotation */
+		patch: operations['annotations.update_annotation'];
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore Annotation */
+		post: operations['annotations.restore_annotation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/moderation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Moderate Annotation */
+		post: operations['annotations.moderate_annotation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Create Reply */
+		post: operations['annotations.create_reply'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Delete Reply */
+		delete: operations['annotations.delete_reply'];
+		options?: never;
+		head?: never;
+		/** Update Reply */
+		patch: operations['annotations.update_reply'];
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotations/{annotation_id}/replies/{reply_id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Restore Reply */
+		post: operations['annotations.restore_reply'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/discovery/search': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Search Discovery */
+		post: operations['discovery.search_discovery'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/discovery/providers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Discovery Providers */
+		get: operations['discovery.discovery_providers'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/workflows/{workflow_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Workflow Status */
+		get: operations['workflows.workflow_status'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1228,7 +1599,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/bibliography/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1245,7 +1616,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/citation/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1262,7 +1633,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/documents': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/documents': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1279,7 +1650,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/archive': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/archive': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1296,7 +1667,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1313,7 +1684,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments/remote': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/remote': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1330,7 +1701,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments/{attachment_id}/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1347,7 +1718,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/attachments/{attachment_id}': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/attachments/{attachment_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1364,7 +1735,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1381,7 +1752,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/remote': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/remote': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1398,7 +1769,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1415,7 +1786,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/viewer': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/viewer': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1432,7 +1803,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/content': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1449,7 +1820,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/thumbnail': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/thumbnail': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1466,7 +1837,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/thumbnail': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/thumbnail': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1483,7 +1854,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/revisions/{revision_id}/export': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/export': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1500,7 +1871,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/annotation-exports': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/annotation-exports': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1517,7 +1888,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/annotation-exports/{workflow_id}': {
+	'/api/v1/workspaces/{workspace_id}/annotation-exports/{workflow_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1534,7 +1905,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/annotation-exports/{workflow_id}/content': {
+	'/api/v1/workspaces/{workspace_id}/annotation-exports/{workflow_id}/content': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1551,15 +1922,15 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/workspace': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/overview': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Item Workspace */
-		get: operations['items.item_workspace'];
+		/** Item Overview */
+		get: operations['items.item_overview'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1568,15 +1939,15 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/organize': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/metadata/sources': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path?: never;
 			cookie?: never;
 		};
-		/** Item Organize Workspace */
-		get: operations['items.item_organize_workspace'];
+		/** Item Metadata Sources */
+		get: operations['items.item_metadata_sources'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1585,7 +1956,24 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/metadata/sync': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/organize': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Item Organize */
+		get: operations['items.item_organize'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/metadata/sync': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1602,7 +1990,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/doi/rescan': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/doi/rescan': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1619,7 +2007,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/citation-key/regenerate': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation-key/regenerate': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1636,7 +2024,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/items/{item_id}/tag-recommendations': {
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/tag-recommendations': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1653,7 +2041,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/authors': {
+	'/api/v1/workspaces/{workspace_id}/authors': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1670,24 +2058,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/citation-key-preview': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Citation Key Preview */
-		get: operations['tools.citation_key_preview'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/citation-styles': {
+	'/api/v1/workspaces/{workspace_id}/citation-styles': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1705,7 +2076,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/duplicates': {
+	'/api/v1/workspaces/{workspace_id}/duplicates': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1722,7 +2093,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/citation-styles/{style_id}': {
+	'/api/v1/workspaces/{workspace_id}/citation-styles/{style_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1739,7 +2110,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/tags/merge': {
+	'/api/v1/workspaces/{workspace_id}/tags/merge': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1756,7 +2127,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/tags/{tag_id}': {
+	'/api/v1/workspaces/{workspace_id}/tags/{tag_id}': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -1786,18 +2157,71 @@ export interface components {
 			/** Api Tokens */
 			api_tokens: components['schemas']['ApiTokenView'][];
 		};
+		/** AdditionalDescription */
+		AdditionalDescription: {
+			/**
+			 * Description
+			 * @description The description of the resource.
+			 */
+			description: string;
+			/**
+			 * Type
+			 * @description The type of the description.
+			 */
+			type?: ('Abstract' | 'Summary' | 'Methods' | 'TechnicalInfo' | 'Other') | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+		};
+		/** AdditionalTitle */
+		AdditionalTitle: {
+			/**
+			 * Title
+			 * @description The title of the resource.
+			 */
+			title: string;
+			/**
+			 * Type
+			 * @description The type of the title.
+			 */
+			type?: ('AlternativeTitle' | 'Subtitle' | 'TranslatedTitle') | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+		};
 		/** AdminAuditEventView */
 		AdminAuditEventView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Actor Id */
 			actor_id?: string | null;
+			/** Workspace Id */
+			workspace_id?: string | null;
+			/** Project Id */
+			project_id?: string | null;
 			/** Action */
 			action: string;
 			/** Target Type */
 			target_type: string;
 			/** Target Id */
 			target_id?: string | null;
+			/** Target Ids */
+			target_ids?: string[] | null;
+			/** Authorization Role */
+			authorization_role?: string | null;
+			/** Authorization Resource Action */
+			authorization_resource_action?: string | null;
+			/** Result */
+			result?: string | null;
+			/** Source */
+			source?: string | null;
 			/** Detail */
 			detail?: unknown | null;
 			/**
@@ -1806,20 +2230,12 @@ export interface components {
 			 */
 			created_at: string;
 		};
-		/** AdminAuditView */
-		AdminAuditView: {
-			/** Events */
-			events: components['schemas']['AdminAuditEventView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
-		};
 		/** AdminInvitationCreatedView */
 		AdminInvitationCreatedView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -1837,7 +2253,10 @@ export interface components {
 		};
 		/** AdminInvitationView */
 		AdminInvitationView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -1851,18 +2270,6 @@ export interface components {
 			/** Accepted At */
 			accepted_at?: string | null;
 		};
-		/** AdminItemsView */
-		AdminItemsView: {
-			/** Items */
-			items: components['schemas']['ItemSearchView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
-			storage: components['schemas']['StorageMetricsView'];
-		};
 		/** AdminMaintenanceView */
 		AdminMaintenanceView: {
 			storage: components['schemas']['StorageMetricsView'];
@@ -1875,50 +2282,23 @@ export interface components {
 			user_count: number;
 			/** Pending Invitation Count */
 			pending_invitation_count: number;
-			/** Failed Workflows */
-			failed_workflows: components['schemas']['WorkflowSummaryView'][];
+			/** Failed Workflow Count */
+			failed_workflow_count: number;
 			storage: components['schemas']['StorageMetricsView'];
-			/** Recent Events */
-			recent_events: components['schemas']['AdminAuditEventView'][];
-		};
-		/** AdminProjectItemView */
-		AdminProjectItemView: {
-			/** Id */
-			id: string;
-			/** Name */
-			name: string;
-			/** Description */
-			description: string;
-			/** State */
-			state: string;
-			/** Visibility */
-			visibility: string;
-			creator: components['schemas']['AdminProjectUserView'];
-			/** Member Count */
-			member_count: number;
-			/** Item Count */
-			item_count: number;
-		};
-		/** AdminProjectUserView */
-		AdminProjectUserView: {
-			/** Id */
-			id: string;
-			/** Username */
-			username: string;
-		};
-		/** AdminProjectsView */
-		AdminProjectsView: {
-			/** Projects */
-			projects: components['schemas']['AdminProjectItemView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
+			recent_events: components['schemas']['OffsetPagination_AdminAuditEventView_'];
 		};
 		/** AdminSettingsView */
 		AdminSettingsView: {
+			/**
+			 * Registration Policy
+			 * @enum {string}
+			 */
+			registration_policy: 'open' | 'closed' | 'invitation_only';
+			/**
+			 * Workspace Creation Policy
+			 * @enum {string}
+			 */
+			workspace_creation_policy: 'admins_only' | 'members_allowed';
 			/** Metadata Contact Email */
 			metadata_contact_email: string;
 			/** Ncbi Api Key */
@@ -1957,7 +2337,10 @@ export interface components {
 		};
 		/** AdminUserView */
 		AdminUserView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -1973,21 +2356,156 @@ export interface components {
 		};
 		/** AdminUsersView */
 		AdminUsersView: {
-			/** Users */
-			users: components['schemas']['AdminUserView'][];
+			/** Items */
+			items: components['schemas']['AdminUserView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
 			/** Total */
 			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
 			/** Invitations */
 			invitations: components['schemas']['AdminInvitationView'][];
 		};
-		/** AdminWorkflowsView */
-		AdminWorkflowsView: {
-			/** Workflows */
-			workflows: components['schemas']['WorkflowSummaryView'][];
+		/** AdminWorkspaceView */
+		AdminWorkspaceView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/** Name */
+			name: string;
+			/**
+			 * Owner Id
+			 * Format: uuid
+			 */
+			owner_id: string;
+			state: components['schemas']['WorkspaceState'];
+			/** Governance Frozen At */
+			governance_frozen_at?: string | null;
+			/** Governance Frozen By */
+			governance_frozen_by?: string | null;
+		};
+		/** Affiliation1 */
+		Affiliation1: {
+			/**
+			 * Identifier
+			 * @description The identifier of the affiliated organization.
+			 */
+			identifier: string;
+			/**
+			 * Identifier Type
+			 * @description The type of the identifier.
+			 */
+			identifier_type?:
+				('ROR' | 'FundRef' | 'GRID' | 'ISNI' | 'Ringgold' | 'URL' | 'Wikidata' | 'Other') | null;
+			/**
+			 * Name
+			 * @description The name of the affiliated organization.
+			 */
+			name?: string | null;
+			/**
+			 * Role
+			 * @description The role or job title held at the organization.
+			 */
+			role?: string | null;
+			/**
+			 * Start Date
+			 * @description The date the affiliation began.
+			 */
+			start_date?: string | null;
+			/**
+			 * End Date
+			 * @description The date the affiliation ended.
+			 */
+			end_date?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Affiliation2 */
+		Affiliation2: {
+			/**
+			 * Identifier
+			 * @description The identifier of the affiliated organization.
+			 */
+			identifier?: string | null;
+			/**
+			 * Identifier Type
+			 * @description The type of the identifier.
+			 */
+			identifier_type?:
+				('ROR' | 'FundRef' | 'GRID' | 'ISNI' | 'Ringgold' | 'URL' | 'Wikidata' | 'Other') | null;
+			/**
+			 * Name
+			 * @description The name of the affiliated organization.
+			 */
+			name: string;
+			/**
+			 * Role
+			 * @description The role or job title held at the organization.
+			 */
+			role?: string | null;
+			/**
+			 * Start Date
+			 * @description The date the affiliation began.
+			 */
+			start_date?: string | null;
+			/**
+			 * End Date
+			 * @description The date the affiliation ended.
+			 */
+			end_date?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** AnnotationCreate */
 		AnnotationCreate: {
@@ -1996,7 +2514,10 @@ export interface components {
 			 * Format: uuid4
 			 */
 			id: string;
-			/** Revision Id */
+			/**
+			 * Revision Id
+			 * Format: uuid
+			 */
 			revision_id: string;
 			/** Page Index */
 			page_index: number;
@@ -2044,6 +2565,43 @@ export interface components {
 			| 'ellipse'
 			| 'line'
 			| 'arrow';
+		/** AnnotationListView */
+		AnnotationListView: {
+			/** Revisions */
+			revisions: components['schemas']['AnnotationRevisionView'][];
+			/** Projects */
+			projects: components['schemas']['AnnotationProjectView'][];
+			/** Annotations */
+			annotations: components['schemas']['AnnotationView'][];
+			/** Total */
+			total: number;
+			/** Page */
+			page: number;
+			/** Per Page */
+			per_page: number;
+			/** Next Cursor */
+			next_cursor?: string | null;
+		};
+		/** AnnotationModerationRequest */
+		AnnotationModerationRequest: {
+			/**
+			 * Action
+			 * @enum {string}
+			 */
+			action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete';
+			/** Version */
+			version: number;
+		};
+		/** AnnotationProjectView */
+		AnnotationProjectView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/** Name */
+			name: string;
+		};
 		/** AnnotationReplyCreate */
 		AnnotationReplyCreate: {
 			/**
@@ -2063,9 +2621,15 @@ export interface components {
 		};
 		/** AnnotationReplyView */
 		AnnotationReplyView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
-			/** Annotation Id */
+			/**
+			 * Annotation Id
+			 * Format: uuid
+			 */
 			annotation_id: string;
 			/** Body */
 			body: string;
@@ -2082,68 +2646,15 @@ export interface components {
 			/** Updated At */
 			updated_at: string;
 		};
-		/** AnnotationReviewAnnotationView */
-		AnnotationReviewAnnotationView: {
-			/** Id */
-			id: string;
-			/** Revision Id */
-			revision_id: string;
-			/** Page Index */
-			page_index: number;
-			kind: components['schemas']['AnnotationKind'];
-			scope: components['schemas']['AnnotationScope'];
-			/** Project Id */
-			project_id: string | null;
-			/** Body */
-			body: string | null;
-			/** Selected Text */
-			selected_text: string | null;
-			/** Payload */
-			payload:
-				| components['schemas']['TextMarkupPayload']
-				| components['schemas']['NotePayload']
-				| components['schemas']['FreeTextPayload']
-				| components['schemas']['InkPayload']
-				| components['schemas']['RectanglePayload']
-				| components['schemas']['EllipsePayload']
-				| components['schemas']['LinePayload']
-				| components['schemas']['ArrowPayload'];
-			/** Version */
-			version: number;
-			/** Author Display Name */
-			author_display_name: string;
-			/** Mine */
-			mine: boolean;
-			/** Editable */
-			editable: boolean;
-			/** Created At */
-			created_at: string;
-			/** Updated At */
-			updated_at: string;
-			/** Replies */
-			replies: components['schemas']['AnnotationReplyView'][];
-			/** Revision Name */
-			revision_name: string;
-		};
-		/** AnnotationReviewRevisionView */
-		AnnotationReviewRevisionView: {
-			/** Id */
+		/** AnnotationRevisionView */
+		AnnotationRevisionView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Original Name */
 			original_name: string;
-		};
-		/** AnnotationReviewView */
-		AnnotationReviewView: {
-			/** Revisions */
-			revisions: components['schemas']['AnnotationReviewRevisionView'][];
-			/** Annotations */
-			annotations: components['schemas']['AnnotationReviewAnnotationView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
 		};
 		/**
 		 * AnnotationScope
@@ -2178,9 +2689,6 @@ export interface components {
 			/** Page Index */
 			page_index: number;
 			kind: components['schemas']['AnnotationKind'];
-			scope: components['schemas']['AnnotationScope'];
-			/** Project Id */
-			project_id?: string | null;
 			/** Body */
 			body?: string | null;
 			/** Selected Text */
@@ -2198,16 +2706,26 @@ export interface components {
 		};
 		/** AnnotationView */
 		AnnotationView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
-			/** Revision Id */
+			/**
+			 * Revision Id
+			 * Format: uuid
+			 */
 			revision_id: string;
+			/** Revision Name */
+			revision_name: string;
 			/** Page Index */
 			page_index: number;
 			kind: components['schemas']['AnnotationKind'];
 			scope: components['schemas']['AnnotationScope'];
 			/** Project Id */
 			project_id: string | null;
+			/** Project Name */
+			project_name: string | null;
 			/** Body */
 			body: string | null;
 			/** Selected Text */
@@ -2230,6 +2748,15 @@ export interface components {
 			mine: boolean;
 			/** Editable */
 			editable: boolean;
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
+			/** Hidden At */
+			hidden_at?: string | null;
+			/** Archived At */
+			archived_at?: string | null;
+			/** Locked At */
+			locked_at?: string | null;
+			/** Moderated By */
+			moderated_by?: string | null;
 			/** Created At */
 			created_at: string;
 			/** Updated At */
@@ -2262,7 +2789,10 @@ export interface components {
 		};
 		/** ApiTokenGrantView */
 		ApiTokenGrantView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Token */
 			token: string;
@@ -2274,7 +2804,10 @@ export interface components {
 		};
 		/** ApiTokenView */
 		ApiTokenView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -2338,10 +2871,17 @@ export interface components {
 				| 'reverse_closed_arrow'
 				| 'slash';
 		};
+		/** AuthorFacet */
+		AuthorFacet: {
+			/** Last Name */
+			last_name: string;
+			/** First Name */
+			first_name: string | null;
+			/** Item Count */
+			item_count: number;
+		};
 		/** AuthorSuggestionView */
 		AuthorSuggestionView: {
-			/** Id */
-			id: string;
 			/** Last Name */
 			last_name: string;
 			/** First Name */
@@ -2351,8 +2891,6 @@ export interface components {
 		};
 		/** BibliographyExportRequest */
 		BibliographyExportRequest: {
-			/** Item Ids */
-			item_ids?: string[];
 			/** File Format */
 			file_format: string;
 			/**
@@ -2371,25 +2909,10 @@ export interface components {
 			 */
 			preserve_case: boolean;
 			/**
-			 * Include Identifiers
-			 * @default false
-			 */
-			include_identifiers: boolean;
-			/**
-			 * Include Custom Fields
-			 * @default false
-			 */
-			include_custom_fields: boolean;
-			/**
 			 * Encoding
 			 * @default unicode
 			 */
 			encoding: string;
-			/**
-			 * Journal Mode
-			 * @default full
-			 */
-			journal_mode: string;
 			/**
 			 * Doi Policy
 			 * @default include
@@ -2417,6 +2940,13 @@ export interface components {
 			 * @default false
 			 */
 			citation_key_force_ascii: boolean;
+			/** Item Ids */
+			item_ids?: string[];
+		};
+		/** BreakGlassReadRequest */
+		BreakGlassReadRequest: {
+			/** Reason */
+			reason: string;
 		};
 		/** BulkActionRequest */
 		BulkActionRequest: {
@@ -2424,11 +2954,8 @@ export interface components {
 			item_ids: string[];
 			/** Action */
 			action: string;
-			/**
-			 * Project Id
-			 * @default
-			 */
-			project_id: string;
+			/** Project Id */
+			project_id?: string | null;
 			/**
 			 * Tag Name
 			 * @default
@@ -2473,11 +3000,6 @@ export interface components {
 			doi?: string | null;
 			/** Abstract */
 			abstract?: string | null;
-			/**
-			 * Imported
-			 * @default false
-			 */
-			imported: boolean;
 		};
 		/** CitationKeyPreviewView */
 		CitationKeyPreviewView: {
@@ -2515,50 +3037,222 @@ export interface components {
 			/** Media Type */
 			media_type: string;
 		};
+		/** Container */
+		Container: {
+			/**
+			 * Identifiers
+			 * @description External identifiers for the container (e.g. its OpenAlex source id, ISSN, DOI, or ISBN).
+			 */
+			identifiers?: components['schemas']['Identifier1'][] | null;
+			/**
+			 * Type
+			 * @description The type of the container.
+			 */
+			type?:
+				| (
+						| 'Blog'
+						| 'Book'
+						| 'BookSeries'
+						| 'Journal'
+						| 'Proceedings'
+						| 'ProceedingsSeries'
+						| 'Repository'
+						| 'DataRepository'
+						| 'Periodical'
+						| 'Series'
+						| 'igsnCatalog'
+						| 'raidRegistry'
+						| 'Other'
+				  )
+				| null;
+			/**
+			 * Title
+			 * @description The name of the container.
+			 */
+			title?: string | null;
+			/**
+			 * Additional Titles
+			 * @description Abbreviated or alternate titles of the container.
+			 */
+			additional_titles?: string[] | null;
+			/**
+			 * Description
+			 * @description A description of the container.
+			 */
+			description?: string | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+			license?: components['schemas']['License'] | null;
+			/**
+			 * Platform
+			 * @description The platform of the container.
+			 */
+			platform?: string | null;
+			/**
+			 * Image
+			 * @description The image for the container.
+			 */
+			image?: string | null;
+			/** @description The publisher or host organization of the container. */
+			publisher?: components['schemas']['Publisher'] | null;
+			/**
+			 * Country
+			 * @description ISO 3166-1 alpha-2 country code of the container.
+			 */
+			country?: string | null;
+			/**
+			 * First Page
+			 * @description The first page of the resource.
+			 */
+			first_page?: string | null;
+			/**
+			 * Last Page
+			 * @description The last page of the resource.
+			 */
+			last_page?: string | null;
+			/**
+			 * Volume
+			 * @description The volume of the resource.
+			 */
+			volume?: string | null;
+			/**
+			 * Issue
+			 * @description The issue of the resource.
+			 */
+			issue?: string | null;
+			/**
+			 * Location
+			 * @description The location of the conference or event.
+			 */
+			location?: string | null;
+			/**
+			 * Series
+			 * @description The series name or acronym for the conference or event.
+			 */
+			series?: string | null;
+			/**
+			 * Url
+			 * @description The homepage URL of the container.
+			 */
+			url?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the container record was last updated.
+			 */
+			date_updated?: string | null;
+		};
 		/** Contributor */
 		Contributor: {
-			/** Last Name */
-			last_name: string;
-			/** First Name */
-			first_name?: string | null;
 			/**
-			 * Is Corresponding
-			 * @default false
+			 * Type
+			 * @enum {string}
 			 */
-			is_corresponding: boolean;
-		};
-		/** ContributorView */
-		ContributorView: {
-			/** First Name */
-			first_name: string | null;
-			/** Last Name */
-			last_name: string;
+			type: 'Person' | 'Organization';
+			/** Person */
+			person?:
+				| components['schemas']['Person1']
+				| components['schemas']['Person2']
+				| components['schemas']['Person3']
+				| components['schemas']['Person4']
+				| null;
+			organization?: components['schemas']['Organization'] | null;
 			/**
-			 * Is Corresponding
-			 * @default false
+			 * Roles
+			 * @description List of roles assumed by the contributor when working on the resource.
 			 */
-			is_corresponding: boolean;
+			roles?:
+				| (
+						| 'Author'
+						| 'Chair'
+						| 'Conceptualization'
+						| 'ContactPerson'
+						| 'CorrespondingAuthor'
+						| 'DataCollector'
+						| 'DataCuration'
+						| 'DataManager'
+						| 'Distributor'
+						| 'Editor'
+						| 'FormalAnalysis'
+						| 'FundingAcquisition'
+						| 'HostingInstitution'
+						| 'Interviewee'
+						| 'Investigation'
+						| 'Maintainer'
+						| 'Methodology'
+						| 'Other'
+						| 'Producer'
+						| 'ProjectAdministration'
+						| 'ProjectLeader'
+						| 'ProjectManager'
+						| 'ProjectMember'
+						| 'Reader'
+						| 'RelatedPerson'
+						| 'RegistrationAgency'
+						| 'RegistrationAuthority'
+						| 'ResearchGroup'
+						| 'Researcher'
+						| 'Resources'
+						| 'Reviewer'
+						| 'ReviewerExternal'
+						| 'ReviewAssistant'
+						| 'RightsHolder'
+						| 'Software'
+						| 'Sponsor'
+						| 'StatsReviewer'
+						| 'Supervision'
+						| 'Translator'
+						| 'Validation'
+						| 'Visualization'
+						| 'WorkPackageLeader'
+						| 'WritingOriginalDraft'
+						| 'WritingReviewEditing'
+				  )[]
+				| null;
 		};
-		/** CustomField */
-		'CustomField-Input': {
-			/** Name */
-			name: string;
-			value: components['schemas']['JsonValue-Input'];
+		/** CrossWorkspaceCopyRequest */
+		CrossWorkspaceCopyRequest: {
+			/**
+			 * Target Workspace Id
+			 * Format: uuid
+			 */
+			target_workspace_id: string;
 		};
-		/** CustomField */
-		'CustomField-Output': {
-			/** Name */
-			name: string;
-			value: components['schemas']['JsonValue-Output'];
+		/** CrossWorkspaceCopyView */
+		CrossWorkspaceCopyView: {
+			/**
+			 * Source Workspace Id
+			 * Format: uuid
+			 */
+			source_workspace_id: string;
+			/**
+			 * Source Item Id
+			 * Format: uuid
+			 */
+			source_item_id: string;
+			/**
+			 * Target Workspace Id
+			 * Format: uuid
+			 */
+			target_workspace_id: string;
+			/**
+			 * Target Item Id
+			 * Format: uuid
+			 */
+			target_item_id: string;
 		};
 		/** DashboardProjectView */
 		DashboardProjectView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
-			/** Visibility */
-			visibility: string;
+			participation: components['schemas']['ProjectParticipation'];
 		};
 		/** DashboardRecentItemView */
 		DashboardRecentItemView: {
@@ -2577,8 +3271,63 @@ export interface components {
 			recent_items: components['schemas']['DashboardRecentItemView'][];
 			/** Projects */
 			projects: components['schemas']['DashboardProjectView'][];
+			/** Project Count */
+			project_count: number;
 			/** Session Count */
 			session_count: number;
+		};
+		/** Dates */
+		Dates: {
+			/**
+			 * Created
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			created?: string | null;
+			/**
+			 * Submitted
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			submitted?: string | null;
+			/**
+			 * Accepted
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			accepted?: string | null;
+			/**
+			 * Accessed
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			accessed?: string | null;
+			/**
+			 * Available
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			available?: string | null;
+			/**
+			 * Withdrawn
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			withdrawn?: string | null;
+			/**
+			 * Collected
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			collected?: string | null;
+			/**
+			 * Valid
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			valid?: string | null;
+			/**
+			 * Copyrighted
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			copyrighted?: string | null;
+			/**
+			 * Other
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			other?: string | null;
 		};
 		/** DeleteConfirmationRequest */
 		DeleteConfirmationRequest: {
@@ -2593,13 +3342,6 @@ export interface components {
 			operator: string;
 			/** Term */
 			term: string;
-		};
-		/** DiscoveryProviderView */
-		DiscoveryProviderView: {
-			/** Id */
-			id: string;
-			/** Name */
-			name: string;
 		};
 		/** DiscoverySearchRequest */
 		DiscoverySearchRequest: {
@@ -2629,20 +3371,36 @@ export interface components {
 		};
 		/** DiscussionMessageView */
 		DiscussionMessageView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Item Id */
-			item_id: string;
-			/** Author Id */
+			item_id?: string | null;
+			/** Project Id */
+			project_id?: string | null;
+			/**
+			 * Author Id
+			 * Format: uuid
+			 */
 			author_id: string;
 			/** Author Username */
 			author_username: string;
+			/** Mine */
+			mine: boolean;
 			/** Body */
 			body: string;
 			/** Created At */
 			created_at: string;
 			/** Updated At */
 			updated_at: string;
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
+		};
+		/** DiscussionModerationRequest */
+		DiscussionModerationRequest: {
+			/** Reason */
+			reason: string;
 		};
 		/** DiscussionRequest */
 		DiscussionRequest: {
@@ -2671,7 +3429,10 @@ export interface components {
 		};
 		/** DocumentListView */
 		DocumentListView: {
-			/** Item Id */
+			/**
+			 * Item Id
+			 * Format: uuid
+			 */
 			item_id: string;
 			/** Files */
 			files: components['schemas']['FileView'][];
@@ -2702,7 +3463,10 @@ export interface components {
 		};
 		/** ExportCreate */
 		ExportCreate: {
-			/** Revision Id */
+			/**
+			 * Revision Id
+			 * Format: uuid
+			 */
 			revision_id: string;
 			/** Project Id */
 			project_id?: string | null;
@@ -2714,16 +3478,27 @@ export interface components {
 			/** Timezone */
 			timezone?: string | null;
 		};
-		/** ExternalIdentifier */
-		ExternalIdentifier: {
-			/** Provider */
-			provider: string;
-			/** Value */
-			value: string;
+		/** File */
+		File: {
+			/** Bucket */
+			bucket?: string | null;
+			/** Key */
+			key?: string | null;
+			/** Checksum */
+			checksum?: string | null;
+			/** Url */
+			url: string;
+			/** Size */
+			size?: number | null;
+			/** Mime Type */
+			mime_type?: string | null;
 		};
 		/** FileView */
 		FileView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/**
 			 * Kind
@@ -2772,6 +3547,213 @@ export interface components {
 			 */
 			alignment: 'left' | 'center' | 'right';
 		};
+		/** FundingReferences */
+		FundingReferences: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id?: string | null;
+			/** Funder Name */
+			funder_name: string;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title?: string | null;
+			/** Award Number */
+			award_number?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** FundingReferences1 */
+		FundingReferences1: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id: string;
+			/** Funder Name */
+			funder_name?: string | null;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title?: string | null;
+			/** Award Number */
+			award_number?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** FundingReferences2 */
+		FundingReferences2: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id?: string | null;
+			/** Funder Name */
+			funder_name?: string | null;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title?: string | null;
+			/** Award Number */
+			award_number: string;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** FundingReferences3 */
+		FundingReferences3: {
+			/**
+			 * Funder Id
+			 * @description The unique identifier for the resource.
+			 */
+			funder_id?: string | null;
+			/** Funder Name */
+			funder_name?: string | null;
+			/**
+			 * Award Id
+			 * @description The unique identifier for the resource.
+			 */
+			award_id?: string | null;
+			/** Award Title */
+			award_title: string;
+			/** Award Number */
+			award_number?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** GeoLocation */
+		GeoLocation: {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id?: string | null;
+			/** Place */
+			place?: string | null;
+			/** Point Longitude */
+			point_longitude?: number | null;
+			/** Point Latitude */
+			point_latitude?: number | null;
+			/** Box West Longitude */
+			box_west_longitude?: number | null;
+			/** Box East Longitude */
+			box_east_longitude?: number | null;
+			/** Box South Latitude */
+			box_south_latitude?: number | null;
+			/** Box North Latitude */
+			box_north_latitude?: number | null;
+			/**
+			 * Polygon
+			 * @description The polygon geometry, formatted as Well-Known Text (WKT).
+			 */
+			polygon?: string | null;
+		};
 		/** HealthView */
 		HealthView: {
 			/**
@@ -2780,48 +3762,168 @@ export interface components {
 			 */
 			status: string;
 		};
-		/** IdentifierImportRequest */
-		IdentifierImportRequest: {
+		/** Identifier */
+		Identifier: {
 			/** Identifier */
 			identifier: string;
+			/**
+			 * Identifier Type
+			 * @enum {string}
+			 */
+			identifier_type:
+				| 'ARK'
+				| 'arXiv'
+				| 'article_id'
+				| 'Bibcode'
+				| 'DOI'
+				| 'FundRef'
+				| 'GeoNames'
+				| 'GRID'
+				| 'Handle'
+				| 'ISBN'
+				| 'ISNI'
+				| 'ISSN'
+				| 'OpenAlex'
+				| 'PMID'
+				| 'PMCID'
+				| 'PURL'
+				| 'RAiD'
+				| 'ResearcherID'
+				| 'ROR'
+				| 'ScopusID'
+				| 'SWHID'
+				| 'URL'
+				| 'URN'
+				| 'UUID'
+				| 'GUID'
+				| 'Wikidata'
+				| 'Other';
+			/**
+			 * Scheme
+			 * @description The scheme for identifiers with identifier_type 'Other', e.g. 'IGSN' or 'MGDS'.
+			 */
+			scheme?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Identifier1 */
+		Identifier1: {
+			/**
+			 * Identifier
+			 * @description The identifier for the container.
+			 */
+			identifier: string;
+			/**
+			 * Identifier Type
+			 * @description Identifier type for a container (journal, repository, blog, etc.).
+			 * @enum {string}
+			 */
+			identifier_type:
+				| 'DataCite'
+				| 'DOI'
+				| 'Handle'
+				| 'ISBN'
+				| 'ISSN'
+				| 'OpenAlex'
+				| 'PURL'
+				| 're3data'
+				| 'URL'
+				| 'URN'
+				| 'UUID'
+				| 'Wikidata'
+				| 'Other';
+		};
+		/** IdentifiersImportRequest */
+		IdentifiersImportRequest: {
+			/** Identifiers */
+			identifiers: string[];
 			/**
 			 * Provider
 			 * @default auto
 			 */
 			provider: string;
 		};
-		/** ImportBatchRetryView */
-		ImportBatchRetryView: {
-			/** Id */
-			id: string;
-			/** Status */
-			status: string;
-			/** Workflow Id */
-			workflow_id?: string | null;
-		};
-		/** ImportBatchView */
-		ImportBatchView: {
-			/** Id */
+		/** ImportBatchPreview */
+		ImportBatchPreview: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** File Format */
 			file_format: string;
-			/** Status */
-			status: string;
+			status: components['schemas']['ImportBatchStatus'];
 			/** Workflow Id */
-			workflow_id?: string | null;
+			workflow_id: string | null;
 			/** Records */
-			records: {
-				[key: string]: unknown;
-			}[];
+			records: components['schemas']['ImportCandidatePreview'][];
 			/** Errors */
-			errors: {
-				[key: string]: unknown;
-			}[];
+			errors: components['schemas']['ImportDiagnostic'][];
 			/**
 			 * Created At
 			 * Format: date-time
 			 */
 			created_at: string;
+		};
+		/**
+		 * ImportBatchStatus
+		 * @enum {string}
+		 */
+		ImportBatchStatus: 'pending' | 'ready' | 'failed' | 'committed';
+		/** ImportCandidatePreview */
+		ImportCandidatePreview: {
+			metadata: components['schemas']['Work'];
+			source?: components['schemas']['ImportSource'] | null;
+		};
+		/** ImportDiagnostic */
+		ImportDiagnostic: {
+			/** Message */
+			message: string;
+			/**
+			 * Severity
+			 * @default error
+			 * @enum {string}
+			 */
+			severity: 'warning' | 'error';
+			/** Row */
+			row?: number | null;
+			/** Filename */
+			filename?: string | null;
+			/** Code */
+			code?: string | null;
+			/** Identifier */
+			identifier?: string | null;
+		};
+		/** ImportSource */
+		ImportSource: {
+			/** Original Name */
+			original_name: string;
+			/** Size */
+			size: number | null;
 		};
 		/** InkPayload */
 		InkPayload: {
@@ -2853,229 +3955,129 @@ export interface components {
 		};
 		/** InvitationDetailsView */
 		InvitationDetailsView: {
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			kind: 'account';
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
+			role: components['schemas']['SystemRole'];
 			/**
 			 * Expires At
 			 * Format: date-time
 			 */
 			expires_at: string;
 		};
-		/** ItemDetailView */
-		ItemDetailView: {
-			/** Id */
-			id: string;
-			/** Title Html */
-			title_html: string;
-			/** Authors */
-			authors: string | null;
-			/** Publication Date */
-			publication_date: string | null;
-			/** Publication Title */
-			publication_title: string | null;
-			/** Doi */
-			doi: string | null;
-			/** Version */
-			version: number;
-			metadata: components['schemas']['ItemMetadata-Output'];
-			/** Abstract Html */
-			abstract_html: string | null;
-			/** Editors */
-			editors: components['schemas']['ContributorView'][];
-			/** Structured Authors */
-			structured_authors: components['schemas']['ContributorView'][];
-			/** Reference Type */
-			reference_type: string | null;
-			/** Volume */
-			volume: string | null;
-			/** Issue */
-			issue: string | null;
-			/** Pages */
-			pages: string | null;
-			/** Keywords */
-			keywords: string | null;
-			/** Urls */
-			urls: string | null;
-		};
-		/** ItemIdentifierView */
-		ItemIdentifierView: {
-			/** Provider */
-			provider: string;
-			/** Value */
-			value: string;
-		};
-		/** ItemLatestRevisionView */
-		ItemLatestRevisionView: {
-			/** Id */
-			id: string;
-			/** Original Name */
-			original_name: string;
-			/** Size */
-			size: number;
-			/** Page Count */
-			page_count?: number | null;
-			/** Processing State */
-			processing_state: string;
-		};
-		/** ItemMetadata */
-		'ItemMetadata-Input': {
-			/** Title */
-			title: string;
-			/** Abstract */
-			abstract?: string | null;
+		/**
+		 * ItemCopyTargetView
+		 * @description A currently eligible copy destination; the command rechecks authority.
+		 */
+		ItemCopyTargetView: {
 			/**
-			 * Keywords
-			 * @default []
+			 * Id
+			 * Format: uuid
 			 */
-			keywords: string[];
-			/** Publication Date */
-			publication_date?: string | null;
-			/** Publication Title */
-			publication_title?: string | null;
-			/** Reference Type */
-			reference_type?: string | null;
-			/** Volume */
-			volume?: string | null;
-			/** Issue */
-			issue?: string | null;
-			/** Pages */
-			pages?: string | null;
-			/** Affiliation */
-			affiliation?: string | null;
-			/** Publisher */
-			publisher?: string | null;
-			/** Place Published */
-			place_published?: string | null;
-			/** Journal Abbreviation */
-			journal_abbreviation?: string | null;
-			/** Bibtex Key */
-			bibtex_key?: string | null;
-			/** Bibtex Type */
-			bibtex_type?: string | null;
-			/**
-			 * Urls
-			 * @default []
-			 */
-			urls: string[];
-			/**
-			 * Authors
-			 * @default []
-			 */
-			authors: components['schemas']['Contributor'][];
-			/**
-			 * Editors
-			 * @default []
-			 */
-			editors: components['schemas']['Contributor'][];
-			/** Doi */
-			doi?: string | null;
-			/**
-			 * Identifiers
-			 * @default []
-			 */
-			identifiers: components['schemas']['ExternalIdentifier'][];
-			/**
-			 * Custom Fields
-			 * @default []
-			 */
-			custom_fields: components['schemas']['CustomField-Input'][];
-		};
-		/** ItemMetadata */
-		'ItemMetadata-Output': {
-			/** Title */
-			title: string;
-			/** Abstract */
-			abstract?: string | null;
-			/**
-			 * Keywords
-			 * @default []
-			 */
-			keywords: string[];
-			/** Publication Date */
-			publication_date?: string | null;
-			/** Publication Title */
-			publication_title?: string | null;
-			/** Reference Type */
-			reference_type?: string | null;
-			/** Volume */
-			volume?: string | null;
-			/** Issue */
-			issue?: string | null;
-			/** Pages */
-			pages?: string | null;
-			/** Affiliation */
-			affiliation?: string | null;
-			/** Publisher */
-			publisher?: string | null;
-			/** Place Published */
-			place_published?: string | null;
-			/** Journal Abbreviation */
-			journal_abbreviation?: string | null;
-			/** Bibtex Key */
-			bibtex_key?: string | null;
-			/** Bibtex Type */
-			bibtex_type?: string | null;
-			/**
-			 * Urls
-			 * @default []
-			 */
-			urls: string[];
-			/**
-			 * Authors
-			 * @default []
-			 */
-			authors: components['schemas']['Contributor'][];
-			/**
-			 * Editors
-			 * @default []
-			 */
-			editors: components['schemas']['Contributor'][];
-			/** Doi */
-			doi?: string | null;
-			/**
-			 * Identifiers
-			 * @default []
-			 */
-			identifiers: components['schemas']['ExternalIdentifier'][];
-			/**
-			 * Custom Fields
-			 * @default []
-			 */
-			custom_fields: components['schemas']['CustomField-Output'][];
-		};
-		/** ItemOrganizeProjectView */
-		ItemOrganizeProjectView: {
-			/** Id */
 			id: string;
 			/** Name */
 			name: string;
-			/** Role */
-			role: string;
+		};
+		/** ItemCreateRequest */
+		ItemCreateRequest: {
+			metadata: components['schemas']['Work'];
+			/** Citation Key */
+			citation_key?: string | null;
+		};
+		/** ItemDetailView */
+		ItemDetailView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/** Version */
+			version: number;
+			metadata: components['schemas']['Work'];
+			/** Citation Key */
+			citation_key: string | null;
+		};
+		/** ItemMetadataSourceView */
+		ItemMetadataSourceView: {
+			/** Namespace */
+			namespace: string;
+			/** Value */
+			value: string;
+			/** Providers */
+			providers: components['schemas']['MetadataSourceProviderView'][];
+		};
+		/** ItemMetadataSourcesView */
+		ItemMetadataSourcesView: {
+			/** Version */
+			version: number;
+			/** Sources */
+			sources: components['schemas']['ItemMetadataSourceView'][];
+		};
+		/** ItemOrganizeProjectView */
+		ItemOrganizeProjectView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/** Name */
+			name: string;
 			/** Assigned */
 			assigned: boolean;
+			participation: components['schemas']['ProjectParticipation'];
+			/** Is Participating */
+			is_participating: boolean;
 		};
 		/** ItemOrganizeView */
 		ItemOrganizeView: {
-			item: components['schemas']['ItemSearchView'];
-			permissions: components['schemas']['ItemWorkspacePermissionsView'];
-			/** Tags */
-			tags: components['schemas']['ItemTagView'][];
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
 			/** Projects */
 			projects: components['schemas']['ItemOrganizeProjectView'][];
 			tag_matrix: components['schemas']['TagMatrixView'];
 		};
-		/** ItemOwnerView */
-		ItemOwnerView: {
-			/** Id */
+		/** ItemOverviewCountsView */
+		ItemOverviewCountsView: {
+			/** Revisions */
+			revisions: number;
+			/** Attachments */
+			attachments: number;
+			/** Annotations */
+			annotations: number;
+			/** Discussion */
+			discussion: number;
+		};
+		/** ItemOverviewView */
+		ItemOverviewView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
-			/** Username */
-			username: string;
+			/** Version */
+			version: number;
+			metadata: components['schemas']['Work'];
+			/** Citation Key */
+			citation_key: string | null;
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
+			counts: components['schemas']['ItemOverviewCountsView'];
+			/** Tags */
+			tags: components['schemas']['ItemTagView'][];
+			/** Latest Revision Id */
+			latest_revision_id?: string | null;
+			thumbnail?: components['schemas']['ItemThumbnailView'] | null;
+			/** Copy Targets */
+			copy_targets: components['schemas']['ItemCopyTargetView'][];
 		};
 		/** ItemSearchView */
 		ItemSearchView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Title Html */
 			title_html: string;
@@ -3092,7 +4094,10 @@ export interface components {
 		};
 		/** ItemTagView */
 		ItemTagView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
@@ -3101,92 +4106,70 @@ export interface components {
 		ItemThumbnailView: {
 			/** Source Kind */
 			source_kind: string;
-			/** Source Id */
+			/**
+			 * Source Id
+			 * Format: uuid
+			 */
 			source_id: string;
 		};
 		/** ItemUpdateRequest */
 		ItemUpdateRequest: {
 			/** Expected Version */
 			expected_version: number;
-			metadata: components['schemas']['ItemMetadata-Input'];
+			metadata: components['schemas']['Work'];
+			/** Citation Key */
+			citation_key?: string | null;
 		};
-		/** ItemWorkspaceCountsView */
-		ItemWorkspaceCountsView: {
-			/** Revisions */
-			revisions: number;
-			/** Attachments */
-			attachments: number;
-			/** Annotations */
-			annotations: number;
-			/** Discussion */
-			discussion: number;
-		};
-		/** ItemWorkspacePermissionsView */
-		ItemWorkspacePermissionsView: {
-			/** Edit */
-			edit: boolean;
-			/** Delete */
-			delete: boolean;
-		};
-		/** ItemWorkspaceView */
-		ItemWorkspaceView: {
-			item: components['schemas']['ItemSearchView'];
-			permissions: components['schemas']['ItemWorkspacePermissionsView'];
-			counts: components['schemas']['ItemWorkspaceCountsView'];
-			/** Tags */
-			tags: components['schemas']['ItemTagView'][];
-			owner: components['schemas']['ItemOwnerView'];
-			/** Identifiers */
-			identifiers: components['schemas']['ItemIdentifierView'][];
-			latest_revision?: components['schemas']['ItemLatestRevisionView'] | null;
-			thumbnail?: components['schemas']['ItemThumbnailView'] | null;
-		};
-		/** JoinableProjectView */
-		JoinableProjectView: {
-			/** Id */
-			id: string;
-			/** Name */
-			name: string;
+		/** KeywordFacet */
+		KeywordFacet: {
+			/** Value */
+			value: string;
 			/** Item Count */
 			item_count: number;
-			/** State */
-			state: string;
-			/** Visibility */
-			visibility: string;
-			/**
-			 * Description
-			 * @default
-			 */
-			description: string;
 		};
-		'JsonValue-Input':
-			| string
-			| number
-			| boolean
-			| components['schemas']['JsonValue-Input'][]
-			| {
-					[key: string]: components['schemas']['JsonValue-Input'];
-			  }
-			| null;
-		'JsonValue-Output':
-			| string
-			| number
-			| boolean
-			| components['schemas']['JsonValue-Output'][]
-			| {
-					[key: string]: components['schemas']['JsonValue-Output'];
-			  }
-			| null;
-		/** LibrarySearchView */
-		LibrarySearchView: {
-			/** Items */
-			items: components['schemas']['ItemSearchView'][];
-			/** Total */
-			total: number;
-			/** Page */
-			page: number;
-			/** Per Page */
-			per_page: number;
+		/** LibraryFacets */
+		LibraryFacets: {
+			/** Authors */
+			authors: components['schemas']['AuthorFacet'][];
+			/** Keywords */
+			keywords: components['schemas']['KeywordFacet'][];
+			/** Reference Types */
+			reference_types: components['schemas']['ReferenceTypeFacet'][];
+		};
+		/** License */
+		License: {
+			/** Id */
+			id?: string | null;
+			/** Title */
+			title?: string | null;
+			/** Url */
+			url?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** LinePayload */
 		LinePayload: {
@@ -3241,7 +4224,10 @@ export interface components {
 		};
 		/** LoginSessionView */
 		LoginSessionView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/**
 			 * Current
@@ -3258,6 +4244,25 @@ export interface components {
 			 * Format: date-time
 			 */
 			created_at: string;
+		};
+		/** MetadataProviderChoices */
+		MetadataProviderChoices: {
+			/** Search */
+			search: components['schemas']['ProviderChoice'][];
+			/** Lookup */
+			lookup: components['schemas']['ProviderChoice'][];
+			/**
+			 * Max Search Clauses
+			 * @default 5
+			 */
+			max_search_clauses: number;
+		};
+		/** MetadataSourceProviderView */
+		MetadataSourceProviderView: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
 		};
 		/** MetadataSyncRequest */
 		MetadataSyncRequest: {
@@ -3283,6 +4288,118 @@ export interface components {
 			 */
 			type: 'note';
 		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_AdminAuditEventView_: {
+			/** Items */
+			items: components['schemas']['AdminAuditEventView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_ItemSearchView_: {
+			/** Items */
+			items: components['schemas']['ItemSearchView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_ProjectSummaryView_: {
+			/** Items */
+			items: components['schemas']['ProjectSummaryView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_TagView_: {
+			/** Items */
+			items: components['schemas']['TagView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkflowSummaryView_: {
+			/** Items */
+			items: components['schemas']['WorkflowSummaryView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkspaceGovernanceMemberView_: {
+			/** Items */
+			items: components['schemas']['WorkspaceGovernanceMemberView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkspaceMemberDirectoryView_: {
+			/** Items */
+			items: components['schemas']['WorkspaceMemberDirectoryView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkspaceView_: {
+			/** Items */
+			items: components['schemas']['WorkspaceView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
 		/** OkView */
 		OkView: {
 			/**
@@ -3290,6 +4407,112 @@ export interface components {
 			 * @default true
 			 */
 			ok: boolean;
+		};
+		/** Organization */
+		Organization: {
+			/**
+			 * Id
+			 * @description ROR identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Name
+			 * @description The name of the organization.
+			 */
+			name?: string | null;
+			/**
+			 * Acronym
+			 * @description The acronym or abbreviation of the organization.
+			 */
+			acronym?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, aliases, or translated names of the organization.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Types
+			 * @description The types of the organization.
+			 */
+			types?:
+				| (
+						| 'education'
+						| 'funder'
+						| 'healthcare'
+						| 'company'
+						| 'archive'
+						| 'nonprofit'
+						| 'government'
+						| 'facility'
+						| 'other'
+				  )[]
+				| null;
+			/**
+			 * Status
+			 * @description The status of the organization.
+			 */
+			status?: ('active' | 'inactive' | 'withdrawn') | null;
+			/**
+			 * Established
+			 * @description The year the organization was established.
+			 */
+			established?: number | null;
+			/**
+			 * Date Updated
+			 * @description The date the organization record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the organization, e.g. GRID, ISNI, FundRef, or Wikidata.
+			 */
+			identifiers?: components['schemas']['Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Website and other URLs associated with the organization.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the organization, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Geo Locations
+			 * @description Geographic locations of the organization.
+			 */
+			geo_locations?: components['schemas']['GeoLocation'][] | null;
+			/**
+			 * Relations
+			 * @description Other organizations related to this organization.
+			 */
+			relations?: components['schemas']['Relation1'][] | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** PasswordChangeRequest */
 		PasswordChangeRequest: {
@@ -3305,14 +4528,25 @@ export interface components {
 		};
 		/** PdfViewerProjectView */
 		PdfViewerProjectView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
+			/**
+			 * Editable
+			 * @description Whether the User may create Annotations in this Project.
+			 */
+			editable: boolean;
 		};
 		/** PdfViewerRevisionView */
 		PdfViewerRevisionView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Original Name */
 			original_name: string;
@@ -3328,13 +4562,356 @@ export interface components {
 		/** PdfViewerView */
 		PdfViewerView: {
 			item: components['schemas']['ItemSearchView'];
-			/** Editable */
+			/**
+			 * Editable
+			 * @description Whether the User may create private Annotations.
+			 */
 			editable: boolean;
 			/** Annotation Author */
 			annotation_author: string;
 			revision: components['schemas']['PdfViewerRevisionView'];
 			/** Projects */
 			projects: components['schemas']['PdfViewerProjectView'][];
+		};
+		/** Person1 */
+		Person1: {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id: string;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person2 */
+		Person2: {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name: string;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person3 */
+		Person3: {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name: string;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name?: string | null;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Person4 */
+		Person4: {
+			/**
+			 * Id
+			 * @description ORCID identifier URL.
+			 */
+			id?: string | null;
+			/**
+			 * Given Name
+			 * @description The given name of the person.
+			 */
+			given_name?: string | null;
+			/**
+			 * Family Name
+			 * @description The family name of the person.
+			 */
+			family_name: string;
+			/**
+			 * Name
+			 * @description The display or credit name of the person.
+			 */
+			name?: string | null;
+			/**
+			 * Additional Names
+			 * @description Alternate names, pseudonyms, or previous names of the person.
+			 */
+			additional_names?: string[] | null;
+			/**
+			 * Description
+			 * @description A biographical description of the person.
+			 */
+			description?: string | null;
+			/**
+			 * Affiliations
+			 * @description The affiliations of the person.
+			 */
+			affiliations?:
+				(components['schemas']['Affiliation1'] | components['schemas']['Affiliation2'])[] | null;
+			/**
+			 * Identifiers
+			 * @description External identifiers for the person, e.g. Scopus Author ID or ResearcherID.
+			 */
+			identifiers?: components['schemas']['Identifier'][] | null;
+			/**
+			 * Urls
+			 * @description Personal or professional URLs associated with the person.
+			 */
+			urls?: components['schemas']['Url'][] | null;
+			/**
+			 * Country
+			 * @description The country of the person, as an ISO 3166-1 alpha-2 code.
+			 */
+			country?: string | null;
+			/**
+			 * Date Updated
+			 * @description The date the person record was last updated.
+			 */
+			date_updated?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
 		};
 		/** Point */
 		Point: {
@@ -3347,12 +4924,7 @@ export interface components {
 		ProjectCreateRequest: {
 			/** Name */
 			name: string;
-			/**
-			 * Visibility
-			 * @default private
-			 * @enum {string}
-			 */
-			visibility: 'private' | 'public';
+			participation: components['schemas']['ProjectParticipation'];
 			/**
 			 * Description
 			 * @default
@@ -3364,94 +4936,122 @@ export interface components {
 			/** Confirmation */
 			confirmation: string;
 		};
-		/** ProjectDescriptionRequest */
-		ProjectDescriptionRequest: {
-			/** Description */
-			description: string;
-		};
 		/** ProjectDetailView */
 		ProjectDetailView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
-			/** Role */
-			role: string;
 			/** Item Count */
 			item_count: number;
-			/** State */
-			state: string;
-			/** Visibility */
-			visibility: string;
+			state: components['schemas']['ProjectState'];
+			participation: components['schemas']['ProjectParticipation'];
+			/** Is Participating */
+			is_participating: boolean;
 			/**
 			 * Description
 			 * @default
 			 */
 			description: string;
-			/** Members */
-			members: components['schemas']['ProjectMemberView'][];
-			/** Items */
-			items: components['schemas']['ItemSearchView'][];
-		};
-		/** ProjectMemberRequest */
-		ProjectMemberRequest: {
-			/** Username */
-			username: string;
+			/** Allowed Participation Changes */
+			allowed_participation_changes: components['schemas']['ProjectParticipation'][];
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
 			/**
-			 * Role
-			 * @default viewer
-			 * @enum {string}
+			 * Active Participants
+			 * @description Active explicit participants; Workspace participation is implicit.
 			 */
-			role: 'editor' | 'viewer';
+			active_participants: components['schemas']['ProjectParticipantInfo'][];
 		};
-		/** ProjectMemberView */
-		ProjectMemberView: {
-			/** User Id */
+		/** ProjectParticipantInfo */
+		ProjectParticipantInfo: {
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
 			user_id: string;
 			/** Username */
 			username: string;
-			/** Role */
-			role: string;
 		};
+		/** ProjectParticipantRequest */
+		ProjectParticipantRequest: {
+			/** Username */
+			username: string;
+		};
+		/**
+		 * ProjectParticipation
+		 * @enum {string}
+		 */
+		ProjectParticipation: 'workspace' | 'open' | 'managed';
 		/** ProjectSettingsRequest */
 		ProjectSettingsRequest: {
 			/** Name */
-			name: string;
-			/**
-			 * Visibility
-			 * @enum {string}
-			 */
-			visibility: 'private' | 'public';
+			name?: string;
+			/** Participation */
+			participation?: components['schemas']['ProjectParticipation'];
 			/** Description */
-			description: string;
+			description?: string;
 		};
+		/**
+		 * ProjectState
+		 * @enum {string}
+		 */
+		ProjectState: 'active' | 'archived';
 		/** ProjectSummaryView */
 		ProjectSummaryView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
-			/** Role */
-			role: string;
 			/** Item Count */
 			item_count: number;
-			/** State */
-			state: string;
-			/** Visibility */
-			visibility: string;
+			state: components['schemas']['ProjectState'];
+			participation: components['schemas']['ProjectParticipation'];
+			/** Is Participating */
+			is_participating: boolean;
 			/**
 			 * Description
 			 * @default
 			 */
 			description: string;
+			/** Allowed Participation Changes */
+			allowed_participation_changes: components['schemas']['ProjectParticipation'][];
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
 		};
-		/** ProjectVisibilityRequest */
-		ProjectVisibilityRequest: {
+		/** ProviderChoice */
+		ProviderChoice: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
 			/**
-			 * Visibility
-			 * @enum {string}
+			 * Sorts
+			 * @default []
 			 */
-			visibility: 'private' | 'public';
+			sorts: components['schemas']['SearchSort'][];
+			/**
+			 * Identifier Namespaces
+			 * @default []
+			 */
+			identifier_namespaces: string[];
+		};
+		/** Publisher */
+		Publisher: {
+			/**
+			 * Id
+			 * @description ROR identifier URL of the publisher.
+			 */
+			id?: string | null;
+			/**
+			 * Name
+			 * @description The name of the publisher.
+			 */
+			name?: string | null;
 		};
 		/** Rect */
 		Rect: {
@@ -3474,6 +5074,229 @@ export interface components {
 			 */
 			type: 'rectangle';
 		};
+		/** Reference */
+		Reference: {
+			/** Key */
+			key?: string | null;
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id?: string | null;
+			/** Type */
+			type?:
+				| (
+						| 'Preprint'
+						| 'Audiovisual'
+						| 'Blog'
+						| 'BlogPost'
+						| 'BlogVolume'
+						| 'Book'
+						| 'BookChapter'
+						| 'BookPart'
+						| 'BookSection'
+						| 'BookSeries'
+						| 'BookSet'
+						| 'Collection'
+						| 'Component'
+						| 'ComputationalNotebook'
+						| 'Database'
+						| 'Dataset'
+						| 'Dissertation'
+						| 'Document'
+						| 'Entry'
+						| 'Event'
+						| 'Figure'
+						| 'Grant'
+						| 'Image'
+						| 'Instrument'
+						| 'InteractiveResource'
+						| 'Journal'
+						| 'JournalArticle'
+						| 'JournalIssue'
+						| 'JournalVolume'
+						| 'LegalDocument'
+						| 'Manuscript'
+						| 'Map'
+						| 'Model'
+						| 'OutputManagementPlan'
+						| 'Patent'
+						| 'PeerReview'
+						| 'Performance'
+						| 'PersonalCommunication'
+						| 'PhysicalObject'
+						| 'Poster'
+						| 'Presentation'
+						| 'Proceedings'
+						| 'ProceedingsArticle'
+						| 'ProceedingsSeries'
+						| 'Report'
+						| 'ReportComponent'
+						| 'ReportSeries'
+						| 'Review'
+						| 'Service'
+						| 'Software'
+						| 'Sound'
+						| 'Standard'
+						| 'StudyRegistration'
+						| 'WebPage'
+						| 'Workflow'
+						| 'Other'
+				  )
+				| null;
+			/**
+			 * Reference
+			 * @description The reference formatted as string.
+			 */
+			reference?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** ReferenceTypeFacet */
+		ReferenceTypeFacet: {
+			/** Value */
+			value: string;
+			/** Item Count */
+			item_count: number;
+		};
+		/** RegisterRequest */
+		RegisterRequest: {
+			/** Username */
+			username: string;
+			/** Password */
+			password: string;
+		};
+		/** Relation */
+		Relation: {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id: string;
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type:
+				| 'IsNewVersionOf'
+				| 'IsPreviousVersionOf'
+				| 'IsVersionOf'
+				| 'HasVersion'
+				| 'IsPartOf'
+				| 'HasPart'
+				| 'IsVariantFormOf'
+				| 'IsOriginalFormOf'
+				| 'IsIdenticalTo'
+				| 'IsTranslationOf'
+				| 'HasTranslation'
+				| 'IsReviewOf'
+				| 'HasReview'
+				| 'IsPreprintOf'
+				| 'HasPreprint'
+				| 'IsReferencedBy'
+				| 'IsSupplementTo'
+				| 'IsSupplementedBy'
+				| 'Other';
+			/**
+			 * Name
+			 * @description A human-readable label for the related resource.
+			 */
+			name?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
+		/** Relation1 */
+		Relation1: {
+			/**
+			 * Id
+			 * @description ROR URL of the related organization.
+			 */
+			id: string;
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type: 'IsPartOf' | 'HasPart' | 'IsRelatedTo' | 'Other';
+			/**
+			 * Name
+			 * @description A human-readable label for the related organization.
+			 */
+			name?: string | null;
+			/**
+			 * Asserted By
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			asserted_by?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+		};
 		/** RemoteAttachmentRequest */
 		RemoteAttachmentRequest: {
 			/** Source */
@@ -3489,8 +5312,89 @@ export interface components {
 			/** Source */
 			source: string;
 		};
+		/**
+		 * ResourceAction
+		 * @description One canonical Workspace-scoped authorization resource/action pair.
+		 * @enum {string}
+		 */
+		ResourceAction:
+			| 'workspace.read'
+			| 'workspace.export'
+			| 'workspace.update'
+			| 'workspace_maintenance.run'
+			| 'workspace.archive'
+			| 'workspace.restore'
+			| 'workspace.delete'
+			| 'item.create'
+			| 'item.update'
+			| 'item.delete'
+			| 'file.manage'
+			| 'file.delete'
+			| 'tag.use'
+			| 'tag.create'
+			| 'tag.manage'
+			| 'citation_style.manage'
+			| 'project.create'
+			| 'project.update'
+			| 'project.archive'
+			| 'project.restore'
+			| 'project.delete'
+			| 'project_item.manage'
+			| 'project_governance.read'
+			| 'project_participation.join'
+			| 'project_participation.leave'
+			| 'project_participation.manage'
+			| 'workspace_invitation.read'
+			| 'workspace_invitation.create'
+			| 'workspace_invitation.revoke'
+			| 'workspace_membership.read'
+			| 'workspace_member.change_role'
+			| 'workspace_member.promote'
+			| 'workspace_member.suspend'
+			| 'workspace_member.reactivate'
+			| 'workspace_member.terminate'
+			| 'workspace_member.transfer_ownership'
+			| 'item_discussion.create'
+			| 'item_discussion.delete'
+			| 'project_discussion.create'
+			| 'project_discussion.delete'
+			| 'private_annotation.create'
+			| 'private_annotation.read'
+			| 'private_annotation.update'
+			| 'private_annotation.delete'
+			| 'private_annotation.restore'
+			| 'project_annotation.create'
+			| 'project_annotation.read'
+			| 'project_annotation.review'
+			| 'project_annotation.update'
+			| 'project_annotation.delete'
+			| 'project_annotation.restore'
+			| 'project_annotation.hide'
+			| 'project_annotation.archive'
+			| 'project_annotation.lock'
+			| 'project_annotation.unlock'
+			| 'private_annotation_reply.create'
+			| 'private_annotation_reply.update'
+			| 'private_annotation_reply.delete'
+			| 'private_annotation_reply.restore'
+			| 'project_annotation_reply.create'
+			| 'project_annotation_reply.update'
+			| 'project_annotation_reply.delete'
+			| 'project_annotation_reply.restore';
 		/** RuntimeSettingsRequest */
 		RuntimeSettingsRequest: {
+			/**
+			 * Registration Policy
+			 * @default invitation_only
+			 * @enum {string}
+			 */
+			registration_policy: 'open' | 'closed' | 'invitation_only';
+			/**
+			 * Workspace Creation Policy
+			 * @default admins_only
+			 * @enum {string}
+			 */
+			workspace_creation_policy: 'admins_only' | 'members_allowed';
 			/**
 			 * Metadata Contact Email
 			 * @default
@@ -3537,9 +5441,14 @@ export interface components {
 			 */
 			export_ttl_hours: number;
 		};
+		/** @enum {string} */
+		SearchSort: 'relevance' | 'published' | 'cited' | 'updated';
 		/** SessionUserView */
 		SessionUserView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Username */
 			username: string;
@@ -3548,6 +5457,7 @@ export interface components {
 			 * @enum {string}
 			 */
 			role: 'administrator' | 'member';
+			authorization: components['schemas']['SystemAuthorizationView'];
 		};
 		/** SessionView */
 		SessionView: {
@@ -3580,14 +5490,83 @@ export interface components {
 			/** Integrity Checked At */
 			integrity_checked_at?: string | null;
 		};
+		/** Subject */
+		Subject: {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id?: string | null;
+			/** Subject */
+			subject: string;
+			/**
+			 * Scheme
+			 * @description The subject classification scheme, e.g. FOS, ANZSRC, or JEL.
+			 */
+			scheme?: string | null;
+			/**
+			 * Scheme Uri
+			 * @description A URI identifying the subject classification scheme.
+			 */
+			scheme_uri?: string | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+		};
+		/**
+		 * SystemAction
+		 * @enum {string}
+		 */
+		SystemAction:
+			| 'account.change_password'
+			| 'api_token.create'
+			| 'api_token.read'
+			| 'api_token.revoke'
+			| 'login_session.read'
+			| 'login_session.revoke'
+			| 'user.read'
+			| 'user.create'
+			| 'user.manage_status'
+			| 'user.manage_role'
+			| 'user.reset_password'
+			| 'user.revoke_sessions'
+			| 'invitation.read'
+			| 'invitation.create'
+			| 'audit.read'
+			| 'workflow.read'
+			| 'setting.read'
+			| 'setting.manage'
+			| 'storage_metrics.read'
+			| 'maintenance.run'
+			| 'backup.read'
+			| 'system_metrics.read'
+			| 'workspace.create'
+			| 'workspace_invitation.accept'
+			| 'workspace_governance.read'
+			| 'workspace_governance.freeze'
+			| 'workspace_governance.unfreeze'
+			| 'workspace_break_glass.read';
+		/**
+		 * SystemAuthorizationView
+		 * @description Instance resource-action decisions evaluated by the server.
+		 */
+		SystemAuthorizationView: {
+			/** Allowed */
+			allowed: components['schemas']['SystemAction'][];
+		};
+		/**
+		 * SystemRole
+		 * @enum {string}
+		 */
+		SystemRole: 'administrator' | 'member';
 		/** TagMatrixGroupView */
 		TagMatrixGroupView: {
 			/** Letter */
 			letter: string;
 			/** Tags */
 			tags: components['schemas']['ItemTagView'][];
-			/** Names */
-			names: string[];
 		};
 		/** TagMatrixView */
 		TagMatrixView: {
@@ -3599,10 +5578,6 @@ export interface components {
 			recommended_ids: string[];
 			/** Suggested Names */
 			suggested_names: string[];
-			/** Suggested Single Words */
-			suggested_single_words: string[];
-			/** Suggested Phrases */
-			suggested_phrases: string[];
 			/** Recommendation State */
 			recommendation_state: string;
 			/** Recommendation Error */
@@ -3610,9 +5585,15 @@ export interface components {
 		};
 		/** TagMergeRequest */
 		TagMergeRequest: {
-			/** Source Tag Id */
+			/**
+			 * Source Tag Id
+			 * Format: uuid
+			 */
 			source_tag_id: string;
-			/** Target Tag Id */
+			/**
+			 * Target Tag Id
+			 * Format: uuid
+			 */
 			target_tag_id: string;
 		};
 		/** TagSetRequest */
@@ -3626,14 +5607,16 @@ export interface components {
 		};
 		/** TagView */
 		TagView: {
-			/** Id */
+			/**
+			 * Id
+			 * Format: uuid
+			 */
 			id: string;
 			/** Name */
 			name: string;
 			/** Accessible Item Count */
 			accessible_item_count: number;
-			/** Can Manage */
-			can_manage: boolean;
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
 		};
 		/** TextMarkupPayload */
 		TextMarkupPayload: {
@@ -3647,6 +5630,16 @@ export interface components {
 			/** Segment Rects */
 			segment_rects: components['schemas']['Rect'][];
 		};
+		/** Url */
+		Url: {
+			/**
+			 * Name
+			 * @description A label for the URL.
+			 */
+			name?: string | null;
+			/** Url */
+			url: string;
+		};
 		/** UserRoleRequest */
 		UserRoleRequest: {
 			/**
@@ -3659,6 +5652,219 @@ export interface components {
 		UserStatusRequest: {
 			/** Active */
 			active: boolean;
+		};
+		/** Work */
+		Work: {
+			/**
+			 * Id
+			 * @description The unique identifier for the resource.
+			 */
+			id: string;
+			/**
+			 * Type
+			 * @enum {string}
+			 */
+			type:
+				| 'Preprint'
+				| 'Audiovisual'
+				| 'Blog'
+				| 'BlogPost'
+				| 'BlogVolume'
+				| 'Book'
+				| 'BookChapter'
+				| 'BookPart'
+				| 'BookSection'
+				| 'BookSeries'
+				| 'BookSet'
+				| 'Collection'
+				| 'Component'
+				| 'ComputationalNotebook'
+				| 'Database'
+				| 'Dataset'
+				| 'Dissertation'
+				| 'Document'
+				| 'Entry'
+				| 'Event'
+				| 'Figure'
+				| 'Grant'
+				| 'Image'
+				| 'Instrument'
+				| 'InteractiveResource'
+				| 'Journal'
+				| 'JournalArticle'
+				| 'JournalIssue'
+				| 'JournalVolume'
+				| 'LegalDocument'
+				| 'Manuscript'
+				| 'Map'
+				| 'Model'
+				| 'OutputManagementPlan'
+				| 'Patent'
+				| 'PeerReview'
+				| 'Performance'
+				| 'PersonalCommunication'
+				| 'PhysicalObject'
+				| 'Poster'
+				| 'Presentation'
+				| 'Proceedings'
+				| 'ProceedingsArticle'
+				| 'ProceedingsSeries'
+				| 'Report'
+				| 'ReportComponent'
+				| 'ReportSeries'
+				| 'Review'
+				| 'Service'
+				| 'Software'
+				| 'Sound'
+				| 'Standard'
+				| 'StudyRegistration'
+				| 'WebPage'
+				| 'Workflow'
+				| 'Other';
+			/**
+			 * Additional Descriptions
+			 * @description The additional descriptions of the resource.
+			 */
+			additional_descriptions?: components['schemas']['AdditionalDescription'][] | null;
+			/**
+			 * Additional Titles
+			 * @description Additional titles of the resource.
+			 */
+			additional_titles?: components['schemas']['AdditionalTitle'][] | null;
+			/**
+			 * Additional Type
+			 * @description The additional type of the resource.
+			 */
+			additional_type?: string | null;
+			/**
+			 * Archive Locations
+			 * @description The locations where content is archived.
+			 */
+			archive_locations?:
+				('CLOCKSS' | 'LOCKSS' | 'Portico' | 'KB' | 'Internet Archive' | 'DWT')[] | null;
+			/** @description The container of the resource. */
+			container?: components['schemas']['Container'] | null;
+			/**
+			 * Content
+			 * @description The full text content of the resource, e.g. the body of a blog post.
+			 */
+			content?: string | null;
+			/**
+			 * Contributors
+			 * @description The contributors to the resource.
+			 */
+			contributors?: components['schemas']['Contributor'][] | null;
+			/**
+			 * Date Published
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			date_published?: string | null;
+			/**
+			 * Date Updated
+			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
+			 */
+			date_updated?: string | null;
+			/** @description Other dates for the resource. */
+			dates?: components['schemas']['Dates'] | null;
+			/**
+			 * Description
+			 * @description The description of the resource.
+			 */
+			description?: string | null;
+			/**
+			 * Files
+			 * @description The downloadable files for the resource.
+			 */
+			files?: components['schemas']['File'][] | null;
+			/**
+			 * Funding References
+			 * @description The funding references for the resource.
+			 */
+			funding_references?:
+				| (
+						| components['schemas']['FundingReferences']
+						| components['schemas']['FundingReferences1']
+						| components['schemas']['FundingReferences2']
+						| components['schemas']['FundingReferences3']
+				  )[]
+				| null;
+			/** Geo Locations */
+			geo_locations?: components['schemas']['GeoLocation'][] | null;
+			/**
+			 * Identifiers
+			 * @description Identifiers for the resource, excluding the id.
+			 */
+			identifiers?: components['schemas']['Identifier'][] | null;
+			/**
+			 * Image
+			 * @description The image for the resource, e.g. a thumbnail for a blog post.
+			 */
+			image?: string | null;
+			/**
+			 * Language
+			 * @description The language. Use one of the language codes from the IETF BCP 47 standard.
+			 */
+			language?: string | null;
+			license?: components['schemas']['License'] | null;
+			/**
+			 * Provider
+			 * @description The provider of the resource or the assertion. This can be a DOI registration agency, a repository, or any other entity asserting the information.
+			 */
+			provider?:
+				| (
+						| 'Crossref'
+						| 'DataCite'
+						| 'Airiti'
+						| 'CNKI'
+						| 'JaLC'
+						| 'KISTI'
+						| 'mEDRA'
+						| 'OP'
+						| 'Contributor'
+						| 'Commonmeta'
+						| 'GitHub'
+						| 'OpenAIRE'
+						| 'OpenAlex'
+						| 'ORCID'
+						| 'Publisher'
+						| 'PubMed'
+						| 'ROR'
+						| 'Other'
+				  )
+				| null;
+			publisher?: components['schemas']['Organization'] | null;
+			/**
+			 * References
+			 * @description References cited by this resource.
+			 */
+			references?: components['schemas']['Reference'][] | null;
+			/**
+			 * Relations
+			 * @description Other resolvable persistent unique IDs related to the resource.
+			 */
+			relations?: components['schemas']['Relation'][] | null;
+			/**
+			 * Schema Version
+			 * @description The URI of the commonmeta JSON Schema version used.
+			 */
+			schema_version?: 'https://commonmeta.org/commonmeta_v1.0.json' | null;
+			/** Subjects */
+			subjects?: components['schemas']['Subject'][] | null;
+			/**
+			 * Title
+			 * @description The title of the resource.
+			 */
+			title?: string | null;
+			/**
+			 * Url
+			 * @description The URL of the resource.
+			 */
+			url?: string | null;
+			/**
+			 * Version
+			 * @description The version of the resource.
+			 */
+			version?: string | null;
 		};
 		/** WorkflowStatusView */
 		WorkflowStatusView: {
@@ -3698,6 +5904,213 @@ export interface components {
 			/** Authenticated User */
 			authenticated_user?: string | null;
 		};
+		/**
+		 * WorkspaceAuthorizationView
+		 * @description Resolved Workspace resource-action capabilities.
+		 */
+		WorkspaceAuthorizationView: {
+			/**
+			 * Allowed
+			 * @description Resolved action grants; excludes actions granted only for a request variant.
+			 */
+			allowed: components['schemas']['ResourceAction'][];
+		};
+		/** WorkspaceCreateRequest */
+		WorkspaceCreateRequest: {
+			/** Name */
+			name: string;
+			/** Owner Username */
+			owner_username?: string | null;
+		};
+		/** WorkspaceCreationAvailabilityView */
+		WorkspaceCreationAvailabilityView: {
+			/** Allowed */
+			allowed: boolean;
+			/** Owner Username Required */
+			owner_username_required: boolean;
+		};
+		/** WorkspaceGovernanceMemberView */
+		WorkspaceGovernanceMemberView: {
+			/**
+			 * Membership Id
+			 * Format: uuid
+			 */
+			membership_id: string;
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
+			user_id: string;
+			/** Username */
+			username: string;
+			role: components['schemas']['WorkspaceRole'];
+			state: components['schemas']['WorkspaceMemberState'];
+			/**
+			 * Joined At
+			 * Format: date-time
+			 */
+			joined_at: string;
+			/** Allowed Roles */
+			allowed_roles: components['schemas']['WorkspaceInvitationRole'][];
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
+		};
+		/** WorkspaceInvitationAcceptanceView */
+		WorkspaceInvitationAcceptanceView: {
+			/**
+			 * Workspace Id
+			 * Format: uuid
+			 */
+			workspace_id: string;
+		};
+		/** WorkspaceInvitationCreatedView */
+		WorkspaceInvitationCreatedView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
+			user_id: string;
+			/** Username */
+			username: string;
+			role: components['schemas']['WorkspaceInvitationRole'];
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/** Token */
+			token: string;
+		};
+		/** WorkspaceInvitationDetailsView */
+		WorkspaceInvitationDetailsView: {
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			kind: 'workspace';
+			/** Username */
+			username: string;
+			role: components['schemas']['WorkspaceInvitationRole'];
+			/** Workspace Name */
+			workspace_name: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+		};
+		/** WorkspaceInvitationRequest */
+		WorkspaceInvitationRequest: {
+			/** Username */
+			username: string;
+			/** @default viewer */
+			role: components['schemas']['WorkspaceInvitationRole'];
+			/** Expires At */
+			expires_at?: string | null;
+		};
+		/**
+		 * WorkspaceInvitationRole
+		 * @enum {string}
+		 */
+		WorkspaceInvitationRole: 'admin' | 'editor' | 'reviewer' | 'viewer';
+		/** WorkspaceInvitationView */
+		WorkspaceInvitationView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
+			user_id: string;
+			/** Username */
+			username: string;
+			role: components['schemas']['WorkspaceInvitationRole'];
+			/**
+			 * Invited By
+			 * Format: uuid
+			 */
+			invited_by: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+		};
+		/** WorkspaceMemberDirectoryView */
+		WorkspaceMemberDirectoryView: {
+			/**
+			 * User Id
+			 * Format: uuid
+			 */
+			user_id: string;
+			/** Username */
+			username: string;
+			role: components['schemas']['WorkspaceRole'];
+		};
+		/**
+		 * WorkspaceMemberState
+		 * @enum {string}
+		 */
+		WorkspaceMemberState: 'active' | 'suspended';
+		/**
+		 * WorkspaceRole
+		 * @enum {string}
+		 */
+		WorkspaceRole: 'owner' | 'admin' | 'editor' | 'reviewer' | 'viewer';
+		/** WorkspaceRoleRequest */
+		WorkspaceRoleRequest: {
+			/**
+			 * Role
+			 * @enum {string}
+			 */
+			role: 'admin' | 'editor' | 'reviewer' | 'viewer';
+		};
+		/**
+		 * WorkspaceState
+		 * @enum {string}
+		 */
+		WorkspaceState: 'active' | 'archived';
+		/** WorkspaceUpdateRequest */
+		WorkspaceUpdateRequest: {
+			/** Name */
+			name: string;
+		};
+		/** WorkspaceView */
+		WorkspaceView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/** Name */
+			name: string;
+			/**
+			 * Owner Id
+			 * Format: uuid
+			 */
+			owner_id: string;
+			state: components['schemas']['WorkspaceState'];
+			current_role: components['schemas']['WorkspaceRole'];
+			/** Governance Frozen */
+			governance_frozen: boolean;
+			/** Allowed Project Participations */
+			allowed_project_participations: components['schemas']['ProjectParticipation'][];
+			/** Allowed Invitation Roles */
+			allowed_invitation_roles?: components['schemas']['WorkspaceInvitationRole'][];
+			authorization: components['schemas']['WorkspaceAuthorizationView'];
+		};
 		/** WriteResult */
 		WriteResult: {
 			/** Id */
@@ -3709,7 +6122,10 @@ export interface components {
 		stage_bibliography_import: {
 			/** Bibliography */
 			bibliography: string;
-			/** File Format */
+			/**
+			 * File Format
+			 * @default auto
+			 */
 			file_format: string;
 		};
 		/** Body_imports.stage_pdf_import */
@@ -3897,96 +6313,12 @@ export interface operations {
 			};
 		};
 	};
-	'dashboard.dashboard': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DashboardView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.apply_item_bulk_action': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['BulkActionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.search_items': {
+	'workspaces.get_workspaces': {
 		parameters: {
 			query?: {
-				query?: string;
-				tag?: string;
-				project?: string;
-				year?: string;
-				keyword?: string;
-				author?: string;
-				page?: number;
+				limit?: number;
+				offset?: number;
+				search?: string;
 			};
 			header?: never;
 			path?: never;
@@ -4000,7 +6332,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['LibrarySearchView'];
+					'application/json': components['schemas']['OffsetPagination_WorkspaceView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -4023,7 +6355,7 @@ export interface operations {
 			};
 		};
 	};
-	'library.create_library_item': {
+	'workspaces.create_user_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -4032,7 +6364,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['ItemMetadata-Input'];
+				'application/json': components['schemas']['WorkspaceCreateRequest'];
 			};
 		};
 		responses: {
@@ -4065,13 +6397,11 @@ export interface operations {
 			};
 		};
 	};
-	'library.get_library_item': {
+	'workspaces.get_workspace_creation_availability': {
 		parameters: {
 			query?: never;
 			header?: never;
-			path: {
-				item_id: string;
-			};
+			path?: never;
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -4082,7 +6412,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ItemDetailView'];
+					'application/json': components['schemas']['WorkspaceCreationAvailabilityView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -4105,18 +6435,138 @@ export interface operations {
 			};
 		};
 	};
-	'library.update_library_item': {
+	'workspaces.accept_workspace_invitation_api': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
-				item_id: string;
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationAcceptanceView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.delete_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.update_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
 			};
 			cookie?: never;
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['ItemUpdateRequest'];
+				'application/json': components['schemas']['WorkspaceUpdateRequest'];
 			};
 		};
 		responses: {
@@ -4149,477 +6599,11 @@ export interface operations {
 			};
 		};
 	};
-	'items.delete_library_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DeleteConfirmationRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.format_item_citation': {
-		parameters: {
-			query?: {
-				style?: string;
-				output?: string;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['CitationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.list_tags': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['TagView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.set_item_tag_selection': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['TagSetRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.add_item_tag': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['NameRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.remove_item_tag': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				tag_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.list_discussions': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DiscussionMessageView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.create_discussion': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DiscussionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library.delete_discussion': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				message_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library_exports.export_item_selection': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['BibliographyExportRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'text/plain': string;
-					'application/x-bibtex': string;
-					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library_exports.download_item_selection': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DocumentArchiveRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/zip': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'library_exports.export_library_bibliography': {
+	'account.citation_key_preview': {
 		parameters: {
 			query: {
-				file_format: string;
-				style?: string;
+				formula: string;
+				force_ascii?: boolean;
 			};
 			header?: never;
 			path?: never;
@@ -4633,1559 +6617,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'text/plain': string;
-					'application/x-bibtex': string;
-					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.stage_bibliography_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'multipart/form-data': components['schemas']['stage_bibliography_import'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.stage_identifier_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['IdentifierImportRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.stage_pdf_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'multipart/form-data': components['schemas']['stage_pdf_import'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			202: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.import_batch': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.discard_staged_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.retry_import_batch': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ImportBatchRetryView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'imports.commit_staged_import': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				batch_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.list_projects': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ProjectSummaryView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.create_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectCreateRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.list_projects_available_to_join': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['JoinableProjectView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.get_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ProjectDetailView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.delete_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectDeleteRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.update_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectSettingsRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.update_project_description_api': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectDescriptionRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WriteResult'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.archive_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.restore_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.set_project_visibility_api': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectVisibilityRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.leave_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.join_public_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.transfer_user_project': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				user_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.add_project_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.remove_project_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.set_project_member': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectMemberRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ProjectMemberView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'projects.remove_project_member': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				project_id: string;
-				user_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.review_annotations': {
-		parameters: {
-			query?: {
-				page?: number;
-				per_page?: number;
-				revision_id?: string | null;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReviewView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.list_annotations': {
-		parameters: {
-			query: {
-				revision_id: string;
-				project_id?: string | null;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.create_annotation': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationCreate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.delete_annotation': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.update_annotation': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationUpdate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.restore_annotation': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.create_reply': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationReplyCreate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			201: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReplyView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.delete_reply': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-				reply_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.update_reply': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-				reply_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['AnnotationReplyUpdate'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReplyView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'annotations.restore_reply': {
-		parameters: {
-			query: {
-				version: number;
-			};
-			header?: never;
-			path: {
-				item_id: string;
-				annotation_id: string;
-				reply_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AnnotationReplyView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'discovery.search_discovery': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DiscoverySearchRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['CandidatePageView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'discovery.discovery_providers': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['DiscoveryProviderView'][];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'workflows.workflow_status': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				workflow_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['WorkflowStatusView'];
+					'application/json': components['schemas']['CitationKeyPreviewView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -6225,7 +6657,9 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['InvitationDetailsView'];
+					'application/json':
+						| components['schemas']['InvitationDetailsView']
+						| components['schemas']['WorkspaceInvitationDetailsView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -6265,6 +6699,48 @@ export interface operations {
 		responses: {
 			/** @description Successful Response */
 			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'account.register_account': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RegisterRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -6534,7 +7010,10 @@ export interface operations {
 	};
 	'admin.admin_overview': {
 		parameters: {
-			query?: never;
+			query?: {
+				limit?: number;
+				offset?: number;
+			};
 			header?: never;
 			path?: never;
 			cookie?: never;
@@ -6576,7 +7055,8 @@ export interface operations {
 				search?: string;
 				role?: string;
 				active?: boolean | null;
-				page?: number;
+				limit?: number;
+				offset?: number;
 			};
 			header?: never;
 			path?: never;
@@ -6869,139 +7349,15 @@ export interface operations {
 			};
 		};
 	};
-	'admin.admin_projects': {
-		parameters: {
-			query?: {
-				search?: string;
-				state?: string;
-				visibility?: string;
-				page?: number;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AdminProjectsView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'admin.admin_items': {
-		parameters: {
-			query?: {
-				search?: string;
-				has_pdf?: boolean | null;
-				page?: number;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['AdminItemsView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'admin.admin_delete_item': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
 	'admin.admin_audit': {
 		parameters: {
 			query?: {
 				search?: string;
-				actor_id?: string;
+				actor_id?: string | null;
 				action?: string;
 				target_type?: string;
-				page?: number;
+				limit?: number;
+				offset?: number;
 			};
 			header?: never;
 			path?: never;
@@ -7015,7 +7371,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['AdminAuditView'];
+					'application/json': components['schemas']['OffsetPagination_AdminAuditEventView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7042,6 +7398,8 @@ export interface operations {
 		parameters: {
 			query?: {
 				state?: string;
+				limit?: number;
+				offset?: number;
 			};
 			header?: never;
 			path?: never;
@@ -7055,7 +7413,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['AdminWorkflowsView'];
+					'application/json': components['schemas']['OffsetPagination_WorkflowSummaryView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7196,13 +7554,11 @@ export interface operations {
 			};
 		};
 	};
-	'admin.run_maintenance': {
+	'admin.admin_workspaces': {
 		parameters: {
 			query?: never;
 			header?: never;
-			path: {
-				operation: 'reindex_all' | 'check_objects' | 'backup' | 'recommend_tags_all';
-			};
+			path?: never;
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -7213,7 +7569,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['WriteResult'];
+					'application/json': components['schemas']['AdminWorkspaceView'][];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7236,12 +7592,12 @@ export interface operations {
 			};
 		};
 	};
-	'admin.download_backup': {
+	'admin.admin_freeze_workspace': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
-				workflow_id: string;
+				workspace_id: string;
 			};
 			cookie?: never;
 		};
@@ -7253,7 +7609,131 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/zip': string;
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_unfreeze_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_break_glass_items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BreakGlassReadRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ItemSearchView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.run_maintenance': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				operation: 'check_objects';
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7316,6 +7796,3146 @@ export interface operations {
 			};
 		};
 	};
+	'workspaces.get_workspace_members': {
+		parameters: {
+			query?: {
+				limit?: number;
+				offset?: number;
+				search?: string;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_WorkspaceMemberDirectoryView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_workspace_governance_members': {
+		parameters: {
+			query?: {
+				limit?: number;
+				offset?: number;
+				search?: string;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_WorkspaceGovernanceMemberView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_workspace_invitations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.create_workspace_invitation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkspaceInvitationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationCreatedView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.revoke_workspace_invitation_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				invitation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.change_workspace_member_role': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkspaceRoleRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.suspend_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.reactivate_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.terminate_member': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.transfer_ownership': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				membership_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.archive_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.restore_user_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.reindex_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'dashboard.dashboard': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.apply_item_bulk_action': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BulkActionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.search_items': {
+		parameters: {
+			query?: {
+				limit?: number;
+				offset?: number;
+				sort?: 'updated' | 'created' | 'title';
+				query?: string;
+				tag?: string;
+				project?: string | null;
+				year?: string;
+				keyword?: string;
+				author?: string;
+				has_files?: boolean | null;
+				reference_type?: string | null;
+				keyword_exact?: string | null;
+				author_last_name?: string | null;
+				author_first_name?: string | null;
+				publication_title?: string | null;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_ItemSearchView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.create_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ItemCreateRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.get_item_facets': {
+		parameters: {
+			query?: {
+				limit?: number;
+				query?: string;
+				tag?: string;
+				project?: string | null;
+				year?: string;
+				keyword?: string;
+				author?: string;
+				has_files?: boolean | null;
+				reference_type?: string | null;
+				keyword_exact?: string | null;
+				author_last_name?: string | null;
+				author_first_name?: string | null;
+				publication_title?: string | null;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LibraryFacets'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.get_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ItemDetailView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.update_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ItemUpdateRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'items.delete_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DeleteConfirmationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.copy_library_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CrossWorkspaceCopyRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CrossWorkspaceCopyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.format_item_citation': {
+		parameters: {
+			query?: {
+				style?: string;
+				output?: string;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CitationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.list_tags': {
+		parameters: {
+			query?: {
+				limit?: number;
+				offset?: number;
+				search?: string;
+				tag_id?: string | null;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_TagView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.set_item_tag_selection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TagSetRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.add_item_tag': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NameRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.remove_item_tag': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				tag_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.list_discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscussionMessageView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.create_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.delete_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.moderate_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionModerationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library.commonmeta_schema': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': {
+						[key: string]: unknown;
+					};
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library_exports.export_item_selection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BibliographyExportRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/vnd.citationstyles.csl+json': string;
+					'application/vnd.commonmeta+json': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library_exports.download_item_selection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DocumentArchiveRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/zip': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'library_exports.export_library_bibliography': {
+		parameters: {
+			query: {
+				file_format: string;
+				style?: string;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/plain': string;
+					'application/x-bibtex': string;
+					'application/x-research-info-systems': string;
+					'application/vnd.citationstyles.csl+json': string;
+					'application/vnd.commonmeta+json': string;
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.stage_bibliography_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['stage_bibliography_import'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchPreview'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.stage_identifiers_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['IdentifiersImportRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchPreview'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.stage_pdf_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'multipart/form-data': components['schemas']['stage_pdf_import'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchPreview'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.import_batch': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchPreview'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.discard_staged_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.retry_import_batch': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ImportBatchPreview'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'imports.commit_staged_import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				batch_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.list_projects': {
+		parameters: {
+			query?: {
+				view?: 'mine' | 'joinable' | 'all';
+				limit?: number;
+				offset?: number;
+				search?: string;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_ProjectSummaryView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.create_user_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectCreateRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.get_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectDetailView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.delete_user_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectDeleteRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.update_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectSettingsRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.archive_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.restore_project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.add_project_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.remove_project_item': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.join_project_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectParticipantInfo'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.leave_project_api': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.add_project_participant': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectParticipantRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectParticipantInfo'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.remove_project_participant': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.list_project_discussions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscussionMessageView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.create_project_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DiscussionMessageView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.delete_project_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'projects.moderate_project_discussion': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				project_id: string;
+				message_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscussionModerationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.list_annotations': {
+		parameters: {
+			query?: {
+				page?: number;
+				per_page?: number;
+				revision_id?: string | null;
+				scope?: components['schemas']['AnnotationScope'] | null;
+				/** @description Repeat to select multiple readable Projects linked to this Item. */
+				project_id?: string[] | null;
+				pagination?: 'page' | 'cursor';
+				cursor?: string | null;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationListView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.create_annotation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationCreate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.delete_annotation': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.update_annotation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationUpdate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.restore_annotation': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.moderate_annotation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationModerationRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.create_reply': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationReplyCreate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReplyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.delete_reply': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+				reply_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.update_reply': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+				reply_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnnotationReplyUpdate'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReplyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'annotations.restore_reply': {
+		parameters: {
+			query: {
+				version: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				annotation_id: string;
+				reply_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnnotationReplyView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'discovery.search_discovery': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DiscoverySearchRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CandidatePageView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'discovery.discovery_providers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MetadataProviderChoices'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workflows.workflow_status': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				workflow_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowStatusView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
 	'citations.export_item_bibliography': {
 		parameters: {
 			query: {
@@ -7323,19 +10943,17 @@ export interface operations {
 				style?: string;
 				include_abstract?: boolean;
 				preserve_case?: boolean;
-				include_identifiers?: boolean;
-				include_custom_fields?: boolean;
 				encoding?: string;
-				journal_mode?: string;
 				doi_policy?: string;
 				url_policy?: string;
-				excluded_fields?: string;
+				excluded_fields?: string[];
 				sort_by?: string;
 				citation_key_formula?: string;
 				citation_key_force_ascii?: boolean;
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7351,7 +10969,8 @@ export interface operations {
 					'text/plain': string;
 					'application/x-bibtex': string;
 					'application/x-research-info-systems': string;
-					'application/x-endnote-refer': string;
+					'application/vnd.citationstyles.csl+json': string;
+					'application/vnd.commonmeta+json': string;
 				};
 			};
 			/** @description Unprocessable Content */
@@ -7381,19 +11000,17 @@ export interface operations {
 				style?: string;
 				include_abstract?: boolean;
 				preserve_case?: boolean;
-				include_identifiers?: boolean;
-				include_custom_fields?: boolean;
 				encoding?: string;
-				journal_mode?: string;
 				doi_policy?: string;
 				url_policy?: string;
-				excluded_fields?: string;
+				excluded_fields?: string[];
 				sort_by?: string;
 				citation_key_formula?: string;
 				citation_key_force_ascii?: boolean;
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7437,6 +11054,7 @@ export interface operations {
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7478,6 +11096,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7523,6 +11142,7 @@ export interface operations {
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7563,6 +11183,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7607,6 +11228,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7651,6 +11273,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				attachment_id: string;
 			};
@@ -7692,6 +11315,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				attachment_id: string;
 			};
@@ -7733,6 +11357,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7777,6 +11402,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -7821,6 +11447,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7862,6 +11489,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7903,6 +11531,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7927,6 +11556,13 @@ export interface operations {
 				content: {
 					'application/pdf': string;
 				};
+			};
+			/** @description Short-lived authorized S3 download; response is not cacheable. */
+			307: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 			/** @description Unprocessable Content */
 			422: {
@@ -7953,6 +11589,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -7994,6 +11631,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8036,11 +11674,14 @@ export interface operations {
 		parameters: {
 			query?: {
 				include_annotations?: boolean;
-				project_id?: string | null;
+				scope?: components['schemas']['AnnotationScope'] | null;
+				/** @description Repeat to select multiple readable Projects linked to this Item. */
+				project_id?: string[] | null;
 				timezone?: string | null;
 			};
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 				revision_id: string;
 			};
@@ -8082,6 +11723,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8126,6 +11768,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				workflow_id: string;
 			};
 			cookie?: never;
@@ -8166,6 +11809,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				workflow_id: string;
 			};
 			cookie?: never;
@@ -8181,6 +11825,13 @@ export interface operations {
 					'application/pdf': string;
 				};
 			};
+			/** @description Short-lived authorized S3 download; response is not cacheable. */
+			307: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
 			/** @description Unprocessable Content */
 			422: {
 				headers: {
@@ -8201,11 +11852,12 @@ export interface operations {
 			};
 		};
 	};
-	'items.item_workspace': {
+	'items.item_overview': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8218,7 +11870,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ItemWorkspaceView'];
+					'application/json': components['schemas']['ItemOverviewView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8241,11 +11893,53 @@ export interface operations {
 			};
 		};
 	};
-	'items.item_organize_workspace': {
+	'items.item_metadata_sources': {
 		parameters: {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
+				item_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ItemMetadataSourcesView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'items.item_organize': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8286,6 +11980,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8330,6 +12025,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8370,6 +12066,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8410,6 +12107,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				item_id: string;
 			};
 			cookie?: never;
@@ -8449,9 +12147,12 @@ export interface operations {
 		parameters: {
 			query?: {
 				query?: string;
+				project?: string | null;
 			};
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -8485,47 +12186,6 @@ export interface operations {
 			};
 		};
 	};
-	'tools.citation_key_preview': {
-		parameters: {
-			query: {
-				formula: string;
-				force_ascii?: boolean;
-			};
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['CitationKeyPreviewView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
 	'tools.citation_styles': {
 		parameters: {
 			query?: {
@@ -8534,7 +12194,9 @@ export interface operations {
 				include?: string;
 			};
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -8572,7 +12234,9 @@ export interface operations {
 		parameters: {
 			query?: never;
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody: {
@@ -8616,7 +12280,9 @@ export interface operations {
 				mode?: string;
 			};
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody?: never;
@@ -8655,6 +12321,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				style_id: string;
 			};
 			cookie?: never;
@@ -8694,7 +12361,9 @@ export interface operations {
 		parameters: {
 			query?: never;
 			header?: never;
-			path?: never;
+			path: {
+				workspace_id: string;
+			};
 			cookie?: never;
 		};
 		requestBody: {
@@ -8737,6 +12406,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				tag_id: string;
 			};
 			cookie?: never;
@@ -8777,6 +12447,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
+				workspace_id: string;
 				tag_id: string;
 			};
 			cookie?: never;

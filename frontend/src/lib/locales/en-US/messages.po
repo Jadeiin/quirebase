@@ -30,17 +30,10 @@ msgstr "{count, plural, one {# diagnostic} other {# diagnostics}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
-#: src/lib/features/admin/AdminProjects.svelte
 #: src/lib/features/library/Library.svelte
-#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "{count, plural, one {# Item} other {# Items}}"
 msgstr "{count, plural, one {# Item} other {# Items}}"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminProjects.svelte
-msgid "{count, plural, one {# member} other {# members}}"
-msgstr "{count, plural, one {# member} other {# members}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -63,6 +56,11 @@ msgid "{count, plural, one {# Tag} other {# Tags}}"
 msgstr "{count, plural, one {# Tag} other {# Tags}}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "{count} / 50 identifiers"
+msgstr "{count} / 50 identifiers"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "{count} selected"
 msgstr "{count} selected"
@@ -73,14 +71,14 @@ msgid "{kind} · {size} KB"
 msgstr "{kind} · {size} KB"
 
 #. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+msgid "{size} KB"
+msgstr "{size} KB"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
 msgid "{size} MB"
 msgstr "{size} MB"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
-msgid "{size} MB stored"
-msgstr "{size} MB stored"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -103,22 +101,42 @@ msgid "90 days"
 msgstr "90 days"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Abbreviation only"
-msgstr "Abbreviation only"
+#: src/lib/features/item/ItemActions.svelte
+msgid "A copy creates a new canonical Item. Only Workspaces where you can create Items are offered."
+msgstr "A copy creates a new canonical Item. Only Workspaces where you can create Items are offered."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "A managed Project starts with no participants; Workspace owners/admins can add them."
+msgstr "A managed Project starts with no participants; Workspace owners/admins can add them."
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Abstract"
 msgstr "Abstract"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Accept invitation"
+msgstr "Accept invitation"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "accepted"
 msgstr "accepted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Accepted"
+msgstr "Accepted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Accessed"
+msgstr "Accessed"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -138,19 +156,30 @@ msgid "Account settings"
 msgstr "Account settings"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Acronym"
+msgstr "Acronym"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Action"
 msgstr "Action"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Actions"
+msgstr "Actions"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "active"
 msgstr "active"
 
-#. Project state.
+#. Workspace or Project lifecycle state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/item/metadata-labels.ts
 msgid "Active"
 msgstr "Active"
 
@@ -158,6 +187,11 @@ msgstr "Active"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "active sessions"
 msgstr "active sessions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Active Workspace members can choose to join or leave this Project."
+msgstr "Active Workspace members can choose to join or leave this Project."
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
@@ -180,6 +214,11 @@ msgid "Add a PDF revision to begin annotating."
 msgstr "Add a PDF revision to begin annotating."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+msgid "Add an entry or remove this optional field."
+msgstr "Add an entry or remove this optional field."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "Add attachment"
 msgstr "Add attachment"
@@ -195,24 +234,25 @@ msgid "Add condition"
 msgstr "Add condition"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Add contributor"
-msgstr "Add contributor"
-
-#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Add custom Citation Style"
 msgstr "Add custom Citation Style"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Add custom field"
-msgstr "Add custom field"
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Add entry"
+msgstr "Add entry"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Add identifier"
-msgstr "Add identifier"
+#: src/lib/features/item/schema-editor/AddField.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Add field"
+msgstr "Add field"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/AddField.svelte
+msgid "Add field to {label}"
+msgstr "Add field to {label}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
@@ -221,13 +261,18 @@ msgstr "Add message"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Add or update member"
-msgstr "Add or update member"
+msgid "Add participant"
+msgstr "Add participant"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "Add PDF revision"
 msgstr "Add PDF revision"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Add records using identifiers, bibliography files, PDFs, or the metadata editor."
+msgstr "Add records using identifiers, bibliography files, PDFs, or the metadata editor."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -255,6 +300,38 @@ msgid "Add to Project"
 msgstr "Add to Project"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Additional descriptions"
+msgstr "Additional descriptions"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/WorkFields.svelte
+msgid "Additional metadata"
+msgstr "Additional metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Additional names"
+msgstr "Additional names"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Additional titles"
+msgstr "Additional titles"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Additional type"
+msgstr "Additional type"
+
+#. Workspace role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "admin"
+msgstr "admin"
+
+#. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
 #: src/lib/app/MobileNavigation.svelte
 #: src/lib/features/admin/AdminShell.svelte
@@ -262,17 +339,16 @@ msgid "Administration"
 msgstr "Administration"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/items/+page.svelte
 #: src/routes/(app)/admin/settings/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
 msgid "Administration action failed"
 msgstr "Administration action failed"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/+page.svelte
 #: src/routes/(app)/admin/audit/+page.svelte
-#: src/routes/(app)/admin/items/+page.svelte
-#: src/routes/(app)/admin/projects/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
+#: src/routes/(app)/admin/workflows/+page.svelte
 msgid "Administration pages"
 msgstr "Administration pages"
 
@@ -290,14 +366,49 @@ msgid "Administrator"
 msgstr "Administrator"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Administrators only"
+msgstr "Administrators only"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Affiliation"
 msgstr "Affiliation"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Affiliations"
+msgstr "Affiliations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members participate in this Project."
+msgstr "All active Workspace members participate in this Project."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members will participate in this Project."
+msgstr "All active Workspace members will participate in this Project."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
+msgstr "All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them."
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
+msgid "All Items"
+msgstr "All Items"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "All members"
+msgstr "All members"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/projects/Projects.svelte
 msgid "All Projects"
 msgstr "All Projects"
 
@@ -312,14 +423,19 @@ msgid "All roles"
 msgstr "All roles"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "All sources"
+msgstr "All sources"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "All Tags"
 msgstr "All Tags"
 
 #. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
-msgid "Already in Library"
-msgstr "Already in Library"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Alternative title"
+msgstr "Alternative title"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -332,26 +448,22 @@ msgid "Annotation pages"
 msgstr "Annotation pages"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Annotation source"
+msgstr "Annotation source"
+
+#. js-lingui-explicit-id
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Annotation sync failed"
 msgstr "Annotation sync failed"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Annotation visibility"
-msgstr "Annotation visibility"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Annotations"
 msgstr "Annotations"
-
-#. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Annotations to include"
-msgstr "Annotations to include"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -364,19 +476,9 @@ msgid "Another condition"
 msgstr "Another condition"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Any"
-msgstr "Any"
-
-#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Any field"
 msgstr "Any field"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Any signed-in User can discover and join this Project."
-msgstr "Any signed-in User can discover and join this Project."
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -387,11 +489,6 @@ msgstr "Any state"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Any status"
 msgstr "Any status"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Any visibility"
-msgstr "Any visibility"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -410,6 +507,11 @@ msgid "Appearance"
 msgstr "Appearance"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Applied filters"
+msgstr "Applied filters"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Apply"
 msgstr "Apply"
@@ -420,16 +522,52 @@ msgid "Apply filters"
 msgstr "Apply filters"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Archive Project"
-msgstr "Archive Project"
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Apply JSON"
+msgstr "Apply JSON"
 
-#. Project state.
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Apply JSON changes before saving."
+msgstr "Apply JSON changes before saving."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Archive"
+msgstr "Archive"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Archive locations"
+msgstr "Archive locations"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Archive pauses normal changes while preserving readable content. You can restore it later."
+msgstr "Archive pauses normal changes while preserving readable content. You can restore it later."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Archive workspace"
+msgstr "Archive workspace"
+
+#. Workspace or Project lifecycle state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminShell.svelte
 msgid "Archived"
 msgstr "Archived"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Archived Projects"
+msgstr "Archived Projects"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Archived workspace · read-only content. Workspace governance actions remain available according to policy."
+msgstr "Archived workspace · read-only content. Workspace governance actions remain available according to policy."
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -438,15 +576,40 @@ msgid "Arrow"
 msgstr "Arrow"
 
 #. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "as"
+msgstr "as"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Asserted by"
+msgstr "Asserted by"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Assigned, Workspace and Your Projects"
+msgstr "Assigned, Workspace and Your Projects"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-msgid "Associated files, annotations, and Project memberships will also be removed."
-msgstr "Associated files, annotations, and Project memberships will also be removed."
+msgid "Associated files, annotations, and assignments of this Item to Projects will also be removed."
+msgstr "Associated files, annotations, and assignments of this Item to Projects will also be removed."
 
 #. File kind for a supplementary file.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Attachment"
 msgstr "Attachment"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Attachment file"
+msgstr "Attachment file"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Audiovisual"
+msgstr "Audiovisual"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -462,11 +625,12 @@ msgstr "Audit log"
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/library/LibraryActiveFilters.svelte
 msgid "Author"
 msgstr "Author"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Authors"
 msgstr "Authors"
@@ -481,6 +645,26 @@ msgstr "Auto detect"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Autoupdate"
 msgstr "Autoupdate"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Available"
+msgstr "Available"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Award number"
+msgstr "Award number"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Award title"
+msgstr "Award title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Award URI"
+msgstr "Award URI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workflows/WorkflowTray.svelte
@@ -498,6 +682,11 @@ msgid "Base endpoint"
 msgstr "Base endpoint"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Bibliography"
+msgstr "Bibliography"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Bibliography downloaded"
 msgstr "Bibliography downloaded"
@@ -513,14 +702,59 @@ msgid "Bibliography file options"
 msgstr "Bibliography file options"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "BibTeX and BibLaTeX options"
-msgstr "BibTeX and BibLaTeX options"
+#: src/lib/export-preferences.ts
+msgid "BibTeX"
+msgstr "BibTeX"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "BibTeX type"
-msgstr "BibTeX type"
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "BibTeX character representation"
+msgstr "BibTeX character representation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Blog"
+msgstr "Blog"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Blog post"
+msgstr "Blog post"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Blog volume"
+msgstr "Blog volume"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Book"
+msgstr "Book"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Book chapter"
+msgstr "Book chapter"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Book part"
+msgstr "Book part"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Book section"
+msgstr "Book section"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Book series"
+msgstr "Book series"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Book set"
+msgstr "Book set"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -528,14 +762,44 @@ msgid "Boolean operator"
 msgstr "Boolean operator"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
-msgstr "Bring records into Quirebase from an identifier, a bibliography, or published PDFs."
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Box east longitude"
+msgstr "Box east longitude"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Box north latitude"
+msgstr "Box north latitude"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Box south latitude"
+msgstr "Box south latitude"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Box west longitude"
+msgstr "Box west longitude"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "BREAK GLASS"
+msgstr "BREAK GLASS"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "BREAK GLASS · read-only item inspection"
+msgstr "BREAK GLASS · read-only item inspection"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Browse the complete accessible taxonomy."
 msgstr "Browse the complete accessible taxonomy."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Bucket"
+msgstr "Bucket"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -563,6 +827,11 @@ msgid "Bulk action failed"
 msgstr "Bulk action failed"
 
 #. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Calendar for {label}"
+msgstr "Calendar for {label}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Can edit"
 msgstr "Can edit"
@@ -571,6 +840,7 @@ msgstr "Can edit"
 #: src/lib/design/ConfirmDialog.svelte
 #: src/lib/design/PromptDialog.svelte
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -587,6 +857,11 @@ msgid "Candidate Records"
 msgstr "Candidate Records"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Chair"
+msgstr "Chair"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Change password"
 msgstr "Change password"
@@ -597,14 +872,20 @@ msgid "Check for duplicates"
 msgstr "Check for duplicates"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Check records and diagnostics"
-msgstr "Check records and diagnostics"
-
-#. js-lingui-explicit-id
 #: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Check stored objects"
 msgstr "Check stored objects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Check this value against the metadata standard."
+msgstr "Check this value against the metadata standard."
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Checking account…"
+msgstr "Checking account…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -612,9 +893,24 @@ msgid "Checking invitation…"
 msgstr "Checking invitation…"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Checking workspace creation availability…"
+msgstr "Checking workspace creation availability…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Checksum"
+msgstr "Checksum"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Choose a new name for this Tag."
 msgstr "Choose a new name for this Tag."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Choose a role"
+msgstr "Choose a role"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -622,9 +918,51 @@ msgid "Choose a source"
 msgstr "Choose a source"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+msgid "Choose a supported value."
+msgstr "Choose a supported value."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Choose a workspace"
+msgstr "Choose a workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Choose a Workspace"
+msgstr "Choose a Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Choose a Workspace explicitly"
+msgstr "Choose a Workspace explicitly"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Choose action"
 msgstr "Choose action"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
+msgstr "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
+
+#. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Choose date for {label}"
+msgstr "Choose date for {label}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Choose file"
+msgstr "Choose file"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Choose files"
+msgstr "Choose files"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -637,9 +975,9 @@ msgid "Choose PDF revisions to package with saved download preferences."
 msgstr "Choose PDF revisions to package with saved download preferences."
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Choose PDFs more than once to add them to the same batch."
-msgstr "Choose PDFs more than once to add them to the same batch."
+#: src/lib/app/WorkspaceMenu.svelte
+msgid "Choose workspace"
+msgstr "Choose workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -653,9 +991,9 @@ msgstr "Citation count"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Citation key"
 msgstr "Citation key"
 
@@ -701,9 +1039,19 @@ msgid "Clear filters"
 msgstr "Clear filters"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Clear Project participant selection?"
+msgstr "Clear Project participant selection?"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Clear selection"
 msgstr "Clear selection"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Clear selection and save"
+msgstr "Clear selection and save"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -717,9 +1065,9 @@ msgid "Close"
 msgstr "Close"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Close editor"
-msgstr "Close editor"
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Closed"
+msgstr "Closed"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
@@ -737,9 +1085,24 @@ msgid "Collapse sidebar"
 msgstr "Collapse sidebar"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Collected"
+msgstr "Collected"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Collection"
+msgstr "Collection"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Commit"
 msgstr "Commit"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Commit or discard the current Import Batch before starting another import."
+msgstr "Commit or discard the current Import Batch before starting another import."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -753,9 +1116,49 @@ msgid "Committed"
 msgstr "Committed"
 
 #. js-lingui-explicit-id
+#: src/lib/export-preferences.ts
+msgid "Commonmeta"
+msgstr "Commonmeta"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Commonmeta exports retain the complete Work, including its abstract and identifiers."
+msgstr "Commonmeta exports retain the complete Work, including its abstract and identifiers."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Company"
+msgstr "Company"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Compare likely duplicate Items before deciding what to retain."
 msgstr "Compare likely duplicate Items before deciding what to retain."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+msgid "Complete at least one of the identifying fields."
+msgstr "Complete at least one of the identifying fields."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+msgid "Complete the required fields."
+msgstr "Complete the required fields."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Component"
+msgstr "Component"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Computational notebook"
+msgstr "Computational notebook"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Conceptualization"
+msgstr "Conceptualization"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -773,6 +1176,16 @@ msgid "Connect an MCP client"
 msgstr "Connect an MCP client"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Contact person"
+msgstr "Contact person"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Content"
+msgstr "Content"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Continue reading"
 msgstr "Continue reading"
@@ -783,14 +1196,41 @@ msgid "Continue reading or open a research collection."
 msgstr "Continue reading or open a research collection."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Contributor"
 msgstr "Contributor"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Contributor roles"
+msgstr "Contributor roles"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Contributors"
+msgstr "Contributors"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Copied to clipboard"
 msgstr "Copied to clipboard"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Copy"
+msgstr "Copy"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Copy entry"
+msgstr "Copy entry"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Copy one-time link"
+msgstr "Copy one-time link"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
@@ -804,13 +1244,39 @@ msgstr "Copy this token now"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+msgid "Copy to another Workspace"
+msgstr "Copy to another Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 msgid "Copy to clipboard"
 msgstr "Copy to clipboard"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Corresponding"
-msgstr "Corresponding"
+#: src/lib/features/item/ItemActions.svelte
+msgid "Copy to Workspace"
+msgstr "Copy to Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Copyrighted"
+msgstr "Copyrighted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Corresponding author"
+msgstr "Corresponding author"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Could not load metadata sources."
+msgstr "Could not load metadata sources."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Country"
+msgstr "Country"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -823,22 +1289,23 @@ msgid "Create a password for"
 msgstr "Create a password for"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Create a workspace"
+msgstr "Create a workspace"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 msgid "Create account"
 msgstr "Create account"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Create an Item manually"
-msgstr "Create an Item manually"
-
-#. js-lingui-explicit-id
-#: src/routes/(app)/admin/maintenance/+page.svelte
-msgid "Create backup"
-msgstr "Create backup"
+#: src/lib/features/item/ItemActions.svelte
+msgid "Create copy"
+msgstr "Create copy"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Create invitation"
 msgstr "Create invitation"
 
@@ -863,9 +1330,20 @@ msgid "Create user"
 msgstr "Create user"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Create workspace"
+msgstr "Create workspace"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Created"
 msgstr "Created"
+
+#. js-lingui-explicit-id
+#: src/lib/export-preferences.ts
+msgid "CSL citation"
+msgstr "CSL citation"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -873,24 +1351,19 @@ msgid "CSL XML"
 msgstr "CSL XML"
 
 #. js-lingui-explicit-id
+#: src/lib/export-preferences.ts
+msgid "CSL-JSON"
+msgstr "CSL-JSON"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Current password"
 msgstr "Current password"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Current PDF"
-msgstr "Current PDF"
-
-#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Current session"
 msgstr "Current session"
-
-#. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Custom fields"
-msgstr "Custom fields"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -909,9 +1382,29 @@ msgid "Dashboard"
 msgstr "Dashboard"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Data collector"
+msgstr "Data collector"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Data curation"
+msgstr "Data curation"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Data directory: {path}"
 msgstr "Data directory: {path}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Data manager"
+msgstr "Data manager"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Data repository"
+msgstr "Data repository"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -919,9 +1412,19 @@ msgid "Data source"
 msgstr "Data source"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Database"
+msgstr "Database"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Database: {url}"
 msgstr "Database: {url}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Dataset"
+msgstr "Dataset"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -929,9 +1432,24 @@ msgid "Date"
 msgstr "Date"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Date precision"
+msgstr "Date precision"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Date unknown"
 msgstr "Date unknown"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Dates"
+msgstr "Dates"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Default"
+msgstr "Default"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -949,9 +1467,10 @@ msgid "Defaults"
 msgstr "Defaults"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 #: src/lib/features/item/files/ItemFilesSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Delete"
 msgstr "Delete"
@@ -967,7 +1486,7 @@ msgid "Delete Item permanently"
 msgstr "Delete Item permanently"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Delete permanently"
 msgstr "Delete permanently"
 
@@ -992,7 +1511,7 @@ msgid "Delete this Citation Style?"
 msgstr "Delete this Citation Style?"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Delete this file permanently?"
 msgstr "Delete this file permanently?"
 
@@ -1002,6 +1521,8 @@ msgid "Delete this Tag from all accessible Items?"
 msgstr "Delete this Tag from all accessible Items?"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Description"
@@ -1033,6 +1554,11 @@ msgid "Discard"
 msgstr "Discard"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Discard draft and load latest"
+msgstr "Discard draft and load latest"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Discover"
 msgstr "Discover"
@@ -1050,9 +1576,25 @@ msgstr "Discovery result pages"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Discussion"
 msgstr "Discussion"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Discussion message deleted"
+msgstr "Discussion message deleted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Discussion message moderated"
+msgstr "Discussion message moderated"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Discussion posted"
+msgstr "Discussion posted"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Toast.svelte
@@ -1060,6 +1602,26 @@ msgstr "Discussion"
 #: src/lib/features/workflows/WorkflowJobRow.svelte
 msgid "Dismiss"
 msgstr "Dismiss"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Displayed annotation sources"
+msgstr "Displayed annotation sources"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Dissertation"
+msgstr "Dissertation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Distributor"
+msgstr "Distributor"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Document"
+msgstr "Document"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1072,17 +1634,22 @@ msgid "Document download options"
 msgstr "Document download options"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Document downloads"
+msgstr "Document downloads"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Document processing"
 msgstr "Document processing"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Document processing completed"
 msgstr "Document processing completed"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 msgid "Document processing failed"
 msgstr "Document processing failed"
 
@@ -1092,9 +1659,9 @@ msgid "Documents"
 msgstr "Documents"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "DOI"
-msgstr "DOI"
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "DOI and URL preferences apply to BibTeX, RIS and CSL exports."
+msgstr "DOI and URL preferences apply to BibTeX, RIS and CSL exports."
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1105,11 +1672,6 @@ msgstr "DOI policy"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "DOI, files, or PDFs"
 msgstr "DOI, files, or PDFs"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "DOI, PMID, or arXiv ID"
-msgstr "DOI, PMID, or arXiv ID"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -1127,11 +1689,6 @@ msgstr "Download and add attachment"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "Download and add PDF"
 msgstr "Download and add PDF"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminMaintenance.svelte
-msgid "Download backup"
-msgstr "Download backup"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1160,6 +1717,11 @@ msgid "Download with annotations"
 msgstr "Download with annotations"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Drop PDFs here or choose them; choosing more later adds to the same batch."
+msgstr "Drop PDFs here or choose them; choosing more later adds to the same batch."
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Duplicate group {number}"
 msgstr "Duplicate group {number}"
@@ -1175,22 +1737,46 @@ msgid "Durable workflows"
 msgstr "Durable workflows"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Each inspection requires a reason and returns at most 100 Items. It grants no continuing access."
+msgstr "Each inspection requires a reason and returns at most 100 Items. It grants no continuing access."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Each workspace follows the same access and governance rules. Choose one to open its library and projects."
+msgstr "Each workspace follows the same access and governance rules. Choose one to open its library and projects."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Edit metadata"
 msgstr "Edit metadata"
 
-#. Project member role.
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Edit standard metadata JSON"
+msgstr "Edit standard metadata JSON"
+
+#. Workspace role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/lib/features/item/metadata-labels.ts
 msgid "Editor"
 msgstr "Editor"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Editors"
 msgstr "Editors"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Education"
+msgstr "Education"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Effective Workspace resource actions determine which governance actions are available."
+msgstr "Effective Workspace resource actions determine which governance actions are available."
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -1204,9 +1790,55 @@ msgid "Enable user"
 msgstr "Enable user"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Encoding"
-msgstr "Encoding"
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "End date"
+msgstr "End date"
+
+#. js-lingui-explicit-id
+#: src/lib/design/DateField.svelte
+msgid "Enter a valid {format} date."
+msgstr "Enter a valid {format} date."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+msgid "Enter a valid absolute URI."
+msgstr "Enter a valid absolute URI."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Enter an Item title."
+msgstr "Enter an Item title."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Enter metadata by hand when no import source applies."
+msgstr "Enter metadata by hand when no import source applies."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Entry"
+msgstr "Entry"
+
+#. Import diagnostic severity.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Error"
+msgstr "Error"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Established"
+msgstr "Established"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Event"
+msgstr "Event"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Exact username"
+msgstr "Exact username"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1217,6 +1849,11 @@ msgstr "excluded"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Excluded fields"
 msgstr "Excluded fields"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Expand"
+msgstr "Expand"
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
@@ -1230,6 +1867,11 @@ msgid "Expired"
 msgstr "Expired"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "expires"
+msgstr "expires"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Expires"
 msgstr "Expires"
@@ -1238,6 +1880,11 @@ msgstr "Expires"
 #: src/lib/features/account/Account.svelte
 msgid "Expires after"
 msgstr "Expires after"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Expires in days"
+msgstr "Expires in days"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1254,6 +1901,11 @@ msgstr "Export bibliography"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Export lifetime in hours"
 msgstr "Export lifetime in hours"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Export preference sections"
+msgstr "Export preference sections"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1285,6 +1937,11 @@ msgstr "External source {number}"
 msgid "Extract metadata and keep the papers together in one Import Batch."
 msgstr "Extract metadata and keep the papers together in one Import Batch."
 
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Facility"
+msgstr "Facility"
+
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -1298,14 +1955,14 @@ msgid "Failed workflows"
 msgstr "Failed workflows"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Fetch one record from DOI, PubMed, arXiv, and other scholarly providers."
-msgstr "Fetch one record from DOI, PubMed, arXiv, and other scholarly providers."
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Family name"
+msgstr "Family name"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Field name"
-msgstr "Field name"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Figure"
+msgstr "Figure"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -1314,7 +1971,9 @@ msgstr "File format"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryFilters.svelte
 msgid "Files"
 msgstr "Files"
 
@@ -1335,17 +1994,19 @@ msgid "Find saved research"
 msgstr "Find saved research"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "First name"
-msgstr "First name"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "First page"
 msgstr "First page"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Formal analysis"
+msgstr "Formal analysis"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/BulkActions.svelte
 msgid "Format"
 msgstr "Format"
 
@@ -1361,19 +2022,54 @@ msgid "Free text"
 msgstr "Free text"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Freeze writes"
+msgstr "Freeze writes"
+
+#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "From year"
 msgstr "From year"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Full title"
-msgstr "Full title"
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Full date"
+msgstr "Full date"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "General citation options"
-msgstr "General citation options"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Funder"
+msgstr "Funder"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Funder name"
+msgstr "Funder name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Funder URI"
+msgstr "Funder URI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Funding acquisition"
+msgstr "Funding acquisition"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Funding references"
+msgstr "Funding references"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "General"
+msgstr "General"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Geo locations"
+msgstr "Geo locations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -1381,14 +2077,65 @@ msgid "Get started"
 msgstr "Get started"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Has PDF"
-msgstr "Has PDF"
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Give a reason for removing this message. The action is recorded in the audit log."
+msgstr "Give a reason for removing this message. The action is recorded in the audit log."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Given name"
+msgstr "Given name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Government"
+msgstr "Government"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Grant"
+msgstr "Grant"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Has part"
+msgstr "Has part"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Has preprint"
+msgstr "Has preprint"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Has review"
+msgstr "Has review"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Has translation"
+msgstr "Has translation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Has version"
+msgstr "Has version"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Header"
 msgstr "Header"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Healthcare"
+msgstr "Healthcare"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Hide"
+msgstr "Hide"
 
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
@@ -1397,19 +2144,41 @@ msgid "Highlight"
 msgstr "Highlight"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata-labels.ts
+msgid "Hosting institution"
+msgstr "Hosting institution"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Identifier"
 msgstr "Identifier"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Identifier type"
+msgstr "Identifier type"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Identifier URI"
+msgstr "Identifier URI"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Identifier, file, or PDFs"
-msgstr "Identifier, file, or PDFs"
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Identifiers"
+msgstr "Identifiers"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "IEEE API key"
 msgstr "IEEE API key"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Image"
+msgstr "Image"
 
 #. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
@@ -1418,9 +2187,19 @@ msgid "Import"
 msgstr "Import"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import a bibliography"
+msgstr "Import a bibliography"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Import Items"
 msgstr "Import Items"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import methods"
+msgstr "Import methods"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -1464,6 +2243,11 @@ msgid "Import published PDFs"
 msgstr "Import published PDFs"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Inactive"
+msgstr "Inactive"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Include"
 msgstr "Include"
@@ -1475,18 +2259,8 @@ msgstr "Include abstract"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
-msgid "Include additional identifiers"
-msgstr "Include additional identifiers"
-
-#. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
 msgid "Include annotations in PDF downloads"
 msgstr "Include annotations in PDF downloads"
-
-#. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Include custom fields"
-msgstr "Include custom fields"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1505,9 +2279,34 @@ msgid "Ink"
 msgstr "Ink"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Inspect Items once"
+msgstr "Inspect Items once"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Install Citation Style"
 msgstr "Install Citation Style"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access."
+msgstr "Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Instrument"
+msgstr "Instrument"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Interactive resource"
+msgstr "Interactive resource"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Interviewee"
+msgstr "Interviewee"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1515,9 +2314,19 @@ msgid "Invalid Citation Key formula"
 msgstr "Invalid Citation Key formula"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Invalid metadata JSON."
+msgstr "Invalid metadata JSON."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Invalid username or password."
 msgstr "Invalid username or password."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Investigation"
+msgstr "Investigation"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/users/+page.svelte
@@ -1525,7 +2334,28 @@ msgid "Invitation created"
 msgstr "Invitation created"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Invitation created. Copy this token now; it will not be shown again."
+msgstr "Invitation created. Copy this token now; it will not be shown again."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Invitation link copied"
+msgstr "Invitation link copied"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminSettings.svelte
+msgid "Invitation only"
+msgstr "Invitation only"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Invitation revoked"
+msgstr "Invitation revoked"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Invitations"
 msgstr "Invitations"
 
@@ -1535,8 +2365,77 @@ msgid "Invite user"
 msgstr "Invite user"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is identical to"
+msgstr "Is identical to"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is new version of"
+msgstr "Is new version of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is original form of"
+msgstr "Is original form of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is part of"
+msgstr "Is part of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is preprint of"
+msgstr "Is preprint of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is previous version of"
+msgstr "Is previous version of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is referenced by"
+msgstr "Is referenced by"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is related to"
+msgstr "Is related to"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is review of"
+msgstr "Is review of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is supplement to"
+msgstr "Is supplement to"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is supplemented by"
+msgstr "Is supplemented by"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is translation of"
+msgstr "Is translation of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is variant form of"
+msgstr "Is variant form of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Is version of"
+msgstr "Is version of"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Issue"
 msgstr "Issue"
 
@@ -1558,14 +2457,33 @@ msgstr "Item actions"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/routes/(app)/admin/items/+page.svelte
+msgid "Item copied to Workspace"
+msgstr "Item copied to Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 msgid "Item deleted"
 msgstr "Item deleted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemHeader.svelte
+msgid "Item details"
+msgstr "Item details"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Item list read-only"
+msgstr "Item list read-only"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Item removed from Project"
 msgstr "Item removed from Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemHeader.svelte
+msgid "Item sections"
+msgstr "Item sections"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -1578,28 +2496,32 @@ msgid "Item thumbnail"
 msgstr "Item thumbnail"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
-msgid "Item workspace"
-msgstr "Item workspace"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
 #: src/lib/features/admin/AdminOverview.svelte
-#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
-#: src/routes/(app)/admin/items/+page.svelte
 msgid "Items"
 msgstr "Items"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Items pagination"
+msgstr "Items pagination"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/projects/Projects.svelte
 msgid "Join"
 msgstr "Join"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
-msgid "Join open research collections from this instance."
-msgstr "Join open research collections from this instance."
+msgid "Join an open research direction to add it to Your Projects."
+msgstr "Join an open research direction to add it to Your Projects."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Join Project"
+msgstr "Join Project"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -1607,20 +2529,29 @@ msgid "Join Quirebase"
 msgstr "Join Quirebase"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/overview/ItemOverviewSection.svelte
-msgid "Journal abbreviation"
-msgstr "Journal abbreviation"
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Joined Project"
+msgstr "Joined Project"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Journal title"
-msgstr "Journal title"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Journal"
+msgstr "Journal"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "JSON or text value"
-msgstr "JSON or text value"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Journal article"
+msgstr "Journal article"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Journal issue"
+msgstr "Journal issue"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Journal volume"
+msgstr "Journal volume"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -1628,31 +2559,45 @@ msgid "Keep your Library useful"
 msgstr "Keep your Library useful"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Key"
+msgstr "Key"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Keyword"
 msgstr "Keyword"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Keywords"
 msgstr "Keywords"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Language"
 msgstr "Language"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Last name or organization"
-msgstr "Last name or organization"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Last page"
 msgstr "Last page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Latest saved metadata"
+msgstr "Latest saved metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "LaTeX character commands"
+msgstr "LaTeX character commands"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -1660,9 +2605,19 @@ msgid "Leave Project"
 msgstr "Leave Project"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Left Project"
+msgstr "Left Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Legal document"
+msgstr "Legal document"
+
+#. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/Library.svelte
 msgid "Library"
 msgstr "Library"
@@ -1688,6 +2643,22 @@ msgid "Library tools"
 msgstr "Library tools"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "License"
+msgstr "License"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "License title"
+msgstr "License title"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Lifecycle"
+msgstr "Lifecycle"
+
+#. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
 msgid "Light theme"
 msgstr "Light theme"
@@ -1697,6 +2668,27 @@ msgstr "Light theme"
 #: src/lib/domain-labels.ts
 msgid "Line"
 msgstr "Line"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Load more members"
+msgstr "Load more members"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Load more Projects"
+msgstr "Load more Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+msgid "Load more Tags"
+msgstr "Load more Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Load more workspaces"
+msgstr "Load more workspaces"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemSectionState.svelte
@@ -1726,9 +2718,30 @@ msgid "Loading dashboard…"
 msgstr "Loading dashboard…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Loading discussion…"
+msgstr "Loading discussion…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Loading Items…"
+msgstr "Loading Items…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Loading Library…"
 msgstr "Loading Library…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Loading members…"
+msgstr "Loading members…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Loading metadata editor…"
+msgstr "Loading metadata editor…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -1751,19 +2764,59 @@ msgid "Loading reader configuration…"
 msgstr "Loading reader configuration…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Loading Tags…"
+msgstr "Loading Tags…"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Loading workspace…"
+msgstr "Loading workspace…"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/routes/(app)/+page.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Loading workspaces…"
+msgstr "Loading workspaces…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Loading…"
+msgstr "Loading…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Locale"
 msgstr "Locale"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Location"
+msgstr "Location"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Lock"
+msgstr "Lock"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Look up an identifier"
-msgstr "Look up an identifier"
+msgid "Look up identifiers"
+msgstr "Look up identifiers"
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
 msgid "Main navigation"
 msgstr "Main navigation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Maintainer"
+msgstr "Maintainer"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -1793,19 +2846,56 @@ msgid "Maintenance: {operation}"
 msgstr "Maintenance: {operation}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Make owner"
-msgstr "Make owner"
-
-#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Manage Tags"
 msgstr "Manage Tags"
 
 #. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+msgid "Manage workspaces"
+msgstr "Manage workspaces"
+
+#. Project participation policy.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Managed"
+msgstr "Managed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Managed participation"
+msgstr "Managed participation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Managed Projects"
+msgstr "Managed Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Managed Projects are visible only to their participants and Workspace owners/admins."
+msgstr "Managed Projects are visible only to their participants and Workspace owners/admins."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Managed Projects are visible to participants and Workspace owners/admins; Workspace owners/admins curate their participant lists."
+msgstr "Managed Projects are visible to participants and Workspace owners/admins; Workspace owners/admins curate their participant lists."
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Manual creation"
 msgstr "Manual creation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Manuscript"
+msgstr "Manuscript"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Map"
+msgstr "Map"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -1831,9 +2921,34 @@ msgid "Member"
 msgstr "Member"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member reactivated"
+msgstr "Member reactivated"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member removed"
+msgstr "Member removed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member role updated"
+msgstr "Member role updated"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Member suspended"
+msgstr "Member suspended"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Members"
 msgstr "Members"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Members pagination"
+msgstr "Members pagination"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -1846,8 +2961,10 @@ msgid "Messages"
 msgstr "Messages"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/schema-editor/AddField.svelte
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Metadata"
 msgstr "Metadata"
 
@@ -1855,6 +2972,11 @@ msgstr "Metadata"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Metadata contact email"
 msgstr "Metadata contact email"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Metadata provider"
+msgstr "Metadata provider"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1867,9 +2989,52 @@ msgid "Metadata synchronized"
 msgstr "Metadata synchronized"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Methodology"
+msgstr "Methodology"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Methods"
+msgstr "Methods"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "MIME type"
+msgstr "MIME type"
+
+#. js-lingui-explicit-id
 #: src/lib/app/MobileNavigation.svelte
 msgid "Mobile navigation"
 msgstr "Mobile navigation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Model"
+msgstr "Model"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/discussion/ItemDiscussionSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Moderate"
+msgstr "Moderate"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Moderate Discussion message"
+msgstr "Moderate Discussion message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Moderation reason"
+msgstr "Moderation reason"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Moderator actions"
+msgstr "Moderator actions"
 
 #. js-lingui-explicit-id
 #: src/lib/app/MobileNavigation.svelte
@@ -1878,13 +3043,25 @@ msgid "More"
 msgstr "More"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Move down"
+msgstr "Move down"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Move every assignment from the source Tag into the target Tag."
 msgstr "Move every assignment from the source Tag into the target Tag."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Move up"
+msgstr "Move up"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Name"
 msgstr "Name"
 
@@ -1931,14 +3108,19 @@ msgid "New Tag name"
 msgstr "New Tag name"
 
 #. js-lingui-explicit-id
-#: src/lib/design/Pagination.svelte
-msgid "Next"
-msgstr "Next"
+#: src/lib/design/DateField.svelte
+msgid "Next calendar period"
+msgstr "Next calendar period"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "Next page"
 msgstr "Next page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "No"
+msgstr "No"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -1972,19 +3154,14 @@ msgid "No Citation Styles match this search."
 msgstr "No Citation Styles match this search."
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "No contributors."
-msgstr "No contributors."
-
-#. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "No custom fields."
-msgstr "No custom fields."
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No description"
 msgstr "No description"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No discussion messages yet."
+msgstr "No discussion messages yet."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
@@ -2013,6 +3190,7 @@ msgstr "No invitations."
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "No Items found."
 msgstr "No Items found."
 
@@ -2020,11 +3198,6 @@ msgstr "No Items found."
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No Items in this Project."
 msgstr "No Items in this Project."
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
-msgid "No Items."
-msgstr "No Items."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -2037,6 +3210,26 @@ msgid "No maintenance workflows."
 msgstr "No maintenance workflows."
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No matching Items."
+msgstr "No matching Items."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No matching members."
+msgstr "No matching members."
+
+#. js-lingui-explicit-id
+#: src/lib/design/SearchSelect.svelte
+msgid "No matching options."
+msgstr "No matching options."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "No matching Projects."
+msgstr "No matching Projects."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "No new Tag suggestions."
 msgstr "No new Tag suggestions."
@@ -2047,24 +3240,29 @@ msgid "No note text"
 msgstr "No note text"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "No open Projects are available to join."
+msgstr "No open Projects are available to join."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "No participating Projects on this page."
+msgstr "No participating Projects on this page."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "No Project participants yet."
+msgstr "No Project participants yet."
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "No projects yet."
 msgstr "No projects yet."
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "No Projects yet."
-msgstr "No Projects yet."
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminProjects.svelte
-msgid "No projects."
-msgstr "No projects."
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "No public Projects are available to join."
-msgstr "No public Projects are available to join."
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "No records in this batch"
+msgstr "No records in this batch"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2083,11 +3281,6 @@ msgid "No Tags match this filter."
 msgstr "No Tags match this filter."
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "No upstream identifiers."
-msgstr "No upstream identifiers."
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "No users."
 msgstr "No users."
@@ -2096,6 +3289,26 @@ msgstr "No users."
 #: src/lib/features/admin/AdminWorkflows.svelte
 msgid "No workflows."
 msgstr "No workflows."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "No workspaces are available for this account yet."
+msgstr "No workspaces are available for this account yet."
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+msgid "No workspaces available"
+msgstr "No workspaces available"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "No workspaces."
+msgstr "No workspaces."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Nonprofit"
+msgstr "Nonprofit"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -2125,16 +3338,18 @@ msgstr "Omit"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
-msgid "Omit when DOI exists"
-msgstr "Omit when DOI exists"
+msgid "Omit when a DOI exists"
+msgstr "Omit when a DOI exists"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
-msgid "Only invited members can access this Project."
-msgstr "Only invited members can access this Project."
+msgid "Only Workspace owners and admins can create managed Projects and curate participation."
+msgstr "Only Workspace owners and admins can create managed Projects and curate participation."
 
+#. Project participation policy.
 #. js-lingui-explicit-id
-#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminSettings.svelte
 msgid "Open"
 msgstr "Open"
 
@@ -2147,6 +3362,11 @@ msgstr "Open an Item to start your reading history."
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "Open annotation workspace"
 msgstr "Open annotation workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Open copy"
+msgstr "Open copy"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2164,9 +3384,29 @@ msgid "Open Library tools"
 msgstr "Open Library tools"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Open metadata editor"
-msgstr "Open metadata editor"
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Open PDF"
+msgstr "Open PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Open Projects"
+msgstr "Open Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Open Projects are visible to all Workspace members. Joining one adds it to Your Projects."
+msgstr "Open Projects are visible to all Workspace members. Joining one adds it to Your Projects."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Open Workspace"
+msgstr "Open Workspace"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Open workspace {name}"
+msgstr "Open workspace {name}"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/settings/+page.svelte
@@ -2179,6 +3419,11 @@ msgid "OpenAPI"
 msgstr "OpenAPI"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/+page.svelte
+msgid "Opening your workspace…"
+msgstr "Opening your workspace…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
 msgid "Operation"
 msgstr "Operation"
@@ -2189,7 +3434,18 @@ msgid "OR"
 msgstr "OR"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Or paste bibliography data"
+msgstr "Or paste bibliography data"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Organization"
+msgstr "Organization"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemHeader.svelte
 msgid "Organize"
 msgstr "Organize"
 
@@ -2199,23 +3455,53 @@ msgid "Organize a collection"
 msgstr "Organize a collection"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Other"
+msgstr "Other"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Other open Projects"
+msgstr "Other open Projects"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Output management plan"
+msgstr "Output management plan"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Output sorting"
 msgstr "Output sorting"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/routes/(app)/admin/+page.svelte
 msgid "Overview"
 msgstr "Overview"
 
-#. Project member role.
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "owner"
+msgstr "owner"
+
+#. Workspace role or resource owner label.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Owner"
 msgstr "Owner"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Owner username (exact match)"
+msgstr "Owner username (exact match)"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Ownership transferred"
+msgstr "Ownership transferred"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -2224,16 +3510,24 @@ msgstr "page"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
-#: src/lib/features/library/LibraryResults.svelte
 msgid "Page {page} of {pageCount}"
 msgstr "Page {page} of {pageCount}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/design/Pagination.svelte
+msgid "Page Size"
+msgstr "Page Size"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Pages"
 msgstr "Pages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Participation"
+msgstr "Participation"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2248,6 +3542,16 @@ msgstr "Password"
 msgid "Password changed"
 msgstr "Password changed"
 
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Paste up to 50 identifiers, one per line. Each record is looked up separately."
+msgstr "Paste up to 50 identifiers, one per line. Each record is looked up separately."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Patent"
+msgstr "Patent"
+
 #. File kind for a PDF revision.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -2255,9 +3559,9 @@ msgid "PDF"
 msgstr "PDF"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "PDF availability"
-msgstr "PDF availability"
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "PDF file"
+msgstr "PDF file"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -2285,6 +3589,21 @@ msgid "PDF scanned for a DOI"
 msgstr "PDF scanned for a DOI"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "PDF URL"
+msgstr "PDF URL"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "PDFs"
+msgstr "PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Peer review"
+msgstr "Peer review"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "pending"
 msgstr "pending"
@@ -2302,9 +3621,23 @@ msgid "Pending invitations"
 msgstr "Pending invitations"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Performance"
+msgstr "Performance"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Periodical"
+msgstr "Periodical"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Permanent deletion"
+msgstr "Permanent deletion"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 #: src/lib/features/library/Library.svelte
-#: src/routes/(app)/admin/items/+page.svelte
 msgid "Permanently delete"
 msgstr "Permanently delete"
 
@@ -2314,14 +3647,14 @@ msgid "Permanently delete the selected Items?"
 msgstr "Permanently delete the selected Items?"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/items/+page.svelte
-msgid "Permanently delete this Item?"
-msgstr "Permanently delete this Item?"
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Permanently delete this Project?"
 msgstr "Permanently delete this Project?"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Permanently delete workspace"
+msgstr "Permanently delete workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -2329,14 +3662,41 @@ msgid "Permissions"
 msgstr "Permissions"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Person"
+msgstr "Person"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Personal communication"
+msgstr "Personal communication"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Personal settings"
 msgstr "Personal settings"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Place published"
-msgstr "Place published"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Physical object"
+msgstr "Physical object"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Place"
+msgstr "Place"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Platform"
+msgstr "Platform"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Please check the metadata fields."
+msgstr "Please check the metadata fields."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -2349,14 +3709,34 @@ msgid "Please sign in again."
 msgstr "Please sign in again."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Point latitude"
+msgstr "Point latitude"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Point longitude"
+msgstr "Point longitude"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Polygon"
+msgstr "Polygon"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Post"
+msgstr "Post"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 msgid "Post message"
 msgstr "Post message"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Prefer abbreviation"
-msgstr "Prefer abbreviation"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Poster"
+msgstr "Poster"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2379,9 +3759,19 @@ msgid "Preparing…"
 msgstr "Preparing…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Preprint"
+msgstr "Preprint"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Presentation"
+msgstr "Presentation"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
-msgid "Preserve bibitem case"
-msgstr "Preserve bibitem case"
+msgid "Preserve BibTeX title case"
+msgstr "Preserve BibTeX title case"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -2399,38 +3789,46 @@ msgid "Preview metadata"
 msgstr "Preview metadata"
 
 #. js-lingui-explicit-id
-#: src/lib/design/Pagination.svelte
-msgid "Previous"
-msgstr "Previous"
+#: src/lib/design/DateField.svelte
+msgid "Previous calendar period"
+msgstr "Previous calendar period"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/design/Pagination.svelte
 msgid "Previous page"
 msgstr "Previous page"
 
-#. Project visibility or annotation scope.
+#. Project participation or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/projects/Projects.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Private"
 msgstr "Private"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Private annotations"
 msgstr "Private annotations"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Private annotations and project: {name}"
-msgstr "Private annotations and project: {name}"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Proceedings"
+msgstr "Proceedings"
 
 #. js-lingui-explicit-id
-#: src/lib/features/pdf-reader/PdfWorkspace.svelte
-msgid "Private annotations only"
-msgstr "Private annotations only"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Proceedings article"
+msgstr "Proceedings article"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Proceedings series"
+msgstr "Proceedings series"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Producer"
+msgstr "Producer"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryFilters.svelte
@@ -2443,24 +3841,29 @@ msgid "Project action failed"
 msgstr "Project action failed"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project archived"
-msgstr "Project archived"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Project administration"
+msgstr "Project administration"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project lifecycle"
-msgstr "Project lifecycle"
+msgid "Project deleted"
+msgstr "Project deleted"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project member removed"
-msgstr "Project member removed"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Project leader"
+msgstr "Project leader"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project member saved"
-msgstr "Project member saved"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Project manager"
+msgstr "Project manager"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Project member"
+msgstr "Project member"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2469,13 +3872,13 @@ msgstr "Project name"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project ownership transferred"
-msgstr "Project ownership transferred"
+msgid "Project participant added"
+msgstr "Project participant added"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Project restored"
-msgstr "Project restored"
+msgid "Project participant removed"
+msgstr "Project participant removed"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2489,48 +3892,45 @@ msgstr "Project settings saved"
 
 #. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
-#: src/lib/features/admin/AdminProjects.svelte
-#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
-#: src/routes/(app)/admin/projects/+page.svelte
 msgid "Projects"
 msgstr "Projects"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Projects are research working contexts inside this Workspace."
+msgstr "Projects are research working contexts inside this Workspace."
+
+#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Provider"
 msgstr "Provider"
 
-#. Project visibility or annotation scope.
+#. Project participation or annotation scope.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/projects/Projects.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Public"
 msgstr "Public"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Public Projects"
-msgstr "Public Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryActiveFilters.svelte
 msgid "Publication"
 msgstr "Publication"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/PublicationDateField.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Publication date"
 msgstr "Publication date"
 
@@ -2540,14 +3940,29 @@ msgid "Publication details"
 msgstr "Publication details"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publication identifiers"
+msgstr "Publication identifiers"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publication publisher"
+msgstr "Publication publisher"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Publication title"
 msgstr "Publication title"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/metadata/ItemMetadataSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publication type"
+msgstr "Publication type"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Publisher"
 msgstr "Publisher"
 
@@ -2560,6 +3975,11 @@ msgstr "Quick actions"
 #: src/lib/features/tools/Tools.svelte
 msgid "Quirebase will not inspect your Library until you start the check."
 msgstr "Quirebase will not inspect your Library until you start the check."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Reactivate"
+msgstr "Reactivate"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -2577,6 +3997,16 @@ msgid "Read PDF"
 msgstr "Read PDF"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "read-only freeze"
+msgstr "read-only freeze"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Reader"
+msgstr "Reader"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Reading"
 msgstr "Reading"
@@ -2586,6 +4016,21 @@ msgstr "Reading"
 #: src/lib/domain-labels.ts
 msgid "Ready"
 msgstr "Ready"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Reason (at least 10 characters)"
+msgstr "Reason (at least 10 characters)"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Reason:"
+msgstr "Reason:"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Rebuild search indexes for this Workspace."
+msgstr "Rebuild search indexes for this Workspace."
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2604,13 +4049,16 @@ msgstr "Recent operations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Recently added"
 msgstr "Recently added"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/maintenance/+page.svelte
-msgid "Recommend Tags for all Items"
-msgstr "Recommend Tags for all Items"
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Recently updated"
+msgstr "Recently updated"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -2629,15 +4077,35 @@ msgid "Rectangle"
 msgstr "Rectangle"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Reference"
+msgstr "Reference"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Reference type"
 msgstr "Reference type"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "References"
+msgstr "References"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Refresh"
 msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+msgid "Refresh page"
+msgstr "Refresh page"
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "Refresh the page to restore Workspace context."
+msgstr "Refresh the page to restore Workspace context."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -2650,9 +4118,34 @@ msgid "Regenerate citation key"
 msgstr "Regenerate citation key"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/maintenance/+page.svelte
-msgid "Reindex all Items"
-msgstr "Reindex all Items"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Registration agency"
+msgstr "Registration agency"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Registration authority"
+msgstr "Registration authority"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Registration policy"
+msgstr "Registration policy"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Reindex Workspace"
+msgstr "Reindex Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Related person"
+msgstr "Related person"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Relations"
+msgstr "Relations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -2661,12 +4154,65 @@ msgstr "Relevance"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/import/ImportWorkspace.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove"
 msgstr "Remove"
+
+#. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+msgid "Remove {name}"
+msgstr "Remove {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Remove entry"
+msgstr "Remove entry"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Remove field"
+msgstr "Remove field"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+msgid "Remove fields that are not part of the metadata standard."
+msgstr "Remove fields that are not part of the metadata standard."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Remove filter {name}"
+msgstr "Remove filter {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Remove from Project"
+msgstr "Remove from Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Remove Item from Project?"
+msgstr "Remove Item from Project?"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+msgid "Remove message"
+msgstr "Remove message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Remove the chosen file to paste bibliography data instead."
+msgstr "Remove the chosen file to paste bibliography data instead."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
+msgstr "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -2679,9 +4225,39 @@ msgid "Rename Tag"
 msgstr "Rename Tag"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Report"
+msgstr "Report"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Report component"
+msgstr "Report component"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Report series"
+msgstr "Report series"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Repository"
+msgstr "Repository"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Rescan PDF for DOI"
 msgstr "Rescan PDF for DOI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Research group"
+msgstr "Research group"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Researcher"
+msgstr "Researcher"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
@@ -2694,12 +4270,28 @@ msgid "Reset to defaults"
 msgstr "Reset to defaults"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Restore Project"
-msgstr "Restore Project"
+#: src/lib/features/item/metadata-labels.ts
+msgid "Resources"
+msgstr "Resources"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Restore"
+msgstr "Restore"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Restore workspace"
+msgstr "Restore workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/+page.svelte
 msgid "Retry"
 msgstr "Retry"
 
@@ -2709,9 +4301,19 @@ msgid "Return to Quirebase"
 msgstr "Return to Quirebase"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Review"
+msgstr "Review"
+
+#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Review and import"
 msgstr "Review and import"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Review assistant"
+msgstr "Review assistant"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -2719,9 +4321,35 @@ msgid "Review duplicates, maintain Tags, and install Citation Styles."
 msgstr "Review duplicates, maintain Tags, and install Citation Styles."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Review the diagnostics below for details."
+msgstr "Review the diagnostics below for details."
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Review the preview"
 msgstr "Review the preview"
+
+#. Workspace role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "reviewer"
+msgstr "reviewer"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Reviewer"
+msgstr "Reviewer"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Reviewer external"
+msgstr "Reviewer external"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Revoke"
+msgstr "Revoke"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2755,12 +4383,25 @@ msgid "Revoked"
 msgstr "Revoked"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Rights holder"
+msgstr "Rights holder"
+
+#. js-lingui-explicit-id
+#: src/lib/export-preferences.ts
+msgid "RIS"
+msgstr "RIS"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Role"
 msgstr "Role"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Role for {username}"
 msgstr "Role for {username}"
 
@@ -2788,18 +4429,8 @@ msgstr "Runtime settings"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
-msgid "Same DOI"
-msgstr "Same DOI"
-
-#. js-lingui-explicit-id
-#: src/lib/features/tools/Tools.svelte
 msgid "Same title"
 msgstr "Same title"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Save member"
-msgstr "Save member"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
@@ -2807,9 +4438,14 @@ msgid "Save metadata"
 msgstr "Save metadata"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Save only when you approve"
-msgstr "Save only when you approve"
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Save name"
+msgstr "Save name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Save new annotations to"
+msgstr "Save new annotations to"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2848,6 +4484,26 @@ msgid "Scanning…"
 msgstr "Scanning…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Schema version URI"
+msgstr "Schema version URI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Scheme"
+msgstr "Scheme"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Scheme URI"
+msgstr "Scheme URI"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Scope: Workspace"
+msgstr "Scope: Workspace"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Search"
@@ -2879,9 +4535,26 @@ msgid "Search field"
 msgstr "Search field"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Search Items"
+msgstr "Search Items"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Search Library"
 msgstr "Search Library"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Search members"
+msgstr "Search members"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/Projects.svelte
+msgid "Search Projects"
+msgstr "Search Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -2902,6 +4575,11 @@ msgstr "Search styles"
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Search title, author, Tag, or full text"
 msgstr "Search title, author, Tag, or full text"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Search workspaces"
+msgstr "Search workspaces"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/Library.svelte
@@ -2934,14 +4612,26 @@ msgid "Select Project"
 msgstr "Select Project"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Select Tag"
+msgstr "Select Tag"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Select this page"
 msgstr "Select this page"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-msgid "Separate Keywords with semicolons"
-msgstr "Separate Keywords with semicolons"
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Series"
+msgstr "Series"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Service"
+msgstr "Service"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -2980,9 +4670,29 @@ msgid "Settings saved"
 msgstr "Settings saved"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Shared collections with explicit membership and roles."
-msgstr "Shared collections with explicit membership and roles."
+#: src/lib/features/tools/Tools.svelte
+msgid "Shared identifier"
+msgstr "Shared identifier"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Show all fields"
+msgstr "Show all fields"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Show members"
+msgstr "Show members"
+
+#. js-lingui-explicit-id
+#: src/lib/design/SearchSelect.svelte
+msgid "Show options for {label}"
+msgstr "Show options for {label}"
+
+#. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Showing {start}–{end} of {total}"
+msgstr "Showing {start}–{end} of {total}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
@@ -2993,6 +4703,11 @@ msgstr "Sign in"
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in to your research workspace."
 msgstr "Sign in to your research workspace."
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Sign in with the invited account to accept this invitation."
+msgstr "Sign in with the invited account to accept this invitation."
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
@@ -3016,6 +4731,26 @@ msgid "Similar title"
 msgstr "Similar title"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Single response; no continuing access is granted"
+msgstr "Single response; no continuing access is granted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Size"
+msgstr "Size"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Software"
+msgstr "Software"
+
+#. js-lingui-explicit-id
+#: src/lib/design/FilePicker.svelte
+msgid "Some files were skipped because they are duplicates, unsupported, or over the batch limit."
+msgstr "Some files were skipped because they are duplicates, unsupported, or over the batch limit."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
@@ -3026,19 +4761,39 @@ msgid "Sort"
 msgstr "Sort"
 
 #. js-lingui-explicit-id
+#: src/lib/design/Pagination.svelte
+msgid "Sort By"
+msgstr "Sort By"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Sound"
+msgstr "Sound"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Source Tag"
 msgstr "Source Tag"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Stage many records from a reference manager export."
-msgstr "Stage many records from a reference manager export."
+#: src/lib/features/item/metadata-labels.ts
+msgid "Sponsor"
+msgstr "Sponsor"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Stage PDFs"
 msgstr "Stage PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Standard"
+msgstr "Standard"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Start date"
+msgstr "Start date"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workflows/WorkflowJobRow.svelte
@@ -3048,13 +4803,25 @@ msgstr "Starting…"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "State"
 msgstr "State"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Stats reviewer"
+msgstr "Stats reviewer"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Status"
 msgstr "Status"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Status:"
+msgstr "Status:"
 
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
@@ -3063,9 +4830,29 @@ msgid "Strikeout"
 msgstr "Strikeout"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Study registration"
+msgstr "Study registration"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Style name"
 msgstr "Style name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Subject"
+msgstr "Subject"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Submitted"
+msgstr "Submitted"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Subtitle"
+msgstr "Subtitle"
 
 #. Workflow or record state.
 #. js-lingui-explicit-id
@@ -3080,6 +4867,16 @@ msgid "Suggestions derived from metadata and the latest ready PDF."
 msgstr "Suggestions derived from metadata and the latest ready PDF."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Summary"
+msgstr "Summary"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Supervision"
+msgstr "Supervision"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Supplements"
 msgstr "Supplements"
@@ -3090,11 +4887,43 @@ msgid "Supplements: {state}"
 msgstr "Supplements: {state}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet."
+msgstr "Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Suspend"
+msgstr "Suspend"
+
+#. Workspace member state.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "suspended"
+msgstr "suspended"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Switch account"
+msgstr "Switch account"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Switching between open and managed participation preserves current participants."
+msgstr "Switching between open and managed participation preserves current participants."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Switching from Workspace-wide participation starts with you as the first participant."
+msgstr "Switching from Workspace-wide participation starts with you as the first participant."
+
+#. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
 msgid "System theme"
 msgstr "System theme"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Tag"
 msgstr "Tag"
@@ -3115,22 +4944,17 @@ msgid "Tag matrix"
 msgstr "Tag matrix"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Tag name"
-msgstr "Tag name"
-
-#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Tag pages"
 msgstr "Tag pages"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Tag recommendation"
 msgstr "Tag recommendation"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Tag recommendation failed"
 msgstr "Tag recommendation failed"
 
@@ -3140,7 +4964,7 @@ msgid "Tag Recommendations"
 msgstr "Tag Recommendations"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Tag recommendations updated"
 msgstr "Tag recommendations updated"
 
@@ -3173,6 +4997,22 @@ msgstr "Target Tag"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Target type"
 msgstr "Target type"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Target Workspace"
+msgstr "Target Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Technical info"
+msgstr "Technical info"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Terminate"
+msgstr "Terminate"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -3210,13 +5050,18 @@ msgid "The uploaded content is too large."
 msgstr "The uploaded content is too large."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/schema.ts
+msgid "The value does not match the required format."
+msgstr "The value does not match the required format."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "This action is not available."
 msgstr "This action is not available."
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/library/Library.svelte
-#: src/routes/(app)/admin/items/+page.svelte
 msgid "This cannot be undone."
 msgstr "This cannot be undone."
 
@@ -3261,9 +5106,34 @@ msgid "This invitation is invalid or has expired."
 msgstr "This invitation is invalid or has expired."
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
+msgid "This Item changed since it was loaded. Your draft was preserved; review the latest metadata."
+msgstr "This Item changed since it was loaded. Your draft was preserved; review the latest metadata."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "This Item changed. Latest state was loaded; review it and explicitly retry."
+msgstr "This Item changed. Latest state was loaded; review it and explicitly retry."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "This Item has changed. Your draft is preserved. Review the latest metadata before retrying."
+msgstr "This Item has changed. Your draft is preserved. Review the latest metadata before retrying."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
+msgstr "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
-msgid "This Project membership changed. Refresh and try again."
-msgstr "This Project membership changed. Refresh and try again."
+msgid "This Project is read only in its current state."
+msgstr "This Project is read only in its current state."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This Project participation changed. Refresh and try again."
+msgstr "This Project participation changed. Refresh and try again."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -3281,6 +5151,16 @@ msgid "This Tag conflicts with an existing Tag."
 msgstr "This Tag conflicts with an existing Tag."
 
 #. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "This Workspace is read only in its current state."
+msgstr "This Workspace is read only in its current state."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "This workspace is unavailable. Choose another workspace."
+msgstr "This workspace is unavailable. Choose another workspace."
+
+#. js-lingui-explicit-id
 #: src/routes/+error.svelte
 msgid "This workspace route does not exist."
 msgstr "This workspace route does not exist."
@@ -3288,8 +5168,9 @@ msgstr "This workspace route does not exist."
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/discovery/Discovery.svelte
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Title"
 msgstr "Title"
 
@@ -3325,12 +5206,29 @@ msgid "Tools"
 msgstr "Tools"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Transfer ownership"
+msgstr "Transfer ownership"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Translated title"
+msgstr "Translated title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Translator"
+msgstr "Translator"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Try a different Library Search."
 msgstr "Try a different Library Search."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryActiveFilters.svelte
 msgid "Type"
 msgstr "Type"
 
@@ -3338,6 +5236,11 @@ msgstr "Type"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Type the Project name to confirm. This cannot be undone."
 msgstr "Type the Project name to confirm. This cannot be undone."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Types"
+msgstr "Types"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -3348,6 +5251,16 @@ msgstr "Unable to accept invitation"
 #: src/lib/features/tools/Tools.svelte
 msgid "Unable to add Citation Style"
 msgstr "Unable to add Citation Style"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Unable to check whether you can create a workspace. Refresh and try again."
+msgstr "Unable to check whether you can create a workspace. Refresh and try again."
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to check your account."
+msgstr "Unable to check your account."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3401,13 +5314,50 @@ msgstr "Unable to load annotations."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to load Import options"
+msgstr "Unable to load Import options"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import preview"
 msgstr "Unable to load Import preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to load Items."
+msgstr "Unable to load Items."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Unable to load members."
+msgstr "Unable to load members."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemMetadataForm.svelte
+msgid "Unable to load metadata editor."
+msgstr "Unable to load metadata editor."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to load Project discussion."
+msgstr "Unable to load Project discussion."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Unable to load Project."
+msgstr "Unable to load Project."
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 msgid "Unable to load Projects."
 msgstr "Unable to load Projects."
+
+#. js-lingui-explicit-id
+#: src/lib/features/tags/TagSelect.svelte
+#: src/lib/features/tools/Tools.svelte
+msgid "Unable to load Tags"
+msgstr "Unable to load Tags"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -3418,6 +5368,17 @@ msgstr "Unable to load the dashboard."
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Unable to load the Library."
 msgstr "Unable to load the Library."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Unable to load workspace."
+msgstr "Unable to load workspace."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/+page.svelte
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Unable to load workspaces."
+msgstr "Unable to load workspaces."
 
 #. js-lingui-explicit-id
 #: src/routes/+error.svelte
@@ -3436,11 +5397,6 @@ msgid "Unable to open this PDF."
 msgstr "Unable to open this PDF."
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Unable to open this Project."
-msgstr "Unable to open this Project."
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to refresh Import preview"
 msgstr "Unable to refresh Import preview"
@@ -3451,10 +5407,10 @@ msgid "Unable to retry Import"
 msgstr "Unable to retry Import"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/item/[itemId]/(workspace)/discussion/+page.svelte
-#: src/routes/(app)/item/[itemId]/(workspace)/files/+page.svelte
-#: src/routes/(app)/item/[itemId]/(workspace)/metadata/+page.svelte
-#: src/routes/(app)/item/[itemId]/(workspace)/organize/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize/+page.svelte
 msgid "Unable to save changes"
 msgstr "Unable to save changes"
 
@@ -3463,6 +5419,17 @@ msgstr "Unable to save changes"
 msgid "Unable to sign in"
 msgstr "Unable to sign in"
 
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to sign out"
+msgstr "Unable to sign out"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
+msgid "Unable to validate metadata."
+msgstr "Unable to validate metadata."
+
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -3470,9 +5437,18 @@ msgid "Underline"
 msgstr "Underline"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminItems.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Unfreeze writes"
+msgstr "Unfreeze writes"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Unicode text"
+msgstr "Unicode text"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/item/ItemWorkspaceHeader.svelte
+#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Unknown authors"
 msgstr "Unknown authors"
@@ -3489,14 +5465,35 @@ msgid "Unknown publication"
 msgstr "Unknown publication"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Unlock"
+msgstr "Unlock"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Untitled"
 msgstr "Untitled"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Update the name members see across this workspace."
+msgstr "Update the name members see across this workspace."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Updated"
+msgstr "Updated"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Updated date"
+msgstr "Updated date"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Upload a bibliography"
-msgstr "Upload a bibliography"
+msgid "Upload a reference manager export or paste structured bibliography data."
+msgstr "Upload a reference manager export or paste structured bibliography data."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -3514,9 +5511,16 @@ msgid "Upload PDF"
 msgstr "Upload PDF"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Upstream identifiers"
 msgstr "Upstream identifiers"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "URL"
+msgstr "URL"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -3524,7 +5528,7 @@ msgid "URL policy"
 msgstr "URL policy"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "URLs"
 msgstr "URLs"
 
@@ -3544,14 +5548,24 @@ msgid "Use at least 12 characters for a strong password."
 msgstr "Use at least 12 characters for a strong password."
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/Account.svelte
-msgid "Use Streamable HTTP. Never put an API Token in the URL."
-msgstr "Use Streamable HTTP. Never put an API Token in the URL."
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Use comma-separated native field names. Field exclusions apply only to BibTeX and CSL-JSON; identity and type fields are required."
+msgstr "Use comma-separated native field names. Field exclusions apply only to BibTeX and CSL-JSON; identity and type fields are required."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Use the metadata editor when no import source is available."
-msgstr "Use the metadata editor when no import source is available."
+msgid "Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:."
+msgstr "Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+msgid "Use latest version and keep draft"
+msgstr "Use latest version and keep draft"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Use Streamable HTTP. Never put an API Token in the URL."
+msgstr "Use Streamable HTTP. Never put an API Token in the URL."
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -3590,8 +5604,9 @@ msgstr "User sessions revoked"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/auth/Login.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Username"
 msgstr "Username"
 
@@ -3614,6 +5629,26 @@ msgid "Uses the defaults saved in your Account export preferences."
 msgstr "Uses the defaults saved in your Account export preferences."
 
 #. js-lingui-explicit-id
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
+msgid "Uses the displayed annotation sources."
+msgstr "Uses the displayed annotation sources."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Valid"
+msgstr "Valid"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Validation"
+msgstr "Validation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Version"
+msgstr "Version"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "View all"
 msgstr "View all"
@@ -3623,19 +5658,43 @@ msgstr "View all"
 msgid "View Items"
 msgstr "View Items"
 
-#. Project member role.
 #. js-lingui-explicit-id
-#: src/lib/domain-labels.ts
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Viewer"
-msgstr "Viewer"
+#: src/lib/features/item/ItemHeader.svelte
+msgid "View Items by {name}"
+msgstr "View Items by {name}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-#: src/lib/features/projects/Projects.svelte
-#: src/lib/features/projects/ProjectWorkspace.svelte
-msgid "Visibility"
-msgstr "Visibility"
+#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "View Items in {name}"
+msgstr "View Items in {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "View Items of type {name}"
+msgstr "View Items of type {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "View Items published in {year}"
+msgstr "View Items published in {year}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "View Items tagged {name}"
+msgstr "View Items tagged {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "View Items with keyword {name}"
+msgstr "View Items with keyword {name}"
+
+#. Workspace role.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Viewer"
+msgstr "Viewer"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -3643,8 +5702,12 @@ msgid "visible Projects"
 msgstr "visible Projects"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemMetadataForm.svelte
-#: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/item/metadata-labels.ts
+msgid "Visualization"
+msgstr "Visualization"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
 msgid "Volume"
 msgstr "Volume"
 
@@ -3653,13 +5716,41 @@ msgstr "Volume"
 msgid "Volume / Issue"
 msgstr "Volume / Issue"
 
+#. Import diagnostic severity.
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminShell.svelte
-msgid "Without PDF"
-msgstr "Without PDF"
+#: src/lib/domain-labels.ts
+msgid "Warning"
+msgstr "Warning"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Web page"
+msgstr "Web page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "With files"
+msgstr "With files"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Withdrawn"
+msgstr "Withdrawn"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Without files"
+msgstr "Without files"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Work package leader"
+msgstr "Work package leader"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
+#: src/lib/features/item/metadata-labels.ts
 msgid "Workflow"
 msgstr "Workflow"
 
@@ -3676,21 +5767,194 @@ msgid "Workflows"
 msgstr "Workflows"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppSidebar.svelte
+#: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/library/Library.svelte
+#: src/routes/(app)/workspace/+page.svelte
 msgid "Workspace"
 msgstr "Workspace"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace archived"
+msgstr "Workspace archived"
+
+#. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
+msgid "Workspace context could not be restored. Refresh the page to recover."
+msgstr "Workspace context could not be restored. Refresh the page to recover."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspace created. Its owner can open it; you have no content access unless you are also a member."
+msgstr "Workspace created. Its owner can open it; you have no content access unless you are also a member."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspace creation is restricted by the instance policy. Ask an administrator for access."
+msgstr "Workspace creation is restricted by the instance policy. Ask an administrator for access."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/settings/+page.svelte
+msgid "Workspace creation policy"
+msgstr "Workspace creation policy"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace deleted"
+msgstr "Workspace deleted"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
+msgid "Workspace for citation style"
+msgstr "Workspace for citation style"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace governance"
+msgstr "Workspace governance"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace maintenance"
+msgstr "Workspace maintenance"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Workspace member"
+msgstr "Workspace member"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspace name"
+msgstr "Workspace name"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace name updated"
+msgstr "Workspace name updated"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Workspace Projects"
+msgstr "Workspace Projects"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex"
+msgstr "Workspace reindex"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex completed"
+msgstr "Workspace reindex completed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex failed"
+msgstr "Workspace reindex failed"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace reindex started"
+msgstr "Workspace reindex started"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace restored"
+msgstr "Workspace restored"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace settings"
+msgstr "Workspace settings"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Workspace settings · Quirebase"
+msgstr "Workspace settings · Quirebase"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace."
+msgstr "Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace."
+
+#. Project participation policy.
+#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+msgid "Workspace-wide"
+msgstr "Workspace-wide"
+
+#. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspaces"
+msgstr "Workspaces"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Workspaces · Quirebase"
+msgstr "Workspaces · Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectWorkspace.svelte
+msgid "Write a message"
+msgstr "Write a message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Writing original draft"
+msgstr "Writing original draft"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/metadata-labels.ts
+msgid "Writing review editing"
+msgstr "Writing review editing"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/item/PublicationDateField.svelte
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Year"
 msgstr "Year"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/PublicationDateField.svelte
+msgid "Year and month"
+msgstr "Year and month"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/schema-editor/labels.ts
+msgid "Yes"
+msgstr "Yes"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "You are signed in as {current}. Switch to {invited} to accept this invitation."
+msgstr "You are signed in as {current}. Switch to {invited} to accept this invitation."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "You do not have permission to perform this action."
 msgstr "You do not have permission to perform this action."
+
+#. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+msgid "You no longer have access to this Workspace."
+msgstr "You no longer have access to this Workspace."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "You will become its owner and can invite other members later."
+msgstr "You will become its owner and can invite other members later."
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "You will join automatically when you create an open Project."
+msgstr "You will join automatically when you create an open Project."
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -3701,3 +5965,18 @@ msgstr "Your library is empty. Import a paper to begin."
 #: src/lib/features/projects/Projects.svelte
 msgid "Your Projects"
 msgstr "Your Projects"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
+msgid "Your role:"
+msgstr "Your role:"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Your workspace URL determines which data and permissions are in use."
+msgstr "Your workspace URL determines which data and permissions are in use."
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/workspace/+page.svelte
+msgid "Your workspaces"
+msgstr "Your workspaces"

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+	import { LocaleProvider } from '@skeletonlabs/skeleton-svelte';
+	import { activeLocale } from '#lib/i18n.js';
 
 	import '../app.css';
 
@@ -10,5 +12,7 @@
 </script>
 
 <QueryClientProvider client={queryClient}>
-	{@render children()}
+	<LocaleProvider locale={$activeLocale}>
+		{@render children()}
+	</LocaleProvider>
 </QueryClientProvider>

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
-from quirebase.web.api.library_schemas import ItemSearchView
+from quirebase.models import ProjectParticipation
+from quirebase.web.api.common import WorkspaceAuthorizationView
+from quirebase.web.api.library_schemas import ItemDetailView, ItemSearchView
 
 
 class DeleteConfirmationRequest(BaseModel):
@@ -23,12 +27,7 @@ class RemoteAttachmentRequest(RemoteRevisionRequest):
     graphical_abstract: bool = False
 
 
-class ItemWorkspacePermissionsView(BaseModel):
-    edit: bool
-    delete: bool
-
-
-class ItemWorkspaceCountsView(BaseModel):
+class ItemOverviewCountsView(BaseModel):
     revisions: int
     attachments: int
     annotations: int
@@ -36,78 +35,77 @@ class ItemWorkspaceCountsView(BaseModel):
 
 
 class ItemTagView(BaseModel):
-    id: str
+    id: UUID
     name: str
-
-
-class ItemOwnerView(BaseModel):
-    id: str
-    username: str
-
-
-class ItemIdentifierView(BaseModel):
-    provider: str
-    value: str
-
-
-class ItemLatestRevisionView(BaseModel):
-    id: str
-    original_name: str
-    size: int
-    page_count: int | None = None
-    processing_state: str
 
 
 class ItemThumbnailView(BaseModel):
     source_kind: str
-    source_id: str
+    source_id: UUID
 
 
-class ItemWorkspaceView(BaseModel):
-    item: ItemSearchView
-    permissions: ItemWorkspacePermissionsView
-    counts: ItemWorkspaceCountsView
+class ItemCopyTargetView(BaseModel):
+    """A currently eligible copy destination; the command rechecks authority."""
+
+    id: UUID
+    name: str
+
+
+class ItemOverviewView(ItemDetailView):
+    authorization: WorkspaceAuthorizationView
+    counts: ItemOverviewCountsView
     tags: list[ItemTagView]
-    owner: ItemOwnerView
-    identifiers: list[ItemIdentifierView]
-    latest_revision: ItemLatestRevisionView | None = None
+    latest_revision_id: UUID | None = None
     thumbnail: ItemThumbnailView | None = None
+    copy_targets: list[ItemCopyTargetView]
+
+
+class MetadataSourceProviderView(BaseModel):
+    id: str
+    name: str
+
+
+class ItemMetadataSourceView(BaseModel):
+    namespace: str
+    value: str
+    providers: list[MetadataSourceProviderView]
+
+
+class ItemMetadataSourcesView(BaseModel):
+    version: int
+    sources: list[ItemMetadataSourceView]
 
 
 class ItemOrganizeProjectView(BaseModel):
-    id: str
+    id: UUID
     name: str
-    role: str
     assigned: bool
+    participation: ProjectParticipation
+    is_participating: bool
 
 
 class TagMatrixGroupView(BaseModel):
     letter: str
     tags: list[ItemTagView]
-    names: list[str]
 
 
 class TagMatrixView(BaseModel):
     groups: list[TagMatrixGroupView]
-    assigned_ids: list[str]
-    recommended_ids: list[str]
+    assigned_ids: list[UUID]
+    recommended_ids: list[UUID]
     suggested_names: list[str]
-    suggested_single_words: list[str]
-    suggested_phrases: list[str]
     recommendation_state: str
     recommendation_error: str | None = None
 
 
 class ItemOrganizeView(BaseModel):
-    item: ItemSearchView
-    permissions: ItemWorkspacePermissionsView
-    tags: list[ItemTagView]
+    authorization: WorkspaceAuthorizationView
     projects: list[ItemOrganizeProjectView]
     tag_matrix: TagMatrixView
 
 
 class PdfViewerRevisionView(BaseModel):
-    id: str
+    id: UUID
     original_name: str
     page_count: int | None = None
     processing_state: str
@@ -116,13 +114,14 @@ class PdfViewerRevisionView(BaseModel):
 
 
 class PdfViewerProjectView(BaseModel):
-    id: str
+    id: UUID
     name: str
+    editable: bool = Field(description="Whether the User may create Annotations in this Project.")
 
 
 class PdfViewerView(BaseModel):
     item: ItemSearchView
-    editable: bool
+    editable: bool = Field(description="Whether the User may create private Annotations.")
     annotation_author: str
     revision: PdfViewerRevisionView
     projects: list[PdfViewerProjectView]

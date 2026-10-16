@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { hasInlineMath, projectRichText, projectRichTextAsync } from '$lib/design/rich-text';
+	import { hasInlineMath, projectRichText, projectRichTextAsync } from '#lib/design/rich-text.js';
 
 	let { html } = $props<{ html: string }>();
 	type MathProjection = { source: string; result: string };

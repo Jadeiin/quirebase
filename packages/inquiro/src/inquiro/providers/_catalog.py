@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 @cache
 def builtin_providers() -> tuple[ProviderDefinition, ...]:
     from inquiro.providers.arxiv import ARXIV_PROVIDER
+    from inquiro.providers.commonmeta import COMMONMETA_PROVIDER
     from inquiro.providers.crossref import CROSSREF_PROVIDER
     from inquiro.providers.datacite import DATACITE_PROVIDER
     from inquiro.providers.ieee import IEEE_PROVIDER
@@ -29,4 +30,5 @@ def builtin_providers() -> tuple[ProviderDefinition, ...]:
         OPENALEX_PROVIDER,
         NASA_ADS_PROVIDER,
         IEEE_PROVIDER,
+        COMMONMETA_PROVIDER,
     )

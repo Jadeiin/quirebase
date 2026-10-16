@@ -4,16 +4,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from inquiro import SearchClause, SearchQuery
+from inquiro.work import contributor_name, work_authors, work_doi
 
+from quirebase.access import require_workspace_membership
 from quirebase.core.errors import ResourceUnavailable
-from quirebase.library.activity import (
-    get_matching_accessible_item_identifiers,
-    record_discovery_search_audit,
-)
+from quirebase.library.activity import record_discovery_search_audit
 from quirebase.library.providers import search_candidates
 from quirebase.models import User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
@@ -37,7 +38,6 @@ class CandidateView:
     publication_date: str | None = None
     doi: str | None = None
     abstract: str | None = None
-    imported: bool = False
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,7 @@ class CandidatePageView:
 async def search_candidate_records(
     db: AsyncSession,
     user: User,
+    workspace_id: UUID,
     provider: str,
     clauses: tuple[DiscoveryClause, ...],
     *,
@@ -83,39 +84,23 @@ async def search_candidate_records(
     reloaded_user = await db.get(User, user_id)
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
-    candidate_identifiers = {
-        (candidate.identifier.provider, candidate.identifier.value) for candidate in result.results
-    }
-    candidate_identifiers.update(
-        ("doi", candidate.doi) for candidate in result.results if candidate.doi
-    )
-    accessible_identifiers = await get_matching_accessible_item_identifiers(
-        db, reloaded_user, candidate_identifiers
-    )
+    reloaded_user = (await require_workspace_membership(db, reloaded_user, workspace_id)).actor
     page_view = CandidatePageView(
         provider=result.provider,
         results=tuple(
             CandidateView(
                 provider=candidate.provider,
-                identifier_provider=candidate.identifier.provider,
-                identifier=candidate.identifier.value,
-                title=candidate.title,
-                authors=candidate.authors,
-                publication_title=candidate.publication_title,
-                publication_date=candidate.publication_date,
-                doi=candidate.doi,
-                abstract=candidate.abstract,
-                imported=(
-                    (
-                        candidate.identifier.provider.casefold(),
-                        candidate.identifier.value.casefold(),
-                    )
-                    in accessible_identifiers
-                    or bool(
-                        candidate.doi
-                        and ("doi", candidate.doi.casefold()) in accessible_identifiers
-                    )
-                ),
+                identifier_provider=candidate.lookup_identifier.provider,
+                identifier=candidate.lookup_identifier.value,
+                title=candidate.work.get("title", ""),
+                authors="; ".join(
+                    contributor_name(author) for author in work_authors(candidate.work)
+                )
+                or None,
+                publication_title=candidate.work.get("container", {}).get("title"),
+                publication_date=candidate.work.get("date_published"),
+                doi=work_doi(candidate.work),
+                abstract=candidate.work.get("description"),
             )
             for candidate in result.results
         ),
@@ -124,6 +109,6 @@ async def search_candidate_records(
         per_page=result.per_page,
     )
     await record_discovery_search_audit(
-        db, reloaded_user, provider, clauses, len(page_view.results)
+        db, reloaded_user, workspace_id, provider, clauses, len(page_view.results)
     )
     return page_view

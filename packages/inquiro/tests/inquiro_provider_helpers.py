@@ -5,6 +5,17 @@ from typing import Any
 import httpx2
 from inquiro import ProviderConfig, ProviderRuntime
 from inquiro.transport import MockExchange, TransportRequest, TransportResponse
+from inquiro.work import work_schema
+
+
+def work_identifier(namespace: str, value: str) -> dict:
+    types = work_schema()["$defs"]["identifier"]["properties"]["identifier_type"]["enum"]
+    kind = next((name for name in types if name.lower() == namespace.lower()), "Other")
+    return {
+        "identifier_type": kind,
+        "identifier": value,
+        **({"scheme": namespace} if kind == "Other" else {}),
+    }
 
 
 def provider_config(settings: Any = None) -> ProviderConfig:

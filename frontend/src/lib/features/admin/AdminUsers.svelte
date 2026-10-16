@@ -1,11 +1,11 @@
 <script lang="ts">
-	import Panel from '$lib/design/Panel.svelte';
-	import Notice from '$lib/design/Notice.svelte';
-	import { domainLabel } from '$lib/domain-labels';
-	import { t } from '$lib/i18n';
-	import type { components } from '$lib/api/schema';
-	import Button from '$lib/design/Button.svelte';
-	import ItemRow from '$lib/design/ItemRow.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import Notice from '#lib/design/Notice.svelte';
+	import { domainLabel } from '#lib/domain-labels.js';
+	import { t } from '#lib/i18n.js';
+	import type { components } from '#lib/api/schema.js';
+	import Button from '#lib/design/Button.svelte';
+	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	type User = components['schemas']['AdminUserView'];
 	type Users = components['schemas']['AdminUsersView'];
@@ -36,7 +36,7 @@
 <div class="grid grid-cols-1 gap-4 min-[800px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
 	<Panel class="mt-4">
 		<h2>{$t('Users')} ({users.total})</h2>
-		{#each users.users as user (user.id)}
+		{#each users.items as user (user.id)}
 			<ItemRow>
 				<div class="grid grid-cols-1 gap-1">
 					<strong>{user.username}</strong><span class="text-surface-600-400"

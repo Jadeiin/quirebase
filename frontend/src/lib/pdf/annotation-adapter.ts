@@ -6,7 +6,7 @@ import {
 	PdfAnnotationSubtype,
 	type PdfAnnotationObject
 } from '@embedpdf/models';
-import type { components } from '$lib/api/schema';
+import type { components } from '#lib/api/schema.js';
 
 type AnnotationKind = components['schemas']['AnnotationKind'];
 type AnnotationView = components['schemas']['AnnotationView'];
@@ -87,6 +87,14 @@ export function canonicalAnnotationFromView(view: AnnotationView): CanonicalAnno
 	};
 }
 
+export function canonicalAnnotationId(objectId: string): string {
+	return objectId.startsWith('annotation:') ? objectId.slice('annotation:'.length) : objectId;
+}
+
+export function canonicalReplyId(objectId: string): string {
+	return objectId.startsWith('reply:') ? objectId.slice('reply:'.length) : objectId;
+}
+
 type VendorRect = { origin: Point; size: { width: number; height: number } };
 type LooseAnnotation = PdfAnnotationObject & {
 	backgroundColor?: string;
@@ -126,6 +134,18 @@ const vendorLineEndings = Object.fromEntries(
 );
 
 export function createAnnotationAdapter(pageGeometry: number[][]) {
+	// Imports use typed IDs. Newly authored objects retain EmbedPDF's generated IDs
+	// for the viewer session, including history replay after a source refresh.
+	const viewerIds = new Map<string, string>();
+	const annotationObjectId = (id: string) =>
+		viewerIds.get(`annotation:${id}`) ?? `annotation:${id}`;
+	const replyObjectId = (id: string) => viewerIds.get(`reply:${id}`) ?? `reply:${id}`;
+	const rememberVendorObject = (object: PdfAnnotationObject) => {
+		const key = object.inReplyToId
+			? `reply:${canonicalReplyId(object.id)}`
+			: `annotation:${canonicalAnnotationId(object.id)}`;
+		viewerIds.set(key, object.id);
+	};
 	const pageHeight = (pageIndex: number) => {
 		const box = pageGeometry[pageIndex];
 		if (!box || box.length !== 4) throw new Error('missing PDF page geometry');
@@ -240,7 +260,7 @@ export function createAnnotationAdapter(pageGeometry: number[][]) {
 		const pageIndex = annotation.page_index;
 		const style = payload.style;
 		const object: Record<string, unknown> = {
-			id: annotation.id,
+			id: annotationObjectId(annotation.id),
 			pageIndex,
 			rect: toVendorRect(payload.rect, pageIndex),
 			author: annotation.author_display_name,
@@ -312,7 +332,7 @@ export function createAnnotationAdapter(pageGeometry: number[][]) {
 		reply: CanonicalReply
 	): PdfAnnotationObject =>
 		({
-			id: reply.id,
+			id: replyObjectId(reply.id),
 			pageIndex: annotation.page_index,
 			rect: toVendorRect(annotation.payload.rect, annotation.page_index),
 			author: reply.author_display_name,
@@ -321,11 +341,18 @@ export function createAnnotationAdapter(pageGeometry: number[][]) {
 			modified: new Date(reply.updated_at),
 			type: PdfAnnotationSubtype.TEXT,
 			name: PdfAnnotationName.Note,
-			inReplyToId: annotation.id,
+			inReplyToId: annotationObjectId(annotation.id),
 			replyType: PdfAnnotationReplyType.Reply,
 			flags: reply.editable ? ['print'] : ['print', 'readOnly'],
 			custom: { quirebase: true, reply: true }
 		}) as PdfAnnotationObject;
 
-	return { canonicalFromVendor, vendorFromCanonical, vendorReplyFromCanonical };
+	return {
+		canonicalFromVendor,
+		vendorFromCanonical,
+		vendorReplyFromCanonical,
+		annotationObjectId,
+		replyObjectId,
+		rememberVendorObject
+	};
 }

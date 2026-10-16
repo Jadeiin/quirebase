@@ -1,59 +1,55 @@
 from __future__ import annotations
 
-import asyncio
-import json
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from advanced_alchemy.types import FileObject
 from dbos import DBOS
 from sqlalchemy import select, update
 
+from quirebase.access import (
+    ResourceAction,
+    SystemAction,
+    require_system_action,
+    require_workspace_action,
+)
 from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.core.workflows import OPERATIONS_QUEUE, ads, durable_operations
-from quirebase.models import FileRevision, Item, ObjectIntegrityScan
+from quirebase.documents import (
+    delete_unreferenced_objects,
+    list_expired_export_artifacts,
+    retire_expired_export_artifacts,
+)
+from quirebase.models import FileRevision, Item, ObjectIntegrityScan, User
 from quirebase.search import search_index
 
 from .maintenance import (
     cleanup_local_exports,
-    create_backup,
-    delete_export_artifact_objects,
-    delete_export_artifact_records,
     delete_orphan_candidates,
-    list_expired_export_artifacts,
     scan_objects,
 )
 
 if TYPE_CHECKING:
     from dbos import ScheduleInput
 
-    from quirebase.models import User
-
-REINDEX_WORKFLOW = "operations.reindex_all"
+REINDEX_WORKFLOW = "operations.reindex_workspace"
 CHECK_OBJECTS_WORKFLOW = "operations.check_objects"
-BACKUP_WORKFLOW = "operations.backup"
-RECOMMEND_TAGS_WORKFLOW = "operations.recommend_tags_all"
 PERIODIC_MAINTENANCE_WORKFLOW = "operations.periodic_maintenance"
 PERIODIC_MAINTENANCE_SCHEDULE = "operations.periodic_maintenance.hourly"
 
 _MAINTENANCE_WORKFLOWS = {
-    "reindex_all": REINDEX_WORKFLOW,
     "check_objects": CHECK_OBJECTS_WORKFLOW,
-    "backup": BACKUP_WORKFLOW,
-    "recommend_tags_all": RECOMMEND_TAGS_WORKFLOW,
 }
 
 _REINDEX_BATCH_SIZE = 100
-_RECOMMEND_BATCH_SIZE = 100
 _EXPORT_CLEANUP_BATCH_SIZE = 100
 
 
 async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
-    if admin.role != "administrator":
-        raise ResourceUnavailable("administrator required")
+    admin = await require_system_action(db, admin, SystemAction.maintenance_run, lock="shared")
     workflow_name = _MAINTENANCE_WORKFLOWS.get(operation)
     if workflow_name is None:
         raise ValidationFailure(f"unknown maintenance operation: {operation}")
@@ -65,69 +61,173 @@ async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
         workflow_name,
         workflow_id,
         admin.id,
+        None,
         queue_name=OPERATIONS_QUEUE,
         workflow_id=workflow_id,
-        attributes={"capability": "operations", "operation": operation, "owner_id": admin.id},
+        attributes={
+            "capability": "operations",
+            "operation": operation,
+            "actor_id": admin.id,
+            "workspace_id": None,
+        },
+    )
+    await db.commit()
+    return workflow_id
+
+
+async def dispatch_workspace_reindex(db, actor: User, workspace_id: UUID) -> str:
+    context = await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
+    workflow_id = f"maintenance:reindex:{workspace_id}:{uuid4()}"
+    record_event(
+        db,
+        actor.id,
+        "workspace.maintenance.reindex",
+        "workflow",
+        workflow_id,
+        workspace_id=workspace_id,
+        authorization_role=context.role.value,
+        authorization_resource_action=ResourceAction.workspace_maintenance_run.value,
+    )
+    await db.flush()
+    await durable_operations().enqueue_in_transaction(
+        db,
+        REINDEX_WORKFLOW,
+        workflow_id,
+        actor.id,
+        workspace_id,
+        queue_name=OPERATIONS_QUEUE,
+        workflow_id=workflow_id,
+        attributes={
+            "capability": "operations",
+            "operation": "reindex",
+            "actor_id": actor.id,
+            "workspace_id": workspace_id,
+        },
     )
     await db.commit()
     return workflow_id
 
 
 @ads.transaction(isolation_level="READ COMMITTED")
-async def list_reindex_item_ids_step(after_id: str | None, limit: int) -> tuple[str, ...]:
+async def list_reindex_item_ids_step(
+    actor_id: UUID, workspace_id: UUID, after_id: UUID | None, limit: int
+) -> tuple[UUID, ...]:
     db = ads.sql_session()
-    query = select(Item.id).order_by(Item.id).limit(limit)
+    actor = await db.get(User, actor_id)
+    if actor is None:
+        raise ResourceUnavailable("reindex actor is unavailable")
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
+    query = select(Item.id).where(Item.workspace_id == workspace_id).order_by(Item.id).limit(limit)
     if after_id is not None:
         query = query.where(Item.id > after_id)
     return tuple((await db.scalars(query)).all())
 
 
 @ads.transaction()
-async def reindex_items_step(item_ids: tuple[str, ...]) -> int:
+async def reindex_items_step(actor_id: UUID, workspace_id: UUID, item_ids: tuple[UUID, ...]) -> int:
     db = ads.sql_session()
+    actor = await db.get(User, actor_id)
+    if actor is None:
+        raise ResourceUnavailable("reindex actor is unavailable")
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
+    visible_ids = set(
+        (
+            await db.scalars(
+                select(Item.id).where(
+                    Item.workspace_id == workspace_id,
+                    Item.id.in_(item_ids),
+                )
+            )
+        ).all()
+    )
     index = search_index(db)
     for item_id in item_ids:
-        await index.index_item(db, item_id)
-    return len(item_ids)
+        if item_id in visible_ids:
+            await index.index_item(db, item_id)
+    return len(visible_ids)
 
 
 @ads.transaction(isolation_level="READ COMMITTED")
-async def list_reindex_revision_ids_step(after_id: str | None, limit: int) -> tuple[str, ...]:
+async def list_reindex_revision_ids_step(
+    actor_id: UUID, workspace_id: UUID, after_id: UUID | None, limit: int
+) -> tuple[UUID, ...]:
     db = ads.sql_session()
-    query = select(FileRevision.id).order_by(FileRevision.id).limit(limit)
+    actor = await db.get(User, actor_id)
+    if actor is None:
+        raise ResourceUnavailable("reindex actor is unavailable")
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
+    query = (
+        select(FileRevision.id)
+        .where(FileRevision.workspace_id == workspace_id)
+        .order_by(FileRevision.id)
+        .limit(limit)
+    )
     if after_id is not None:
         query = query.where(FileRevision.id > after_id)
     return tuple((await db.scalars(query)).all())
 
 
 @ads.transaction()
-async def reindex_revisions_step(revision_ids: tuple[str, ...]) -> int:
+async def reindex_revisions_step(
+    actor_id: UUID, workspace_id: UUID, revision_ids: tuple[UUID, ...]
+) -> int:
     db = ads.sql_session()
+    actor = await db.get(User, actor_id)
+    if actor is None:
+        raise ResourceUnavailable("reindex actor is unavailable")
+    await require_workspace_action(
+        db, actor, workspace_id, ResourceAction.workspace_maintenance_run
+    )
+    visible_ids = set(
+        (
+            await db.scalars(
+                select(FileRevision.id).where(
+                    FileRevision.workspace_id == workspace_id,
+                    FileRevision.id.in_(revision_ids),
+                )
+            )
+        ).all()
+    )
     index = search_index(db)
     for revision_id in revision_ids:
-        await index.index_revision(db, revision_id)
-    return len(revision_ids)
+        if revision_id in visible_ids:
+            await index.index_revision(db, revision_id)
+    return len(visible_ids)
 
 
 @DBOS.workflow(name=REINDEX_WORKFLOW)
-async def reindex_all_workflow(_workflow_id: str, _owner_id: str) -> dict[str, Any]:
+async def reindex_workspace_workflow(
+    _workflow_id: str, actor_id: UUID, workspace_id: UUID
+) -> dict[str, Any]:
     total = 0
-    after_id: str | None = None
+    after_id: UUID | None = None
     while True:
-        item_ids = await list_reindex_item_ids_step(after_id, _REINDEX_BATCH_SIZE)
+        item_ids = await list_reindex_item_ids_step(
+            actor_id, workspace_id, after_id, _REINDEX_BATCH_SIZE
+        )
         if not item_ids:
             break
-        total += await reindex_items_step(item_ids)
+        total += await reindex_items_step(actor_id, workspace_id, item_ids)
         if len(item_ids) < _REINDEX_BATCH_SIZE:
             break
         after_id = item_ids[-1]
     revision_total = 0
-    after_revision_id: str | None = None
+    after_revision_id: UUID | None = None
     while True:
-        revision_ids = await list_reindex_revision_ids_step(after_revision_id, _REINDEX_BATCH_SIZE)
+        revision_ids = await list_reindex_revision_ids_step(
+            actor_id, workspace_id, after_revision_id, _REINDEX_BATCH_SIZE
+        )
         if not revision_ids:
             break
-        revision_total += await reindex_revisions_step(revision_ids)
+        revision_total += await reindex_revisions_step(actor_id, workspace_id, revision_ids)
         if len(revision_ids) < _REINDEX_BATCH_SIZE:
             break
         after_revision_id = revision_ids[-1]
@@ -153,35 +253,35 @@ async def delete_orphan_candidates_step(candidates: list[str]) -> list[str]:
 
 
 @ads.transaction(isolation_level="READ COMMITTED")
-async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[str, int]) -> None:
+async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[str, dict]) -> None:
     db = ads.sql_session()
-    for revision_id, thumbnail_size in thumbnail_sizes.items():
-        await db.execute(
-            update(FileRevision)
-            .where(
-                FileRevision.id == revision_id,
-                FileRevision.thumbnail_size.is_(None),
-            )
-            .values(thumbnail_size=thumbnail_size)
+    for revision_id, repair in thumbnail_sizes.items():
+        revision = await db.scalar(
+            select(FileRevision).where(FileRevision.id == UUID(revision_id)).with_for_update()
         )
+        if (
+            revision is not None
+            and revision.thumbnail is not None
+            and revision.thumbnail.path == repair["path"]
+            and revision.thumbnail.size is None
+        ):
+            # FileObject equality ignores metadata at an unchanged path. Always emit SQL.
+            descriptor = FileObject(**(revision.thumbnail.to_dict() | {"size": repair["size"]}))
+            await db.execute(
+                update(FileRevision)
+                .where(FileRevision.id == revision.id)
+                .values(thumbnail=descriptor)
+            )
     missing_count = sum("missing " in error for error in errors)
     mismatch_count = sum("mismatch" in error for error in errors)
-    scan = await db.get(ObjectIntegrityScan, "latest")
-    if scan is None:
-        scan = ObjectIntegrityScan(
-            id="latest",
+    db.add(
+        ObjectIntegrityScan(
             status="ok" if not errors else "inconsistencies_found",
             missing_count=missing_count,
             mismatch_count=mismatch_count,
-            errors=json.dumps(errors, ensure_ascii=False),
+            errors=errors,
         )
-        db.add(scan)
-    else:
-        scan.status = "ok" if not errors else "inconsistencies_found"
-        scan.missing_count = missing_count
-        scan.mismatch_count = mismatch_count
-        scan.errors = json.dumps(errors, ensure_ascii=False)
-        scan.checked_at = datetime.now(UTC)
+    )
     await db.flush()
 
 
@@ -198,7 +298,9 @@ async def _run_integrity_scan() -> dict[str, Any]:
 
 
 @DBOS.workflow(name=CHECK_OBJECTS_WORKFLOW)
-async def check_objects_workflow(_workflow_id: str, _owner_id: str) -> dict[str, Any]:
+async def check_objects_workflow(
+    _workflow_id: str, _actor_id: UUID, _workspace_id: None
+) -> dict[str, Any]:
     return await _run_integrity_scan()
 
 
@@ -223,16 +325,17 @@ async def list_expired_export_artifacts_step(
     return await list_expired_export_artifacts(ads.sql_session(), limit)
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
-async def delete_export_artifact_objects_step(
-    artifacts: tuple[dict[str, str], ...],
-) -> dict[str, Any]:
-    return await delete_export_artifact_objects(artifacts)
-
-
 @ads.transaction(isolation_level="READ COMMITTED")
-async def delete_export_artifact_records_step(workflow_ids: list[str]) -> int:
-    return await delete_export_artifact_records(ads.sql_session(), workflow_ids)
+async def retire_expired_export_artifacts_step(
+    artifacts: tuple[dict[str, str], ...],
+) -> tuple[str, ...]:
+    return await retire_expired_export_artifacts(ads.sql_session(), artifacts)
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def delete_export_artifact_objects_step(keys: tuple[str, ...]) -> int:
+    async with AsyncSessionLocal() as db:
+        return len(await delete_unreferenced_objects(db, keys))
 
 
 async def _run_export_cleanup() -> int:
@@ -241,9 +344,8 @@ async def _run_export_cleanup() -> int:
         artifacts = await list_expired_export_artifacts_step(_EXPORT_CLEANUP_BATCH_SIZE)
         if not artifacts:
             break
-        result = await delete_export_artifact_objects_step(artifacts)
-        await delete_export_artifact_records_step(result["workflow_ids"])
-        removed += result["removed"]
+        keys = await retire_expired_export_artifacts_step(artifacts)
+        removed += await delete_export_artifact_objects_step(keys)
     return removed
 
 
@@ -264,58 +366,3 @@ def maintenance_schedules() -> list[ScheduleInput]:
             "queue_name": OPERATIONS_QUEUE,
         }
     ]
-
-
-@DBOS.step(retries_allowed=True, max_attempts=3)
-async def backup_step(workflow_id: str) -> dict[str, Any]:
-    safe_id = "".join(
-        character if character.isalnum() or character in "._-" else "_" for character in workflow_id
-    )
-    filename = f"backup_{safe_id}.zip"
-    destination = get_settings().export_dir / filename
-    await create_backup(destination)
-    size = await asyncio.to_thread(lambda: destination.stat().st_size)
-    return {"filename": filename, "size_bytes": size}
-
-
-@DBOS.workflow(name=BACKUP_WORKFLOW)
-async def backup_workflow(workflow_id: str, _owner_id: str) -> dict[str, Any]:
-    return await backup_step(workflow_id)
-
-
-@ads.transaction(isolation_level="READ COMMITTED")
-async def list_items_for_tag_recommendation_step(
-    after_id: str | None, limit: int
-) -> tuple[str, ...]:
-    from quirebase.library import item_ids_for_tag_recommendation
-
-    db = ads.sql_session()
-    return await item_ids_for_tag_recommendation(db, after_id, limit)
-
-
-@ads.transaction()
-async def request_item_tag_recommendation_step(item_id: str, owner_id: str) -> bool:
-    from quirebase.library import request_item_tag_recommendation
-
-    db = ads.sql_session()
-    try:
-        await request_item_tag_recommendation(db, item_id, owner_id=owner_id, force=True)
-    except ValueError:
-        return False
-    return True
-
-
-@DBOS.workflow(name=RECOMMEND_TAGS_WORKFLOW)
-async def recommend_tags_all_workflow(_workflow_id: str, owner_id: str) -> dict[str, Any]:
-    enqueued = 0
-    after_id: str | None = None
-    while True:
-        item_ids = await list_items_for_tag_recommendation_step(after_id, _RECOMMEND_BATCH_SIZE)
-        if not item_ids:
-            break
-        for item_id in item_ids:
-            enqueued += await request_item_tag_recommendation_step(item_id, owner_id)
-        if len(item_ids) < _RECOMMEND_BATCH_SIZE:
-            break
-        after_id = item_ids[-1]
-    return {"enqueued_items": enqueued}

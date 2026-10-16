@@ -1,6 +1,7 @@
 <script lang="ts">
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import type { Snippet } from 'svelte';
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n.js';
 
 	let { loading, failed, children } = $props<{
 		loading: boolean;
@@ -11,7 +12,7 @@
 
 {#if loading}
 	<div class="grid min-h-52 grid-cols-1 place-items-center text-surface-600-400">
-		{$t('Loading')}…
+		<LoadingState label={$t('Loading') + '…'} class="w-full" />
 	</div>
 {:else if failed}
 	<div class="grid min-h-52 grid-cols-1 place-items-center text-error-700-300">

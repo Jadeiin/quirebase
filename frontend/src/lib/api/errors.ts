@@ -1,5 +1,5 @@
-import { ApiError } from '$lib/api/client';
-import { msg, translate, type MessageKey } from '$lib/i18n';
+import { ApiError } from '#lib/api/client.js';
+import { msg, translate, type MessageKey } from '#lib/i18n.js';
 
 const messages: Record<string, MessageKey> = {
 	invalid_credentials: msg('Invalid username or password.'),
@@ -9,7 +9,11 @@ const messages: Record<string, MessageKey> = {
 	login_throttled: msg('Too many sign-in attempts. Try again later.'),
 	invitation_conflict: msg('This invitation can no longer be used.'),
 	tag_conflict: msg('This Tag conflicts with an existing Tag.'),
-	project_member_conflict: msg('This Project membership changed. Refresh and try again.'),
+	project_participation_conflict: msg('This Project participation changed. Refresh and try again.'),
+	workspace_context_required: msg('Refresh the page to restore Workspace context.'),
+	workspace_unavailable: msg('You no longer have access to this Workspace.'),
+	workspace_lifecycle_error: msg('This Workspace is read only in its current state.'),
+	project_lifecycle_error: msg('This Project is read only in its current state.'),
 	document_not_ready: msg('This Document is not ready yet.'),
 	import_batch_conflict: msg('This Import Batch cannot be changed in its current state.'),
 	unsupported_media_type: msg('This file type is not supported.'),

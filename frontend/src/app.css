@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @import '@skeletonlabs/skeleton';
+@import '@skeletonlabs/skeleton-svelte';
+@source '../node_modules/@sjsf/skeleton5-theme/dist';
 @custom-variant dark (&:where([data-mode='dark'], [data-mode='dark'] *));
 
 :root {
@@ -27,6 +29,12 @@
 	--typo-heading--letter-spacing: -0.02em;
 	--typo-anchor--color-light: var(--color-primary-700);
 	--typo-anchor--color-dark: var(--color-primary-300);
+	--field-placeholder: var(--color-surface-500);
+	--default-border-width: 1px;
+	--default-outline-width: 1px;
+	--default-ring-width: 1px;
+	--corner-shape-base: inherit;
+	--corner-shape-container: inherit;
 	--radius-base: 0.5rem;
 	--radius-container: 0.875rem;
 	--color-root-bg-light: var(--color-surface-100);
@@ -105,39 +113,51 @@
 	--color-surface-950: #0e1713;
 }
 
-* {
-	box-sizing: border-box;
-}
-body {
-	margin: 0;
-	min-width: 320px;
-	min-height: 100vh;
-	background: var(--color-surface-100-900);
-	line-height: 1.5;
-}
-a {
-	color: inherit;
-}
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-	outline: 3px solid color-mix(in srgb, var(--color-primary-700) 25%, transparent);
-	outline-offset: 2px;
-}
-h1,
-h2,
-h3,
-p {
-	margin-top: 0;
-}
-h2 {
-	font-size: 1.1rem;
-}
-h1 {
-	margin-bottom: 0.35rem;
-	font-size: clamp(1.75rem, 3vw, 2.3rem);
-	line-height: 1.12;
-	letter-spacing: -0.035em;
+/* Element resets live in the base layer so Skeleton presets and Tailwind
+   utilities (both in later layers) can override them. */
+@layer base {
+	* {
+		box-sizing: border-box;
+	}
+	body {
+		margin: 0;
+		min-width: 320px;
+		min-height: 100vh;
+		background: var(--color-surface-100-900);
+		line-height: 1.5;
+	}
+	a {
+		color: inherit;
+	}
+	/* Skeleton's `.select` intentionally omits padding-inline so the native
+	   drop-down arrow keeps its space; add the start padding back so the
+	   selected option lines up with `.input` and `.textarea`. */
+	select {
+		padding-inline-start: calc(
+			(var(--field-size, var(--text-base)) - --spacing(0.5)) / 2 + var(--spacing)
+		);
+	}
+	button:focus-visible,
+	a:focus-visible,
+	input:focus-visible,
+	select:focus-visible,
+	textarea:focus-visible {
+		outline: 3px solid color-mix(in srgb, var(--color-primary-700) 25%, transparent);
+		outline-offset: 2px;
+	}
+	h1,
+	h2,
+	h3,
+	p {
+		margin-top: 0;
+	}
+	h2 {
+		font-size: 1.1rem;
+	}
+	h1 {
+		margin-bottom: 0.35rem;
+		font-size: clamp(1.75rem, 3vw, 2.3rem);
+		line-height: 1.12;
+		letter-spacing: -0.035em;
+	}
 }

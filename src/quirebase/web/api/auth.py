@@ -29,6 +29,10 @@ bearer = HTTPBearer(auto_error=False)
 
 async def http_api_invocation(request: Request) -> AsyncIterator[None]:  # ruff: ignore[unused-async]
     """Bind a route name so business Audit Events can retain API provenance."""
+    current = current_programmatic_invocation()
+    if current is not None and current.protocol == "mcp":
+        yield
+        return
     route = request.scope.get("route")
     operation = getattr(route, "name", "unknown")
     invocation = programmatic_invocation("http", operation)
@@ -58,25 +62,15 @@ async def current_api_user(
             raise _authentication_required()
         user = await resolve_api_token_user(db, verified.user_id)
         trusted_invocation = current_programmatic_invocation()
-        if trusted_invocation is not None and trusted_invocation.protocol == "mcp":
-            identify_programmatic_invocation(
-                api_token_id=verified.token_id,
-                client_id=trusted_invocation.client_id or "mcp",
-            )
-            yield user
-            return
-        route = request.scope.get("route")
-        operation = getattr(route, "name", "unknown")
-        invocation = programmatic_invocation("http", operation)
-        invocation.__enter__()  # ruff: ignore[unnecessary-dunder-call]
-        try:
-            identify_programmatic_invocation(
-                api_token_id=verified.token_id,
-                client_id="http-api",
-            )
-            yield user
-        finally:
-            invocation.__exit__(None, None, None)
+        identify_programmatic_invocation(
+            api_token_id=verified.token_id,
+            client_id=(
+                trusted_invocation.client_id or "mcp"
+                if trusted_invocation is not None and trusted_invocation.protocol == "mcp"
+                else "http-api"
+            ),
+        )
+        yield user
         return
 
     raw_session = request.cookies.get(get_settings().session_cookie, "")

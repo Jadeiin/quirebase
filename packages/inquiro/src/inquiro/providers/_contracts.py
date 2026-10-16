@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
 from inquiro.models import (
     AcquiredDocument,
+    CandidatePage,
+    CandidateRecord,
     Identifier,
     ProviderConfig,
-    ProviderRecord,
-    ProviderSearchPage,
     ProviderUnavailable,
-    SearchClause,
+    SearchQuery,
+    SearchSort,
 )
 from inquiro.transport import RemoteNotFound
 
@@ -27,34 +28,29 @@ type ProviderCapability = Literal["lookup", "search", "document"]
 class LookupImplementation(Protocol):
     async def lookup(
         self,
-        client: ProviderContext,
-        value: str,
+        client: BoundedTransport,
+        identifier: Identifier,
         settings: ProviderConfig,
         *,
         endpoint: str,
-    ) -> ProviderRecord: ...
+    ) -> CandidateRecord: ...
 
 
 class SearchImplementation(Protocol):
     async def search(
         self,
-        client: ProviderContext,
-        clauses: list[SearchClause],
+        client: BoundedTransport,
+        request: SearchQuery,
         *,
-        page: int,
-        per_page: int,
-        sort: str,
-        year_from: int | None,
-        year_to: int | None,
         settings: ProviderConfig,
         endpoint: str,
-    ) -> ProviderSearchPage: ...
+    ) -> CandidatePage: ...
 
 
 class DocumentImplementation(Protocol):
     async def acquire(
         self,
-        client: ProviderContext,
+        client: BoundedTransport,
         value: str,
         settings: ProviderConfig,
         *,
@@ -65,11 +61,12 @@ class DocumentImplementation(Protocol):
 @dataclass(frozen=True)
 class ProviderDefinition:
     name: str
+    identifier_namespace: str
     display_name: str | None = None
-    identifier_aliases: tuple[str, ...] = ()
     identifier_parser: IdentifierParser | None = None
     auto_detect_identifier: bool = False
     search_adapter: SearchImplementation | None = None
+    search_sorts: tuple[SearchSort, ...] = ("relevance", "published")
     lookup_adapter: LookupImplementation | None = None
     document_adapter: DocumentImplementation | None = None
     endpoint: str = ""
@@ -77,40 +74,25 @@ class ProviderDefinition:
     credential_setting: str | None = None
     credential_environment: str | None = None
     credential_capabilities: frozenset[ProviderCapability] = frozenset({"lookup", "search"})
+    additional_lookup_namespaces: tuple[str, ...] = ()
+
+    def accepts_identifier(self, provider: str) -> bool:
+        return provider in {self.name, self.identifier_namespace}
 
     def require_credentials(
         self,
         config: ProviderConfig,
         capability: ProviderCapability,
     ) -> None:
-        if (
-            capability in self.credential_capabilities
-            and self.credential_setting
-            and not getattr(config, self.credential_setting)
-        ):
+        if not self.has_credentials(config, capability):
             raise ProviderUnavailable(
                 f"{self.display_name or self.name} requires "
                 f"{self.credential_environment or self.credential_setting}"
             )
 
-
-class ProviderContext:
-    def __init__(self, transport: BoundedTransport) -> None:
-        self._transport = transport
-
-    async def _get(
-        self,
-        url: str,
-        params: Mapping[str, object] | None = None,
-        headers: Mapping[str, str] | None = None,
-    ) -> bytes:
-        return await self._transport.get(url, params, headers)
-
-    async def _download_pdf(
-        self,
-        url: str,
-        *,
-        filename: str | None = None,
-        provider: str | None = None,
-    ) -> AcquiredDocument:
-        return await self._transport.download_pdf(url, filename=filename, provider=provider)
+    def has_credentials(self, config: ProviderConfig, capability: ProviderCapability) -> bool:
+        return not (
+            capability in self.credential_capabilities
+            and self.credential_setting
+            and not getattr(config, self.credential_setting)
+        )

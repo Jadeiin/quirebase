@@ -1,39 +1,127 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING
 
-from inquiro.canonical import (
-    clean_rich_markup,
-    first_text,
-)
-from inquiro.identifiers import parse_bibcode
+from commonmeta.base_utils import compact
+
+from inquiro.canonical import clean_markup, clean_rich_markup, first_text
+from inquiro.identifiers import normalize_doi, parse_bibcode
 from inquiro.models import (
     CandidateNotFound,
-    ProviderRecord,
-    ProviderSearchPage,
-    ProviderSearchRecord,
+    CandidatePage,
+    CandidateRecord,
+    Identifier,
+    ProviderConfig,
     ProviderUnavailable,
-    SearchClause,
+    SearchQuery,
 )
-from inquiro.providers._contracts import ProviderContext, ProviderDefinition
+from inquiro.providers._contracts import ProviderDefinition
 from inquiro.providers._payload import (
+    affiliation_values,
     boolean_query,
+    keyword_values,
+    source_credit,
+    source_files,
+    source_identifiers,
+    source_landing_url,
+    source_link,
+    source_subjects,
+    source_work_id,
+    text_contributors,
 )
+
+if TYPE_CHECKING:
+    from inquiro.transport import BoundedTransport
+
+
+def _contributors(document: dict) -> tuple[dict, ...] | None:
+    names = document.get("author")
+    affiliations = document.get("aff")
+    if (
+        isinstance(names, list)
+        and isinstance(affiliations, list)
+        and (len(affiliations) == len(names))
+    ):
+        return (
+            tuple(
+                (
+                    source_credit(name, affiliations=affiliation_values([affiliation]))
+                    for raw_name, affiliation in zip(names, affiliations, strict=True)
+                    if (name := clean_markup(first_text(raw_name)))
+                )
+            )
+            or None
+        )
+    return text_contributors(names)
+
+
+def _record(doc: dict, identifier: Identifier) -> CandidateRecord:
+    title = clean_rich_markup(first_text(doc.get("title")))
+    if not title:
+        raise CandidateNotFound("NASA ADS record was not found")
+    doi = normalize_doi(first_text(doc.get("doi")) or "") or None
+    bibcode = first_text(doc.get("bibcode"))
+    identifiers = {"bibcode": bibcode}
+    if doi:
+        identifiers["doi"] = doi
+    return CandidateRecord(
+        provider="nasa_ads",
+        lookup_identifier=identifier,
+        work=compact({
+            "id": source_work_id(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
+            ),
+            "type": "Other",
+            "title": title,
+            "description": clean_rich_markup(first_text(doc.get("abstract"))),
+            "contributors": _contributors(doc),
+            "date_published": first_text(doc.get("pubdate")),
+            "identifiers": source_identifiers(
+                tuple((Identifier(key, value) for key, value in identifiers.items() if value))
+            ),
+            "subjects": source_subjects(keyword_values(doc.get("keyword")) or ()),
+            "container": compact({"title": first_text(doc.get("pub"))}),
+            "url": source_landing_url(
+                (
+                    source_link(
+                        f"https://ui.adsabs.harvard.edu/abs/{bibcode}/abstract", kind="landing_page"
+                    ),
+                )
+                if bibcode
+                else None
+            ),
+            "files": source_files(
+                (
+                    source_link(
+                        f"https://ui.adsabs.harvard.edu/abs/{bibcode}/abstract", kind="landing_page"
+                    ),
+                )
+                if bibcode
+                else None
+            ),
+        }),
+    )
 
 
 class NasaAdsLookupAdapter:
     async def lookup(
-        self, client: ProviderContext, value: str, settings: Any, *, endpoint: str
-    ) -> ProviderRecord:
-        token = getattr(settings, "nasa_ads_token", None) or ""
+        self,
+        client: BoundedTransport,
+        identifier: Identifier,
+        settings: ProviderConfig,
+        *,
+        endpoint: str,
+    ) -> CandidateRecord:
+        value = identifier.value
+        token = settings.nasa_ads_token or ""
         params = {
             "q": f'bibcode:"{value}"',
-            "fl": "bibcode,title,author,doi,pubdate,pub,abstract",
+            "fl": "bibcode,title,author,aff,keyword,doi,pubdate,pub,abstract,doctype",
             "rows": "1",
         }
         headers = {"Authorization": f"Bearer {token}"}
-        body = await client._get(endpoint, params, headers=headers)
+        body = await client.get(endpoint, params, headers=headers)
         try:
             payload = json.loads(body)
         except (json.JSONDecodeError, TypeError) as error:
@@ -42,45 +130,21 @@ class NasaAdsLookupAdapter:
         if not docs:
             raise CandidateNotFound("NASA ADS record was not found")
         doc = docs[0]
-        title = clean_rich_markup(first_text(doc.get("title")))
-        if not title:
-            raise CandidateNotFound("NASA ADS record was not found")
-        doi = first_text(doc.get("doi"))
-        bibcode = first_text(doc.get("bibcode")) or value
-        identifiers = {"bibcode": bibcode}
-        if doi:
-            identifiers["doi"] = doi
-        return ProviderRecord(
-            title=title,
-            abstract=clean_rich_markup(first_text(doc.get("abstract"))),
-            authors="; ".join(doc.get("author", [])) or None,
-            keywords=None,
-            publication_date=first_text(doc.get("pubdate")),
-            publication_title=first_text(doc.get("pub")),
-            doi=doi,
-            urls=f"https://ui.adsabs.harvard.edu/abs/{value}/abstract",
-            identifiers=json.dumps(identifiers),
-            reference_type="article",
-        )
+        return _record(doc, identifier)
 
 
 class NasaAdsSearchAdapter:
     async def search(
         self,
-        client: ProviderContext,
-        clauses: list[SearchClause],
+        client: BoundedTransport,
+        request: SearchQuery,
         *,
-        page: int,
-        per_page: int,
-        sort: str,
-        year_from: int | None,
-        year_to: int | None,
-        settings: Any,
+        settings: ProviderConfig,
         endpoint: str,
-    ) -> ProviderSearchPage:
-        token = getattr(settings, "nasa_ads_token", None) or ""
+    ) -> CandidatePage:
+        token = settings.nasa_ads_token or ""
         query = boolean_query(
-            clauses,
+            request.clauses,
             {
                 "any": "",
                 "title": "title:",
@@ -90,25 +154,25 @@ class NasaAdsSearchAdapter:
             },
             field_prefix=True,
         )
-        if year_from or year_to:
-            query += f" year:{year_from or 0}-{year_to or 3000}"
+        if request.year_from or request.year_to:
+            query += f" year:{request.year_from or 0}-{request.year_to or 3000}"
         sort_value = (
             "date desc"
-            if sort == "published"
+            if request.sort == "published"
             else "citation_count desc"
-            if sort == "cited"
+            if request.sort == "cited"
             else "score desc"
         )
         params = {
             "q": query,
-            "fl": "bibcode,title,author,doi,pubdate,pub,abstract",
-            "rows": str(per_page),
-            "start": str((page - 1) * per_page),
+            "fl": "bibcode,title,author,aff,keyword,doi,pubdate,pub,abstract,doctype",
+            "rows": str(request.per_page),
+            "start": str((request.page - 1) * request.per_page),
             "sort": sort_value,
         }
         headers = {"Authorization": f"Bearer {token}"}
         try:
-            payload = json.loads(await client._get(endpoint, params, headers=headers))
+            payload = json.loads(await client.get(endpoint, params, headers=headers))
         except (json.JSONDecodeError, TypeError) as error:
             raise ProviderUnavailable("NASA ADS returned invalid search results") from error
         response = payload.get("response", {})
@@ -122,28 +186,29 @@ class NasaAdsSearchAdapter:
             identifier = doi or bibcode
             assert identifier is not None
             results.append(
-                ProviderSearchRecord(
-                    provider="nasa",
-                    identifier_provider="doi" if doi else "bibcode",
-                    identifier=identifier,
-                    title=title,
-                    authors="; ".join(document.get("author", [])) or None,
-                    publication_title=first_text(document.get("pub")),
-                    publication_date=first_text(document.get("pubdate")),
-                    abstract=first_text(document.get("abstract")),
+                _record(
+                    document,
+                    Identifier("doi", normalize_doi(doi))
+                    if doi
+                    else Identifier("bibcode", identifier),
                 )
             )
-        return ProviderSearchPage(
-            "nasa", results, int(response.get("numFound", len(results))), page, per_page
+        return CandidatePage(
+            "nasa_ads",
+            tuple(results),
+            int(response.get("numFound", len(results))),
+            request.page,
+            request.per_page,
         )
 
 
 NASA_ADS_PROVIDER = ProviderDefinition(
-    name="nasa",
+    name="nasa_ads",
     display_name="NASA ADS",
-    identifier_aliases=("bibcode",),
+    identifier_namespace="bibcode",
     identifier_parser=parse_bibcode,
     search_adapter=NasaAdsSearchAdapter(),
+    search_sorts=("relevance", "published", "cited"),
     lookup_adapter=NasaAdsLookupAdapter(),
     endpoint="https://api.adsabs.harvard.edu/v1/search/query",
     credential_setting="nasa_ads_token",

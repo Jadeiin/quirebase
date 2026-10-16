@@ -1,117 +1,135 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from dataclasses import asdict
+from uuid import UUID
 
 from fastapi import APIRouter
 
+from quirebase.access import (
+    ResourceAction,
+    item_decisions,
+    workspace_decisions,
+)
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.documents import (
     resolve_item_thumbnail,
 )
 from quirebase.library import (
-    OrganizeWorkspace,
-    SummaryWorkspace,
-    WorkspaceSection,
+    ItemOrganizationData,
+    ItemOverviewData,
+    ItemSection,
     delete_item,
-    open_item_workspace,
-    regenerate_bibtex_key,
+    get_item_metadata_sources,
+    open_item_section,
+    regenerate_citation_key,
     regenerate_item_tag_recommendation,
     rescan_pdf_doi,
     search_authors_typeahead,
     sync_metadata_from_upstream,
 )
 from quirebase.operations.settings import get_effective_settings_model
-from quirebase.web.api.common import OkView, WriteResult
-from quirebase.web.api.dependencies import ApiUser, Database
+from quirebase.web.api.common import OkView, WriteResult, authorization_view
+from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.item_schemas import (
     DeleteConfirmationRequest,
+    ItemMetadataSourcesView,
     ItemOrganizeView,
-    ItemWorkspaceView,
+    ItemOverviewView,
     MetadataSyncRequest,
 )
-from quirebase.web.api.library_schemas import AuthorSuggestionView, item_search_view
-from quirebase.web.api.serialization import enum_value
+from quirebase.web.api.library_schemas import AuthorSuggestionView
+from quirebase.workspaces import list_workspaces
 
-router = APIRouter(tags=["HTTP API"])
+router = APIRouter(tags=["Items"])
 
 
-@router.get("/items/{item_id}/workspace", response_model=ItemWorkspaceView)
-async def item_workspace(item_id: str, user: ApiUser, db: Database):
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.summary)
-    if not isinstance(workspace, SummaryWorkspace):  # pragma: no cover
-        raise TypeError("item summary workspace mismatch")
-    latest = workspace.revisions[0] if workspace.revisions else None
+@router.get("/items/{item_id}/overview", response_model=ItemOverviewView)
+async def item_overview(workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database):
+    source_actions = context.allowed_actions
+    view = await open_item_section(db, context, item_id, ItemSection.overview)
+    user = context.actor
+    if not isinstance(view, ItemOverviewData):  # pragma: no cover
+        raise TypeError("item overview section mismatch")
+    latest = view.revisions[0] if view.revisions else None
     thumbnail = None
     with suppress(ResourceNotFound):
-        resolved = await resolve_item_thumbnail(db, user, item_id)
+        resolved = await resolve_item_thumbnail(db, user, workspace_id, item_id)
         thumbnail = {
             "source_kind": resolved.source_kind,
             "source_id": resolved.source_id,
         }
+    copy_targets = []
+    if ResourceAction.workspace_export in source_actions:
+        for workspace, member in (await list_workspaces(db, user, limit=None))[0]:
+            if workspace.id == workspace_id:
+                continue
+            target_actions = workspace_decisions(
+                member.role,
+                workspace.state,
+                governance_frozen=workspace.governance_frozen_at is not None,
+            ).allowed
+            if ResourceAction.item_create in target_actions:
+                copy_targets.append({"id": workspace.id, "name": workspace.name})
     return {
-        "item": item_search_view(workspace.item),
-        "permissions": {"edit": workspace.can_edit, "delete": workspace.can_delete},
+        "id": view.item.id,
+        "version": view.item.version,
+        "authorization": authorization_view(item_decisions(context)),
         "counts": {
-            "revisions": workspace.revision_count,
-            "attachments": workspace.attachment_count,
-            "annotations": workspace.annotation_count,
-            "discussion": workspace.message_count,
+            "revisions": view.revision_count,
+            "attachments": view.attachment_count,
+            "annotations": view.annotation_count,
+            "discussion": view.message_count,
         },
-        "tags": [{"id": tag.id, "name": tag.name} for tag in workspace.tags],
-        "owner": {"id": workspace.item_owner.id, "username": workspace.item_owner.username},
-        "identifiers": [
-            {"provider": identifier.provider, "value": identifier.value}
-            for identifier in workspace.identifiers
-        ],
-        "latest_revision": (
-            {
-                "id": latest.id,
-                "original_name": latest.original_name,
-                "size": latest.size,
-                "page_count": latest.page_count,
-                "processing_state": enum_value(latest.processing_state),
-            }
-            if latest
-            else None
-        ),
+        "tags": [{"id": tag.id, "name": tag.name} for tag in view.tags],
+        "metadata": view.item.work,
+        "citation_key": view.item.citation_key,
+        "latest_revision_id": latest.id if latest else None,
         "thumbnail": thumbnail,
+        "copy_targets": copy_targets,
     }
 
 
-@router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
-async def item_organize_workspace(item_id: str, user: ApiUser, db: Database):
+@router.get("/items/{item_id}/metadata/sources", response_model=ItemMetadataSourcesView)
+async def item_metadata_sources(
+    workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database
+):
+    return asdict(
+        await get_item_metadata_sources(
+            db, context, item_id, settings=await get_effective_settings_model(db)
+        )
+    )
 
-    workspace = await open_item_workspace(db, user, item_id, WorkspaceSection.organize)
-    if not isinstance(workspace, OrganizeWorkspace):  # pragma: no cover
-        raise TypeError("item organize workspace mismatch")
-    matrix = workspace.tag_matrix
+
+@router.get("/items/{item_id}/organize", response_model=ItemOrganizeView)
+async def item_organize(workspace_id: UUID, item_id: UUID, context: WorkspaceAccess, db: Database):
+    view = await open_item_section(db, context, item_id, ItemSection.organize)
+    if not isinstance(view, ItemOrganizationData):  # pragma: no cover
+        raise TypeError("item organize section mismatch")
+    matrix = view.tag_matrix
     return {
-        "item": item_search_view(workspace.item),
-        "permissions": {"edit": workspace.can_edit, "delete": workspace.can_delete},
-        "tags": [{"id": tag.id, "name": tag.name} for tag in workspace.tags],
+        "authorization": authorization_view(item_decisions(context)),
         "projects": [
             {
-                "id": membership.project.id,
-                "name": membership.project.name,
-                "role": enum_value(membership.role),
-                "assigned": membership.project.id in workspace.assigned_project_ids,
+                "id": project_option.project.id,
+                "name": project_option.project.name,
+                "assigned": project_option.project.id in view.assigned_project_ids,
+                "participation": project_option.project.participation,
+                "is_participating": project_option.is_participating,
             }
-            for membership in workspace.memberships
+            for project_option in view.projects
         ],
         "tag_matrix": {
             "groups": [
                 {
                     "letter": group.letter,
                     "tags": [{"id": tag.id, "name": tag.name} for tag in group.tags],
-                    "names": list(group.names),
                 }
                 for group in matrix.groups
             ],
             "assigned_ids": sorted(matrix.assigned_ids),
             "recommended_ids": sorted(matrix.recommended_ids),
             "suggested_names": list(matrix.suggested_names),
-            "suggested_single_words": list(matrix.suggested_single_words),
-            "suggested_phrases": list(matrix.suggested_phrases),
             "recommendation_state": matrix.recommendation_state,
             "recommendation_error": matrix.recommendation_error,
         },
@@ -120,21 +138,30 @@ async def item_organize_workspace(item_id: str, user: ApiUser, db: Database):
 
 @router.delete("/items/{item_id}", response_model=OkView)
 async def delete_library_item(
-    item_id: str, data: DeleteConfirmationRequest, user: ApiUser, db: Database
+    workspace_id: UUID,
+    item_id: UUID,
+    data: DeleteConfirmationRequest,
+    user: ApiUser,
+    db: Database,
 ) -> OkView:
     if data.confirmation != "delete":
         raise ValidationFailure("confirm deletion to continue")
-    await delete_item(db, user, item_id)
+    await delete_item(db, user, workspace_id, item_id)
     return OkView()
 
 
 @router.post("/items/{item_id}/metadata/sync", response_model=OkView)
 async def sync_item_metadata(
-    item_id: str, data: MetadataSyncRequest, user: ApiUser, db: Database
+    workspace_id: UUID,
+    item_id: UUID,
+    data: MetadataSyncRequest,
+    user: ApiUser,
+    db: Database,
 ) -> OkView:
     await sync_metadata_from_upstream(
         db,
         user,
+        workspace_id,
         item_id,
         data.expected_version,
         provider=data.provider,
@@ -145,24 +172,29 @@ async def sync_item_metadata(
 
 
 @router.post("/items/{item_id}/doi/rescan", response_model=OkView)
-async def rescan_item_doi(item_id: str, user: ApiUser, db: Database) -> OkView:
-    await rescan_pdf_doi(db, user, item_id)
+async def rescan_item_doi(workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database) -> OkView:
+    await rescan_pdf_doi(db, user, workspace_id, item_id)
     return OkView()
 
 
 @router.post("/items/{item_id}/citation-key/regenerate", response_model=OkView)
-async def regenerate_item_citation_key(item_id: str, user: ApiUser, db: Database) -> OkView:
-    await regenerate_bibtex_key(db, user, item_id)
+async def regenerate_item_citation_key(
+    workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database
+) -> OkView:
+    await regenerate_citation_key(db, user, workspace_id, item_id)
     return OkView()
 
 
 @router.post("/items/{item_id}/tag-recommendations", response_model=WriteResult)
-async def regenerate_tag_recommendations(item_id: str, user: ApiUser, db: Database) -> WriteResult:
-    workflow_id = await regenerate_item_tag_recommendation(db, user, item_id)
+async def regenerate_tag_recommendations(
+    workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database
+) -> WriteResult:
+    workflow_id = await regenerate_item_tag_recommendation(db, user, workspace_id, item_id)
     return WriteResult(id=workflow_id)
 
 
 @router.get("/authors", response_model=list[AuthorSuggestionView])
-async def suggest_authors(user: ApiUser, db: Database, query: str = ""):
-    del user
-    return await search_authors_typeahead(db, query=query)
+async def suggest_authors(
+    workspace_id: UUID, user: ApiUser, db: Database, query: str = "", project: UUID | None = None
+):
+    return await search_authors_typeahead(db, user, workspace_id, query=query, project=project)

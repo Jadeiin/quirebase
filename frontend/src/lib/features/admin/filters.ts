@@ -4,6 +4,7 @@ import type { AdminFilters } from './queries';
 export type AdminFilterContext = {
 	filters: () => AdminFilters;
 	setPage: (page: number) => void;
+	setPageSize: (pageSize: number) => void;
 };
 
 const [getAdminFilters, setAdminFilters] = createContext<AdminFilterContext>();

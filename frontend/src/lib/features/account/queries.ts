@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/svelte-query';
-import { apiRequest } from '$lib/api/client';
+import { apiRequest, createWorkspaceApi } from '#lib/api/client.js';
 
 export const accountKeys = {
 	all: ['account'] as const,
@@ -15,20 +15,26 @@ export function accountQuery() {
 
 export const exportPreferenceKeys = {
 	all: ['export-preferences'] as const,
-	citationStyles: (query: string, include: string) =>
-		[...exportPreferenceKeys.all, 'citation-styles', query, include] as const,
+	citationStyles: (workspaceId: string, query: string, include: string) =>
+		[...exportPreferenceKeys.all, 'citation-styles', workspaceId, query, include] as const,
 	citationKeyPreview: (formula: string, forceAscii: boolean) =>
 		[...exportPreferenceKeys.all, 'citation-key-preview', formula, forceAscii] as const
 };
 
-export function exportCitationStylesQuery(query: string, include: string) {
+export function exportCitationStylesQuery(workspaceId: string, query: string, include: string) {
+	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: exportPreferenceKeys.citationStyles(query, include),
-		queryFn: ({ signal }) =>
-			apiRequest('GET', '/citation-styles', {
+		queryKey: exportPreferenceKeys.citationStyles(workspaceId, query, include),
+		enabled: Boolean(workspaceId),
+		queryFn: async ({ signal }) => ({
+			...(await api.request('GET', '/workspaces/{workspace_id}/citation-styles', {
 				params: { query: { query, limit: 30, include } },
 				signal
-			})
+			})),
+			workspaceId,
+			query,
+			include
+		})
 	});
 }
 
@@ -36,8 +42,9 @@ export function citationKeyPreviewQuery(formula: string, forceAscii: boolean, en
 	return queryOptions({
 		queryKey: exportPreferenceKeys.citationKeyPreview(formula, forceAscii),
 		enabled,
+		retry: false,
 		queryFn: async ({ signal }) => ({
-			...(await apiRequest('GET', '/citation-key-preview', {
+			...(await apiRequest('GET', '/account/citation-key-preview', {
 				params: { query: { formula, force_ascii: forceAscii } },
 				signal
 			})),

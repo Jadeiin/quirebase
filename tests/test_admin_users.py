@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from sqlalchemy import select
+from workspace_helpers import accessible_workspace_id
 
+from quirebase.access import SystemAction
 from quirebase.accounts import (
     authenticate_user,
     change_user_role,
@@ -19,7 +23,8 @@ from quirebase.core.errors import (
     ResourceUnavailable,
     ValidationFailure,
 )
-from quirebase.models import AuditEvent, LoginSession, User
+from quirebase.models import AuditEvent, LoginSession, User, WorkspaceMember, WorkspaceRole
+from quirebase.workspaces import transfer_workspace_ownership
 
 
 async def create_test_admin(db, username="admin_tester"):
@@ -59,15 +64,44 @@ async def test_admin_create_user_and_authenticate(async_db):
     # Check audit event
     event = await db.scalar(
         select(AuditEvent).where(
-            AuditEvent.action == "admin.user.create", AuditEvent.target_id == new_user.id
+            AuditEvent.action == "admin.user.create", AuditEvent.target_id == str(new_user.id)
         )
     )
     assert event is not None
     assert event.actor_id == admin.id
+    assert event.authorization_resource_action == SystemAction.users_create.value
 
     # Test authentication with new user
     session, _token = await authenticate_user(db, "127.0.0.1", "new_member_1", "securepass123456")
     assert session.user_id == new_user.id
+
+
+@pytest.mark.anyio
+async def test_admin_creation_hashes_before_final_authorization_lock(async_db, monkeypatch):
+    admin = await create_test_admin(async_db, "admin-hash-order")
+    events: list[str] = []
+
+    async def authorize(_db, actor, _action, *, lock=None, **_kwargs):
+        await asyncio.sleep(0)
+        events.append(f"authorize:{lock}")
+        return actor
+
+    async def hash_password(_password: str) -> str:
+        await asyncio.sleep(0)
+        events.append("hash")
+        return "precomputed-password-hash"
+
+    monkeypatch.setattr("quirebase.accounts.administration.require_system_action", authorize)
+    monkeypatch.setattr("quirebase.accounts.administration.hash_password_async", hash_password)
+
+    await create_user_admin(
+        async_db,
+        admin,
+        "admin-created-after-hash",
+        "password123456",
+    )
+
+    assert events == ["authorize:None", "hash", "authorize:shared"]
 
 
 @pytest.mark.anyio
@@ -93,10 +127,23 @@ async def test_admin_toggle_user_status_and_session_revocation(async_db):
     admin = await create_test_admin(db, "admin3")
     user = await create_user_admin(db, admin, "target_user", "password123456")
 
+    # A Workspace owner must transfer ownership before the instance account can
+    # be deactivated.  Make the administrator an active member of the target
+    # user's initial Workspace, then perform that explicit governance action.
+    workspace_id = await accessible_workspace_id(db, user)
+    membership = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=admin.id,
+        role=WorkspaceRole.admin,
+        invited_by=admin.id,
+    )
+    db.add(membership)
+    await db.flush()
+    await transfer_workspace_ownership(db, user, workspace_id, membership.id)
+
     # Create active sessions
     _session1, _ = await create_login_session(db, user)
     _session2, _ = await create_login_session(db, user)
-    await db.commit()
     assert (
         len(
             list(
@@ -111,6 +158,14 @@ async def test_admin_toggle_user_status_and_session_revocation(async_db):
     # Deactivate user
     await update_user_status(db, admin, user.id, active=False)
     assert user.active is False
+
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.status_update", AuditEvent.target_id == str(user.id)
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_status_manage.value
 
     # Sessions must be wiped
     active_sessions = list(
@@ -134,6 +189,14 @@ async def test_admin_change_user_role(async_db):
     await change_user_role(db, admin, user.id, new_role="administrator")
     assert user.role == "administrator"
 
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.role_change", AuditEvent.target_id == str(user.id)
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_roles_manage.value
+
     # Self-demotion must be blocked
     with pytest.raises(PermissionDenied, match="cannot demote their own account"):
         await change_user_role(db, admin, admin.id, new_role="member")
@@ -145,9 +208,16 @@ async def test_admin_reset_password(async_db):
     admin = await create_test_admin(db, "admin5")
     user = await create_user_admin(db, admin, "pw_target", "oldpass123456")
     await create_login_session(db, user)
-    await db.commit()
 
     await reset_user_password(db, admin, user.id, "brand_new_pass_456")
+
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.password_reset", AuditEvent.target_id == str(user.id)
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_password_reset.value
 
     # Old session is revoked
     assert (
@@ -177,6 +247,13 @@ async def test_admin_revoke_sessions(async_db):
 
     revoked = await revoke_user_sessions(db, admin, user.id)
     assert revoked == 2
+    event = await db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "admin.user.sessions_revoked", AuditEvent.target_id == str(user.id)
+        )
+    )
+    assert event is not None
+    assert event.authorization_resource_action == SystemAction.users_sessions_revoke.value
     assert (
         len(
             list(
@@ -196,6 +273,16 @@ async def test_list_users_paginated_and_filtered(async_db):
     await create_user_admin(db, admin, "alpha_member", "pass123456789", role="member")
     await create_user_admin(db, admin, "beta_admin", "pass123456789", role="administrator")
     u3 = await create_user_admin(db, admin, "gamma_disabled", "pass123456789", role="member")
+    workspace_id = await accessible_workspace_id(db, u3)
+    membership = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=admin.id,
+        role=WorkspaceRole.admin,
+        invited_by=admin.id,
+    )
+    db.add(membership)
+    await db.flush()
+    await transfer_workspace_ownership(db, u3, workspace_id, membership.id)
     await update_user_status(db, admin, u3.id, active=False)
 
     users, total = await list_users_paginated(db, admin, search="alpha")

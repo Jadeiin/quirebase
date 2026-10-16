@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import httpx2
 import pytest
+from app_helpers import json_payload
 from sqlalchemy import select
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
+from quirebase.access import SystemAction
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
-from quirebase.models import LoginSession, Project, SystemSetting, User
+from quirebase.core.workflows import WorkflowSummary
+from quirebase.models import AuditEvent, LoginSession, SystemSetting, User
 from quirebase.web.app import app
 
 
@@ -25,6 +30,7 @@ async def admin_client(db, tmp_path, monkeypatch):
     )
     db.add(user)
     await db.flush()
+    await provision_initial_workspace(db, user)
     raw = "admin-session-raw-token"
     login = LoginSession(
         token_hash=token_hash(raw),
@@ -89,8 +95,6 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
     for path in [
         "/api/v1/admin/overview",
         "/api/v1/admin/users",
-        "/api/v1/admin/projects",
-        "/api/v1/admin/items",
         "/api/v1/admin/audit",
         "/api/v1/admin/workflows",
         "/api/v1/admin/settings",
@@ -103,36 +107,11 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_admin_project_directory_links_to_later_filtered_pages(
-    async_db, tmp_path, monkeypatch
-):
+async def test_admin_workspace_governance_directory(async_db, tmp_path, monkeypatch):
     client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
-    async_db.add_all([
-        Project(name=f"Paged project {index:02d}", created_by=admin.id) for index in range(21)
-    ])
-    await async_db.commit()
-
-    first = await client.get(
-        "/api/v1/admin/projects",
-        params={"search": "Paged", "state": "active", "visibility": "private"},
-    )
-    assert first.status_code == 200
-    assert first.json()["page"] == 1
-    assert first.json()["total"] == 21
-    assert len(first.json()["projects"]) == 20
-
-    second = await client.get(
-        "/api/v1/admin/projects",
-        params={
-            "search": "Paged",
-            "state": "active",
-            "visibility": "private",
-            "page": 2,
-        },
-    )
-    assert second.status_code == 200
-    assert second.json()["page"] == 2
-    assert len(second.json()["projects"]) == 1
+    response = await client.get("/api/v1/admin/workspaces")
+    assert response.status_code == 200
+    assert any(row["id"] == str(fixture_workspace_id(admin)) for row in response.json())
     await client.aclose()
 
 
@@ -149,21 +128,154 @@ async def test_admin_workflow_filter_rejects_unknown_state(async_db, tmp_path, m
 
 
 @pytest.mark.anyio
+async def test_admin_overview_pages_events_without_changing_statistics(
+    async_db, tmp_path, monkeypatch, fake_durable_operations
+):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+
+    monkeypatch.setattr(
+        fake_durable_operations,
+        "state_counts",
+        AsyncMock(return_value={"failed": 123, "succeeded": 7}),
+    )
+    now = datetime.now(UTC)
+    async_db.add_all([
+        AuditEvent(
+            actor_id=admin.id,
+            action=f"test.event.{index}",
+            target_type="instance",
+            created_at=now + timedelta(seconds=index),
+        )
+        for index in range(27)
+    ])
+    await async_db.commit()
+    try:
+        first = await client.get("/api/v1/admin/overview", params={"limit": 10})
+        assert first.status_code == 200
+        first_page = first.json()
+        assert first_page["failed_workflow_count"] == 123
+        assert len(first_page["recent_events"]["items"]) == 10
+        assert first_page["recent_events"]["total"] >= 27
+
+        second = await client.get("/api/v1/admin/overview", params={"limit": 10, "offset": 10})
+        assert second.status_code == 200
+        second_page = second.json()
+        assert second_page["recent_events"]["total"] == first_page["recent_events"]["total"]
+        assert second_page["recent_events"]["offset"] == 10
+        assert second_page["recent_events"]["limit"] == 10
+        assert [row["action"] for row in second_page["recent_events"]["items"]] == [
+            f"test.event.{index}" for index in range(16, 6, -1)
+        ]
+        for key in ("user_count", "pending_invitation_count", "failed_workflow_count", "storage"):
+            assert second_page[key] == first_page[key]
+
+        empty = await client.get("/api/v1/admin/overview", params={"limit": 10, "offset": 1000})
+        assert empty.status_code == 200
+        assert empty.json()["recent_events"]["items"] == []
+        assert empty.json()["recent_events"]["total"] == first_page["recent_events"]["total"]
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_workflows_pages_complete_history_and_counts_filtered_states(
+    async_db, tmp_path, monkeypatch, fake_durable_operations
+):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    now = datetime.now(UTC)
+    for index in range(150):
+        state, raw_status = ("failed", "ERROR") if index % 3 == 0 else ("pending", "ENQUEUED")
+        row = WorkflowSummary(
+            id=f"workflow-{index}",
+            name="operations.check_objects",
+            state=state,
+            raw_status=raw_status,
+            queue_name="operations",
+            executor_id=None,
+            created_at=now + timedelta(seconds=index),
+            updated_at=now + timedelta(seconds=index),
+        )
+        fake_durable_operations.workflows[row.id] = row
+    try:
+        response = await client.get("/api/v1/admin/workflows", params={"limit": 10, "offset": 100})
+        assert response.status_code == 200
+        page = response.json()
+        assert (page["total"], page["limit"], page["offset"]) == (150, 10, 100)
+        assert [row["id"] for row in page["items"]] == [
+            f"workflow-{index}" for index in range(49, 39, -1)
+        ]
+
+        filtered = await client.get(
+            "/api/v1/admin/workflows", params={"state": " FaIlEd ", "limit": 10, "offset": 10}
+        )
+        assert filtered.status_code == 200
+        page = filtered.json()
+        assert (page["total"], page["limit"], page["offset"]) == (50, 10, 10)
+        assert [row["id"] for row in page["items"]] == [
+            f"workflow-{index}" for index in range(117, 87, -3)
+        ]
+        assert all(row["state"] == "failed" for row in page["items"])
+
+        empty = await client.get("/api/v1/admin/workflows", params={"state": "running"})
+        assert empty.status_code == 200
+        assert empty.json()["total"] == 0
+        assert empty.json()["items"] == []
+
+        past_end = await client.get("/api/v1/admin/workflows", params={"offset": 200})
+        assert past_end.status_code == 200
+        assert past_end.json()["total"] == 150
+        assert past_end.json()["items"] == []
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("section", ["overview", "workflows"])
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+async def test_admin_pagination_rejects_invalid_bounds(
+    async_db, tmp_path, monkeypatch, section, params
+):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    try:
+        response = await client.get(f"/api/v1/admin/{section}", params=params)
+        assert response.status_code == 422
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_admin_pages_forbidden_for_member(async_db, tmp_path, monkeypatch):
     client, _user, _ = await member_client(async_db, tmp_path, monkeypatch)
 
     for path in [
         "/api/v1/admin/overview",
         "/api/v1/admin/users",
-        "/api/v1/admin/items",
         "/api/v1/admin/audit",
         "/api/v1/admin/workflows",
         "/api/v1/admin/settings",
         "/api/v1/admin/maintenance",
     ]:
         res = await client.get(path)
-        assert res.status_code in (403, 404, 500)
+        assert res.status_code in {403, 404}, path
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_endpoint_relies_only_on_its_concrete_action(async_db, tmp_path, monkeypatch):
+    client, _user, _login = await member_client(async_db, tmp_path, monkeypatch)
+
+    def allow_audit_only(_role, action, *, relation="any"):
+        return action is SystemAction.audit_read and relation == "any"
+
+    monkeypatch.setattr(
+        "quirebase.access.authorization.system_action_allowed",
+        allow_audit_only,
+    )
+    try:
+        response = await client.get("/api/v1/admin/audit")
+        assert response.status_code == 200
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio
@@ -173,11 +285,11 @@ async def test_admin_create_user_endpoint(async_db, tmp_path, monkeypatch):
 
     res = await client.post(
         "/api/v1/admin/users",
-        json={
+        json=json_payload({
             "username": "http_created_user",
             "password": "strong_password_123",
             "role": "member",
-        },
+        }),
     )
     assert res.status_code == 201
     assert res.json()["username"] == "http_created_user"
@@ -195,7 +307,7 @@ async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
 
     res = await client.put(
         "/api/v1/admin/settings",
-        json={
+        json=json_payload({
             "metadata_contact_email": "http_admin@institution.edu",
             "ncbi_api_key": "ncbi_key_xyz",
             "openalex_api_key": "",
@@ -205,7 +317,7 @@ async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
             "max_pdf_bytes": 104857600,
             "max_attachment_bytes": 104857600,
             "export_ttl_hours": 48,
-        },
+        }),
     )
     assert res.status_code == 200
 
@@ -220,16 +332,11 @@ async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch, fake_
     db = async_db
     client, _admin, _login = await admin_client(db, tmp_path, monkeypatch)
 
-    routes = {
-        "/api/v1/admin/maintenance/reindex_all": "reindex_all",
-        "/api/v1/admin/maintenance/check_objects": "check_objects",
-        "/api/v1/admin/maintenance/backup": "backup",
-        "/api/v1/admin/maintenance/recommend_tags_all": "recommend_tags_all",
-    }
+    routes = {"/api/v1/admin/maintenance/check_objects": "check_objects"}
     for route, operation in routes.items():
         res = await client.post(
             route,
-            json={},
+            json=json_payload({}),
         )
         assert res.status_code == 200
         workflow_id = res.json()["id"]
@@ -239,9 +346,6 @@ async def test_admin_maintenance_triggers(async_db, tmp_path, monkeypatch, fake_
         assert progress.json()["id"] == workflow_id
 
     assert {row.name for row in await fake_durable_operations.list()} == {
-        "operations.reindex_all",
         "operations.check_objects",
-        "operations.backup",
-        "operations.recommend_tags_all",
     }
     await client.aclose()

@@ -10,6 +10,7 @@ from quirebase.core.crypto import token_hash
 from quirebase.models import User
 from quirebase.operations.settings import get_effective_setting
 from quirebase.web.api.auth import require_same_origin
+from quirebase.web.api.common import system_authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.session_schemas import LoginRequest, SessionView
 from quirebase.web.errors import ApiHTTPException
@@ -25,7 +26,12 @@ async def session_bootstrap(request: Request, db: Database):
         return {"authenticated": False, "user": None}
     return {
         "authenticated": True,
-        "user": {"id": login.user.id, "username": login.user.username, "role": login.user.role},
+        "user": {
+            "id": login.user.id,
+            "username": login.user.username,
+            "role": login.user.role,
+            "authorization": system_authorization_view(login.user.role),
+        },
     }
 
 
@@ -72,7 +78,12 @@ async def login_session(
         )
     return {
         "authenticated": True,
-        "user": {"id": user.id, "username": user.username, "role": user.role},
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "authorization": system_authorization_view(user.role),
+        },
     }
 
 

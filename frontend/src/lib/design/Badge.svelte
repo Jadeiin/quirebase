@@ -21,7 +21,7 @@
 	}: BadgeProps = $props();
 
 	const variants: Record<BadgeVariant, string> = {
-		surface: 'preset-tonal-surface',
+		surface: 'preset-tonal-surface preset-outlined-surface-300-700',
 		primary: 'preset-tonal-primary',
 		success: 'preset-tonal-success',
 		warning: 'preset-tonal-warning',

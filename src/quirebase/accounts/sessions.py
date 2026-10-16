@@ -6,19 +6,30 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
+from quirebase.access import require_system_resource_action
 from quirebase.audit import record_event
 from quirebase.core.crypto import generate_token, token_hash
 from quirebase.core.errors import ResourceNotFound
-from quirebase.core.timezones import as_utc
 from quirebase.models import LoginSession, User
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def create_login_session(
     db: AsyncSession, user: User, session_days: int = 30
 ) -> tuple[LoginSession, str]:
+    login, raw = await _create_login_session(db, user, session_days)
+    await db.commit()
+    return login, raw
+
+
+async def _create_login_session(
+    db: AsyncSession, user: User, session_days: int = 30
+) -> tuple[LoginSession, str]:
+    """Prepare a Session inside the caller's authentication transaction."""
     raw = generate_token(32)
     login = LoginSession(
         token_hash=token_hash(raw),
@@ -26,7 +37,7 @@ async def create_login_session(
         expires_at=datetime.now(UTC) + timedelta(days=session_days),
     )
     db.add(login)
-    await db.commit()
+    await db.flush()
     return login, raw
 
 
@@ -38,26 +49,37 @@ async def get_login_session_by_token(db: AsyncSession, raw_token: str) -> LoginS
         .options(selectinload(LoginSession.user))
         .where(LoginSession.token_hash == token_hash(raw_token))
     )
-    if login is None or as_utc(login.expires_at) <= datetime.now(UTC) or not login.user.active:
+    if login is None or login.expires_at <= datetime.now(UTC) or not login.user.active:
         return None
     return login
 
 
-async def list_user_sessions(db: AsyncSession, user_id: str) -> list[LoginSession]:
+async def list_user_sessions(db: AsyncSession, user: User) -> list[LoginSession]:
+    user = await require_system_resource_action(db, user, "login_session", "read", relation="own")
     return list(
         (
             await db.scalars(
                 select(LoginSession)
-                .where(LoginSession.user_id == user_id)
+                .where(LoginSession.user_id == user.id)
                 .order_by(LoginSession.created_at.desc())
             )
         ).all()
     )
 
 
-async def revoke_session(db: AsyncSession, user: User, session_id: str) -> None:
+async def revoke_session(db: AsyncSession, user: User, session_id: UUID) -> None:
     target = await db.get(LoginSession, session_id)
-    if target is None or target.user_id != user.id:
+    relation = "own" if target is not None and target.user_id == user.id else "other"
+    user = await require_system_resource_action(
+        db,
+        user,
+        "login_session",
+        "revoke",
+        relation=relation,
+        lock="shared",
+        message="session not found",
+    )
+    if target is None:
         raise ResourceNotFound("session not found")
     record_event(db, user.id, "auth.session.revoke", "login_session", target.id)
     await db.delete(target)
@@ -65,6 +87,9 @@ async def revoke_session(db: AsyncSession, user: User, session_id: str) -> None:
 
 
 async def revoke_all_sessions(db: AsyncSession, user: User) -> int:
+    user = await require_system_resource_action(
+        db, user, "login_session", "revoke", relation="own", lock="shared"
+    )
     count = (
         await db.scalar(
             select(func.count()).select_from(LoginSession).where(LoginSession.user_id == user.id)

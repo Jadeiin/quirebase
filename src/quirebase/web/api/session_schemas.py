@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves it
+from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from quirebase.web.api.common import SystemAuthorizationView
 
 
 class LoginRequest(BaseModel):
@@ -12,16 +15,17 @@ class LoginRequest(BaseModel):
 
 
 class LoginSessionView(BaseModel):
-    id: str
+    id: UUID
     current: bool = False
     expires_at: datetime
     created_at: datetime
 
 
 class SessionUserView(BaseModel):
-    id: str
+    id: UUID
     username: str
     role: Literal["administrator", "member"]
+    authorization: SystemAuthorizationView
 
 
 class SessionView(BaseModel):

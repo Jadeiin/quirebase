@@ -1,6 +1,7 @@
 <script lang="ts">
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import type { Snippet } from 'svelte';
-	import { t, type MessageKey } from '$lib/i18n';
+	import { t, type MessageKey } from '#lib/i18n.js';
 
 	let { loading, failed, label, children } = $props<{
 		loading: boolean;
@@ -11,7 +12,7 @@
 </script>
 
 {#if loading}
-	<p class="text-surface-600-400">{$t('Loading {section}…', { section: $t(label) })}</p>
+	<LoadingState label={$t('Loading {section}…', { section: $t(label) })} />
 {:else if failed}
 	<p class="text-error-700-300">{$t('Unable to load administration.')}</p>
 {:else}

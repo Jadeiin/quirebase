@@ -1,7 +1,12 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
-import { apiDownload, apiRequest } from '$lib/api/client';
-import { invalidateLibrary, invalidateProject } from '$lib/query/invalidation';
-import type { ExportPreferences } from '$lib/export-preferences';
+import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
+import { invalidateLibrary, invalidateProject, invalidateTags } from '#lib/query/invalidation.js';
+import {
+	bibliographyExportParameters,
+	bibliographyFilename,
+	type ExportPreferences
+} from '#lib/export-preferences.js';
+import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type LibraryBulkAction = 'add_project' | 'add_tag' | 'bibliography' | 'documents' | 'delete';
 
@@ -13,12 +18,6 @@ export type LibraryBulkInput = {
 	exportFormat: string;
 	preferences: ExportPreferences;
 };
-
-function bibliographyFilename(format: string): string {
-	if (format === 'csl') return 'quirebase-citations.txt';
-	const extension = format === 'ris' ? 'ris' : format === 'endnote' ? 'enw' : 'bib';
-	return `quirebase-export.${extension}`;
-}
 
 function archiveFilename(includeAnnotations: boolean, includeSupplements: boolean): string {
 	const kind =
@@ -32,39 +31,26 @@ function archiveFilename(includeAnnotations: boolean, includeSupplements: boolea
 	return `quirebase-selected-${kind}.zip`;
 }
 
-export async function runLibraryBulkDownload(input: LibraryBulkInput): Promise<void> {
+export async function runLibraryBulkDownload(
+	workspaceId: string,
+	input: LibraryBulkInput
+): Promise<void> {
+	const api = createWorkspaceApi(workspaceId);
 	if (input.action === 'bibliography') {
-		const citation = input.preferences.citation;
-		await apiDownload(
-			'/items/bibliography',
+		await api.download(
+			'/workspaces/{workspace_id}/items/bibliography',
 			{
 				body: {
 					item_ids: input.itemIds,
-					file_format: input.exportFormat,
-					style: citation.style,
-					include_abstract: citation.includeAbstract,
-					preserve_case: citation.preserveCase,
-					include_identifiers: citation.includeIdentifiers,
-					include_custom_fields: citation.includeCustomFields,
-					encoding: citation.encoding,
-					journal_mode: citation.journalMode,
-					doi_policy: citation.doiPolicy,
-					url_policy: citation.urlPolicy,
-					excluded_fields: citation.excludedFields
-						.split(',')
-						.map((value) => value.trim())
-						.filter(Boolean),
-					sort_by: citation.sortBy,
-					citation_key_formula: citation.citationKeyFormula,
-					citation_key_force_ascii: citation.citationKeyForceAscii
+					...bibliographyExportParameters(input.preferences.citation, input.exportFormat)
 				}
 			},
 			{ suggestedName: bibliographyFilename(input.exportFormat) }
 		);
 		return;
 	}
-	await apiDownload(
-		'/items/documents/archive',
+	await api.download(
+		'/workspaces/{workspace_id}/items/documents/archive',
 		{
 			body: {
 				item_ids: input.itemIds,
@@ -83,21 +69,30 @@ export async function runLibraryBulkDownload(input: LibraryBulkInput): Promise<v
 }
 
 export async function runLibraryBulkMutation(
+	workspaceId: string,
 	input: LibraryBulkInput,
 	queryClient: QueryClient
 ): Promise<void> {
-	await apiRequest('POST', '/items/bulk', {
+	const api = createWorkspaceApi(workspaceId);
+	await api.request('POST', '/workspaces/{workspace_id}/items/bulk', {
 		body: {
 			item_ids: input.itemIds,
 			action: input.action,
-			project_id: input.projectId,
+			project_id: input.projectId || undefined,
 			tag_name: input.tagName,
 			confirmation: input.action === 'delete' ? 'delete' : ''
 		}
 	});
-	const invalidations = [invalidateLibrary(queryClient)];
+	const invalidations = [invalidateLibrary(queryClient, workspaceId)];
 	if (input.action === 'add_project' && input.projectId) {
-		invalidations.push(invalidateProject(queryClient, input.projectId));
+		invalidations.push(invalidateProject(queryClient, workspaceId));
+	}
+	if (input.action === 'delete') {
+		// Deleting Items also removes them from their Projects.
+		invalidations.push(invalidateProject(queryClient, workspaceId));
+	}
+	if (input.action === 'add_tag') {
+		invalidations.push(invalidateTags(queryClient, workspaceId));
 	}
 	await Promise.all(invalidations);
 }
@@ -107,18 +102,27 @@ export type LibraryBulkMutation = {
 	afterMutation?: () => void;
 };
 
-export function libraryBulkMutationOptions(queryClient: QueryClient) {
+export function libraryBulkMutationOptions(workspaceId: string, queryClient: QueryClient) {
 	return mutationOptions({
-		mutationKey: ['library-bulk'],
+		mutationKey: workspaceKeys.mutation(workspaceId, 'library-bulk'),
 		mutationFn: async ({ input }: LibraryBulkMutation) => {
 			if (input.action === 'bibliography' || input.action === 'documents') {
-				await runLibraryBulkDownload(input);
+				await runLibraryBulkDownload(workspaceId, input);
 				return;
 			}
-			await runLibraryBulkMutation(input, queryClient);
+			await runLibraryBulkMutation(workspaceId, input, queryClient);
 		},
 		onSuccess: async (_result, mutation) => {
 			mutation.afterMutation?.();
+		},
+		onError: async (reason, { input }) => {
+			if (
+				input.action === 'add_project' &&
+				reason instanceof ApiError &&
+				reason.code === 'project_lifecycle_error'
+			) {
+				await invalidateProject(queryClient, workspaceId);
+			}
 		}
 	});
 }

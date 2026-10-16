@@ -1,196 +1,58 @@
+"""Suggest record-local contributor names without a shared Author identity."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from inquiro.bibliography import Contributor as BibliographyContributor
-from sqlalchemy import delete, or_, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload
+from sqlalchemy import func, or_, select, true
 
-from quirebase.access.items import require_editable_item_for_mutation
-from quirebase.core.errors import ValidationFailure
-from quirebase.models import Author, Item, ItemAuthor, User, normalize_author_identity
+from quirebase.models import Item
+
+from ._json_queries import array_elements, author_role, contributor_name_parts
+from .catalog import LibraryFilter, _library_query
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
-
-def parse_author_name(name_str: str) -> tuple[str, str | None]:
-    cleaned = " ".join(name_str.split())
-    if not cleaned:
-        raise ValidationFailure("author name cannot be empty")
-    if "," in cleaned:
-        parts = cleaned.split(",", 1)
-        last = parts[0].strip()
-        first = parts[1].strip() or None
-        return last, first
-    parts = cleaned.split()
-    if len(parts) == 1:
-        return parts[0], None
-    return parts[-1], " ".join(parts[:-1])
+    from quirebase.models import User
 
 
-def parse_author_list_string(raw: str | None) -> list[dict[str, str | None]]:
-    """Parse cached names while preserving single-field/literal contributors."""
-
-    if not raw or not raw.strip():
-        return []
-    authors: list[dict[str, str | None]] = []
-    for part in raw.split(";"):
-        cleaned = part.strip()
-        if not cleaned:
-            continue
-        contributor = BibliographyContributor.parse(cleaned)
-        authors.append({
-            "last_name": contributor.family_name,
-            "first_name": contributor.given_name,
-        })
-    return authors
-
-
-async def find_or_create_author(
-    db: AsyncSession, last_name: str, first_name: str | None = None
-) -> Author:
-    last = " ".join(last_name.split())
-    if not last:
-        raise ValidationFailure("author last name is required")
-    first = " ".join(first_name.split()) if first_name else None
-    if len(last) > 120 or (first is not None and len(first) > 120):
-        raise ValidationFailure("author name is too long")
-    identity_key = normalize_author_identity(last, first)
-
-    stmt = select(Author).where(Author.identity_key == identity_key)
-    author = await db.scalar(stmt)
-    if author is None:
-        try:
-            async with db.begin_nested():
-                author = Author(last_name=last, first_name=first, identity_key=identity_key)
-                db.add(author)
-                await db.flush()
-        except IntegrityError:
-            author = await db.scalar(stmt)
-            if author is None:  # pragma: no cover - constraint unrelated to author identity
-                raise
-    return author
-
-
-async def set_item_authors(
+async def search_authors_typeahead(
     db: AsyncSession,
     user: User,
-    item_id: str,
-    authors_data: list[dict],
-    role: str = "author",
-) -> list[ItemAuthor]:
-    identities: set[str] = set()
-    for entry in authors_data:
-        last = str(entry.get("last_name", "")).strip()
-        raw_first = entry.get("first_name")
-        first = str(raw_first).strip() or None if raw_first else None
-        if not last:
-            continue
-        if len(last) > 120 or (first is not None and len(first) > 120):
-            raise ValidationFailure("author name is too long")
-        identity = normalize_author_identity(last, first)
-        if identity in identities:
-            raise ValidationFailure("contributors must be unique within a role")
-        identities.add(identity)
-
-    item = await require_editable_item_for_mutation(db, user, item_id)
-
-    await db.execute(
-        delete(ItemAuthor).where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)
-    )
-    await db.flush()
-
-    links: list[ItemAuthor] = []
-    formatted_names: list[str] = []
-
-    for pos, entry in enumerate(authors_data, start=1):
-        last = entry.get("last_name", "").strip()
-        first = entry.get("first_name")
-        if first:
-            first = first.strip() or None
-        if not last:
-            continue
-        author = await find_or_create_author(db, last_name=last, first_name=first)
-        is_corr = bool(entry.get("is_corresponding", False))
-        link = ItemAuthor(
-            item_id=item_id,
-            author_id=author.id,
-            position=pos,
-            role=role,
-            is_corresponding=is_corr,
-        )
-        db.add(link)
-        links.append(link)
-        formatted_names.append(
-            BibliographyContributor(
-                family_name=last,
-                given_name=first,
-            ).display_name()
-        )
-
-    joined_str = "; ".join(formatted_names) or None
-    if role == "author":
-        item.authors = joined_str
-    elif role == "editor":
-        item.editors = joined_str
-
-    await db.flush()
-    return links
-
-
-async def set_item_authors_from_string(
-    db: AsyncSession,
-    user: User,
-    item: Item,
-    role: str = "author",
-) -> list[ItemAuthor]:
-    raw = item.authors if role == "author" else item.editors
-    parsed_authors = parse_author_list_string(raw)
-    if not parsed_authors:
-        return []
-    return await set_item_authors(db, user, item.id, parsed_authors, role=role)
-
-
-async def get_item_authors(
-    db: AsyncSession, item_id: str, role: str = "author"
-) -> list[ItemAuthor]:
-    return list(
-        (
-            await db.scalars(
-                select(ItemAuthor)
-                .options(selectinload(ItemAuthor.author))
-                .where(ItemAuthor.item_id == item_id, ItemAuthor.role == role)
-                .order_by(ItemAuthor.position)
-            )
-        ).all()
-    )
-
-
-async def search_authors_typeahead(db: AsyncSession, query: str, limit: int = 10) -> list[dict]:
+    workspace_id: UUID,
+    query: str,
+    limit: int = 10,
+    *,
+    project: UUID | None = None,
+) -> list[dict]:
+    items = await _library_query(db, user, workspace_id, LibraryFilter(project=project))
     term = query.strip()
     if not term:
         return []
-    pattern = f"{term}%"
-    stmt = (
-        select(Author)
+    candidates = items.with_only_columns(Item.work).subquery()
+    authors = array_elements(db, candidates.c.work["contributors"], objects=True)
+    family, given = contributor_name_parts(authors.c.value)
+    rows = await db.execute(
+        select(family, given)
+        .select_from(candidates.join(authors, true()))
         .where(
+            author_role(db, authors.c.value),
             or_(
-                Author.last_name.ilike(pattern),
-                Author.first_name.ilike(pattern),
-            )
+                family.istartswith(term, autoescape=True), given.istartswith(term, autoescape=True)
+            ),
         )
-        .order_by(Author.last_name, Author.first_name)
+        .group_by(family, given)
+        .order_by(family, func.coalesce(given, ""))
         .limit(limit)
     )
-    authors = list((await db.scalars(stmt)).all())
     return [
         {
-            "id": a.id,
-            "last_name": a.last_name,
-            "first_name": a.first_name,
-            "full_name": f"{a.last_name}, {a.first_name}" if a.first_name else a.last_name,
+            "last_name": last,
+            "first_name": first,
+            "full_name": ", ".join(part for part in (last, first) if part),
         }
-        for a in authors
+        for last, first in rows
     ]

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest';
-import { hasInlineMath, projectRichText, projectRichTextAsync } from '$lib/design/rich-text';
+import { hasInlineMath, projectRichText, projectRichTextAsync } from '#lib/design/rich-text.js';
 
 describe('Web rich-text projection', () => {
 	it('converts every inline TeX span to allowlisted MathML inside canonical markup', async () => {

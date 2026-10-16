@@ -94,10 +94,10 @@ async def test_arxiv_identifier_uses_the_native_pdf_adapter(source: str) -> None
         assert document.provider == "arxiv"
 
 
-@pytest.mark.parametrize("source", ("W123", "https://openalex.org/W123"))
+@pytest.mark.parametrize("source", ("W1230000000", "https://openalex.org/W1230000000"))
 async def test_openalex_work_uses_the_content_endpoint(source: str) -> None:
     def response(request: httpx2.Request) -> httpx2.Response:
-        assert request.url.path == "/works/W123.pdf"
+        assert request.url.path == "/works/W1230000000.pdf"
         assert request.url.params["api_key"] == "openalex-key"
         return httpx2.Response(200, content=PDF)
 
@@ -106,7 +106,7 @@ async def test_openalex_work_uses_the_content_endpoint(source: str) -> None:
         provider_runtime(settings=settings, transport=httpx2.MockTransport(response)) as runtime,
         await runtime.acquire_document(DocumentRequest(source)) as document,
     ):
-        assert document.filename == "W123.pdf"
+        assert document.filename == "W1230000000.pdf"
         assert document.provider == "openalex"
 
 
@@ -137,7 +137,7 @@ async def test_openalex_doi_resolves_the_work_before_download() -> None:
 async def test_openalex_pdf_requires_its_content_credential() -> None:
     async with provider_runtime(transport=httpx2.MockTransport(lambda _request: None)) as runtime:
         with pytest.raises(ProviderUnavailable, match="INQUIRO_OPENALEX_API_KEY"):
-            await runtime.acquire_document(DocumentRequest("W123", provider="openalex"))
+            await runtime.acquire_document(DocumentRequest("W1230000000", provider="openalex"))
 
 
 @pytest.mark.parametrize("source", ("10.1234/example", "https://doi.org/10.1234/example"))
@@ -177,7 +177,11 @@ async def test_crossref_doi_without_a_pdf_link_is_not_available() -> None:
             await runtime.acquire_document(DocumentRequest("10.1234/example"))
 
 
-async def test_pmc_uses_the_latest_aws_article_version() -> None:
+@pytest.mark.parametrize(
+    ("source", "provider"),
+    [("PMC123", "auto"), ("pmcid:123", "pmcid"), ("123", "pmc")],
+)
+async def test_pmc_uses_the_latest_aws_article_version(source: str, provider: str) -> None:
     def response(request: httpx2.Request) -> httpx2.Response:
         if request.url.params.get("list-type") == "2":
             return httpx2.Response(
@@ -200,7 +204,7 @@ async def test_pmc_uses_the_latest_aws_article_version() -> None:
 
     async with (
         provider_runtime(transport=httpx2.MockTransport(response)) as runtime,
-        await runtime.acquire_document(DocumentRequest("PMC123")) as document,
+        await runtime.acquire_document(DocumentRequest(source, provider=provider)) as document,
     ):
         assert document.filename == "PMC123.2.pdf"
         assert document.provider == "pmc"
@@ -244,9 +248,7 @@ async def test_ieee_downloads_documented_pdf_url_for_open_access_article() -> No
     settings = SimpleNamespace(ieee_api_key="ieee-key")
     async with (
         provider_runtime(settings=settings, transport=httpx2.MockTransport(response)) as runtime,
-        await runtime.acquire_document(
-            DocumentRequest("1234567", provider="article_number")
-        ) as document,
+        await runtime.acquire_document(DocumentRequest("1234567", provider="ieee")) as document,
     ):
         assert document.filename == "1234567.pdf"
         assert document.provider == "ieee"
@@ -272,7 +274,7 @@ async def test_ieee_locked_article_reports_access_denied_without_downloading() -
         settings=settings, transport=httpx2.MockTransport(response)
     ) as runtime:
         with pytest.raises(PdfAccessDenied, match="not openly accessible"):
-            await runtime.acquire_document(DocumentRequest("1234567", provider="article_number"))
+            await runtime.acquire_document(DocumentRequest("1234567", provider="ieee"))
 
 
 @pytest.mark.parametrize(
@@ -284,7 +286,7 @@ async def test_ieee_locked_article_reports_access_denied_without_downloading() -
             SimpleNamespace(openalex_api_key="openalex-key"),
         ),
         (
-            DocumentRequest("1234567", provider="article_number"),
+            DocumentRequest("1234567", provider="ieee"),
             SimpleNamespace(ieee_api_key="ieee-key"),
         ),
     ),

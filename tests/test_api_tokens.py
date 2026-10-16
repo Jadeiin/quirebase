@@ -6,9 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 import pytest
-from app_helpers import create_web_test_app
+from app_helpers import create_web_test_app, json_payload
 from sqlalchemy import select
+from sqlalchemy.exc import StatementError
 from typer.testing import CliRunner
+from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase import cli
 from quirebase.accounts import (
@@ -117,7 +119,7 @@ async def test_revoked_expired_and_inactive_user_tokens_are_rejected(async_db):
 
 
 @pytest.mark.anyio
-async def test_token_expiry_preserves_timezone_offsets_with_aware_and_naive_datetimes(async_db):
+async def test_token_expiry_normalizes_offsets_and_rejects_naive_writes(async_db):
     db = async_db
     from datetime import timezone
 
@@ -153,13 +155,16 @@ async def test_token_expiry_preserves_timezone_offsets_with_aware_and_naive_date
     assert verified.expires_at.tzinfo == UTC
     assert int(verified.expires_at.timestamp()) == int(future_instant.timestamp())
 
-    # Naive datetime (simulating SQLite return)
+    # UTC mappings reject naive writes; SQLite reads are normalized by DateTimeUTC.
     naive_future = datetime.now(UTC) + timedelta(minutes=15)
     record.expires_at = naive_future.replace(tzinfo=None)
-    await db.commit()
-    naive_verified = await verify_api_token(db, grant.raw_token)
-    assert naive_verified is not None
-    assert naive_verified.expires_at.tzinfo == UTC
+    with pytest.raises(StatementError, match="tzinfo is required"):
+        await db.commit()
+    await db.rollback()
+    verified = await verify_api_token(db, grant.raw_token)
+    assert verified is not None
+    assert verified.expires_at.tzinfo == UTC
+    assert int(verified.expires_at.timestamp()) == int(future_instant.timestamp())
 
 
 @pytest.mark.anyio
@@ -209,7 +214,7 @@ async def test_mcp_verifier_redacts_raw_token_and_returns_no_scopes(
 
     assert access is not None
     assert access.token == "<redacted>"
-    assert access.subject == user.id
+    assert access.subject == str(user.id)
     assert access.client_id == f"quirebase-api-token:{grant.token_id}"
     assert access.scopes == []
 
@@ -238,28 +243,32 @@ async def test_mcp_http_accepts_only_a_valid_bearer_api_token(async_db, async_se
     }
 
     async with mcp_client(test_app) as client:
-        assert (await client.post("/mcp/", json=initialize, headers=headers)).status_code == 401
         assert (
-            await client.post(f"/mcp/?token={grant.raw_token}", json=initialize, headers=headers)
+            await client.post("/mcp/", json=json_payload(initialize), headers=headers)
+        ).status_code == 401
+        assert (
+            await client.post(
+                f"/mcp/?token={grant.raw_token}", json=json_payload(initialize), headers=headers
+            )
         ).status_code == 401
         invalid = await client.post(
             "/mcp/",
-            json=initialize,
+            json=json_payload(initialize),
             headers={**headers, "Authorization": "Bearer invalid"},
         )
         accepted = await client.post(
             "/mcp/",
-            json=initialize,
+            json=json_payload(initialize),
             headers={**headers, "Authorization": f"Bearer {grant.raw_token}"},
         )
         called = await client.post(
             "/mcp/",
-            json={
+            json=json_payload({
                 "jsonrpc": "2.0",
                 "id": 2,
                 "method": "tools/call",
                 "params": {"name": "library.search_items", "arguments": {"query": ""}},
-            },
+            }),
             headers={**headers, "Authorization": f"Bearer {grant.raw_token}"},
         )
 
@@ -288,19 +297,21 @@ async def test_mcp_http_rejects_malformed_arguments_without_protocol_audit(
     async with mcp_client(test_app) as client:
         response = await client.post(
             "/mcp/",
-            json={
+            json=json_payload({
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
                 "params": {"name": "library.get_library_item", "arguments": {}},
-            },
+            }),
             headers=headers,
         )
 
     assert response.status_code == 200
     assert response.json()["result"]["isError"] is True
     events = list(
-        (await db.scalars(select(AuditEvent).where(AuditEvent.target_id == grant.token_id))).all()
+        (
+            await db.scalars(select(AuditEvent).where(AuditEvent.target_id == str(grant.token_id)))
+        ).all()
     )
     assert [event.action for event in events] == ["auth.api_token.create"]
 
@@ -320,6 +331,8 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
     db = async_db
     user = User(username=f"host-{host}", password_hash="unused")
     db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
     await db.commit()
     grant = await create_api_token(db, user, "HTTP host", expires_in_days=30)
     monkeypatch.setenv("QUIREBASE_ALLOWED_HOSTS", allowed_hosts)
@@ -353,15 +366,18 @@ async def test_mcp_http_preserves_web_allowed_host_semantics(
 
     try:
         async with mcp_client(test_app) as client:
-            response = await client.post("/mcp/", json=initialize, headers=headers)
+            response = await client.post("/mcp/", json=json_payload(initialize), headers=headers)
             called = await client.post(
                 "/mcp/",
-                json={
+                json=json_payload({
                     "jsonrpc": "2.0",
                     "id": 2,
                     "method": "tools/call",
-                    "params": {"name": "library.search_items", "arguments": {}},
-                },
+                    "params": {
+                        "name": "library.search_items",
+                        "arguments": {"workspace_id": fixture_workspace_id(user)},
+                    },
+                }),
                 headers=headers,
             )
         assert response.status_code == 200
@@ -418,7 +434,7 @@ async def test_mcp_http_validates_browser_origins_with_wildcard_hosts(
 
     try:
         async with mcp_client(test_app) as client:
-            response = await client.post("/mcp/", json=initialize, headers=headers)
+            response = await client.post("/mcp/", json=json_payload(initialize), headers=headers)
         assert response.status_code == expected_status
         if expected_status == 200:
             assert response.headers["access-control-allow-origin"] == origin
@@ -473,7 +489,7 @@ async def test_mcp_http_rejects_untrusted_origin_before_authentication(
         async with mcp_client(test_app) as client:
             response = await client.post(
                 "/mcp/",
-                json={},
+                json=json_payload({}),
                 headers={
                     "Content-Type": "application/json",
                     "Host": "internal.quirebase:8000",
@@ -534,7 +550,7 @@ async def test_member_can_create_view_and_revoke_own_api_token_from_settings(
 
         created = await client.post(
             "/api/v1/account/api-tokens",
-            json={"name": "Desktop MCP", "days": 30},
+            json=json_payload({"name": "Desktop MCP", "days": 30}),
         )
         token = await db.scalar(
             select(ApiToken).where(ApiToken.user_id == user.id, ApiToken.name == "Desktop MCP")

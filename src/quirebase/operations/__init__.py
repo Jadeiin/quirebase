@@ -16,13 +16,17 @@ from quirebase.operations.settings import (
     get_runtime_settings,
     update_runtime_settings,
 )
-from quirebase.operations.workflows import dispatch_maintenance_workflow
+from quirebase.operations.workflows import (
+    dispatch_maintenance_workflow,
+    dispatch_workspace_reindex,
+)
 
 __all__ = [
     "check_health",
     "check_objects",
     "create_backup",
     "dispatch_maintenance_workflow",
+    "dispatch_workspace_reindex",
     "get_backup_artifact",
     "get_runtime_settings",
     "get_system_metrics",

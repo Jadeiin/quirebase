@@ -1,14 +1,14 @@
 import { i18n, type Messages } from '@lingui/core';
 import { derived, writable } from 'svelte/store';
-import { messages as englishMessages } from '$lib/locales/en-US/messages';
-import { messages as chineseMessages } from '$lib/locales/zh-CN/messages';
+import { messages as englishMessages } from '#lib/locales/en-US/messages.js';
+import { messages as chineseMessages } from '#lib/locales/zh-CN/messages.js';
 import {
 	LOCALE_STORAGE_KEY,
 	detectInitialLocale,
 	normalizeLocale,
 	storeLocale,
 	type Locale
-} from '$lib/locale';
+} from '#lib/locale.js';
 
 declare const messageKey: unique symbol;
 export type MessageKey = string & { readonly [messageKey]: true };

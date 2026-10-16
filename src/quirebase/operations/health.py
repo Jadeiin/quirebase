@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
-from quirebase.core.errors import ResourceUnavailable
+from quirebase.access import SystemAction, require_system_action
 from quirebase.core.workflows import durable_operations
 from quirebase.models import FileRevision, Item, User
 
@@ -17,8 +17,9 @@ def check_health() -> dict[str, str]:
 
 
 async def get_system_metrics(db: AsyncSession, user: User) -> str:
-    if user.role != "administrator":
-        raise ResourceUnavailable("administrator role required")
+    await require_system_action(
+        db, user, SystemAction.system_metrics_read, message="administrator role required"
+    )
     workflow_counts = await durable_operations().state_counts()
     lines = [
         f'quirebase_workflows{{state="{state}"}} {count}'

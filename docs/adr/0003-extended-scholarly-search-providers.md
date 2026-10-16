@@ -1,6 +1,8 @@
-# ADR 0003: extended scholarly metadata and Discovery providers (PMC, NASA ADS, IEEE Xplore)
+---
+status: accepted
+---
 
-Status: accepted.
+# ADR 0003: extended scholarly metadata and Discovery providers (PMC, NASA ADS, IEEE Xplore)
 
 Following ADR 0001's requirement that deferred external integrations be bounded, credentialed, and documented through dedicated ADRs, Quirebase adds PubMed Central (PMC), NASA Astrophysics Data System (NASA ADS), and IEEE Xplore to its fixed Provider allowlist for metadata lookup and Discovery (online search).
 
@@ -8,7 +10,7 @@ Following ADR 0001's requirement that deferred external integrations be bounded,
 
 1. **Fixed HTTPS Endpoints**: Connections are restricted strictly to official Provider endpoints (`https://eutils.ncbi.nlm.nih.gov`, `https://api.adsabs.harvard.edu`, `https://ieeexploreapi.ieee.org`). Redirects remain forbidden.
 2. **Credential Gating**: NASA ADS requires `INQUIRO_NASA_ADS_TOKEN` (Bearer token); IEEE Xplore requires `INQUIRO_IEEE_API_KEY` (query parameter); PMC accepts optional `INQUIRO_NCBI_API_KEY` and contact email for rate-limit tiering. Discovery searches against credentialed sources fail cleanly with descriptive configuration errors when keys are absent.
-3. **Identifier Scoping**: NASA ADS uses `bibcode` and IEEE Xplore uses `article_number`. Both require explicit provider specification on metadata lookup to avoid ambiguous collisions in automatic identifier detection.
+3. **Identifier Scoping**: NASA ADS (`nasa_ads`) uses the `bibcode` Identifier Namespace and IEEE Xplore uses `ieee`. IEEE's upstream API field remains `article_number`. Both require explicit provider specification on metadata lookup to avoid ambiguous collisions in automatic identifier detection. PMC uses `pmcid` for document acquisition and offers Discovery, but has no metadata lookup adapter.
 4. **Discovery Query Sanitization**: All provider queries are mapped from structured `SearchClause` filters with dialect-appropriate boolean operators and field prefixes.
 5. **No Direct Import**: Discovery results are candidate summaries only. Selecting a result triggers identifier resolution and enters the mandatory preview-before-commit flow.
 6. **Auditing**: Provider lookups and Discovery searches are recorded as audit events without recording query terms or user search text.

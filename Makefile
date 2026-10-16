@@ -7,7 +7,7 @@ include Makefile.config
         docker-down docker-down-s3 docker-ps docker-logs docker-shell \
         docker-admin docker-doctor \
         build-frontend \
-        check-all lint-all lint-python format-python type-check test-all test-oa \
+        check-all lint-all lint-python lint-architecture format-python type-check test-all test-oa \
         clean clean-install make-p
 
 # --- Development & Operations ---
@@ -79,11 +79,14 @@ build-frontend:
 # --- Code Quality & Verification ---
 check-all: lint-all type-check test-all
 
-lint-all: lint-python
+lint-all: lint-python lint-architecture
 
 lint-python:
 	$(RUFF) check .
 	$(RUFF) format --check .
+
+lint-architecture:
+	$(UV) run lint-imports
 
 format-python:
 	$(RUFF) format .
@@ -100,7 +103,7 @@ test-oa:
 
 # --- Housekeeping ---
 clean:
-	rm -rf .mypy_cache .pytest_cache .ruff_cache .cache
+	rm -rf .mypy_cache .pytest_cache .ruff_cache .import_linter_cache .cache
 	rm -rf $(SRC_DIR)/__pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 

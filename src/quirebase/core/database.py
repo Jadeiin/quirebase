@@ -1,24 +1,47 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
+from advanced_alchemy.base import DefaultBase, UUIDv7AuditBase, UUIDv7Base
+from advanced_alchemy.config import (
+    AlembicAsyncConfig,
+    AsyncSessionConfig,
+    EngineConfig,
+    SQLAlchemyAsyncConfig,
 )
-from sqlalchemy.orm import DeclarativeBase
+from advanced_alchemy.types import GUID
+from sqlalchemy import event
+from sqlalchemy.ext.compiler import compiles
 
 from quirebase.core.config import get_settings
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-class Base(DeclarativeBase):
-    pass
+
+@compiles(GUID, "sqlite")
+def _sqlite_guid_storage(_type, _compiler, **_kwargs) -> str:
+    # BINARY has NUMERIC affinity on SQLite and reflects as NUMERIC(16).
+    # BLOB stores the same UUID bytes and keeps Alembic roundtrips stable.
+    return "BLOB"
+
+
+class Base(DefaultBase):
+    __abstract__ = True
+    __bind_key__ = "quirebase"
+
+
+class EntityBase(UUIDv7AuditBase):
+    __abstract__ = True
+    __bind_key__ = "quirebase"
+
+
+class IdentityBase(UUIDv7Base):
+    __abstract__ = True
+    __bind_key__ = "quirebase"
 
 
 def _libpq_url(database_url: str) -> str:
@@ -58,10 +81,44 @@ def is_sqlite_database_url(url: str | None = None) -> bool:
     return database_url.startswith(("sqlite:///", "sqlite+aiosqlite:///"))
 
 
-def make_async_engine(url: str | None = None) -> AsyncEngine:
+def _make_database_config(url: str | None = None) -> SQLAlchemyAsyncConfig:
     database_url = async_database_url(url)
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    if database_url.startswith("sqlite"):
+    package_dir = Path(__file__).resolve().parents[1]
+    migrations = package_dir / "migrations"
+    if not migrations.is_dir():
+        migrations = package_dir.parents[1] / "migrations"
+    config = SQLAlchemyAsyncConfig(
+        connection_string=database_url,
+        engine_config=EngineConfig(pool_pre_ping=True),
+        metadata=Base.metadata,
+        session_config=AsyncSessionConfig(expire_on_commit=False),
+        alembic_config=AlembicAsyncConfig(
+            script_location=str(migrations),
+            script_config="",
+            version_table_name="alembic_version",
+            compare_type=True,
+        ),
+        enable_file_object_listener=False,
+        # AuditColumns supplies onupdate for ORM and SQL DML; keep explicit overrides.
+        enable_touch_updated_timestamp_listener=False,
+    )
+    engine = config.get_engine()
+    if database_url.startswith("postgresql"):
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def configure_postgres(dbapi_connection, _connection_record):
+            # DateTimeUTC preserves timezone-aware driver results. PostgreSQL must
+            # return UTC independently of the server's configured timezone.
+            previous_autocommit = dbapi_connection.autocommit
+            dbapi_connection.autocommit = True
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("SET TIME ZONE 'UTC'")
+            finally:
+                cursor.close()
+                dbapi_connection.autocommit = previous_autocommit
+
+    elif database_url.startswith("sqlite"):
 
         @event.listens_for(engine.sync_engine, "connect")
         def configure_sqlite(dbapi_connection, _connection_record):
@@ -70,11 +127,23 @@ def make_async_engine(url: str | None = None) -> AsyncEngine:
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
 
-    return engine
+        @event.listens_for(engine.sync_engine, "savepoint")
+        def begin_sqlite_before_savepoint(connection, _name):
+            # Legacy SQLite reads do not begin a physical transaction. A first
+            # savepoint must have an outer BEGIN or its release commits the rows.
+            if not connection.connection.driver_connection.in_transaction:
+                connection.exec_driver_sql("BEGIN")
+
+    return config
 
 
-engine = make_async_engine()
-AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+def make_async_engine(url: str | None = None) -> AsyncEngine:
+    return _make_database_config(url).get_engine()
+
+
+database_config = _make_database_config()
+engine = database_config.get_engine()
+AsyncSessionLocal = cast("async_sessionmaker[AsyncSession]", database_config.create_session_maker())
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

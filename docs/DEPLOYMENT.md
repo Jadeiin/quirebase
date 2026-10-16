@@ -93,6 +93,22 @@ offers an optional `Boto3CredentialProvider` for applications that install boto3
 and deliberately need botocore-compatible credential resolution, but Quirebase
 does not install or select that provider by default.
 
+For direct PDF and Annotation Export downloads, set `QUIREBASE_SIGNED_DOWNLOADS=true`.
+The content API reauthorizes each request and responds with a non-cacheable 307 to a native
+S3 signed GET URL. `QUIREBASE_SIGNED_DOWNLOAD_SECONDS` defaults to 60 and accepts 1–300 seconds;
+export URLs also end before the artifact expires. An issued URL remains usable until its expiry
+if membership is revoked in the meantime. Local storage continues streaming through Quirebase.
+
+Direct delivery requires an S3 endpoint reachable by both the application and the browser.
+Container-only hostnames such as the bundled `http://garage:3900` cannot serve browser downloads;
+keep streaming enabled for that deployment, or configure a public TLS endpoint. The S3 bucket's
+CORS must allow the exact Quirebase application origin, GET/HEAD, Range and conditional request
+headers, and expose `Content-Disposition`, `ETag`, `Content-Length`, `Content-Range` and
+`Accept-Ranges`. Browser download requests use same-origin application credentials and the S3 URL's
+signature. Configure CORS on the object service separately; MCP's origin allowlist does not configure
+it. The application CSP already permits HTTP(S) connections used by its reader. Annotation Export
+objects carry attachment disposition and the filename `annotated.pdf` at upload time.
+
 Before switching an existing installation, copy every physical object below the
 local object directory to the configured bucket/prefix while preserving its key.
 The current release does not perform that external data migration automatically.
