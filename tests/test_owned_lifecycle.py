@@ -621,7 +621,7 @@ async def test_dbos_expiration_retries_io_and_replays_retirement_checkpoint(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("archived", [False, True])
-async def test_owner_deactivation_guard_preserves_status_session_and_audit(
+async def test_owner_deactivation_preserves_ownership_and_revokes_session(
     persistence_sessions, archived
 ):
     async with persistence_sessions() as db:
@@ -641,15 +641,24 @@ async def test_owner_deactivation_guard_preserves_status_session_and_audit(
         db.add(session)
         await db.commit()
         session_id = session.id
-        with pytest.raises(PermissionDenied, match="transfer Workspace ownership"):
-            await update_user_status(db, admin, owner_id, False)
-        assert owner.active
-        assert await db.get(LoginSession, session_id) is not None
+        await update_user_status(db, admin, owner_id, False)
+        assert not owner.active
+        assert await db.get(LoginSession, session_id) is None
+        assert (
+            await db.scalar(
+                select(WorkspaceMember.user_id).where(
+                    WorkspaceMember.workspace_id == workspace_id,
+                    WorkspaceMember.role == WorkspaceRole.owner,
+                    WorkspaceMember.terminated_at.is_(None),
+                )
+            )
+            == owner_id
+        )
         assert (
             await db.scalar(
                 select(AuditEvent.id).where(AuditEvent.action == "admin.user.status_update")
             )
-            is None
+            is not None
         )
 
 

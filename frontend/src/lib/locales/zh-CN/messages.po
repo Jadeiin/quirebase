@@ -842,6 +842,7 @@ msgstr "可编辑"
 #: src/lib/design/PromptDialog.svelte
 #: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Cancel"
@@ -1169,6 +1170,11 @@ msgid "Configure defaults used by Library and Item export actions on this browse
 msgstr "配置此浏览器上文献库与条目导出操作使用的默认值。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Confirm owner reassignment"
+msgstr "确认重新指派所有者"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Connect an HTTP API client"
 msgstr "连接 HTTP API 客户端"
@@ -1366,6 +1372,11 @@ msgid "CSL-JSON"
 msgstr "CSL-JSON"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Current owner: {username}"
+msgstr "当前所有者：{username}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Current password"
 msgstr "当前密码"
@@ -1553,6 +1564,11 @@ msgstr "停用用户"
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Disabled"
 msgstr "已停用"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Disabling a user immediately blocks account access and ends sign-in sessions. Workspace ownership is retained; reassign it separately in Workspace governance."
+msgstr "停用用户会立即阻止账号访问并结束登录会话。工作空间归属仍然保留，可在工作空间治理中单独重新指派。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -2297,11 +2313,6 @@ msgid "Install Citation Style"
 msgstr "安装引文样式"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access."
-msgstr "实例管理员可以冻结或解除工作空间的写入冻结。活跃成员仍可读取和导出；此操作不会授予常规内容访问权限。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Instrument"
 msgstr "仪器"
@@ -2887,6 +2898,11 @@ msgid "Manage user"
 msgstr "管理用户"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Manage Workspace owners and freezes. Reassigning ownership grants access to the selected user; freezing writes preserves active members’ read and export access."
+msgstr "管理工作空间所有者与写入冻结。重新指派会向所选用户授予所有者权限；冻结写入仍允许活跃成员读取和导出。"
+
+#. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
 msgid "Manage workspaces"
 msgstr "管理工作区"
@@ -3116,6 +3132,11 @@ msgstr "NCBI API 密钥"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "新条目元数据"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "New owner"
+msgstr "新所有者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -3530,9 +3551,19 @@ msgid "Owner"
 msgstr "所有者"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Owner account disabled"
+msgstr "所有者账号已停用"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Owner username (exact match)"
 msgstr "所有者用户名（精确匹配）"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Ownership changed. Review the refreshed owner and submit again. Your draft is preserved."
+msgstr "所有权已变更。请核对刷新后的所有者，再次提交。已保留填写内容。"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
@@ -4050,6 +4081,7 @@ msgid "Ready"
 msgstr "已就绪"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason (at least 10 characters)"
 msgstr "原因（至少 10 个字符）"
@@ -4058,6 +4090,12 @@ msgstr "原因（至少 10 个字符）"
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason:"
 msgstr "原因："
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Reassign owner"
+msgstr "重新指派所有者"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
@@ -4555,6 +4593,11 @@ msgid "Search"
 msgstr "搜索"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Search active users"
+msgstr "搜索活跃用户"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Search Citation Styles"
 msgstr "搜索引文样式"
@@ -4738,6 +4781,11 @@ msgstr "显示{label}选项"
 #: src/lib/design/Pagination.svelte
 msgid "Showing {start}–{end} of {total}"
 msgstr "显示第 {start}–{end} 条，共 {total} 条"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Showing up to 20 active users. Type to narrow the search."
+msgstr "最多显示 20 位活跃用户，可输入用户名缩小搜索范围。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
@@ -5088,6 +5136,11 @@ msgstr "请求的文件范围不可用。"
 #: src/lib/api/errors.ts
 msgid "The requested resource was not found."
 msgstr "未找到请求的资源。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "The selected user gains Workspace owner access. The previous owner becomes a Workspace admin. This does not disable the previous account."
+msgstr "所选用户将获得工作空间所有者权限，原所有者将改为工作空间管理员。此操作不会停用原所有者的账号。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

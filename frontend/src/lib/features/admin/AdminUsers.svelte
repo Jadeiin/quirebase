@@ -131,6 +131,11 @@
 						</label>
 						<Button disabled={busy}>{$t('Reset password')}</Button>
 					</form>
+					<p class="text-sm text-surface-600-400">
+						{$t(
+							'Disabling a user immediately blocks account access and ends sign-in sessions. Workspace ownership is retained; reassign it separately in Workspace governance.'
+						)}
+					</p>
 					<div class="flex flex-wrap gap-2 border-t border-surface-300-700 pt-3">
 						<Button disabled={busy} onclick={() => onRevokeUserSessions(user.id)}
 							>{$t('Revoke sessions')}</Button

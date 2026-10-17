@@ -2,6 +2,259 @@ import { chooseSearchOption } from './helpers';
 import { expect, test } from '@playwright/test';
 import { mockSession } from './helpers';
 
+for (const draftWorkspace of ['B', 'A']) {
+	test(`completing Workspace A reassignment preserves the newer Workspace ${draftWorkspace} form`, async ({
+		page
+	}) => {
+		await mockSession(page, 'administrator');
+		let ownerA = 'owner-A';
+		const workspaces = () =>
+			['A', 'B'].map((id) => ({
+				id,
+				name: `Workspace ${id}`,
+				owner_id: id === 'A' ? ownerA : 'owner-B',
+				owner_username: id === 'A' ? ownerA : 'owner-B',
+				owner_active: true,
+				can_reassign_owner: true,
+				state: 'active',
+				governance_frozen_at: null,
+				governance_frozen_by: null
+			}));
+		await page.route('**/api/v1/admin/workspaces', (route) =>
+			route.fulfill({ json: workspaces() })
+		);
+		await page.route('**/api/v1/admin/users?*', (route) =>
+			route.fulfill({
+				json: {
+					items: ['successor-A', 'successor-B'].map((id) => ({
+						id,
+						username: id,
+						role: 'member',
+						active: true,
+						created_at: '2026-01-01T00:00:00Z'
+					})),
+					total: 2,
+					limit: 20,
+					offset: 0
+				}
+			})
+		);
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		await page.route('**/api/v1/admin/workspaces/A/owner', async (route) => {
+			started.resolve();
+			await release.promise;
+			ownerA = 'successor-A';
+			await route.fulfill({ json: workspaces()[0] });
+		});
+		await page.goto('/admin/workspaces');
+		const rowA = page
+			.locator('article')
+			.filter({ has: page.getByText('Workspace A', { exact: true }) });
+		const rowB = page
+			.locator('article')
+			.filter({ has: page.getByText('Workspace B', { exact: true }) });
+		await rowA.getByRole('button', { name: 'Reassign owner', exact: true }).click();
+		await chooseSearchOption(page, 'New owner', 'successor-A');
+		await rowA.getByLabel('Reason (at least 10 characters)').fill('First ownership handover');
+		await rowA.getByRole('button', { name: 'Confirm owner reassignment' }).click();
+		await started.promise;
+		try {
+			await rowB.getByRole('button', { name: 'Reassign owner', exact: true }).click();
+			if (draftWorkspace === 'A')
+				await rowA.getByRole('button', { name: 'Reassign owner', exact: true }).click();
+			const draftRow = draftWorkspace === 'A' ? rowA : rowB;
+			await chooseSearchOption(page, 'New owner', 'successor-B');
+			await draftRow
+				.getByLabel('Reason (at least 10 characters)')
+				.fill('Preserve this independent draft');
+			release.resolve();
+			await expect(rowA.locator('p').first()).toContainText('successor-A');
+			await expect(draftRow.getByRole('combobox', { name: 'New owner' })).toHaveValue(
+				'successor-B'
+			);
+			await expect(draftRow.getByLabel('Reason (at least 10 characters)')).toHaveValue(
+				'Preserve this independent draft'
+			);
+			await draftRow.getByRole('button', { name: 'Cancel', exact: true }).click();
+			await expect(draftRow.getByRole('combobox', { name: 'New owner' })).toHaveCount(0);
+		} finally {
+			release.resolve();
+		}
+	});
+}
+
+test('owner reassignment retains a searched user outside the first page through conflict and submission', async ({
+	page
+}) => {
+	await mockSession(page, 'administrator');
+	let currentOwner = 'owner';
+	const workspace = () => ({
+		id: 'workspace-governance',
+		name: 'Research',
+		owner_id: currentOwner,
+		owner_username: currentOwner,
+		owner_active: true,
+		can_reassign_owner: true,
+		state: 'active',
+		governance_frozen_at: null,
+		governance_frozen_by: null
+	});
+	await page.route('**/api/v1/admin/workspaces', (route) => route.fulfill({ json: [workspace()] }));
+	const user = (id: string) => ({
+		id,
+		username: id,
+		role: 'member',
+		active: true,
+		created_at: '2026-01-01T00:00:00Z'
+	});
+	let searched = false;
+	await page.route('**/api/v1/admin/users?*', (route) => {
+		const search = new URL(route.request().url()).searchParams.get('search');
+		const items = search
+			? [user('zz-successor')]
+			: Array.from({ length: 20 }, (_, index) => user(`user-${index}`));
+		if (search) searched = true;
+		return route.fulfill({ json: { items, total: search ? 1 : 21, limit: 20, offset: 0 } });
+	});
+	const requests: unknown[] = [];
+	await page.route('**/api/v1/admin/workspaces/workspace-governance/owner', (route) => {
+		requests.push(route.request().postDataJSON());
+		if (requests.length === 1) {
+			currentOwner = 'competing-owner';
+			return route.fulfill({
+				status: 409,
+				json: { code: 'version_conflict', message: 'Owner changed' }
+			});
+		}
+		currentOwner = 'zz-successor';
+		return route.fulfill({ json: workspace() });
+	});
+	await page.goto('/admin/workspaces');
+	await page.getByRole('button', { name: 'Reassign owner', exact: true }).click();
+	const input = page.getByRole('combobox', { name: 'New owner' });
+	await input.fill('zz-successor');
+	await page.getByRole('option', { name: 'zz-successor', exact: true }).click();
+	await page
+		.getByLabel('Reason (at least 10 characters)')
+		.first()
+		.fill('Hand over to a searched successor');
+	await expect(input).toHaveValue('zz-successor');
+	await page.getByRole('button', { name: 'Confirm owner reassignment' }).click();
+	await expect(page.getByText(/Ownership changed/)).toBeVisible();
+	await expect(input).toHaveValue('zz-successor');
+	await page.getByRole('button', { name: 'Confirm owner reassignment' }).click();
+	await expect(input).toHaveCount(0);
+	await expect(page.locator('article').getByText(/zz-successor/)).toBeVisible();
+	expect(searched).toBe(true);
+	expect(requests).toEqual([
+		{
+			new_owner_user_id: 'zz-successor',
+			expected_owner_user_id: 'owner',
+			reason: 'Hand over to a searched successor'
+		},
+		{
+			new_owner_user_id: 'zz-successor',
+			expected_owner_user_id: 'competing-owner',
+			reason: 'Hand over to a searched successor'
+		}
+	]);
+});
+
+for (const width of [1280, 390]) {
+	test(`administrator reassigns an inactive owner's Workspace and recovers a conflict at ${width}px`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width, height: 900 });
+		await mockSession(page, 'administrator');
+		let currentOwner = 'disabled-owner';
+		const workspace = () => ({
+			id: 'workspace-governance',
+			name: 'Offboarding research',
+			owner_id: currentOwner,
+			owner_username: currentOwner,
+			owner_active: currentOwner !== 'disabled-owner',
+			can_reassign_owner: true,
+			state: 'archived',
+			governance_frozen_at: null,
+			governance_frozen_by: null
+		});
+		await page.route('**/api/v1/admin/workspaces', (route) =>
+			route.fulfill({ json: [workspace()] })
+		);
+		await page.route('**/api/v1/admin/users?*', (route) => {
+			const params = new URL(route.request().url()).searchParams;
+			expect(params.get('active')).toBe('true');
+			expect(params.get('limit')).toBe('20');
+			return route.fulfill({
+				json: {
+					items: [
+						{
+							id: 'successor',
+							username: 'successor',
+							role: 'member',
+							active: true,
+							created_at: '2026-01-01T00:00:00Z'
+						}
+					],
+					total: 1,
+					limit: 20,
+					offset: 0
+				}
+			});
+		});
+		const requests: unknown[] = [];
+		await page.route('**/api/v1/admin/workspaces/workspace-governance/owner', (route) => {
+			requests.push(route.request().postDataJSON());
+			if (requests.length === 1) {
+				currentOwner = 'competing-owner';
+				return route.fulfill({
+					status: 409,
+					json: { code: 'version_conflict', message: 'Owner changed' }
+				});
+			}
+			currentOwner = 'successor';
+			return route.fulfill({ json: workspace() });
+		});
+		await page.goto('/admin/workspaces');
+		await expect(page.getByText('Owner account disabled', { exact: true })).toBeVisible();
+		await page.getByRole('button', { name: 'Reassign owner', exact: true }).click();
+		await expect(page.getByText(/The selected user gains Workspace owner access/)).toBeVisible();
+		await chooseSearchOption(page, 'New owner', 'successor');
+		const form = page
+			.locator('form')
+			.filter({ has: page.getByRole('heading', { name: 'Reassign owner', exact: true }) });
+		await form
+			.getByLabel('Reason (at least 10 characters)')
+			.fill('Explicit handover after offboarding');
+		await form.getByRole('button', { name: 'Confirm owner reassignment' }).click();
+		await expect(form.getByText(/Ownership changed/)).toBeVisible();
+		await expect(form.getByText('Current owner: competing-owner')).toBeVisible();
+		await expect(form.getByLabel('Reason (at least 10 characters)')).toHaveValue(
+			'Explicit handover after offboarding'
+		);
+		await expect(form.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
+		await form.getByRole('button', { name: 'Confirm owner reassignment' }).click();
+		await expect(form).toHaveCount(0);
+		await expect(page.locator('article').getByText(/successor/)).toBeVisible();
+		expect(requests).toEqual([
+			{
+				new_owner_user_id: 'successor',
+				expected_owner_user_id: 'disabled-owner',
+				reason: 'Explicit handover after offboarding'
+			},
+			{
+				new_owner_user_id: 'successor',
+				expected_owner_user_id: 'competing-owner',
+				reason: 'Explicit handover after offboarding'
+			}
+		]);
+		expect(
+			await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+		).toBe(true);
+	});
+}
+
 test('administration URL selects and loads the users section', async ({ page }) => {
 	await mockSession(page, 'administrator');
 	let usersRequests = 0;
@@ -58,6 +311,70 @@ test('administration URL selects and loads the users section', async ({ page }) 
 	).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Create user', exact: true })).toHaveCount(0);
 	expect(usersRequests).toBe(1);
+});
+
+test('disabling an owner refreshes cached Workspace governance independently of account management', async ({
+	page
+}) => {
+	await mockSession(page, 'administrator');
+	let active = true;
+	await page.route('**/api/v1/admin/workspaces', (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: 'workspace-1',
+					name: 'Offboarding research',
+					owner_id: 'user-2',
+					owner_username: 'curator',
+					owner_active: active,
+					can_reassign_owner: true,
+					state: 'active',
+					governance_frozen_at: null,
+					governance_frozen_by: null
+				}
+			]
+		})
+	);
+	await page.route('**/api/v1/admin/users?*', (route) =>
+		route.fulfill({
+			json: {
+				items: [
+					{
+						id: 'user-2',
+						username: 'curator',
+						role: 'member',
+						active,
+						created_at: '2026-01-01T00:00:00Z'
+					}
+				],
+				total: 1,
+				limit: 20,
+				offset: 0
+			}
+		})
+	);
+	await page.route('**/api/v1/admin/users/user-2/status', (route) => {
+		active = route.request().postDataJSON().active;
+		return route.fulfill({
+			json: {
+				id: 'user-2',
+				username: 'curator',
+				role: 'member',
+				active,
+				created_at: '2026-01-01T00:00:00Z'
+			}
+		});
+	});
+	await page.goto('/admin/workspaces');
+	await expect(page.locator('article').getByText(/curator/)).toBeVisible();
+	await page.getByRole('link', { name: 'Users', exact: true }).click();
+	await page.getByText('Manage user', { exact: true }).click();
+	await expect(page.getByText(/Disabling a user immediately blocks account access/)).toBeVisible();
+	await page.getByRole('button', { name: 'Disable user', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Enable user', exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Workspaces', exact: true }).click();
+	await expect(page.getByText('Owner account disabled', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Reassign owner', exact: true })).toBeVisible();
 });
 
 test('administrators receive the one-time invitation URL after creation', async ({ page }) => {
@@ -371,6 +688,9 @@ test('Workspace governance freezes, unfreezes, and performs reason-bound break-g
 					id: 'workspace-1',
 					name: 'Research',
 					owner_id: 'user-1',
+					owner_username: 'owner',
+					owner_active: true,
+					can_reassign_owner: !frozen,
 					state: 'active',
 					governance_frozen_at: frozen ? '2026-09-01T00:00:00Z' : null,
 					governance_frozen_by: frozen ? 'admin-1' : null
@@ -432,6 +752,9 @@ test('break-glass inspection keeps the Workspace that authorized the displayed r
 					id: 'workspace-1',
 					name: 'Research',
 					owner_id: 'owner-1',
+					owner_username: 'owner-1',
+					owner_active: true,
+					can_reassign_owner: true,
 					state: 'active',
 					governance_frozen_at: null,
 					governance_frozen_by: null
@@ -440,6 +763,9 @@ test('break-glass inspection keeps the Workspace that authorized the displayed r
 					id: 'workspace-2',
 					name: 'Archive',
 					owner_id: 'owner-2',
+					owner_username: 'owner-2',
+					owner_active: true,
+					can_reassign_owner: true,
 					state: 'active',
 					governance_frozen_at: null,
 					governance_frozen_by: null

@@ -8,7 +8,7 @@ from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.service import OffsetPagination, ResultConverter
 from fastapi import APIRouter, Query, status
 
-from quirebase.access import SystemAction, require_system_action
+from quirebase.access import SystemAction, require_system_action, system_action_allowed
 from quirebase.accounts import (
     change_user_role,
     create_invitation,
@@ -26,6 +26,7 @@ from quirebase.audit import query_events
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.core.workflows import durable_operations
 from quirebase.library import get_storage_metrics
+from quirebase.models import User, Workspace
 from quirebase.operations import (
     dispatch_maintenance_workflow,
     get_runtime_settings,
@@ -49,6 +50,7 @@ from quirebase.web.api.admin_schemas import (
     UserRoleRequest,
     UserStatusRequest,
     WorkflowSummaryView,
+    WorkspaceOwnerReassignRequest,
 )
 from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
@@ -57,8 +59,9 @@ from quirebase.workspaces import (
     freeze_workspace_governance,
     list_workspaces_for_governance,
     read_workspace_items_break_glass,
+    reassign_workspace_owner,
     unfreeze_workspace_governance,
-    workspace_owner_ids,
+    workspace_owners,
 )
 
 router = APIRouter(
@@ -305,19 +308,41 @@ async def admin_maintenance(user: ApiUser, db: Database):
 @router.get("/workspaces", response_model=list[AdminWorkspaceView])
 async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceView]:
     workspaces = await list_workspaces_for_governance(db, user)
-    owner_ids = await workspace_owner_ids(db, {workspace.id for workspace in workspaces})
+    owners = await workspace_owners(db, {workspace.id for workspace in workspaces})
     return [
-        AdminWorkspaceView(
-            id=workspace.id,
-            name=workspace.name,
-            owner_id=owner_ids[workspace.id],
-            state=workspace.state,
-            governance_frozen_at=workspace.governance_frozen_at,
-            governance_frozen_by=workspace.governance_frozen_by,
-        )
+        _admin_workspace_view(workspace, owners[workspace.id], user)
         for workspace in workspaces
-        if workspace.id in owner_ids
+        if workspace.id in owners
     ]
+
+
+def _admin_workspace_view(workspace: Workspace, owner: User, actor: User) -> AdminWorkspaceView:
+    return AdminWorkspaceView(
+        id=workspace.id,
+        name=workspace.name,
+        owner_id=owner.id,
+        owner_username=owner.username,
+        owner_active=owner.active,
+        can_reassign_owner=actor.active
+        and workspace.governance_frozen_at is None
+        and system_action_allowed(actor.role, SystemAction.workspaces_governance_reassign_owner),
+        state=workspace.state,
+        governance_frozen_at=workspace.governance_frozen_at,
+        governance_frozen_by=workspace.governance_frozen_by,
+    )
+
+
+@router.post("/workspaces/{workspace_id}/owner", response_model=AdminWorkspaceView)
+async def admin_reassign_workspace_owner(
+    workspace_id: UUID, data: WorkspaceOwnerReassignRequest, user: ApiUser, db: Database
+) -> AdminWorkspaceView:
+    workspace = await reassign_workspace_owner(
+        db, user, workspace_id, data.new_owner_user_id, data.expected_owner_user_id, data.reason
+    )
+    owners = await workspace_owners(db, {workspace_id})
+    if workspace_id not in owners:
+        raise ResourceNotFound("Workspace not found")
+    return _admin_workspace_view(workspace, owners[workspace_id], user)
 
 
 @router.post("/workspaces/{workspace_id}/freeze", response_model=OkView)

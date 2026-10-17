@@ -85,7 +85,7 @@ async def test_database_rejects_inactive_owner_memberships(integrity_sessions, i
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("corruption", ["missing_owner", "removed_membership", "inactive_account"])
+@pytest.mark.parametrize("corruption", ["missing_owner", "removed_membership"])
 async def test_owner_lookup_and_diagnostics_reject_invalid_surviving_roots(
     integrity_sessions, corruption
 ):
@@ -102,7 +102,7 @@ async def test_owner_lookup_and_diagnostics_reject_invalid_surviving_roots(
                 )
                 .values(role=WorkspaceRole.admin)
             )
-        elif corruption == "removed_membership":
+        else:
             membership = await db.scalar(
                 select(WorkspaceMember).where(
                     WorkspaceMember.workspace_id == workspace_id,
@@ -110,8 +110,6 @@ async def test_owner_lookup_and_diagnostics_reject_invalid_surviving_roots(
                 )
             )
             await db.delete(membership)
-        else:
-            owner.active = False
         await db.commit()
         with pytest.raises(RuntimeError, match=str(workspace_id)):
             await workspace_owner_ids(db, {workspace_id})
@@ -202,12 +200,21 @@ async def test_permanent_workspace_delete_retains_audit_project_history(integrit
 
 
 @pytest.mark.anyio
-async def test_doctor_reports_domain_integrity_failures(async_session_factory, monkeypatch):
+@pytest.mark.parametrize("missing_owner", [False, True])
+async def test_doctor_distinguishes_inactive_owner_accounts_from_missing_memberships(
+    async_session_factory, monkeypatch, missing_owner
+):
     from quirebase import cli
 
     async with async_session_factory() as db:
         owner, _, _, _ = await _workspace(db)
         owner.active = False
+        if missing_owner:
+            await db.execute(
+                update(WorkspaceMember)
+                .where(WorkspaceMember.user_id == owner.id)
+                .values(role=WorkspaceRole.admin)
+            )
         await db.commit()
 
     async def verified_workflows():
@@ -217,10 +224,13 @@ async def test_doctor_reports_domain_integrity_failures(async_session_factory, m
     monkeypatch.setattr(cli, "AsyncSessionLocal", async_session_factory)
     monkeypatch.setattr(cli, "verify_durable_operations", verified_workflows)
     result = await anyio.to_thread.run_sync(lambda: CliRunner().invoke(cli.app, ["doctor"]))
-    assert result.exit_code == 1, result.output
+    assert result.exit_code == (1 if missing_owner else 0), result.output
     assert "[ok] object integrity" in result.output
-    assert "[failed] domain Workspace" in result.output
-    assert "active account" in result.output
+    if missing_owner:
+        assert "[failed] domain Workspace" in result.output
+        assert "active owner membership" in result.output
+    else:
+        assert "[ok] domain integrity" in result.output
 
 
 @pytest.mark.anyio

@@ -16,11 +16,12 @@ Workspace commands are implemented by `creation` (including provisioning), `dire
 owns exclusive Workspace-root acquisition and fresh target-member loading; callers recheck
 authority and state while retaining that root lock. Invitation invalidation stays owned by
 `invitations`; `workflows` verifies committed deletion intent before calling Documents for physical
-cleanup. `membership.guard_user_deactivation` owns the surviving-owner predicate and locks current
-membership Workspace roots in stable UUID order after Accounts has locked the target User. It
-rechecks ownership under those locks without committing. Accounts retains account status, session
-revocation, Audit and commit. These are implementation files
-within one Business Module, rather than additional service or repository layers.
+cleanup. `membership.guard_user_deactivation` locks current membership Workspace roots in stable
+UUID order after Accounts has locked the target User. It allows inactive ownership while retaining
+those locks without committing. Accounts retains account
+status, session revocation, Audit and commit. These are implementation files within one Business Module, rather than additional service or repository layers.
+`governance.reassign_workspace_owner` owns explicit reason-bound owner reassignment, User-before-root
+coordination, receiving membership admission/reactivation and the atomic Audit Event.
 
 Frontend principal-role comparisons cannot select behavior; ESLint guards direct comparisons
 and `includes` checks, while backend architecture tests guard direct WorkspaceContext role

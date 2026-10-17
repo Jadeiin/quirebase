@@ -4,6 +4,8 @@
 	import { apiRequest } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Button from '#lib/design/Button.svelte';
+	import Badge from '#lib/design/Badge.svelte';
+	import WorkspaceOwnerReassign from '#lib/features/admin/WorkspaceOwnerReassign.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import { adminWorkspacesQuery } from '#lib/features/admin/queries.js';
@@ -13,16 +15,30 @@
 	import { domainLabel } from '#lib/domain-labels.js';
 	import type { components } from '#lib/api/schema.js';
 
+	type ReassignmentForm = { workspaceId: string };
+
 	const { filters } = getAdminFilters();
 	const queryClient = useQueryClient();
 	const workspaces = createQuery(() => adminWorkspacesQuery(filters()));
 	let error = $state('');
 	let busyId = $state('');
+	let reassignment = $state<ReassignmentForm | null>(null);
 	let targetId = $state('');
 	let reason = $state('');
 	let inspection = $state<components['schemas']['ItemSearchView'][] | undefined>();
 	let inspectionReason = $state('');
 	let inspectionWorkspaceId = $state('');
+
+	function toggleReassignment(workspaceId: string) {
+		reassignment = reassignment?.workspaceId === workspaceId ? null : { workspaceId };
+	}
+
+	function closeReassignment(form: ReassignmentForm) {
+		return () => {
+			// A completed request may belong to an already replaced form, even for the same Workspace.
+			if (reassignment === form) reassignment = null;
+		};
+	}
 
 	async function govern(workspaceId: string, operation: 'freeze' | 'unfreeze') {
 		busyId = workspaceId;
@@ -75,7 +91,7 @@
 		<h2 class="text-2xl font-bold">{$t('Workspace governance')}</h2>
 		<p class="text-sm text-surface-600-400">
 			{$t(
-				'Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access.'
+				'Manage Workspace owners and freezes. Reassigning ownership grants access to the selected user; freezing writes preserves active members’ read and export access.'
 			)}
 		</p>
 	</header>
@@ -86,16 +102,26 @@
 			{#each workspaces.data as workspace (workspace.id)}<article
 					class="flex flex-wrap items-center justify-between gap-3 rounded-container border border-surface-300-700 p-4"
 				>
-					<div>
+					<div class="min-w-0">
 						<strong>{workspace.name}</strong>
-						<p class="text-xs text-surface-600-400">
+						<p class="text-xs break-all text-surface-600-400">
 							{workspace.id} · {$t(domainLabel(workspace.state))} · {$t('owner')}
-							{workspace.owner_id}{workspace.governance_frozen_at
+							{workspace.owner_username}{workspace.governance_frozen_at
 								? ` · ${$t('read-only freeze')} ${new Date(workspace.governance_frozen_at).toLocaleString()}`
 								: ''}
 						</p>
+						{#if !workspace.owner_active}<Badge variant="warning"
+								>{$t('Owner account disabled')}</Badge
+							>{/if}
 					</div>
-					<div class="flex gap-2">
+					<div class="flex flex-wrap gap-2">
+						{#if workspace.can_reassign_owner}<Button
+								size="sm"
+								disabled={busyId !== ''}
+								onclick={() => toggleReassignment(workspace.id)}
+								aria-expanded={reassignment?.workspaceId === workspace.id}
+								>{$t('Reassign owner')}</Button
+							>{/if}
 						{#if workspace.governance_frozen_at}<Button
 								size="sm"
 								disabled={busyId !== ''}
@@ -108,6 +134,9 @@
 								onclick={() => void govern(workspace.id, 'freeze')}>{$t('Freeze writes')}</Button
 							>{/if}
 					</div>
+					{#if reassignment && reassignment.workspaceId === workspace.id}
+						<WorkspaceOwnerReassign {workspace} onClose={closeReassignment(reassignment)} />
+					{/if}
 				</article>{/each}
 		</div>{:else}<p>{$t('No workspaces.')}</p>{/if}
 	<section

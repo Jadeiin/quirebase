@@ -94,7 +94,6 @@ def _workspace_owners_query():
         .where(
             *current_owner,
             WorkspaceMember.state == WorkspaceMemberState.active,
-            User.active.is_(True),
             owner_count == 1,
         )
         .correlate(Workspace)
@@ -104,7 +103,7 @@ def _workspace_owners_query():
 
 
 async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[UUID]) -> dict[UUID, UUID]:
-    """Return owners of surviving Workspaces, validating membership and account state."""
+    """Return structural owners; an inactive User retains its ownership assignment."""
     if not workspace_ids:
         return {}
     rows = await db.execute(_workspace_owners_query().where(Workspace.id.in_(workspace_ids)))
@@ -120,10 +119,24 @@ async def workspace_owner_ids(db: AsyncSession, workspace_ids: set[UUID]) -> dic
 async def check_workspace_integrity(db: AsyncSession) -> list[str]:
     rows = await db.execute(_workspace_owners_query().order_by(Workspace.id))
     return [
-        f"Workspace {workspace_id} must have exactly one current active owner with an active account"
+        f"Workspace {workspace_id} must have exactly one current active owner membership"
         for workspace_id, owner_id in rows
         if owner_id is None
     ]
+
+
+async def workspace_owners(db: AsyncSession, workspace_ids: set[UUID]) -> dict[UUID, User]:
+    """Project owner identity and account status from the structural owner query."""
+    if not workspace_ids:
+        return {}
+    owners = _workspace_owners_query().where(Workspace.id.in_(workspace_ids)).subquery()
+    rows = (
+        await db.execute(select(owners.c.id, User).outerjoin(User, User.id == owners.c.owner_id))
+    ).all()
+    missing = {workspace_id for workspace_id, user in rows if user is None}
+    if missing:
+        raise RuntimeError(f"Workspace owner invariant failed for: {sorted(missing)}")
+    return {workspace_id: user for workspace_id, user in rows if user is not None}
 
 
 async def list_workspace_members(

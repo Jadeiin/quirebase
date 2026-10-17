@@ -31,7 +31,9 @@ and database invariants are defined in the
 
 ## Consequences
 
-- All Workspaces use the same domain rules and have exactly one active owner. User provisioning
+- All Workspaces use the same domain rules and have exactly one current active owner membership.
+  [ADR 0016](0016-account-deactivation-and-owner-reassignment.md) separates that assignment from
+  account activity and adds explicit, audited administrator reassignment. User provisioning
   creates an ordinary Workspace; a single-Workspace UI may de-emphasize the selector.
 - Active Workspace membership and the Access Module's resource-action policy govern canonical
   data. Project participation controls the working context and managed-Project discovery without

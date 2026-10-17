@@ -138,10 +138,11 @@ the administrator an implicit Workspace member or grant content access. An admin
 normal membership, or explicit reason-bound, audited, read-only break-glass access, when content
 access is needed. The current implementation provides one-shot inspection requests.
 
-Instance governance provides administrative freeze/unfreeze and reason-bound read-only inspection.
-It does not repair missing or inactive Workspace ownership. Integrity checks diagnose those
-conditions; an owner-repair command would require a separate, narrowly scoped, audited decision
-and would not grant ordinary content access.
+Instance governance provides administrative freeze/unfreeze, reason-bound read-only inspection and
+explicit owner reassignment. An inactive owner account remains a valid structural assignment.
+Reassignment grants the selected active User owner access; it grants no implicit membership to the
+executing administrator. Missing or invalid owner memberships remain integrity failures, rather than
+being repaired implicitly. See [account deactivation and owner reassignment](account-deactivation-and-owner-reassignment.md).
 
 ### User provisioning, Workspace creation and membership
 
@@ -163,7 +164,7 @@ Instance registration and Workspace admission are separate operations:
 - A valid membership has state `active` or `suspended`. Removal terminates the membership and is
   retained as an audit/history record, not as an ACL-satisfying `removed` state.
 - Workspace owner/admin manages ordinary membership. An instance administrator may perform only
-  coarse lifecycle governance such as freeze/unfreeze, not ordinary content access.
+  explicit lifecycle governance, including reason-bound owner reassignment, without implicit content access.
 - The active member directory exposes Workspace roles as collaboration metadata, requiring both
   an active User account and an active current Workspace membership. The governance view retains
   current memberships for inactive accounts and adds membership identifiers, state, join time,
@@ -173,6 +174,9 @@ Instance registration and Workspace admission are separate operations:
 - Ownership transfer is required before an owner can leave, be suspended or be removed. Each
   surviving Workspace has exactly one active authoritative owner membership. Transfer promotes
   the new owner to `owner` and changes the previous owner to `admin` in the same transaction.
+  Account deactivation requires no transfer and preserves that assignment while removing effective
+  authority. Administrator reassignment is a distinct, reason-bound operation with an expected-owner
+  precondition and may admit or reactivate its receiving active User.
 
 Additional Workspace creation is controlled by instance-level `workspace_creation_policy`:
 
@@ -332,6 +336,9 @@ period (30 days by default). The deletion transaction removes the Workspace root
 its owned rows; a durable, reference-aware cleanup removes its stored objects. Audit Events keep
 the deleted Workspace and Project IDs as historical metadata, without live-resource foreign keys.
 
+Explicit administrator owner reassignment is permitted on an unfrozen archived Workspace without
+restoring it. Ordinary archived membership mutations retain their restrictions.
+
 Archived Workspace governance member and invitation lists remain readable to owners/admins;
 their mutations remain disabled.
 
@@ -441,8 +448,9 @@ one current membership per Workspace/User pair. Current means `terminated_at IS 
 suspended memberships. A row CHECK requires every owner membership to be active and non-terminated;
 the database does not enforce the existence of an owner or the owner's account activity.
 Service transactions preserve exactly one active owner for every surviving Workspace through
-provisioning, atomic ownership transfer and prohibitions on owner suspension, termination and account
-deactivation; `workspace_owner_ids()` validates owner membership and account activity on reads in
+provisioning, atomic ownership transfer/reassignment and prohibitions on owner suspension and
+termination. Account deactivation preserves the ownership assignment; `workspace_owner_ids()`
+validates structural owner membership independently of account activity on reads in
 the same snapshot as Workspace existence. A concurrently deleted root is omitted, while an invalid
 surviving root is an integrity failure. `doctor` diagnoses missing or invalid owners and Project
 participation drift: Workspace-mode Projects must have no ProjectParticipant rows, and each explicit

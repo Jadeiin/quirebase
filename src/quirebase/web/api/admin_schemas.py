@@ -25,10 +25,19 @@ class BreakGlassReadRequest(BaseModel):
     reason: str = Field(min_length=10, max_length=1000)
 
 
+class WorkspaceOwnerReassignRequest(BaseModel):
+    new_owner_user_id: UUID
+    expected_owner_user_id: UUID
+    reason: str = Field(min_length=10, max_length=1000)
+
+
 class AdminWorkspaceView(BaseModel):
     id: UUID
     name: str
     owner_id: UUID
+    owner_username: str
+    owner_active: bool
+    can_reassign_owner: bool
     state: WorkspaceState
     governance_frozen_at: datetime | None = None
     governance_frozen_by: UUID | None = None

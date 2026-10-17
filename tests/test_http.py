@@ -134,7 +134,8 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
     else:
         url = f"/api/v1/workspaces/{workspace_id}" if detail else "/api/v1/workspaces"
         api = workspace_api
-    owner_lookup = api.workspace_owner_ids
+    lookup_name = "workspace_owners" if surface == "admin" else "workspace_owner_ids"
+    owner_lookup = getattr(api, lookup_name)
 
     async def delete_before_owner_lookup(db, workspace_ids):
         assert workspace_id in workspace_ids
@@ -153,7 +154,7 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
                 view["id"]
                 for view in (before.json()["items"] if surface == "list" else before.json())
             } == set(map(str, {workspace_id, retained.id}))
-        monkeypatch.setattr(api, "workspace_owner_ids", delete_before_owner_lookup)
+        monkeypatch.setattr(api, lookup_name, delete_before_owner_lookup)
         response = await client.get(url)
         if detail:
             assert response.status_code == 404

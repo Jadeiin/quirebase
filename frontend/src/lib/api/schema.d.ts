@@ -539,6 +539,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/admin/workspaces/{workspace_id}/owner': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Reassign Workspace Owner */
+		post: operations['admin.admin_reassign_workspace_owner'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/admin/workspaces/{workspace_id}/freeze': {
 		parameters: {
 			query?: never;
@@ -2426,6 +2443,12 @@ export interface components {
 			 * Format: uuid
 			 */
 			owner_id: string;
+			/** Owner Username */
+			owner_username: string;
+			/** Owner Active */
+			owner_active: boolean;
+			/** Can Reassign Owner */
+			can_reassign_owner: boolean;
 			state: components['schemas']['WorkspaceState'];
 			/** Governance Frozen At */
 			governance_frozen_at?: string | null;
@@ -5607,6 +5630,7 @@ export interface components {
 			| 'workspace_invitation.accept'
 			| 'workspace_governance.read'
 			| 'workspace_governance.freeze'
+			| 'workspace_governance.reassign_owner'
 			| 'workspace_governance.unfreeze'
 			| 'workspace_break_glass.read';
 		/**
@@ -6125,6 +6149,21 @@ export interface components {
 		 * @enum {string}
 		 */
 		WorkspaceMemberState: 'active' | 'suspended';
+		/** WorkspaceOwnerReassignRequest */
+		WorkspaceOwnerReassignRequest: {
+			/**
+			 * New Owner User Id
+			 * Format: uuid
+			 */
+			new_owner_user_id: string;
+			/**
+			 * Expected Owner User Id
+			 * Format: uuid
+			 */
+			expected_owner_user_id: string;
+			/** Reason */
+			reason: string;
+		};
 		/**
 		 * WorkspaceRole
 		 * @enum {string}
@@ -7753,6 +7792,50 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AdminWorkspaceView'][];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_reassign_workspace_owner': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkspaceOwnerReassignRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AdminWorkspaceView'];
 				};
 			};
 			/** @description Unprocessable Content */

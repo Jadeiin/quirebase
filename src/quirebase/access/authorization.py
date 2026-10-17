@@ -72,6 +72,7 @@ class SystemAction(ResourceActionKey):
     workspace_invitations_accept = "workspace_invitation.accept"
     workspaces_governance_read = "workspace_governance.read"
     workspaces_governance_freeze = "workspace_governance.freeze"
+    workspaces_governance_reassign_owner = "workspace_governance.reassign_owner"
     workspaces_governance_unfreeze = "workspace_governance.unfreeze"
     workspaces_break_glass_read = "workspace_break_glass.read"
 

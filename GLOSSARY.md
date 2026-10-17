@@ -49,9 +49,15 @@ active members' content reads, downloads and exports. Unfreezing preserves the u
 active or archived state. It neither suspends members nor grants the administrator content access.
 
 **Workspace Member**:
-A User with an active or suspended membership in a Workspace. An active membership is required
-for Workspace data access; suspension and termination remove effective access without changing
+A User with an active or suspended membership in a Workspace. An active User and active membership
+are required for Workspace data access; suspension and termination remove effective access without changing
 the provenance of Workspace-owned resources.
+
+**Workspace Owner**:
+The User assigned to a Workspace's unique current active owner membership. The assignment survives
+User deactivation; effective access still requires an active User. An instance administrator may
+explicitly reassign ownership with a recorded reason, granting the selected active User owner access
+and retaining the previous owner as a Workspace admin.
 
 **Workspace Role**:
 The only persistent resource role axis in Quirebase: `owner`, `admin`, `editor`, `reviewer` or
@@ -241,7 +247,8 @@ Container, contributor and related-resource identifiers do not identify the Work
 _Avoid_: Identifier claim, workspace-unique bibliographic identity
 
 **User**:
-An authenticated human account with an assigned System Role.
+A human account with an assigned System Role. Deactivation blocks authentication and effective
+authority while preserving Workspace ownership, memberships and provenance.
 _Avoid_: Account, Profile
 
 **System Role**:

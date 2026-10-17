@@ -1351,7 +1351,7 @@ async def test_ownership_transfer_serializes_with_target_deactivation(postgres_s
         outcomes = await asyncio.wait_for(
             asyncio.gather(transfer_task, deactivation_task, return_exceptions=True), timeout=5
         )
-    assert outcomes == ["transferred", "denied"]
+    assert outcomes == ["transferred", "deactivated"]
     async with postgres_sessions() as db:
         workspace = await db.get(Workspace, workspace_id)
         target = await db.get(User, target_id)
@@ -1367,7 +1367,7 @@ async def test_ownership_transfer_serializes_with_target_deactivation(postgres_s
             )
             == target.id
         )
-        assert target.active is True
+        assert target.active is False
 
 
 @pytest.mark.concurrency_case("actor-revocation")

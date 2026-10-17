@@ -842,6 +842,7 @@ msgstr "Can edit"
 #: src/lib/design/PromptDialog.svelte
 #: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Cancel"
@@ -1169,6 +1170,11 @@ msgid "Configure defaults used by Library and Item export actions on this browse
 msgstr "Configure defaults used by Library and Item export actions on this browser."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Confirm owner reassignment"
+msgstr "Confirm owner reassignment"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Connect an HTTP API client"
 msgstr "Connect an HTTP API client"
@@ -1366,6 +1372,11 @@ msgid "CSL-JSON"
 msgstr "CSL-JSON"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Current owner: {username}"
+msgstr "Current owner: {username}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Current password"
 msgstr "Current password"
@@ -1553,6 +1564,11 @@ msgstr "Disable user"
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Disabled"
 msgstr "Disabled"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Disabling a user immediately blocks account access and ends sign-in sessions. Workspace ownership is retained; reassign it separately in Workspace governance."
+msgstr "Disabling a user immediately blocks account access and ends sign-in sessions. Workspace ownership is retained; reassign it separately in Workspace governance."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -2297,11 +2313,6 @@ msgid "Install Citation Style"
 msgstr "Install Citation Style"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access."
-msgstr "Instance administrators can freeze or unfreeze Workspace writes. Active members retain read and export access. This does not grant ordinary content access."
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Instrument"
 msgstr "Instrument"
@@ -2887,6 +2898,11 @@ msgid "Manage user"
 msgstr "Manage user"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Manage Workspace owners and freezes. Reassigning ownership grants access to the selected user; freezing writes preserves active members’ read and export access."
+msgstr "Manage Workspace owners and freezes. Reassigning ownership grants access to the selected user; freezing writes preserves active members’ read and export access."
+
+#. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
 msgid "Manage workspaces"
 msgstr "Manage workspaces"
@@ -3116,6 +3132,11 @@ msgstr "NCBI API key"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "New Item metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "New owner"
+msgstr "New owner"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -3530,9 +3551,19 @@ msgid "Owner"
 msgstr "Owner"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Owner account disabled"
+msgstr "Owner account disabled"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Owner username (exact match)"
 msgstr "Owner username (exact match)"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Ownership changed. Review the refreshed owner and submit again. Your draft is preserved."
+msgstr "Ownership changed. Review the refreshed owner and submit again. Your draft is preserved."
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
@@ -4050,6 +4081,7 @@ msgid "Ready"
 msgstr "Ready"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason (at least 10 characters)"
 msgstr "Reason (at least 10 characters)"
@@ -4058,6 +4090,12 @@ msgstr "Reason (at least 10 characters)"
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason:"
 msgstr "Reason:"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Reassign owner"
+msgstr "Reassign owner"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
@@ -4555,6 +4593,11 @@ msgid "Search"
 msgstr "Search"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Search active users"
+msgstr "Search active users"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Search Citation Styles"
 msgstr "Search Citation Styles"
@@ -4738,6 +4781,11 @@ msgstr "Show options for {label}"
 #: src/lib/design/Pagination.svelte
 msgid "Showing {start}–{end} of {total}"
 msgstr "Showing {start}–{end} of {total}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Showing up to 20 active users. Type to narrow the search."
+msgstr "Showing up to 20 active users. Type to narrow the search."
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
@@ -5088,6 +5136,11 @@ msgstr "The requested file range is not available."
 #: src/lib/api/errors.ts
 msgid "The requested resource was not found."
 msgstr "The requested resource was not found."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "The selected user gains Workspace owner access. The previous owner becomes a Workspace admin. This does not disable the previous account."
+msgstr "The selected user gains Workspace owner access. The previous owner becomes a Workspace admin. This does not disable the previous account."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

@@ -199,6 +199,78 @@ async def test_admin_workspace_governance_directory(async_db, tmp_path, monkeypa
 
 
 @pytest.mark.anyio
+async def test_administrator_can_disable_owner_then_explicitly_reassign_workspace(
+    async_db, tmp_path, monkeypatch
+):
+    from quirebase.models import WorkspaceMember
+
+    client, admin, _ = await admin_client(async_db, tmp_path, monkeypatch)
+    admin_id = admin.id
+    try:
+        created = await client.post(
+            "/api/v1/admin/users",
+            json={
+                "username": "offboarding-owner",
+                "password": "password-123456",
+            },
+        )
+        owner_id = created.json()["id"]
+        disabled = await client.put(
+            f"/api/v1/admin/users/{owner_id}/status", json={"active": False}
+        )
+        assert disabled.status_code == 200 and disabled.json()["active"] is False
+        directory = (await client.get("/api/v1/admin/workspaces")).json()
+        workspace = next(row for row in directory if row["owner_id"] == owner_id)
+        assert workspace["owner_username"] == "offboarding-owner"
+        assert workspace["owner_active"] is False and workspace["can_reassign_owner"] is True
+        path = f"/api/v1/admin/workspaces/{workspace['id']}/owner"
+        payload = {
+            "new_owner_user_id": str(admin_id),
+            "expected_owner_user_id": owner_id,
+            "reason": "Explicit handover after offboarding",
+        }
+        updated = await client.post(path, json=payload)
+        assert updated.status_code == 200
+        assert updated.json()["owner_id"] == str(admin_id)
+        assert updated.json()["owner_active"] is True
+        assert (await client.post(path, json=payload)).status_code == 409
+        await async_db.rollback()
+        assert (
+            await async_db.scalar(
+                select(WorkspaceMember.id).where(
+                    WorkspaceMember.workspace_id == workspace["id"],
+                    WorkspaceMember.user_id == admin_id,
+                )
+            )
+            is not None
+        )
+        assert (await client.post(path, json={**payload, "reason": "short"})).status_code == 422
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_workspace_reassignment_is_hidden_from_non_administrators(
+    async_db, tmp_path, monkeypatch
+):
+    from uuid import uuid4
+
+    client, _member, _login = await member_client(async_db, tmp_path, monkeypatch)
+    try:
+        response = await client.post(
+            f"/api/v1/admin/workspaces/{uuid4()}/owner",
+            json={
+                "new_owner_user_id": str(uuid4()),
+                "expected_owner_user_id": str(uuid4()),
+                "reason": "Attempt a forbidden reassignment",
+            },
+        )
+        assert response.status_code == 404
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
 async def test_admin_workflow_filter_rejects_unknown_state(async_db, tmp_path, monkeypatch):
     client, _user, _login = await admin_client(async_db, tmp_path, monkeypatch)
     try:

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createMutation, createQuery } from '@tanstack/svelte-query';
+	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import type { components } from '#lib/api/schema.js';
 	import { apiRequest } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -18,7 +18,16 @@
 	let notice = $state<MessageKey | null>(null);
 	const { filters, setPage, setPageSize } = getAdminFilters();
 	const users = createQuery(() => adminUsersQuery(filters(), true));
-	const adminMutation = createMutation(() => adminMutationOptions('users', () => users.refetch()));
+	const queryClient = useQueryClient();
+	const adminMutation = createMutation(() =>
+		adminMutationOptions('users', async () => {
+			const { invalidateWorkspaces } = await import('#lib/query/invalidation.js');
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ['admin'] }),
+				invalidateWorkspaces(queryClient)
+			]);
+		})
+	);
 	const busy = $derived(adminMutation.isPending);
 	const pageCount = $derived(
 		users.data?.total && users.data.limit

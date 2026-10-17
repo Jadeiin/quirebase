@@ -9,11 +9,13 @@ from quirebase.workspaces.directory import (
     list_workspace_members,
     list_workspaces,
     workspace_owner_ids,
+    workspace_owners,
 )
 from quirebase.workspaces.governance import (
     freeze_workspace_governance,
     list_workspaces_for_governance,
     read_workspace_items_break_glass,
+    reassign_workspace_owner,
     unfreeze_workspace_governance,
 )
 from quirebase.workspaces.invitations import (
@@ -58,6 +60,7 @@ __all__ = [
     "provision_initial_workspace",
     "reactivate_workspace_member",
     "read_workspace_items_break_glass",
+    "reassign_workspace_owner",
     "restore_workspace",
     "revoke_workspace_invitation",
     "set_workspace_member_role",
@@ -68,4 +71,5 @@ __all__ = [
     "update_workspace",
     "workspace_creation_options",
     "workspace_owner_ids",
+    "workspace_owners",
 ]

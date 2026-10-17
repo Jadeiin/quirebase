@@ -126,4 +126,5 @@ p, system:administrator, workspace, create, active, admins_only
 p, system:administrator, workspace_break_glass, read, active, any
 p, system:administrator, workspace_governance, freeze, active, any
 p, system:administrator, workspace_governance, read, active, any
+p, system:administrator, workspace_governance, reassign_owner, active, any
 p, system:administrator, workspace_governance, unfreeze, active, any

@@ -125,28 +125,28 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 }
 
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	// Includes the Invitation route entry and shared account-management translations.
-	raw: 685000,
+	// Includes shared Invitation and owner-governance navigation and translations.
+	raw: 688000,
 	gzip: 192000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
 	raw: 921000,
 	// Includes the shared, localized destructive-detachment warning.
-	gzip: 259000
+	gzip: 259500
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination styles and Invitation lifecycle translations.
-	raw: 815000,
-	gzip: 230000
+	raw: 818000,
+	gzip: 230500
 });
 enforce('Account route', routeBundle('/(app)/account'), {
-	raw: 799000,
+	raw: 802000,
 	gzip: 226000
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 	// Includes shared pagination styles and account-management translations.
-	raw: 822000,
-	gzip: 235500
+	raw: 825000,
+	gzip: 236000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
 	raw: 829000,
@@ -182,7 +182,7 @@ enforce(
 	{
 		raw: 827000,
 		// Organize now includes the destructive-detachment confirmation dialog.
-		gzip: 235000
+		gzip: 235500
 	}
 );
 enforce(
@@ -190,8 +190,8 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
 		// Includes shared pagination styles and account-management translations.
-		raw: 825000,
-		gzip: 236500
+		raw: 828000,
+		gzip: 237000
 	}
 );
 enforce(
@@ -199,47 +199,48 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
 		// Includes shared pagination styles and account-management translations.
-		raw: 812000,
+		raw: 815000,
 		gzip: 234000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
 	// Includes Skeleton pagination and the separate Invitation navigation entry.
-	raw: 711000,
+	raw: 714000,
 	gzip: 201000
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
-	// Includes on-demand User creation and expandable role and sign-in controls.
-	raw: 722000,
+	// Includes account containment guidance and expandable role and sign-in controls.
+	raw: 725000,
 	gzip: 205000
 });
 enforce('Admin invitations route', routeBundle('/(app)/admin/invitations'), {
 	// Owns invitation creation, history, status filtering and one pagination control.
-	raw: 722000,
+	raw: 725000,
 	gzip: 205000
 });
 enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
-	raw: 763000,
-	gzip: 216000
+	// Includes owner reassignment, bounded User search, conflict recovery and scoped completion.
+	raw: 766000,
+	gzip: 216500
 });
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 711000,
+	raw: 714000,
 	gzip: 202000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
 	// Includes Skeleton pagination and the separate Invitation navigation entry.
-	raw: 710000,
+	raw: 713000,
 	gzip: 201000
 });
 enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 700000,
+	raw: 703000,
 	gzip: 200000
 });
 enforce('Admin maintenance route', routeBundle('/(app)/admin/maintenance'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 700000,
+	raw: 703000,
 	gzip: 200000
 });
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
@@ -254,6 +255,6 @@ const openedEditor = mergeGraphs(
 );
 enforce('Metadata editor when open', bundleSize(graphFiles(openedEditor)), {
 	// Includes shared pagination styles and account-management translations.
-	raw: 1055000,
+	raw: 1058000,
 	gzip: 307000
 });
