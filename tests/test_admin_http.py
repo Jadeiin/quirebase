@@ -15,7 +15,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
 from quirebase.core.workflows import WorkflowSummary
-from quirebase.models import AuditEvent, LoginSession, SystemSetting, User
+from quirebase.models import AuditEvent, Invitation, LoginSession, SystemSetting, User
 from quirebase.web.app import app
 
 
@@ -104,6 +104,89 @@ async def test_admin_pages_accessible_by_admin(async_db, tmp_path, monkeypatch):
         assert res.status_code == 200
         assert res.headers["content-type"].startswith("application/json")
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_invitation_lifecycle_and_paginated_history(async_db, tmp_path, monkeypatch):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    try:
+        created = await client.post("/api/v1/admin/invitations", json={"username": "http-invitee"})
+        assert created.status_code == 201
+        original = created.json()
+        reissued = await client.post(f"/api/v1/admin/invitations/{original['id']}/reissue")
+        assert reissued.status_code == 201
+        replacement = reissued.json()
+        assert replacement["id"] != original["id"]
+        assert replacement["token"] != original["token"]
+        assert (await client.get(f"/api/v1/invitations/{original['token']}")).status_code == 404
+        assert (await client.get(f"/api/v1/invitations/{replacement['token']}")).status_code == 200
+
+        page = (await client.get("/api/v1/admin/invitations?limit=1&offset=1")).json()
+        assert page["total"] == 2 and page["limit"] == 1 and page["offset"] == 1
+        assert page["items"][0]["id"] == original["id"]
+        assert page["items"][0]["state"] == "revoked"
+        assert page["items"][0]["revoked_at"] is not None
+        assert not {"token", "token_hash", "accept_path"} & page["items"][0].keys()
+        pending = (await client.get("/api/v1/admin/invitations?state=pending")).json()
+        assert pending["total"] == 1
+        assert pending["items"][0]["id"] == replacement["id"]
+        assert (await client.get("/api/v1/admin/overview")).json()["pending_invitation_count"] == 1
+
+        for _ in range(2):
+            revoked = await client.delete(f"/api/v1/admin/invitations/{replacement['id']}")
+            assert revoked.status_code == 200
+        assert (await client.get(f"/api/v1/invitations/{replacement['token']}")).status_code == 404
+        rejected = await client.post(
+            f"/api/v1/invitations/{replacement['token']}/accept",
+            json={"password": "password-123456"},
+        )
+        assert rejected.status_code == 404
+        assert (await client.get("/api/v1/admin/overview")).json()["pending_invitation_count"] == 0
+        assert (await client.get("/api/v1/admin/invitations?state=unknown")).status_code == 422
+        assert (await client.get("/api/v1/admin/invitations?limit=101")).status_code == 422
+        assert "invitations" not in (await client.get("/api/v1/admin/users")).json()
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_invitation_overview_excludes_expired_links(async_db, tmp_path, monkeypatch):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    async_db.add(
+        Invitation(
+            token_hash=token_hash("expired-link"),
+            username="expired-http-invitee",
+            role="member",
+            created_by=admin.id,
+            expires_at=datetime.now(UTC) - timedelta(days=1),
+        )
+    )
+    await async_db.commit()
+    try:
+        assert (await client.get("/api/v1/admin/overview")).json()["pending_invitation_count"] == 0
+        page = (await client.get("/api/v1/admin/invitations?state=expired")).json()
+        assert page["total"] == 1 and page["items"][0]["state"] == "expired"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/api/v1/admin/invitations"),
+        ("DELETE", "/api/v1/admin/invitations/00000000-0000-0000-0000-000000000001"),
+        ("POST", "/api/v1/admin/invitations/00000000-0000-0000-0000-000000000001/reissue"),
+    ],
+)
+async def test_invitation_administration_is_hidden_from_members(
+    async_db, tmp_path, monkeypatch, method, path
+):
+    client, _member, _login = await member_client(async_db, tmp_path, monkeypatch)
+    try:
+        assert (await client.request(method, path)).status_code == 404
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio

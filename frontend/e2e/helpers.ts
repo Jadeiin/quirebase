@@ -102,6 +102,9 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 }
 
 export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	await page.route('**/api/v1/admin/invitations?*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, limit: 20, offset: 0 } })
+	);
 	await page.route('**/api/v1/workspaces/*/metadata/schema', (route) =>
 		route.fulfill({ json: workSchema })
 	);

@@ -23,6 +23,7 @@ const labels = {
 		comment: 'Project participation or annotation scope.'
 	}),
 	pending: msg({ message: 'Pending', comment: 'Workflow or record state.' }),
+	accepted: msg({ message: 'Accepted', comment: 'Invitation state.' }),
 	ready: msg({ message: 'Ready', comment: 'Workflow or record state.' }),
 	failed: msg({ message: 'Failed', comment: 'Workflow or record state.' }),
 	error: msg({ message: 'Error', comment: 'Import diagnostic severity.' }),

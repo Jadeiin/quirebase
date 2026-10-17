@@ -114,6 +114,7 @@ jobs:
         run: >-
           uv run pytest -q tests/test_postgres_contract.py tests/test_postgres_concurrency.py
           tests/test_facets.py tests/test_commonmeta_library.py
+          tests/test_instance_invitations.py
           tests/test_provider_identifier_aliases.py tests/test_identifiers_sync.py -m shared_postgres
           --concurrency-report-dir=concurrency-results --junitxml=concurrency-results/junit.xml
       - name: Preserve concurrency coverage and failure evidence

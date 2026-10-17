@@ -108,6 +108,8 @@ p, system:administrator, audit, read, active, any
 p, system:administrator, backup, read, active, any
 p, system:administrator, invitation, create, active, any
 p, system:administrator, invitation, read, active, any
+p, system:administrator, invitation, reissue, active, any
+p, system:administrator, invitation, revoke, active, any
 p, system:administrator, maintenance, run, active, any
 p, system:administrator, setting, manage, active, any
 p, system:administrator, setting, read, active, any

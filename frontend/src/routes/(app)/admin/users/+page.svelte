@@ -13,11 +13,9 @@
 	import { msg, t, type MessageKey } from '#lib/i18n.js';
 
 	type User = components['schemas']['AdminUserView'];
-	type InvitationCreated = components['schemas']['AdminInvitationCreatedView'];
 
 	let error = $state('');
 	let notice = $state<MessageKey | null>(null);
-	let invitationUrl = $state('');
 	const { filters, setPage, setPageSize } = getAdminFilters();
 	const users = createQuery(() => adminUsersQuery(filters(), true));
 	const adminMutation = createMutation(() => adminMutationOptions('users', () => users.refetch()));
@@ -28,18 +26,12 @@
 			: 1
 	);
 
-	function mutate(
-		operation: () => Promise<unknown>,
-		success: MessageKey,
-		form?: HTMLFormElement,
-		onSuccess?: (result: unknown) => void
-	) {
+	function mutate(operation: () => Promise<unknown>, success: MessageKey, form?: HTMLFormElement) {
 		error = '';
 		notice = null;
 		void adminMutation
 			.mutateAsync({ run: operation, form })
-			.then((result) => {
-				onSuccess?.(result);
+			.then(() => {
 				notice = success;
 			})
 			.catch((reason) => {
@@ -113,28 +105,6 @@
 			msg('User sessions revoked')
 		);
 	}
-
-	function createInvitation(event: SubmitEvent) {
-		event.preventDefault();
-		const form = event.currentTarget as HTMLFormElement;
-		const values = new FormData(form);
-		invitationUrl = '';
-		void mutate(
-			() =>
-				apiRequest('POST', '/admin/invitations', {
-					body: {
-						username: String(values.get('username') ?? ''),
-						role: values.get('role') === 'administrator' ? 'administrator' : 'member'
-					}
-				}),
-			msg('Invitation created'),
-			form,
-			(result) => {
-				const invitation = result as InvitationCreated;
-				invitationUrl = new URL(invitation.accept_path, window.location.origin).href;
-			}
-		);
-	}
 </script>
 
 <AdminNotices {error} {notice} />
@@ -142,22 +112,23 @@
 	<AdminUsers
 		users={users.data!}
 		{busy}
-		{invitationUrl}
 		onCreateUser={createUser}
-		onCreateInvitation={createInvitation}
 		onUpdateUserRole={updateUserRole}
 		onUpdateUserStatus={updateUserStatus}
 		onResetUserPassword={resetUserPassword}
 		onRevokeUserSessions={revokeUserSessions}
-	/>
-	<Pagination
-		page={filters().page}
-		{pageCount}
-		pageSize={filters().pageSize}
-		total={users.data?.total ?? 0}
-		busy={users.isFetching || busy}
-		onPageSize={setPageSize}
-		label={$t('Administration pages')}
-		onPage={setPage}
-	/>
+	>
+		{#snippet pagination()}
+			<Pagination
+				page={filters().page}
+				{pageCount}
+				pageSize={filters().pageSize}
+				total={users.data?.total ?? 0}
+				busy={users.isFetching || busy}
+				onPageSize={setPageSize}
+				label={$t('Administration pages')}
+				onPage={setPage}
+			/>
+		{/snippet}
+	</AdminUsers>
 </AdminSectionState>

@@ -9,10 +9,8 @@ from quirebase.projects.lifecycle import (
 )
 from quirebase.projects.loaders import (
     get_project,
-    get_project_for_update,
     get_project_item,
     require_project,
-    require_project_item,
 )
 from quirebase.projects.participation import (
     ProjectParticipantInfo,
@@ -44,7 +42,6 @@ __all__ = [
     "create_project",
     "delete_project",
     "get_project",
-    "get_project_for_update",
     "get_project_item",
     "join_project",
     "leave_project",
@@ -54,7 +51,6 @@ __all__ = [
     "remove_item_from_project",
     "remove_project_participant",
     "require_project",
-    "require_project_item",
     "set_project_state",
     "update_project_settings",
     "validate_project_state",

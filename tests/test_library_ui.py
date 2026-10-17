@@ -37,7 +37,6 @@ from quirebase.library.imports import (
     extract_pdf_import_doi,
     finalize_pdf_import_batch,
     lookup_pdf_import_candidate,
-    prepare_pdf_import_candidate,
     retry_pdf_import_batch,
     stage_pdf_import_batch,
 )
@@ -346,7 +345,7 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
     )
     async with async_session_factory() as worker_db:
         with pytest.raises(UpstreamServiceError, match="temporarily unavailable"):
-            await prepare_pdf_import_candidate(worker_db, batch.id, pending)
+            await lookup_pdf_import_candidate(worker_db, batch.id, pending, "10.1000/retry")
     assert local_object_path(pending["_pdf"]["object_key"]).exists()
 
 
@@ -641,7 +640,9 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
     batch = await db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)[0]
     async with async_session_factory() as worker_db:
-        importing = asyncio.create_task(prepare_pdf_import_candidate(worker_db, batch.id, pending))
+        importing = asyncio.create_task(
+            lookup_pdf_import_candidate(worker_db, batch.id, pending, "10.1000/cancelled")
+        )
         await provider_started.wait()
         importing.cancel()
         release_provider.set()

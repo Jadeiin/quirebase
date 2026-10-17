@@ -123,12 +123,10 @@ msgstr "摘要"
 msgid "Accept invitation"
 msgstr "接受邀请"
 
+#. Invitation state.
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "accepted"
-msgstr "已接受"
-
-#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Accepted"
 msgstr "录用日期"
@@ -170,15 +168,11 @@ msgstr "动作"
 msgid "Actions"
 msgstr "操作"
 
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "active"
-msgstr "启用"
-
 #. Workspace or Project lifecycle state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/metadata-labels.ts
 msgid "Active"
 msgstr "正常"
@@ -339,6 +333,7 @@ msgid "Administration"
 msgstr "管理"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
 #: src/routes/(app)/admin/settings/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
 msgid "Administration action failed"
@@ -360,6 +355,7 @@ msgstr "管理分区"
 #. User role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Administrator"
@@ -379,6 +375,11 @@ msgstr "机构单位"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Affiliations"
 msgstr "所属机构"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "All"
+msgstr "全部"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
@@ -839,6 +840,8 @@ msgstr "可编辑"
 #. js-lingui-explicit-id
 #: src/lib/design/ConfirmDialog.svelte
 #: src/lib/design/PromptDialog.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Cancel"
@@ -1233,7 +1236,7 @@ msgid "Copy one-time link"
 msgstr "复制一次性链接"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Copy this invitation URL now"
 msgstr "请立即复制此邀请链接"
 
@@ -1304,7 +1307,7 @@ msgid "Create copy"
 msgstr "创建副本"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Create invitation"
 msgstr "创建邀请"
@@ -1325,6 +1328,11 @@ msgid "Create revocable credentials for API and MCP clients."
 msgstr "为 API 和 MCP 客户端创建可撤销的凭据。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Create sign-up links and track who has accepted them."
+msgstr "签发注册链接，查看邀请的接受情况。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Create user"
 msgstr "创建用户"
@@ -1336,6 +1344,8 @@ msgstr "创建工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Created"
 msgstr "创建于"
@@ -1539,12 +1549,8 @@ msgid "Disable user"
 msgstr "停用用户"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "disabled"
-msgstr "停用"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 msgid "Disabled"
 msgstr "已停用"
 
@@ -1863,6 +1869,7 @@ msgstr "展开侧边栏"
 #. API Token or invitation state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Expired"
 msgstr "已过期"
 
@@ -1873,6 +1880,7 @@ msgstr "到期时间"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Expires"
 msgstr "到期于"
 
@@ -2329,7 +2337,7 @@ msgid "Investigation"
 msgstr "研究调查"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/users/+page.svelte
+#: src/routes/(app)/admin/invitations/+page.svelte
 msgid "Invitation created"
 msgstr "邀请已创建"
 
@@ -2344,23 +2352,41 @@ msgid "Invitation link copied"
 msgstr "已复制邀请链接"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
+msgid "Invitation link reissued"
+msgstr "邀请链接已重新签发"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Invitation only"
 msgstr "仅限邀请"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
+msgid "Invitation pages"
+msgstr "邀请分页"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Invitation revoked"
 msgstr "邀请已撤销"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Invitation status"
+msgstr "邀请状态"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/invitations/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Invitations"
 msgstr "邀请"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Invite user"
 msgstr "邀请用户"
 
@@ -2846,9 +2872,19 @@ msgid "Maintenance: {operation}"
 msgstr "维护：{operation}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Manage accounts, roles, and sign-in access."
+msgstr "管理账号、角色和登录权限。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Manage Tags"
 msgstr "管理标签"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Manage user"
+msgstr "管理用户"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -2915,6 +2951,7 @@ msgstr "PDF 大小上限（字节）"
 #. User role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Member"
@@ -3082,7 +3119,6 @@ msgstr "新条目元数据"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
-#: src/lib/features/admin/AdminUsers.svelte
 msgid "New password"
 msgstr "新密码"
 
@@ -3184,7 +3220,7 @@ msgid "No files."
 msgstr "暂无文件。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "No invitations."
 msgstr "暂无邀请。"
 
@@ -3603,14 +3639,10 @@ msgstr "PDF 文件"
 msgid "Peer review"
 msgstr "同行评审"
 
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "pending"
-msgstr "待处理"
-
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "待处理"
@@ -4138,6 +4170,11 @@ msgid "Reindex Workspace"
 msgstr "重建工作区索引"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Reissue invitation link"
+msgstr "重新签发邀请链接"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Related person"
 msgstr "相关人员"
@@ -4362,6 +4399,11 @@ msgid "Revoke current session"
 msgstr "撤销当前会话"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Revoke invitation"
+msgstr "撤销邀请"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Revoke session"
 msgstr "撤销会话"
@@ -4379,6 +4421,7 @@ msgstr "撤销令牌"
 #. API Token or session state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Revoked"
 msgstr "已撤销"
 
@@ -4393,7 +4436,9 @@ msgid "RIS"
 msgstr "RIS"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Role"
@@ -5603,6 +5648,7 @@ msgid "User sessions revoked"
 msgstr "用户会话已撤销"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/auth/Login.svelte

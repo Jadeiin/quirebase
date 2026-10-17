@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -236,10 +237,27 @@ async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: UUID) -> 
     return deleted_count
 
 
-async def list_invitations(db: AsyncSession, admin: User) -> list[Invitation]:
+async def list_invitations(
+    db: AsyncSession, admin: User, *, state: str = "", limit: int = 20, offset: int = 0
+) -> tuple[list[Invitation], int]:
     await require_system_action(db, admin, SystemAction.invitations_read)
-    return list(
-        await db.scalars(
-            select(Invitation).order_by(Invitation.created_at.desc(), Invitation.id.desc())
+    now = datetime.now(UTC)
+    query = select(Invitation)
+    if state == "accepted":
+        query = query.where(Invitation.accepted_at.is_not(None))
+    elif state == "revoked":
+        query = query.where(Invitation.revoked_at.is_not(None))
+    elif state in {"pending", "expired"}:
+        query = query.where(
+            Invitation.accepted_at.is_(None),
+            Invitation.revoked_at.is_(None),
+            Invitation.expires_at > now if state == "pending" else Invitation.expires_at <= now,
         )
+    elif state:
+        raise ValidationFailure(f"unknown invitation state: {state}")
+    return await select_page(
+        db,
+        query.order_by(Invitation.created_at.desc(), Invitation.id.desc()),
+        Invitation,
+        LimitOffset(limit=limit, offset=offset),
     )

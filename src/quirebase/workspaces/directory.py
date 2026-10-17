@@ -9,7 +9,6 @@ from quirebase.access import (
     ResourceAction,
     WorkspaceContext,
     require_action,
-    require_workspace_action,
 )
 from quirebase.core.persistence import select_page
 from quirebase.models import (
@@ -125,13 +124,6 @@ async def check_workspace_integrity(db: AsyncSession) -> list[str]:
         for workspace_id, owner_id in rows
         if owner_id is None
     ]
-
-
-async def get_workspace(
-    db: AsyncSession, actor: User, workspace_id: UUID
-) -> tuple[Workspace, WorkspaceMember]:
-    context = await require_workspace_action(db, actor, workspace_id, ResourceAction.workspace_read)
-    return context.workspace, context.membership
 
 
 async def list_workspace_members(

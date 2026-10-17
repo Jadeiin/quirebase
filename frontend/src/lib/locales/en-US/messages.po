@@ -123,12 +123,10 @@ msgstr "Abstract"
 msgid "Accept invitation"
 msgstr "Accept invitation"
 
+#. Invitation state.
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "accepted"
-msgstr "accepted"
-
-#. js-lingui-explicit-id
+#: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Accepted"
 msgstr "Accepted"
@@ -170,15 +168,11 @@ msgstr "Action"
 msgid "Actions"
 msgstr "Actions"
 
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "active"
-msgstr "active"
-
 #. Workspace or Project lifecycle state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/metadata-labels.ts
 msgid "Active"
 msgstr "Active"
@@ -339,6 +333,7 @@ msgid "Administration"
 msgstr "Administration"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
 #: src/routes/(app)/admin/settings/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
 msgid "Administration action failed"
@@ -360,6 +355,7 @@ msgstr "Administration sections"
 #. User role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Administrator"
@@ -379,6 +375,11 @@ msgstr "Affiliation"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Affiliations"
 msgstr "Affiliations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "All"
+msgstr "All"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
@@ -839,6 +840,8 @@ msgstr "Can edit"
 #. js-lingui-explicit-id
 #: src/lib/design/ConfirmDialog.svelte
 #: src/lib/design/PromptDialog.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Cancel"
@@ -1233,7 +1236,7 @@ msgid "Copy one-time link"
 msgstr "Copy one-time link"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Copy this invitation URL now"
 msgstr "Copy this invitation URL now"
 
@@ -1304,7 +1307,7 @@ msgid "Create copy"
 msgstr "Create copy"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Create invitation"
 msgstr "Create invitation"
@@ -1325,6 +1328,11 @@ msgid "Create revocable credentials for API and MCP clients."
 msgstr "Create revocable credentials for API and MCP clients."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Create sign-up links and track who has accepted them."
+msgstr "Create sign-up links and track who has accepted them."
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Create user"
 msgstr "Create user"
@@ -1336,6 +1344,8 @@ msgstr "Create workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Created"
 msgstr "Created"
@@ -1539,12 +1549,8 @@ msgid "Disable user"
 msgstr "Disable user"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "disabled"
-msgstr "disabled"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 msgid "Disabled"
 msgstr "Disabled"
 
@@ -1863,6 +1869,7 @@ msgstr "Expand sidebar"
 #. API Token or invitation state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Expired"
 msgstr "Expired"
 
@@ -1873,6 +1880,7 @@ msgstr "expires"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Expires"
 msgstr "Expires"
 
@@ -2329,7 +2337,7 @@ msgid "Investigation"
 msgstr "Investigation"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/users/+page.svelte
+#: src/routes/(app)/admin/invitations/+page.svelte
 msgid "Invitation created"
 msgstr "Invitation created"
 
@@ -2344,23 +2352,41 @@ msgid "Invitation link copied"
 msgstr "Invitation link copied"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
+msgid "Invitation link reissued"
+msgstr "Invitation link reissued"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Invitation only"
 msgstr "Invitation only"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
+msgid "Invitation pages"
+msgstr "Invitation pages"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/invitations/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Invitation revoked"
 msgstr "Invitation revoked"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Invitation status"
+msgstr "Invitation status"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
+#: src/routes/(app)/admin/invitations/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Invitations"
 msgstr "Invitations"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Invite user"
 msgstr "Invite user"
 
@@ -2846,9 +2872,19 @@ msgid "Maintenance: {operation}"
 msgstr "Maintenance: {operation}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Manage accounts, roles, and sign-in access."
+msgstr "Manage accounts, roles, and sign-in access."
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Manage Tags"
 msgstr "Manage Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminUsers.svelte
+msgid "Manage user"
+msgstr "Manage user"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -2915,6 +2951,7 @@ msgstr "Maximum PDF size in bytes"
 #. User role.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Member"
@@ -3082,7 +3119,6 @@ msgstr "New Item metadata"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
-#: src/lib/features/admin/AdminUsers.svelte
 msgid "New password"
 msgstr "New password"
 
@@ -3184,7 +3220,7 @@ msgid "No files."
 msgstr "No files."
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "No invitations."
 msgstr "No invitations."
 
@@ -3603,14 +3639,10 @@ msgstr "PDFs"
 msgid "Peer review"
 msgstr "Peer review"
 
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminUsers.svelte
-msgid "pending"
-msgstr "pending"
-
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "Pending"
@@ -4138,6 +4170,11 @@ msgid "Reindex Workspace"
 msgstr "Reindex Workspace"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Reissue invitation link"
+msgstr "Reissue invitation link"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Related person"
 msgstr "Related person"
@@ -4362,6 +4399,11 @@ msgid "Revoke current session"
 msgstr "Revoke current session"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+msgid "Revoke invitation"
+msgstr "Revoke invitation"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Revoke session"
 msgstr "Revoke session"
@@ -4379,6 +4421,7 @@ msgstr "Revoke token"
 #. API Token or session state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminInvitations.svelte
 msgid "Revoked"
 msgstr "Revoked"
 
@@ -4393,7 +4436,9 @@ msgid "RIS"
 msgstr "RIS"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte
 msgid "Role"
@@ -5603,6 +5648,7 @@ msgid "User sessions revoked"
 msgstr "User sessions revoked"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/auth/Login.svelte

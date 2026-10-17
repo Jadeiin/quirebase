@@ -34,6 +34,8 @@ from quirebase.accounts.invitations import (
     InvitationConflict,
     create_invitation,
     get_valid_invitation,
+    reissue_invitation,
+    revoke_invitation,
 )
 from quirebase.accounts.registration import (
     RegistrationClosed,
@@ -88,10 +90,12 @@ __all__ = [
     "logout",
     "record_login_failure",
     "register_user",
+    "reissue_invitation",
     "reset_user_password",
     "resolve_api_token_user",
     "revoke_all_sessions",
     "revoke_api_token",
+    "revoke_invitation",
     "revoke_session",
     "revoke_user_sessions",
     "update_user_status",

@@ -30,11 +30,7 @@ from quirebase.documents.exports import (
     get_export_status,
 )
 from quirebase.documents.loaders import (
-    get_annotation,
-    get_annotation_reply,
-    get_attachment,
     get_revision,
-    get_revision_for_update,
 )
 from quirebase.documents.objects import (
     WorkspaceDocumentSnapshot,
@@ -124,9 +120,6 @@ __all__ = [
     "delete_unreferenced_objects",
     "enqueue_object_cleanup",
     "export_revision_pdf",
-    "get_annotation",
-    "get_annotation_reply",
-    "get_attachment",
     "get_attachment_file",
     "get_export_file",
     "get_export_status",
@@ -135,7 +128,6 @@ __all__ = [
     "get_revision",
     "get_revision_download_url",
     "get_revision_file",
-    "get_revision_for_update",
     "get_revision_thumbnail",
     "head_attachment_file",
     "head_item_thumbnail",

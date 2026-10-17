@@ -31,7 +31,6 @@ from quirebase.access.items import (
     can_edit_item,
     can_read_item,
     get_item,
-    get_item_for_update,
     require_accessible_items,
     require_editable_item,
     require_item_action,
@@ -62,7 +61,7 @@ from quirebase.access.projections import (
     workspace_member_roles,
     workspace_project_participations,
 )
-from quirebase.access.scope import workspace_id_predicate, workspace_select
+from quirebase.access.scope import workspace_select
 from quirebase.access.tags import visible_tags_query
 from quirebase.access.workspace_policy import (
     ResourceAction,
@@ -89,7 +88,6 @@ __all__ = [
     "effective_resource_actions",
     "effective_system_actions",
     "get_item",
-    "get_item_for_update",
     "initialize_authorization",
     "item_decisions",
     "lock_workspace_context",
@@ -121,7 +119,6 @@ __all__ = [
     "visible_items_query",
     "visible_tags_query",
     "workspace_decisions",
-    "workspace_id_predicate",
     "workspace_invitation_roles",
     "workspace_items_query",
     "workspace_member_decisions",

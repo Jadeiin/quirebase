@@ -3,7 +3,14 @@ import { apiRequest } from '#lib/api/client.js';
 import type { components } from '#lib/api/schema.js';
 
 export type AdminSection =
-	'overview' | 'users' | 'workspaces' | 'audit' | 'workflows' | 'settings' | 'maintenance';
+	| 'overview'
+	| 'users'
+	| 'invitations'
+	| 'workspaces'
+	| 'audit'
+	| 'workflows'
+	| 'settings'
+	| 'maintenance';
 
 export type AdminFilters = {
 	page: number;
@@ -46,6 +53,20 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 						active: filters.filterB ? filters.filterB === 'true' : undefined
 					}
 				},
+				signal
+			})
+	});
+}
+
+export type InvitationState = components['schemas']['AdminInvitationView']['state'];
+
+export function adminInvitationsQuery(page: number, pageSize: number, state: InvitationState | '') {
+	return queryOptions({
+		queryKey: ['admin', 'invitations', page, pageSize, state],
+		staleTime: 0,
+		queryFn: ({ signal }) =>
+			apiRequest('GET', '/admin/invitations', {
+				params: { query: { limit: pageSize, offset: (page - 1) * pageSize, state } },
 				signal
 			})
 	});

@@ -18,9 +18,3 @@ def workspace_select(model: Any, ctx: WorkspaceContext) -> Select[Any]:
     """
 
     return select(model).where(model.workspace_id == ctx.workspace_id)
-
-
-def workspace_id_predicate(model: Any, ctx: WorkspaceContext) -> Any:
-    """Return the explicit lineage predicate for mutation statements."""
-
-    return model.workspace_id == ctx.workspace_id

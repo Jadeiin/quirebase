@@ -446,21 +446,6 @@ class DBOSAdapter:
         return counts
 
 
-async def list_all_workflows(*, status: str = "", name: str | None = None):
-    """Read the complete workflow history in bounded DBOS pages."""
-    page_size = 10_000
-    offset = 0
-    result: list[WorkflowSummary] = []
-    while True:
-        page = await durable_operations().list(
-            status=status, name=name, limit=page_size, offset=offset
-        )
-        result.extend(page)
-        if len(page) < page_size:
-            return tuple(result)
-        offset += len(page)
-
-
 async def list_active_workflows(*, name: str | None = None) -> tuple[WorkflowSummary, ...]:
     """Read active workflow reservations without scanning terminal history."""
     page_size = 10_000

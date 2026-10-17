@@ -498,22 +498,6 @@ async def lookup_pdf_import_candidate(
         return _pdf_import_candidate_error(pending, "invalid_pdf", error)
 
 
-async def prepare_pdf_import_candidate(
-    db: AsyncSession,
-    batch_id: UUID,
-    pending: dict,
-) -> dict:
-    """Prepare one candidate through the same seams used by the durable workflow."""
-    extracted = await extract_pdf_import_doi(pending)
-    detected_doi = extracted.get("detected_doi")
-    if not isinstance(detected_doi, str):
-        return extracted
-    checked = await check_pdf_import_eligibility(db, batch_id, pending)
-    if not checked.get("eligible"):
-        return checked
-    return await lookup_pdf_import_candidate(db, batch_id, pending, detected_doi)
-
-
 async def finalize_pdf_import_batch(
     db: AsyncSession,
     actor_id: UUID,

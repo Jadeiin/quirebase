@@ -124,6 +124,21 @@ export. Neither Inquiro nor commonmeta-py knows Workspace, Item UUID or database
 
 ## Interfaces
 
+Accounts owns the instance Invitation lifecycle. Revocation preserves the record and hashed
+token; reissue revokes the old Invitation and creates a new one with the same username and
+System Role. Only an unaccepted, unrevoked Invitation reserves its username. Creating another
+Invitation retires an expired reservation in the same transaction; User usernames remain unique.
+Accept, revoke and reissue use conditional writes to arbitrate concurrent requests, with User
+provisioning and Audit committed atomically. Repeated revocation preserves its original timestamp
+and event; repeating reissue against the old record fails rather than creating another link.
+Creation, revocation and reissue record the administrator and Invitation identity; acceptance
+records its source Invitation. Tokens appear only in creation/reissue responses, never in Audit
+or history. The Web adapter owns the independently paginated, state-filtered administrative
+history and one-time link presentation under `/admin/invitations`. User administration lives
+under `/admin/users`; each route owns one resource list, its queries and one pagination control.
+A schema downgrade refuses duplicate historical
+usernames instead of deleting Invitation history to restore the old unique constraint.
+
 A Module interface is the smallest surface callers need to exercise a business capability.
 For business Modules, prefer use-case operations, typed commands/results and domain errors.
 Transport types, ORM query construction, adapter selection and synchronization details stay in

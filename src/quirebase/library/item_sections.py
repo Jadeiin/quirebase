@@ -37,7 +37,6 @@ from quirebase.models import (
     Project,
     ProjectItem,
     Tag,
-    User,
 )
 from quirebase.projects import list_item_organize_projects
 
@@ -76,7 +75,6 @@ class ItemOverviewData(ItemSectionData):
     annotation_count: int
     message_count: int
     tags: tuple[Tag, ...]
-    updater: User | None
 
 
 @dataclass(frozen=True)
@@ -164,7 +162,6 @@ async def _open_overview(
         annotation_count=annotation_count,
         message_count=message_count,
         tags=tags,
-        updater=await db.get(User, item.updated_by) if item.updated_by else None,
     )
 
 

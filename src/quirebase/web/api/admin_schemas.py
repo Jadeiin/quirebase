@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
 from advanced_alchemy.service import OffsetPagination
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from quirebase.models import WorkspaceState
 
@@ -75,12 +75,21 @@ class AdminInvitationView(BaseModel):
     role: str
     expires_at: datetime
     accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime
+
+    @computed_field
+    def state(self) -> Literal["pending", "expired", "revoked", "accepted"]:
+        if self.accepted_at is not None:
+            return "accepted"
+        if self.revoked_at is not None:
+            return "revoked"
+        return "expired" if self.expires_at <= datetime.now(UTC) else "pending"
 
 
 @dataclass
 class AdminUsersView(OffsetPagination[AdminUserView]):
     items: list[AdminUserView]
-    invitations: list[AdminInvitationView]
 
 
 class AdminInvitationCreatedView(BaseModel):

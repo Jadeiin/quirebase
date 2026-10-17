@@ -16,7 +16,9 @@ from quirebase.accounts import (
     list_invitations,
     list_users,
     list_users_paginated,
+    reissue_invitation,
     reset_user_password,
+    revoke_invitation,
     revoke_user_sessions,
     update_user_status,
 )
@@ -80,15 +82,13 @@ async def admin_overview(
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
     users = await list_users(db, user)
-    invitations = await list_invitations(db, user)
+    _, pending_count = await list_invitations(db, user, state="pending", limit=1)
     await require_system_action(db, user, SystemAction.workflows_read)
     workflow_counts = await durable_operations().state_counts()
     events, total = await query_events(db, user, limit=limit, offset=offset)
     return {
         "user_count": len(users),
-        "pending_invitation_count": sum(
-            invitation.accepted_at is None for invitation in invitations
-        ),
+        "pending_invitation_count": pending_count,
         "failed_workflow_count": workflow_counts.get("failed", 0),
         "storage": await get_storage_metrics(db, user),
         "recent_events": result_converter.to_schema(
@@ -113,7 +113,6 @@ async def admin_users(
     users, total = await list_users_paginated(
         db, user, search=search, role=role, active=active, limit=limit, offset=offset
     )
-    invitations = await list_invitations(db, user)
     page = result_converter.to_schema(
         users,
         total=total,
@@ -125,9 +124,6 @@ async def admin_users(
         total=page.total,
         limit=page.limit,
         offset=page.offset,
-        invitations=list(
-            result_converter.to_schema(invitations, schema_type=AdminInvitationView).items
-        ),
     )
 
 
@@ -175,6 +171,46 @@ async def admin_revoke_sessions(user_id: UUID, user: ApiUser, db: Database) -> O
 async def admin_create_invitation(data: InvitationCreateRequest, user: ApiUser, db: Database):
 
     invitation, token = await create_invitation(db, user, data.username, data.role)
+    return {
+        "id": invitation.id,
+        "username": invitation.username,
+        "role": invitation.role,
+        "expires_at": invitation.expires_at,
+        "token": token,
+        "accept_path": f"/invite/{token}",
+    }
+
+
+@router.get("/invitations", response_model=OffsetPagination[AdminInvitationView])
+async def admin_invitations(
+    user: ApiUser,
+    db: Database,
+    state: Literal["", "pending", "expired", "revoked", "accepted"] = "",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    invitations, total = await list_invitations(db, user, state=state, limit=limit, offset=offset)
+    return result_converter.to_schema(
+        invitations,
+        total=total,
+        filters=[LimitOffset(limit=limit, offset=offset)],
+        schema_type=AdminInvitationView,
+    )
+
+
+@router.delete("/invitations/{invitation_id}", response_model=OkView)
+async def admin_revoke_invitation(invitation_id: UUID, user: ApiUser, db: Database) -> OkView:
+    await revoke_invitation(db, user, invitation_id)
+    return OkView()
+
+
+@router.post(
+    "/invitations/{invitation_id}/reissue",
+    response_model=AdminInvitationCreatedView,
+    status_code=status.HTTP_201_CREATED,
+)
+async def admin_reissue_invitation(invitation_id: UUID, user: ApiUser, db: Database):
+    invitation, token = await reissue_invitation(db, user, invitation_id)
     return {
         "id": invitation.id,
         "username": invitation.username,

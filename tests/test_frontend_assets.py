@@ -69,6 +69,7 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
         "frontend/src/routes/(app)/account/+page.svelte": "Account",
         "frontend/src/routes/(app)/admin/+page.svelte": "AdminOverview",
         "frontend/src/routes/(app)/admin/users/+page.svelte": "AdminUsers",
+        "frontend/src/routes/(app)/admin/invitations/+page.svelte": "AdminInvitations",
         "frontend/src/routes/(app)/admin/audit/+page.svelte": "AdminAudit",
         "frontend/src/routes/(app)/admin/workflows/+page.svelte": "AdminWorkflows",
         "frontend/src/routes/(app)/admin/settings/+page.svelte": "AdminSettings",

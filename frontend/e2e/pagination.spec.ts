@@ -174,6 +174,7 @@ for (const section of [
 	'workspaces',
 	'projects',
 	'users',
+	'invitations',
 	'audit',
 	'overview',
 	'workflows'
@@ -187,14 +188,15 @@ for (const section of [
 			username: `user-${index}`,
 			role: 'member',
 			active: true,
-			state: section === 'workflows' ? 'failed' : 'active',
+			state: section === 'workflows' ? 'failed' : section === 'invitations' ? 'pending' : 'active',
 			item_count: 0,
 			participation: 'workspace',
 			is_participating: true,
 			allowed_participation_changes: [],
 			action: 'item.create',
 			target_type: 'item',
-			created_at: '2026-01-01T00:00:00Z'
+			created_at: '2026-01-01T00:00:00Z',
+			expires_at: '2027-01-01T00:00:00Z'
 		}));
 		const apiPath =
 			section === 'workspaces'
@@ -224,7 +226,7 @@ for (const section of [
 								storage: { items_count: 123, total_disk_bytes: 0 },
 								recent_events: result
 							}
-						: { ...result, invitations: [] }
+						: result
 			});
 		});
 		await page.goto(path);

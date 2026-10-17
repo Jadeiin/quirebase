@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from quirebase.access.scope import workspace_select
-from quirebase.models import Attachment, FileRevision, PdfAnnotation, PdfAnnotationReply
+from quirebase.models import FileRevision
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -20,34 +20,4 @@ async def get_revision(
 ) -> FileRevision | None:
     return await db.scalar(
         workspace_select(FileRevision, ctx).where(FileRevision.id == revision_id)
-    )
-
-
-async def get_revision_for_update(
-    db: AsyncSession, ctx: WorkspaceContext, revision_id: UUID
-) -> FileRevision | None:
-    return await db.scalar(
-        workspace_select(FileRevision, ctx).where(FileRevision.id == revision_id).with_for_update()
-    )
-
-
-async def get_attachment(
-    db: AsyncSession, ctx: WorkspaceContext, attachment_id: UUID
-) -> Attachment | None:
-    return await db.scalar(workspace_select(Attachment, ctx).where(Attachment.id == attachment_id))
-
-
-async def get_annotation(
-    db: AsyncSession, ctx: WorkspaceContext, annotation_id: UUID
-) -> PdfAnnotation | None:
-    return await db.scalar(
-        workspace_select(PdfAnnotation, ctx).where(PdfAnnotation.id == annotation_id)
-    )
-
-
-async def get_annotation_reply(
-    db: AsyncSession, ctx: WorkspaceContext, reply_id: UUID
-) -> PdfAnnotationReply | None:
-    return await db.scalar(
-        workspace_select(PdfAnnotationReply, ctx).where(PdfAnnotationReply.id == reply_id)
     )

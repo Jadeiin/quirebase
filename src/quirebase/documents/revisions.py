@@ -93,9 +93,6 @@ class StagedPdf:
     size: int
     original_name: str
 
-    def revision_data(self) -> tuple[str, int, str]:
-        return self.object_key, self.size, self.original_name
-
 
 @dataclass(frozen=True)
 class UploadWorkflow:
@@ -189,16 +186,6 @@ async def _discard_staged_pdf(db: AsyncSession, staged: StagedPdf) -> None:
 
 async def _release_staged_attachment(db: AsyncSession, staged: StoredObject) -> None:
     await discard_staged_object(db, staged.key)
-
-
-async def _rollback_and_release_pdf(db: AsyncSession, staged: StagedPdf) -> None:
-    await db.rollback()
-    await _discard_staged_pdf(db, staged)
-
-
-async def _rollback_and_release_attachment(db: AsyncSession, staged: StoredObject) -> None:
-    await db.rollback()
-    await _release_staged_attachment(db, staged)
 
 
 async def attach_staged_pdf(

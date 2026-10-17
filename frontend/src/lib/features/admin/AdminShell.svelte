@@ -17,6 +17,7 @@
 	const labels: Record<AdminSection, MessageKey> = {
 		overview: msg('Overview'),
 		users: msg('Users'),
+		invitations: msg('Invitations'),
 		workspaces: msg('Workspaces'),
 		audit: msg('Audit'),
 		workflows: msg('Workflows'),

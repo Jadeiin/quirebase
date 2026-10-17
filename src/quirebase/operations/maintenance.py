@@ -17,14 +17,11 @@ from sqlalchemy import select
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
 from quirebase.core.storage import get_object_store, is_managed_object_key
-from quirebase.core.workflows import durable_operations
 from quirebase.documents import (
     delete_unreferenced_objects,
-    list_expired_export_artifacts,
     protected_object_keys,
-    retire_expired_export_artifacts,
 )
-from quirebase.models import Attachment, FileRevision, User
+from quirebase.models import Attachment, FileRevision
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -227,27 +224,6 @@ def _restore_objects(restored_objects: Path, object_dir: Path) -> None:
         shutil.copytree(restored_objects, object_dir, dirs_exist_ok=True)
 
 
-async def cleanup_exports(db: AsyncSession | None = None, *, batch_size: int = 100) -> int:
-    from quirebase.operations.settings import get_effective_setting
-
-    ttl_hours = (
-        await get_effective_setting(db, "export_ttl_hours", get_settings().export_ttl_hours)
-        if db is not None
-        else get_settings().export_ttl_hours
-    )
-    if db is not None:
-        await db.rollback()
-    removed = await cleanup_local_exports(ttl_hours)
-    if db is None:
-        return removed
-    artifacts = await list_expired_export_artifacts(db, batch_size)
-    if not artifacts:
-        return removed
-    keys = await retire_expired_export_artifacts(db, artifacts)
-    await db.commit()
-    return removed + len(await delete_unreferenced_objects(db, keys))
-
-
 async def cleanup_local_exports(ttl_hours: int) -> int:
     cutoff = datetime.now(UTC) - timedelta(hours=ttl_hours)
     return await asyncio.to_thread(_cleanup_exports, get_settings().export_dir, cutoff)
@@ -340,28 +316,3 @@ async def delete_orphan_candidates(
 ) -> tuple[str, ...]:
     """Let Documents recheck the scan's candidates immediately before physical deletion."""
     return await delete_unreferenced_objects(db, candidates)
-
-
-async def get_backup_artifact(db: AsyncSession, admin: User, workflow_id: str) -> tuple[Path, str]:
-    from quirebase.access import SystemAction, require_system_action
-    from quirebase.core.errors import ResourceNotFound
-
-    await require_system_action(db, admin, SystemAction.backup_read)
-    workflow = await durable_operations().get(workflow_id)
-    if (
-        workflow is None
-        or workflow.name != "operations.backup"
-        or workflow.state != "succeeded"
-        or not isinstance(workflow.output, dict)
-    ):
-        raise ResourceNotFound("backup artifact not found or not ready")
-    filename = workflow.output.get("filename")
-
-    if not filename:
-        raise ResourceNotFound("backup filename missing")
-
-    backup_file = get_settings().export_dir / filename
-    if not await asyncio.to_thread(backup_file.is_file):
-        raise ResourceNotFound("backup artifact expired or deleted")
-
-    return backup_file, f"quirebase_backup_{workflow.id[-8:]}.zip"

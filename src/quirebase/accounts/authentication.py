@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import require_system_resource_action
@@ -141,36 +141,49 @@ async def accept_invitation(db: AsyncSession, token: str, password: str) -> User
     if (
         invitation is None
         or invitation.accepted_at is not None
+        or invitation.revoked_at is not None
         or invitation.expires_at <= datetime.now(UTC)
     ):
         raise ResourceNotFound("invitation not found or expired")
     if await db.scalar(select(User).where(User.username == invitation.username)):
         raise InvitationConflict("username already exists")
+    # Password hashing must not retain the initial read transaction. The write
+    # below checks the link again after any concurrent revocation or reissue.
+    await db.commit()
     try:
         encoded = await hash_password_async(password)
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
     invitation = await db.scalar(
-        select(Invitation)
-        .where(Invitation.token_hash == invitation_token_hash)
+        update(Invitation)
+        .where(
+            Invitation.token_hash == invitation_token_hash,
+            Invitation.accepted_at.is_(None),
+            Invitation.revoked_at.is_(None),
+            Invitation.expires_at > datetime.now(UTC),
+        )
+        .values(accepted_at=datetime.now(UTC))
+        .returning(Invitation)
         .execution_options(populate_existing=True)
-        .with_for_update()
     )
-    if (
-        invitation is None
-        or invitation.accepted_at is not None
-        or invitation.expires_at <= datetime.now(UTC)
-    ):
+    if invitation is None:
         raise ResourceNotFound("invitation not found or expired")
     if await db.scalar(select(User).where(User.username == invitation.username)):
+        await db.rollback()
         raise InvitationConflict("username already exists")
     user = User(username=invitation.username, password_hash=encoded, role=invitation.role)
-    invitation.accepted_at = datetime.now(UTC)
     try:
         db.add(user)
         await db.flush()
         await provision_initial_workspace(db, user)
-        record_event(db, user.id, "invitation.accept", "user", user.id)
+        record_event(
+            db,
+            user.id,
+            "invitation.accept",
+            "user",
+            user.id,
+            detail={"invitation_id": invitation.id},
+        )
         await db.commit()
     except IntegrityError as error:
         await db.rollback()

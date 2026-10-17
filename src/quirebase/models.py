@@ -242,14 +242,24 @@ class LoginThrottle(Base):
 
 class Invitation(EntityBase):
     __tablename__ = "invitations"
+    __table_args__ = (
+        Index(
+            "uq_invitations_pending_username",
+            "username",
+            unique=True,
+            sqlite_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+            postgresql_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+        ),
+    )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    username: Mapped[str] = mapped_column(String(120), unique=True)
+    username: Mapped[str] = mapped_column(String(120))
     role: Mapped[SystemRole] = mapped_column(
         enum_type(SystemRole, "system_role"), default=SystemRole.member
     )
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
 
 
 class Item(EntityBase):

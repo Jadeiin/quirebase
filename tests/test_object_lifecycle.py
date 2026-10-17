@@ -10,8 +10,13 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.documents import (
+    delete_unreferenced_objects,
+    list_expired_export_artifacts,
+    retire_expired_export_artifacts,
+)
 from quirebase.models import FileRevision, Item, User
-from quirebase.operations.maintenance import cleanup_exports, reconcile_objects
+from quirebase.operations.maintenance import reconcile_objects
 from quirebase.operations.object_migration import migrate_legacy_objects
 
 
@@ -202,7 +207,10 @@ async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
     ])
     await async_db.commit()
 
-    assert await cleanup_exports(async_db) == 1
+    artifacts = await list_expired_export_artifacts(async_db, 100)
+    keys = await retire_expired_export_artifacts(async_db, artifacts)
+    await async_db.commit()
+    assert len(await delete_unreferenced_objects(async_db, keys)) == 1
     assert not await store.exists(expired.key)
     assert await store.exists(recent.key)
     assert await async_db.get(ExportArtifact, "expired-export") is None

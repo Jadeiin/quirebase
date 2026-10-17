@@ -7,7 +7,6 @@ from quirebase.operations.health import (
 from quirebase.operations.maintenance import (
     check_objects,
     create_backup,
-    get_backup_artifact,
     reconcile_objects,
     restore_backup,
     verify_backup,
@@ -27,7 +26,6 @@ __all__ = [
     "create_backup",
     "dispatch_maintenance_workflow",
     "dispatch_workspace_reindex",
-    "get_backup_artifact",
     "get_runtime_settings",
     "get_system_metrics",
     "reconcile_objects",

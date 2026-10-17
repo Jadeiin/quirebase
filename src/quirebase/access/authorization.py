@@ -58,6 +58,8 @@ class SystemAction(ResourceActionKey):
     users_sessions_revoke = "user.revoke_sessions"
     invitations_read = "invitation.read"
     invitations_create = "invitation.create"
+    invitations_revoke = "invitation.revoke"
+    invitations_reissue = "invitation.reissue"
     audit_read = "audit.read"
     workflows_read = "workflow.read"
     settings_read = "setting.read"

@@ -5,7 +5,6 @@ from quirebase.workspaces.creation import (
 )
 from quirebase.workspaces.directory import (
     check_workspace_integrity,
-    get_workspace,
     list_workspace_governance_members,
     list_workspace_members,
     list_workspaces,
@@ -48,7 +47,6 @@ __all__ = [
     "create_workspace",
     "delete_workspace",
     "freeze_workspace_governance",
-    "get_workspace",
     "get_workspace_invitation_by_token",
     "guard_user_deactivation",
     "invite_workspace_member",

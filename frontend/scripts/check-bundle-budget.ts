@@ -125,7 +125,8 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 }
 
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
-	raw: 684000,
+	// Includes the Invitation route entry and shared account-management translations.
+	raw: 685000,
 	gzip: 192000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
@@ -134,8 +135,8 @@ enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), 
 	gzip: 259000
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
-	// Includes the shared pagination styles and consistent control borders.
-	raw: 814000,
+	// Includes shared pagination styles and Invitation lifecycle translations.
+	raw: 815000,
 	gzip: 230000
 });
 enforce('Account route', routeBundle('/(app)/account'), {
@@ -143,9 +144,9 @@ enforce('Account route', routeBundle('/(app)/account'), {
 	gzip: 226000
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
-	// Includes the shared pagination styles and consistent control borders.
-	raw: 821000,
-	gzip: 235000
+	// Includes shared pagination styles and account-management translations.
+	raw: 822000,
+	gzip: 235500
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
 	raw: 829000,
@@ -188,27 +189,33 @@ enforce(
 	'Item annotations route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
-		// Shared pagination includes page-size controls and a localized result range.
-		raw: 823000,
-		gzip: 236000
+		// Includes shared pagination styles and account-management translations.
+		raw: 825000,
+		gzip: 236500
 	}
 );
 enforce(
 	'Item discussion route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
-		// Includes the shared pagination styles.
-		raw: 810000,
+		// Includes shared pagination styles and account-management translations.
+		raw: 812000,
 		gzip: 234000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
-	// Includes Skeleton pagination and page-size controls.
-	raw: 710000,
+	// Includes Skeleton pagination and the separate Invitation navigation entry.
+	raw: 711000,
 	gzip: 201000
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
-	raw: 718000,
+	// Includes on-demand User creation and expandable role and sign-in controls.
+	raw: 722000,
+	gzip: 205000
+});
+enforce('Admin invitations route', routeBundle('/(app)/admin/invitations'), {
+	// Owns invitation creation, history, status filtering and one pagination control.
+	raw: 722000,
 	gzip: 205000
 });
 enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
@@ -216,20 +223,23 @@ enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
 	gzip: 216000
 });
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
-	raw: 710000,
+	// Includes the separate Invitation navigation entry and shared translations.
+	raw: 711000,
 	gzip: 202000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
-	// Includes Skeleton pagination and page-size controls.
-	raw: 709000,
+	// Includes Skeleton pagination and the separate Invitation navigation entry.
+	raw: 710000,
 	gzip: 201000
 });
 enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
-	raw: 699000,
+	// Includes the separate Invitation navigation entry and shared translations.
+	raw: 700000,
 	gzip: 200000
 });
 enforce('Admin maintenance route', routeBundle('/(app)/admin/maintenance'), {
-	raw: 699000,
+	// Includes the separate Invitation navigation entry and shared translations.
+	raw: 700000,
 	gzip: 200000
 });
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
@@ -243,7 +253,7 @@ const openedEditor = mergeGraphs(
 	dependencyGraph([metadataEditorKey], true)
 );
 enforce('Metadata editor when open', bundleSize(graphFiles(openedEditor)), {
-	// Includes the shared pagination styles.
-	raw: 1053000,
+	// Includes shared pagination styles and account-management translations.
+	raw: 1055000,
 	gzip: 307000
 });

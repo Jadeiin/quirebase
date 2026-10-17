@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,6 +30,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import Base, _make_database_config, async_database_url
 from quirebase.models import (
     AuditEvent,
+    Invitation,
     Project,
     SystemRole,
     User,
@@ -246,6 +247,55 @@ def test_schema_matches_metadata(migration_database):
     _assert_schema_matches_metadata(inspect(engine), engine)
 
 
+def test_invitation_upgrade_preserves_records_and_releases_historical_usernames(migration_database):
+    database_url, engine = migration_database
+    _migrate_database(database_url, "bd688512265a")
+    with Session(engine) as db:
+        admin = User(
+            username="invitation-migration-admin", password_hash="unused", role="administrator"
+        )
+        db.add(admin)
+        db.flush()
+        invitation_id = uuid.uuid4()
+        expires_at = datetime.now(UTC) + timedelta(days=1)
+        db.execute(
+            Invitation.__table__.insert().values(
+                id=invitation_id,
+                username="migration-invitee",
+                token_hash="original-link",
+                role="member",
+                created_by=admin.id,
+                expires_at=expires_at,
+            )
+        )
+        db.commit()
+    _migrate_database(database_url)
+    with Session(engine) as db:
+        invitation = db.get(Invitation, invitation_id)
+        assert invitation.token_hash == "original-link" and invitation.revoked_at is None
+        duplicate = Invitation(
+            username=invitation.username,
+            token_hash="replacement-link",
+            role="member",
+            created_by=invitation.created_by,
+            expires_at=expires_at,
+        )
+        nested = db.begin_nested()
+        db.add(duplicate)
+        with pytest.raises(IntegrityError):
+            db.flush()
+        nested.rollback()
+        invitation.revoked_at = datetime.now(UTC)
+        db.commit()
+        db.add(duplicate)
+        db.commit()
+        assert db.get(Invitation, invitation_id).revoked_at is not None
+        assert duplicate.id != invitation_id
+    with pytest.raises(subprocess.CalledProcessError) as failure:
+        _migrate_database(database_url, "bd688512265a", downgrade=True)
+    assert "Cannot downgrade while invitation history shares usernames" in failure.value.stderr
+
+
 def test_migrated_enum_rejects_invalid_raw_sql_values(migration_database):
     database_url, engine = migration_database
     _migrate_database(database_url)
@@ -356,12 +406,12 @@ def test_search_projection_revision_roundtrip(migration_database):
     scripts = ScriptDirectory.from_config(
         AlembicCommands(_make_database_config(database_url)).config
     )
-    search_revision = scripts.get_revision("head")
+    search_revision = scripts.get_revision("bd688512265a")
     assert search_revision.down_revision is not None
     _migrate_database(database_url, search_revision.down_revision, downgrade=True)
     assert set(inspect(engine).get_table_names()) == set(Base.metadata.tables) | {"alembic_version"}
-    _assert_schema_matches_metadata(inspect(engine), engine)
     _migrate_database(database_url)
+    _assert_schema_matches_metadata(inspect(engine), engine)
     assert set(inspect(engine).get_table_names()) >= SEARCH_PROJECTION_TABLES
     with engine.connect() as connection:
         for table_name in sorted(SEARCH_PROJECTION_TABLES):

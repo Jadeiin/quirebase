@@ -408,10 +408,45 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		get?: never;
+		/** Admin Invitations */
+		get: operations['admin.admin_invitations'];
 		put?: never;
 		/** Admin Create Invitation */
 		post: operations['admin.admin_create_invitation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/invitations/{invitation_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Admin Revoke Invitation */
+		delete: operations['admin.admin_revoke_invitation'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/admin/invitations/{invitation_id}/reissue': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Admin Reissue Invitation */
+		post: operations['admin.admin_reissue_invitation'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -2269,6 +2304,18 @@ export interface components {
 			expires_at: string;
 			/** Accepted At */
 			accepted_at?: string | null;
+			/** Revoked At */
+			revoked_at?: string | null;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+			/**
+			 * State
+			 * @enum {string}
+			 */
+			readonly state: 'pending' | 'expired' | 'revoked' | 'accepted';
 		};
 		/** AdminMaintenanceView */
 		AdminMaintenanceView: {
@@ -2364,8 +2411,6 @@ export interface components {
 			offset: number;
 			/** Total */
 			total: number;
-			/** Invitations */
-			invitations: components['schemas']['AdminInvitationView'][];
 		};
 		/** AdminWorkspaceView */
 		AdminWorkspaceView: {
@@ -4306,6 +4351,20 @@ export interface components {
 		 * OffsetPagination
 		 * @description Container for data returned using limit/offset pagination.
 		 */
+		OffsetPagination_AdminInvitationView_: {
+			/** Items */
+			items: components['schemas']['AdminInvitationView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
 		OffsetPagination_ItemSearchView_: {
 			/** Items */
 			items: components['schemas']['ItemSearchView'][];
@@ -5534,6 +5593,8 @@ export interface components {
 			| 'user.revoke_sessions'
 			| 'invitation.read'
 			| 'invitation.create'
+			| 'invitation.revoke'
+			| 'invitation.reissue'
 			| 'audit.read'
 			| 'workflow.read'
 			| 'setting.read'
@@ -7307,6 +7368,48 @@ export interface operations {
 			};
 		};
 	};
+	'admin.admin_invitations': {
+		parameters: {
+			query?: {
+				state?: '' | 'pending' | 'expired' | 'revoked' | 'accepted';
+				limit?: number;
+				offset?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_AdminInvitationView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
 	'admin.admin_create_invitation': {
 		parameters: {
 			query?: never;
@@ -7319,6 +7422,86 @@ export interface operations {
 				'application/json': components['schemas']['InvitationCreateRequest'];
 			};
 		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AdminInvitationCreatedView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_revoke_invitation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				invitation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_reissue_invitation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				invitation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
 		responses: {
 			/** @description Successful Response */
 			201: {

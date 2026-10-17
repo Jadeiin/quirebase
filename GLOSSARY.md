@@ -254,6 +254,8 @@ _Avoid_: Global Role, User Role
 A single-use, time-limited instance-level mechanism for provisioning or registering a User. A
 Workspace admission uses a separate WorkspaceInvitation and does not follow from instance
 registration alone.
+Revocation invalidates the link while preserving its record. Reissuing an Invitation revokes
+the previous link and creates a new Invitation for the same username and System Role.
 _Avoid_: Invite Code, Signup Token
 
 **Workspace Invitation**:
@@ -286,7 +288,8 @@ The HTTP API and its generated operation IDs use these verbs deliberately:
 An HTTP DELETE method can therefore generate either a delete_* or remove_* operation ID:
 the method describes the transport, while the verb describes the domain effect. discard is
 reserved for abandoning staged transient work such as an Import Batch, and revoke is reserved
-for invalidating a Login Session or API Token without deleting its audit/persistence record.
+for invalidating an Invitation, Workspace Invitation, Login Session or API Token without deleting
+its audit/persistence record.
 
 ## Relationships
 

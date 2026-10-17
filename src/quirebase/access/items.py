@@ -39,16 +39,6 @@ async def get_item(db: AsyncSession, ctx: WorkspaceContext, item_id: UUID) -> It
     return await db.scalar(workspace_select(Item, ctx).options().where(Item.id == item_id))
 
 
-async def get_item_for_update(
-    db: AsyncSession, ctx: WorkspaceContext, item_id: UUID
-) -> Item | None:
-    """Load an Item root with a row lock for a mutation boundary."""
-
-    return await db.scalar(
-        workspace_select(Item, ctx).options().where(Item.id == item_id).with_for_update()
-    )
-
-
 async def can_read_item(db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID) -> bool:
     try:
         await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
