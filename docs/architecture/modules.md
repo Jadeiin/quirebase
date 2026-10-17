@@ -31,10 +31,11 @@ errors, while valid facts without a grant remain permission denials.
 The [generated capability matrix](authorization-matrix.md) makes effective policy changes
 reviewable without maintaining another grant table.
 
-The [`main` PostgreSQL merge gate](https://github.com/Jadeiin/quirebase/rules/24554596) requires
-the GitHub Actions `postgres` check against the current base branch. That job runs database
-and JSON query contracts, controlled concurrency, migrations and durable recovery, followed by
-fresh database initialization and durable-workflow diagnostics.
+The GitHub Actions [`postgres` job](../../.github/workflows/ci.yml) runs on pushes, pull requests,
+manual dispatches and scheduled CI runs. It checks database and JSON query contracts, controlled
+concurrency, migrations and durable recovery, followed by fresh database initialization and
+durable-workflow diagnostics. Direct pushes to `main` do not require this check to have completed
+on a separate branch.
 
 | Package | Role | Owns |
 | --- | --- | --- |
