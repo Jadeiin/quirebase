@@ -161,6 +161,80 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 	await expect(page.getByText('Page 2 Item 1')).toBeVisible();
 });
 
+for (const nextPage of [false, true]) {
+	test(`bulk completion preserves a newer selection on ${nextPage ? 'another' : 'the same'} Library page`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		const items = Array.from({ length: 26 }, (_, i) => ({
+			id: `item-${i}`,
+			title_html: `Library Item ${i}`,
+			authors: null,
+			publication_date: null,
+			publication_title: null,
+			doi: null,
+			version: 1
+		}));
+		await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+			route.fulfill({ json: directoryPage(items, route) })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
+		);
+		await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+			route.fulfill({
+				json: tagPage(
+					[
+						{
+							id: 'tag-1',
+							name: 'Methods',
+							accessible_item_count: 0,
+							authorization: { allowed: ['tag.use'] }
+						}
+					],
+					route
+				)
+			})
+		);
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const submitted: Array<{ item_ids: string[] }> = [];
+		await page.route('**/api/v1/workspaces/workspace-1/items/bulk', async (route) => {
+			submitted.push(route.request().postDataJSON());
+			started.resolve();
+			await release.promise;
+			return route.fulfill({ json: { ok: true } });
+		});
+		await page.goto('/workspace/workspace-1/library');
+		await page.locator('article input[type=checkbox]').first().check();
+		await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
+		await chooseSearchOption(page, 'Select Tag', 'Methods');
+		await page.getByRole('button', { name: 'Apply', exact: true }).click();
+		await started.promise;
+		try {
+			if (nextPage) {
+				await page.getByRole('button', { name: 'Next page', exact: true }).click();
+				await expect(page.getByText('Library Item 25', { exact: true })).toBeVisible();
+			} else {
+				await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+			}
+			const newerSelection = page.locator('article input[type=checkbox]').first();
+			await newerSelection.check();
+			release.resolve();
+			await expect(page.getByText('Bulk action completed', { exact: true })).toBeVisible();
+			await expect(newerSelection).toBeChecked();
+			await page.getByRole('button', { name: 'Apply', exact: true }).click();
+			await expect(newerSelection).not.toBeChecked();
+			expect(submitted.map((body) => body.item_ids)).toEqual([
+				['item-0'],
+				[nextPage ? 'item-25' : 'item-0']
+			]);
+		} finally {
+			release.resolve();
+		}
+	});
+}
+
 test('Library history navigation restores filter drafts and clears selection', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>

@@ -3,6 +3,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiRequest } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
+	import type { components } from '#lib/api/schema.js';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import Badge from '#lib/design/Badge.svelte';
 	import Notice from '#lib/design/Notice.svelte';
@@ -21,7 +22,7 @@
 
 	let tokenName = $state('');
 	let tokenDays = $state(30);
-	let createdToken = $state('');
+	let createdToken = $state<components['schemas']['ApiTokenGrantView'] | null>(null);
 	let externalOrigin = $state('');
 	let sidebarCollapsed = $state(false);
 	let error = $state('');
@@ -81,7 +82,7 @@
 			const grant = await apiRequest('POST', '/account/api-tokens', {
 				body: { name: tokenName, days: tokenDays }
 			});
-			createdToken = grant.token;
+			createdToken = grant;
 			tokenName = '';
 			await account.refetch();
 		} catch (reason) {
@@ -109,13 +110,12 @@
 	}
 
 	function revokeToken(tokenId: string) {
-		void mutate(
-			() =>
-				apiRequest('DELETE', '/account/api-tokens/{token_id}', {
-					params: { path: { token_id: tokenId } }
-				}),
-			msg('API Token revoked')
-		);
+		void mutate(async () => {
+			await apiRequest('DELETE', '/account/api-tokens/{token_id}', {
+				params: { path: { token_id: tokenId } }
+			});
+			if (createdToken?.id === tokenId) createdToken = null;
+		}, msg('API Token revoked'));
 	}
 
 	function revokeSession(sessionId: string, current: boolean) {
@@ -312,7 +312,7 @@
 						variant="warning"
 						class="grid min-w-0 grid-cols-1 gap-2 [overflow-wrap:anywhere]"
 					>
-						<strong>{$t('Copy this token now')}</strong><code>{createdToken}</code>
+						<strong>{$t('Copy this token now')}</strong><code>{createdToken.token}</code>
 					</Notice>
 				{/if}
 				{#each account.data.api_tokens as token (token.id)}

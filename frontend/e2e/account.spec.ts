@@ -45,6 +45,79 @@ async function savedCitationStyle(page: Page, workspaceId: string) {
 	);
 }
 
+test('one-time API Token display survives unrelated and failed revocations and clears on its own revocation', async ({
+	page
+}) => {
+	await mockSession(page);
+	let created = false;
+	let failRevoke = true;
+	let refreshUnavailable = false;
+	const revoked = new Set<string>();
+	await page.route('**/api/v1/account**', (route) => {
+		const request = route.request();
+		if (request.method() === 'POST') {
+			created = true;
+			return route.fulfill({
+				status: 201,
+				json: {
+					id: 'token-current',
+					token: 'qb_synthetic_one_time_secret',
+					expires_at: '2099-01-01T00:00:00Z'
+				}
+			});
+		}
+		if (request.method() === 'DELETE') {
+			const id = request.url().split('/').at(-1)!;
+			if (id === 'token-current' && failRevoke) {
+				failRevoke = false;
+				return route.fulfill({ status: 500, json: { code: 'internal_error' } });
+			}
+			revoked.add(id);
+			if (id === 'token-current') refreshUnavailable = true;
+			return route.fulfill({ json: { ok: true } });
+		}
+		if (refreshUnavailable) return route.fulfill({ status: 500, json: { code: 'internal_error' } });
+		return route.fulfill({
+			json: {
+				user: { id: 'user-1', username: 'reader', role: 'member' },
+				sessions: [],
+				api_tokens: [
+					{ id: 'token-older', name: 'Older client' },
+					...(created ? [{ id: 'token-current', name: 'Current client' }] : [])
+				].map((token) => ({
+					...token,
+					status: revoked.has(token.id) ? 'revoked' : 'active',
+					expires_at: '2099-01-01T00:00:00Z'
+				}))
+			}
+		});
+	});
+	await page.goto('/account');
+	await page.getByPlaceholder('Token name').fill('Current client');
+	await page.getByRole('button', { name: 'Create', exact: true }).click();
+	const secret = page.getByText('qb_synthetic_one_time_secret', { exact: true });
+	await expect(secret).toBeVisible();
+	await page
+		.getByText('Older client', { exact: true })
+		.locator('../..')
+		.getByRole('button', { name: 'Revoke token', exact: true })
+		.click();
+	await expect(page.getByText('API Token revoked', { exact: true })).toBeVisible();
+	await expect(secret).toBeVisible();
+	const revokeCurrent = page
+		.getByText('Current client', { exact: true })
+		.locator('../..')
+		.getByRole('button', { name: 'Revoke token', exact: true });
+	await revokeCurrent.click();
+	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(revokeCurrent).toBeEnabled();
+	await expect(secret).toBeVisible();
+	await revokeCurrent.click();
+	await expect(page.getByText('API Token revoked', { exact: true })).toBeVisible();
+	await expect(secret).toHaveCount(0);
+	await expect(page.getByText('Copy this token now', { exact: true })).toHaveCount(0);
+});
+
 test('resetting export preferences resets the saved Workspace citation style', async ({ page }) => {
 	await mockExportPreferences(page);
 	await page.goto('/account');

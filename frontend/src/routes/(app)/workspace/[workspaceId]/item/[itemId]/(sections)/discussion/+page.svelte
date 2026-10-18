@@ -46,8 +46,8 @@
 		event.preventDefault();
 		if (!workspace.can('item_discussion.create')) return;
 		const form = event.currentTarget as HTMLFormElement;
-		const body = String(new FormData(form).get('body') ?? '').trim();
-		if (body) track(discussionCreate.mutateAsync({ form, body }));
+		const body = String(new FormData(form).get('body') ?? '');
+		if (body.trim()) track(discussionCreate.mutateAsync({ form, body }));
 	}
 
 	function deleteDiscussion(messageId: string) {

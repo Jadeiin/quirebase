@@ -2,6 +2,7 @@
 	import { Combobox, Dialog, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -147,13 +148,6 @@
 		error = '';
 		settingsDialogOpen = true;
 	}
-
-	$effect(() => {
-		if (!project) return;
-		settingsName = project.name;
-		settingsDescription = project.description;
-		settingsParticipation = project.participation;
-	});
 
 	async function mutate(
 		action: () => Promise<unknown>,
@@ -313,11 +307,14 @@
 	}
 
 	async function confirmDeleteProject(confirmation: string) {
+		const targetProjectId = projectId;
+		const targetProjectName = project?.name ?? confirmation;
+		const requestedPath = page.url.pathname;
 		deleteDialogOpen = false;
 		const deleted = await mutate(
 			() =>
 				workspace.api.request('DELETE', '/workspaces/{workspace_id}/projects/{project_id}', {
-					params: { path: { project_id: projectId } },
+					params: { path: { project_id: targetProjectId } },
 					body: { confirmation }
 				}),
 			$t('Project deleted'),
@@ -327,7 +324,10 @@
 			// Deletion removes the Project from every cached directory and
 			// selector, including reader annotation sources.
 			await invalidateProject(queryClient, workspaceId);
-			await goto(resolve(workspaceHref(workspaceId, 'projects')));
+			if (page.url.pathname === requestedPath) {
+				await goto(resolve(workspaceHref(workspaceId, 'projects')));
+			}
+			toaster.success({ title: `${$t('Project deleted')}: ${targetProjectName}` });
 		}
 	}
 
@@ -361,18 +361,19 @@
 	async function addDiscussion(event: SubmitEvent) {
 		event.preventDefault();
 		if (!body.trim()) return;
+		const submittedBody = body;
 		const posted = await mutate(
 			() =>
 				workspace.api.request(
 					'POST',
 					'/workspaces/{workspace_id}/projects/{project_id}/discussions',
-					{ params: { path: { project_id: projectId } }, body: { body: body.trim() } }
+					{ params: { path: { project_id: projectId } }, body: { body: submittedBody.trim() } }
 				),
 			$t('Discussion posted'),
 			true,
 			true
 		);
-		if (posted) body = '';
+		if (posted && body === submittedBody) body = '';
 	}
 
 	async function deleteDiscussion(messageId: string) {

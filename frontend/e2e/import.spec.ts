@@ -280,6 +280,58 @@ test('shared pending Import previews poll the batch without actor-only workflow 
 	expect(workflowRequests).toBe(0);
 });
 
+for (const owned of [false, true]) {
+	test(`${owned ? 'owned' : 'shared'} pending Import previews resume after a temporary refresh failure`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		let reads = 0;
+		const writes: string[] = [];
+		await page.route('**/api/v1/workspaces/workspace-1/imports/batch-recover**', (route) => {
+			if (route.request().method() !== 'GET') {
+				writes.push(route.request().method());
+				return route.fulfill({ status: 500, json: { code: 'internal_error' } });
+			}
+			reads++;
+			if (reads === 2) return route.fulfill({ status: 500, json: { code: 'internal_error' } });
+			return route.fulfill({
+				json: {
+					id: 'batch-recover',
+					file_format: 'pdf',
+					status: reads >= 4 ? 'ready' : 'pending',
+					workflow_id: owned ? 'workflow-recover' : null,
+					records:
+						reads >= 4
+							? [
+									{
+										metadata: {
+											id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+											type: 'Other',
+											title: 'Recovered imported PDF'
+										}
+									}
+								]
+							: [],
+					errors: []
+				}
+			});
+		});
+		await page.route('**/api/v1/workspaces/workspace-1/workflows/workflow-recover', (route) =>
+			route.fulfill({ json: { id: 'workflow-recover', state: 'succeeded', error: null } })
+		);
+		await page.goto('/workspace/workspace-1/import?batch=batch-recover');
+		await expect(page.getByRole('heading', { name: /Import preview/ })).toBeVisible();
+		await expect(page.getByRole('alert')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Commit', exact: true })).toBeDisabled();
+		await page.getByRole('button', { name: 'Retry', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Commit', exact: true })).toBeEnabled();
+		await expect(page.getByText('Recovered imported PDF', { exact: true })).toBeVisible();
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		await expect(page).toHaveURL(/batch=batch-recover/);
+		expect(writes).toEqual([]);
+	});
+}
+
 test('PDF import accumulates and deduplicates repeated file selections', async ({ page }) => {
 	await mockSession(page);
 	let uploadBody = '';

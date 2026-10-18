@@ -18,6 +18,7 @@
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	type Results = components['schemas']['CandidatePageView'];
+	type SearchRequest = components['schemas']['DiscoverySearchRequest'];
 	type Candidate = components['schemas']['CandidateView'];
 	type Clause = { id: number; field: string; operator: string; term: string };
 	type Sort = components['schemas']['ProviderChoice']['sorts'][number];
@@ -33,6 +34,7 @@
 	let importing = $state('');
 	let error = $state('');
 	let results = $state<Results | null>(null);
+	let submittedSearch = $state<SearchRequest | null>(null);
 	let searchAbort: AbortController | null = null;
 
 	const workspace = getWorkspaceContext();
@@ -64,26 +66,38 @@
 		clauses = clauses.filter((clause) => clause.id !== id);
 	}
 
-	async function search(page = 1) {
+	function search() {
 		if (!selectedProvider) return;
+		void loadResults({
+			provider,
+			clauses: clauses.map(({ field, operator, term }) => ({ field, operator, term })),
+			page: 1,
+			per_page: pageSize,
+			sort,
+			year_from: yearFrom ? Number(yearFrom) : null,
+			year_to: yearTo ? Number(yearTo) : null
+		});
+	}
+
+	async function loadResults(body: SearchRequest) {
 		searchAbort?.abort();
 		const controller = new AbortController();
 		searchAbort = controller;
 		busy = true;
 		error = '';
 		try {
-			results = await workspace.api.request('POST', '/workspaces/{workspace_id}/discovery/search', {
-				body: {
-					provider,
-					clauses: clauses.map(({ field, operator, term }) => ({ field, operator, term })),
-					page,
-					per_page: pageSize,
-					sort,
-					year_from: yearFrom ? Number(yearFrom) : null,
-					year_to: yearTo ? Number(yearTo) : null
-				},
-				signal: controller.signal
-			});
+			const next = await workspace.api.request(
+				'POST',
+				'/workspaces/{workspace_id}/discovery/search',
+				{
+					body,
+					signal: controller.signal
+				}
+			);
+			if (controller.signal.aborted) return;
+			results = next;
+			submittedSearch = body;
+			pageSize = next.per_page;
 		} catch (reason) {
 			if (controller.signal.aborted) return;
 			if (results) pageSize = results.per_page;
@@ -267,11 +281,13 @@
 			total={results.total}
 			onPageSize={(size) => {
 				pageSize = size;
-				void search();
+				if (submittedSearch) void loadResults({ ...submittedSearch, page: 1, per_page: size });
 			}}
 			{busy}
 			label={$t('Discovery result pages')}
-			onPage={(next) => void search(next)}
+			onPage={(next) => {
+				if (submittedSearch) void loadResults({ ...submittedSearch, page: next });
+			}}
 		/>
 	{/if}
 </Panel>

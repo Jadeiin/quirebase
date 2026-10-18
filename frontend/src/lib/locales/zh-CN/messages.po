@@ -2730,6 +2730,7 @@ msgstr "加载更多 Workspace"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemSectionState.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "Loading"
 msgstr "正在加载"
 
@@ -4368,11 +4369,13 @@ msgstr "恢复工作区"
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/+page.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "Retry"
 msgstr "重试"
 
@@ -5497,6 +5500,7 @@ msgstr "无法打开 Quirebase"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemSectionState.svelte
+#: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "Unable to open this Item section."
 msgstr "无法打开此条目分区。"
 

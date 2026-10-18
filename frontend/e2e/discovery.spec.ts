@@ -36,6 +36,96 @@ test('Discovery follows provider sorts and the server clause limit', async ({ pa
 	await expect.poll(() => searchBody).toMatchObject({ provider: 'arxiv', sort: 'relevance' });
 });
 
+test('Discovery paging retains the successful query while a new query is edited or rejected', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>
+		route.fulfill({
+			json: {
+				search: [
+					{ id: 'crossref', name: 'Crossref', sorts: ['relevance', 'published', 'cited'] },
+					{ id: 'arxiv', name: 'arXiv', sorts: ['relevance', 'published'] }
+				],
+				lookup: [],
+				max_search_clauses: 5
+			}
+		})
+	);
+	const requests: Array<{
+		provider: string;
+		sort: string;
+		page: number;
+		per_page: number;
+		clauses: { term: string }[];
+		year_from: number;
+	}> = [];
+	let rejectNewQuery = true;
+	await page.route('**/api/v1/workspaces/workspace-1/discovery/search', (route) => {
+		const body = route.request().postDataJSON();
+		requests.push(body);
+		if (body.clauses[0].term === 'beta' && rejectNewQuery)
+			return route.fulfill({ status: 503, json: { code: 'upstream_service_error' } });
+		return route.fulfill({
+			json: {
+				provider: body.provider,
+				page: body.page,
+				per_page: body.per_page,
+				total: 120,
+				results: [
+					{
+						provider: body.provider,
+						identifier_provider: 'doi',
+						identifier: '10.1000/result',
+						title: `${body.clauses[0].term} page ${body.page}`
+					}
+				]
+			}
+		});
+	});
+	await page.goto('/workspace/workspace-1/discovery');
+	const term = page.getByPlaceholder('Title, author, DOI, or topic');
+	await term.fill('alpha');
+	await page.getByRole('combobox', { name: 'Sort', exact: true }).selectOption('cited');
+	await page.getByRole('textbox', { name: 'From year', exact: true }).fill('2020');
+	await page.getByRole('button', { name: 'Search Discovery' }).click();
+	await expect(page.getByText('alpha page 1', { exact: true })).toBeVisible();
+	await term.fill('beta');
+	await page.getByRole('combobox', { name: 'Provider', exact: true }).selectOption('arxiv');
+	await page.getByRole('textbox', { name: 'From year', exact: true }).fill('2024');
+	const pagination = page.getByRole('navigation', { name: 'Discovery result pages' });
+	await pagination.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(page.getByText('alpha page 2', { exact: true })).toBeVisible();
+	await pagination.getByRole('combobox', { name: 'Page Size', exact: true }).selectOption('50');
+	await expect(pagination.getByText('Showing 1–50 of 120')).toBeVisible();
+	await expect(term).toHaveValue('beta');
+	await page.getByRole('button', { name: 'Search Discovery' }).click();
+	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page.getByText('alpha page 1', { exact: true })).toBeVisible();
+	await pagination.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(page.getByText('alpha page 2', { exact: true })).toBeVisible();
+	rejectNewQuery = false;
+	await page.getByRole('button', { name: 'Search Discovery' }).click();
+	await expect(page.getByText('beta page 1', { exact: true })).toBeVisible();
+	expect(
+		requests.map((body) => ({
+			provider: body.provider,
+			sort: body.sort,
+			term: body.clauses[0].term,
+			year: body.year_from,
+			page: body.page,
+			size: body.per_page
+		}))
+	).toEqual([
+		{ provider: 'crossref', sort: 'cited', term: 'alpha', year: 2020, page: 1, size: 20 },
+		{ provider: 'crossref', sort: 'cited', term: 'alpha', year: 2020, page: 2, size: 20 },
+		{ provider: 'crossref', sort: 'cited', term: 'alpha', year: 2020, page: 1, size: 50 },
+		{ provider: 'arxiv', sort: 'relevance', term: 'beta', year: 2024, page: 1, size: 50 },
+		{ provider: 'crossref', sort: 'cited', term: 'alpha', year: 2020, page: 2, size: 50 },
+		{ provider: 'arxiv', sort: 'relevance', term: 'beta', year: 2024, page: 1, size: 50 }
+	]);
+});
+
 test('discovery renders the flat results response contract', async ({ page }) => {
 	await mockSession(page);
 	await page.route('**/api/v1/workspaces/workspace-1/discovery/providers', (route) =>

@@ -61,6 +61,54 @@ test('Library pagination keeps size, sort and exact filters through navigation',
 	expect(new URL(page.url()).searchParams.get('author_first_name')).toBe('');
 });
 
+test('Library deletion recovers the last valid page with filters, sorting and page size intact', async ({
+	page
+}) => {
+	await mockSession(page);
+	const remaining = items.slice(0, 21);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+		route.fulfill({ json: directoryPage(remaining, route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items/bulk', (route) => {
+		expect(route.request().postDataJSON()).toMatchObject({
+			item_ids: ['item-21'],
+			action: 'delete',
+			confirmation: 'delete'
+		});
+		remaining.pop();
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto(
+		'/workspace/workspace-1/library?q=research&sort=created&author_first_name=&page=2&page_size=20'
+	);
+	await expect(page.getByText('Item 21', { exact: true })).toBeVisible();
+	await page.getByRole('checkbox', { name: 'Select this page', exact: true }).check();
+	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('delete');
+	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Permanently delete', exact: true })
+		.click();
+	await expect(page.getByText('Bulk action completed', { exact: true })).toBeVisible();
+	const pagination = page.getByRole('navigation', { name: 'Library pages' });
+	await expect(pagination.getByText('Page 1 of 1', { exact: true })).toBeVisible();
+	await expect(page.getByText('Item 1', { exact: true })).toBeVisible();
+	await expect(pagination.getByRole('combobox', { name: 'Page Size', exact: true })).toHaveValue(
+		'20'
+	);
+	await expect(pagination.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue(
+		'created'
+	);
+	const params = new URL(page.url()).searchParams;
+	expect(params.get('q')).toBe('research');
+	expect(params.get('author_first_name')).toBe('');
+	expect(params.get('page')).toBeNull();
+	expect(params.get('page_size')).toBe('20');
+});
+
 for (const total of [0, 1]) {
 	test(`Library pagination stays usable with ${total} results on mobile`, async ({ page }) => {
 		await mockSession(page);

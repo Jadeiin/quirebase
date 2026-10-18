@@ -25,10 +25,10 @@ export function discussionCreateMutationOptions(
 		mutationFn: ({ body }: DiscussionCreateMutation) =>
 			api.request('POST', '/workspaces/{workspace_id}/items/{item_id}/discussions', {
 				params: { path: { item_id: itemId } },
-				body: { body }
+				body: { body: body.trim() }
 			}),
-		onSuccess: async (_saved, { form }) => {
-			form.reset();
+		onSuccess: async (_saved, { form, body }) => {
+			if (String(new FormData(form).get('body') ?? '') === body) form.reset();
 			await invalidateItemDiscussion(queryClient, workspaceId, itemId);
 		}
 	});

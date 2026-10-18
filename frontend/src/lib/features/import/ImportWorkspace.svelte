@@ -10,6 +10,7 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import type { components } from '#lib/api/schema.js';
 	import Panel from '#lib/design/Panel.svelte';
+	import Button from '#lib/design/Button.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import Badge from '#lib/design/Badge.svelte';
 	import FilePicker from '#lib/design/FilePicker.svelte';
@@ -46,6 +47,7 @@
 	let batch = $state<ImportBatch | null>(null);
 	const hasStagedBatch = $derived(batch !== null && batch.status !== 'committed');
 	let error = $state('');
+	let refreshFailedBatchId = $state<string | null>(null);
 	let busy = $state(false);
 	let previewPage = $state(1);
 	let metadataErrors = $state<components['schemas']['ErrorField'][]>([]);
@@ -111,6 +113,7 @@
 
 	function acceptBatch(next: ImportBatch) {
 		stopPolling();
+		refreshFailedBatchId = null;
 		if (batch?.id !== next.id) {
 			sourceTab =
 				next.file_format === 'pdf'
@@ -157,12 +160,15 @@
 				interval = Math.min(interval * 2, 4000);
 			}
 		} catch (reason) {
-			if (controller.signal.aborted) return;
+			if (controller.signal.aborted || batch?.id !== batchId) return;
+			refreshFailedBatchId = batchId;
 			error = apiErrorMessage(reason, $t('Unable to refresh Import preview'));
 		}
 	}
 
 	async function loadBatch(batchId: string) {
+		stopPolling();
+		refreshFailedBatchId = null;
 		busy = true;
 		error = '';
 		try {
@@ -172,6 +178,7 @@
 				})
 			);
 		} catch (reason) {
+			refreshFailedBatchId = batchId;
 			error = apiErrorMessage(reason, $t('Unable to load Import preview'));
 		} finally {
 			busy = false;
@@ -199,13 +206,16 @@
 				'GET',
 				'/workspaces/{workspace_id}/imports/{batch_id}',
 				{
-					params: { path: { batch_id: batchId } }
+					params: { path: { batch_id: batchId } },
+					signal: controller.signal
 				}
 			);
 			if (controller.signal.aborted || batch?.id !== batchId) return;
 			await acceptBatch(refreshed);
 			error = '';
 		} catch (reason) {
+			if (controller.signal.aborted || batch?.id !== batchId) return;
+			refreshFailedBatchId = batchId;
 			error = apiErrorMessage(reason, $t('Unable to refresh Import preview'));
 		}
 	}
@@ -314,6 +324,7 @@
 			});
 			stopPolling();
 			batch = null;
+			refreshFailedBatchId = null;
 			const url = new URL(page.url.href);
 			url.searchParams.delete('batch');
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- page.url is already a resolved pathname
@@ -383,7 +394,18 @@
 		</li>
 	{/each}
 </ol>
-{#if error}<Notice variant="error">{error}</Notice>{/if}
+{#if error}<Notice variant="error" as="div">
+		{error}
+		{#if refreshFailedBatchId}
+			<Button
+				class="ml-3"
+				disabled={busy}
+				onclick={() => {
+					if (refreshFailedBatchId) void loadBatch(refreshFailedBatchId);
+				}}>{$t('Retry')}</Button
+			>
+		{/if}
+	</Notice>{/if}
 {#if workspace.can('item.create')}
 	<Tabs
 		value={sourceTab}

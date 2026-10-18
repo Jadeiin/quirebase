@@ -111,6 +111,53 @@ for (const width of [1440, 390]) {
 	});
 }
 
+test('Project settings preserve rejected drafts through refresh and a corrected retry', async ({
+	page
+}) => {
+	let current = { ...project };
+	const submitted: Array<{ name?: string; description?: string }> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) => {
+		if (route.request().method() === 'PATCH') {
+			const changes = route.request().postDataJSON();
+			submitted.push(changes);
+			if (submitted.length === 1) {
+				current = { ...current, item_count: 1 };
+				return route.fulfill({
+					status: 422,
+					json: { code: 'validation_failed', message: 'Description is too long' }
+				});
+			}
+			current = { ...current, ...changes };
+			return route.fulfill({ json: { id: project.id } });
+		}
+		return route.fulfill({ json: current });
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Project settings', exact: true });
+	const name = 'Keep this unsaved Project name';
+	const description = 'Long unsaved description '.repeat(90);
+	await dialog.getByLabel('Name', { exact: true }).fill(name);
+	await dialog.getByLabel('Description', { exact: true }).fill(description);
+	await dialog.getByRole('button', { name: 'Save Project settings' }).click();
+	await expect(dialog.getByRole('alert')).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Save Project settings' })).toBeEnabled();
+	await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue(name);
+	await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
+	await dialog.getByLabel('Description', { exact: true }).fill('Corrected description');
+	await dialog.getByRole('button', { name: 'Save Project settings' }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+	await expect(page.getByText('Corrected description', { exact: true })).toBeVisible();
+	expect(submitted).toEqual([
+		{ name, description },
+		{ name, description: 'Corrected description' }
+	]);
+});
+
 test('Workspace admins can open and govern managed Projects without being participants', async ({
 	page
 }) => {
@@ -344,6 +391,61 @@ test('deleting a Project refreshes the cached Project directory', async ({ page 
 	await expect.poll(() => deleted).toBe(true);
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);
 	await expect(page.getByRole('link').filter({ hasText: project.name })).toHaveCount(0);
+});
+
+test('a completed Project deletion preserves navigation and a newer Project draft', async ({
+	page
+}) => {
+	let deleted = false;
+	const rows = () =>
+		['A', 'B']
+			.filter((id) => !deleted || id !== 'A')
+			.map((id) => ({
+				...project,
+				id,
+				name: `Project ${id}`,
+				authorization: { allowed: [...project.authorization.allowed, 'project.delete'] }
+			}));
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+		route.fulfill({ json: directoryPage(rows(), route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/*/discussions', (route) =>
+		route.fulfill({ json: [] })
+	);
+	const started = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	await page.route('**/api/v1/workspaces/workspace-1/projects/*', async (route) => {
+		if (route.request().method() === 'DELETE') {
+			expect(route.request().url()).toContain('/projects/A');
+			expect(route.request().postDataJSON()).toEqual({ confirmation: 'Project A' });
+			started.resolve();
+			await release.promise;
+			deleted = true;
+			return route.fulfill({ json: { ok: true } });
+		}
+		return route.fulfill({
+			json: rows().find((row) => row.id === route.request().url().split('/').at(-1))
+		});
+	});
+	await page.goto('/workspace/workspace-1/projects/A');
+	await page.getByRole('button', { name: 'Delete Project', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Permanently delete this Project?' });
+	await dialog.getByLabel('Project name', { exact: true }).fill('Project A');
+	await dialog.getByRole('button', { name: 'Delete Project', exact: true }).click();
+	await started.promise;
+	try {
+		await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
+		await page.getByRole('link', { name: /Project B/ }).click();
+		await page.getByPlaceholder('Write a message').fill('Keep this draft in Project B');
+		release.resolve();
+		await expect(page.getByText('Project deleted: Project A', { exact: true })).toBeVisible();
+		await expect(page).toHaveURL(/\/projects\/B$/);
+		await expect(page.getByPlaceholder('Write a message')).toHaveValue(
+			'Keep this draft in Project B'
+		);
+	} finally {
+		release.resolve();
+	}
 });
 
 test('Workspace admin moderates managed Project Discussion with an audited reason', async ({

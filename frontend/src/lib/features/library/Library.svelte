@@ -54,6 +54,7 @@
 	let fileFilter = $state(page.url.searchParams.get('has_files') ?? '');
 	let filtersOpen = $state(false);
 	let selected = new SvelteSet<string>();
+	let selectionVersion = 0;
 	let bulkAction = $state('');
 	let bulkProject = $state('');
 	let bulkTag = $state('');
@@ -81,7 +82,7 @@
 		keyword = page.url.searchParams.get('keyword') ?? '';
 		author = page.url.searchParams.get('author') ?? '';
 		fileFilter = page.url.searchParams.get('has_files') ?? '';
-		selected.clear();
+		clearSelection();
 	});
 
 	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber, pageSize));
@@ -96,6 +97,14 @@
 			: (projects.data ?? [])
 	);
 	const totalPages = $derived(Math.max(1, Math.ceil((library.data?.total ?? 0) / pageSize)));
+	$effect(() => {
+		if (library.isSuccess && !library.isFetching && pageNumber > totalPages) {
+			void goto(resolve(libraryHref(workspaceId, submitted, totalPages, pageSize)), {
+				reset: false,
+				replaceState: true
+			});
+		}
+	});
 	const allPageSelected = $derived(
 		((library.data?.items.length ?? 0) > 0 &&
 			library.data?.items.every((item) => selected.has(item.id))) ??
@@ -111,7 +120,7 @@
 	});
 
 	function navigate(filters: AppliedLibraryFilters, nextPage = 1, nextPageSize = pageSize) {
-		selected.clear();
+		clearSelection();
 		void goto(resolve(libraryHref(workspaceId, filters, nextPage, nextPageSize)), { reset: false });
 	}
 
@@ -140,6 +149,7 @@
 	}
 
 	function togglePageSelection(event: Event) {
+		selectionVersion++;
 		const checked = (event.currentTarget as HTMLInputElement).checked;
 		for (const item of library.data?.items ?? []) {
 			if (checked) selected.add(item.id);
@@ -148,8 +158,14 @@
 	}
 
 	function toggleItem(id: string) {
+		selectionVersion++;
 		if (selected.has(id)) selected.delete(id);
 		else selected.add(id);
+	}
+
+	function clearSelection() {
+		selectionVersion++;
+		selected.clear();
 	}
 
 	function requestBulkAction() {
@@ -167,6 +183,7 @@
 		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
 		error = '';
 		notice = '';
+		const submittedSelectionVersion = selectionVersion;
 		try {
 			await bulkMutation.mutateAsync({
 				input: {
@@ -177,7 +194,9 @@
 					exportFormat,
 					preferences: exportPreferences
 				},
-				afterMutation: () => selected.clear()
+				afterMutation: () => {
+					if (selectionVersion === submittedSelectionVersion) clearSelection();
+				}
 			});
 			notice = $t('Bulk action completed');
 		} catch (reason) {
@@ -230,7 +249,7 @@
 	projects={projectChoices}
 	{busy}
 	onApply={requestBulkAction}
-	onClearSelection={() => selected.clear()}
+	onClearSelection={clearSelection}
 />
 
 {#if projects.hasNextPage}<Button

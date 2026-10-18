@@ -131,8 +131,8 @@ enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
 	raw: 921000,
-	// Includes the shared, localized destructive-detachment warning.
-	gzip: 259500
+	// Includes destructive-detachment warnings, scoped selection cleanup and last-page recovery.
+	gzip: 260000
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.
@@ -144,8 +144,8 @@ enforce('Account route', routeBundle('/(app)/account'), {
 	gzip: 226000
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
-	// Includes shared pagination styles and account-management translations.
-	raw: 825000,
+	// Includes shared pagination styles, account-management translations and recovery controls.
+	raw: 825500,
 	gzip: 236000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {

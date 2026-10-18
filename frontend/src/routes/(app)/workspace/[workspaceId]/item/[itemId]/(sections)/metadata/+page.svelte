@@ -5,7 +5,8 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { can } from '#lib/authorization/can.js';
 	import Notice from '#lib/design/Notice.svelte';
-	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
+	import Button from '#lib/design/Button.svelte';
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import ItemMetadataSection from '#lib/features/item/metadata/ItemMetadataSection.svelte';
 	import { metadataMutationOptions } from '#lib/features/item/metadata/mutations.js';
 	import { itemOverviewQuery } from '#lib/features/item/queries.js';
@@ -30,7 +31,7 @@
 		metadata: components['schemas']['ItemDetailView']['metadata'],
 		citationKey: string
 	) {
-		if (!workspace.can('item.update')) return false;
+		if (!workspace.can('item.update') || overview.isFetching || overview.isError) return false;
 		mutationError = '';
 		serverErrors = [];
 		try {
@@ -52,12 +53,22 @@
 </script>
 
 {#if mutationError}<Notice variant="error">{mutationError}</Notice>{/if}
-<ItemSectionState loading={overview.isPending} failed={overview.isError}>
+{#if overview.isError}
+	<Notice as="div" variant="error" class="mb-4 flex flex-wrap items-center justify-between gap-3">
+		<span>{$t('Unable to open this Item section.')}</span>
+		<Button disabled={overview.isFetching} onclick={() => void overview.refetch()}
+			>{$t('Retry')}</Button
+		>
+	</Notice>
+{/if}
+{#if overview.data}
 	<ItemMetadataSection
-		item={overview.data!}
+		item={overview.data}
 		canEdit={can(overview.data?.authorization, 'item.update')}
-		busy={metadataMutation.isPending}
+		busy={metadataMutation.isPending || overview.isFetching || overview.isError}
 		{serverErrors}
 		onSubmit={updateMetadata}
 	/>
-</ItemSectionState>
+{:else if overview.isPending}
+	<LoadingState label={$t('Loading') + '…'} />
+{/if}

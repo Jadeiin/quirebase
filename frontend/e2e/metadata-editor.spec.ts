@@ -731,6 +731,52 @@ test('adapts desktop columns to available space and keeps the localized mobile e
 	).toHaveCount(1);
 });
 
+test('metadata conflict refresh failures preserve the full draft through recovery and retry', async ({
+	page
+}) => {
+	const requests = await openEditor(page, 409);
+	let unavailable = true;
+	await page.route('**/api/v1/workspaces/workspace-1/items/editor/overview', (route) =>
+		unavailable
+			? route.fulfill({
+					status: 500,
+					json: { code: 'internal_error', message: 'Refresh unavailable' }
+				})
+			: route.fallback()
+	);
+	await page.getByLabel('Title', { exact: true }).fill('My preserved draft');
+	await page.getByLabel('Citation key', { exact: true }).fill('PreservedKey');
+	await page.getByRole('button', { name: 'Save metadata', exact: true }).click();
+	await expect(
+		page.getByText(
+			'This Item changed since it was loaded. Your draft was preserved; review the latest metadata.',
+			{ exact: true }
+		)
+	).toBeVisible();
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('My preserved draft');
+	await expect(page.getByLabel('Citation key', { exact: true })).toHaveValue('PreservedKey');
+	await expect(page.getByRole('button', { name: 'Save metadata', exact: true })).toBeDisabled();
+	unavailable = false;
+	await page.getByRole('button', { name: 'Retry', exact: true }).click();
+	await expect(
+		page.getByText(
+			'This Item has changed. Your draft is preserved. Review the latest metadata before retrying.',
+			{ exact: true }
+		)
+	).toBeVisible();
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('My preserved draft');
+	await expect(page.getByLabel('Citation key', { exact: true })).toHaveValue('PreservedKey');
+	await page.getByRole('button', { name: 'Use latest version and keep draft' }).click();
+	await page.getByRole('button', { name: 'Save metadata', exact: true }).click();
+	await expect
+		.poll(() => requests[1])
+		.toEqual({
+			expected_version: 5,
+			metadata: { ...work, title: 'My preserved draft' },
+			citation_key: 'PreservedKey'
+		});
+});
+
 test('can discard a conflicted draft explicitly and load the latest server metadata', async ({
 	page
 }) => {
