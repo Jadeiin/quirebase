@@ -656,7 +656,17 @@ for (const failure of [409, 422] as const) {
 		await page.getByLabel('Title', { exact: true }).fill('My draft');
 		await page.getByLabel('Citation key', { exact: true }).fill('MyKey');
 		await page.getByRole('button', { name: 'Save metadata' }).click();
-		await expect(page.getByRole('alert').first()).toBeVisible();
+		await expect(
+			page
+				.getByRole('main')
+				.getByRole('alert')
+				.filter({
+					hasText:
+						failure === 409
+							? 'This Item changed since it was loaded. Your draft was preserved; review the latest metadata.'
+							: 'Please check the submitted values.'
+				})
+		).toBeVisible();
 		await expect(page.getByLabel('Title', { exact: true })).toHaveValue('My draft');
 		await expect(page.getByLabel('Citation key', { exact: true })).toHaveValue('MyKey');
 		if (failure === 422) {

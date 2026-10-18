@@ -321,12 +321,12 @@ for (const owned of [false, true]) {
 		);
 		await page.goto('/workspace/workspace-1/import?batch=batch-recover');
 		await expect(page.getByRole('heading', { name: /Import preview/ })).toBeVisible();
-		await expect(page.getByRole('alert')).toBeVisible();
+		await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Commit', exact: true })).toBeDisabled();
 		await page.getByRole('button', { name: 'Retry', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Commit', exact: true })).toBeEnabled();
 		await expect(page.getByText('Recovered imported PDF', { exact: true })).toBeVisible();
-		await expect(page.getByRole('alert')).toHaveCount(0);
+		await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 		await expect(page).toHaveURL(/batch=batch-recover/);
 		expect(writes).toEqual([]);
 	});

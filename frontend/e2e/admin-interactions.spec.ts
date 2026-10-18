@@ -61,7 +61,7 @@ for (const ownerFilter of ['initial-owner-name', 'initial-owner-id']) {
 		const reason = row.getByLabel('Reason (at least 10 characters)');
 		await reason.fill('Preserve this draft through an ownership conflict');
 		await row.getByRole('button', { name: 'Confirm owner reassignment' }).click();
-		await expect(page.getByRole('alert')).toContainText('Ownership changed.');
+		await expect(page.getByRole('main').getByRole('alert')).toContainText('Ownership changed.');
 		await expect(row.getByText('Current owner: competing-owner-name')).toBeVisible();
 		await expect(
 			row.getByText('This Workspace stays visible while its owner reassignment form is open.')
@@ -201,17 +201,17 @@ test('invitation links survive unrelated or failed actions until their own revoc
 		.locator('article')
 		.filter({ has: page.getByText(current.username, { exact: true }) });
 	await oldRow.getByRole('button', { name: 'Revoke invitation', exact: true }).click();
-	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(link).toBeVisible();
 	await oldRow.getByRole('button', { name: 'Revoke invitation', exact: true }).click();
 	await expect(oldRow.getByText('Revoked', { exact: true })).toBeVisible();
 	await expect(link).toBeVisible();
 	await currentRow.getByRole('button', { name: 'Reissue invitation link', exact: true }).click();
-	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(link).toBeVisible();
 	await page.getByLabel('Username', { exact: true }).fill('another-invitee');
 	await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
-	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(link).toBeVisible();
 	await currentRow.getByRole('button', { name: 'Revoke invitation', exact: true }).click();
 	await expect(currentRow.getByText('Revoked', { exact: true })).toBeVisible();
@@ -250,7 +250,7 @@ test('reassignment failure remains visible after switching forms', async ({ page
 		const response = page.waitForResponse((res) => res.url().endsWith('/admin/workspaces/A/owner'));
 		release.resolve();
 		await response;
-		await expect(page.getByRole('alert')).toContainText('Research A');
+		await expect(page.getByRole('main').getByRole('alert')).toContainText('Research A');
 		await expect(rowB.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
 		await expect(rowB.getByLabel('Reason (at least 10 characters)')).toHaveValue(
 			'Keep this new Workspace draft'
@@ -310,7 +310,7 @@ test('settings lock fields during submission and preserve a failed draft for ret
 		await expect(page.getByRole('combobox', { name: /^Workspace creation policy/ })).toBeDisabled();
 		await expect(page.getByRole('spinbutton', { name: 'Session lifetime in days' })).toBeDisabled();
 		release.resolve();
-		await expect(page.getByRole('alert')).toBeVisible();
+		await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 		await expect(input).toBeEnabled();
 		await expect(input).toHaveValue('submitted-value');
 		await input.fill('retry-value');
@@ -398,12 +398,14 @@ test('workspace directory errors offer retry instead of reporting an empty direc
 			: route.fulfill({ status: 500, json: { code: 'internal_error', message: 'Unavailable' } })
 	);
 	await page.goto('/admin/workspaces');
-	await expect(page.getByRole('alert')).toContainText('Unable to load workspaces.');
+	await expect(page.getByRole('main').getByRole('alert')).toContainText(
+		'Unable to load workspaces.'
+	);
 	await expect(page.getByText('No workspaces.', { exact: true })).toHaveCount(0);
 	available = true;
 	await page.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(page.locator('article').getByText('Research Alpha', { exact: true })).toBeVisible();
-	await expect(page.getByRole('alert')).toHaveCount(0);
+	await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });
 
 test('workspace directory refresh errors and retry preserve an open reassignment draft', async ({
@@ -437,13 +439,15 @@ test('workspace directory refresh errors and retry preserve an open reassignment
 	const reason = rowA.getByLabel('Reason (at least 10 characters)');
 	await reason.fill('Keep this draft across refresh errors');
 	await rowB.getByRole('button', { name: 'Freeze writes', exact: true }).click();
-	await expect(page.getByRole('alert')).toContainText('Unable to load workspaces.');
+	await expect(page.getByRole('main').getByRole('alert')).toContainText(
+		'Unable to load workspaces.'
+	);
 	await expect(reason).toHaveValue('Keep this draft across refresh errors');
 	await expect(rowA.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
 	available = true;
 	await page.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(rowB.getByRole('button', { name: 'Unfreeze writes', exact: true })).toBeVisible();
-	await expect(page.getByRole('alert')).toHaveCount(0);
+	await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 	await expect(reason).toHaveValue('Keep this draft across refresh errors');
 	await expect(rowA.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
 });

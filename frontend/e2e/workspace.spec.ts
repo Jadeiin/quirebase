@@ -341,7 +341,9 @@ test('a failed availability refetch preserves an explicit Workspace route', asyn
 
 	await page.goto('/workspace/workspace-1');
 	await expect.poll(() => listRequests).toBeGreaterThanOrEqual(2);
-	await expect(page.getByRole('alert')).toContainText('The request could not be completed.');
+	await expect(page.getByRole('main').getByRole('alert')).toContainText(
+		'The request could not be completed.'
+	);
 	expect(listRequests).toBe(2);
 	expect(detailRequests).toBe(2);
 	await expect(page).toHaveURL(/\/workspace\/workspace-1$/);
@@ -403,7 +405,9 @@ test('availability recovery releases its guard for a later membership revocation
 	});
 
 	await page.goto('/workspace/workspace-1');
-	await expect(page.getByRole('alert')).toContainText('The request could not be completed.');
+	await expect(page.getByRole('main').getByRole('alert')).toContainText(
+		'The request could not be completed.'
+	);
 	expect(detailRequests).toBe(2);
 	detailAvailable = true;
 	await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));

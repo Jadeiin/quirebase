@@ -60,7 +60,7 @@ test('revoking a Workspace invitation retires its displayed one-time link', asyn
 	await expect(page.getByText(/invite\/workspace-audit-token/)).toBeVisible();
 	const currentRow = page.getByRole('listitem').filter({ hasText: 'invited-user' });
 	await currentRow.getByRole('button', { name: 'Revoke', exact: true }).click();
-	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(page.getByText(/invite\/workspace-audit-token/)).toBeVisible();
 	await page
 		.getByRole('listitem')

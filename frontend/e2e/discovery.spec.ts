@@ -99,8 +99,17 @@ test('Discovery paging retains the successful query while a new query is edited 
 	await pagination.getByRole('combobox', { name: 'Page Size', exact: true }).selectOption('50');
 	await expect(pagination.getByText('Showing 1–50 of 120')).toBeVisible();
 	await expect(term).toHaveValue('beta');
+	// Calendar widgets can leave an assertive announcement outside the application content.
+	await page.evaluate(() => {
+		const announcement = document.createElement('span');
+		announcement.setAttribute('role', 'alert');
+		announcement.setAttribute('aria-live', 'assertive');
+		announcement.style.cssText = 'position:absolute;clip:rect(0,0,0,0);width:1px;height:1px';
+		announcement.textContent = 'Calendar selection updated';
+		document.body.append(announcement);
+	});
 	await page.getByRole('button', { name: 'Search Discovery' }).click();
-	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(page.getByText('alpha page 1', { exact: true })).toBeVisible();
 	await pagination.getByRole('button', { name: 'Next page', exact: true }).click();
 	await expect(page.getByText('alpha page 2', { exact: true })).toBeVisible();

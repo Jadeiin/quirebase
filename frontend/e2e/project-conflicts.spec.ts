@@ -198,7 +198,7 @@ for (const assigned of [false, true]) {
 			await expect(dialog).toContainText('This Project is read only in its current state.');
 			await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 		}
-		await expect(page.getByRole('alert')).toHaveText(
+		await expect(page.getByRole('main').getByRole('alert')).toHaveText(
 			'This Project is read only in its current state.'
 		);
 		await expect(page.getByText('No available projects.')).toBeVisible();

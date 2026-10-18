@@ -158,6 +158,58 @@ test('Project settings preserve rejected drafts through refresh and a corrected 
 	]);
 });
 
+for (const field of ['name', 'description', 'participation'] as const) {
+	test(`Project settings retry changes only the edited ${field} after a concurrent refresh`, async ({
+		page
+	}) => {
+		let current = { ...project, participation: field === 'participation' ? 'workspace' : 'open' };
+		const submitted: Array<Record<string, string>> = [];
+		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) => {
+			if (route.request().method() !== 'PATCH') return route.fulfill({ json: current });
+			const changes = route.request().postDataJSON();
+			submitted.push(changes);
+			if (submitted.length === 1) {
+				current = {
+					...current,
+					name: 'Renamed by another administrator',
+					description: 'Description updated by another administrator',
+					participation: 'managed'
+				};
+				return route.fulfill({
+					status: 503,
+					json: { code: 'internal_error', message: 'Temporary failure' }
+				});
+			}
+			current = { ...current, ...changes };
+			return route.fulfill({ json: { id: project.id } });
+		});
+		await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+			route.fulfill({ json: [] })
+		);
+		await page.goto('/workspace/workspace-1/projects/project-1');
+		await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Project settings', exact: true });
+		const draft = field === 'participation' ? 'open' : `My edited ${field}`;
+		if (field === 'participation') await dialog.getByLabel('Participation').selectOption(draft);
+		else
+			await dialog
+				.getByLabel(field === 'name' ? 'Name' : 'Description', { exact: true })
+				.fill(draft);
+		await dialog.getByRole('button', { name: 'Save Project settings' }).click();
+		await expect(dialog.getByRole('alert')).toHaveText('Something went wrong. Try again.');
+		await expect(dialog.getByRole('button', { name: 'Save Project settings' })).toBeEnabled();
+		await dialog.getByRole('button', { name: 'Save Project settings' }).click();
+		await expect(dialog).toHaveCount(0);
+		expect(submitted).toEqual([{ [field]: draft }, { [field]: draft }]);
+		expect(current).toMatchObject({
+			name: 'Renamed by another administrator',
+			description: 'Description updated by another administrator',
+			participation: 'managed',
+			[field]: draft
+		});
+	});
+}
+
 test('Workspace admins can open and govern managed Projects without being participants', async ({
 	page
 }) => {

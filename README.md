@@ -31,13 +31,19 @@ For manual setup:
 
 ```sh
 uv sync
-uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
+uv run --frozen prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 bun install --cwd frontend --frozen-lockfile
 bun run --cwd frontend build
 uv run quirebase init-db
 uv run quirebase create-admin
 uv run quirebase serve
 ```
+
+`uv sync` and `uv run` use your local uv index configuration, including mirrors such as TUNA,
+and may update the source URLs in `uv.lock`. When a commit changes the root or workspace Python
+manifests, `uv.toml`, or `uv.lock`, the `uv-lock` hook refreshes the lockfile against official
+PyPI. If the hook changes `uv.lock`, review and stage it, then retry the commit. Subsequent
+Python check hooks use `--frozen` to preserve the lockfile.
 
 Run `uv run quirebase worker` in a second process. Configuration uses `QUIREBASE_` environment variables; the defaults use SQLite and `./quirebase-data`.
 

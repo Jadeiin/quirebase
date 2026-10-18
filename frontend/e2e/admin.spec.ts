@@ -228,7 +228,9 @@ for (const width of [1280, 390]) {
 			.getByLabel('Reason (at least 10 characters)')
 			.fill('Explicit handover after offboarding');
 		await form.getByRole('button', { name: 'Confirm owner reassignment' }).click();
-		await expect(page.getByRole('alert')).toContainText('Offboarding research: Ownership changed.');
+		await expect(page.getByRole('main').getByRole('alert')).toContainText(
+			'Offboarding research: Ownership changed.'
+		);
 		await expect(form.getByText('Current owner: competing-owner')).toBeVisible();
 		await expect(form.getByLabel('Reason (at least 10 characters)')).toHaveValue(
 			'Explicit handover after offboarding'
@@ -236,7 +238,7 @@ for (const width of [1280, 390]) {
 		await expect(form.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
 		await form.getByRole('button', { name: 'Confirm owner reassignment' }).click();
 		await expect(form).toHaveCount(0);
-		await expect(page.getByRole('alert')).toHaveCount(0);
+		await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 		await expect(page.locator('article').getByText(/successor/)).toBeVisible();
 		expect(requests).toEqual([
 			{

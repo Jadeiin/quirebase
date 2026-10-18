@@ -207,7 +207,7 @@ test('Discovery changes page size on the server and keeps the previous page on f
 	await expect(pagination.getByText('Showing 51–73 of 73')).toBeVisible();
 	fail = true;
 	await size.selectOption('10');
-	await expect(page.getByRole('alert')).toHaveText(
+	await expect(page.getByRole('main').getByRole('alert')).toHaveText(
 		'The external service is temporarily unavailable.'
 	);
 	await expect(size).toHaveValue('50');

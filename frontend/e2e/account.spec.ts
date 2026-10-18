@@ -109,7 +109,7 @@ test('one-time API Token display survives unrelated and failed revocations and c
 		.locator('../..')
 		.getByRole('button', { name: 'Revoke token', exact: true });
 	await revokeCurrent.click();
-	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(revokeCurrent).toBeEnabled();
 	await expect(secret).toBeVisible();
 	await revokeCurrent.click();

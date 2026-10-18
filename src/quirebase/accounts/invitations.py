@@ -54,13 +54,10 @@ async def create_invitation(
         denied_error=ResourceNotFound,
     )
     normalized = username.strip()
-    if (
-        not normalized
-        or len(normalized) > 120
-        or role not in SystemRole
-        or not 1 <= expires_days <= 365
-    ):
+    if not normalized or len(normalized) > 120 or role not in SystemRole:
         raise ValidationFailure("invalid username or role")
+    if not 1 <= expires_days <= 365:
+        raise ValidationFailure("expires_days must be between 1 and 365")
     if await db.scalar(select(User.id).where(User.username == normalized)):
         raise InvitationConflict("username already exists or is invited")
     now = datetime.now(UTC)

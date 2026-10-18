@@ -248,6 +248,9 @@ persisted ProjectParticipant association remains a working-context selection, no
 Project settings use one partial `PATCH /projects/{id}` command and one transaction. Omitted
 fields stay unchanged; metadata-only updates do not alter participation or ProjectParticipant rows.
 Participation changes are an explicit submitted field with their own capability check.
+Browser settings refresh untouched fields while preserving edited drafts. Retries submit only
+fields changed by the User, so a metadata-only retry cannot restore older participation or overwrite
+another metadata field refreshed after a failed save.
 Settings use a Project root write lock rather than client-version CAS. Updates to the same field
 are applied in lock order; omitted fields retain the values reread under that lock. Participant
 changes use compatible root guards, so mode transitions and association changes cannot interleave.

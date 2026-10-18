@@ -45,15 +45,15 @@ bun run --cwd frontend i18n:check   # extract PO catalogs and compile runtime me
 bun run --cwd frontend check
 bun run --cwd frontend lint
 bun run --cwd frontend test
-uv run prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
-uv run prek run --all-files
+uv run --frozen prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
+uv run --frozen prek run --all-files
 uv run pytest -q -m "not oa" -n 4 --dist loadscope
 ```
 
 The frontend commands type-check Svelte and TypeScript, enforce ESLint and Prettier, and run the
 Vitest suite. The hooks reject malformed YAML/TOML/JSON, large files, case-conflicting paths,
-merge markers and private keys; update the uv lock; run strict Ruff checks plus formatting;
-type-check production modules with mypy; enforce Conventional Commits; and run the fast tests
+merge markers and private keys; refresh the uv lock against official PyPI; run strict Ruff checks
+plus formatting; type-check production modules with mypy; enforce Conventional Commits; and run the fast tests
 before pushes. This suite is offline and covers schema, permissions, storage, PDF coordinates and
 annotations, Library Search and Discovery, bibliography interchange, maintenance, migration,
 security and HTTP behavior. PostgreSQL Library Search runs in CI against PostgreSQL 18 when
@@ -62,6 +62,13 @@ security and HTTP behavior. PostgreSQL Library Search runs in CI against Postgre
 advisory lock, so modules that mutate the configured test database stay serial even under xdist.
 Dedicated PostgreSQL, S3 and real-PDF contract jobs also remain serial because they coordinate
 through one external service or corpus.
+
+Local `uv sync` and `uv run` respect your user-level index configuration, including mirrors such
+as TUNA, and can change the source URLs in `uv.lock`. Commits that change the root or workspace
+Python manifests, `uv.toml`, or `uv.lock` trigger the `uv-lock` hook, which refreshes the lockfile
+against official PyPI. If the hook updates `uv.lock`, review and stage it, then retry the commit.
+Python check hooks use `uv run --frozen` so they do not rewrite the lockfile using your local
+mirror settings. Use `uv run --frozen prek ...` when running hooks manually for the same reason.
 
 ## Frontend localization
 

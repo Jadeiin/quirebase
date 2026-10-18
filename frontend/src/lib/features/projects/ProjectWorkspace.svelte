@@ -117,6 +117,13 @@
 	let settingsName = $state('');
 	let settingsDescription = $state('');
 	let settingsParticipation = $state<components['schemas']['ProjectParticipation']>('workspace');
+	let settingsBaseline =
+		$state<
+			Pick<
+				components['schemas']['ProjectDetailView'],
+				'id' | 'name' | 'description' | 'participation'
+			>
+		>();
 	let participationDialogOpen = $state(false);
 	let pendingSettings = $state<
 		{ projectId: string; changes: components['schemas']['ProjectSettingsRequest'] } | undefined
@@ -138,6 +145,28 @@
 		if (!can('project.update')) settingsDialogOpen = false;
 	});
 
+	$effect(() => {
+		const previous = settingsBaseline;
+		if (!settingsDialogOpen || !project || previous?.id !== project.id) return;
+		if (
+			previous.name === project.name &&
+			previous.description === project.description &&
+			previous.participation === project.participation
+		)
+			return;
+		// Refresh untouched fields while keeping the user's edits across failed saves.
+		if (settingsName.trim() === previous.name) settingsName = project.name;
+		if (settingsDescription === previous.description) settingsDescription = project.description;
+		if (settingsParticipation === previous.participation)
+			settingsParticipation = project.participation;
+		settingsBaseline = {
+			id: project.id,
+			name: project.name,
+			description: project.description,
+			participation: project.participation
+		};
+	});
+
 	function openSettings() {
 		if (!project || !can('project.update')) return;
 		participationDialogOpen = false;
@@ -145,13 +174,19 @@
 		settingsName = project.name;
 		settingsDescription = project.description;
 		settingsParticipation = project.participation;
+		settingsBaseline = {
+			id: project.id,
+			name: project.name,
+			description: project.description,
+			participation: project.participation
+		};
 		error = '';
 		settingsDialogOpen = true;
 	}
 
 	async function mutate(
 		action: () => Promise<unknown>,
-		success: string,
+		success: string | undefined,
 		reload = true,
 		successToast = false
 	): Promise<boolean> {
@@ -160,8 +195,8 @@
 		notice = '';
 		try {
 			await action();
-			if (successToast) toaster.success({ title: success });
-			else notice = success;
+			if (successToast && success) toaster.success({ title: success });
+			else if (success) notice = success;
 			if (reload) {
 				await invalidateProject(queryClient, workspaceId);
 			}
@@ -213,11 +248,18 @@
 
 	async function saveSettings(event: SubmitEvent) {
 		event.preventDefault();
-		if (!project || project.id !== projectId || !can('project.update')) return;
+		if (
+			!project ||
+			project.id !== projectId ||
+			settingsBaseline?.id !== projectId ||
+			!can('project.update')
+		)
+			return;
 		const changes: components['schemas']['ProjectSettingsRequest'] = {};
-		if (settingsName.trim() !== project.name) changes.name = settingsName.trim();
-		if (settingsDescription !== project.description) changes.description = settingsDescription;
-		if (settingsParticipation !== project.participation) {
+		if (settingsName.trim() !== settingsBaseline.name) changes.name = settingsName.trim();
+		if (settingsDescription !== settingsBaseline.description)
+			changes.description = settingsDescription;
+		if (settingsParticipation !== settingsBaseline.participation) {
 			if (!project.allowed_participation_changes.includes(settingsParticipation)) return;
 			changes.participation = settingsParticipation;
 		}
@@ -317,7 +359,7 @@
 					params: { path: { project_id: targetProjectId } },
 					body: { confirmation }
 				}),
-			$t('Project deleted'),
+			undefined,
 			false
 		);
 		if (deleted) {
