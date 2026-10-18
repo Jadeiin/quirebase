@@ -34,6 +34,10 @@
 			? Math.max(1, Math.ceil(users.data.total / users.data.limit))
 			: 1
 	);
+	$effect(() => {
+		if (users.isFetching || !users.data) return;
+		if (filters().page > pageCount) setPage(pageCount);
+	});
 
 	function mutate(operation: () => Promise<unknown>, success: MessageKey, form?: HTMLFormElement) {
 		error = '';

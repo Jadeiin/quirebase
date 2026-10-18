@@ -19,7 +19,13 @@
 
 	const { filters } = getAdminFilters();
 	const queryClient = useQueryClient();
-	const workspaces = createQuery(() => adminWorkspacesQuery(filters()));
+	const workspaces = createQuery(() => adminWorkspacesQuery());
+	const search = $derived(filters().search.toLowerCase());
+	const visibleWorkspaces = $derived(
+		(workspaces.data ?? []).filter(
+			(workspace) => workspace.id === reassignment?.workspaceId || matchesSearch(workspace)
+		)
+	);
 	let error = $state('');
 	let busyId = $state('');
 	let reassignment = $state<ReassignmentForm | null>(null);
@@ -28,6 +34,12 @@
 	let inspection = $state<components['schemas']['ItemSearchView'][] | undefined>();
 	let inspectionReason = $state('');
 	let inspectionWorkspaceId = $state('');
+
+	function matchesSearch(workspace: components['schemas']['AdminWorkspaceView']) {
+		return [workspace.name, workspace.id, workspace.owner_username, workspace.owner_id].some(
+			(value) => value.toLowerCase().includes(search)
+		);
+	}
 
 	function toggleReassignment(workspaceId: string) {
 		reassignment = reassignment?.workspaceId === workspaceId ? null : { workspaceId };
@@ -96,10 +108,18 @@
 		</p>
 	</header>
 	{#if error}<Notice variant="error">{error}</Notice>{/if}
-	{#if workspaces.isPending}<p>{$t('Loading workspaces…')}</p>{:else if workspaces.data?.length}<div
-			class="grid grid-cols-1 gap-3"
-		>
-			{#each workspaces.data as workspace (workspace.id)}<article
+	{#if workspaces.isError}
+		<Notice as="div" variant="error" class="flex flex-wrap items-center justify-between gap-3">
+			<span>{$t('Unable to load workspaces.')}</span>
+			<Button disabled={workspaces.isFetching} onclick={() => void workspaces.refetch()}
+				>{$t('Retry')}</Button
+			>
+		</Notice>
+	{/if}
+	{#if workspaces.isPending}<p>
+			{$t('Loading workspaces…')}
+		</p>{:else if visibleWorkspaces.length}<div class="grid grid-cols-1 gap-3">
+			{#each visibleWorkspaces as workspace (workspace.id)}<article
 					class="flex flex-wrap items-center justify-between gap-3 rounded-container border border-surface-300-700 p-4"
 				>
 					<div class="min-w-0">
@@ -135,10 +155,23 @@
 							>{/if}
 					</div>
 					{#if reassignment && reassignment.workspaceId === workspace.id}
-						<WorkspaceOwnerReassign {workspace} onClose={closeReassignment(reassignment)} />
+						{#if !matchesSearch(workspace)}
+							<Notice class="w-full">
+								{$t('This Workspace stays visible while its owner reassignment form is open.')}
+							</Notice>
+						{/if}
+						<WorkspaceOwnerReassign
+							{workspace}
+							onClose={closeReassignment(reassignment)}
+							onError={(message) => {
+								error = message ? `${workspace.name}: ${message}` : '';
+							}}
+						/>
 					{/if}
 				</article>{/each}
-		</div>{:else}<p>{$t('No workspaces.')}</p>{/if}
+		</div>{:else if workspaces.data}<p>
+			{filters().search ? $t('No matching workspaces.') : $t('No workspaces.')}
+		</p>{/if}
 	<section
 		class="grid max-w-3xl grid-cols-1 gap-3 rounded-container border border-warning-500 p-5 dark:border-warning-300"
 	>

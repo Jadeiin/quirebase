@@ -67,7 +67,7 @@
 		if (!inviteRoles.includes(inviteRole) && inviteRoles[0]) inviteRole = inviteRoles[0];
 	});
 	let inviteDays = $state(7);
-	let oneTimeToken = $state('');
+	let oneTimeInvitation = $state<{ id: string; token: string } | null>(null);
 	let message = $state('');
 	let error = $state('');
 	let busyId = $state('');
@@ -116,7 +116,7 @@
 			const created = await api.request('POST', '/workspaces/{workspace_id}/invitations', {
 				body: { username: inviteUsername.trim(), role: inviteRole, expires_at: expiresAt }
 			});
-			oneTimeToken = created.token;
+			oneTimeInvitation = { id: created.id, token: created.token };
 			inviteUsername = '';
 			message = $t('Invitation created. Copy this token now; it will not be shown again.');
 			await Promise.all([
@@ -129,8 +129,21 @@
 			busyId = '';
 		}
 	}
+	async function revokeInvitation(invitationId: string) {
+		await run(
+			`revoke:${invitationId}`,
+			async () => {
+				await api.request('DELETE', '/workspaces/{workspace_id}/invitations/{invitation_id}', {
+					params: { path: { invitation_id: invitationId } }
+				});
+				if (oneTimeInvitation?.id === invitationId) oneTimeInvitation = null;
+			},
+			$t('Invitation revoked')
+		);
+	}
 	async function copyToken() {
-		await navigator.clipboard.writeText(`${location.origin}/invite/${oneTimeToken}`);
+		if (!oneTimeInvitation) return;
+		await navigator.clipboard.writeText(`${location.origin}/invite/${oneTimeInvitation.token}`);
 		message = $t('Invitation link copied');
 	}
 	async function deleteWorkspace() {
@@ -528,10 +541,10 @@
 						>{$t('Create invitation')}</Button
 					>
 				</form>{/if}
-			{#if oneTimeToken}<div
+			{#if oneTimeInvitation}<div
 					class="flex flex-wrap items-center gap-2 rounded-md bg-surface-100-900 p-3"
 				>
-					<code class="break-all">{location.origin}/invite/{oneTimeToken}</code><Button
+					<code class="break-all">{location.origin}/invite/{oneTimeInvitation.token}</code><Button
 						size="sm"
 						onclick={() => void copyToken()}>{$t('Copy one-time link')}</Button
 					>
@@ -547,17 +560,7 @@
 									size="sm"
 									variant="tonal"
 									disabled={busyId !== ''}
-									onclick={() =>
-										void run(
-											`revoke:${invitation.id}`,
-											() =>
-												api.request(
-													'DELETE',
-													'/workspaces/{workspace_id}/invitations/{invitation_id}',
-													{ params: { path: { invitation_id: invitation.id } } }
-												),
-											$t('Invitation revoked')
-										)}>{$t('Revoke')}</Button
+									onclick={() => void revokeInvitation(invitation.id)}>{$t('Revoke')}</Button
 								>{/if}
 						</li>{/each}
 				</ul>{/if}

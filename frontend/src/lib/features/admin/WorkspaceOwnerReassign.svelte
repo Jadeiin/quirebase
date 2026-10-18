@@ -12,10 +12,12 @@
 
 	let {
 		workspace,
-		onClose
+		onClose,
+		onError
 	}: {
 		workspace: components['schemas']['AdminWorkspaceView'];
 		onClose: () => void;
+		onError: (message: string) => void;
 	} = $props();
 	const queryClient = useQueryClient();
 	let search = $state<string | null>(null);
@@ -23,7 +25,6 @@
 	let selectedUser = $state<components['schemas']['AdminUserView']>();
 	let reason = $state('');
 	let busy = $state(false);
-	let error = $state('');
 	const users = createQuery(() =>
 		adminUsersQuery({
 			page: 1,
@@ -45,7 +46,7 @@
 		event.preventDefault();
 		if (!receiverId || reason.trim().length < 10 || !workspace.can_reassign_owner) return;
 		busy = true;
-		error = '';
+		onError('');
 		try {
 			await apiRequest('POST', '/admin/workspaces/{workspace_id}/owner', {
 				params: { path: { workspace_id: workspace.id } },
@@ -62,11 +63,13 @@
 			onClose();
 		} catch (failure) {
 			if (failure instanceof ApiError && failure.code === 'version_conflict') {
-				error = $t(
-					'Ownership changed. Review the refreshed owner and submit again. Your draft is preserved.'
+				onError(
+					$t(
+						'Ownership changed. Review the refreshed owner and submit again. Your draft is preserved.'
+					)
 				);
 				await queryClient.invalidateQueries({ queryKey: ['admin', 'workspaces'] });
-			} else error = apiErrorMessage(failure, 'Workspace governance action failed');
+			} else onError(apiErrorMessage(failure, 'Workspace governance action failed'));
 		} finally {
 			busy = false;
 		}
@@ -84,7 +87,6 @@
 		)}
 	</p>
 	<p class="text-sm">{$t('Current owner: {username}', { username: workspace.owner_username })}</p>
-	{#if error}<Notice variant="error">{error}</Notice>{/if}
 	{#if users.isError}<Notice variant="error"
 			>{apiErrorMessage(users.error, 'Failed to load users')}</Notice
 		>{/if}

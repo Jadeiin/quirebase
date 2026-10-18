@@ -1242,7 +1242,7 @@ msgid "Copy one-time link"
 msgstr "Copy one-time link"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminInvitations.svelte
+#: src/routes/(app)/admin/invitations/+page.svelte
 msgid "Copy this invitation URL now"
 msgstr "Copy this invitation URL now"
 
@@ -3287,6 +3287,11 @@ msgid "No matching Projects."
 msgstr "No matching Projects."
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "No matching workspaces."
+msgstr "No matching workspaces."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "No new Tag suggestions."
 msgstr "No new Tag suggestions."
@@ -4367,6 +4372,7 @@ msgstr "Restore workspace"
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/+page.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Retry"
 msgstr "Retry"
 
@@ -5264,6 +5270,11 @@ msgid "This workspace route does not exist."
 msgstr "This workspace route does not exist."
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "This Workspace stays visible while its owner reassignment form is open."
+msgstr "This Workspace stays visible while its owner reassignment form is open."
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/schema-editor/labels.ts
@@ -5474,6 +5485,7 @@ msgstr "Unable to load workspace."
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/+page.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
 #: src/routes/(app)/workspace/+page.svelte
 msgid "Unable to load workspaces."
 msgstr "Unable to load workspaces."

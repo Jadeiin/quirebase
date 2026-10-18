@@ -4,6 +4,7 @@
 	import { apiRequest } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Pagination from '#lib/design/Pagination.svelte';
+	import Notice from '#lib/design/Notice.svelte';
 	import AdminInvitations from '#lib/features/admin/AdminInvitations.svelte';
 	import AdminNotices from '#lib/features/admin/AdminNotices.svelte';
 	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
@@ -15,7 +16,8 @@
 
 	let error = $state('');
 	let notice = $state<MessageKey | null>(null);
-	let invitationUrl = $state('');
+	let oneTimeInvitation = $state<{ id: string; url: string } | null>(null);
+	const invitationUrl = $derived(oneTimeInvitation?.url ?? '');
 	let invitationState = $state<InvitationState | ''>('');
 	let invitationPage = $state(1);
 	let invitationPageSize = $state(20);
@@ -41,10 +43,14 @@
 		error = '';
 		notice = null;
 		void adminMutation
-			.mutateAsync({ run: operation, form })
-			.then((result) => {
-				onSuccess?.(result);
-				notice = success;
+			.mutateAsync({
+				run: async () => {
+					const result = await operation();
+					onSuccess?.(result);
+					notice = success;
+					return result;
+				},
+				form
 			})
 			.catch((reason) => {
 				error = apiErrorMessage(reason, $t('Administration action failed'));
@@ -55,7 +61,6 @@
 		event.preventDefault();
 		const form = event.currentTarget as HTMLFormElement;
 		const values = new FormData(form);
-		invitationUrl = '';
 		void mutate(
 			() =>
 				apiRequest('POST', '/admin/invitations', {
@@ -68,24 +73,29 @@
 			form,
 			(result) => {
 				const invitation = result as InvitationCreated;
-				invitationUrl = new URL(invitation.accept_path, window.location.origin).href;
+				oneTimeInvitation = {
+					id: invitation.id,
+					url: new URL(invitation.accept_path, window.location.origin).href
+				};
 			}
 		);
 	}
 
 	function revokeInvitation(invitationId: string) {
-		invitationUrl = '';
 		void mutate(
 			() =>
 				apiRequest('DELETE', '/admin/invitations/{invitation_id}', {
 					params: { path: { invitation_id: invitationId } }
 				}),
-			msg('Invitation revoked')
+			msg('Invitation revoked'),
+			undefined,
+			() => {
+				if (oneTimeInvitation?.id === invitationId) oneTimeInvitation = null;
+			}
 		);
 	}
 
 	function reissueInvitation(invitationId: string) {
-		invitationUrl = '';
 		void mutate(
 			() =>
 				apiRequest('POST', '/admin/invitations/{invitation_id}/reissue', {
@@ -95,13 +105,22 @@
 			undefined,
 			(result) => {
 				const invitation = result as InvitationCreated;
-				invitationUrl = new URL(invitation.accept_path, window.location.origin).href;
+				oneTimeInvitation = {
+					id: invitation.id,
+					url: new URL(invitation.accept_path, window.location.origin).href
+				};
 			}
 		);
 	}
 </script>
 
 <AdminNotices {error} {notice} />
+{#if invitationUrl}
+	<Notice as="div" variant="warning" class="mb-4 grid grid-cols-1 gap-2 [overflow-wrap:anywhere]">
+		<strong>{$t('Copy this invitation URL now')}</strong>
+		<a href={invitationUrl} rel="external">{invitationUrl}</a>
+	</Notice>
+{/if}
 <AdminSectionState
 	loading={invitations.isPending}
 	failed={invitations.isError}
@@ -110,7 +129,6 @@
 	<AdminInvitations
 		invitations={invitations.data!}
 		{busy}
-		{invitationUrl}
 		{invitationState}
 		onInvitationState={(state) => {
 			invitationState = state;

@@ -135,8 +135,8 @@ enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), 
 	gzip: 259500
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
-	// Includes shared pagination styles and Invitation lifecycle translations.
-	raw: 818000,
+	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.
+	raw: 818500,
 	gzip: 230500
 });
 enforce('Account route', routeBundle('/(app)/account'), {

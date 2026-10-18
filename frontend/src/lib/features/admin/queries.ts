@@ -72,10 +72,9 @@ export function adminInvitationsQuery(page: number, pageSize: number, state: Inv
 	});
 }
 
-export function adminWorkspacesQuery(filters: AdminFilters, enabled = true) {
+export function adminWorkspacesQuery() {
 	return queryOptions({
-		queryKey: adminKeys.section('workspaces', filters),
-		enabled,
+		queryKey: ['admin', 'workspaces'],
 		queryFn: ({ signal }) => apiRequest('GET', '/admin/workspaces', { signal })
 	});
 }

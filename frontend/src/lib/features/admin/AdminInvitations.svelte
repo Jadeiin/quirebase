@@ -4,7 +4,6 @@
 	import Badge from '#lib/design/Badge.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
-	import Notice from '#lib/design/Notice.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
@@ -15,7 +14,6 @@
 	let {
 		invitations,
 		busy,
-		invitationUrl,
 		invitationState,
 		onInvitationState,
 		pagination,
@@ -25,7 +23,6 @@
 	}: {
 		invitations: components['schemas']['OffsetPagination_AdminInvitationView_'];
 		busy: boolean;
-		invitationUrl: string;
 		invitationState: InvitationState | '';
 		onInvitationState: (state: InvitationState | '') => void;
 		pagination: Snippet;
@@ -73,13 +70,6 @@
 			>
 		</div>
 	</Panel>
-{/if}
-
-{#if invitationUrl}
-	<Notice as="div" variant="warning" class="mb-4 grid grid-cols-1 gap-2 [overflow-wrap:anywhere]">
-		<strong>{$t('Copy this invitation URL now')}</strong>
-		<a href={invitationUrl} rel="external">{invitationUrl}</a>
-	</Notice>
 {/if}
 
 <Panel>

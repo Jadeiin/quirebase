@@ -26,13 +26,18 @@
 			<label
 				>{$t(label)}
 				{#if key === 'registration_policy'}
-					<select class="input" name={key} value={settings.registration_policy}>
+					<select class="input" name={key} value={settings.registration_policy} disabled={busy}>
 						<option value="open">{$t('Open')}</option>
 						<option value="closed">{$t('Closed')}</option>
 						<option value="invitation_only">{$t('Invitation only')}</option>
 					</select>
 				{:else if key === 'workspace_creation_policy'}
-					<select class="input" name={key} value={settings.workspace_creation_policy}>
+					<select
+						class="input"
+						name={key}
+						value={settings.workspace_creation_policy}
+						disabled={busy}
+					>
 						<option value="admins_only">{$t('Administrators only')}</option>
 						<option value="members_allowed">{$t('All members')}</option>
 					</select>
@@ -42,6 +47,7 @@
 						name={key}
 						type={typeof settings[key] === 'number' ? 'number' : 'text'}
 						value={settings[key]}
+						disabled={busy}
 						required={typeof settings[key] === 'number'}
 					/>
 				{/if}</label

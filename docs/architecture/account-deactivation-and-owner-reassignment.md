@@ -156,8 +156,10 @@ loss of account access without performing automatic Workspace handover.
 The Workspaces administration page shows owner username and account status and provides an explicit
 reassignment action. The form selects an active User and requires a reason. It submits the displayed
 current owner as the expected owner. On conflict, refresh the current facts and preserve the draft
-for an explicit retry. Render actions from server-provided decisions or choices, following the
-existing prohibition on principal-role comparisons in frontend behavior.
+for an explicit retry. Keep the open form's Workspace row visible even if a directory filter stops
+matching after refresh; closing the form restores ordinary filtering. Render actions from
+server-provided decisions or choices, following the existing prohibition on principal-role
+comparisons in frontend behavior.
 
 | Module | Responsibility |
 | --- | --- |
