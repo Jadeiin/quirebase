@@ -114,15 +114,16 @@
 	<Login />
 {:else}
 	<WorkflowTray />
-	<div
+	<header
 		class={`sticky top-0 z-40 items-center justify-between bg-primary-950 px-4 py-3 text-white md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	>
 		<WorkspaceMenu workspaceId={page.params.workspaceId} mobile />
 		<a
 			class="grid size-8 grid-cols-1 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
-			href={resolve('account')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
+			href={resolve('account')}
+			aria-label={$t('Account settings')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
 		>
-	</div>
+	</header>
 	<div
 		class={`min-h-screen md:grid ${sidebarCollapsed ? 'md:grid-cols-[4.75rem_minmax(0,1fr)]' : 'md:grid-cols-[15.5rem_minmax(0,1fr)]'} ${readerRoute ? '' : 'pb-16 md:pb-0'}`}
 	>

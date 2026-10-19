@@ -100,6 +100,9 @@ domain rules; this table alone does not establish permission for a concrete comm
 | `workspace_member.change_role` | `admin` | A | — | — | — | — |
 | `workspace_member.change_role` | `member` | A | A | — | — | — |
 | `workspace_member.change_role` | `owner` | — | — | — | — | — |
+| `workspace_member.leave` | `admin` | A | A | A | A | A |
+| `workspace_member.leave` | `member` | A | A | A | A | A |
+| `workspace_member.leave` | `owner` | — | — | — | — | — |
 | `workspace_member.promote` | `admin` | — | — | — | — | — |
 | `workspace_member.promote` | `member` | A | — | — | — | — |
 | `workspace_member.promote` | `owner` | — | — | — | — | — |

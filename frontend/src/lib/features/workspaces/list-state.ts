@@ -8,8 +8,9 @@ export function readWorkspaceListState(parameters: Pick<URLSearchParams, 'get'>)
 	};
 }
 
-export function workspaceListParameters(search: string, page = 1, pageSize = 25) {
-	const parameters = new URLSearchParams();
+export function workspaceListParameters(search: string, page = 1, pageSize = 25, current?: string) {
+	const parameters = new URLSearchParams(current);
+	for (const key of ['q', 'page', 'page_size']) parameters.delete(key);
 	if (search) parameters.set('q', search);
 	if (page > 1) parameters.set('page', String(page));
 	if (pageSize !== 25) parameters.set('page_size', String(pageSize));

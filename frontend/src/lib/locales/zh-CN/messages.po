@@ -61,6 +61,12 @@ msgid "{count} / 50 identifiers"
 msgstr "{count} / 50 个标识符"
 
 #. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "{count} pending invitations"
+msgstr "{count} 个待接受的邀请"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "{count} selected"
 msgstr "已选择 {count} 项"
@@ -119,7 +125,13 @@ msgid "Abstract"
 msgstr "摘要"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Accept an invitation to join a workspace. You choose when to open it."
+msgstr "接受邀请即可加入工作区，之后可自行选择何时打开。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Accept invitation"
 msgstr "接受邀请"
 
@@ -148,6 +160,7 @@ msgid "Account action failed"
 msgstr "账号操作失败"
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
 #: src/lib/app/AppSidebar.svelte
 #: src/lib/app/navigation.ts
 msgid "Account settings"
@@ -893,6 +906,11 @@ msgid "Check for duplicates"
 msgstr "检查重复项"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Check status"
+msgstr "核实状态"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Check stored objects"
 msgstr "检查存储对象"
@@ -910,6 +928,7 @@ msgstr "正在检查账号…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Checking invitation…"
 msgstr "正在检查邀请…"
 
@@ -1640,6 +1659,7 @@ msgstr "讨论已发布"
 #: src/lib/design/Toast.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 #: src/lib/features/workflows/WorkflowJobRow.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Dismiss"
 msgstr "忽略"
 
@@ -1905,6 +1925,7 @@ msgstr "到期时间"
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 #: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Expires"
 msgstr "到期于"
 
@@ -2362,6 +2383,11 @@ msgid "Investigation"
 msgstr "研究调查"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Invitation accepted."
+msgstr "已接受邀请。"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/admin/invitations/+page.svelte
 msgid "Invitation created"
 msgstr "邀请已创建"
@@ -2399,6 +2425,7 @@ msgstr "邀请已撤销"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Invitation status"
 msgstr "邀请状态"
 
@@ -2425,6 +2452,11 @@ msgstr "邀请现有用户加入此工作区。"
 #: src/lib/features/admin/AdminInvitations.svelte
 msgid "Invite user"
 msgstr "邀请用户"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Invited by {username}"
+msgstr "邀请人：{username}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2662,9 +2694,24 @@ msgid "LaTeX character commands"
 msgstr "LaTeX 字符命令"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Leave {name}? You will lose access to its library and projects. Your contributions will remain in the workspace."
+msgstr "离开 {name}？你将无法访问其中的文献库和项目，你的贡献仍会保留在工作区内。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Leave Project"
 msgstr "退出项目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Leave workspace"
+msgstr "离开工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Leaving removes your access. Existing workspace content and your contributions are kept. You will need a new invitation to rejoin."
+msgstr "离开后你将失去访问权限。工作区现有内容和你的贡献会保留，重新加入需要新的邀请。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2802,6 +2849,7 @@ msgid "Loading documents…"
 msgstr "正在加载文件列表…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Loading invitations…"
 msgstr "正在加载邀请…"
@@ -3545,14 +3593,10 @@ msgid "Open Projects are visible to all Workspace members. Joining one adds it t
 msgstr "开放项目对所有工作区成员可见。加入后会显示在你的项目列表中。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 msgid "Open Workspace"
 msgstr "打开工作区"
-
-#. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceDirectory.svelte
-msgid "Open workspace {name}"
-msgstr "打开工作区 {name}"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/settings/+page.svelte
@@ -4258,6 +4302,7 @@ msgstr "参考文献列表"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Refresh"
 msgstr "刷新"
 
@@ -5305,6 +5350,11 @@ msgid "This invitation is invalid or has expired."
 msgstr "此邀请无效或已过期。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "This invitation is no longer available. Ask the inviter for a new invitation."
+msgstr "此邀请已失效，请联系邀请人重新发送邀请。"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "This Item changed since it was loaded. Your draft was preserved; review the latest metadata."
 msgstr "此条目在加载后已发生变化。草稿已保留，请检查最新元数据。"
@@ -5353,6 +5403,11 @@ msgstr "此标签与现有标签冲突。"
 #: src/lib/api/errors.ts
 msgid "This Workspace is read only in its current state."
 msgstr "此工作区在当前状态下为只读。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "This workspace is read only. You can accept when membership changes are available again."
+msgstr "此工作区当前为只读，恢复成员变更后即可接受邀请。"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
@@ -5420,6 +5475,11 @@ msgid "Transfer workspace ownership to {username}? You will become an admin and 
 msgstr "将工作区所有权转移给 {username}？你将成为管理员，并失去仅限所有者的治理权限。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Transfer workspace ownership to another member before leaving."
+msgstr "请先将工作区所有权转移给其他成员，再离开工作区。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Translated title"
 msgstr "译名"
@@ -5458,6 +5518,7 @@ msgstr "类型列表"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Unable to accept invitation"
 msgstr "无法接受邀请"
 
@@ -5485,6 +5546,11 @@ msgstr "无法检查你的账号。"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to commit Import"
 msgstr "无法提交导入"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Unable to confirm whether you joined. Check status before trying again."
+msgstr "暂时无法确认是否已加入。请先核实状态，再重试。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -5520,6 +5586,11 @@ msgstr "无法丢弃导入"
 #: src/lib/features/projects/Projects.svelte
 msgid "Unable to join Project"
 msgstr "无法加入项目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Unable to leave workspace."
+msgstr "无法离开工作区。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -5618,6 +5689,11 @@ msgstr "无法加载概览。"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Unable to load the Library."
 msgstr "无法加载文献库。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Unable to load workspace invitations."
+msgstr "无法加载工作区邀请。"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
@@ -6062,6 +6138,12 @@ msgid "Workspace governance"
 msgstr "工作区治理"
 
 #. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Workspace invitations"
+msgstr "工作区邀请"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
 msgid "Workspace maintenance"
 msgstr "工作区维护"
@@ -6179,14 +6261,29 @@ msgid "Yes"
 msgstr "是"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "You already have a membership. Contact a workspace administrator to restore access."
+msgstr "你已是该工作区的成员。如需恢复访问，请联系工作区管理员。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 msgid "You are signed in as {current}. Switch to {invited} to accept this invitation."
 msgstr "你当前以 {current} 登录。请切换到 {invited} 以接受此邀请。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "You cannot leave while this workspace is read only."
+msgstr "工作区处于只读状态时，暂时无法离开。"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "You do not have permission to perform this action."
 msgstr "你无权执行此操作。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "You joined this workspace, but access is no longer available. Contact a workspace administrator."
+msgstr "你曾加入此工作区，但目前已无访问权限，请联系工作区管理员。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

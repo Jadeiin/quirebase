@@ -52,6 +52,9 @@ active or archived state. It neither suspends members nor grants the administrat
 A User with an active or suspended membership in a Workspace. An active User and active membership
 are required for Workspace data access; suspension and termination remove effective access without changing
 the provenance of Workspace-owned resources.
+An active non-owner member may leave an active, unfrozen Workspace. Leaving terminates that
+membership generation and its Project participation while preserving Workspace content and
+authorship. Rejoining requires a new invitation and creates a new membership generation.
 
 **Workspace Owner**:
 The User assigned to a Workspace's unique current active owner membership. The assignment survives
@@ -267,7 +270,11 @@ _Avoid_: Invite Code, Signup Token
 
 **Workspace Invitation**:
 A single-use, time-limited admission mechanism for adding an existing User to a Workspace.
-Accepting it creates or activates a Workspace Member; it does not provision instance identity.
+Accepting it creates a new Workspace Member; it does not provision instance identity or
+reactivate a suspended membership. Rejoining after termination creates a new membership
+generation without restoring old Project participation. Recipients may view their own invitations
+without prior Workspace membership; an accepted invitation never grants access after membership
+suspension or termination.
 
 **Login Session**:
 A revocable authenticated device session belonging to one User.

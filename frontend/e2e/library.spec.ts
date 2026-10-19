@@ -705,3 +705,64 @@ test('Library loads Tag options on demand, searches server pages and resolves a 
 		.poll(() => reads.some((read) => read.tag === 'tag-60' && read.limit === 1))
 		.toBe(true);
 });
+
+test('Library delete retains its submitted targets after pending Back navigation and failure', async ({
+	page
+}) => {
+	await mockSession(page);
+	const items = Array.from({ length: 26 }, (_, index) => ({
+		id: `item-${index}`,
+		title_html: `Item ${index}`,
+		authors: null,
+		publication_date: null,
+		publication_title: null,
+		doi: null,
+		version: 1
+	}));
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+		route.fulfill({ json: directoryPage(items, route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
+	const release = Promise.withResolvers<void>();
+	const submitted: Array<{ item_ids: string[]; action: string }> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/items/bulk', async (route) => {
+		submitted.push(route.request().postDataJSON());
+		if (submitted.length === 1) {
+			await release.promise;
+			return route.fulfill({
+				status: 500,
+				json: { code: 'internal_error', message: 'Temporary failure' }
+			});
+		}
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('button', { name: 'Next page', exact: true }).click();
+	await page.locator('article input[type=checkbox]').first().check();
+	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('delete');
+	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByRole('button', { name: 'Permanently delete', exact: true }).click();
+	try {
+		await expect.poll(() => submitted.length).toBe(1);
+		await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeVisible();
+		await page.goBack();
+		await expect(page).toHaveURL(/\/library$/);
+	} finally {
+		release.resolve();
+	}
+	await expect(dialog.getByRole('alert')).toBeVisible();
+	await dialog.getByRole('button', { name: 'Permanently delete', exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	expect(submitted.map((body) => ({ item_ids: body.item_ids, action: body.action }))).toEqual([
+		{ item_ids: ['item-25'], action: 'delete' },
+		{ item_ids: ['item-25'], action: 'delete' }
+	]);
+});

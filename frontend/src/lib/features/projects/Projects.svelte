@@ -15,6 +15,7 @@
 	import Icon from '#lib/design/Icon.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import Notice from '#lib/design/Notice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
@@ -289,7 +290,11 @@
 	<Panel>
 		<h2>{$t('Your Projects')}</h2>
 		{#if projects.isPending}<p class="text-surface-600-400">{$t('Loading Projects…')}</p>
-		{:else if projects.isError}<p class="text-error-700-300">{$t('Unable to load Projects.')}</p>
+		{:else if projects.isError}<QueryError
+				message={$t('Unable to load Projects.')}
+				busy={projects.isFetching}
+				onRetry={() => void projects.refetch()}
+			/>
 		{:else}{#each myProjects as project (project.id)}
 				<ItemRow
 					as="a"
@@ -317,7 +322,11 @@
 			{$t('Join an open research direction to add it to Your Projects.')}
 		</p>
 		{#if projects.isPending}<p class="text-surface-600-400">{$t('Loading Projects…')}</p>
-		{:else if projects.isError}<p class="text-error-700-300">{$t('Unable to load Projects.')}</p>
+		{:else if projects.isError}<QueryError
+				message={$t('Unable to load Projects.')}
+				busy={projects.isFetching}
+				onRetry={() => void projects.refetch()}
+			/>
 		{:else}{#each joinable as project (project.id)}
 				<ItemRow>
 					<a

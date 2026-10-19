@@ -20,9 +20,12 @@ from quirebase.workspaces.governance import (
 )
 from quirebase.workspaces.invitations import (
     accept_workspace_invitation,
+    accept_workspace_invitation_by_id,
     accept_workspace_invitation_by_token,
+    get_received_workspace_invitation,
     get_workspace_invitation_by_token,
     invite_workspace_member,
+    list_received_workspace_invitations,
     list_workspace_invitations,
     revoke_workspace_invitation,
 )
@@ -34,6 +37,7 @@ from quirebase.workspaces.lifecycle import (
 )
 from quirebase.workspaces.membership import (
     guard_user_deactivation,
+    leave_workspace,
     reactivate_workspace_member,
     set_workspace_member_role,
     suspend_workspace_member,
@@ -43,15 +47,19 @@ from quirebase.workspaces.membership import (
 
 __all__ = [
     "accept_workspace_invitation",
+    "accept_workspace_invitation_by_id",
     "accept_workspace_invitation_by_token",
     "archive_workspace",
     "check_workspace_integrity",
     "create_workspace",
     "delete_workspace",
     "freeze_workspace_governance",
+    "get_received_workspace_invitation",
     "get_workspace_invitation_by_token",
     "guard_user_deactivation",
     "invite_workspace_member",
+    "leave_workspace",
+    "list_received_workspace_invitations",
     "list_workspace_governance_members",
     "list_workspace_invitations",
     "list_workspace_members",

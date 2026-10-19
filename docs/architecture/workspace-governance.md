@@ -126,6 +126,7 @@ The initial role presets are:
 | Manage Workspace members, roles and settings | yes | yes | no | no | no |
 | Rebuild Workspace search projections | yes | yes | no | no | no |
 | Transfer Workspace ownership or manage admins | yes | no | no | no | no |
+| Leave an active, unfrozen Workspace | transfer ownership first | yes | yes | yes | yes |
 | Archive/restore Workspace | yes | yes | no | no | no |
 | Permanently delete Workspace | yes | no | no | no | no |
 
@@ -165,6 +166,13 @@ Instance registration and Workspace admission are separate operations:
   retained as an audit/history record, not as an ACL-satisfying `removed` state.
 - Workspace owner/admin manages ordinary membership. An instance administrator may perform only
   explicit lifecycle governance, including reason-bound owner reassignment, without implicit content access.
+- An active non-owner member may leave an active, unfrozen Workspace through
+  `workspace_member.leave`, independently of governance authority over other members. The command
+  requires the caller's submitted membership ID, so a retry cannot terminate a later rejoin.
+  Leaving terminates the current generation, clears its explicit Project participation, revokes
+  pending Workspace invitations and records `workspace.member.leave` atomically, preserving content
+  and authorship. A repeated request has no further effect and cannot bypass membership checks.
+  Rejoining requires a new invitation and never restores the old Project participation.
 - The active member directory exposes Workspace roles as collaboration metadata, requiring both
   an active User account and an active current Workspace membership. The governance view retains
   current memberships for inactive accounts and adds membership identifiers, state, join time,

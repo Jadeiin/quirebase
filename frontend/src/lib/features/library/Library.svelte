@@ -19,7 +19,8 @@
 	import LibraryResults from '#lib/features/library/LibraryResults.svelte';
 	import {
 		libraryBulkMutationOptions,
-		type LibraryBulkAction
+		type LibraryBulkAction,
+		type LibraryBulkInput
 	} from '#lib/features/library/mutations.js';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
 	import {
@@ -62,6 +63,8 @@
 	let error = $state('');
 	let notice = $state('');
 	let confirmDeleteOpen = $state(false);
+	let deleteInput = $state<LibraryBulkInput | null>(null);
+	let deleteSelectionVersion = 0;
 	let exportPreferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
@@ -69,12 +72,16 @@
 	const { query: session } = getSession();
 	const bulkMutation = createMutation(() => libraryBulkMutationOptions(workspaceId, queryClient));
 	const busy = $derived(bulkMutation.isPending);
+	$effect(() => {
+		if (!confirmDeleteOpen && !busy) deleteInput = null;
+	});
 
 	let previousSearch = page.url.search;
 	$effect(() => {
 		const search = page.url.search;
 		if (search === previousSearch) return;
 		previousSearch = search;
+		if (!busy) confirmDeleteOpen = false;
 		query = page.url.searchParams.get('q') ?? '';
 		tag = page.url.searchParams.get('tag') ?? '';
 		project = page.url.searchParams.get('project') ?? '';
@@ -172,32 +179,42 @@
 		if (!bulkAction || selected.size === 0 || bulkMutation.isPending) return;
 		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
 		if (bulkAction === 'delete') {
+			deleteInput = currentBulkInput();
+			deleteSelectionVersion = selectionVersion;
+			error = '';
 			confirmDeleteOpen = true;
 			return;
 		}
 		void executeBulkAction();
 	}
 
+	function currentBulkInput(): LibraryBulkInput {
+		return {
+			action: bulkAction as LibraryBulkAction,
+			itemIds: [...selected],
+			projectId: bulkProject,
+			tagName: bulkTag,
+			exportFormat,
+			preferences: $state.snapshot(exportPreferences)
+		};
+	}
+
 	async function executeBulkAction() {
-		confirmDeleteOpen = false;
-		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
+		if (busy) return;
+		const input = deleteInput ?? currentBulkInput();
+		if (!input.action || input.itemIds.length === 0) return;
+		if (!canRunBulkAction(workspace.can, input.action)) return;
 		error = '';
 		notice = '';
-		const submittedSelectionVersion = selectionVersion;
+		const submittedSelectionVersion = deleteInput ? deleteSelectionVersion : selectionVersion;
 		try {
 			await bulkMutation.mutateAsync({
-				input: {
-					action: bulkAction as LibraryBulkAction,
-					itemIds: [...selected],
-					projectId: bulkProject,
-					tagName: bulkTag,
-					exportFormat,
-					preferences: exportPreferences
-				},
+				input,
 				afterMutation: () => {
 					if (selectionVersion === submittedSelectionVersion) clearSelection();
 				}
 			});
+			confirmDeleteOpen = false;
 			notice = $t('Bulk action completed');
 		} catch (reason) {
 			if (isDownloadCancelled(reason)) return;
@@ -263,10 +280,11 @@
 	body={$t('This cannot be undone.')}
 	confirmLabel={$t('Permanently delete')}
 	{busy}
+	error={confirmDeleteOpen ? error : ''}
 	onConfirm={() => void executeBulkAction()}
 />
 
-<StatusNotice {error} {notice} />
+<StatusNotice error={confirmDeleteOpen ? '' : error} {notice} />
 
 <LibraryResults
 	{workspaceId}
@@ -285,4 +303,5 @@
 	onPage={(next) => navigate(submitted, next)}
 	onPageSize={(size) => navigate(submitted, 1, size)}
 	onSort={(value) => navigate({ ...submitted, sort: librarySort(value) })}
+	onRetry={() => void library.refetch()}
 />

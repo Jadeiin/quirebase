@@ -57,6 +57,57 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/me/workspace-invitations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Received Invitations */
+		get: operations['workspaces.get_received_invitations'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/me/workspace-invitations/{invitation_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Received Invitation */
+		get: operations['workspaces.get_received_invitation'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/me/workspace-invitations/{invitation_id}/accept': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Accept Received Invitation */
+		post: operations['workspaces.accept_received_invitation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workspaces': {
 		parameters: {
 			query?: never;
@@ -705,6 +756,23 @@ export interface paths {
 		post?: never;
 		/** Revoke Workspace Invitation Api */
 		delete: operations['workspaces.revoke_workspace_invitation_api'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/leave': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Leave Current Workspace */
+		post: operations['workspaces.leave_current_workspace'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -4416,6 +4484,20 @@ export interface components {
 		 * OffsetPagination
 		 * @description Container for data returned using limit/offset pagination.
 		 */
+		OffsetPagination_ReceivedWorkspaceInvitationView_: {
+			/** Items */
+			items: components['schemas']['ReceivedWorkspaceInvitationView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
 		OffsetPagination_TagView_: {
 			/** Items */
 			items: components['schemas']['TagView'][];
@@ -5135,6 +5217,45 @@ export interface components {
 			 */
 			name?: string | null;
 		};
+		/** ReceivedWorkspaceInvitationView */
+		ReceivedWorkspaceInvitationView: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/**
+			 * Workspace Id
+			 * Format: uuid
+			 */
+			workspace_id: string;
+			/** Workspace Name */
+			workspace_name: string;
+			/** Inviter Username */
+			inviter_username: string;
+			role: components['schemas']['WorkspaceInvitationRole'];
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+			/**
+			 * Expires At
+			 * Format: date-time
+			 */
+			expires_at: string;
+			/**
+			 * State
+			 * @enum {string}
+			 */
+			state: 'pending' | 'accepted' | 'revoked' | 'expired';
+			/** Can Accept */
+			can_accept: boolean;
+			/** Can Open */
+			can_open: boolean;
+			/** Unavailable Reason */
+			unavailable_reason: ('workspace_read_only' | 'current_member') | null;
+		};
 		/** Rect */
 		Rect: {
 			/** X */
@@ -5435,6 +5556,7 @@ export interface components {
 			| 'workspace_member.suspend'
 			| 'workspace_member.reactivate'
 			| 'workspace_member.terminate'
+			| 'workspace_member.leave'
 			| 'workspace_member.transfer_ownership'
 			| 'item_discussion.create'
 			| 'item_discussion.delete'
@@ -5627,6 +5749,7 @@ export interface components {
 			| 'backup.read'
 			| 'system_metrics.read'
 			| 'workspace.create'
+			| 'workspace_invitation.read'
 			| 'workspace_invitation.accept'
 			| 'workspace_governance.read'
 			| 'workspace_governance.freeze'
@@ -6133,6 +6256,14 @@ export interface components {
 			 */
 			created_at: string;
 		};
+		/** WorkspaceLeaveRequest */
+		WorkspaceLeaveRequest: {
+			/**
+			 * Membership Id
+			 * Format: uuid
+			 */
+			membership_id: string;
+		};
 		/** WorkspaceMemberDirectoryView */
 		WorkspaceMemberDirectoryView: {
 			/**
@@ -6203,6 +6334,11 @@ export interface components {
 			owner_id: string;
 			state: components['schemas']['WorkspaceState'];
 			current_role: components['schemas']['WorkspaceRole'];
+			/**
+			 * Current Membership Id
+			 * Format: uuid
+			 */
+			current_membership_id: string;
 			/** Governance Frozen */
 			governance_frozen: boolean;
 			/** Allowed Project Participations */
@@ -6392,6 +6528,127 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_received_invitations': {
+		parameters: {
+			query?: {
+				limit?: number;
+				offset?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_ReceivedWorkspaceInvitationView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.get_received_invitation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				invitation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReceivedWorkspaceInvitationView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.accept_received_invitation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				invitation_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkspaceInvitationAcceptanceView'];
+				};
 			};
 			/** @description Unprocessable Content */
 			422: {
@@ -8245,6 +8502,50 @@ export interface operations {
 			cookie?: never;
 		};
 		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OkView'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'workspaces.leave_current_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkspaceLeaveRequest'];
+			};
+		};
 		responses: {
 			/** @description Successful Response */
 			200: {

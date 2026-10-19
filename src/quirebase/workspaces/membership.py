@@ -15,6 +15,7 @@ from quirebase.access import (
 from quirebase.audit import record_event
 from quirebase.core.errors import (
     PermissionDenied,
+    ResourceNotFound,
     ValidationFailure,
 )
 from quirebase.models import (
@@ -146,14 +147,7 @@ async def terminate_workspace_member(
         ResourceAction.workspace_member_terminate,
         relation=workspace_member_relation(member.role),
     )
-    await db.execute(
-        delete(ProjectParticipant).where(
-            ProjectParticipant.workspace_id == workspace_id,
-            ProjectParticipant.workspace_member_id == member.id,
-        )
-    )
-    member.terminated_at = datetime.now(UTC)
-    await _revoke_pending_invitations(db, workspace_id, member.user_id)
+    await _end_membership(db, member)
     record_event(
         db,
         actor.id,
@@ -165,6 +159,46 @@ async def terminate_workspace_member(
         authorization_resource_action=ResourceAction.workspace_member_terminate.value,
     )
     await db.commit()
+
+
+async def leave_workspace(
+    db: AsyncSession, actor: User, workspace_id: UUID, membership_id: UUID
+) -> None:
+    """End only the caller's submitted membership generation, under the governance root lock."""
+    await _lock_workspace(db, workspace_id)
+    context = await require_workspace_membership(db, actor, workspace_id)
+    member = context.membership
+    if member.id != membership_id:
+        raise ResourceNotFound("Workspace membership not found")
+    require_action(
+        context,
+        ResourceAction.workspace_member_leave,
+        relation=workspace_member_relation(context.role),
+        message="transfer Workspace ownership before leaving",
+    )
+    await _end_membership(db, member)
+    record_event(
+        db,
+        actor.id,
+        "workspace.member.leave",
+        "workspace_member",
+        member.id,
+        workspace_id=workspace_id,
+        authorization_role=context.role.value,
+        authorization_resource_action=ResourceAction.workspace_member_leave.value,
+    )
+    await db.commit()
+
+
+async def _end_membership(db: AsyncSession, member: WorkspaceMember) -> None:
+    await db.execute(
+        delete(ProjectParticipant).where(
+            ProjectParticipant.workspace_id == member.workspace_id,
+            ProjectParticipant.workspace_member_id == member.id,
+        )
+    )
+    member.terminated_at = datetime.now(UTC)
+    await _revoke_pending_invitations(db, member.workspace_id, member.user_id)
 
 
 async def transfer_workspace_ownership(

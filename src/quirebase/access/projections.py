@@ -48,11 +48,21 @@ def workspace_decisions(
     *,
     governance_frozen: bool = False,
 ) -> AuthorizationProjection:
-    allowed = effective_resource_actions(
+    allowed = set(
+        effective_resource_actions(
+            role,
+            state,
+            governance_frozen=governance_frozen,
+        )
+    )
+    if workspace_resource_action_allowed(
         role,
         state,
+        ResourceAction.workspace_member_leave,
         governance_frozen=governance_frozen,
-    )
+        relation=workspace_member_relation(role),
+    ):
+        allowed.add(ResourceAction.workspace_member_leave)
     return AuthorizationProjection(allowed=tuple(sorted(allowed, key=lambda action: action.value)))
 
 

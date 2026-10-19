@@ -22,6 +22,7 @@ from quirebase.operations import dispatch_workspace_reindex
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.workspace_schemas import (
+    ReceivedWorkspaceInvitationView,
     WorkspaceCreateRequest,
     WorkspaceCreationAvailabilityView,
     WorkspaceGovernanceMemberView,
@@ -29,17 +30,22 @@ from quirebase.web.api.workspace_schemas import (
     WorkspaceInvitationCreatedView,
     WorkspaceInvitationRequest,
     WorkspaceInvitationView,
+    WorkspaceLeaveRequest,
     WorkspaceMemberDirectoryView,
     WorkspaceRoleRequest,
     WorkspaceUpdateRequest,
     WorkspaceView,
 )
 from quirebase.workspaces import (
+    accept_workspace_invitation_by_id,
     accept_workspace_invitation_by_token,
     archive_workspace,
     create_workspace,
     delete_workspace,
+    get_received_workspace_invitation,
     invite_workspace_member,
+    leave_workspace,
+    list_received_workspace_invitations,
     list_workspace_governance_members,
     list_workspace_invitations,
     list_workspace_members,
@@ -61,6 +67,50 @@ workspace_root_router = APIRouter(tags=["Workspaces"])
 workspace_router = APIRouter(tags=["Workspaces"])
 
 
+@router.get(
+    "/me/workspace-invitations", response_model=OffsetPagination[ReceivedWorkspaceInvitationView]
+)
+async def get_received_invitations(
+    user: ApiUser,
+    db: Database,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> OffsetPagination[ReceivedWorkspaceInvitationView]:
+    invitations, total = await list_received_workspace_invitations(
+        db, user, limit=limit, offset=offset
+    )
+    return OffsetPagination(
+        items=[
+            ReceivedWorkspaceInvitationView.model_validate(invitation, from_attributes=True)
+            for invitation in invitations
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/me/workspace-invitations/{invitation_id}", response_model=ReceivedWorkspaceInvitationView
+)
+async def get_received_invitation(
+    invitation_id: UUID, user: ApiUser, db: Database
+) -> ReceivedWorkspaceInvitationView:
+    invitation = await get_received_workspace_invitation(db, user, invitation_id)
+    return ReceivedWorkspaceInvitationView.model_validate(invitation, from_attributes=True)
+
+
+@router.post(
+    "/me/workspace-invitations/{invitation_id}/accept",
+    response_model=WorkspaceInvitationAcceptanceView,
+)
+async def accept_received_invitation(
+    invitation_id: UUID, user: ApiUser, db: Database
+) -> WorkspaceInvitationAcceptanceView:
+    member = await accept_workspace_invitation_by_id(db, user, invitation_id)
+    return WorkspaceInvitationAcceptanceView(workspace_id=member.workspace_id)
+
+
 def _workspace_view(workspace, member, *, owner_id: UUID) -> WorkspaceView:
     projection = workspace_decisions(
         member.role,
@@ -73,6 +123,7 @@ def _workspace_view(workspace, member, *, owner_id: UUID) -> WorkspaceView:
         owner_id=owner_id,
         state=workspace.state,
         current_role=member.role,
+        current_membership_id=member.id,
         governance_frozen=workspace.governance_frozen_at is not None,
         allowed_project_participations=list(
             workspace_project_participations(
@@ -289,6 +340,14 @@ async def accept_workspace_invitation_api(
 ) -> WorkspaceInvitationAcceptanceView:
     member = await accept_workspace_invitation_by_token(db, user, token)
     return WorkspaceInvitationAcceptanceView(workspace_id=member.workspace_id)
+
+
+@workspace_router.post("/leave", response_model=OkView)
+async def leave_current_workspace(
+    workspace_id: UUID, data: WorkspaceLeaveRequest, user: ApiUser, db: Database
+) -> OkView:
+    await leave_workspace(db, user, workspace_id, data.membership_id)
+    return OkView()
 
 
 @workspace_router.put("/members/{membership_id}/role", response_model=OkView)

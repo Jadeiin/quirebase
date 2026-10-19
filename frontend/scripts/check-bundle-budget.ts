@@ -126,43 +126,46 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 
 // Workspace navigation, confirmation feedback and both locale catalogs add shared code/styles.
 // Route budgets include that shared graph; settings sections remain independently loaded.
-// Recovery feedback, translated read states and URL list state are measured in other-pages-evidence/after/bundle-sizes.json.
-// Exceeded raw limits allow at most 2 KiB above measurements; only Tools adds 1 KiB gzip for recovery and responsive rows.
-// Other gzip limits and code-loading isolation checks remain unchanged.
+// Received invitations add a pending-count query/menu entry and both locale catalogs to the shell.
+// Measured against 4fea97a: +7237 B raw / +1897 B gzip shared; Library also retains a delete snapshot.
+// Leave translations add 1741 B raw / 373 B gzip to the shell; confirmation stays in settings.
+// Access-loss cleanup adds 485 B raw / 284 B gzip to Workspace routes. Route-independent leave
+// verification adds 165 B raw / 81 B gzip to General settings.
+// Only exceeded limits move, with bounded rounding headroom; isolation checks stay unchanged.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
-	raw: 696000,
-	gzip: 196000
+	raw: 705000,
+	gzip: 198000
 });
 enforce('Library route', routeBundle('/(app)/workspace/[workspaceId]/library'), {
-	raw: 921000,
+	raw: 932000,
 	// Includes destructive-detachment warnings, scoped selection cleanup and last-page recovery.
-	gzip: 264000
+	gzip: 267000
 });
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.
-	raw: 829000,
-	gzip: 235000
+	raw: 838000,
+	gzip: 238000
 });
 enforce('Account route', routeBundle('/(app)/account'), {
-	raw: 812000,
-	gzip: 230000
+	raw: 820000,
+	gzip: 233000
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 	// Includes shared pagination styles, account-management translations and recovery controls.
-	raw: 838000,
-	gzip: 242000
+	raw: 848000,
+	gzip: 244000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
 	raw: 829000,
-	gzip: 236000
+	gzip: 238000
 });
 enforce(
 	'Item overview route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)'),
 	{
-		raw: 829000,
-		gzip: 239000
+		raw: 838000,
+		gzip: 241000
 	}
 );
 enforce(
@@ -177,17 +180,17 @@ enforce(
 	'Item files route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files'),
 	{
-		raw: 875000,
-		gzip: 254000
+		raw: 884000,
+		gzip: 256000
 	}
 );
 enforce(
 	'Item organize route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
-		raw: 833000,
+		raw: 841000,
 		// Organize now includes the destructive-detachment confirmation dialog.
-		gzip: 242000
+		gzip: 243000
 	}
 );
 enforce(
@@ -195,8 +198,8 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
 		// Includes shared pagination styles and account-management translations.
-		raw: 839000,
-		gzip: 242000
+		raw: 847000,
+		gzip: 245000
 	}
 );
 enforce(
@@ -204,68 +207,69 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
 		// Includes shared pagination styles and account-management translations.
-		raw: 826000,
-		gzip: 240000
+		raw: 835000,
+		gzip: 241000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
 	// Includes Skeleton pagination and the separate Invitation navigation entry.
-	raw: 725000,
-	gzip: 207000
+	raw: 734000,
+	gzip: 208000
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
 	// Includes account containment guidance and expandable role and sign-in controls.
-	raw: 735000,
-	gzip: 211000
+	raw: 744000,
+	gzip: 212000
 });
 enforce('Admin invitations route', routeBundle('/(app)/admin/invitations'), {
 	// Owns invitation creation, history, status filtering and one pagination control.
-	raw: 734000,
-	gzip: 211000
+	raw: 743000,
+	gzip: 212000
 });
 enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
 	// Includes owner reassignment, bounded User search, conflict recovery and scoped completion.
-	raw: 776000,
-	gzip: 223000
+	raw: 785000,
+	gzip: 224000
 });
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 725000,
-	gzip: 207000
+	raw: 734000,
+	gzip: 208000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
 	// Includes Skeleton pagination and the separate Invitation navigation entry.
-	raw: 724000,
-	gzip: 207000
+	raw: 733000,
+	gzip: 208000
 });
 enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 714000,
-	gzip: 204000
+	raw: 723000,
+	gzip: 205000
 });
 enforce('Admin maintenance route', routeBundle('/(app)/admin/maintenance'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 714000,
-	gzip: 204000
+	raw: 723000,
+	gzip: 206000
 });
-enforce('Workspace directory', routeBundle('/(app)/workspace'), { raw: 750000, gzip: 214000 });
+// Includes the conditional received-invitation section; no standalone inbox route.
+enforce('Workspace directory', routeBundle('/(app)/workspace'), { raw: 762000, gzip: 216000 });
 enforce('Workspace general settings', routeBundle('/(app)/workspace/[workspaceId]/settings'), {
-	raw: 724000,
-	gzip: 208000
+	raw: 744000,
+	gzip: 213000
 });
 enforce('Workspace members', routeBundle('/(app)/workspace/[workspaceId]/settings/members'), {
-	raw: 761000,
+	raw: 764000,
 	gzip: 220000
 });
 enforce(
 	'Workspace invitations',
 	routeBundle('/(app)/workspace/[workspaceId]/settings/invitations'),
-	{ raw: 730000, gzip: 210000 }
+	{ raw: 732000, gzip: 210000 }
 );
 enforce(
 	'Workspace advanced settings',
 	routeBundle('/(app)/workspace/[workspaceId]/settings/advanced'),
-	{ raw: 746000, gzip: 215000 }
+	{ raw: 747000, gzip: 215000 }
 );
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
 	raw: 8_000_000,
@@ -279,6 +283,6 @@ const openedEditor = mergeGraphs(
 );
 enforce('Metadata editor when open', bundleSize(graphFiles(openedEditor)), {
 	// Includes shared pagination styles and account-management translations.
-	raw: 1068000,
-	gzip: 307000
+	raw: 1077000,
+	gzip: 310000
 });

@@ -6,9 +6,14 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError, onWorkspaceConflict, onWorkspaceUnavailable } from '#lib/api/client.js';
 	import { invalidateWorkspaces } from '#lib/query/invalidation.js';
+	import { reconcileWorkspaceAccessLoss } from '#lib/features/workspaces/access-loss.js';
+	import { getSession } from '#lib/session.js';
 	import WorkspaceProvider from '#lib/workspaces/WorkspaceProvider.svelte';
 	import { workspaceListQuery, workspaceQuery } from '#lib/workspaces/queries.js';
-	import { clearDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
+	import {
+		clearDefaultWorkspacePreference,
+		defaultWorkspacePreference
+	} from '#lib/workspaces/preference.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Notice from '#lib/design/Notice.svelte';
 	import { t } from '#lib/i18n.js';
@@ -19,6 +24,7 @@
 	// Only recover() needs this list; WorkspaceMenu loads the directory for normal navigation.
 	const workspaceList = createQuery(() => ({ ...workspaceListQuery(), enabled: false }));
 	const queryClient = useQueryClient();
+	const session = getSession().query;
 	let recoveryStarted = $state(false);
 	let unavailable = $state(false);
 	let checkedWorkspaceError = $state<unknown>();
@@ -26,15 +32,26 @@
 	async function recover() {
 		if (recoveryStarted) return;
 		recoveryStarted = true;
+		const recoveringWorkspaceId = workspaceId;
 		try {
 			const [list, current] = await Promise.all([workspaceList.refetch(), workspace.refetch()]);
 			if (list.isError) return;
 			if (current.isError) {
 				if (!(current.error instanceof ApiError) || current.error.code !== 'workspace_unavailable')
 					return;
-				clearDefaultWorkspacePreference();
-				unavailable = true;
-				void goto(resolve('workspace'), { replace: true });
+				if (defaultWorkspacePreference() === recoveringWorkspaceId)
+					clearDefaultWorkspacePreference();
+				if (workspaceId === recoveringWorkspaceId) {
+					unavailable = true;
+					await goto(resolve('workspace'), { replace: true });
+				}
+				// Remove projections after leaving the route, then refresh every directory
+				// and menu scope so a lost response cannot leave revoked access selectable.
+				await reconcileWorkspaceAccessLoss(
+					queryClient,
+					recoveringWorkspaceId,
+					session.data?.user?.id ?? ''
+				);
 			} else {
 				unavailable = false;
 			}

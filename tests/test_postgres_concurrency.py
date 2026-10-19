@@ -38,6 +38,7 @@ from quirebase.core.crypto import hash_password, verify_password
 from quirebase.core.errors import (
     PermissionDenied,
     ProjectLifecycleError,
+    ResourceNotFound,
     ResourceUnavailable,
     ValidationFailure,
     VersionConflict,
@@ -122,10 +123,14 @@ from quirebase.projects import (
     update_project_settings,
 )
 from quirebase.workspaces import (
+    accept_workspace_invitation_by_id,
+    accept_workspace_invitation_by_token,
     archive_workspace,
     delete_workspace,
     freeze_workspace_governance,
+    get_received_workspace_invitation,
     invite_workspace_member,
+    leave_workspace,
     list_workspaces,
     list_workspaces_for_governance,
     suspend_workspace_member,
@@ -3045,3 +3050,119 @@ async def test_item_delete_waits_for_project_reply_without_annotation_lock_cycle
                 is not None
             )
     assert fake_durable_operations.enqueues[-1]["attributes"]["object_intent"] == "cleanup"
+
+
+@pytest.mark.concurrency_case("membership-identity")
+async def test_id_and_token_invitation_acceptance_serialize_once(postgres_race):
+    async with postgres_race.session("setup") as db:
+        owner = await _user(db, "accept-once-owner")
+        recipient = await _user(db, "accept-once-recipient")
+        workspace_id, recipient_id = fixture_workspace_id(owner), recipient.id
+        invitation, token = await invite_workspace_member(
+            db, owner, workspace_id, recipient.username, WorkspaceRole.editor
+        )
+        invitation_id = invitation.id
+
+    async def accept(name):
+        async with postgres_race.session(name) as db:
+            actor = await db.get(User, recipient_id)
+            assert actor is not None
+            try:
+                if name == "by-id":
+                    await accept_workspace_invitation_by_id(db, actor, invitation_id)
+                else:
+                    await accept_workspace_invitation_by_token(db, actor, token)
+                return "accepted"
+            except ResourceNotFound:
+                await db.rollback()
+                return "used"
+
+    async with postgres_race.session("blocker") as db:
+        await db.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
+        for name in ("by-id", "by-token"):
+            postgres_race.start(name, accept(name))
+            await postgres_race.wait_blocked(name, "blocker")
+        await db.commit()
+    outcomes = [await postgres_race.join(name) for name in ("by-id", "by-token")]
+    assert sorted(outcomes) == ["accepted", "used"]
+    async with postgres_race.session("verify") as db:
+        actor = await db.get(User, recipient_id)
+        assert actor is not None
+        view = await get_received_workspace_invitation(db, actor, invitation_id)
+        assert view.state == "accepted" and view.can_open
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(WorkspaceMember)
+                .where(
+                    WorkspaceMember.workspace_id == workspace_id,
+                    WorkspaceMember.user_id == recipient_id,
+                )
+            )
+            == 1
+        )
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.workspace_id == workspace_id,
+                    AuditEvent.action == "workspace.invitation.accept",
+                )
+            )
+            == 1
+        )
+
+
+@pytest.mark.concurrency_case("membership-identity")
+@pytest.mark.parametrize("first", ["leave", "transfer"])
+async def test_workspace_leave_serializes_with_ownership_transfer(postgres_race, first):
+    async with postgres_race.session("setup") as db:
+        owner = await _user(db, "leave-race-owner")
+        target = await _user(db, "leave-race-target")
+        workspace_id, owner_id, target_id = fixture_workspace_id(owner), owner.id, target.id
+        membership = WorkspaceMember(
+            workspace_id=workspace_id, user_id=target_id, role=WorkspaceRole.viewer
+        )
+        db.add(membership)
+        await db.commit()
+        membership_id = membership.id
+
+    async def command(name):
+        async with postgres_race.session(name) as db:
+            actor = await db.get(User, target_id if name == "leave" else owner_id)
+            assert actor is not None
+            try:
+                if name == "leave":
+                    await leave_workspace(db, actor, workspace_id, membership_id)
+                else:
+                    await transfer_workspace_ownership(db, actor, workspace_id, membership_id)
+                return name
+            except (ResourceNotFound, PermissionDenied):
+                await db.rollback()
+                return "denied"
+
+    second = "transfer" if first == "leave" else "leave"
+    async with postgres_race.session("blocker") as db:
+        await db.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
+        for name in (first, second):
+            postgres_race.start(name, command(name))
+            await postgres_race.wait_blocked(name, "blocker")
+        await db.commit()
+    assert await postgres_race.join(first) == first
+    assert await postgres_race.join(second) == "denied"
+    async with postgres_race.session("verify") as db:
+        owners = list(
+            await db.scalars(
+                select(WorkspaceMember).where(
+                    WorkspaceMember.workspace_id == workspace_id,
+                    WorkspaceMember.role == WorkspaceRole.owner,
+                    WorkspaceMember.terminated_at.is_(None),
+                )
+            )
+        )
+        assert len(owners) == 1
+        assert owners[0].user_id == (target_id if first == "transfer" else owner_id)
+        member = await db.get(WorkspaceMember, membership_id)
+        assert member is not None
+        assert (member.terminated_at is not None) == (first == "leave")

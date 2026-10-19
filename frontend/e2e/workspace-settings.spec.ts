@@ -26,9 +26,7 @@ test('workspace directory exposes global navigation and distinguishes an empty s
 	await page.reload();
 	await expect(page.getByLabel('Search workspaces', { exact: true })).toHaveValue('missing');
 	await page.getByRole('button', { name: 'Clear search', exact: true }).click();
-	await expect(
-		page.getByRole('link', { name: 'Open workspace Research', exact: true })
-	).toBeVisible();
+	await expect(page.getByRole('link', { name: /Research.*Open Workspace/ })).toBeVisible();
 });
 
 test('settings sections load their own data and preserve member search across navigation and refresh', async ({

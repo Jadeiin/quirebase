@@ -149,7 +149,7 @@ test('an archived Workspace selected as default opens again from the root', asyn
 	);
 
 	await page.goto('/workspace');
-	await page.getByRole('link', { name: 'Open workspace Archive' }).click();
+	await page.getByRole('link', { name: /Archive.*Open Workspace/ }).click();
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/workspace\/workspace-2$/);
 	await expect
@@ -1025,11 +1025,9 @@ test('A preferred Workspace outside the first directory page opens directly and 
 	await expect(page).toHaveURL(/\/workspace\/workspace-27$/);
 	await expect(page.getByRole('button', { name: 'Quirebase' })).toContainText('Workspace 27');
 	await page.goto('/workspace');
-	await expect(
-		page.getByRole('link', { name: 'Open workspace Workspace 27', exact: true })
-	).toHaveCount(0);
+	await expect(page.getByRole('link', { name: /Workspace 27.*Open Workspace/ })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Next page', exact: true }).click();
-	const choice = page.getByRole('link', { name: 'Open workspace Workspace 27', exact: true });
+	const choice = page.getByRole('link', { name: /Workspace 27.*Open Workspace/ });
 	await expect(choice).toBeVisible();
 	await expect(choice).toContainText('Default');
 	expect(await page.evaluate(() => localStorage.getItem('quirebase:default-workspace'))).toBe(

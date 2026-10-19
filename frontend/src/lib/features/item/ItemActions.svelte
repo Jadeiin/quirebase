@@ -122,6 +122,7 @@
 	}
 
 	async function action(operation: () => Promise<unknown>, success: string) {
+		if (busy) return;
 		busy = true;
 		error = '';
 		notice = '';
@@ -305,7 +306,12 @@
 		>{/if}
 </div>
 
-<Dialog {open} onOpenChange={(details) => (open = details.open)}>
+<Dialog
+	{open}
+	onOpenChange={(details) => {
+		if (!busy) open = details.open;
+	}}
+>
 	<Portal>
 		<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
 		<Dialog.Positioner class="fixed inset-0 z-71 grid grid-cols-1 place-items-center p-4">
@@ -314,11 +320,13 @@
 			>
 				<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
 					<Dialog.Title class="text-lg font-bold">{$t('Item actions')}</Dialog.Title>
-					<DialogCloseButton />
+					<DialogCloseButton disabled={busy} />
 				</header>
 				<Tabs
 					value={section}
-					onValueChange={(details) => (section = (details.value ?? 'citation') as ActionSection)}
+					onValueChange={(details) => {
+						if (!busy) section = (details.value ?? 'citation') as ActionSection;
+					}}
 					class="grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]"
 				>
 					<Tabs.List class="mb-0 overflow-x-auto px-3 pt-2" aria-label={$t('Item actions')}>

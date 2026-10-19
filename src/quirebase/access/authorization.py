@@ -69,6 +69,7 @@ class SystemAction(ResourceActionKey):
     backup_read = "backup.read"
     system_metrics_read = "system_metrics.read"
     workspaces_create = "workspace.create"
+    workspace_invitations_read = "workspace_invitation.read"
     workspace_invitations_accept = "workspace_invitation.accept"
     workspaces_governance_read = "workspace_governance.read"
     workspaces_governance_freeze = "workspace_governance.freeze"
@@ -86,6 +87,7 @@ for _own_action in (
     SystemAction.api_tokens_revoke,
     SystemAction.login_sessions_read,
     SystemAction.login_sessions_revoke,
+    SystemAction.workspace_invitations_read,
     SystemAction.workspace_invitations_accept,
 ):
     SYSTEM_POLICY_RELATIONS[_own_action] = ("own",)

@@ -4,6 +4,98 @@ import { chooseSearchOption, directoryPage, mockSession, tagPage } from './helpe
 
 test.describe.configure({ mode: 'parallel' });
 
+test('Project moderation retains its reason after failure and blocks pending dismissal', async ({
+	page
+}) => {
+	await setup(page);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1/discussions', (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: 'message-1',
+					author_username: 'researcher',
+					mine: false,
+					body: 'Review this note',
+					created_at: '2026-10-01T00:00:00Z',
+					authorization: { allowed: ['project_discussion.delete'] }
+				}
+			]
+		})
+	);
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const reasons: string[] = [];
+	await page.route(
+		'**/api/v1/workspaces/workspace-1/projects/project-1/discussions/message-1/moderation',
+		async (route) => {
+			reasons.push(route.request().postDataJSON().reason);
+			if (reasons.length === 1) {
+				await held;
+				await route.fulfill({ status: 500, json: { code: 'internal_error' } });
+			} else await route.fulfill({ json: { ok: true } });
+		}
+	);
+	await page.goto('/workspace/workspace-1/projects/project-1');
+	await page.getByRole('button', { name: 'Moderate', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('Moderation reason').fill('Keep this reason');
+	await dialog.getByRole('button', { name: 'Remove message', exact: true }).click();
+	try {
+		await expect.poll(() => reasons.length).toBe(1);
+		await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeVisible();
+	} finally {
+		release();
+	}
+	await expect(dialog.getByRole('alert')).toBeVisible();
+	await expect(dialog.getByLabel('Moderation reason')).toHaveValue('Keep this reason');
+	await dialog.getByRole('button', { name: 'Remove message', exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect.poll(() => reasons).toEqual(['Keep this reason', 'Keep this reason']);
+});
+
+for (const task of ['library', 'projects', 'project', 'items', 'discussion'] as const) {
+	test(`${task} read failure has a local retry`, async ({ page }) => {
+		await setup(page);
+		await page.route('**/api/v1/workspaces/*/members?*', (route) =>
+			route.fulfill({ json: directoryPage([], route) })
+		);
+		let failing = true;
+		const endpoint =
+			task === 'library' || task === 'items'
+				? '**/api/v1/workspaces/*/items?*'
+				: task === 'projects'
+					? '**/api/v1/workspaces/*/projects?*'
+					: task === 'project'
+						? '**/api/v1/workspaces/workspace-1/projects/project-1'
+						: '**/api/v1/workspaces/workspace-1/projects/project-1/discussions';
+		const data =
+			task === 'project'
+				? project
+				: task === 'discussion'
+					? []
+					: { items: [], total: 0, limit: 25, offset: 0 };
+		await page.route(endpoint, (route) =>
+			route.fulfill(failing ? { status: 500, json: { code: 'internal_error' } } : { json: data })
+		);
+		await page.goto(
+			task === 'library'
+				? '/workspace/workspace-1/library'
+				: task === 'projects'
+					? '/workspace/workspace-1/projects'
+					: '/workspace/workspace-1/projects/project-1'
+		);
+		const alert = page.getByRole('main').getByRole('alert').first();
+		await expect(alert).toBeVisible();
+		failing = false;
+		await alert.getByRole('button', { name: 'Retry', exact: true }).click();
+		await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+	});
+}
+
 const project = {
 	id: 'project-1',
 	name: 'Research direction',

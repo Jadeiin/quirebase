@@ -21,6 +21,7 @@
 		workspaceListQuery
 	} from '#lib/workspaces/queries.js';
 	import WorkspaceCreateDialog from './WorkspaceCreateDialog.svelte';
+	import ReceivedInvitations from './ReceivedInvitations.svelte';
 	import { readWorkspaceListState, workspaceListParameters } from './list-state';
 
 	const listing = $derived(readWorkspaceListState(page.url.searchParams));
@@ -38,7 +39,7 @@
 		defaultWorkspaceId = defaultWorkspacePreference();
 	});
 	function navigate(search: string, nextPage = 1, size = listing.pageSize, replace = false) {
-		const parameters = workspaceListParameters(search, nextPage, size);
+		const parameters = workspaceListParameters(search, nextPage, size, page.url.search);
 		void goto(parameters ? resolve(`workspace?${parameters}`) : resolve('workspace'), {
 			reset: false,
 			replaceState: replace
@@ -51,9 +52,9 @@
 </script>
 
 <svelte:head><title>{$t('Workspaces · Quirebase')}</title></svelte:head>
-<section class="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6">
-	<header class="flex flex-wrap items-start justify-between gap-4">
-		<div class="grid grid-cols-1 gap-2">
+<section class="mx-auto grid w-full max-w-5xl min-w-0 grid-cols-1 gap-6">
+	<header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+		<div class="grid min-w-0 grid-cols-1 gap-2">
 			<h1 class="text-3xl font-bold">{$t('My workspaces')}</h1>
 			<p class="text-surface-700-300">
 				{$t('Choose a workspace to open its library and projects.')}
@@ -61,12 +62,14 @@
 		</div>
 		{#if creation.data?.allowed}<Button
 				variant="filled"
+				class="shrink-0 self-start"
 				onclick={() => {
 					notice = '';
 					createOpen = true;
 				}}>{$t('Create workspace')}</Button
 			>{/if}
 	</header>
+	<ReceivedInvitations />
 	{#if notice}<Notice variant="success">{notice}</Notice>{/if}
 	{#if creation.isError}<Notice variant="error"
 			>{$t('Unable to check whether you can create a workspace. Refresh and try again.')}
@@ -94,7 +97,6 @@
 				<Panel
 					as="a"
 					href={resolve(workspaceHref(workspace.id))}
-					aria-label={$t('Open workspace {name}', { name: workspace.name })}
 					class="group flex min-h-28 items-center justify-between gap-4 text-inherit no-underline transition-colors hover:border-primary-500 hover:bg-primary-50-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
 					onclick={() => {
 						setDefaultWorkspacePreference(workspace.id);

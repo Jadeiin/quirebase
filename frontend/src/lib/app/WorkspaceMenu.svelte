@@ -7,6 +7,8 @@
 	import Button from '#lib/design/Button.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { t } from '#lib/i18n.js';
+	import { getSession } from '#lib/session.js';
+	import { receivedInvitationsQuery } from '#lib/features/workspaces/received-invitations.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { workspaceOptionsQuery, workspaceQuery } from '#lib/workspaces/queries.js';
 	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
@@ -22,6 +24,10 @@
 	} = $props();
 
 	const workspaces = createInfiniteQuery(() => workspaceOptionsQuery());
+	const session = getSession().query;
+	const invitations = createQuery(() =>
+		receivedInvitationsQuery(session.data?.user?.id ?? '', 0, 1)
+	);
 	const current = createQuery(() => workspaceQuery(workspaceId ?? ''));
 	const currentWorkspace = $derived(current.data);
 	// Mirrors the visible text so the accessible name honours WCAG 2.5.3 (label in name).
@@ -38,20 +44,26 @@
 
 <Menu positioning={{ placement: 'bottom-start', gutter: 8 }}>
 	<Menu.Trigger
-		class={`flex min-w-0 cursor-pointer items-center border-0 bg-transparent text-white transition-colors hover:bg-white/8 ${
+		class={`relative flex min-w-0 cursor-pointer items-center border-0 bg-transparent text-white transition-colors hover:bg-white/8 ${
 			mobile
 				? 'max-w-[calc(100vw-5rem)] gap-2 rounded-lg px-1.5 py-1'
 				: compact
 					? 'size-10 justify-center rounded-lg'
 					: 'flex-1 gap-2.5 rounded-lg px-2 py-1.5 text-left'
 		}`}
-		aria-label={compact ? `Quirebase ${contextLabel}` : undefined}
+		aria-label={compact
+			? `Quirebase ${contextLabel}${invitations.data?.total ? ` ${$t('{count} pending invitations', { count: invitations.data.total })}` : ''}`
+			: undefined}
 		title={compact ? $t('Workspace') : undefined}
 	>
 		<span
-			aria-hidden="true"
-			class={`grid shrink-0 grid-cols-1 place-items-center rounded-xl bg-primary-50 font-serif font-extrabold text-primary-800 ${mobile ? 'size-7 text-base' : 'size-8 text-xl'}`}
-			>Q</span
+			class={`relative grid shrink-0 grid-cols-1 place-items-center rounded-xl bg-primary-50 font-serif font-extrabold text-primary-800 ${mobile ? 'size-7 text-base' : 'size-8 text-xl'}`}
+			><span aria-hidden="true">Q</span>
+			{#if invitations.data?.total}<span
+					class="absolute -top-1 -right-1.5 min-w-4 rounded-full border border-primary-950 bg-primary-200 px-1 font-sans text-[0.625rem] leading-4 font-bold text-primary-950 tabular-nums"
+					aria-label={$t('{count} pending invitations', { count: invitations.data.total })}
+					>{invitations.data.total > 99 ? '99+' : invitations.data.total}</span
+				>{/if}</span
 		>
 		{#if !compact}
 			<span class="grid min-w-0 flex-1 grid-cols-1 text-left leading-tight">
@@ -97,6 +109,17 @@
 					<p class="px-2.5 py-2 text-sm text-surface-600-400">{$t('No workspaces available')}</p>
 				{/if}
 				<Menu.Separator class="my-1 h-px bg-surface-300-700" />
+				{#if invitations.data?.total}<Menu.Item
+						value="received-invitations"
+						class="min-w-0 cursor-pointer justify-start gap-2 px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
+						onclick={() => goto(resolve('workspace#invitations'))}
+					>
+						<Icon name="mail" />{$t('Workspace invitations')}
+						<span
+							class="ml-auto rounded-full bg-primary-200 px-2 text-xs font-bold text-primary-950"
+							>{invitations.data.total}</span
+						>
+					</Menu.Item>{/if}
 				<Menu.Item
 					value="manage-workspaces"
 					class="min-w-0 cursor-pointer justify-start gap-2 px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"

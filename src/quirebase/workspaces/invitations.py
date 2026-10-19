@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import select
+from advanced_alchemy.filters import LimitOffset
+from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -12,6 +14,8 @@ from quirebase.access import (
     require_action,
     require_system_resource_action,
     require_workspace_membership,
+    system_resource_action_allowed,
+    workspace_decisions,
     workspace_member_relation,
 )
 from quirebase.audit import record_event
@@ -21,6 +25,7 @@ from quirebase.core.errors import (
     ValidationFailure,
     WorkspaceLifecycleError,
 )
+from quirebase.core.persistence import select_page
 from quirebase.models import (
     User,
     Workspace,
@@ -38,6 +43,130 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._locking import _lock_workspace
+
+
+@dataclass(frozen=True, slots=True)
+class ReceivedWorkspaceInvitation:
+    """Recipient-only admission state, without token material or Workspace content."""
+
+    id: UUID
+    workspace_id: UUID
+    workspace_name: str
+    inviter_username: str
+    role: WorkspaceInvitationRole
+    created_at: datetime
+    expires_at: datetime
+    state: Literal["pending", "accepted", "revoked", "expired"]
+    can_accept: bool
+    can_open: bool
+    unavailable_reason: Literal["workspace_read_only", "current_member"] | None
+
+
+async def _received_invitation_views(
+    db: AsyncSession, actor: User, invitation_ids: list[UUID]
+) -> list[ReceivedWorkspaceInvitation]:
+    if not invitation_ids:
+        return []
+    rows = await db.execute(
+        select(WorkspaceInvitation, Workspace, User.username, WorkspaceMember)
+        .join(Workspace, Workspace.id == WorkspaceInvitation.workspace_id)
+        .join(User, User.id == WorkspaceInvitation.invited_by)
+        .outerjoin(
+            WorkspaceMember,
+            and_(
+                WorkspaceMember.workspace_id == Workspace.id,
+                WorkspaceMember.user_id == actor.id,
+                WorkspaceMember.terminated_at.is_(None),
+            ),
+        )
+        .where(
+            WorkspaceInvitation.id.in_(invitation_ids),
+            WorkspaceInvitation.user_id == actor.id,
+        )
+        .execution_options(populate_existing=True)
+    )
+    now = datetime.now(UTC)
+    views = {}
+    for invitation, workspace, inviter_username, member in rows:
+        state: Literal["pending", "accepted", "revoked", "expired"] = "pending"
+        if invitation.accepted_at is not None:
+            state = "accepted"
+        elif invitation.revoked_at is not None:
+            state = "revoked"
+        elif invitation.expires_at <= now:
+            state = "expired"
+        unavailable_reason: Literal["workspace_read_only", "current_member"] | None = None
+        if (
+            workspace.state is not WorkspaceState.active
+            or workspace.governance_frozen_at is not None
+        ):
+            unavailable_reason = "workspace_read_only"
+        elif member is not None:
+            unavailable_reason = "current_member"
+        views[invitation.id] = ReceivedWorkspaceInvitation(
+            id=invitation.id,
+            workspace_id=workspace.id,
+            workspace_name=workspace.name,
+            inviter_username=inviter_username,
+            role=invitation.role,
+            created_at=invitation.created_at,
+            expires_at=invitation.expires_at,
+            state=state,
+            can_accept=state == "pending"
+            and unavailable_reason is None
+            and system_resource_action_allowed(
+                actor.role, "workspace_invitation", "accept", relation="own"
+            ),
+            can_open=state == "accepted"
+            and member is not None
+            and member.state is WorkspaceMemberState.active
+            and ResourceAction.workspace_read
+            in workspace_decisions(
+                member.role,
+                workspace.state,
+                governance_frozen=workspace.governance_frozen_at is not None,
+            ).allowed,
+            unavailable_reason=unavailable_reason if state == "pending" else None,
+        )
+    return [views[invitation_id] for invitation_id in invitation_ids if invitation_id in views]
+
+
+async def list_received_workspace_invitations(
+    db: AsyncSession, actor: User, *, limit: int = 25, offset: int = 0
+) -> tuple[list[ReceivedWorkspaceInvitation], int]:
+    """List this User's pending invitations, including temporarily unavailable ones."""
+    current_actor = await require_system_resource_action(
+        db, actor, "workspace_invitation", "read", relation="own"
+    )
+    invitations, total = await select_page(
+        db,
+        select(WorkspaceInvitation)
+        .where(
+            WorkspaceInvitation.user_id == current_actor.id,
+            WorkspaceInvitation.accepted_at.is_(None),
+            WorkspaceInvitation.revoked_at.is_(None),
+            WorkspaceInvitation.expires_at > datetime.now(UTC),
+        )
+        .order_by(WorkspaceInvitation.created_at.desc(), WorkspaceInvitation.id.desc()),
+        WorkspaceInvitation,
+        LimitOffset(limit=limit, offset=offset),
+    )
+    return await _received_invitation_views(
+        db, current_actor, [invitation.id for invitation in invitations]
+    ), total
+
+
+async def get_received_workspace_invitation(
+    db: AsyncSession, actor: User, invitation_id: UUID
+) -> ReceivedWorkspaceInvitation:
+    """Reconcile a possibly completed accept without replaying admission or restoring access."""
+    current_actor = await require_system_resource_action(
+        db, actor, "workspace_invitation", "read", relation="own"
+    )
+    views = await _received_invitation_views(db, current_actor, [invitation_id])
+    if not views:
+        raise ResourceNotFound("Workspace invitation not found")
+    return views[0]
 
 
 async def invite_workspace_member(
@@ -172,6 +301,21 @@ async def get_workspace_invitation_by_token(
 async def accept_workspace_invitation(
     db: AsyncSession, actor: User, workspace_id: UUID, token: str
 ) -> WorkspaceMember:
+    invitation_id = await db.scalar(
+        select(WorkspaceInvitation.id).where(
+            WorkspaceInvitation.workspace_id == workspace_id,
+            WorkspaceInvitation.token_hash == token_hash(token),
+        )
+    )
+    if invitation_id is None:
+        raise ResourceNotFound("Workspace invitation not found or expired")
+    return await accept_workspace_invitation_by_id(db, actor, invitation_id)
+
+
+async def accept_workspace_invitation_by_id(
+    db: AsyncSession, actor: User, invitation_id: UUID
+) -> WorkspaceMember:
+    """Admit the authenticated recipient, sharing one transaction with token acceptance."""
     current_actor = await require_system_resource_action(
         db,
         actor,
@@ -182,11 +326,13 @@ async def accept_workspace_invitation(
         message="Workspace invitation not found or expired",
         denied_error=ResourceNotFound,
     )
-    hashed = token_hash(token)
-    observed = await db.scalar(
-        select(WorkspaceInvitation).where(WorkspaceInvitation.token_hash == hashed)
+    workspace_id = await db.scalar(
+        select(WorkspaceInvitation.workspace_id).where(
+            WorkspaceInvitation.id == invitation_id,
+            WorkspaceInvitation.user_id == current_actor.id,
+        )
     )
-    if observed is None or observed.workspace_id != workspace_id:
+    if workspace_id is None:
         raise ResourceNotFound("Workspace invitation not found or expired")
     workspace = await _lock_workspace(db, workspace_id)
     if workspace.state is not WorkspaceState.active or workspace.governance_frozen_at is not None:
@@ -194,7 +340,7 @@ async def accept_workspace_invitation(
     invitation = await db.scalar(
         select(WorkspaceInvitation)
         .where(
-            WorkspaceInvitation.token_hash == hashed,
+            WorkspaceInvitation.id == invitation_id,
             WorkspaceInvitation.workspace_id == workspace_id,
         )
         .execution_options(populate_existing=True)
@@ -257,14 +403,12 @@ async def accept_workspace_invitation_by_token(
 ) -> WorkspaceMember:
     """Accept a single-use invitation without requiring prior Workspace membership."""
 
-    workspace_id = await db.scalar(
-        select(WorkspaceInvitation.workspace_id).where(
-            WorkspaceInvitation.token_hash == token_hash(token)
-        )
+    invitation_id = await db.scalar(
+        select(WorkspaceInvitation.id).where(WorkspaceInvitation.token_hash == token_hash(token))
     )
-    if workspace_id is None:
+    if invitation_id is None:
         raise ResourceNotFound("Workspace invitation not found or expired")
-    return await accept_workspace_invitation(db, actor, workspace_id, token)
+    return await accept_workspace_invitation_by_id(db, actor, invitation_id)
 
 
 async def _revoke_pending_invitations(

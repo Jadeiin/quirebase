@@ -12,6 +12,7 @@ const view = (
 	owner_id: 'user-1',
 	state: 'active',
 	current_role: role,
+	current_membership_id: 'membership-1',
 	governance_frozen: false,
 	allowed_project_participations: [],
 	authorization: { allowed }

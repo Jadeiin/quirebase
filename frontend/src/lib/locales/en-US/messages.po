@@ -61,6 +61,12 @@ msgid "{count} / 50 identifiers"
 msgstr "{count} / 50 identifiers"
 
 #. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "{count} pending invitations"
+msgstr "{count} pending invitations"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "{count} selected"
 msgstr "{count} selected"
@@ -119,7 +125,13 @@ msgid "Abstract"
 msgstr "Abstract"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Accept an invitation to join a workspace. You choose when to open it."
+msgstr "Accept an invitation to join a workspace. You choose when to open it."
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Accept invitation"
 msgstr "Accept invitation"
 
@@ -148,6 +160,7 @@ msgid "Account action failed"
 msgstr "Account action failed"
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
 #: src/lib/app/AppSidebar.svelte
 #: src/lib/app/navigation.ts
 msgid "Account settings"
@@ -893,6 +906,11 @@ msgid "Check for duplicates"
 msgstr "Check for duplicates"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Check status"
+msgstr "Check status"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Check stored objects"
 msgstr "Check stored objects"
@@ -910,6 +928,7 @@ msgstr "Checking account…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Checking invitation…"
 msgstr "Checking invitation…"
 
@@ -1640,6 +1659,7 @@ msgstr "Discussion posted"
 #: src/lib/design/Toast.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 #: src/lib/features/workflows/WorkflowJobRow.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Dismiss"
 msgstr "Dismiss"
 
@@ -1905,6 +1925,7 @@ msgstr "expires"
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 #: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Expires"
 msgstr "Expires"
 
@@ -2362,6 +2383,11 @@ msgid "Investigation"
 msgstr "Investigation"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Invitation accepted."
+msgstr "Invitation accepted."
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/admin/invitations/+page.svelte
 msgid "Invitation created"
 msgstr "Invitation created"
@@ -2399,6 +2425,7 @@ msgstr "Invitation revoked"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Invitation status"
 msgstr "Invitation status"
 
@@ -2425,6 +2452,11 @@ msgstr "Invite an existing user to join this workspace."
 #: src/lib/features/admin/AdminInvitations.svelte
 msgid "Invite user"
 msgstr "Invite user"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Invited by {username}"
+msgstr "Invited by {username}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2662,9 +2694,24 @@ msgid "LaTeX character commands"
 msgstr "LaTeX character commands"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Leave {name}? You will lose access to its library and projects. Your contributions will remain in the workspace."
+msgstr "Leave {name}? You will lose access to its library and projects. Your contributions will remain in the workspace."
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Leave Project"
 msgstr "Leave Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Leave workspace"
+msgstr "Leave workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Leaving removes your access. Existing workspace content and your contributions are kept. You will need a new invitation to rejoin."
+msgstr "Leaving removes your access. Existing workspace content and your contributions are kept. You will need a new invitation to rejoin."
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2802,6 +2849,7 @@ msgid "Loading documents…"
 msgstr "Loading documents…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Loading invitations…"
 msgstr "Loading invitations…"
@@ -3545,14 +3593,10 @@ msgid "Open Projects are visible to all Workspace members. Joining one adds it t
 msgstr "Open Projects are visible to all Workspace members. Joining one adds it to Your Projects."
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 msgid "Open Workspace"
 msgstr "Open Workspace"
-
-#. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceDirectory.svelte
-msgid "Open workspace {name}"
-msgstr "Open workspace {name}"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/settings/+page.svelte
@@ -4258,6 +4302,7 @@ msgstr "References"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Refresh"
 msgstr "Refresh"
 
@@ -5305,6 +5350,11 @@ msgid "This invitation is invalid or has expired."
 msgstr "This invitation is invalid or has expired."
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "This invitation is no longer available. Ask the inviter for a new invitation."
+msgstr "This invitation is no longer available. Ask the inviter for a new invitation."
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "This Item changed since it was loaded. Your draft was preserved; review the latest metadata."
 msgstr "This Item changed since it was loaded. Your draft was preserved; review the latest metadata."
@@ -5353,6 +5403,11 @@ msgstr "This Tag conflicts with an existing Tag."
 #: src/lib/api/errors.ts
 msgid "This Workspace is read only in its current state."
 msgstr "This Workspace is read only in its current state."
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "This workspace is read only. You can accept when membership changes are available again."
+msgstr "This workspace is read only. You can accept when membership changes are available again."
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
@@ -5420,6 +5475,11 @@ msgid "Transfer workspace ownership to {username}? You will become an admin and 
 msgstr "Transfer workspace ownership to {username}? You will become an admin and lose owner-only governance actions."
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Transfer workspace ownership to another member before leaving."
+msgstr "Transfer workspace ownership to another member before leaving."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Translated title"
 msgstr "Translated title"
@@ -5458,6 +5518,7 @@ msgstr "Types"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Unable to accept invitation"
 msgstr "Unable to accept invitation"
 
@@ -5485,6 +5546,11 @@ msgstr "Unable to check your account."
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to commit Import"
 msgstr "Unable to commit Import"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Unable to confirm whether you joined. Check status before trying again."
+msgstr "Unable to confirm whether you joined. Check status before trying again."
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -5520,6 +5586,11 @@ msgstr "Unable to discard Import"
 #: src/lib/features/projects/Projects.svelte
 msgid "Unable to join Project"
 msgstr "Unable to join Project"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "Unable to leave workspace."
+msgstr "Unable to leave workspace."
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -5618,6 +5689,11 @@ msgstr "Unable to load the dashboard."
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Unable to load the Library."
 msgstr "Unable to load the Library."
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Unable to load workspace invitations."
+msgstr "Unable to load workspace invitations."
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
@@ -6062,6 +6138,12 @@ msgid "Workspace governance"
 msgstr "Workspace governance"
 
 #. js-lingui-explicit-id
+#: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "Workspace invitations"
+msgstr "Workspace invitations"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
 msgid "Workspace maintenance"
 msgstr "Workspace maintenance"
@@ -6179,14 +6261,29 @@ msgid "Yes"
 msgstr "Yes"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "You already have a membership. Contact a workspace administrator to restore access."
+msgstr "You already have a membership. Contact a workspace administrator to restore access."
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
 msgid "You are signed in as {current}. Switch to {invited} to accept this invitation."
 msgstr "You are signed in as {current}. Switch to {invited} to accept this invitation."
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceLeave.svelte
+msgid "You cannot leave while this workspace is read only."
+msgstr "You cannot leave while this workspace is read only."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "You do not have permission to perform this action."
 msgstr "You do not have permission to perform this action."
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/ReceivedInvitations.svelte
+msgid "You joined this workspace, but access is no longer available. Contact a workspace administrator."
+msgstr "You joined this workspace, but access is no longer available. Contact a workspace administrator."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

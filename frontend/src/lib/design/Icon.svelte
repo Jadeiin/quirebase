@@ -58,6 +58,8 @@
 		/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
 	{:else if name === 'user'}
 		<circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" />
+	{:else if name === 'mail'}
+		<rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" />
 	{:else if name === 'panel'}
 		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
 	{:else if name === 'hand'}

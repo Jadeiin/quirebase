@@ -15,6 +15,7 @@
 	import Icon from '#lib/design/Icon.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import Notice from '#lib/design/Notice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
@@ -71,6 +72,8 @@
 			deleteDialogOpen = false;
 			removeItemDialogOpen = false;
 			pendingRemoveItem = undefined;
+			moderationDialogOpen = false;
+			moderationMessageId = '';
 		}
 	});
 	$effect(() => {
@@ -198,6 +201,7 @@
 		reload = true,
 		successToast = false
 	): Promise<boolean> {
+		if (busy) return false;
 		busy = true;
 		error = '';
 		notice = '';
@@ -257,6 +261,7 @@
 	async function saveSettings(event: SubmitEvent) {
 		event.preventDefault();
 		if (
+			busy ||
 			!project ||
 			project.id !== projectId ||
 			settingsBaseline?.id !== projectId ||
@@ -450,6 +455,7 @@
 	async function moderateDiscussion(reason: string) {
 		const messageId = moderationMessageId;
 		if (
+			busy ||
 			!messageId ||
 			!reason.trim() ||
 			!discussions.data?.some(
@@ -460,19 +466,21 @@
 			)
 		)
 			return;
-		moderationDialogOpen = false;
-		await mutate(
+		const targetProjectId = projectId;
+		const moderated = await mutate(
 			() =>
 				workspace.api.request(
 					'POST',
 					'/workspaces/{workspace_id}/projects/{project_id}/discussions/{message_id}/moderation',
 					{
-						params: { path: { project_id: projectId, message_id: messageId } },
+						params: { path: { project_id: targetProjectId, message_id: messageId } },
 						body: { reason: reason.trim() }
 					}
 				),
 			$t('Discussion message moderated')
 		);
+		if (moderated && projectId === targetProjectId && moderationMessageId === messageId)
+			moderationDialogOpen = false;
 	}
 </script>
 
@@ -503,14 +511,16 @@
 			</div>
 		{/if}
 	</div>
-	{#if error && !settingsDialogOpen && !deleteDialogOpen && !removeItemDialogOpen}<Notice
+	{#if error && !settingsDialogOpen && !deleteDialogOpen && !removeItemDialogOpen && !moderationDialogOpen}<Notice
 			variant="error">{error}</Notice
 		>{/if}
 	{#if notice}<Notice>{notice}</Notice>{/if}
 	{#if detail.isPending}<p>{$t('Loading Project…')}</p>
-	{:else if detail.isError || !project}<Notice variant="error"
-			>{$t('Unable to load Project.')}</Notice
-		>
+	{:else if detail.isError || !project}<QueryError
+			message={$t('Unable to load Project.')}
+			busy={detail.isFetching}
+			onRetry={() => void detail.refetch()}
+		/>
 	{:else}
 		<SectionHeader class="flex-col items-stretch sm:flex-row sm:items-start">
 			<div>
@@ -656,7 +666,11 @@
 				}}
 			/>
 			{#if items.isPending}<p>{$t('Loading Items…')}</p>
-			{:else if items.isError}<Notice variant="error">{$t('Unable to load Items.')}</Notice>
+			{:else if items.isError}<QueryError
+					message={$t('Unable to load Items.')}
+					busy={items.isFetching}
+					onRetry={() => void items.refetch()}
+				/>
 			{:else}
 				{#each items.data?.items ?? [] as item (item.id)}<ItemRow
 						class="grid-cols-[minmax(0,1fr)_auto] items-center"
@@ -705,9 +719,11 @@
 		<Panel>
 			<h2>{$t('Discussion')}</h2>
 			{#if discussions.isPending}<p>{$t('Loading discussion…')}</p>
-			{:else if discussions.isError}<p class="text-error-700-300">
-					{$t('Unable to load Project discussion.')}
-				</p>
+			{:else if discussions.isError}<QueryError
+					message={$t('Unable to load Project discussion.')}
+					busy={discussions.isFetching}
+					onRetry={() => void discussions.refetch()}
+				/>
 			{:else}{#each discussions.data ?? [] as message (message.id)}
 					<article class="grid grid-cols-1 gap-1 border-t border-surface-300-700 py-3">
 						<div class="flex items-center justify-between gap-2">
@@ -751,6 +767,7 @@
 		<Dialog
 			open={settingsDialogOpen}
 			onOpenChange={(details) => {
+				if (busy) return;
 				settingsDialogOpen = details.open;
 				if (!details.open) {
 					participationDialogOpen = false;
@@ -771,7 +788,7 @@
 									: $t('Project settings')}</Dialog.Title
 							>
 							{#snippet actions()}
-								<DialogCloseButton />
+								<DialogCloseButton disabled={busy} />
 							{/snippet}
 						</SectionHeader>
 						{#if error}<Notice variant="error" class="mb-4">{error}</Notice>{/if}
@@ -805,12 +822,16 @@
 									>{$t('Name')}<input
 										class="input"
 										bind:value={settingsName}
+										disabled={busy}
 										required
 										maxlength="240"
 									/></label
 								>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Participation')}<select class="select" bind:value={settingsParticipation}
+									>{$t('Participation')}<select
+										class="select"
+										bind:value={settingsParticipation}
+										disabled={busy}
 										>{#if project.participation === 'workspace' || project.allowed_participation_changes.includes('workspace')}<option
 												value="workspace">{$t(domainLabel('workspace'))}</option
 											>{/if}{#if project.participation === 'open' || project.allowed_participation_changes.includes('open')}<option
@@ -842,6 +863,7 @@
 								<label class="grid grid-cols-1 gap-1 sm:col-span-2"
 									>{$t('Description')}<textarea
 										class="textarea min-h-24"
+										disabled={busy}
 										bind:value={settingsDescription}></textarea></label
 								>
 								<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
@@ -893,6 +915,7 @@
 	<PromptDialog
 		bind:open={moderationDialogOpen}
 		title={$t('Moderate Discussion message')}
+		error={moderationDialogOpen ? error : ''}
 		body={$t('Give a reason for removing this message. The action is recorded in the audit log.')}
 		label={$t('Moderation reason')}
 		confirmLabel={$t('Remove message')}

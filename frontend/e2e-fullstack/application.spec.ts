@@ -13,6 +13,69 @@ async function signIn(page: Page) {
 	return new URL(page.url()).pathname.split('/').at(-1)!;
 }
 
+test('received invitation joins and leaves through the real API and only opens on request', async ({
+	page,
+	browser
+}) => {
+	const workspaceId = await signIn(page);
+	const origin = new URL(page.url()).origin;
+	const headers = { Origin: origin };
+	const username = 'invitation-recipient';
+	const created = await page.request.post('/api/v1/admin/users', {
+		headers,
+		data: { username, password: 'quirebase-recipient-e2e', role: 'member' }
+	});
+	expect(created.status()).toBe(201);
+	await page.goto(`/workspace/${workspaceId}/settings/invitations`);
+	await page.getByLabel('Exact username').fill(username);
+	await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
+	await expect(
+		page.getByText('Invitation created. Copy this token now; it will not be shown again.', {
+			exact: true
+		})
+	).toBeVisible();
+	const recipientContext = await browser.newContext();
+	const recipient = await recipientContext.newPage();
+	try {
+		await recipient.goto(`${origin}/workspace#invitations`);
+		await recipient.getByLabel('Username').fill(username);
+		await recipient.getByLabel('Password').fill('quirebase-recipient-e2e');
+		await recipient.getByRole('button', { name: 'Sign in' }).click();
+		await expect(
+			recipient.getByRole('heading', { name: 'Workspace invitations', exact: true })
+		).toBeVisible();
+		const previousDefault = await recipient.evaluate(() =>
+			localStorage.getItem('quirebase:default-workspace')
+		);
+		await recipient.getByRole('button', { name: 'Accept invitation', exact: true }).click();
+		await expect(recipient.getByText('Invitation accepted.', { exact: true })).toBeVisible();
+		await expect(recipient).toHaveURL(/\/workspace#invitations$/);
+		expect(
+			await recipient.evaluate(() => localStorage.getItem('quirebase:default-workspace'))
+		).toBe(previousDefault);
+		const inbox = await recipient.request.get('/api/v1/me/workspace-invitations');
+		expect((await inbox.json()).total).toBe(0);
+		await recipient.getByRole('link', { name: 'Open Workspace', exact: true }).click();
+		await expect(recipient).toHaveURL(new RegExp(`/workspace/${workspaceId}$`));
+		await expect(recipient.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+		const membership = await recipient.request.get(`/api/v1/workspaces/${workspaceId}`);
+		expect((await membership.json()).current_role).toBe('viewer');
+		await recipient.goto(`/workspace/${workspaceId}/settings`);
+		await recipient.getByRole('button', { name: 'Leave workspace', exact: true }).click();
+		await recipient
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Leave workspace', exact: true })
+			.click();
+		await expect(recipient).toHaveURL(/\/workspace$/);
+		expect(
+			await recipient.evaluate(() => localStorage.getItem('quirebase:default-workspace'))
+		).toBeNull();
+		expect((await recipient.request.get(`/api/v1/workspaces/${workspaceId}`)).status()).toBe(404);
+	} finally {
+		await recipientContext.close();
+	}
+});
+
 test('workspace settings create, rename and restore a workspace through the real API', async ({
 	page
 }) => {

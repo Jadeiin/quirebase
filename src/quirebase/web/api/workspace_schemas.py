@@ -36,10 +36,15 @@ class WorkspaceView(BaseModel):
     owner_id: UUID
     state: WorkspaceState
     current_role: WorkspaceRole
+    current_membership_id: UUID
     governance_frozen: bool
     allowed_project_participations: list[ProjectParticipation]
     allowed_invitation_roles: list[WorkspaceInvitationRole] = Field(default_factory=list)
     authorization: WorkspaceAuthorizationView
+
+
+class WorkspaceLeaveRequest(BaseModel):
+    membership_id: UUID
 
 
 class WorkspaceMemberDirectoryView(BaseModel):
@@ -90,3 +95,17 @@ class WorkspaceInvitationView(BaseModel):
 
 class WorkspaceInvitationAcceptanceView(BaseModel):
     workspace_id: UUID
+
+
+class ReceivedWorkspaceInvitationView(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    workspace_name: str
+    inviter_username: str
+    role: WorkspaceInvitationRole
+    created_at: datetime
+    expires_at: datetime
+    state: Literal["pending", "accepted", "revoked", "expired"]
+    can_accept: bool
+    can_open: bool
+    unavailable_reason: Literal["workspace_read_only", "current_member"] | None

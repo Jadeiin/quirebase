@@ -113,12 +113,12 @@ asynchronous Tag assignment actions retain their current product semantics.
 
 Client interactions distinguish four sources of state:
 
-| State | Owner | Transition rule |
-| --- | --- | --- |
-| Raw text and unsaved form fields | Local draft | Keep whitespace and newer edits until an explicit reset or restored filter replaces them. |
-| Submitted filters, criteria and list position | URL | Queries consume these values; dependent changes such as a new filter and page one publish together. |
-| Submitted operation criteria and input | Operation snapshot | Capture on explicit submission; later draft or URL edits do not retarget an in-flight operation. |
-| Remote results, errors and fetch status | TanStack Query | Do not mirror results or infer active work from the absence of data. |
+| State                                         | Owner              | Transition rule                                                                                     |
+| --------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------- |
+| Raw text and unsaved form fields              | Local draft        | Keep whitespace and newer edits until an explicit reset or restored filter replaces them.           |
+| Submitted filters, criteria and list position | URL                | Queries consume these values; dependent changes such as a new filter and page one publish together. |
+| Submitted operation criteria and input        | Operation snapshot | Capture on explicit submission; later draft or URL edits do not retarget an in-flight operation.    |
+| Remote results, errors and fetch status       | TanStack Query     | Do not mirror results or infer active work from the absence of data.                                |
 
 The Web UI Adapter's `src/lib/navigation/url-draft.svelte.ts` owns the repeated search-draft
 synchronization used by Tools' Tag filter and Citation Style search. Features retain their URL
@@ -210,6 +210,23 @@ projection, selected by the server-authored read decision. Advanced holds mainte
 lifecycle operations, with permanent deletion last. Direct visits to unavailable sections explain
 their unavailability without fetching restricted data.
 
+General settings also contains self-service Leave workspace, projected as `workspace_member.leave`
+for active non-owner members of active, unfrozen Workspaces. Owner and read-only states explain
+their prerequisite instead of offering an unauthorized command. `WorkspaceView.current_membership_id`
+identifies the caller's current generation. The confirmation snapshots it and the displayed name;
+`POST /workspaces/{workspace_id}/leave` accepts `{membership_id}` and can end only that same current
+membership of the authenticated User. Submission prevents dismissal and duplicate commands;
+failures retain the confirmation and refresh authoritative Workspace availability, including recovery
+after a lost response. Success clears a matching default preference, returns to `/workspace`,
+evicts that Workspace's cached projections and refreshes the directory and pending invitation count.
+Recovery after a lost response performs the same cleanup once the API confirms the Workspace
+is unavailable, including all directory pages and the brand menu's Workspace options. Pending
+Workspace reads are cancelled before eviction so their responses cannot repopulate the cache.
+Failed leaves directly read the captured Workspace, independently of query observers and route
+lifetime, even if navigation happens during that read. An unavailable response enters the same cleanup
+path as a successful leave; other read failures retain uncertainty and never replay the command.
+Finishing an operation after navigation to another Workspace does not redirect that new context.
+
 Directory and member search, page and page size live in URL parameters. Search and page-size
 changes reset to page one; settled results clamp an out-of-range page. Unsubmitted drafts remain
 local and are not overwritten by background refreshes. A Workspace-ID change retains the existing
@@ -258,3 +275,45 @@ membership, lifecycle and cross-Workspace recovery checks.
   route bundles and opened tools; budgets may be adjusted for justified dependency or feature
   changes. DatePicker, the schema editor and the PDF reader stay outside the application shell.
   Temml loads through the lazy `rich-text-math` chunk when inline math is rendered.
+
+## Received Workspace Invitations
+
+Workspaces owns recipient reads and admission; Access owns the `workspace_invitation.read`
+and `workspace_invitation.accept` system decisions with the `own` relation. The authenticated
+`/api/v1/me/workspace-invitations` collection requires no Workspace membership. It returns only
+that User's pending invitations, in descending creation/ID order with limit/offset pagination.
+The pending count includes invitations temporarily blocked by Workspace freeze or archive.
+The separate Workspace settings collection remains the governance view of sent invitations.
+Neither read exposes raw tokens or token hashes.
+
+`GET /me/workspace-invitations/{invitation_id}` reports the recipient's pending, accepted,
+revoked or expired state. Workspaces projects `can_accept`, `can_open` and an optional
+`unavailable_reason` from current lifecycle, membership and Access decisions. An accepted
+invitation alone never authorizes opening a Workspace: a current active membership and
+`workspace.read` are required. Missing and other recipients' invitations return the same 404.
+
+`POST /me/workspace-invitations/{invitation_id}/accept` shares the single-use admission command
+with token-based acceptance. The command reloads and locks the active User, then the Workspace,
+then the invitation; it creates a new membership and records Audit in the same transaction.
+It neither activates suspended memberships nor restores terminated generations or Project
+participation. A repeated acceptance fails; reconciliation reads do not replay the command.
+The standard HTTP credential and cookie Origin checks apply to all three endpoints.
+
+Received invitations live in a conditional section above the Workspace directory at `/workspace`,
+available without any Workspace membership. When there are no pending invitations, the section
+and its Workspace menu shortcut are hidden. A positive count appears beside the section heading,
+on the menu trigger and in the shortcut, which links to `/workspace#invitations`.
+Counts represent pending invitations, not unread notifications. Query keys include the User ID;
+`invitation_page` and `invitation_page_size` live in the URL independently of the directory's
+search and pagination. A submitted accept retains its target,
+prevents duplicate commands through reconciliation, and reads authoritative invitation state
+after either success or failure. A lost response can therefore become an accepted result.
+If that read also fails, the next action checks status without resending acceptance. A missing,
+revoked or expired invitation is explained; failure never appears as a successful empty inbox.
+Read failures show a local Retry even when the pending count is unknown. The last acceptance
+keeps its result and explicit Open Workspace action visible until dismissed or navigated away;
+the section does not disappear during reconciliation. Uncertain results cannot be dismissed.
+Successful reconciliation refreshes pending counts, the Workspace directory/options and
+Workspace projections. Acceptance keeps the default Workspace preference unchanged; only the
+explicit Open Workspace action changes it. The mobile header is a banner landmark with a
+named Account settings link.

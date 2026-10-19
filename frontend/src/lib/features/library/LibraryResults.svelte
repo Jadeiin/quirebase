@@ -4,6 +4,7 @@
 	import Icon from '#lib/design/Icon.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import Panel from '#lib/design/Panel.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import type { LibrarySearch } from '#lib/features/library/queries.js';
 	import { t } from '#lib/i18n.js';
@@ -25,7 +26,8 @@
 		onToggleItem,
 		onPage,
 		onPageSize,
-		onSort
+		onSort,
+		onRetry
 	}: {
 		data?: LibrarySearch;
 		workspaceId: string;
@@ -43,6 +45,7 @@
 		onPage: (page: number) => void;
 		onPageSize: (size: number) => void;
 		onSort: (sort: string) => void;
+		onRetry: () => void;
 	} = $props();
 </script>
 
@@ -50,9 +53,7 @@
 	{#if isPending}<div class="grid min-h-56 grid-cols-1 place-items-center text-surface-600-400">
 			{$t('Loading Library…')}
 		</div>
-	{:else if isError}<div class="grid min-h-56 grid-cols-1 place-items-center text-error-700-300">
-			{$t('Unable to load the Library.')}
-		</div>
+	{:else if isError}<QueryError message={$t('Unable to load the Library.')} {busy} {onRetry} />
 	{:else if !data?.items.length}<EmptyState
 			title={$t('No Items found.')}
 			detail={$t('Try a different Library Search.')}

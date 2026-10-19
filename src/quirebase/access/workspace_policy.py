@@ -49,6 +49,7 @@ class ResourceAction(ResourceActionKey):
     workspace_member_suspend = "workspace_member.suspend"
     workspace_member_reactivate = "workspace_member.reactivate"
     workspace_member_terminate = "workspace_member.terminate"
+    workspace_member_leave = "workspace_member.leave"
     workspace_member_transfer_ownership = "workspace_member.transfer_ownership"
     item_discussion_create = "item_discussion.create"
     item_discussion_delete = "item_discussion.delete"
@@ -134,6 +135,7 @@ ACTION_SPECS: dict[ResourceAction, ActionSpec] = {
     ResourceAction.workspace_member_suspend: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.workspace_member_reactivate: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.workspace_member_terminate: ActionSpec(True, _MEMBER_RELATIONS),
+    ResourceAction.workspace_member_leave: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.workspace_member_transfer_ownership: ActionSpec(True, _MEMBER_RELATIONS),
     ResourceAction.item_discussion_create: _WRITE,
     ResourceAction.item_discussion_delete: ActionSpec(True, _AUTHOR_RELATIONS),

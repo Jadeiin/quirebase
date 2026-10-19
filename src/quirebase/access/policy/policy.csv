@@ -23,6 +23,7 @@ p, workspace:viewer, project_participation, join, active, open
 p, workspace:viewer, project_participation, leave, active, open
 p, workspace:viewer, workspace, export, (active|archived|frozen), any
 p, workspace:viewer, workspace, read, (active|archived|frozen), any
+p, workspace:viewer, workspace_member, leave, active, (admin|member)
 
 # Reviewer: shared authorship and Discussion participation.
 p, workspace:reviewer, item_discussion, create, active, any
@@ -102,6 +103,7 @@ p, system:member, login_session, read, active, own
 p, system:member, login_session, revoke, active, own
 p, system:member, workspace, create, active, members_allowed
 p, system:member, workspace_invitation, accept, active, own
+p, system:member, workspace_invitation, read, active, own
 
 # Administrator: instance operation and tenancy governance.
 p, system:administrator, audit, read, active, any

@@ -23,6 +23,18 @@ export function workspaceRenameMutationOptions(workspaceId: string, client: Quer
 	});
 }
 
+export function workspaceLeaveMutationOptions(workspaceId: string) {
+	const api = createWorkspaceApi(workspaceId);
+	return mutationOptions({
+		mutationKey: workspaceKeys.mutation(workspaceId, 'leave'),
+		mutationFn: (membershipId: string) =>
+			api.request('POST', '/workspaces/{workspace_id}/leave', {
+				body: { membership_id: membershipId }
+			}),
+		retry: false
+	});
+}
+
 export type MemberCommand = {
 	membershipId: string;
 } & (

@@ -38,6 +38,7 @@ export function workspaceView(id: string, name: string) {
 		owner_id: 'user-1',
 		state: 'active',
 		current_role: 'owner',
+		current_membership_id: `membership-${id}`,
 		governance_frozen: false,
 		allowed_project_participations: ['managed', 'open', 'workspace'],
 		allowed_invitation_roles: ['viewer', 'reviewer', 'editor', 'admin'],
@@ -102,6 +103,9 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 }
 
 export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	await page.route('**/api/v1/me/workspace-invitations?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
 	await page.route('**/api/v1/admin/invitations?*', (route) =>
 		route.fulfill({ json: { items: [], total: 0, limit: 20, offset: 0 } })
 	);
