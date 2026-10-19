@@ -122,6 +122,8 @@
 	</Notice>
 {/if}
 <AdminSectionState
+	busy={invitations.isFetching}
+	onRetry={() => void invitations.refetch()}
 	loading={invitations.isPending}
 	failed={invitations.isError}
 	label={msg('Invitations')}

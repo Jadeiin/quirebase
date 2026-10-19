@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
@@ -22,19 +23,29 @@
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { readProjectListState, projectListParameters, type ProjectListState } from './list-state';
 
 	const workspace = getWorkspaceContext();
 	const workspaceId = workspace.workspaceId;
 	const queryClient = useQueryClient();
-	let offset = $state(0);
-	let pageSize = $state(25);
-	let search = $state('');
-	let view = $state<'all' | 'mine' | 'joinable'>('all');
+	const listing = $derived(readProjectListState(page.url.searchParams));
+	const offset = $derived((listing.page - 1) * listing.pageSize);
+	const pageSize = $derived(listing.pageSize);
+	const search = $derived(listing.search);
+	const view = $derived(listing.view);
+	function navigate(change: Partial<ProjectListState>, replace = false) {
+		const parameters = projectListParameters({ ...listing, ...change });
+		const path = workspaceHref(workspaceId, 'projects');
+		void goto(resolve(parameters ? `${path}?${parameters}` : path), {
+			reset: false,
+			replace
+		});
+	}
 	const projects = createQuery(() => projectListQuery(workspaceId, view, offset, search, pageSize));
 	const pageCount = $derived(Math.max(1, Math.ceil((projects.data?.total ?? 0) / pageSize)));
 	$effect(() => {
-		if (projects.data && offset >= projects.data.total && offset > 0)
-			offset = (pageCount - 1) * pageSize;
+		if (projects.isSuccess && !projects.isFetching && offset >= projects.data.total && offset > 0)
+			navigate({ page: pageCount }, true);
 	});
 	const joinable = $derived(
 		(projects.data?.items ?? []).filter(
@@ -76,15 +87,16 @@
 	});
 	let busy = $state(false);
 	let error = $state('');
+	let createError = $state('');
 
 	async function refresh() {
 		await invalidateProject(queryClient, workspaceId);
 	}
 
 	async function createProject() {
-		if (!allowedParticipation.includes(participation)) return;
+		if (busy || !allowedParticipation.includes(participation)) return;
 		busy = true;
-		error = '';
+		createError = '';
 		try {
 			const created = await workspace.api.request('POST', '/workspaces/{workspace_id}/projects', {
 				body: { name: name.trim(), description, participation }
@@ -98,7 +110,7 @@
 			await refresh();
 			await goto(resolve(workspaceHref(workspaceId, `projects/${created.id}`)));
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to create Project'));
+			createError = apiErrorMessage(reason, $t('Unable to create Project'));
 		} finally {
 			busy = false;
 		}
@@ -136,7 +148,14 @@
 	</div>
 	{#snippet actions()}
 		{#if allowedParticipation.length > 0}
-			<Dialog open={createOpen} onOpenChange={(details) => (createOpen = details.open)}>
+			<Dialog
+				open={createOpen}
+				onOpenChange={(details) => {
+					if (busy) return;
+					createOpen = details.open;
+					if (!details.open) createError = '';
+				}}
+			>
 				<DialogTriggerButton><Icon name="plus" /> {$t('New Project')}</DialogTriggerButton>
 				<Portal>
 					<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
@@ -146,8 +165,9 @@
 						>
 							<SectionHeader>
 								<Dialog.Title class="text-xl font-bold">{$t('Create Project')}</Dialog.Title>
-								{#snippet actions()}<DialogCloseButton />{/snippet}
+								{#snippet actions()}<DialogCloseButton disabled={busy} />{/snippet}
 							</SectionHeader>
+							{#if createError}<Notice variant="error" class="mb-3">{createError}</Notice>{/if}
 							<form
 								class="grid grid-cols-1 gap-3"
 								onsubmit={(event) => {
@@ -159,6 +179,7 @@
 									>{$t('Name')}<input
 										class="input"
 										bind:value={name}
+										disabled={busy}
 										required
 										maxlength="240"
 									/></label
@@ -167,10 +188,15 @@
 									>{$t('Description')}<textarea
 										class="textarea min-h-28"
 										bind:value={description}
+										disabled={busy}
 										maxlength="2000"></textarea></label
 								>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Participation')}<select class="select" bind:value={participation}>
+									>{$t('Participation')}<select
+										class="select"
+										bind:value={participation}
+										disabled={busy}
+									>
 										{#each allowedParticipation as value (value)}
 											<option {value}>{$t(domainLabel(value))}</option>
 										{/each}
@@ -207,7 +233,7 @@
 	class="mb-4 flex flex-wrap items-end gap-3"
 	onsubmit={(event) => {
 		event.preventDefault();
-		offset = 0;
+		navigate({ page: 1 });
 	}}
 >
 	<label
@@ -215,17 +241,17 @@
 			class="input"
 			value={search}
 			oninput={(event) => {
-				search = event.currentTarget.value;
-				offset = 0;
+				navigate({ search: event.currentTarget.value, page: 1 }, true);
 			}}
 		/></label
 	>
 	<label
 		>{$t('Projects')}<select
 			class="select"
-			bind:value={view}
-			onchange={() => {
-				offset = 0;
+			value={view}
+			onchange={(event) => {
+				const value = event.currentTarget.value;
+				navigate({ view: value === 'mine' || value === 'joinable' ? value : 'all', page: 1 });
 			}}
 		>
 			<option value="all">{$t('All Projects')}</option>
@@ -366,11 +392,10 @@
 	{pageSize}
 	total={projects.data?.total ?? 0}
 	onPageSize={(size) => {
-		pageSize = size;
-		offset = 0;
+		navigate({ pageSize: size, page: 1 });
 	}}
 	onPage={(page) => {
-		offset = (page - 1) * pageSize;
+		navigate({ page });
 	}}
 	busy={projects.isFetching}
 	label={$t('Projects')}

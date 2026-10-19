@@ -13,6 +13,8 @@
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import Icon from '#lib/design/Icon.svelte';
 	import Notice from '#lib/design/Notice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
+	import LoadingState from '#lib/design/LoadingState.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import {
 		bibliographyExportParameters,
@@ -322,27 +324,27 @@
 					<Tabs.List class="mb-0 overflow-x-auto px-3 pt-2" aria-label={$t('Item actions')}>
 						<Tabs.Indicator class="bg-primary-700-300" />
 						<Tabs.Trigger
-							class="whitespace-nowrap data-selected:text-primary-700-300"
+							class="whitespace-nowrap data-selected:text-primary-800-200"
 							value="citation">{$t('Citation')}</Tabs.Trigger
 						>
 
 						{#if copyDestinations.length}
 							<Tabs.Trigger
-								class="whitespace-nowrap data-selected:text-primary-700-300"
+								class="whitespace-nowrap data-selected:text-primary-800-200"
 								value="copy">{$t('Copy')}</Tabs.Trigger
 							>
 						{/if}
 
 						{#if overview.latest_revision_id && can(overview.authorization, 'workspace.export')}
 							<Tabs.Trigger
-								class="whitespace-nowrap data-selected:text-primary-700-300"
+								class="whitespace-nowrap data-selected:text-primary-800-200"
 								value="documents">{$t('Documents')}</Tabs.Trigger
 							>
 						{/if}
 
 						{#if can(overview.authorization, 'item.update')}
 							<Tabs.Trigger
-								class="whitespace-nowrap data-selected:text-primary-700-300"
+								class="whitespace-nowrap data-selected:text-primary-800-200"
 								value="sources">{$t('Metadata sources')}</Tabs.Trigger
 							>
 						{/if}
@@ -434,6 +436,7 @@
 												type="checkbox"
 												class="mt-1 shrink-0"
 												checked={selectedRevisions.has(revision.id)}
+												disabled={busy || files.isFetching || files.isError}
 												onchange={() =>
 													selectedRevisions.has(revision.id)
 														? selectedRevisions.delete(revision.id)
@@ -445,6 +448,12 @@
 												></span
 											></label
 										>{/each}
+									{#if files.isError}<QueryError
+											message={apiErrorMessage(files.error, $t('Unable to load documents.'))}
+											busy={files.isFetching}
+											onRetry={() => void files.refetch()}
+										/>{:else if files.isPending}<LoadingState label={$t('Loading documents…')} />
+									{:else if revisions.length === 0}<p>{$t('No PDF revisions available.')}</p>{/if}
 									<p class="text-sm text-surface-600-400">
 										{$t('Annotations: {state}', {
 											state: preferences.document.includeAnnotations
@@ -460,7 +469,10 @@
 									<div class="flex flex-wrap gap-2">
 										<Button
 											variant="filled"
-											disabled={busy || selectedRevisions.size === 0}
+											disabled={busy ||
+												files.isPending ||
+												files.isError ||
+												selectedRevisions.size === 0}
 											onclick={downloadDocuments}>{$t('Download bundle')}</Button
 										>
 										<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button

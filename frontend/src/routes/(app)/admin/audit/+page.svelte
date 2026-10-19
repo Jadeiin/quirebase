@@ -16,7 +16,13 @@
 	);
 </script>
 
-<AdminSectionState loading={audit.isPending} failed={audit.isError} label={msg('Audit')}>
+<AdminSectionState
+	busy={audit.isFetching}
+	onRetry={() => void audit.refetch()}
+	loading={audit.isPending}
+	failed={audit.isError}
+	label={msg('Audit')}
+>
 	<AdminAudit events={audit.data!.items} />
 	<Pagination
 		page={filters().page}

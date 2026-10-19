@@ -382,6 +382,10 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await expect(page.getByRole('menuitem', { name: /Renamed Research/ })).toBeVisible();
 	await page.keyboard.press('Escape');
+	await page
+		.getByRole('navigation', { name: 'Workspace settings', exact: true })
+		.getByRole('link', { name: 'Advanced', exact: true })
+		.click();
 	await page.getByRole('button', { name: 'Reindex Workspace' }).click();
 	await expect.poll(() => reindexRequests).toBe(1);
 });
@@ -426,6 +430,10 @@ test('a lifecycle conflict refreshes the Workspace action projection', async ({ 
 	await page.getByRole('button', { name: 'Save name' }).click();
 	await expect(page.getByText(/Archived workspace/)).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(0);
+	await page
+		.getByRole('navigation', { name: 'Workspace settings', exact: true })
+		.getByRole('link', { name: 'Advanced', exact: true })
+		.click();
 	await expect(page.getByRole('button', { name: 'Restore workspace' })).toBeVisible();
 });
 

@@ -16,7 +16,7 @@
 
 	let error = $state('');
 	let notice = $state<MessageKey | null>(null);
-	const { filters, setPage, setPageSize } = getAdminFilters();
+	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
 	const users = createQuery(() => adminUsersQuery(filters(), true));
 	const queryClient = useQueryClient();
 	const adminMutation = createMutation(() =>
@@ -35,8 +35,8 @@
 			: 1
 	);
 	$effect(() => {
-		if (users.isFetching || !users.data) return;
-		if (filters().page > pageCount) setPage(pageCount);
+		if (!users.isSuccess || users.isFetching) return;
+		correctPage(pageCount);
 	});
 
 	function mutate(operation: () => Promise<unknown>, success: MessageKey, form?: HTMLFormElement) {
@@ -121,7 +121,13 @@
 </script>
 
 <AdminNotices {error} {notice} />
-<AdminSectionState loading={users.isPending} failed={users.isError} label={msg('Users')}>
+<AdminSectionState
+	busy={users.isFetching}
+	onRetry={() => void users.refetch()}
+	loading={users.isPending}
+	failed={users.isError}
+	label={msg('Users')}
+>
 	<AdminUsers
 		users={users.data!}
 		{busy}

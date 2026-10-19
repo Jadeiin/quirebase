@@ -28,7 +28,7 @@
 		onThemeChange: (preference: ThemePreference) => void;
 	} = $props();
 	const mobileItems = $derived(
-		mobileNavigation.map(
+		(workspaceId ? mobileNavigation : []).map(
 			([section, label, icon]) =>
 				[
 					workspaceId ? resolve(workspaceHref(workspaceId, section)) : resolve('workspace'),
@@ -38,18 +38,20 @@
 		)
 	);
 	const moreItems = $derived(
-		mobileMoreNavigation.map(
-			([section, label, icon]) =>
-				[
-					section === '/account'
-						? resolve('account')
-						: workspaceId
-							? resolve(workspaceHref(workspaceId, section))
-							: resolve('workspace'),
-					label,
-					icon
-				] as const
-		)
+		mobileMoreNavigation
+			.filter(([section]) => workspaceId || section === '/account')
+			.map(
+				([section, label, icon]) =>
+					[
+						section === '/account'
+							? resolve('account')
+							: workspaceId
+								? resolve(workspaceHref(workspaceId, section))
+								: resolve('workspace'),
+						label,
+						icon
+					] as const
+			)
 	);
 	const moreActive = $derived(
 		moreItems.some(([route]) =>
@@ -65,6 +67,13 @@
 	{#snippet element(attributes)}
 		<nav {...attributes as HTMLAttributes<HTMLElement>} aria-label={$t('Mobile navigation')}>
 			<Navigation.Menu class="w-full gap-0">
+				{#if !workspaceId}<Navigation.TriggerAnchor
+						class="flex min-w-18 flex-1 flex-col items-center gap-1 rounded-none bg-transparent px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+						href={resolve('workspace')}
+						aria-current={routeIsActive('/workspace') ? 'page' : undefined}
+					>
+						<Icon name="panel" size={19} /><span>{$t('My workspaces')}</span>
+					</Navigation.TriggerAnchor>{/if}
 				{#each mobileItems as [route, label, icon] (label)}
 					<Navigation.TriggerAnchor
 						class="flex min-w-18 flex-1 flex-col items-center gap-1 rounded-none bg-transparent px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"

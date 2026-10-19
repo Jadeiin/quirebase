@@ -26,7 +26,7 @@ test('Workspace switching and governance live in the Quirebase menu, not the dai
 	await page.getByRole('button', { name: 'Quirebase' }).click();
 	await expect(page.getByRole('menuitem', { name: /Research/ })).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: /Archive/ })).toBeVisible();
-	await expect(page.getByRole('menuitem', { name: 'Manage workspaces' })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'My workspaces' })).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: 'Workspace settings' })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await mainNavigation.getByRole('link', { name: 'Projects' }).click();
@@ -191,10 +191,14 @@ test('workspace creation submits an explicit owner and opens the Workspace when 
 	);
 
 	await page.goto('/workspace');
-	await expect(page.getByRole('heading', { name: 'Create a workspace' })).toBeVisible();
+	await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'Create a workspace' })).toBeVisible();
 	await page.getByLabel('Workspace name').fill('New research');
 	await page.getByLabel('Owner username (exact match)').fill('reader');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Create workspace', exact: true })
+		.click();
 
 	await expect(page).toHaveURL(/\/workspace\/workspace-created$/);
 	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
@@ -238,9 +242,13 @@ test('an instance administrator who assigns another owner is not added to Worksp
 	});
 
 	await page.goto('/workspace');
+	await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
 	await page.getByLabel('Workspace name').fill('Assigned workspace');
 	await page.getByLabel('Owner username (exact match)').fill('target-owner');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Create workspace', exact: true })
+		.click();
 
 	await expect(
 		page.getByText(
@@ -635,7 +643,7 @@ test('Workspace admins do not get governance controls for other admin members', 
 		route.fulfill({ json: [] })
 	);
 
-	await page.goto('/workspace/workspace-1/settings');
+	await page.goto('/workspace/workspace-1/settings/members');
 
 	const adminRow = page.getByRole('row').filter({ hasText: 'other-admin' });
 	await expect(adminRow.getByRole('combobox')).toHaveCount(0);
@@ -644,7 +652,8 @@ test('Workspace admins do not get governance controls for other admin members', 
 	await expect(editorRow.getByRole('combobox', { name: 'Role for editor' })).toBeVisible();
 	await expect(editorRow.getByRole('combobox').locator('option[value="editor"]')).toHaveCount(0);
 	await expect(editorRow.getByRole('combobox')).toHaveValue('');
-	await expect(editorRow.getByRole('button', { name: 'Suspend' })).toBeVisible();
+	await editorRow.getByRole('button', { name: 'Actions for editor' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Suspend', exact: true })).toBeVisible();
 });
 
 test('Workspace members see the active directory without governance data', async ({ page }) => {
@@ -686,7 +695,7 @@ test('Workspace members see the active directory without governance data', async
 		return route.fulfill({ status: 403, json: { code: 'forbidden', message: 'forbidden' } });
 	});
 
-	await page.goto('/workspace/workspace-1/settings');
+	await page.goto('/workspace/workspace-1/settings/members');
 
 	await expect(page.getByRole('row').filter({ hasText: 'editor' })).toBeVisible();
 	await expect(page.getByRole('row').filter({ hasText: 'owner' })).toBeVisible();
@@ -727,7 +736,7 @@ for (const roles of [['reviewer'], []]) {
 			}
 			return route.fulfill({ json: [] });
 		});
-		await page.goto('/workspace/workspace-1/settings');
+		await page.goto('/workspace/workspace-1/settings/invitations');
 		await expect(page.getByRole('heading', { name: 'Invitations', exact: true })).toBeVisible();
 		if (roles.length === 0) {
 			await expect(page.getByRole('button', { name: 'Create invitation' })).toHaveCount(0);
@@ -942,7 +951,7 @@ test('member role choices use the concrete projection even when no generic role 
 		requestedRole = route.request().postDataJSON().role;
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.goto('/workspace/workspace-1/settings');
+	await page.goto('/workspace/workspace-1/settings/members');
 	const roles = page.getByRole('combobox', { name: 'Role for collaborator' });
 	await expect(roles.locator('option:not([disabled])')).toHaveCount(1);
 	await roles.selectOption('admin');
@@ -977,10 +986,13 @@ for (const maintenance of [false, true]) {
 			route.fulfill({ json: directoryPage([], route) })
 		);
 		await page.goto('/workspace/workspace-1/settings');
+		await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(maintenance ? 0 : 1);
+		await page.goto('/workspace/workspace-1/settings/advanced');
+		await expect(page.getByRole('heading', { name: 'Advanced', exact: true })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Reindex Workspace' })).toHaveCount(
 			maintenance ? 1 : 0
 		);
-		await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(maintenance ? 0 : 1);
 	});
 }
 
@@ -1049,12 +1061,12 @@ test('Workspace member governance supports later pages and username search', asy
 	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
 		route.fulfill({ json: [] })
 	);
-	await page.goto('/workspace/workspace-1/settings');
+	await page.goto('/workspace/workspace-1/settings/members');
 	const pager = page.getByRole('navigation', { name: 'Members pagination' });
 	await pager.getByRole('button', { name: 'Next page', exact: true }).click();
-	await expect(page.getByRole('cell', { name: 'member-27', exact: true })).toBeVisible();
+	await expect(page.getByText('member-27', { exact: true })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Search members' }).fill('member-12');
-	await expect(page.getByRole('cell', { name: 'member-12', exact: true })).toBeVisible();
-	await expect(page.getByRole('cell', { name: 'member-27', exact: true })).toHaveCount(0);
+	await expect(page.getByText('member-12', { exact: true })).toBeVisible();
+	await expect(page.getByText('member-27', { exact: true })).toHaveCount(0);
 	await expect(pager.getByText('Page 1 of 1')).toBeVisible();
 });

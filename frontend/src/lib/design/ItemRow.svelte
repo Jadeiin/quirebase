@@ -11,7 +11,8 @@
 
 	let { as = 'div', class: className = '', children, ...rest }: ItemRowProps = $props();
 
-	const base = 'grid gap-1 border-b border-surface-300-700 py-[0.85rem] last:border-b-0';
+	const base =
+		'grid min-w-0 grid-cols-1 gap-1 wrap-anywhere border-b border-surface-300-700 py-[0.85rem] last:border-b-0';
 	const classes = $derived(
 		`${base} ${as === 'a' ? 'no-underline hover:text-primary-800-200' : ''} ${className}`.trim()
 	);

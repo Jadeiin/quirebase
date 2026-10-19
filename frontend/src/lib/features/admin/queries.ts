@@ -12,13 +12,8 @@ export type AdminSection =
 	| 'settings'
 	| 'maintenance';
 
-export type AdminFilters = {
-	page: number;
-	pageSize: number;
-	search: string;
-	filterA: string;
-	filterB: string;
-};
+import type { AdminFilters } from './list-state';
+export type { AdminFilters } from './list-state';
 
 export const adminKeys = {
 	section: (section: AdminSection, filters: AdminFilters) => ['admin', section, filters] as const
@@ -49,8 +44,8 @@ export function adminUsersQuery(filters: AdminFilters, enabled = true) {
 						limit: filters.pageSize,
 						offset: (filters.page - 1) * filters.pageSize,
 						search: filters.search,
-						role: filters.filterA,
-						active: filters.filterB ? filters.filterB === 'true' : undefined
+						role: filters.role,
+						active: filters.active ? filters.active === 'true' : undefined
 					}
 				},
 				signal
@@ -90,8 +85,8 @@ export function adminAuditQuery(filters: AdminFilters, enabled = true) {
 						limit: filters.pageSize,
 						offset: (filters.page - 1) * filters.pageSize,
 						search: filters.search,
-						action: filters.filterA,
-						target_type: filters.filterB
+						action: filters.action,
+						target_type: filters.targetType
 					}
 				},
 				signal
@@ -109,7 +104,7 @@ export function adminWorkflowsQuery(filters: AdminFilters, enabled = true) {
 			apiRequest('GET', '/admin/workflows', {
 				params: {
 					query: {
-						state: filters.filterA,
+						state: filters.workflowState,
 						limit: filters.pageSize,
 						offset: (filters.page - 1) * filters.pageSize
 					}

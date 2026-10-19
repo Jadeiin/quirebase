@@ -101,7 +101,7 @@
 					value="manage-workspaces"
 					class="min-w-0 cursor-pointer justify-start gap-2 px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 					onclick={() => goto(resolve('workspace'))}
-					><Icon name="panel" />{$t('Manage workspaces')}</Menu.Item
+					><Icon name="panel" />{$t('My workspaces')}</Menu.Item
 				>
 
 				{#if workspaceId}

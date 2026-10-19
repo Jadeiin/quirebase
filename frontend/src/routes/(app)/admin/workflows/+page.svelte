@@ -7,16 +7,18 @@
 	import { adminWorkflowsQuery } from '#lib/features/admin/queries.js';
 	import { msg, t } from '#lib/i18n.js';
 
-	const { filters, setPage, setPageSize } = getAdminFilters();
+	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
 	const workflows = createQuery(() => adminWorkflowsQuery(filters(), true));
 	$effect(() => {
-		if (workflows.isFetching || !workflows.data) return;
+		if (!workflows.isSuccess || workflows.isFetching) return;
 		const lastPage = Math.max(1, Math.ceil(workflows.data.total / filters().pageSize));
-		if (filters().page > lastPage) setPage(lastPage);
+		correctPage(lastPage);
 	});
 </script>
 
 <AdminSectionState
+	busy={workflows.isFetching}
+	onRetry={() => void workflows.refetch()}
 	loading={workflows.isPending}
 	failed={workflows.isError}
 	label={msg('Workflows')}

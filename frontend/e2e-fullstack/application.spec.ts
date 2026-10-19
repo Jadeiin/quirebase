@@ -13,6 +13,45 @@ async function signIn(page: Page) {
 	return new URL(page.url()).pathname.split('/').at(-1)!;
 }
 
+test('workspace settings create, rename and restore a workspace through the real API', async ({
+	page
+}) => {
+	await signIn(page);
+	await page.goto('/workspace');
+	await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
+	const creation = page.getByRole('dialog');
+	await creation.getByLabel('Workspace name').fill('Workspace settings smoke');
+	await creation.getByLabel('Owner username (exact match)').fill('admin');
+	await creation.getByRole('button', { name: 'Create workspace', exact: true }).click();
+	await expect(page).toHaveURL(/\/workspace\/[^/]+$/);
+	const workspaceId = new URL(page.url()).pathname.split('/').at(-1)!;
+	await page.goto(`/workspace/${workspaceId}/settings`);
+	await page.getByLabel('Name', { exact: true }).fill('Renamed settings smoke');
+	await page.getByRole('button', { name: 'Save name', exact: true }).click();
+	await expect(page.getByText('Workspace name updated', { exact: true })).toBeVisible();
+	const sections = page.getByRole('navigation', { name: 'Workspace settings', exact: true });
+	await sections.getByRole('link', { name: 'Members', exact: true }).click();
+	await expect(page.getByRole('cell').filter({ hasText: /^admin/ })).toBeVisible();
+	await sections.getByRole('link', { name: 'Invitations', exact: true }).click();
+	await expect(page.getByText('No pending invitations.', { exact: true })).toBeVisible();
+	await sections.getByRole('link', { name: 'Advanced', exact: true }).click();
+	await page.getByRole('button', { name: 'Archive workspace', exact: true }).click();
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Archive workspace', exact: true })
+		.click();
+	await expect(page.getByText('Workspace archived', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Restore workspace', exact: true }).click();
+	await expect(page.getByText('Workspace restored', { exact: true })).toBeVisible();
+	const response = await page.request.get(`/api/v1/workspaces/${workspaceId}`);
+	expect(response.ok()).toBe(true);
+	expect(await response.json()).toMatchObject({
+		name: 'Renamed settings smoke',
+		state: 'active',
+		current_role: 'owner'
+	});
+});
+
 test('applies the stored theme under production CSP before hydration', async ({ page }) => {
 	const cspErrors: string[] = [];
 	page.on('console', (message) => {
@@ -153,10 +192,13 @@ test('creates a Project through the real API', async ({ page }) => {
 
 	await page.goto(`/workspace/${workspaceId}/projects`);
 	await page.getByRole('button', { name: 'New Project' }).click();
-	await page.getByLabel('Name').fill('Full-stack smoke Project');
-	await page.getByLabel('Description').fill('Created by the real browser-to-database smoke test.');
-	await page.getByLabel('Participation').selectOption('open');
-	await page.getByRole('button', { name: 'Create Project' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Create Project', exact: true });
+	await dialog.getByLabel('Name', { exact: true }).fill('Full-stack smoke Project');
+	await dialog
+		.getByLabel('Description', { exact: true })
+		.fill('Created by the real browser-to-database smoke test.');
+	await dialog.getByRole('combobox', { name: 'Participation', exact: true }).selectOption('open');
+	await dialog.getByRole('button', { name: 'Create Project', exact: true }).click();
 
 	await expect(page).toHaveURL(/\/workspace\/[^/]+\/projects\/[0-9a-f-]+$/);
 	await expect(page.getByRole('heading', { name: 'Full-stack smoke Project' })).toBeVisible();

@@ -35,7 +35,7 @@
 		workspaceId?: string;
 	} = $props();
 	const navItems = $derived(
-		navigation.map(
+		(workspaceId ? navigation : []).map(
 			([section, label, icon]) =>
 				[
 					workspaceId ? resolve(workspaceHref(workspaceId, section)) : resolve('workspace'),
@@ -73,6 +73,15 @@
 			<Navigation.Menu class="flex-none gap-1">
 				{#snippet element(attributes)}
 					<nav {...attributes as HTMLAttributes<HTMLElement>} aria-label={$t('Main navigation')}>
+						{#if !workspaceId}<Navigation.TriggerAnchor
+								class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+								href={resolve('workspace')}
+								aria-label={$t('My workspaces')}
+								title={collapsed ? $t('My workspaces') : undefined}
+								aria-current={routeIsActive('/workspace') ? 'page' : undefined}
+							>
+								<Icon name="panel" />{#if !collapsed}<span>{$t('My workspaces')}</span>{/if}
+							</Navigation.TriggerAnchor>{/if}
 						{#each navItems as [route, label, icon] (label)}
 							<Navigation.TriggerAnchor
 								class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-surface-400 no-underline transition-colors hover:bg-white/9 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"

@@ -102,13 +102,72 @@ Skeleton's Svelte component stylesheet is loaded alongside the core primitives. 
 sidebar, mobile and section-link presentation; SvelteKit still owns URL selection and `aria-current`.
 Pagination owns page changes through first/previous/next/last controls, a Page Size selector and the
 current result range. Library and Project Item lists expose server-side Sort By choices in the same
-bar. Library pagination keeps its page, Page Size and sorting in the URL and resets to page one when
-size or sorting changes. Tabs owns local Account, Tools and Item-action sections. Combobox owns
+bar. Library, Project directory and Project Item lists keep filters, page, Page Size and sorting
+in the URL and reset to page one when size, sorting or filters change. Tabs owns local Account
+and Item-action sections, plus URL-selected Tools modes. Combobox owns
 searchable Tag, Project and Workspace selection, Listbox owns the visible CSL style choices,
 SegmentedControl owns duplicate criteria,
 Collapsible owns the Library filter disclosure, and Progress owns indeterminate loading feedback.
 Short fixed choices and native form inputs keep Skeleton's CSS primitives. Native details and
 asynchronous Tag assignment actions retain their current product semantics.
+
+Client interactions distinguish four sources of state:
+
+| State | Owner | Transition rule |
+| --- | --- | --- |
+| Raw text and unsaved form fields | Local draft | Keep whitespace and newer edits until an explicit reset or restored filter replaces them. |
+| Submitted filters, criteria and list position | URL | Queries consume these values; dependent changes such as a new filter and page one publish together. |
+| Submitted operation criteria and input | Operation snapshot | Capture on explicit submission; later draft or URL edits do not retarget an in-flight operation. |
+| Remote results, errors and fetch status | TanStack Query | Do not mirror results or infer active work from the absence of data. |
+
+The Web UI Adapter's `src/lib/navigation/url-draft.svelte.ts` owns the repeated search-draft
+synchronization used by Tools' Tag filter and Citation Style search. Features retain their URL
+parsers and build the complete destination. The shared mechanism publishes trimmed text after
+200 ms using replacement navigation, preserves raw whitespace and newer edits when that publication
+is acknowledged, and pauses publication while navigation is in progress. Back/Forward cancels
+unpublished edits and restores the destination's filter even when its value equals the previous
+URL's value. An external filter change replaces the draft; an unrelated URL correction retains it.
+Timers belong to the view's lifetime. A cancelled publication retains the draft without an automatic
+retry loop; the next edit can publish again.
+
+Automatic page clamps replace history only after a successful, settled read establishes the last
+page. User pagination pushes history. Administration exposes separate `setPage` and `correctPage`
+actions so query effects cannot accidentally select the user-navigation policy.
+
+Tools stores the active mode, duplicate criteria, Tag filter/page/size and Citation Style search
+in its URL. Returning to or refreshing a duplicate view never initiates a scan. Only the explicit
+check captures submitted criteria and calls the disabled query's `refetch`; URL criteria changes
+leave that in-flight query attached to the submitted criteria. Revisiting stale results does not
+refetch. Leaving the view may cancel the request; returning requires another explicit check.
+A pending query with idle fetch status is an idle check, not a loading indicator. Tag and Citation
+Style reads are enabled only for their active tool. Pending Tools commands prevent duplicate
+submission without blocking independent filter or tab navigation. Citation Style installation
+captures its input and clears only an unchanged submitted draft on success; newer form edits remain.
+
+The shared administration filter bar and Overview, Users, Audit and
+Workflows pagination store their state in the URL; switching sections starts the default view,
+while browser history restores its previous filter values. The filter bar keeps unsubmitted drafts
+when only the page or Page Size changes, including automatic page corrections. A changed submitted
+filter, section switch or Back/Forward restores the destination's filter values. Clear filters
+explicitly resets drafts even when the URL already contains the default filters.
+Passwords, credentials and mutation drafts remain local.
+
+Remote reads distinguish loading, failure, successful empty results and populated results.
+`QueryError` provides localized, task-local failure feedback and a retry action; a failed read
+cannot produce a successful empty-result message. Cached content may remain visible when a
+refresh fails, accompanied by the failure feedback. Modal commands retain their target and
+draft on failure, display errors inside the active modal, and close after success. Pending
+commands disable repeated submission and dismissal. File selection includes visible action
+text in its accessible name and associates supplementary instructions as a description.
+
+List content must shrink and wrap valid long words; declaring grid columns alone is insufficient.
+Secondary text is checked against both page and panel backgrounds, and tab text is checked in
+selected and focused states. Browser acceptance includes representative English and Chinese,
+light and dark modes, long content, failed reads/commands, and URL refresh/history recovery.
+Temporal regressions are covered through the shared draft Interface and browser consumers:
+debounce followed by Back/Forward, edits during URL publication or a pending command, command
+success/failure, an in-flight scan's criteria changes, leaving an unfinished scan, stale-tab return,
+and automatic clamps followed by user pagination and Back.
 
 Administrative event and workflow lists use server-side limit/offset pages. Workflow totals come
 from DBOS state aggregates, and overview statistics cover the complete record set independently of
@@ -132,6 +191,47 @@ so deep links and renamed selections remain usable outside the first option page
 assignments only for Tags in the requested page, preserving zero counts without aggregating the
 whole taxonomy. Tag mutations invalidate Tag lists, option searches and selected-Tag queries.
 
+## Workspace navigation and settings
+
+The Workspace directory at `/workspace` is a global destination. Without a Workspace ID, the
+application shell offers global destinations rather than linking Library, Projects and other
+Workspace tasks back to the directory. The brand menu owns Workspace switching and the settings
+entry. Workspace creation is an explicit dialog action; its owner requirements come from the
+creation-availability projection, and assigning another owner does not grant the creator content
+access.
+
+`src/lib/features/workspaces` owns Workspace directory and settings presentation, typed queries,
+mutations and their cache invalidation. It consumes the Workspace context/API, design patterns,
+localization and Workflow Center; authorization stays in Access and the HTTP API. Route pages are
+thin adapters. A shared settings layout identifies the current Workspace and links to literal
+General, Members, Invitations and Advanced routes. Each task loads its own data and owns its
+drafts, pending state and feedback. Members includes either the ordinary directory or governance
+projection, selected by the server-authored read decision. Advanced holds maintenance and
+lifecycle operations, with permanent deletion last. Direct visits to unavailable sections explain
+their unavailability without fetching restricted data.
+
+Directory and member search, page and page size live in URL parameters. Search and page-size
+changes reset to page one; settled results clamp an out-of-range page. Unsubmitted drafts remain
+local and are not overwritten by background refreshes. A Workspace-ID change retains the existing
+keyed Provider isolation. Governance mutations invalidate the shared Workspace projections once,
+including dependent research views; starting reindex registers its scoped job with the global
+Workflow Center.
+
+Read sections distinguish loading, failure, no matches and empty data, with local retries for
+failures. Invitation read failures do not remove a newly created one-time link. Only successful
+revocation of that exact invitation retires its displayed link. Confirmation dialogs identify the
+affected Workspace or member, retain failures for retry and block dismissal while a submission is
+pending. Permanent Workspace deletion requires the current Workspace name in the confirmation
+dialog; the API still enforces archive and retention conditions. ESLint rejects native browser
+dialogs in both TypeScript and Svelte product code.
+
+Workspace UI changes describe the user task, account/Workspace/instance scope, entry and URL,
+required server decisions, success/failure/empty states and representative acceptance scenario.
+Browser checks cover task routes, refresh/back navigation, cancellation and failure recovery;
+representative English desktop and Chinese narrow-screen scenarios check long content,
+accessibility and layout width and attach review screenshots. These complement the existing
+membership, lifecycle and cross-Workspace recovery checks.
+
 ## Deployment and frontend constraints
 
 - A single Quirebase service and artifact still contains the complete application.
@@ -149,7 +249,8 @@ whole taxonomy. Tag mutations invalidate Tag lists, option searches and selected
 - Quirebase owns one named Skeleton theme, including the complete semantic color ramps,
   typography and radii. Product code consumes those tokens instead of raw palette values for
   general interface states.
-- Reactive Svelte state (runes) lives in `.svelte`, `.svelte.js` or `.svelte.ts` modules only;
+- Reactive Svelte state (runes) lives in `.svelte`, `.svelte.js` or `.svelte.ts` modules only
+  (including Vite-compiled `.svelte.test.ts` test modules);
   plain TypeScript modules never use runes, so the static build cannot ship an initializer that
   crashes the application shell at startup.
 - Production builds must tree-shake unused components. Frontend upgrades check generated JS/CSS

@@ -59,6 +59,12 @@
 </script>
 
 <AdminNotices {error} {notice} />
-<AdminSectionState loading={settings.isPending} failed={settings.isError} label={msg('Settings')}>
+<AdminSectionState
+	busy={settings.isFetching}
+	onRetry={() => void settings.refetch()}
+	loading={settings.isPending}
+	failed={settings.isError}
+	label={msg('Settings')}
+>
 	<AdminSettings settings={settings.data!} fields={settingFields} {busy} onSave={saveSettings} />
 </AdminSectionState>

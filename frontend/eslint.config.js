@@ -67,6 +67,24 @@ export default defineConfig(
 			tailwindcss: { cssConfigPath: path.resolve(import.meta.dirname, 'src/app.css') }
 		},
 		rules: {
+			'no-restricted-globals': [
+				'error',
+				...['alert', 'confirm', 'prompt'].map((name) => ({
+					name,
+					message:
+						'Use a #lib/design dialog so confirmation, localization and pending states remain consistent.'
+				}))
+			],
+			'no-restricted-properties': [
+				'error',
+				...['window', 'globalThis', 'self'].flatMap((object) =>
+					['alert', 'confirm', 'prompt'].map((property) => ({
+						object,
+						property,
+						message: 'Use a #lib/design dialog instead of a native dialog.'
+					}))
+				)
+			],
 			'@typescript-eslint/no-floating-promises': 'error',
 			'tailwindcss/no-custom-classname': 'error',
 			'tailwindcss/no-contradicting-classname': 'error',

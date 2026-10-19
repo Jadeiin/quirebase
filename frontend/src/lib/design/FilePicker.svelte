@@ -43,7 +43,7 @@
 		disabled,
 		required,
 		maxFiles: multiple ? maxFiles : 1,
-		translations: { dropzone: label },
+		translations: { dropzone: `${label} ${actionLabel}` },
 		onFileChange: (details) => {
 			onFilesChange?.(details.acceptedFiles);
 			// A rejected selection leaves the rejected file in the native input
@@ -95,17 +95,18 @@
 	class={`grid min-w-0 grid-cols-1 gap-3 ${className}`.trim()}
 >
 	<FileUpload.Dropzone
+		aria-describedby={hint ? `${id}-hint` : undefined}
 		class="flex min-w-0 cursor-pointer flex-row items-center justify-between gap-3 rounded-base border border-dashed border-surface-400-600 bg-surface-50-950 px-4 py-3 transition-colors hover:border-primary-700-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-700 data-disabled:cursor-not-allowed data-disabled:opacity-60 data-dragging:border-primary-700-300 data-dragging:bg-primary-50-950"
 	>
 		<span class="min-w-0">
 			<strong class="block text-sm">{label}</strong>
-			{#if hint}<small class="block text-surface-600-400">{hint}</small>{/if}
 		</span>
 		<span
 			class="shrink-0 rounded-full border border-surface-300-700 px-3 py-1 text-sm font-semibold text-primary-700-300"
 			>{actionLabel}</span
 		>
 	</FileUpload.Dropzone>
+	{#if hint}<small id={`${id}-hint`} class="block text-surface-600-400">{hint}</small>{/if}
 	<FileUpload.HiddenInput>
 		{#snippet element(attributes)}
 			<input

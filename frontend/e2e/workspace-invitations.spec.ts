@@ -54,7 +54,7 @@ test('revoking a Workspace invitation retires its displayed one-time link', asyn
 		revoked.add(route.request().url().split('/').at(-1)!);
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.goto('/workspace/workspace-1/settings');
+	await page.goto('/workspace/workspace-1/settings/invitations');
 	await page.getByLabel('Exact username').fill('invited-user');
 	await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
 	await expect(page.getByText(/invite\/workspace-audit-token/)).toBeVisible();

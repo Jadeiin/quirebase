@@ -7,6 +7,7 @@
 	import { domainLabel } from '#lib/domain-labels.js';
 	import Badge from '#lib/design/Badge.svelte';
 	import Notice from '#lib/design/Notice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import ExportPreferences from '#lib/features/account/ExportPreferences.svelte';
 	import { accountQuery } from '#lib/features/account/queries.js';
@@ -157,6 +158,11 @@
 </div>
 {#if error}<Notice variant="error">{error}</Notice>{/if}
 {#if notice}<Notice variant="success">{$t(notice)}</Notice>{/if}
+{#if account.isError}<QueryError
+		message={apiErrorMessage(account.error, $t('Unable to load account.'))}
+		busy={account.isFetching}
+		onRetry={() => void account.refetch()}
+	/>{/if}
 {#if account.isPending}
 	<p class="text-surface-600-400">{$t('Loading account…')}</p>
 {:else if account.data}

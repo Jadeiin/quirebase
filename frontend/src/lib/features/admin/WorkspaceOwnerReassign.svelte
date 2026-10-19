@@ -30,8 +30,11 @@
 			page: 1,
 			pageSize: 20,
 			search: search ?? '',
-			filterA: '',
-			filterB: 'true'
+			role: '',
+			active: 'true',
+			action: '',
+			targetType: '',
+			workflowState: ''
 		})
 	);
 	function selectReceiver(userId: string) {

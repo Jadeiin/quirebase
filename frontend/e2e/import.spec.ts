@@ -65,11 +65,11 @@ test('manual Import mounts the schema editor on first activation and retains its
 		if (request.url().endsWith('/metadata/schema')) schemaRequests += 1;
 	});
 	await page.goto('/workspace/workspace-1/import');
-	await expect(page.getByRole('button', { name: 'PDF files', exact: true })).not.toBeVisible();
+	await expect(page.getByRole('button', { name: /^PDF files / })).not.toBeVisible();
 	await expect(page.getByRole('combobox', { name: 'Data source' })).toBeEnabled();
 	expect(schemaRequests).toBe(0);
 	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'PDF files', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: /^PDF files / })).toBeVisible();
 	expect(schemaRequests).toBe(0);
 	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
 	const title = page.getByLabel('Title', { exact: true });

@@ -7,6 +7,7 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import type { components } from '#lib/api/schema.js';
 	import Notice from '#lib/design/Notice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import RichText from '#lib/design/RichText.svelte';
@@ -149,6 +150,15 @@
 		</p>
 	</div>
 </SectionHeader>
+
+{#if providers.isError}<QueryError
+		message={apiErrorMessage(providers.error, $t('Unable to load Discovery providers.'))}
+		busy={providers.isFetching}
+		onRetry={() => void providers.refetch()}
+	/>{:else if providers.isPending}<LoadingState label={$t('Loading Discovery providers…')} />
+{:else if providers.data.search.length === 0}<Notice
+		>{$t('No Discovery providers are available.')}</Notice
+	>{/if}
 
 <Panel
 	as="form"

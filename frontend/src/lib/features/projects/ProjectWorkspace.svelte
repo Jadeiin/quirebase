@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { readProjectListState, projectListParameters, type ProjectListState } from './list-state';
 	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -37,10 +38,19 @@
 	const queryClient = useQueryClient();
 	const detail = createQuery(() => projectDetailQuery(workspaceId, projectId));
 	const project = $derived(detail.data);
-	let itemPage = $state(1);
-	let itemPageSize = $state(25);
-	let itemSort = $state<'updated' | 'created' | 'title'>('updated');
-	let itemSearch = $state('');
+	const listing = $derived(readProjectListState(page.url.searchParams));
+	const itemPage = $derived(listing.page);
+	const itemPageSize = $derived(listing.pageSize);
+	const itemSort = $derived(listing.sort);
+	const itemSearch = $derived(listing.search);
+	function navigateItems(change: Partial<ProjectListState>, replace = false) {
+		const parameters = projectListParameters({ ...listing, ...change }, true);
+		const path = workspaceHref(workspaceId, `projects/${projectId}`);
+		void goto(resolve(parameters ? `${path}?${parameters}` : path), {
+			reset: false,
+			replace
+		});
+	}
 	const items = createQuery(() => ({
 		...libraryListQuery(
 			workspaceId,
@@ -54,8 +64,6 @@
 	$effect(() => {
 		if (activeProjectId !== projectId) {
 			activeProjectId = projectId;
-			itemPage = 1;
-			itemSearch = '';
 			memberSearch = '';
 			selectedMemberId = '';
 			selectedMember = undefined;
@@ -68,7 +76,7 @@
 	$effect(() => {
 		if (!items.isFetching && items.data) {
 			const lastPage = Math.max(1, Math.ceil(items.data.total / items.data.limit));
-			if (itemPage > lastPage) itemPage = lastPage;
+			if (itemPage > lastPage) navigateItems({ page: lastPage }, true);
 		}
 	});
 	const discussions = createQuery(() => ({
@@ -352,7 +360,6 @@
 		const targetProjectId = projectId;
 		const targetProjectName = project?.name ?? confirmation;
 		const requestedPath = page.url.pathname;
-		deleteDialogOpen = false;
 		const deleted = await mutate(
 			() =>
 				workspace.api.request('DELETE', '/workspaces/{workspace_id}/projects/{project_id}', {
@@ -363,6 +370,7 @@
 			false
 		);
 		if (deleted) {
+			deleteDialogOpen = false;
 			// Deletion removes the Project from every cached directory and
 			// selector, including reader annotation sources.
 			await invalidateProject(queryClient, workspaceId);
@@ -486,13 +494,18 @@
 						variant="danger"
 						size="sm"
 						disabled={busy}
-						onclick={() => (deleteDialogOpen = true)}>{$t('Delete Project')}</Button
+						onclick={() => {
+							error = '';
+							deleteDialogOpen = true;
+						}}>{$t('Delete Project')}</Button
 					>
 				{/if}
 			</div>
 		{/if}
 	</div>
-	{#if error && !settingsDialogOpen}<Notice variant="error">{error}</Notice>{/if}
+	{#if error && !settingsDialogOpen && !deleteDialogOpen && !removeItemDialogOpen}<Notice
+			variant="error">{error}</Notice
+		>{/if}
 	{#if notice}<Notice>{notice}</Notice>{/if}
 	{#if detail.isPending}<p>{$t('Loading Project…')}</p>
 	{:else if detail.isError || !project}<Notice variant="error"
@@ -639,8 +652,7 @@
 				placeholder={$t('Search Items')}
 				value={itemSearch}
 				oninput={(event) => {
-					itemSearch = event.currentTarget.value;
-					itemPage = 1;
+					navigateItems({ search: event.currentTarget.value, page: 1 }, true);
 				}}
 			/>
 			{#if items.isPending}<p>{$t('Loading Items…')}</p>
@@ -673,8 +685,7 @@
 				pageSize={itemPageSize}
 				total={items.data?.total ?? 0}
 				onPageSize={(size) => {
-					itemPageSize = size;
-					itemPage = 1;
+					navigateItems({ pageSize: size, page: 1 });
 				}}
 				sort={itemSort}
 				sortOptions={[
@@ -683,10 +694,9 @@
 					{ value: 'title', label: $t('Title') }
 				]}
 				onSort={(value) => {
-					itemSort = librarySort(value);
-					itemPage = 1;
+					navigateItems({ sort: librarySort(value), page: 1 });
 				}}
-				onPage={(page) => (itemPage = page)}
+				onPage={(page) => navigateItems({ page })}
 				label={$t('Items pagination')}
 				busy={items.isFetching}
 			/>
@@ -877,6 +887,7 @@
 		requireMatch={project?.name ?? ''}
 		confirmLabel={$t('Delete Project')}
 		{busy}
+		error={deleteDialogOpen ? error : ''}
 		onConfirm={(value) => void confirmDeleteProject(value)}
 	/>
 	<PromptDialog

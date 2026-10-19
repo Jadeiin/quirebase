@@ -12,7 +12,13 @@
 	const events = $derived(overview.data?.recent_events);
 </script>
 
-<AdminSectionState loading={overview.isPending} failed={overview.isError} label={msg('Overview')}>
+<AdminSectionState
+	busy={overview.isFetching}
+	onRetry={() => void overview.refetch()}
+	loading={overview.isPending}
+	failed={overview.isError}
+	label={msg('Overview')}
+>
 	<AdminOverview overview={overview.data!} />
 	<Pagination
 		page={filters().page}

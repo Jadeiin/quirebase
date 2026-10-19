@@ -479,14 +479,16 @@ test('a completed Project deletion preserves navigation and a newer Project draf
 			json: rows().find((row) => row.id === route.request().url().split('/').at(-1))
 		});
 	});
-	await page.goto('/workspace/workspace-1/projects/A');
+	await page.goto('/workspace/workspace-1/projects');
+	await page.getByRole('link', { name: /Project A/ }).click();
 	await page.getByRole('button', { name: 'Delete Project', exact: true }).click();
 	const dialog = page.getByRole('dialog', { name: 'Permanently delete this Project?' });
 	await dialog.getByLabel('Project name', { exact: true }).fill('Project A');
 	await dialog.getByRole('button', { name: 'Delete Project', exact: true }).click();
 	await started.promise;
 	try {
-		await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
+		// Pending modal commands protect dismissal; browser history can still leave the route.
+		await page.goBack();
 		await page.getByRole('link', { name: /Project B/ }).click();
 		await page.getByPlaceholder('Write a message').fill('Keep this draft in Project B');
 		release.resolve();

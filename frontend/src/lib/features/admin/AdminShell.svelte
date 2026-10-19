@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { beforeNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import Button from '#lib/design/Button.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
@@ -11,6 +11,7 @@
 	import { msg, t, type MessageKey } from '#lib/i18n.js';
 	import { setAdminFilters } from './filters';
 	import type { AdminFilters, AdminSection } from './queries';
+	import { readAdminFilters, adminListParameters } from './list-state';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -30,56 +31,89 @@
 		return sectionKeys.find((key) => key === candidate) ?? 'overview';
 	});
 
-	let searchInput = $state('');
-	let filterA = $state('');
-	let filterB = $state('');
-	let appliedSearch = $state('');
-	let appliedFilterA = $state('');
-	let appliedFilterB = $state('');
-	let adminPage = $state(1);
-	let adminPageSize = $state<number | undefined>();
+	const applied = $derived(readAdminFilters(page.url.searchParams, section));
+	const initial = untrack(() => ({ section, filters: applied }));
+	let searchInput = $state(initial.filters.search);
+	let roleFilter = $state(initial.filters.role);
+	let activeFilter = $state(initial.filters.active);
+	let actionFilter = $state(initial.filters.action);
+	let targetTypeFilter = $state(initial.filters.targetType);
+	let workflowStateFilter = $state(initial.filters.workflowState);
+	const filterFields = [
+		'search',
+		'role',
+		'active',
+		'action',
+		'targetType',
+		'workflowState'
+	] as const;
+	let previousSection = initial.section;
+	let previousFilters = initial.filters;
+	afterNavigate(({ type }) => {
+		const previous = previousFilters;
+		// Page-only navigation keeps unsubmitted edits; history explicitly restores the URL.
+		if (
+			type === 'popstate' ||
+			section !== previousSection ||
+			filterFields.some((key) => applied[key] !== previous[key])
+		) {
+			restoreFilterDraft(applied);
+		}
+		previousSection = section;
+		previousFilters = applied;
+	});
+
+	function restoreFilterDraft(filters: AdminFilters) {
+		searchInput = filters.search;
+		roleFilter = filters.role;
+		activeFilter = filters.active;
+		actionFilter = filters.action;
+		targetTypeFilter = filters.targetType;
+		workflowStateFilter = filters.workflowState;
+	}
+
+	function navigate(filters: AdminFilters, history: 'push' | 'replace' = 'push') {
+		const parameters = adminListParameters(filters, section);
+		const path = sectionPath(section);
+		void goto(resolve(parameters ? `${path}?${parameters}` : path), {
+			reset: false,
+			replace: history === 'replace'
+		});
+	}
 
 	function filters(): AdminFilters {
-		return {
-			page: adminPage,
-			pageSize: adminPageSize ?? (section === 'overview' ? 10 : section === 'audit' ? 50 : 20),
-			search: appliedSearch,
-			filterA: appliedFilterA,
-			filterB: appliedFilterB
-		};
+		return applied;
 	}
 	function setPage(nextPage: number) {
-		adminPage = nextPage;
+		navigate({ ...applied, page: nextPage });
+	}
+	function correctPage(lastPage: number) {
+		if (applied.page > lastPage) navigate({ ...applied, page: lastPage }, 'replace');
 	}
 	function setPageSize(size: number) {
-		adminPageSize = size;
-		adminPage = 1;
+		navigate({ ...applied, pageSize: size, page: 1 });
 	}
-	setAdminFilters({ filters, setPage, setPageSize });
+	setAdminFilters({ filters, setPage, correctPage, setPageSize });
 
 	function applyFilters(event: SubmitEvent) {
 		event.preventDefault();
-		adminPage = 1;
-		appliedSearch = searchInput.trim();
-		appliedFilterA = filterA;
-		appliedFilterB = filterB;
+		navigate({
+			...applied,
+			page: 1,
+			search: searchInput.trim(),
+			role: roleFilter,
+			active: activeFilter,
+			action: actionFilter.trim(),
+			targetType: targetTypeFilter.trim(),
+			workflowState: workflowStateFilter
+		});
 	}
 
 	function clearFilters() {
-		searchInput = '';
-		filterA = '';
-		filterB = '';
-		appliedSearch = '';
-		appliedFilterA = '';
-		appliedFilterB = '';
-		adminPage = 1;
+		const defaults = readAdminFilters(new URLSearchParams(), section);
+		restoreFilterDraft(defaults);
+		navigate(defaults);
 	}
-
-	beforeNavigate(({ shallow }) => {
-		if (shallow) return;
-
-		return clearFilters();
-	});
 
 	function sectionPath(key: AdminSection) {
 		return key === 'overview' ? ('admin' as const) : (`admin/${key}` as const);
@@ -109,7 +143,7 @@
 			>
 		{:else}
 			<label
-				>{$t('State')}<select class="input h-8 w-auto min-w-36" bind:value={filterA}
+				>{$t('State')}<select class="input h-8 w-auto min-w-36" bind:value={workflowStateFilter}
 					><option value="">{$t('Any state')}</option><option value="pending"
 						>{$t('Pending')}</option
 					><option value="running">{$t('Running')}</option><option value="succeeded"
@@ -122,21 +156,26 @@
 		{/if}
 		{#if section === 'users'}
 			<label
-				>{$t('Role')}<select class="input h-8 w-auto min-w-36" bind:value={filterA}
+				>{$t('Role')}<select class="input h-8 w-auto min-w-36" bind:value={roleFilter}
 					><option value="">{$t('All roles')}</option><option value="member">{$t('Member')}</option
 					><option value="administrator">{$t('Administrator')}</option></select
 				></label
 			>
 			<label
-				>{$t('Status')}<select class="input h-8 w-auto min-w-36" bind:value={filterB}
+				>{$t('Status')}<select class="input h-8 w-auto min-w-36" bind:value={activeFilter}
 					><option value="">{$t('Any status')}</option><option value="true">{$t('Active')}</option
 					><option value="false">{$t('Disabled')}</option></select
 				></label
 			>
 		{:else if section === 'audit'}
-			<label>{$t('Action')}<input class="input h-8 w-auto min-w-36" bind:value={filterA} /></label>
 			<label
-				>{$t('Target type')}<input class="input h-8 w-auto min-w-36" bind:value={filterB} /></label
+				>{$t('Action')}<input class="input h-8 w-auto min-w-36" bind:value={actionFilter} /></label
+			>
+			<label
+				>{$t('Target type')}<input
+					class="input h-8 w-auto min-w-36"
+					bind:value={targetTypeFilter}
+				/></label
 			>
 		{/if}
 		<Button variant="filled">{$t('Apply filters')}</Button>

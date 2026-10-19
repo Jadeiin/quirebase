@@ -2,6 +2,9 @@
 	import TagSelect from '#lib/features/tags/TagSelect.svelte';
 	import LoadingState from '#lib/design/LoadingState.svelte';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { tick } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { SegmentedControl, Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { ApiError } from '#lib/api/client.js';
@@ -9,6 +12,7 @@
 	import { can, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import Notice from '#lib/design/Notice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import PromptDialog from '#lib/design/PromptDialog.svelte';
@@ -26,6 +30,8 @@
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { createUrlDraft } from '#lib/navigation/url-draft.svelte.js';
+	import { readToolsState, toolsParameters, type ToolsState } from './list-state';
 
 	type Tool = 'duplicates' | 'tags' | 'citation-styles';
 	type Tag = {
@@ -36,24 +42,23 @@
 	};
 	type CitationStyle = { key: string; name: string; scope: 'builtin' | 'custom' };
 
-	let activeTool = $state<Tool>('duplicates');
-	let mode = $state('identifier');
+	const location = $derived(readToolsState(page.url.searchParams));
+	const activeTool = $derived(location.tool);
+	const mode = $derived(location.mode);
 	let scannedMode = $state('');
-	let tagFilter = $state('');
-	let submittedTagFilter = $state('');
-	$effect(() => {
-		const filter = tagFilter.trim();
-		if (filter === submittedTagFilter) return;
-		const timeout = setTimeout(() => {
-			submittedTagFilter = filter;
-			tagPage = 1;
-		}, 200);
-		return () => clearTimeout(timeout);
+	const submittedTagFilter = $derived(location.tagSearch);
+	const tagFilter = createUrlDraft({
+		read: (url) => readToolsState(url.searchParams).tagSearch,
+		href: (tagSearch) => toolsHref({ tagSearch, tagPage: 1 })
 	});
-	let tagPage = $state(1);
+	const tagPage = $derived(location.tagPage);
 	let sourceTag = $state('');
 	let targetTag = $state('');
-	let styleQuery = $state('');
+	const styleQuery = $derived(location.styleQuery);
+	const styleSearch = createUrlDraft({
+		read: (url) => readToolsState(url.searchParams).styleQuery,
+		href: (styleQuery) => toolsHref({ styleQuery })
+	});
 	let styleName = $state('');
 	let styleCsl = $state('');
 	let busy = $state(false);
@@ -65,25 +70,45 @@
 	let renameOpen = $state(false);
 	let pendingStyle = $state<CitationStyle | null>(null);
 	let confirmStyleDeleteOpen = $state(false);
-	let pageSize = $state(20);
+	const pageSize = $derived(location.pageSize);
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
+	function toolsHref(change: Partial<ToolsState>) {
+		const parameters = toolsParameters({ ...location, ...change });
+		const path = workspaceHref(workspaceId, 'tools');
+		return resolve(parameters ? `${path}?${parameters}` : path);
+	}
+	function navigateTools(change: Partial<ToolsState>, history: 'push' | 'replace' = 'push') {
+		void goto(toolsHref(change), {
+			reset: false,
+			replace: history === 'replace'
+		});
+	}
 
 	const tags = createQuery(() => ({
 		...tagsQuery(workspaceId, submittedTagFilter, (tagPage - 1) * pageSize, pageSize),
 		enabled: activeTool === 'tags'
 	}));
-	const duplicates = createQuery(() => duplicateScanQuery(workspaceId, scannedMode));
-	const citationStyles = createQuery(() => citationStylesQuery(workspaceId, styleQuery));
+	const duplicates = createQuery(() => ({
+		...duplicateScanQuery(workspaceId, scannedMode),
+		// A stale result must never turn navigation or invalidation into a new scan.
+		enabled: false
+	}));
+	const citationStyles = createQuery(() => ({
+		...citationStylesQuery(workspaceId, styleQuery),
+		enabled: activeTool === 'citation-styles'
+	}));
 
 	const tagPageCount = $derived(Math.max(1, Math.ceil((tags.data?.total ?? 0) / pageSize)));
 	$effect(() => {
 		// Only a completed server response can establish that the current page disappeared.
-		if (tags.isSuccess && !tags.isFetching && tagPage > tagPageCount) tagPage = tagPageCount;
+		if (activeTool === 'tags' && tags.isSuccess && !tags.isFetching && tagPage > tagPageCount)
+			navigateTools({ tagPage: tagPageCount }, 'replace');
 	});
 
 	async function tagMutation(operation: () => Promise<unknown>, success: string): Promise<boolean> {
+		if (busy) return false;
 		busy = true;
 		error = '';
 		notice = '';
@@ -111,16 +136,20 @@
 	}
 
 	function renameTag(tag: Tag) {
+		error = '';
 		renameTarget = tag;
 		renameOpen = true;
 	}
 
-	function confirmRenameTag(name: string) {
+	async function confirmRenameTag(name: string) {
 		const tag = renameTarget;
-		renameTarget = null;
-		renameOpen = false;
-		if (!tag || !name || name === tag.name) return;
-		void tagMutation(
+		if (!tag || !name.trim() || busy) return;
+		if (name === tag.name) {
+			renameOpen = false;
+			renameTarget = null;
+			return;
+		}
+		const saved = await tagMutation(
 			() =>
 				workspace.api.request('PATCH', '/workspaces/{workspace_id}/tags/{tag_id}', {
 					params: { path: { tag_id: tag.id } },
@@ -128,25 +157,32 @@
 				}),
 			$t('Tag renamed')
 		);
+		if (saved) {
+			renameOpen = false;
+			renameTarget = null;
+		}
 	}
 
 	function deleteTag(tag: Tag) {
+		error = '';
 		pendingTag = tag;
 		confirmDeleteOpen = true;
 	}
 
-	function confirmDeleteTag() {
+	async function confirmDeleteTag() {
 		const tag = pendingTag;
-		pendingTag = null;
-		confirmDeleteOpen = false;
-		if (!tag) return;
-		void tagMutation(
+		if (!tag || busy) return;
+		const saved = await tagMutation(
 			() =>
 				workspace.api.request('DELETE', '/workspaces/{workspace_id}/tags/{tag_id}', {
 					params: { path: { tag_id: tag.id } }
 				}),
 			$t('Tag deleted')
 		);
+		if (saved) {
+			confirmDeleteOpen = false;
+			pendingTag = null;
+		}
 	}
 
 	function mergeTags() {
@@ -166,22 +202,28 @@
 	}
 
 	async function scanDuplicates() {
+		if (duplicates.isFetching) return;
 		error = '';
 		notice = '';
-		if (scannedMode === mode) await duplicates.refetch();
-		else scannedMode = mode;
+		scannedMode = mode;
+		await tick();
+		await duplicates.refetch();
 	}
 
 	async function createStyle() {
+		if (busy) return;
+		const input = { name: styleName, csl: styleCsl };
 		busy = true;
 		error = '';
 		notice = '';
 		try {
 			await workspace.api.request('POST', '/workspaces/{workspace_id}/citation-styles', {
-				body: { name: styleName, csl: styleCsl }
+				body: input
 			});
-			styleName = '';
-			styleCsl = '';
+			if (styleName === input.name && styleCsl === input.csl) {
+				styleName = '';
+				styleCsl = '';
+			}
 			await invalidateCitationStyles(queryClient, workspaceId);
 			notice = $t('Citation Style added');
 		} catch (reason) {
@@ -192,15 +234,14 @@
 	}
 
 	async function deleteStyle(style: CitationStyle) {
+		error = '';
 		pendingStyle = style;
 		confirmStyleDeleteOpen = true;
 	}
 
 	async function confirmDeleteStyle() {
 		const style = pendingStyle;
-		pendingStyle = null;
-		confirmStyleDeleteOpen = false;
-		if (!style) return;
+		if (!style || busy) return;
 		busy = true;
 		error = '';
 		try {
@@ -212,6 +253,8 @@
 				}
 			);
 			await invalidateCitationStyles(queryClient, workspaceId);
+			confirmStyleDeleteOpen = false;
+			pendingStyle = null;
 			notice = $t('Citation Style deleted');
 		} catch (reason) {
 			error = apiErrorMessage(reason, $t('Unable to delete Citation Style'));
@@ -233,24 +276,26 @@
 
 <Tabs
 	value={activeTool}
-	onValueChange={(details) => (activeTool = (details.value ?? 'duplicates') as Tool)}
+	onValueChange={(details) => navigateTools({ tool: (details.value ?? 'duplicates') as Tool })}
 >
 	<Tabs.List class="max-w-full overflow-x-auto" aria-label={$t('Library tools')}>
 		<Tabs.Indicator class="bg-primary-700-300" />
-		<Tabs.Trigger value="duplicates" class="whitespace-nowrap data-selected:text-primary-700-300"
+		<Tabs.Trigger value="duplicates" class="whitespace-nowrap data-selected:text-primary-800-200"
 			>{$t('Duplicate review')}</Tabs.Trigger
 		>
-		<Tabs.Trigger value="tags" class="whitespace-nowrap data-selected:text-primary-700-300"
+		<Tabs.Trigger value="tags" class="whitespace-nowrap data-selected:text-primary-800-200"
 			>{$t('Manage Tags')}</Tabs.Trigger
 		>
 		<Tabs.Trigger
 			value="citation-styles"
-			class="whitespace-nowrap data-selected:text-primary-700-300"
+			class="whitespace-nowrap data-selected:text-primary-800-200"
 			>{$t('Citation Styles')}</Tabs.Trigger
 		>
 	</Tabs.List>
 
-	{#if error}<Notice variant="error">{error}</Notice>{/if}
+	{#if error && !renameOpen && !confirmDeleteOpen && !confirmStyleDeleteOpen}<Notice variant="error"
+			>{error}</Notice
+		>{/if}
 	{#if notice}<Notice variant="success">{notice}</Notice>{/if}
 
 	<Tabs.Content value="duplicates">
@@ -274,7 +319,13 @@
 			<div class="border-b border-surface-300-700 bg-surface-100-900 px-5 py-3">
 				<SegmentedControl
 					value={mode}
-					onValueChange={(details) => (mode = details.value ?? 'identifier')}
+					onValueChange={(details) =>
+						navigateTools({
+							mode:
+								details.value === 'title' || details.value === 'similar'
+									? details.value
+									: 'identifier'
+						})}
 				>
 					<SegmentedControl.Label>{$t('Match criteria')}</SegmentedControl.Label>
 					<SegmentedControl.Control class="flex-wrap">
@@ -289,7 +340,7 @@
 				</SegmentedControl>
 			</div>
 			<div class="p-5">
-				{#if !scannedMode}
+				{#if !scannedMode || (duplicates.isPending && !duplicates.isFetching)}
 					<div class="grid min-h-40 grid-cols-1 place-items-center text-center">
 						<div class="max-w-md">
 							<h3>{$t('Run a check when you are ready')}</h3>
@@ -302,8 +353,14 @@
 					<Notice variant="success">
 						{$t('The match criteria changed. Start a new check to refresh these results.')}
 					</Notice>
-				{:else if duplicates.isPending || duplicates.isFetching}
+				{:else if duplicates.isFetching}
 					<LoadingState label={$t('Scanning…')} />
+				{:else if duplicates.isError}
+					<QueryError
+						message={apiErrorMessage(duplicates.error, $t('Unable to check for duplicates.'))}
+						busy={duplicates.isFetching}
+						onRetry={() => void scanDuplicates()}
+					/>
 				{:else}{#each duplicates.data?.groups ?? [] as group, index (group
 						.map((item) => item.id)
 						.join(':'))}
@@ -326,7 +383,7 @@
 	<Tabs.Content value="tags">
 		<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
 			<Panel>
-				<SectionHeader>
+				<SectionHeader class="flex-col items-stretch sm:flex-row sm:items-center">
 					<div>
 						<h2>{$t('Manage Tags')}</h2>
 						<p class="text-surface-600-400">
@@ -337,18 +394,22 @@
 					</div>
 					{#snippet actions()}
 						<input
-							class="input w-auto min-w-36"
-							bind:value={tagFilter}
+							class="input w-full sm:w-auto sm:min-w-36"
+							bind:value={tagFilter.value}
 							placeholder={$t('Filter Tags')}
 						/>
 					{/snippet}
 				</SectionHeader>
-				{#if tags.isError}<Notice variant="error">
-						{apiErrorMessage(tags.error, $t('Unable to load Tags'))}
-					</Notice>
+				{#if tags.isError}<QueryError
+						message={apiErrorMessage(tags.error, $t('Unable to load Tags'))}
+						busy={tags.isFetching}
+						onRetry={() => void tags.refetch()}
+					/>
 				{:else if tags.isPending}<LoadingState label={$t('Loading Tags…')} />
 				{:else}{#each tags.data?.items ?? [] as tag (tag.id)}
-						<ItemRow class="grid-cols-[minmax(0,1fr)_auto] items-center">
+						<ItemRow
+							class="grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+						>
 							<div>
 								<strong>{tag.name}</strong>
 								<p class="mb-0 text-sm text-surface-600-400">
@@ -379,12 +440,11 @@
 					{pageSize}
 					total={tags.data?.total ?? 0}
 					onPageSize={(size) => {
-						pageSize = size;
-						tagPage = 1;
+						navigateTools({ pageSize: size, tagPage: 1 });
 					}}
 					busy={tags.isFetching}
 					label={$t('Tag pages')}
-					onPage={(next) => (tagPage = next)}
+					onPage={(next) => navigateTools({ tagPage: next })}
 				/>
 			</Panel>
 			<Panel as="aside" class="grid grid-cols-1 gap-3 self-start">
@@ -416,7 +476,7 @@
 	<Tabs.Content value="citation-styles">
 		<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,1fr)]">
 			<Panel>
-				<SectionHeader>
+				<SectionHeader class="flex-col items-stretch sm:flex-row sm:items-center">
 					<div>
 						<h2>{$t('Citation Style catalog')}</h2>
 						<p class="text-surface-600-400">
@@ -425,14 +485,22 @@
 					</div>
 					{#snippet actions()}
 						<input
-							class="input w-auto min-w-36"
-							bind:value={styleQuery}
+							class="input w-full sm:w-auto sm:min-w-36"
+							bind:value={styleSearch.value}
 							placeholder={$t('Search styles')}
 						/>
 					{/snippet}
 				</SectionHeader>
+				{#if citationStyles.isError}<QueryError
+						message={apiErrorMessage(citationStyles.error, $t('Unable to load Citation Styles.'))}
+						busy={citationStyles.isFetching}
+						onRetry={() => void citationStyles.refetch()}
+					/>{/if}
+				{#if citationStyles.isPending}<LoadingState label={$t('Loading Citation Styles…')} />{/if}
 				{#each citationStyles.data?.styles ?? [] as style (style.key)}
-					<ItemRow class="grid-cols-[minmax(0,1fr)_auto] items-center">
+					<ItemRow
+						class="grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+					>
 						<div>
 							<strong>{style.name}</strong>
 							<p class="mb-0 text-sm text-surface-600-400">{style.scope}</p>
@@ -443,9 +511,9 @@
 								onclick={() => deleteStyle(style)}>{$t('Delete')}</Button
 							>{/if}
 					</ItemRow>
-				{:else}<p class="text-surface-600-400">
-						{$t('No Citation Styles match this search.')}
-					</p>{/each}
+				{:else}{#if citationStyles.isSuccess}<p class="text-surface-600-400">
+							{$t('No Citation Styles match this search.')}
+						</p>{/if}{/each}
 			</Panel>
 			{#if workspace.can('citation_style.manage')}<Panel
 					as="form"
@@ -475,7 +543,8 @@
 	body={pendingTag?.name ?? ''}
 	confirmLabel={$t('Delete Tag')}
 	{busy}
-	onConfirm={confirmDeleteTag}
+	error={confirmDeleteOpen ? error : ''}
+	onConfirm={() => void confirmDeleteTag()}
 />
 <PromptDialog
 	bind:open={renameOpen}
@@ -486,7 +555,8 @@
 	initialValue={renameTarget?.name ?? ''}
 	confirmLabel={$t('Rename')}
 	{busy}
-	onConfirm={confirmRenameTag}
+	error={renameOpen ? error : ''}
+	onConfirm={(name) => void confirmRenameTag(name)}
 />
 <ConfirmDialog
 	bind:open={confirmStyleDeleteOpen}
@@ -494,5 +564,6 @@
 	body={pendingStyle?.name ?? ''}
 	confirmLabel={$t('Delete Style')}
 	{busy}
+	error={confirmStyleDeleteOpen ? error : ''}
 	onConfirm={() => void confirmDeleteStyle()}
 />

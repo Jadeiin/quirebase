@@ -4,6 +4,9 @@
 	import { onMount, untrack } from 'svelte';
 	import { Listbox, Tabs, useListCollection } from '@skeletonlabs/skeleton-svelte';
 	import Panel from '#lib/design/Panel.svelte';
+	import LoadingState from '#lib/design/LoadingState.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
+	import { apiErrorMessage } from '#lib/api/errors.js';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import {
 		citationKeyPreviewQuery,
@@ -208,16 +211,30 @@
 		<Tabs.List class="max-w-full overflow-x-auto" aria-label={$t('Export preference sections')}>
 			<Tabs.Indicator class="bg-primary-700-300" />
 			{#each [['csl', 'CSL'], ['bibtex', 'BibTeX'], ['bibliography', $t('Bibliography file options')], ['documents', $t('Document downloads')]] as [value, label] (value)}
-				<Tabs.Trigger {value} class="whitespace-nowrap data-selected:text-primary-700-300"
+				<Tabs.Trigger {value} class="whitespace-nowrap data-selected:text-primary-800-200"
 					>{label}</Tabs.Trigger
 				>
 			{/each}
 		</Tabs.List>
 		<Tabs.Content value="csl">
+			{#if workspaces.isError}<QueryError
+					message={apiErrorMessage(workspaces.error, $t('Unable to load workspaces.'))}
+					busy={workspaces.isFetching}
+					onRetry={() => void workspaces.refetch()}
+				/>{/if}
+			{#if workspaceId && styles.isError}<QueryError
+					message={apiErrorMessage(styles.error, $t('Unable to load Citation Styles.'))}
+					busy={styles.isFetching}
+					onRetry={() => void styles.refetch()}
+				/>{/if}
+			{#if workspaceId && styles.isPending}<LoadingState
+					label={$t('Loading Citation Styles…')}
+				/>{/if}
 			<div class="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
 				<SearchSelect
 					label={$t('Workspace for citation style')}
 					bind:value={workspaceId}
+					loading={workspaces.isPending}
 					emptyLabel={$t('Choose a Workspace explicitly')}
 					options={(workspaces.data ?? []).map((workspace) => ({
 						value: workspace.id,
@@ -251,6 +268,9 @@
 					</Listbox.Content>
 				</Listbox>
 			</div>
+			{#if workspaceId && styles.isSuccess && styles.data.styles.length === 0}
+				<p>{$t('No Citation Styles match this search.')}</p>
+			{/if}
 			{#if workspaces.hasNextPage}<Button
 					disabled={workspaces.isFetchingNextPage}
 					onclick={() => void workspaces.fetchNextPage()}>{$t('Load more workspaces')}</Button

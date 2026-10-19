@@ -5,6 +5,7 @@
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { t } from '#lib/i18n.js';
+	import Notice from '#lib/design/Notice.svelte';
 
 	let {
 		open = $bindable(false),
@@ -16,6 +17,7 @@
 		confirmLabel,
 		requireMatch = '',
 		busy = false,
+		error = '',
 		onConfirm
 	}: {
 		open: boolean;
@@ -27,6 +29,7 @@
 		confirmLabel: string;
 		requireMatch?: string;
 		busy?: boolean;
+		error?: string;
 		onConfirm: (value: string) => void;
 	} = $props();
 
@@ -37,7 +40,12 @@
 	const canConfirm = $derived(!busy && (requireMatch ? value === requireMatch : true));
 </script>
 
-<Dialog {open} onOpenChange={(details) => (open = details.open)}>
+<Dialog
+	{open}
+	onOpenChange={(details) => {
+		if (!busy) open = details.open;
+	}}
+>
 	<Portal>
 		<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
 		<Dialog.Positioner class="fixed inset-0 z-71 grid grid-cols-1 place-items-center p-4">
@@ -47,10 +55,11 @@
 				<SectionHeader>
 					<Dialog.Title class="text-lg font-bold">{title}</Dialog.Title>
 					{#snippet actions()}
-						<DialogCloseButton />
+						<DialogCloseButton disabled={busy} />
 					{/snippet}
 				</SectionHeader>
 				<p class="mt-3 text-sm text-surface-600-400">{body}</p>
+				{#if error}<Notice variant="error" class="mt-3">{error}</Notice>{/if}
 				<form
 					class="mt-4 grid grid-cols-1 gap-3"
 					onsubmit={(event) => {
@@ -62,6 +71,7 @@
 						>{label}<input
 							class="input"
 							bind:value
+							disabled={busy}
 							{placeholder}
 							required={!requireMatch}
 							autocomplete="off"

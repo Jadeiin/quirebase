@@ -1054,9 +1054,13 @@ test('creating a Workspace refreshes cached Item copy destinations', async ({ pa
 	await page.keyboard.press('Escape');
 
 	await page.getByRole('button', { name: 'Quirebase' }).click();
-	await page.getByRole('menuitem', { name: 'Manage workspaces' }).click();
-	await page.getByLabel('Workspace name').fill('New Workspace');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
+	await page.getByRole('menuitem', { name: 'My workspaces' }).click();
+	await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
+	await page.getByRole('dialog').getByLabel('Workspace name').fill('New Workspace');
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Create workspace', exact: true })
+		.click();
 	await expect(page).toHaveURL(/\/workspace\/workspace-new$/);
 	await page.goBack();
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/item\/item-copy$/);
@@ -1392,7 +1396,7 @@ test('Item file uploads keep the accepted file after dismissing or rejecting a c
 	// `input`, then restores the accepted files before the dialog opens.
 	await Promise.all([
 		page.waitForEvent('filechooser'),
-		page.getByRole('button', { name: 'PDF file', exact: true }).click()
+		page.getByRole('button', { name: /^PDF file / }).click()
 	]);
 	expect(await input.evaluate((element: HTMLInputElement) => element.files?.length ?? 0)).toBe(1);
 	expect(await input.evaluate((element: HTMLInputElement) => element.files?.[0]?.name ?? '')).toBe(
@@ -2353,6 +2357,11 @@ test('Tools Tag counts refresh after an Item tag assignment', async ({ page }) =
 	await page.getByRole('tab', { name: 'Manage Tags' }).click();
 	await expect(page.getByText('0 Items')).toBeVisible();
 	await page.goBack();
+	await expect(page.getByRole('tab', { name: 'Duplicate review', exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await page.goBack();
 	await expect(page).toHaveURL(/\/item\/item-1\/organize$/);
 	await page.getByRole('button', { name: 'Methods', exact: true }).click();
 	await expect.poll(() => assigned).toBe(true);
@@ -2709,6 +2718,11 @@ test('Tag renames refresh Item tag projections', async ({ page }) => {
 	await page.getByLabel('New Tag name').fill('Methods renamed');
 	await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
 	await expect(page.getByText('Tag renamed')).toBeVisible();
+	await page.goBack();
+	await expect(page.getByRole('tab', { name: 'Duplicate review', exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 	await page.goBack();
 	await expect(page).toHaveURL(/\/item\/item-1\/organize$/);
 	await expect(page.getByRole('button', { name: 'Methods renamed', exact: true })).toBeVisible();

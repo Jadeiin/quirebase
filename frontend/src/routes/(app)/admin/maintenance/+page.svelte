@@ -53,6 +53,8 @@
 
 <AdminNotices {error} {notice} />
 <AdminSectionState
+	busy={maintenance.isFetching}
+	onRetry={() => void maintenance.refetch()}
 	loading={maintenance.isPending}
 	failed={maintenance.isError}
 	label={msg('Maintenance')}

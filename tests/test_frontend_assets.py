@@ -36,6 +36,7 @@ def test_wheel_and_sdist_include_generated_static_assets():
 
 def test_sveltekit_filesystem_routes_own_application_navigation():
     routes = {
+        "frontend/src/routes/(app)/workspace/+page.svelte": "WorkspaceDirectory",
         "frontend/src/routes/(app)/workspace/[workspaceId]/+page.svelte": "Dashboard",
         "frontend/src/routes/(app)/workspace/[workspaceId]/library/+page.svelte": "Library",
         "frontend/src/routes/(app)/workspace/[workspaceId]/import/+page.svelte": "ImportWorkspace",
@@ -66,6 +67,18 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
             "PdfWorkspace"
         ),
         "frontend/src/routes/(app)/workspace/[workspaceId]/tools/+page.svelte": "Tools",
+        "frontend/src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte": (
+            "WorkspaceGeneral"
+        ),
+        "frontend/src/routes/(app)/workspace/[workspaceId]/settings/members/+page.svelte": (
+            "WorkspaceMembers"
+        ),
+        "frontend/src/routes/(app)/workspace/[workspaceId]/settings/invitations/+page.svelte": (
+            "WorkspaceInvitations"
+        ),
+        "frontend/src/routes/(app)/workspace/[workspaceId]/settings/advanced/+page.svelte": (
+            "WorkspaceAdvanced"
+        ),
         "frontend/src/routes/(app)/account/+page.svelte": "Account",
         "frontend/src/routes/(app)/admin/+page.svelte": "AdminOverview",
         "frontend/src/routes/(app)/admin/users/+page.svelte": "AdminUsers",
@@ -85,14 +98,19 @@ def test_sveltekit_filesystem_routes_own_application_navigation():
     assert "defaultWorkspacePreference" in root
     assert "initial-workspace/repair" not in root
     assert "repair_initial_workspace" not in read("src/quirebase/web/api/workspaces.py")
-    chooser = read("frontend/src/routes/(app)/workspace/+page.svelte")
+    chooser = read("frontend/src/lib/features/workspaces/WorkspaceDirectory.svelte")
     assert "workspaceListQuery" in chooser
     assert "setDefaultWorkspacePreference" in chooser
     assert "workspaceCreationAvailabilityQuery" in chooser
     assert "repair_initial_workspace" not in chooser
-    settings = read("frontend/src/routes/(app)/workspace/[workspaceId]/settings/+page.svelte")
+    settings_layout = read(
+        "frontend/src/routes/(app)/workspace/[workspaceId]/settings/+layout.svelte"
+    )
+    assert "<WorkspaceSettings" in settings_layout
+    settings = read("frontend/src/lib/features/workspaces/WorkspaceSettings.svelte")
     assert "workspace.view?.name" in settings
-    assert "Permanent deletion" in settings
+    advanced = read("frontend/src/lib/features/workspaces/WorkspaceAdvanced.svelte")
+    assert "Permanent deletion" in advanced
     admin_workspaces = read("frontend/src/routes/(app)/admin/workspaces/+page.svelte")
     assert "adminWorkspacesQuery" in admin_workspaces
     assert "BREAK GLASS" in admin_workspaces

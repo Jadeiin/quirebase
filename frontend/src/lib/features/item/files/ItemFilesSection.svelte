@@ -59,7 +59,9 @@
 	<Panel class="grid grid-cols-1 content-start gap-4">
 		<h2 class="mb-0">{$t('Files')}</h2>
 		{#each data.files as file (file.id)}
-			<ItemRow class="grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+			<ItemRow
+				class="grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+			>
 				<div class="grid min-w-0 grid-cols-1 gap-1">
 					<span class="flex min-w-0 items-center gap-2">
 						<Icon name="file" size={16} />
@@ -72,7 +74,7 @@
 						})}{file.processing_state ? ` · ${$t(domainLabel(file.processing_state))}` : ''}</span
 					>
 				</div>
-				<div class="flex flex-wrap items-center justify-end gap-2">
+				<div class="flex flex-wrap items-center gap-2 sm:justify-end">
 					{#if file.kind === 'revision' && file.processing_state === 'ready'}
 						<Button
 							as="a"

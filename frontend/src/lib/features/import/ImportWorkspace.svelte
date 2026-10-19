@@ -419,7 +419,7 @@
 			{#each [['identifiers', 'search', $t('Identifiers')], ['bibliography', 'library', $t('Bibliography')], ['pdfs', 'import', $t('PDFs')], ['manual', 'plus', $t('Manual creation')]] as [value, icon, label] (value)}
 				<Tabs.Trigger
 					{value}
-					class="flex items-center gap-2 whitespace-nowrap data-selected:text-primary-700-300"
+					class="flex items-center gap-2 whitespace-nowrap data-selected:text-primary-800-200"
 				>
 					<Icon name={icon} size={16} />{label}
 				</Tabs.Trigger>
