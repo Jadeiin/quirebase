@@ -17,7 +17,7 @@ from workspace_helpers import provision_initial_workspace
 from quirebase.access import resolve_workspace_context
 from quirebase.accounts import update_user_status
 from quirebase.core.config import get_settings
-from quirebase.core.errors import PermissionDenied, ResourceUnavailable, ValidationFailure
+from quirebase.core.errors import PermissionDenied, ResourceUnavailable
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.core.workflows import object_reservation_attributes
 from quirebase.documents import (
@@ -216,7 +216,7 @@ async def test_project_delete_cascades_context_and_preserves_workspace_data(
         removed_ids = [(type(row), row.id) for row in removed]
         preserved_ids = [(type(row), row.id) for row in preserved]
         project_id, name = project.id, project.name
-        await delete_project(db, owner, workspace_id, project_id, name)
+        await delete_project(db, owner, workspace_id, project_id)
 
     async with persistence_sessions() as db:
         for model, identity in removed_ids:
@@ -238,12 +238,12 @@ async def test_project_delete_cascades_context_and_preserves_workspace_data(
         with pytest.raises(ResourceUnavailable):
             await set_project_state(db, owner, workspace_id, project_id, ProjectState.active)
         with pytest.raises(ResourceUnavailable):
-            await delete_project(db, owner, workspace_id, project_id, name)
+            await delete_project(db, owner, workspace_id, project_id)
     assert await store.exists(stored.key)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("guard", ["authority", "confirmation", "rollback"])
+@pytest.mark.parametrize("guard", ["authority", "rollback"])
 async def test_project_delete_guards_and_rollback_preserve_context(
     persistence_sessions, monkeypatch, guard
 ):
@@ -269,7 +269,7 @@ async def test_project_delete_guards_and_rollback_preserve_context(
         )
         db.add(assignment)
         await db.commit()
-        project_id, assignment_id, name = project.id, assignment.id, project.name
+        project_id, assignment_id = project.id, assignment.id
         if guard == "rollback":
 
             async def fail_commit():
@@ -283,7 +283,6 @@ async def test_project_delete_guards_and_rollback_preserve_context(
             monkeypatch.setattr(db, "commit", fail_commit)
         error = {
             "authority": PermissionDenied,
-            "confirmation": ValidationFailure,
             "rollback": RuntimeError,
         }[guard]
         with pytest.raises(error):
@@ -292,7 +291,6 @@ async def test_project_delete_guards_and_rollback_preserve_context(
                 editor if guard == "authority" else owner,
                 workspace_id,
                 project_id,
-                "Wrong name" if guard == "confirmation" else name,
             )
         await db.rollback()
     async with persistence_sessions() as db:
@@ -743,7 +741,7 @@ async def test_organize_uses_complete_active_options_and_projects_participation(
         )
         db.add_all([*implicit, open_project, managed, archived, deleted])
         await db.commit()
-        await delete_project(db, owner, workspace_id, deleted.id, deleted.name)
+        await delete_project(db, owner, workspace_id, deleted.id)
         context = await resolve_workspace_context(db, owner, workspace_id)
         options = await list_item_organize_projects(db, context)
         assert len(options) == 32
@@ -915,7 +913,7 @@ async def test_workspace_teardown_cleans_owned_projections_and_rollback_is_atomi
 async def test_item_deletion_retires_document_identities_and_cleanup_is_atomic(
     persistence_sessions, fake_durable_operations, monkeypatch, bulk
 ):
-    from quirebase.library import apply_bulk_item_action, delete_item
+    from quirebase.library import BulkItemAction, apply_bulk_item_action, delete_item
 
     store = get_object_store()
     stored = [
@@ -990,7 +988,7 @@ async def test_item_deletion_retires_document_identities_and_cleanup_is_atomic(
             owner = await db.get(User, owner_id)
             if bulk:
                 await apply_bulk_item_action(
-                    db, owner, workspace_id, [item_id], "delete_items", confirm_delete="delete"
+                    db, owner, workspace_id, [item_id], BulkItemAction.delete_items
                 )
             else:
                 await delete_item(db, owner, workspace_id, item_id)

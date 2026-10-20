@@ -1,29 +1,19 @@
 <script lang="ts">
-	import Button from '#lib/design/Button.svelte';
 	import { resolve } from '$app/paths';
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { onDestroy, tick, untrack } from 'svelte';
 	import { page } from '$app/state';
-	import {
-		createMutation,
-		createInfiniteQuery,
-		createQuery,
-		useQueryClient
-	} from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { isDownloadCancelled } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
-	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import StatusNotice from '#lib/design/StatusNotice.svelte';
 	import BulkActions from '#lib/features/library/BulkActions.svelte';
 	import LibraryFilters from '#lib/features/library/LibraryFilters.svelte';
 	import LibraryResults from '#lib/features/library/LibraryResults.svelte';
 	import LibraryShortcuts from './LibraryShortcuts.svelte';
-	import {
-		libraryBulkMutationOptions,
-		type LibraryBulkAction,
-		type LibraryBulkInput
-	} from '#lib/features/library/mutations.js';
+	import type { LibraryBulkAction } from './mutations.js';
+	import LibraryActionDialog from './LibraryActionDialog.svelte';
+	import type { LibraryActionRequest } from './action-request.js';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
 	import {
 		readLibraryFilters,
@@ -35,13 +25,8 @@
 		type LibraryFilters as AppliedLibraryFilters
 	} from './filters.js';
 	import LibraryActiveFilters from './LibraryActiveFilters.svelte';
-	import { projectDetailQuery, projectOptionsQuery } from '#lib/features/projects/queries.js';
+	import { projectDetailQuery } from '#lib/features/projects/queries.js';
 	import { getSession } from '#lib/session.js';
-	import {
-		defaultExportPreferences,
-		readExportPreferences,
-		type ExportPreferences
-	} from '#lib/export-preferences.js';
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { canRunBulkAction } from '#lib/workspaces/actions.js';
@@ -111,35 +96,19 @@
 	let selected = new SvelteSet<string>();
 	let bulkActionsElement = $state<HTMLElement>();
 	let selectionVersion = 0;
-	let bulkAction = $state('');
-	let bulkProject = $state('');
-	let bulkTag = $state('');
-	let bulkTagId = $state('');
-	let exportFormat = $state('bibtex');
-	let error = $state('');
 	let notice = $state('');
-	let confirmBulkOpen = $state(false);
-	let confirmedInput = $state<LibraryBulkInput | null>(null);
-	let confirmedSelectionVersion = 0;
-	let confirmationTrigger: HTMLElement | null = null;
-	let confirmationProjectName = $state('');
-	let exportPreferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
+	let actionRequest = $state<LibraryActionRequest | null>(null);
+	let busy = $state(false);
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
 	const { query: session } = getSession();
-	const bulkMutation = createMutation(() => libraryBulkMutationOptions(workspaceId, queryClient));
-	const busy = $derived(bulkMutation.isPending);
-	$effect(() => {
-		if (!confirmBulkOpen && !busy) confirmedInput = null;
-	});
 
 	let previousSearch = '';
 	$effect(() => {
 		const search = listingIdentity;
 		if (search === previousSearch) return;
 		previousSearch = search;
-		if (!busy) confirmBulkOpen = false;
 		clearSelection();
 	});
 	let previousFilters = '';
@@ -161,21 +130,16 @@
 	});
 
 	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber, pageSize));
-	const projects = createInfiniteQuery(() => projectOptionsQuery(workspaceId));
 	const selectedProject = createQuery(() => ({
 		...projectDetailQuery(workspaceId, submitted.project ?? ''),
-		enabled: Boolean(submitted.project) && !projects.data?.some((p) => p.id === submitted.project)
+		enabled: Boolean(submitted.project)
 	}));
-	const projectChoices = $derived(
-		selectedProject.data && !projects.data?.some((p) => p.id === selectedProject.data?.id)
-			? [selectedProject.data, ...(projects.data ?? [])]
-			: (projects.data ?? [])
-	);
 	const currentProject = $derived(
-		projectChoices.find(
-			(candidate) =>
-				candidate.id === submitted.project && can(candidate.authorization, 'project_item.manage')
-		) ?? null
+		selectedProject.data &&
+			!selectedProject.isError &&
+			can(selectedProject.data.authorization, 'project_item.manage')
+			? selectedProject.data
+			: null
 	);
 	const previewIndex = $derived(
 		library.data?.items.findIndex((item) => item.id === previewItemId) ?? -1
@@ -264,7 +228,7 @@
 	$effect(() => {
 		if (library.data === null) {
 			clearSelection();
-			confirmBulkOpen = false;
+			if (!busy) actionRequest = null;
 			return;
 		}
 		if (!library.isSuccess || library.isFetching) return;
@@ -279,14 +243,6 @@
 				selectionVersion++;
 				selected.delete(id);
 			}
-	});
-
-	$effect(() => {
-		if (session.data?.user) {
-			const loadedPreferences = readExportPreferences(session.data.user.id, workspaceId);
-			exportPreferences = loadedPreferences;
-			exportFormat = loadedPreferences.citation.format;
-		}
 	});
 
 	function navigate(filters: AppliedLibraryFilters, nextPage = 1, nextPageSize = pageSize) {
@@ -421,57 +377,48 @@
 		return true;
 	}
 
-	function requestBulkAction() {
-		if (!bulkAction || selected.size === 0 || bulkMutation.isPending) return;
-		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
-		if (bulkAction === 'remove_project' && !currentProject) return;
-		if (bulkAction === 'delete' || bulkAction === 'remove_project') {
-			confirmationTrigger =
-				document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			confirmedInput = currentBulkInput();
-			confirmedSelectionVersion = selectionVersion;
-			confirmationProjectName = currentProject?.name ?? '';
-			error = '';
-			confirmBulkOpen = true;
-			return;
-		}
-		void executeBulkAction();
-	}
-
-	function currentBulkInput(): LibraryBulkInput {
-		return {
-			action: bulkAction as LibraryBulkAction,
-			itemIds: [...selected],
-			projectId: bulkAction === 'remove_project' ? (currentProject?.id ?? '') : bulkProject,
-			tagName: bulkTag,
-			tagId: bulkTagId,
-			exportFormat,
-			preferences: $state.snapshot(exportPreferences)
+	function requestAction(action: LibraryBulkAction, trigger: HTMLElement, itemId?: string) {
+		if (busy || !canRunBulkAction(workspace.can, action)) return;
+		if (action === 'remove_project' && !currentProject) return;
+		const itemIds = itemId
+			? [itemId]
+			: (library.data?.items.filter((item) => selected.has(item.id)).map((item) => item.id) ?? []);
+		if (!itemIds.length) return;
+		const version = selectionVersion;
+		const listing = listingIdentity;
+		notice = '';
+		actionRequest = {
+			action,
+			itemIds,
+			source: itemId ? 'item' : 'selection',
+			trigger,
+			listing,
+			project: currentProject ? { id: currentProject.id, name: currentProject.name } : null,
+			afterMutation: itemId
+				? undefined
+				: () => {
+						if (selectionVersion === version && listingIdentity === listing)
+							clearSelection(trigger);
+					}
 		};
 	}
 
-	async function executeBulkAction() {
-		if (busy) return;
-		const input = confirmedInput ?? currentBulkInput();
-		if (!input.action || input.itemIds.length === 0) return;
-		if (!canRunBulkAction(workspace.can, input.action)) return;
-		error = '';
-		notice = '';
-		const submittedSelectionVersion = confirmedInput ? confirmedSelectionVersion : selectionVersion;
-		const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		try {
-			await bulkMutation.mutateAsync({
-				input,
-				afterMutation: () => {
-					if (selectionVersion === submittedSelectionVersion) clearSelection(trigger);
-				}
-			});
-			confirmBulkOpen = false;
-			notice = $t('Bulk action completed');
-		} catch (reason) {
-			if (isDownloadCancelled(reason)) return;
-			error = apiErrorMessage(reason, $t('Bulk action failed'));
+	function copyCitation() {
+		const focused = document.activeElement;
+		if (!(focused instanceof HTMLElement)) return false;
+		if (focused.closest('#library-preview') && previewItemId) {
+			requestAction('copy_bibliography', focused, previewItemId);
+		} else {
+			const rowId = focused.closest<HTMLElement>('[data-library-item]')?.dataset.libraryItem;
+			if (rowId && !selected.has(rowId)) requestAction('copy_bibliography', focused, rowId);
+			else if (
+				selected.size &&
+				(focused.closest('#library-results') || bulkActionsElement?.contains(focused))
+			)
+				requestAction('copy_bibliography', focused);
+			else return false;
 		}
+		return !busy && canRunBulkAction(workspace.can, 'copy_bibliography');
 	}
 </script>
 
@@ -498,6 +445,7 @@
 			bind:enabled={shortcutsEnabled}
 			onSearch={() => searchInput?.focus()}
 			onEscape={escape}
+			onCopy={copyCitation}
 		/>
 	</div>
 </div>
@@ -513,7 +461,6 @@
 	bind:author
 	bind:fileFilter
 	bind:filtersOpen
-	projects={projectChoices}
 	onSearch={search}
 	onClear={clearFilters}
 />
@@ -523,46 +470,21 @@
 <BulkActions
 	bind:element={bulkActionsElement}
 	selectedCount={selected.size}
-	bind:bulkAction
-	bind:bulkProject
-	bind:bulkTag
-	bind:bulkTagId
 	{currentProject}
-	bind:exportFormat
-	projects={projectChoices}
 	{busy}
-	onApply={requestBulkAction}
+	onAction={(action, trigger) => requestAction(action, trigger)}
 	onClearSelection={() => clearSelection()}
 />
 
-{#if projects.hasNextPage}<Button
-		disabled={projects.isFetchingNextPage}
-		onclick={() => void projects.fetchNextPage()}>{$t('Load more Projects')}</Button
-	>{/if}
-
-<ConfirmDialog
-	bind:open={confirmBulkOpen}
-	finalFocusEl={() =>
-		confirmationTrigger?.isConnected
-			? confirmationTrigger
-			: document.getElementById('library-results')}
-	title={confirmedInput?.action === 'remove_project'
-		? $t('Remove the selected Items from {project}?', { project: confirmationProjectName })
-		: $t('Permanently delete the selected Items?')}
-	body={confirmedInput?.action === 'remove_project'
-		? $t(
-				'This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved.'
-			)
-		: $t('This cannot be undone.')}
-	confirmLabel={confirmedInput?.action === 'remove_project'
-		? $t('Remove from Project')
-		: $t('Permanently delete')}
-	{busy}
-	error={confirmBulkOpen ? error : ''}
-	onConfirm={() => void executeBulkAction()}
+<LibraryActionDialog
+	bind:request={actionRequest}
+	bind:busy
+	userId={session.data?.user?.id ?? ''}
+	{listingIdentity}
+	onNotice={(message) => (notice = message)}
 />
 
-<StatusNotice error={confirmBulkOpen ? '' : error} {notice} />
+<StatusNotice {notice} />
 
 <LibraryResults
 	{workspaceId}
@@ -583,6 +505,9 @@
 	{previewItemId}
 	{previewNavigation}
 	{itemHref}
+	{currentProject}
+	actionsBusy={busy}
+	onItemAction={(action, itemId, trigger) => requestAction(action, trigger, itemId)}
 	onSelectionChange={setSelection}
 	onPreview={preview}
 	onPreviewReady={focusPreview}

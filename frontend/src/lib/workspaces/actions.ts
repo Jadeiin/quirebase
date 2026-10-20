@@ -8,9 +8,10 @@ const bulkResourceActions: Record<LibraryBulkAction, AuthorizationAction> = {
 	remove_project: 'project_item.manage',
 	add_tag: 'tag.use',
 	remove_tag: 'tag.use',
+	copy_bibliography: 'workspace.export',
 	bibliography: 'workspace.export',
 	documents: 'workspace.export',
-	delete: 'item.delete'
+	delete_items: 'item.delete'
 };
 
 export function canRunBulkAction(can: CanResourceAction, action: LibraryBulkAction): boolean {

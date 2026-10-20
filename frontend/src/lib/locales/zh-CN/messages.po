@@ -73,6 +73,8 @@ msgstr "{count} 个待接受的邀请"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
 msgid "{count} selected"
 msgstr "已选择 {count} 项"
 
@@ -193,6 +195,7 @@ msgid "Action"
 msgstr "动作"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Actions"
 msgstr "操作"
@@ -315,7 +318,8 @@ msgid "Add tag"
 msgstr "添加标签"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Add Tag"
 msgstr "添加标签"
 
@@ -335,7 +339,8 @@ msgid "Add to Library"
 msgstr "添加到文献库"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Add to Project"
 msgstr "添加到项目"
 
@@ -565,11 +570,6 @@ msgid "Applied filters"
 msgstr "已应用的筛选条件"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Apply"
-msgstr "应用"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Apply filters"
 msgstr "应用筛选"
@@ -586,8 +586,9 @@ msgstr "请先应用 JSON 修改，再保存。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
-msgid "Applying to the selected Items…"
-msgstr "正在对所选条目执行操作…"
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Applying action…"
+msgstr "正在执行操作…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -768,6 +769,7 @@ msgstr "书目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Bibliography downloaded"
 msgstr "书目文件已下载"
 
@@ -892,17 +894,12 @@ msgid "Built-in CSL styles and styles installed by you."
 msgstr "内置 CSL 样式及你安装的样式。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Bulk action"
-msgstr "批量操作"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Bulk action completed"
 msgstr "批量操作已完成"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Bulk action failed"
 msgstr "批量操作失败"
 
@@ -928,6 +925,7 @@ msgstr "可编辑"
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
 msgid "Cancel"
@@ -949,6 +947,11 @@ msgstr "候选记录"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Chair"
 msgstr "主席"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Change options"
+msgstr "修改选项"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -1003,7 +1006,7 @@ msgid "Choose a new name for this Tag."
 msgstr "为该标签输入一个新名称。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Choose a Project to continue."
 msgstr "请选择项目以继续。"
 
@@ -1023,7 +1026,7 @@ msgid "Choose a supported value."
 msgstr "请选择标准支持的值。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Choose a Tag to continue."
 msgstr "请选择标签后继续。"
 
@@ -1042,16 +1045,6 @@ msgstr "明确选择一个工作区"
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 msgid "Choose a workspace to open its library and projects."
 msgstr "选择一个工作区，打开其中的文献库和项目。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Choose action"
-msgstr "选择操作"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Choose an action to continue."
-msgstr "请选择操作以继续。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
@@ -1080,7 +1073,7 @@ msgid "Choose how Quirebase looks and speaks to you."
 msgstr "选择 Quirebase 的显示与语言方式。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Choose or enter a Tag to continue."
 msgstr "请选择或输入标签以继续。"
 
@@ -1128,6 +1121,11 @@ msgid "Citation key updated"
 msgstr "引用键已更新"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Citation Style"
+msgstr "引文样式"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Citation Style added"
 msgstr "已添加引文样式"
@@ -1146,6 +1144,11 @@ msgstr "已删除引文样式"
 #: src/lib/features/tools/Tools.svelte
 msgid "Citation Styles"
 msgstr "引文样式"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Citation text"
+msgstr "引用文本"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -1177,6 +1180,11 @@ msgstr "清除选择并保存"
 #: src/lib/features/account/Account.svelte
 msgid "Client connection guide"
 msgstr "客户端连接指南"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Clipboard access was denied. Copy the citation text below or download it."
+msgstr "剪贴板访问被拒绝。请复制下方引用文本或下载文件。"
 
 #. js-lingui-explicit-id
 #: src/lib/design/DialogCloseButton.svelte
@@ -1332,6 +1340,11 @@ msgid "Content"
 msgstr "内容"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Continue in Library"
+msgstr "继续使用文献库"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Continue reading"
 msgstr "继续阅读"
@@ -1360,6 +1373,7 @@ msgstr "贡献者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Copied to clipboard"
 msgstr "已复制到剪贴板"
@@ -1368,6 +1382,17 @@ msgstr "已复制到剪贴板"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Copy"
 msgstr "复制"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Copy citation"
+msgstr "复制引用"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Copy citations for selected or focused Items"
+msgstr "复制所选或当前条目的引用"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
@@ -1401,6 +1426,7 @@ msgstr "复制到另一个工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Copy to clipboard"
 msgstr "复制到剪贴板"
 
@@ -1514,6 +1540,12 @@ msgstr "CSL XML"
 #: src/lib/export-preferences.ts
 msgid "CSL-JSON"
 msgstr "CSL-JSON"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
+msgid "Current Item"
+msgstr "当前条目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
@@ -1817,6 +1849,7 @@ msgstr "文档"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Document bundle downloaded"
 msgstr "文档包已下载"
 
@@ -1895,12 +1928,14 @@ msgstr "下载文档包"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Download documents"
 msgstr "下载文档"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Download file"
 msgstr "下载文件"
 
@@ -2099,7 +2134,8 @@ msgstr "导出"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Export bibliography"
 msgstr "导出书目"
 
@@ -2248,7 +2284,7 @@ msgstr "正式分析"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Format"
 msgstr "格式"
 
@@ -2501,9 +2537,19 @@ msgid "Include abstract"
 msgstr "包含摘要"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Include Annotations"
+msgstr "包含批注"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Include annotations in PDF downloads"
 msgstr "PDF 下载中包含批注"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Include supplementary files"
+msgstr "包含补充文件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -2735,6 +2781,8 @@ msgstr "条目操作失败"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
 msgid "Item actions"
 msgstr "条目操作"
 
@@ -3025,7 +3073,7 @@ msgid "Load more members"
 msgstr "加载更多成员"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "Load more Projects"
 msgstr "加载更多 Project"
 
@@ -3135,6 +3183,7 @@ msgstr "正在加载项目…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "Loading Projects…"
 msgstr "正在加载项目…"
 
@@ -3441,8 +3490,14 @@ msgstr "审核操作"
 #. js-lingui-explicit-id
 #: src/lib/app/MobileNavigation.svelte
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
 msgid "More"
 msgstr "更多"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionMenu.svelte
+msgid "More actions"
+msgstr "更多操作"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -3855,6 +3910,11 @@ msgid "Open in Library"
 msgstr "在资料库中打开"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Open Item actions"
+msgstr "打开条目操作"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Open Library"
 msgstr "打开文献库"
@@ -4130,8 +4190,8 @@ msgid "Permanent deletion"
 msgstr "永久删除"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Permanently delete"
 msgstr "永久删除"
 
@@ -4141,9 +4201,14 @@ msgid "Permanently delete {name} and its content? This cannot be undone."
 msgstr "永久删除 {name} 及其中的内容？此操作无法撤销。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Permanently delete the selected Items?"
 msgstr "永久删除所选条目？"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Permanently delete this Item?"
+msgstr "永久删除此条目？"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4271,11 +4336,6 @@ msgstr "演示报告"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Preserve BibTeX title case"
 msgstr "保留 BibTeX 标题大小写"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/LibraryTable.svelte
-msgid "Preview"
-msgstr "预览"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -4759,13 +4819,13 @@ msgid "Remove from {name}"
 msgstr "从“{name}”移除"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
 msgid "Remove from current Project"
 msgstr "从当前项目移除"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove from Project"
@@ -4785,7 +4845,8 @@ msgid "Remove message"
 msgstr "移除消息"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Remove Tag"
 msgstr "移除标签"
 
@@ -4795,9 +4856,14 @@ msgid "Remove the chosen file to paste bibliography data instead."
 msgstr "移除已选文件即可改为粘贴书目数据。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Remove the selected Items from {project}?"
 msgstr "将所选条目移出“{project}”？"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Remove this Item from {project}?"
+msgstr "将此条目移出“{project}”？"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -4894,7 +4960,9 @@ msgstr "恢复工作区"
 #: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -4914,6 +4982,11 @@ msgstr "返回 Quirebase"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Review"
 msgstr "综述"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Review action"
+msgstr "查看操作"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -4939,6 +5012,11 @@ msgstr "查看下方诊断以了解详情。"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Review the preview"
 msgstr "审阅预览"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Review this action to continue."
+msgstr "查看此操作以继续。"
 
 #. Workspace role.
 #. js-lingui-explicit-id
@@ -5226,7 +5304,7 @@ msgid "Select {name}"
 msgstr "选择 {name}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Select a Project filter to remove Items from it."
 msgstr "请先筛选项目，再从中移除条目。"
 
@@ -5246,12 +5324,12 @@ msgid "Select or unselect current Item"
 msgstr "选择或取消选择当前条目"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Select Project"
 msgstr "选择项目"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Select Tag"
 msgstr "选择标签"
 
@@ -5749,7 +5827,8 @@ msgid "The value does not match the required format."
 msgstr "此值不符合要求的格式。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "This action is no longer available."
 msgstr "此操作已不可用。"
 
@@ -5760,7 +5839,7 @@ msgstr "此操作不可用。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "This cannot be undone."
 msgstr "此操作无法撤销。"
 
@@ -5825,7 +5904,7 @@ msgid "This Item has changed. Your draft is preserved. Review the latest metadat
 msgstr "此条目已发生变化。草稿已保留，请检查最新元数据后再重试。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved."
 msgstr "这会永久删除所选条目在此项目中的批注和回复。条目、文件、私有批注及其他项目会保留。"
 
@@ -6137,12 +6216,14 @@ msgid "Unable to load Project discussion."
 msgstr "无法加载项目讨论。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Unable to load Project."
 msgstr "无法加载项目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "Unable to load Projects."
 msgstr "无法加载项目。"
 
@@ -6445,6 +6526,7 @@ msgstr "管理用户、存储、审计、设置和持久操作。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Uses the defaults saved in your Account export preferences."
 msgstr "使用账号导出偏好中保存的默认值。"
 

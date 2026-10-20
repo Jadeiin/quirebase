@@ -11,7 +11,7 @@ from quirebase.access import (
     item_decisions,
     workspace_decisions,
 )
-from quirebase.core.errors import ResourceNotFound, ValidationFailure
+from quirebase.core.errors import ResourceNotFound
 from quirebase.documents import (
     resolve_item_thumbnail,
 )
@@ -32,7 +32,6 @@ from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
 from quirebase.web.api.item_schemas import (
-    DeleteConfirmationRequest,
     ItemMetadataSourcesView,
     ItemOrganizeView,
     ItemOverviewView,
@@ -140,12 +139,9 @@ async def item_organize(workspace_id: UUID, item_id: UUID, context: WorkspaceAcc
 async def delete_library_item(
     workspace_id: UUID,
     item_id: UUID,
-    data: DeleteConfirmationRequest,
     user: ApiUser,
     db: Database,
 ) -> OkView:
-    if data.confirmation != "delete":
-        raise ValidationFailure("confirm deletion to continue")
     await delete_item(db, user, workspace_id, item_id)
     return OkView()
 

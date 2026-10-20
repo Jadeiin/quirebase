@@ -1,5 +1,6 @@
+import { openLibraryAction } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
-import { chooseSearchOption, directoryPage, mockSession, tagPage } from './helpers';
+import { chooseSearchOption, directoryPage, mockSession, projectPage, tagPage } from './helpers';
 
 async function mockLibrary(page: Page, editableProject = true, itemCount = 26) {
 	await mockSession(page);
@@ -23,7 +24,7 @@ async function mockLibrary(page: Page, editableProject = true, itemCount = 26) {
 		authorization: { allowed: editableProject ? ['project_item.manage'] : [] }
 	}));
 	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
-		route.fulfill({ json: directoryPage(projects, route) })
+		route.fulfill({ json: projectPage(projects, route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-*', (route) => {
 		const id = new URL(route.request().url()).pathname.split('/').at(-1);
@@ -111,49 +112,45 @@ test('Tag removal requires an existing Tag ID and keeps adding and removing targ
 	await page.goto('/workspace/workspace-1/library');
 	await page.locator('[data-library-item-select="item-0"]').check();
 	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
-	const action = toolbar.getByRole('combobox', { name: 'Bulk action', exact: true });
-	const apply = toolbar.getByRole('button', { name: 'Apply', exact: true });
-	await expect(action.locator('option[value="remove_project"]')).toHaveCount(0);
-	await action.selectOption('add_tag');
-	await toolbar.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('New taxonomy');
+	await toolbar.getByRole('button', { name: 'More actions', exact: true }).click();
+	await expect(
+		page.getByRole('menuitem', { name: 'Remove from current Project', exact: true })
+	).toHaveCount(0);
+	await expect(page.getByRole('menu')).toBeFocused();
 	await page.keyboard.press('Escape');
-	await action.selectOption('remove_tag');
-	await expect(apply).toBeDisabled();
-	await expect(apply).toHaveAccessibleDescription('Choose a Tag to continue.');
-	const tag = toolbar.getByRole('combobox', { name: 'Select Tag', exact: true });
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await openLibraryAction(page, 'add_tag');
+	let dialog = page.getByRole('dialog', { name: 'Add Tag', exact: true });
+	await dialog.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('New taxonomy');
+	await dialog.getByText('Add Tag', { exact: true }).first().click();
+	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await openLibraryAction(page, 'remove_tag');
+	dialog = page.getByRole('dialog', { name: 'Remove Tag', exact: true });
+	const submit = dialog.getByRole('button', { name: 'Remove Tag', exact: true });
+	await expect(submit).toBeDisabled();
+	await expect(submit).toHaveAccessibleDescription('Choose a Tag to continue.');
+	const tag = dialog.getByRole('combobox', { name: 'Select Tag', exact: true });
 	await tag.fill('New taxonomy');
 	await expect(page.getByText('No matching options.', { exact: true })).toBeVisible();
 	await page.keyboard.press('Escape');
-	await expect(apply).toBeDisabled();
+	await expect(submit).toBeDisabled();
 	await chooseSearchOption(page, 'Select Tag', 'Methods');
-	await action.selectOption('add_tag');
-	await expect(toolbar.getByRole('combobox', { name: 'Select Tag', exact: true })).toHaveValue(
-		'New taxonomy'
-	);
-	await action.selectOption('remove_tag');
-	await expect(toolbar.getByRole('combobox', { name: 'Select Tag', exact: true })).toHaveValue(
-		'Methods'
-	);
-	await apply.click();
-	await expect(page.getByRole('alert')).toBeVisible();
+	await submit.click();
+	await expect(dialog.getByRole('alert')).toBeVisible();
 	await expect(page.locator('[data-library-item-select="item-0"]')).toBeChecked();
-	await apply.click();
+	await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(toolbar).toHaveCount(0);
 	await expect(page.locator('#library-results')).toBeFocused();
 	expect(requests).toEqual([
 		{
 			action: 'remove_tag',
 			item_ids: ['item-0'],
-			tag_id: 'tag-methods',
-			tag_name: '',
-			confirmation: ''
+			tag_id: 'tag-methods'
 		},
 		{
 			action: 'remove_tag',
 			item_ids: ['item-0'],
-			tag_id: 'tag-methods',
-			tag_name: '',
-			confirmation: ''
+			tag_id: 'tag-methods'
 		}
 	]);
 });
@@ -171,9 +168,7 @@ test('removing from the current Project confirms destructive context while prese
 	});
 	await page.goto('/workspace/workspace-1/library?project=project-1');
 	await page.locator('[data-library-item-select="item-0"]').check();
-	const action = page.getByRole('combobox', { name: 'Bulk action', exact: true });
-	await action.selectOption('remove_project');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await openLibraryAction(page, 'remove_project');
 	const dialog = page.getByRole('dialog', {
 		name: 'Remove the selected Items from Reading Project 1?'
 	});
@@ -193,9 +188,7 @@ test('removing from the current Project confirms destructive context while prese
 		{
 			action: 'remove_project',
 			item_ids: ['item-0'],
-			project_id: 'project-1',
-			tag_name: '',
-			confirmation: 'remove_project'
+			project_id: 'project-1'
 		}
 	]);
 	await page.goto('/workspace/workspace-1/library');
@@ -226,40 +219,36 @@ test('Project-removal retry retains the original Project and Items after browser
 	await expect(page).toHaveURL(/project=project-1/);
 	await page.getByRole('button', { name: 'Next page', exact: true }).click();
 	await page.locator('[data-library-item-select="item-25"]').check();
-	await page
-		.getByRole('combobox', { name: 'Bulk action', exact: true })
-		.selectOption('remove_project');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await openLibraryAction(page, 'remove_project');
 	const dialog = page.getByRole('dialog');
 	await dialog.getByRole('button', { name: 'Remove from Project', exact: true }).click();
 	try {
 		await expect.poll(() => requests.length).toBe(1);
-		await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+		await expect(
+			dialog.getByRole('button', { name: 'Continue in Library', exact: true })
+		).toBeEnabled();
 		await page.goBack();
 		await page.goBack();
 		await expect(page).toHaveURL(/project=project-2/);
 	} finally {
 		release.resolve();
 	}
+	await page.getByRole('button', { name: 'Review action', exact: true }).click();
 	await expect(dialog.getByRole('alert')).toBeVisible();
 	await expect(dialog).toContainText('Reading Project 1');
-	await dialog.getByRole('button', { name: 'Remove from Project', exact: true }).click();
+	await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 	await expect(page).toHaveURL(/project=project-2/);
 	expect(requests).toEqual([
 		{
 			action: 'remove_project',
 			item_ids: ['item-25'],
-			project_id: 'project-1',
-			tag_name: '',
-			confirmation: 'remove_project'
+			project_id: 'project-1'
 		},
 		{
 			action: 'remove_project',
 			item_ids: ['item-25'],
-			project_id: 'project-1',
-			tag_name: '',
-			confirmation: 'remove_project'
+			project_id: 'project-1'
 		}
 	]);
 });
@@ -275,12 +264,16 @@ test('Tag-removal completion preserves a newer selection and search focus', asyn
 	});
 	await page.goto('/workspace/workspace-1/library');
 	await page.locator('[data-library-item-select="item-0"]').check();
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('remove_tag');
+	await openLibraryAction(page, 'remove_tag');
 	await chooseSearchOption(page, 'Select Tag', 'Methods');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Remove Tag', exact: true }).click();
 	const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
 	try {
 		await expect.poll(() => requested).toBe(true);
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Continue in Library', exact: true })
+			.click();
 		await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
 		await page.locator('[data-library-item-select="item-1"]').check();
 		await search.fill('continue typing');
@@ -298,9 +291,14 @@ test('a read-only current Project does not offer bulk removal', async ({ page })
 	await mockLibrary(page, false);
 	await page.goto('/workspace/workspace-1/library?project=project-1');
 	await page.locator('[data-library-item-select="item-0"]').check();
-	const action = page.getByRole('combobox', { name: 'Bulk action', exact: true });
-	await expect(action.locator('option[value="remove_project"]')).toHaveCount(0);
-	await expect(action.locator('option[value="remove_tag"]')).toHaveCount(1);
+	await page
+		.getByRole('region', { name: 'Bulk actions', exact: true })
+		.getByRole('button', { name: 'More actions', exact: true })
+		.click();
+	await expect(
+		page.getByRole('menuitem', { name: 'Remove from current Project', exact: true })
+	).toHaveCount(0);
+	await expect(page.getByRole('menuitem', { name: 'Remove Tag', exact: true })).toBeVisible();
 });
 
 for (const scenario of [
@@ -329,11 +327,9 @@ for (const scenario of [
 		for (const id of scenario.removedIds) {
 			await page.locator(`[data-library-item-select="${id}"]`).check();
 		}
-		await page
-			.getByRole('combobox', { name: 'Bulk action', exact: true })
-			.selectOption('remove_tag');
+		await openLibraryAction(page, 'remove_tag');
 		await chooseSearchOption(page, 'Select Tag', 'Methods');
-		await page.getByRole('button', { name: 'Apply', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Remove Tag', exact: true }).click();
 		for (const id of scenario.removedIds) {
 			await expect(page.locator(`[data-library-item-select="${id}"]`)).toHaveCount(0);
 		}
@@ -364,10 +360,7 @@ test('bulk Project removal keeps Previous on the current page after multiple ear
 	for (const id of ['item-10', 'item-12', 'item-14']) {
 		await page.locator(`[data-library-item-select="${id}"]`).check();
 	}
-	await page
-		.getByRole('combobox', { name: 'Bulk action', exact: true })
-		.selectOption('remove_project');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await openLibraryAction(page, 'remove_project');
 	await page
 		.getByRole('dialog', { name: 'Remove the selected Items from Reading Project 1?' })
 		.getByRole('button', { name: 'Remove from Project', exact: true })
@@ -384,8 +377,7 @@ test('bulk Project removal keeps Previous on the current page after multiple ear
 		{
 			action: 'remove_project',
 			item_ids: ['item-10', 'item-12', 'item-14'],
-			project_id: 'project-1',
-			confirmation: 'remove_project'
+			project_id: 'project-1'
 		}
 	]);
 });
@@ -427,9 +419,9 @@ test('bulk removal preserves the final preview position while the clamped page r
 	await page.goBack();
 	await expect.poll(() => new URL(page.url()).searchParams.get('page')).toBe('2');
 	await page.locator('[data-library-item-select="item-10"]').check();
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('remove_tag');
+	await openLibraryAction(page, 'remove_tag');
 	await chooseSearchOption(page, 'Select Tag', 'Methods');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Remove Tag', exact: true }).click();
 	try {
 		await expect.poll(() => clampedPageWaiting).toBe(true);
 		await expect.poll(() => new URL(page.url()).searchParams.get('page')).toBe(null);

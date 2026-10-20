@@ -1,6 +1,9 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/svelte-query';
 import { createWorkspaceApi } from '#lib/api/client.js';
+import type { components } from '#lib/api/schema.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
+
+export type ProjectSummary = components['schemas']['ProjectSummaryView'];
 
 export const projectKeys = {
 	all: (workspaceId: string) => workspaceKeys.projects(workspaceId),
@@ -27,14 +30,14 @@ export function projectListQuery(
 	});
 }
 
-export function projectOptionsQuery(workspaceId: string) {
+export function projectOptionsQuery(workspaceId: string, search = '') {
 	const api = createWorkspaceApi(workspaceId);
 	return infiniteQueryOptions({
-		queryKey: [...projectKeys.all(workspaceId), 'options'],
+		queryKey: [...projectKeys.all(workspaceId), 'options', search],
 		initialPageParam: 0,
 		queryFn: ({ signal, pageParam }) =>
 			api.request('GET', '/workspaces/{workspace_id}/projects', {
-				params: { query: { view: 'all', limit: 25, offset: pageParam } },
+				params: { query: { view: 'all', limit: 25, offset: pageParam, search } },
 				signal
 			}),
 		getNextPageParam: (page) =>

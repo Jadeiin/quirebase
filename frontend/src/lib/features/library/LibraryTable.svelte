@@ -23,6 +23,8 @@
 	import type { WorkspacePath } from '#lib/workspaces/href.js';
 	import type { LibrarySearch } from './queries';
 	import { libraryRowCommands, runLibraryShortcut, type LibraryRowCommand } from './shortcuts.js';
+	import LibraryActionMenu from './LibraryActionMenu.svelte';
+	import type { LibraryBulkAction } from './mutations.js';
 	import {
 		defaultSortDirection,
 		type libraryHref,
@@ -48,6 +50,9 @@
 		onPreview,
 		previewItemId,
 		itemHref,
+		currentProject,
+		actionsBusy,
+		onItemAction,
 		sort,
 		direction,
 		onSort,
@@ -63,6 +68,9 @@
 		onPreview: (id: string, trigger: HTMLElement) => void;
 		previewItemId: string;
 		itemHref: (id: string, suffix?: string) => WorkspacePath;
+		currentProject: { id: string; name: string } | null;
+		actionsBusy: boolean;
+		onItemAction: (action: LibraryBulkAction, id: string, trigger: HTMLElement) => void;
 		sort: LibrarySort;
 		direction: LibrarySortDirection;
 		onSort: (sort: LibrarySort, direction: LibrarySortDirection) => void;
@@ -118,10 +126,10 @@
 		{ accessorKey: 'doi', header: $t('DOI'), size: 190, minSize: 100, maxSize: 800 },
 		{
 			id: 'preview',
-			header: $t('Preview'),
-			size: 52,
-			minSize: 52,
-			maxSize: 52,
+			header: $t('Actions'),
+			size: 104,
+			minSize: 104,
+			maxSize: 104,
 			enableHiding: false,
 			enableResizing: false
 		}
@@ -247,6 +255,15 @@
 			return true;
 		}
 		const id = controls[current]?.dataset.libraryItemSelect;
+		if (command === 'actions') {
+			const menu = controls[current]
+				?.closest('[data-library-item]')
+				?.querySelector<HTMLButtonElement>('[data-library-item-actions]');
+			if (!menu || menu.disabled) return false;
+			menu.focus();
+			menu.click();
+			return true;
+		}
 		if (command === 'toggle' || command === 'only' || command === 'preview') {
 			if (!id) return false;
 			if (command === 'toggle') toggleItem(id);
@@ -591,16 +608,26 @@
 									<span class="block break-words text-surface-600-400"
 										>{@render dateLink(row.original.publication_date)}</span
 									>
-								{:else if cell.column.id === 'preview'}<Button
-										variant="icon"
-										size="sm"
-										aria-label={$t('Preview Item {number}', { number: row.index + 1 })}
-										title={$t('Preview Item')}
-										aria-expanded={previewItemId === row.id}
-										aria-controls={previewItemId === row.id ? 'library-preview' : undefined}
-										onclick={(event) => onPreview(row.id, event.currentTarget)}
-										><Icon name="panel-right" size={16} /></Button
+								{:else if cell.column.id === 'preview'}<div
+										class="flex items-center justify-end gap-1"
 									>
+										<Button
+											variant="icon"
+											size="sm"
+											aria-label={$t('Preview Item {number}', { number: row.index + 1 })}
+											title={$t('Preview Item')}
+											aria-expanded={previewItemId === row.id}
+											aria-controls={previewItemId === row.id ? 'library-preview' : undefined}
+											onclick={(event) => onPreview(row.id, event.currentTarget)}
+											><Icon name="panel-right" size={16} /></Button
+										>
+										<LibraryActionMenu
+											itemId={row.id}
+											{currentProject}
+											disabled={actionsBusy || busy}
+											onAction={(action, trigger) => onItemAction(action, row.id, trigger)}
+										/>
+									</div>
 								{:else}<span
 										class="block break-words text-surface-600-400"
 										class:line-clamp-2={preferences.density === 'compact'}
@@ -664,16 +691,24 @@
 						)}</span
 					>
 				</div>
-				<Button
-					variant="icon"
-					size="sm"
-					aria-label={$t('Preview Item {number}', { number: row.index + 1 })}
-					title={$t('Preview Item')}
-					aria-expanded={previewItemId === row.id}
-					aria-controls={previewItemId === row.id ? 'library-preview' : undefined}
-					onclick={(event) => onPreview(row.id, event.currentTarget)}
-					><Icon name="panel-right" size={16} /></Button
-				>
+				<div class="flex items-center gap-1">
+					<Button
+						variant="icon"
+						size="sm"
+						aria-label={$t('Preview Item {number}', { number: row.index + 1 })}
+						title={$t('Preview Item')}
+						aria-expanded={previewItemId === row.id}
+						aria-controls={previewItemId === row.id ? 'library-preview' : undefined}
+						onclick={(event) => onPreview(row.id, event.currentTarget)}
+						><Icon name="panel-right" size={16} /></Button
+					>
+					<LibraryActionMenu
+						itemId={row.id}
+						{currentProject}
+						disabled={actionsBusy || busy}
+						onAction={(action, trigger) => onItemAction(action, row.id, trigger)}
+					/>
+				</div>
 			</article>
 		{/each}
 	</div>

@@ -425,6 +425,7 @@ test('deleting a Project refreshes the cached Project directory', async ({ page 
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) => {
 		if (route.request().method() === 'DELETE') {
+			expect(route.request().postData()).toBeNull();
 			deleted = true;
 			return route.fulfill({ json: { ok: true } });
 		}
@@ -438,8 +439,14 @@ test('deleting a Project refreshes the cached Project directory', async ({ page 
 	await page.getByRole('link').filter({ hasText: project.name }).click();
 	await expect(page).toHaveURL(/\/projects\/project-1$/);
 	await page.getByRole('button', { name: 'Delete Project' }).click();
-	await page.getByLabel('Project name').fill(project.name);
-	await page.getByRole('dialog').getByRole('button', { name: 'Delete Project' }).click();
+	const deletion = page.getByRole('dialog');
+	const confirm = deletion.getByRole('button', { name: 'Delete Project' });
+	await expect(confirm).toBeDisabled();
+	await deletion.getByLabel('Project name').fill('A different Project');
+	await expect(confirm).toBeDisabled();
+	await deletion.getByLabel('Project name').fill(project.name);
+	await expect(confirm).toBeEnabled();
+	await confirm.click();
 	await expect.poll(() => deleted).toBe(true);
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects$/);
 	await expect(page.getByRole('link').filter({ hasText: project.name })).toHaveCount(0);
@@ -469,7 +476,7 @@ test('a completed Project deletion preserves navigation and a newer Project draf
 	await page.route('**/api/v1/workspaces/workspace-1/projects/*', async (route) => {
 		if (route.request().method() === 'DELETE') {
 			expect(route.request().url()).toContain('/projects/A');
-			expect(route.request().postDataJSON()).toEqual({ confirmation: 'Project A' });
+			expect(route.request().postData()).toBeNull();
 			started.resolve();
 			await release.promise;
 			deleted = true;

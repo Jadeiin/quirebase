@@ -1,4 +1,5 @@
-import { tagPage, directoryPage } from './helpers';
+import { openLibraryAction } from './helpers';
+import { tagPage, directoryPage, projectPage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { chooseSearchOption, mockSession } from './helpers';
 
@@ -19,12 +20,16 @@ test('a Project filter outside the first directory page resolves directly and su
 	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
 		route.fulfill({ json: tagPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
-		route.fulfill({ json: directoryPage(projects, route) })
-	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects/project-26', (route) =>
-		route.fulfill({ json: { ...projects[25], active_participants: [] } })
-	);
+	const projectLists: URL[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) => {
+		projectLists.push(new URL(route.request().url()));
+		return route.fulfill({ json: projectPage(projects, route) });
+	});
+	const projectDetails: string[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-26', (route) => {
+		projectDetails.push('project-26');
+		return route.fulfill({ json: { ...projects[25], active_participants: [] } });
+	});
 	const itemFilters: Array<string | null> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) => {
 		itemFilters.push(new URL(route.request().url()).searchParams.get('project'));
@@ -33,16 +38,21 @@ test('a Project filter outside the first directory page resolves directly and su
 
 	await page.goto('/workspace/workspace-1/library?project=project-26');
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	expect(projectLists).toEqual([]);
+	await expect.poll(() => projectDetails).toEqual(['project-26']);
 	await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(
 		'Project 26'
 	);
 	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
 	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
-	await page.getByRole('combobox', { name: 'Project', exact: true }).press('Escape');
-	await page.getByRole('button', { name: 'Load more Projects' }).click();
-	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Load more Projects', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Load more Projects', exact: true }).click();
+	await expect
+		.poll(() => projectLists.some((url) => url.searchParams.get('offset') === '25'))
+		.toBe(true);
 	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
-	await page.getByRole('combobox', { name: 'Project', exact: true }).press('Escape');
+	await page.getByRole('button', { name: 'Show options for Project', exact: true }).click();
+	await expect(page.getByRole('listbox', { name: 'Project', exact: true })).toHaveCount(0);
 	await page.getByPlaceholder('Search title, author, Tag, or full text').fill('retained filter');
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
 	await expect(page).toHaveURL(/project=project-26/);
@@ -211,10 +221,14 @@ for (const nextPage of [false, true]) {
 		});
 		await page.goto('/workspace/workspace-1/library');
 		await page.locator('#library-results input[type=checkbox][aria-label]').first().check();
-		await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
+		await openLibraryAction(page, 'add_tag');
 		await chooseSearchOption(page, 'Select Tag', 'Methods');
-		await page.getByRole('button', { name: 'Apply', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Add Tag', exact: true }).click();
 		await started.promise;
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Continue in Library', exact: true })
+			.click();
 		try {
 			if (nextPage) {
 				await page.getByRole('button', { name: 'Next page', exact: true }).click();
@@ -229,7 +243,9 @@ for (const nextPage of [false, true]) {
 			release.resolve();
 			await expect(page.getByText('Bulk action completed', { exact: true })).toBeVisible();
 			await expect(newerSelection).toBeChecked();
-			await page.getByRole('button', { name: 'Apply', exact: true }).click();
+			await openLibraryAction(page, 'add_tag');
+			await chooseSearchOption(page, 'Select Tag', 'Methods');
+			await page.getByRole('dialog').getByRole('button', { name: 'Add Tag', exact: true }).click();
 			await expect(newerSelection).not.toBeChecked();
 			expect(submitted.map((body) => body.item_ids)).toEqual([
 				['item-0'],
@@ -283,13 +299,15 @@ test('Library history navigation restores filter drafts and clears selection', a
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?q=bar/);
 	await expect(page.getByText('Result for bar')).toBeVisible();
 	await page.locator('#library-results input[type="checkbox"][aria-label]').check();
-	await expect(page.getByText('1 selected')).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Bulk actions', exact: true })).toContainText(
+		'1 selected'
+	);
 
 	await page.goBack();
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?q=foo/);
 	await expect(page.getByText('Result for foo')).toBeVisible();
 	await expect(search).toHaveValue('foo');
-	await expect(page.getByText('1 selected')).toHaveCount(0);
+	await expect(page.getByRole('region', { name: 'Bulk actions', exact: true })).toHaveCount(0);
 });
 
 test('adding a Library Item invalidates a previously opened Project', async ({ page }) => {
@@ -327,9 +345,9 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 			}
 		});
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
 		route.fulfill({
-			json: directoryPage(
+			json: projectPage(
 				[
 					{
 						id: 'project-1',
@@ -384,11 +402,12 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 	await expect.poll(() => projectReads).toBe(1);
 	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
 	await page.getByLabel('Select this page').check();
-	await page
-		.getByRole('combobox', { name: 'Bulk action', exact: true })
-		.selectOption('add_project');
+	await openLibraryAction(page, 'add_project');
 	await chooseSearchOption(page, 'Select Project', 'Research');
-	await page.getByRole('button', { name: 'Apply' }).click();
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Add to Project', exact: true })
+		.click();
 	await expect(page.getByText('Bulk action completed')).toBeVisible();
 	await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
 	await page.getByRole('link').filter({ hasText: 'Research' }).click();
@@ -502,10 +521,11 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 
 		await page.goto(`/workspace/${workspaceId}/library`);
 		await page.getByLabel('Select A. Author').check();
+		await openLibraryAction(page, 'bibliography');
 		await page
-			.getByRole('combobox', { name: 'Bulk action', exact: true })
-			.selectOption('bibliography');
-		await page.getByRole('button', { name: 'Apply' }).click();
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Download file', exact: true })
+			.click();
 		await expect
 			.poll(() => exportBody)
 			.toMatchObject({
@@ -719,6 +739,79 @@ test('Library loads Tag options on demand, searches server pages and resolves a 
 		.toBe(true);
 });
 
+test('Library loads Project options only inside the picker, searches server pages and resolves the selected Project directly', async ({
+	page
+}) => {
+	await mockSession(page);
+	const projects = Array.from({ length: 60 }, (_, index) => ({
+		id: `project-${index + 1}`,
+		name: `Project ${String(index + 1).padStart(2, '0')}`,
+		state: 'active',
+		participation: 'workspace',
+		is_participating: true,
+		item_count: 0,
+		authorization: { allowed: ['project_item.manage'] }
+	}));
+	const reads: Array<{ offset: number; limit: number; search: string; view: string | null }> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) => {
+		const query = new URL(route.request().url()).searchParams;
+		reads.push({
+			offset: Number(query.get('offset') ?? 0),
+			limit: Number(query.get('limit')),
+			search: query.get('search') ?? '',
+			view: query.get('view')
+		});
+		return route.fulfill({ json: projectPage(projects, route) });
+	});
+	const details: string[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-*', (route) => {
+		const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+		details.push(id);
+		return route.fulfill({
+			json: { ...projects.find((project) => project.id === id), active_participants: [] }
+		});
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+		route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+	);
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	expect(reads).toEqual([]);
+	expect(details).toEqual([]);
+	await expect(page.getByRole('button', { name: 'Load more Projects', exact: true })).toHaveCount(
+		0
+	);
+	await page.getByRole('button', { name: 'Show options for Project', exact: true }).click();
+	await expect(page.getByRole('option', { name: 'Project 25', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(0);
+	expect(reads).toEqual([{ offset: 0, limit: 25, search: '', view: 'all' }]);
+	const loadMore = page.getByRole('button', { name: 'Load more Projects', exact: true });
+	await loadMore.click();
+	await expect(page.getByRole('option', { name: 'Project 50', exact: true })).toBeVisible();
+	expect(reads[1].offset).toBe(25);
+	await loadMore.focus();
+	await loadMore.press('Enter');
+	await expect(page.getByRole('option', { name: 'Project 60', exact: true })).toBeVisible();
+	expect(reads[2].offset).toBe(50);
+	await chooseSearchOption(page, 'Project', 'Project 60');
+	await expect
+		.poll(() => reads.some((read) => read.search === 'Project 60' && read.offset === 0))
+		.toBe(true);
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect(page).toHaveURL(/project=project-60/);
+	const listReadsBeforeReload = reads.length;
+	await page.reload();
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveValue(
+		'Project 60'
+	);
+	expect(reads).toHaveLength(listReadsBeforeReload);
+	await expect.poll(() => details.filter((id) => id === 'project-60').length).toBeGreaterThan(1);
+});
+
 test('Library delete retains its submitted targets after pending Back navigation and failure', async ({
 	page
 }) => {
@@ -757,25 +850,26 @@ test('Library delete retains its submitted targets after pending Back navigation
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByRole('button', { name: 'Next page', exact: true }).click();
 	await page.locator('#library-results input[type=checkbox][aria-label]').first().check();
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('delete');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await openLibraryAction(page, 'delete_items');
 	const dialog = page.getByRole('dialog');
 	await dialog.getByRole('button', { name: 'Permanently delete', exact: true }).click();
 	try {
 		await expect.poll(() => submitted.length).toBe(1);
-		await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
-		await page.keyboard.press('Escape');
+		await expect(
+			dialog.getByRole('button', { name: 'Continue in Library', exact: true })
+		).toBeEnabled();
 		await expect(dialog).toBeVisible();
 		await page.goBack();
 		await expect(page).toHaveURL(/\/library$/);
 	} finally {
 		release.resolve();
 	}
+	await page.getByRole('button', { name: 'Review action', exact: true }).click();
 	await expect(dialog.getByRole('alert')).toBeVisible();
-	await dialog.getByRole('button', { name: 'Permanently delete', exact: true }).click();
+	await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 	expect(submitted.map((body) => ({ item_ids: body.item_ids, action: body.action }))).toEqual([
-		{ item_ids: ['item-25'], action: 'delete' },
-		{ item_ids: ['item-25'], action: 'delete' }
+		{ item_ids: ['item-25'], action: 'delete_items' },
+		{ item_ids: ['item-25'], action: 'delete_items' }
 	]);
 });

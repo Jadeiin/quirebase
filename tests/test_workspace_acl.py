@@ -2519,7 +2519,7 @@ async def test_project_annotation_bundle_hides_managed_content_from_nonmembers(a
         )
         is None
     )
-    await delete_project(async_db, owner, workspace_id, project.id, project.name)
+    await delete_project(async_db, owner, workspace_id, project.id)
     assert [row.id for row in await _own_annotations(async_db, former_member, revision)] == [
         private.id
     ]
@@ -2714,7 +2714,7 @@ async def test_item_organize_omits_deleted_projects(async_db):
         ItemSection.organize,
     )
     assert project.id in {option.project.id for option in before.projects}
-    await delete_project(async_db, owner, workspace_id, project.id, project.name)
+    await delete_project(async_db, owner, workspace_id, project.id)
     after = await open_item_section(
         async_db,
         await resolve_workspace_context(async_db, owner, workspace_id),
@@ -3443,7 +3443,7 @@ async def test_deleted_project_annotations_are_excluded_from_item_review(async_d
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )
     assert [entry["id"] for entry in before.annotations] == [annotation.id]
-    await delete_project(async_db, author, workspace_id, project.id, project.name)
+    await delete_project(async_db, author, workspace_id, project.id)
     after = await list_document_annotations(
         async_db, author, workspace_id, item.id, page=1, per_page=20
     )

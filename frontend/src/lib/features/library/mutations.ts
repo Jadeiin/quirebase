@@ -1,5 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
+import type { paths } from '#lib/api/schema.js';
 import {
 	invalidateLibrary,
 	invalidateProject,
@@ -13,14 +14,11 @@ import {
 } from '#lib/export-preferences.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
+type LibraryMutationRequest =
+	paths['/api/v1/workspaces/{workspace_id}/items/bulk']['post']['requestBody']['content']['application/json'];
+
 export type LibraryBulkAction =
-	| 'add_project'
-	| 'remove_project'
-	| 'add_tag'
-	| 'remove_tag'
-	| 'bibliography'
-	| 'documents'
-	| 'delete';
+	LibraryMutationRequest['action'] | 'copy_bibliography' | 'bibliography' | 'documents';
 
 export type LibraryBulkInput = {
 	action: LibraryBulkAction;
@@ -31,6 +29,24 @@ export type LibraryBulkInput = {
 	exportFormat: string;
 	preferences: ExportPreferences;
 };
+
+export async function readLibraryBibliography(
+	workspaceId: string,
+	input: Pick<LibraryBulkInput, 'itemIds' | 'preferences' | 'exportFormat'>
+): Promise<string> {
+	return createWorkspaceApi(workspaceId).request(
+		'POST',
+		'/workspaces/{workspace_id}/items/bibliography',
+		{
+			body: {
+				item_ids: input.itemIds,
+				...bibliographyExportParameters(input.preferences.citation, input.exportFormat)
+			},
+			headers: { Accept: '*/*' },
+			parseAs: 'text'
+		}
+	);
+}
 
 function archiveFilename(includeAnnotations: boolean, includeSupplements: boolean): string {
 	const kind =
@@ -86,27 +102,40 @@ export async function runLibraryBulkMutation(
 	input: LibraryBulkInput,
 	queryClient: QueryClient
 ): Promise<void> {
+	if (
+		input.action === 'copy_bibliography' ||
+		input.action === 'bibliography' ||
+		input.action === 'documents'
+	) {
+		throw new Error('Exports must use the Library export operations');
+	}
 	const api = createWorkspaceApi(workspaceId);
-	await api.request('POST', '/workspaces/{workspace_id}/items/bulk', {
-		body: {
-			item_ids: input.itemIds,
-			action: input.action,
-			project_id:
-				input.action === 'add_project' || input.action === 'remove_project'
-					? input.projectId || undefined
-					: undefined,
-			tag_name: input.action === 'add_tag' ? input.tagName : '',
-			tag_id: input.action === 'remove_tag' ? input.tagId || undefined : undefined,
-			confirmation:
-				input.action === 'delete'
-					? 'delete'
-					: input.action === 'remove_project'
-						? 'remove_project'
-						: ''
+	const body: LibraryMutationRequest = (() => {
+		const item_ids = input.itemIds;
+		switch (input.action) {
+			case 'add_project':
+				return { action: input.action, item_ids, project_id: input.projectId };
+			case 'remove_project':
+				return {
+					action: input.action,
+					item_ids,
+					project_id: input.projectId
+				};
+			case 'add_tag':
+				return { action: input.action, item_ids, tag_name: input.tagName };
+			case 'remove_tag':
+				return { action: input.action, item_ids, tag_id: input.tagId ?? '' };
+			case 'delete_items':
+				return { action: input.action, item_ids };
+			default:
+				throw new Error('Exports must use the Library export operations');
 		}
+	})();
+	await api.request('POST', '/workspaces/{workspace_id}/items/bulk', {
+		body
 	});
 	const changesProjects =
-		input.action === 'delete' ||
+		input.action === 'delete_items' ||
 		input.action === 'add_project' ||
 		input.action === 'remove_project';
 	// Project invalidation includes Library, dashboard and reader projections.
@@ -115,7 +144,11 @@ export async function runLibraryBulkMutation(
 			? invalidateProject(queryClient, workspaceId)
 			: invalidateLibrary(queryClient, workspaceId)
 	];
-	if (input.action === 'add_tag' || input.action === 'remove_tag' || input.action === 'delete') {
+	if (
+		input.action === 'add_tag' ||
+		input.action === 'remove_tag' ||
+		input.action === 'delete_items'
+	) {
 		invalidations.push(invalidateTags(queryClient, workspaceId));
 	}
 	await Promise.all(invalidations);
@@ -130,6 +163,9 @@ export function libraryBulkMutationOptions(workspaceId: string, queryClient: Que
 	return mutationOptions({
 		mutationKey: workspaceKeys.mutation(workspaceId, 'library-bulk'),
 		mutationFn: async ({ input }: LibraryBulkMutation) => {
+			if (input.action === 'copy_bibliography') {
+				return readLibraryBibliography(workspaceId, input);
+			}
 			if (input.action === 'bibliography' || input.action === 'documents') {
 				await runLibraryBulkDownload(workspaceId, input);
 				return;
@@ -137,7 +173,13 @@ export function libraryBulkMutationOptions(workspaceId: string, queryClient: Que
 			await runLibraryBulkMutation(workspaceId, input, queryClient);
 		},
 		onSuccess: async (_result, mutation) => {
-			mutation.afterMutation?.();
+			if (
+				mutation.input.action !== 'copy_bibliography' &&
+				mutation.input.action !== 'bibliography' &&
+				mutation.input.action !== 'documents'
+			) {
+				mutation.afterMutation?.();
+			}
 		},
 		onError: async (reason, { input }) => {
 			if (

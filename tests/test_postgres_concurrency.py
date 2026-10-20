@@ -59,6 +59,7 @@ from quirebase.documents import (
 )
 from quirebase.documents.workflows import _lock_upload_authority
 from quirebase.library import (
+    BulkItemAction,
     ItemMetadataData,
     ItemSection,
     TagConflict,
@@ -621,7 +622,7 @@ async def test_project_discussion_moderation_waits_for_root_deletion(
         await postgres_race.wait_blocked("moderate", "delete")
         if root == "project":
             actor = await delete_db.get(User, owner_id)
-            await delete_project(delete_db, actor, workspace_id, project_id, resource.name)
+            await delete_project(delete_db, actor, workspace_id, project_id)
         else:
             await delete_db.delete(resource)
             await delete_db.flush()
@@ -2039,7 +2040,7 @@ async def test_bulk_project_assignment_translates_item_delete_race(postgres_sess
                         actor,
                         workspace_id,
                         item_ids=[item_id],
-                        action="add_project",
+                        action=BulkItemAction.add_project,
                         project_id=project_id,
                     )
                 except ValidationFailure:
@@ -2351,7 +2352,12 @@ async def test_association_batch_skips_a_competing_insert_without_losing_other_l
             actor = await db.get(User, actor_id)
             if kind == "tag":
                 return await apply_bulk_item_action(
-                    db, actor, workspace_id, item_ids, "add_tag", tag_name="Overlap tag"
+                    db,
+                    actor,
+                    workspace_id,
+                    item_ids,
+                    BulkItemAction.add_tag,
+                    tag_name="Overlap tag",
                 )
             inserted = await add_items_to_project(db, actor, workspace_id, root_id, item_ids)
             await db.commit()
@@ -2421,7 +2427,7 @@ async def test_bulk_tag_add_does_not_resurrect_a_link_removed_after_conflict_ski
             monkeypatch.setattr(db, "scalars", paused_scalars)
             actor = await db.get(User, actor_id)
             await apply_bulk_item_action(
-                db, actor, workspace_id, item_ids, "add_tag", tag_name=tag.name
+                db, actor, workspace_id, item_ids, BulkItemAction.add_tag, tag_name=tag.name
             )
 
     postgres_race.start("batch", batch())

@@ -49,7 +49,6 @@ from quirebase.web.api.library_schemas import (
 )
 from quirebase.web.api.project_schemas import (
     ProjectCreateRequest,
-    ProjectDeleteRequest,
     ProjectDetailView,
     ProjectParticipantRequest,
     ProjectSettingsRequest,
@@ -146,11 +145,10 @@ async def update_project(
 async def delete_user_project(
     workspace_id: UUID,
     project_id: UUID,
-    data: ProjectDeleteRequest,
     user: ApiUser,
     db: Database,
 ) -> OkView:
-    await delete_project(db, user, workspace_id, project_id, data.confirmation)
+    await delete_project(db, user, workspace_id, project_id)
     return OkView()
 
 

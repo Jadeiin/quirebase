@@ -143,7 +143,7 @@ async def test_project_pages_count_authorized_roots_and_separate_governance_from
         for item in items
     ])
     await async_db.commit()
-    await delete_project(async_db, owner, workspace.id, deleted.id, deleted.name)
+    await delete_project(async_db, owner, workspace.id, deleted.id)
     owner_grant = await create_api_token(async_db, owner, "Project directory", expires_in_days=1)
     editor_grant = await create_api_token(async_db, editor, "Project directory", expires_in_days=1)
     base = f"/api/v1/workspaces/{workspace.id}/projects"

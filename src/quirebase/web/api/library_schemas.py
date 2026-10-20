@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from advanced_alchemy.service import OffsetPagination
 from pydantic import BaseModel, ConfigDict, Field
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
-from quirebase.library import ItemMetadataData, Work, item_summary
+from quirebase.library import BulkItemAction, ItemMetadataData, Work, item_summary
 from quirebase.models import MAX_CITATION_KEY_LENGTH
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
@@ -33,13 +33,43 @@ class ItemSearchView(BaseModel):
 LibrarySearchView = OffsetPagination[ItemSearchView]
 
 
-class BulkActionRequest(BaseModel):
-    item_ids: list[UUID]
-    action: str
-    project_id: UUID | None = None
-    tag_name: str = ""
-    tag_id: UUID | None = None
-    confirmation: str = ""
+class _BulkItemSelectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    item_ids: list[UUID] = Field(min_length=1)
+
+
+class BulkAddProjectRequest(_BulkItemSelectionRequest):
+    action: Literal[BulkItemAction.add_project]
+    project_id: UUID
+
+
+class BulkRemoveProjectRequest(_BulkItemSelectionRequest):
+    action: Literal[BulkItemAction.remove_project]
+    project_id: UUID
+
+
+class BulkAddTagRequest(_BulkItemSelectionRequest):
+    action: Literal[BulkItemAction.add_tag]
+    tag_name: str = Field(min_length=1)
+
+
+class BulkRemoveTagRequest(_BulkItemSelectionRequest):
+    action: Literal[BulkItemAction.remove_tag]
+    tag_id: UUID
+
+
+class BulkDeleteItemsRequest(_BulkItemSelectionRequest):
+    action: Literal[BulkItemAction.delete_items]
+
+
+BulkActionRequest = Annotated[
+    BulkAddProjectRequest
+    | BulkRemoveProjectRequest
+    | BulkAddTagRequest
+    | BulkRemoveTagRequest
+    | BulkDeleteItemsRequest,
+    Field(discriminator="action"),
+]
 
 
 class ItemDetailView(BaseModel):

@@ -1,3 +1,4 @@
+import { openLibraryAction } from './helpers';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
@@ -153,27 +154,31 @@ test('bulk toolbar explains requirements, keeps failed targets and restores focu
 	await row.check();
 	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
 	await expect(toolbar).toContainText('Current page only');
-	const apply = toolbar.getByRole('button', { name: 'Apply', exact: true });
-	await expect(apply).toBeDisabled();
-	await expect(apply).toHaveAccessibleDescription('Choose an action to continue.');
-	await toolbar
-		.getByRole('combobox', { name: 'Bulk action', exact: true })
-		.selectOption('add_project');
-	await expect(apply).toHaveAccessibleDescription('Choose a Project to continue.');
-	await toolbar.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
-	await expect(apply).toHaveAccessibleDescription('Choose or enter a Tag to continue.');
-	await toolbar.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('Methods');
-	await page.keyboard.press('Escape');
-	await expect(apply).toBeEnabled();
 	const bounds = (await toolbar.boundingBox())!;
 	expect(bounds.x).toBeGreaterThanOrEqual(0);
 	expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+	await openLibraryAction(page, 'add_project');
+	let dialog = page.getByRole('dialog', { name: 'Add to Project', exact: true });
+	await expect(dialog.getByRole('button', { name: 'Add to Project', exact: true })).toBeDisabled();
+	await expect(
+		dialog.getByRole('button', { name: 'Add to Project', exact: true })
+	).toHaveAccessibleDescription('Choose a Project to continue.');
+	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await openLibraryAction(page, 'add_tag');
+	dialog = page.getByRole('dialog', { name: 'Add Tag', exact: true });
+	const apply = dialog.getByRole('button', { name: 'Add Tag', exact: true });
+	await expect(apply).toHaveAccessibleDescription('Choose or enter a Tag to continue.');
+	await dialog.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('Methods');
+	await dialog.getByText('Add Tag', { exact: true }).first().click();
+	await expect(apply).toBeEnabled();
 	await page.screenshot({ path: '/tmp/quirebase-library-bulk-mobile.png' });
 	await apply.click();
 	await expect(page.getByRole('alert')).toContainText('Something went wrong. Try again.');
-	await expect(row).toBeChecked();
-	await expect(apply).toBeEnabled();
-	await apply.click();
+	// The modal correctly hides the Library from the accessibility tree.
+	await expect(page.locator('[data-library-item-select="item-1"]')).toBeChecked();
+	const retry = dialog.getByRole('button', { name: 'Retry', exact: true });
+	await expect(retry).toBeEnabled();
+	await retry.click();
 	await expect(page.getByText('Bulk action completed', { exact: true })).toBeVisible();
 	await expect(row).not.toBeChecked();
 	await expect(page.locator('#library-results')).toBeFocused();
@@ -194,17 +199,24 @@ test('bulk progress keeps the search interactive and preserves its focus on comp
 	await page.goto('/workspace/workspace-1/library');
 	await page.locator('[data-library-item-select="item-1"]').check();
 	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
-	await toolbar.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
-	await toolbar.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('Methods');
-	await page.keyboard.press('Escape');
-	await toolbar.getByRole('button', { name: 'Apply', exact: true }).click();
+	await openLibraryAction(page, 'add_tag');
+	await page
+		.getByRole('dialog')
+		.getByRole('combobox', { name: 'Select Tag', exact: true })
+		.fill('Methods');
+	await page.getByRole('dialog').getByText('Add Tag', { exact: true }).first().click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Add Tag', exact: true }).click();
 	const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
 	try {
 		await expect.poll(() => submitted).toBe(true);
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Continue in Library', exact: true })
+			.click();
 		await expect(toolbar).toHaveAttribute('aria-busy', 'true');
-		await expect(toolbar).toContainText('Applying to the selected Items…');
+		await expect(toolbar).toContainText('Applying action…');
 		await expect(toolbar.getByRole('button', { name: 'Clear selection' })).toBeEnabled();
-		await expect(toolbar.getByRole('combobox', { name: 'Bulk action' })).toBeDisabled();
+		await expect(toolbar.getByRole('button', { name: 'Add Tag', exact: true })).toBeDisabled();
 		await search.fill('unfinished search');
 	} finally {
 		release.resolve();
@@ -215,7 +227,7 @@ test('bulk progress keeps the search interactive and preserves its focus on comp
 	await expect(page).not.toHaveURL(/q=/);
 });
 
-test('bulk delete returns focus to Apply on cancellation and results after deletion', async ({
+test('bulk delete returns focus to More actions on cancellation and results after deletion', async ({
 	page
 }) => {
 	const rows = items.slice(0, 3);
@@ -226,13 +238,14 @@ test('bulk delete returns focus to Apply on cancellation and results after delet
 	});
 	await page.goto('/workspace/workspace-1/library');
 	await page.locator('[data-library-item-select="item-1"]').check();
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('delete');
-	const apply = page.getByRole('button', { name: 'Apply', exact: true });
-	await apply.click();
+	await openLibraryAction(page, 'delete_items');
+	const apply = page
+		.getByRole('region', { name: 'Bulk actions', exact: true })
+		.getByRole('button', { name: 'More actions', exact: true });
 	const dialog = page.getByRole('dialog');
 	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(apply).toBeFocused();
-	await apply.click();
+	await openLibraryAction(page, 'delete_items');
 	await dialog.getByRole('button', { name: 'Permanently delete', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 	await expect(page.locator('[data-library-item-select="item-1"]')).toHaveCount(0);
@@ -432,12 +445,12 @@ for (const view of ['table', 'list'] as const) {
 		await expect(preview).toHaveCount(0);
 		await expect(trigger).toBeFocused();
 		await expect(row).toBeChecked();
-		const bulk = page.getByRole('combobox', { name: 'Bulk action', exact: true });
-		await bulk.selectOption('delete');
-		const apply = page.getByRole('button', { name: 'Apply', exact: true });
-		await apply.click();
+		const apply = page
+			.getByRole('region', { name: 'Bulk actions', exact: true })
+			.getByRole('button', { name: 'More actions', exact: true });
+		await openLibraryAction(page, 'delete_items');
 		await expect(
-			page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true })
+			page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true })
 		).toBeFocused();
 		await page.keyboard.press('Escape');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -579,11 +592,13 @@ for (const [platform, modifier] of [
 		const first = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
 		await first.press(`${modifier}+a`);
 		await expect(page.getByRole('checkbox', { name: 'Select this page' })).toBeChecked();
-		await expect(page.getByText('25 selected', { exact: true })).toBeVisible();
+		await expect(page.getByRole('region', { name: 'Bulk actions', exact: true })).toContainText(
+			'25 selected'
+		);
 		await first.press('?');
 		const help = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true });
 		await expect(
-			help.locator('kbd').filter({ hasText: modifier === 'Meta' ? '⌘' : 'Ctrl' })
+			help.locator('kbd').filter({ hasText: modifier === 'Meta' ? /^⌘ A$/ : /^Ctrl\+A$/ })
 		).toHaveText(modifier === 'Meta' ? '⌘ A' : 'Ctrl+A');
 		await expect(help.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
 		await page.keyboard.press('Escape');
@@ -957,7 +972,7 @@ for (const view of ['table', 'list'] as const) {
 				await expect(selection).toBeChecked();
 			} else {
 				await expect(item).toHaveCount(0);
-				await expect(page.getByRole('combobox', { name: 'Bulk action', exact: true })).toHaveCount(
+				await expect(page.getByRole('region', { name: 'Bulk actions', exact: true })).toHaveCount(
 					0
 				);
 				await expect(page.getByRole('navigation', { name: 'Library pages' })).toContainText(

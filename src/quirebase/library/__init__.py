@@ -18,6 +18,7 @@ from quirebase.library.authors import (
     search_authors_typeahead,
 )
 from quirebase.library.bulk_items import (
+    BulkItemAction,
     apply_bulk_item_action,
     download_selected_item_documents,
 )
@@ -125,6 +126,7 @@ __all__ = [
     "DEFAULT_CITATION_KEY_FORMULA",
     "BatchConflict",
     "BibliographyExportOptions",
+    "BulkItemAction",
     "CandidatePageView",
     "CandidateView",
     "DiscoveryClause",

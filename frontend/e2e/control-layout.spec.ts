@@ -1,6 +1,7 @@
+import { openLibraryAction } from './helpers';
 import { mockMetadataSources } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
-import { chooseSearchOption, directoryPage, mockSession, tagPage } from './helpers';
+import { chooseSearchOption, mockSession, projectPage, tagPage } from './helpers';
 
 async function library(page: Page) {
 	await mockSession(page);
@@ -12,23 +13,20 @@ async function library(page: Page) {
 			)
 		})
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
-		route.fulfill({
-			json: directoryPage(
-				[
-					{
-						id: 'project-1',
-						name: 'Reading Project',
-						state: 'active',
-						participation: 'workspace',
-						is_participating: true,
-						item_count: 0,
-						authorization: { allowed: ['project_item.manage'] }
-					}
-				],
-				route
-			)
-		})
+	const project = {
+		id: 'project-1',
+		name: 'Reading Project',
+		state: 'active',
+		participation: 'workspace',
+		is_participating: true,
+		item_count: 0,
+		authorization: { allowed: ['project_item.manage'] }
+	};
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+		route.fulfill({ json: projectPage([project], route) })
+	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>
+		route.fulfill({ json: { ...project, active_participants: [] } })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
 		route.fulfill({
@@ -141,34 +139,41 @@ test('bulk Tag action offers searchable existing Tags and submits their names', 
 		submitted = route.request().postDataJSON();
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
+	await openLibraryAction(page, 'add_tag');
 	await chooseSearchOption(page, 'Select Tag', 'Reading');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Add Tag', exact: true }).click();
 	await expect
 		.poll(() => submitted)
 		.toMatchObject({ action: 'add_tag', tag_name: 'Reading', item_ids: ['item-1'] });
 });
 
-test('bulk Project chooser aligns with the action selector', async ({ page }) => {
-	await page.setViewportSize({ width: 1440, height: 1000 });
-	await library(page);
-	await page
-		.getByRole('combobox', { name: 'Bulk action', exact: true })
-		.selectOption('add_project');
-	const action = (await page
-		.getByRole('combobox', { name: 'Bulk action', exact: true })
-		.boundingBox())!;
-	const project = (await page
-		.getByRole('combobox', { name: 'Select Project', exact: true })
-		.boundingBox())!;
-	expect(Math.abs(action.y - project.y), JSON.stringify({ action, project })).toBeLessThan(2);
-	expect(Math.abs(action.height - project.height)).toBeLessThan(2);
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
-	const tag = (await page
-		.getByRole('combobox', { name: 'Select Tag', exact: true })
-		.boundingBox())!;
-	expect(Math.abs(action.y - tag.y)).toBeLessThan(2);
-	expect(Math.abs(action.height - tag.height)).toBeLessThan(2);
+test('bulk toolbar exposes direct actions without overflowing at narrow widths', async ({
+	page
+}) => {
+	for (const width of [1440, 390]) {
+		await page.setViewportSize({ width, height: 1000 });
+		await library(page);
+		const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
+		for (const name of [
+			'Add Tag',
+			'Add to Project',
+			'Copy citation',
+			'Export bibliography',
+			'More actions'
+		]) {
+			const control = toolbar.getByRole('button', { name, exact: true });
+			await expect(control).toBeVisible();
+			const box = (await control.boundingBox())!;
+			expect(box.x).toBeGreaterThanOrEqual(0);
+			expect(box.x + box.width).toBeLessThanOrEqual(width);
+		}
+		await openLibraryAction(page, 'add_project');
+		const dialog = page.getByRole('dialog', { name: 'Add to Project', exact: true });
+		await expect(
+			dialog.getByRole('combobox', { name: 'Select Project', exact: true })
+		).toBeVisible();
+		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+	}
 });
 
 test('bulk Tag action still accepts a new Tag name', async ({ page }) => {
@@ -178,11 +183,11 @@ test('bulk Tag action still accepts a new Tag name', async ({ page }) => {
 		submitted = route.request().postDataJSON();
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
+	await openLibraryAction(page, 'add_tag');
 	const tag = page.getByRole('combobox', { name: 'Select Tag', exact: true });
 	await tag.fill('New topic');
-	await tag.press('Escape');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await page.getByRole('dialog').getByText('Add Tag', { exact: true }).first().click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Add Tag', exact: true }).click();
 	await expect.poll(() => submitted).toMatchObject({ action: 'add_tag', tag_name: 'New topic' });
 });
 

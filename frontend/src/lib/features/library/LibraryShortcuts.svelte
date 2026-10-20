@@ -12,11 +12,13 @@
 	let {
 		enabled = $bindable(true),
 		onSearch,
-		onEscape
+		onEscape,
+		onCopy
 	}: {
 		enabled: boolean;
 		onSearch: () => void;
 		onEscape: () => boolean;
+		onCopy: () => boolean;
 	} = $props();
 	let open = $state(false);
 	let returnFocus: HTMLElement | undefined;
@@ -60,7 +62,8 @@
 				callback: (event) => runLibraryShortcut(event, () => setOpen(true)),
 				options: { enabled: enabled && !open }
 			},
-			{ hotkey: 'Escape', callback: (event) => runLibraryShortcut(event, onEscape) }
+			{ hotkey: 'Escape', callback: (event) => runLibraryShortcut(event, onEscape) },
+			{ hotkey: 'Mod+Shift+C', callback: (event) => runLibraryShortcut(event, onCopy) }
 		],
 		() => ({
 			// Run after Skeleton's document listeners and leave unhandled events intact.
@@ -109,6 +112,8 @@
 					<dd><kbd class="kbd">?</kbd></dd>
 					<dt>{$t('Close a popup or preview, then clear selection')}</dt>
 					<dd><kbd class="kbd">{$t('Esc')}</kbd></dd>
+					<dt>{$t('Copy citations for selected or focused Items')}</dt>
+					<dd><kbd class="kbd">{formatForDisplay('Mod+Shift+C')}</kbd></dd>
 				</dl>
 				<h3 class="text-sm font-semibold">{$t('Library results')}</h3>
 				<p class="mt-2 text-sm text-surface-600-400">

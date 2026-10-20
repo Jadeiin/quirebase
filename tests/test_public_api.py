@@ -135,10 +135,12 @@ async def test_http_api_includes_the_public_capability_set(
         ("POST", "/api/v1/workspaces/{workspace_id}/items"),
         ("GET", "/api/v1/workspaces/{workspace_id}/items/{item_id}"),
         ("PUT", "/api/v1/workspaces/{workspace_id}/items/{item_id}"),
+        ("DELETE", "/api/v1/workspaces/{workspace_id}/items/{item_id}"),
         ("GET", "/api/v1/workspaces/{workspace_id}/projects"),
         ("POST", "/api/v1/workspaces/{workspace_id}/projects"),
         ("GET", "/api/v1/workspaces/{workspace_id}/projects/{project_id}"),
         ("PATCH", "/api/v1/workspaces/{workspace_id}/projects/{project_id}"),
+        ("DELETE", "/api/v1/workspaces/{workspace_id}/projects/{project_id}"),
         ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/archive"),
         ("POST", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/restore"),
         ("PUT", "/api/v1/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}"),
@@ -183,6 +185,11 @@ async def test_http_api_includes_the_public_capability_set(
     assert paths["/api/v1/workspaces/{workspace_id}/items"]["get"]["responses"]["200"]["content"][
         "application/json"
     ]["schema"] == {"$ref": "#/components/schemas/OffsetPagination_ItemSearchView_"}
+    for path in (
+        "/api/v1/workspaces/{workspace_id}/items/{item_id}",
+        "/api/v1/workspaces/{workspace_id}/projects/{project_id}",
+    ):
+        assert "requestBody" not in paths[path]["delete"]
     assert paths["/api/v1/workspaces/{workspace_id}/items/{item_id}"]["get"]["responses"]["200"][
         "content"
     ]["application/json"]["schema"] == {"$ref": "#/components/schemas/ItemDetailView"}
@@ -192,6 +199,51 @@ async def test_http_api_includes_the_public_capability_set(
     assert paths["/api/v1/workspaces/{workspace_id}/items/{item_id}/documents"]["get"]["responses"][
         "200"
     ]["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/DocumentListView"}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("role", [WorkspaceRole.owner, WorkspaceRole.admin, WorkspaceRole.editor])
+@pytest.mark.parametrize("state", list(ProjectState))
+async def test_project_delete_without_body_rechecks_authority_and_records_current_name(
+    async_db, async_session_factory, role, state
+):
+    owner = User(username="project-delete-owner", password_hash="unused")
+    async_db.add(owner)
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, owner)
+    actor = owner
+    if role is not WorkspaceRole.owner:
+        actor = User(username="project-delete-actor", password_hash="unused")
+        async_db.add(actor)
+        await async_db.flush()
+        async_db.add(WorkspaceMember(workspace_id=workspace.id, user_id=actor.id, role=role))
+    project = Project(
+        workspace_id=workspace.id, created_by=owner.id, name="Current Project name", state=state
+    )
+    async_db.add(project)
+    await async_db.commit()
+    project_id = project.id
+    grant = await create_api_token(async_db, actor, "Delete Project", expires_in_days=1)
+    allowed = role in {WorkspaceRole.owner, WorkspaceRole.admin}
+    async with api_client(async_session_factory) as (client, _app):
+        response = await client.delete(
+            f"/api/v1/workspaces/{workspace.id}/projects/{project_id}",
+            headers=bearer(grant.raw_token),
+        )
+        assert response.status_code == (200 if allowed else 403)
+    async with async_session_factory() as observer:
+        assert (await observer.get(Project, project_id) is None) is allowed
+        event = await observer.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "project.delete", AuditEvent.project_id == project_id
+            )
+        )
+        if allowed:
+            assert event is not None
+            assert event.detail["name"] == "Current Project name"
+            assert event.authorization_resource_action == "project.delete"
+        else:
+            assert event is None
 
 
 @pytest.mark.anyio

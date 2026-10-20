@@ -70,9 +70,5 @@ class ProjectSettingsRequest(BaseModel):
         return value
 
 
-class ProjectDeleteRequest(BaseModel):
-    confirmation: str
-
-
 class ProjectParticipantRequest(BaseModel):
     username: str

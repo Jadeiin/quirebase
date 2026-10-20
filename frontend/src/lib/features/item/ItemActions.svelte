@@ -254,8 +254,7 @@
 		});
 		void action(async () => {
 			await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
-				params: { path: { item_id: deletedItemId } },
-				body: { confirmation: 'delete' }
+				params: { path: { item_id: deletedItemId } }
 			});
 			// Deletion also removes the Item from its Projects, changing their
 			// counts, lists and reader sources.

@@ -1,12 +1,11 @@
 <script lang="ts">
 	import DateField from '#lib/design/DateField.svelte';
 	import { Collapsible } from '@skeletonlabs/skeleton-svelte';
-	import SearchSelect from '#lib/design/SearchSelect.svelte';
+	import ProjectSelect from '#lib/features/projects/ProjectSelect.svelte';
 	import TagSelect from '#lib/features/tags/TagSelect.svelte';
 	import { buttonClass } from '#lib/design/button-classes.js';
 	import Icon from '#lib/design/Icon.svelte';
 	import Panel from '#lib/design/Panel.svelte';
-	import type { LibraryProject } from '#lib/features/library/queries.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
 
@@ -21,7 +20,6 @@
 		author = $bindable(''),
 		fileFilter = $bindable(''),
 		filtersOpen = $bindable(false),
-		projects = [],
 		onSearch,
 		onClear
 	}: {
@@ -35,7 +33,6 @@
 		author: string;
 		fileFilter: string;
 		filtersOpen: boolean;
-		projects: LibraryProject[];
 		onSearch: () => void;
 		onClear: () => void;
 	} = $props();
@@ -77,15 +74,7 @@
 				class="grid grid-cols-1 gap-3 border-t border-surface-300-700 pt-4 sm:grid-cols-2 xl:grid-cols-5"
 			>
 				<TagSelect label={$t('Tag')} bind:value={tag} emptyLabel={$t('All Tags')} />
-				<SearchSelect
-					label={$t('Project')}
-					bind:value={project}
-					emptyLabel={$t('All Projects')}
-					options={projects.map((option: LibraryProject) => ({
-						value: option.id,
-						label: option.name
-					}))}
-				/>
+				<ProjectSelect label={$t('Project')} bind:value={project} emptyLabel={$t('All Projects')} />
 				<DateField precision="year" label={$t('Year')} bind:value={year} />
 				<label>{$t('Contributor')}<input class="input" bind:value={author} /></label>
 				<label>{$t('Keyword')}<input class="input" bind:value={keyword} /></label>

@@ -81,4 +81,3 @@ export function libraryListQuery(
 
 export type LibrarySearch = components['schemas']['OffsetPagination_ItemSearchView_'];
 export type LibraryTag = components['schemas']['TagView'];
-export type LibraryProject = components['schemas']['ProjectSummaryView'];

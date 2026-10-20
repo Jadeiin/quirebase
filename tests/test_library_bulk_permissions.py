@@ -26,7 +26,12 @@ from quirebase.core.crypto import hash_password
 from quirebase.core.errors import PermissionDenied, ProjectLifecycleError
 from quirebase.core.storage import ObjectMetadata, ObjectResponse
 from quirebase.documents import create_item_document_bundle
-from quirebase.library import apply_bulk_item_action, bulk_items, download_selected_item_documents
+from quirebase.library import (
+    BulkItemAction,
+    apply_bulk_item_action,
+    bulk_items,
+    download_selected_item_documents,
+)
 from quirebase.models import (
     AuditEvent,
     FileRevision,
@@ -165,7 +170,7 @@ async def test_bulk_action_blocks_unauthorized_assignment_to_project(
             viewer_user,
             item.workspace_id,
             item_ids=[item.id],
-            action="add_project",
+            action=BulkItemAction.add_project,
             project_id=target_project.id,
         )
 
@@ -215,7 +220,7 @@ async def test_bulk_action_records_single_bulk_audit_event(
         owner,
         item.workspace_id,
         item_ids=[item.id],
-        action="add_project",
+        action=BulkItemAction.add_project,
         project_id=target_project.id,
     )
 
@@ -303,7 +308,7 @@ async def test_bulk_action_rejects_archived_project_assignment(
             owner,
             item.workspace_id,
             item_ids=[item.id],
-            action="add_project",
+            action=BulkItemAction.add_project,
             project_id=target_project.id,
         )
 
@@ -391,7 +396,7 @@ async def test_bulk_action_revalidates_stale_project_state(async_db, async_sessi
                 bulk_owner,
                 fixture_workspace_id(owner),
                 item_ids=[item.id],
-                action="add_project",
+                action=BulkItemAction.add_project,
                 project_id=project.id,
             )
 
@@ -434,8 +439,7 @@ async def test_bulk_delete_preserves_object_referenced_by_pending_pdf_import(
         owner,
         item.workspace_id,
         item_ids=[item.id],
-        action="delete_items",
-        confirm_delete="delete",
+        action=BulkItemAction.delete_items,
     )
 
     assert object_path.is_file()

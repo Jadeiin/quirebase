@@ -141,23 +141,22 @@ async def test_single_and_bulk_actions_evaluate_independent_grants(
     try:
         if action == "add_project":
             single = await client.put(f"{base}/projects/{project_id}/items/{single_id}")
+            bulk_options = {"project_id": project_id}
         elif action == "add_tag":
             single = await client.put(
                 f"{base}/items/{single_id}/tags",
                 json={"new_names": ["Independent"], "add_tag_ids": [], "remove_tag_ids": []},
             )
+            bulk_options = {"tag_name": "Independent"}
         else:
-            single = await client.request(
-                "DELETE", f"{base}/items/{single_id}", json={"confirmation": "delete"}
-            )
+            bulk_options = {}
+            single = await client.delete(f"{base}/items/{single_id}")
         bulk = await client.post(
             f"{base}/items/bulk",
             json=json_payload({
                 "item_ids": [bulk_id],
                 "action": action,
-                "project_id": project_id,
-                "tag_name": "Independent",
-                "confirmation": "delete",
+                **bulk_options,
             }),
         )
         assert single.status_code == bulk.status_code == (200 if allowed else 403)
@@ -365,11 +364,7 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
         assert (
             await client.delete(f"{base}/items/{item_id}/attachments/{result['attachment_id']}")
         ).status_code == 200
-        assert (
-            await client.request(
-                "DELETE", f"{base}/items/{item_id}", json=json_payload({"confirmation": "delete"})
-            )
-        ).status_code == 403
+        assert (await client.delete(f"{base}/items/{item_id}")).status_code == 403
     finally:
         await client.aclose()
 

@@ -1,68 +1,28 @@
 <script lang="ts">
-	import { bibliographyFormats } from '#lib/export-preferences.js';
-	import SearchSelect from '#lib/design/SearchSelect.svelte';
-	import TagSelect from '#lib/features/tags/TagSelect.svelte';
-	import { can } from '#lib/authorization/can.js';
-	import type { LibraryProject } from '#lib/features/library/queries.js';
-	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
+	import Icon from '#lib/design/Icon.svelte';
+	import { t } from '#lib/i18n.js';
 	import { canRunBulkAction } from '#lib/workspaces/actions.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
+	import LibraryActionMenu from './LibraryActionMenu.svelte';
+	import { libraryPrimaryActions, type LibraryActionHandler } from './actions.js';
 
 	let {
 		element = $bindable(),
 		selectedCount,
-		bulkAction = $bindable(''),
-		bulkProject = $bindable(''),
-		bulkTag = $bindable(''),
-		bulkTagId = $bindable(''),
-		exportFormat = $bindable('bibtex'),
-		projects = [],
 		currentProject = null,
 		busy,
-		onApply,
+		onAction,
 		onClearSelection
 	}: {
 		element?: HTMLElement;
 		selectedCount: number;
-		bulkAction: string;
-		bulkProject: string;
-		bulkTag: string;
-		bulkTagId?: string;
-		exportFormat: string;
-		projects: LibraryProject[];
 		currentProject?: { id: string; name: string } | null;
 		busy: boolean;
-		onApply: () => void;
+		onAction: LibraryActionHandler;
 		onClearSelection: () => void;
 	} = $props();
 	const workspace = getWorkspaceContext();
-	const assignableProjects: LibraryProject[] = $derived(
-		projects.filter((project: LibraryProject) => can(project.authorization, 'project_item.manage'))
-	);
-	const needsConfiguration = $derived(
-		['add_project', 'add_tag', 'remove_tag', 'remove_project', 'bibliography'].includes(bulkAction)
-	);
-	const validationMessage = $derived(
-		!bulkAction
-			? $t('Choose an action to continue.')
-			: !canRunBulkAction(workspace.can, bulkAction as import('./mutations.js').LibraryBulkAction)
-				? $t('This action is no longer available.')
-				: bulkAction === 'add_project' && !bulkProject
-					? $t('Choose a Project to continue.')
-					: bulkAction === 'add_tag' && !bulkTag.trim()
-						? $t('Choose or enter a Tag to continue.')
-						: bulkAction === 'remove_tag' && !bulkTagId
-							? $t('Choose a Tag to continue.')
-							: bulkAction === 'remove_project' && !currentProject
-								? $t('Select a Project filter to remove Items from it.')
-								: ''
-	);
-	$effect(() => {
-		if (bulkProject && !assignableProjects.some((project) => project.id === bulkProject)) {
-			bulkProject = '';
-		}
-	});
 </script>
 
 {#if selectedCount}
@@ -71,108 +31,37 @@
 		data-library-bulk-actions
 		aria-label={$t('Bulk actions')}
 		aria-busy={busy}
-		class="sticky top-20 z-30 mt-4 grid grid-cols-1 gap-3 rounded-xl border border-primary-700-300/30 bg-surface-50-950 p-3 shadow-lg lg:top-3 lg:flex lg:flex-wrap lg:items-center"
+		class="sticky top-20 z-30 mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary-700-300/30 bg-surface-50-950 p-3 shadow-lg lg:top-3"
 	>
-		<div class="flex items-center justify-between gap-3 lg:contents">
-			<div class="min-w-0 lg:mr-auto">
-				<strong aria-live="polite">{$t('{count} selected', { count: selectedCount })}</strong>
-				<p class="m-0 text-xs text-surface-600-400">{$t('Current page only')}</p>
-			</div>
-			<Button class="shrink-0 lg:order-2" size="sm" onclick={onClearSelection}
-				>{$t('Clear selection')}</Button
-			>
+		<div class="mr-auto min-w-0">
+			<strong aria-live="polite">{$t('{count} selected', { count: selectedCount })}</strong>
+			<p class="m-0 text-xs text-surface-600-400">{$t('Current page only')}</p>
 		</div>
-		<div
-			class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap lg:order-1"
-		>
-			<select
-				class="select h-8 w-full min-w-0 sm:w-auto sm:min-w-36"
-				class:col-span-2={needsConfiguration}
-				bind:value={bulkAction}
-				aria-label={$t('Bulk action')}
+		<Button class="xl:order-2" size="sm" onclick={onClearSelection}>{$t('Clear selection')}</Button>
+		<div class="flex basis-full flex-wrap items-center gap-2 xl:order-1 xl:basis-auto">
+			{#each libraryPrimaryActions as entry (entry.action)}
+				{#if canRunBulkAction(workspace.can, entry.action)}
+					<Button
+						size="sm"
+						disabled={busy}
+						onclick={(event) => onAction(entry.action, event.currentTarget)}
+					>
+						<Icon name={entry.icon} size={16} />
+						{$t(entry.label)}
+					</Button>
+				{/if}
+			{/each}
+			<LibraryActionMenu
+				{onAction}
+				{currentProject}
+				{selectedCount}
 				disabled={busy}
-			>
-				<option value="">{$t('Choose action')}</option>
-				{#if canRunBulkAction(workspace.can, 'add_project')}<option value="add_project"
-						>{$t('Add to Project')}</option
-					>{/if}
-				{#if canRunBulkAction(workspace.can, 'add_tag')}<option value="add_tag"
-						>{$t('Add Tag')}</option
-					>{/if}
-				{#if currentProject && canRunBulkAction(workspace.can, 'remove_project')}<option
-						value="remove_project">{$t('Remove from current Project')}</option
-					>{/if}
-				{#if canRunBulkAction(workspace.can, 'remove_tag')}<option value="remove_tag"
-						>{$t('Remove Tag')}</option
-					>{/if}
-				{#if canRunBulkAction(workspace.can, 'bibliography')}<option value="bibliography"
-						>{$t('Export bibliography')}</option
-					>{/if}
-				{#if canRunBulkAction(workspace.can, 'documents')}<option value="documents"
-						>{$t('Download documents')}</option
-					>{/if}
-				{#if canRunBulkAction(workspace.can, 'delete')}<option value="delete"
-						>{$t('Permanently delete')}</option
-					>{/if}
-			</select>
-			{#if bulkAction === 'add_project'}
-				<SearchSelect
-					class="w-full min-w-0 sm:w-56"
-					label={$t('Select Project')}
-					hideLabel
-					emptyLabel={$t('Select Project')}
-					bind:value={bulkProject}
-					disabled={busy}
-					options={assignableProjects.map((project: LibraryProject) => ({
-						value: project.id,
-						label: project.name
-					}))}
-				/>
-			{/if}
-			{#if bulkAction === 'add_tag'}<TagSelect
-					class="w-full min-w-0 sm:w-56"
-					label={$t('Select Tag')}
-					emptyLabel={$t('Select Tag')}
-					hideLabel
-					valueBy="name"
-					allowCustomValue
-					disabled={busy}
-					bind:value={bulkTag}
-				/>{/if}
-			{#if bulkAction === 'remove_tag'}<TagSelect
-					class="w-full min-w-0 sm:w-56"
-					label={$t('Select Tag')}
-					emptyLabel={$t('Select Tag')}
-					hideLabel
-					valueBy="id"
-					disabled={busy}
-					bind:value={bulkTagId}
-				/>{/if}
-			{#if bulkAction === 'remove_project' && currentProject}
-				<span class="min-w-0 truncate text-sm font-semibold sm:max-w-56" title={currentProject.name}
-					>{currentProject.name}</span
-				>
-			{/if}
-			{#if bulkAction === 'bibliography'}<select
-					class="select h-8 w-full min-w-0 sm:w-auto sm:min-w-36"
-					aria-label={$t('Format')}
-					disabled={busy}
-					bind:value={exportFormat}
-				>
-					{#each bibliographyFormats as choice (choice.value)}
-						<option value={choice.value}>{$t(choice.label)}</option>
-					{/each}
-				</select>{/if}
-			<Button
-				variant="filled"
-				disabled={busy || Boolean(validationMessage)}
-				aria-describedby={busy || validationMessage ? 'library-bulk-hint' : undefined}
-				onclick={onApply}>{$t('Apply')}</Button
-			>
+				secondaryOnly
+			/>
 		</div>
-		{#if busy || validationMessage}
-			<p id="library-bulk-hint" class="m-0 text-xs text-surface-600-400 lg:order-3 lg:basis-full">
-				{busy ? $t('Applying to the selected Items…') : validationMessage}
+		{#if busy}
+			<p class="m-0 basis-full text-xs text-surface-600-400">
+				{$t('Applying action…')}
 			</p>
 		{/if}
 	</section>

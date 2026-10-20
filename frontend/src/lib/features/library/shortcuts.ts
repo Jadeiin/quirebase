@@ -42,6 +42,12 @@ export const libraryRowCommands = [
 		label: msg('Preview current Item'),
 		keys: [key('I', true), key('Enter')],
 		repeat: false
+	},
+	{
+		id: 'actions',
+		label: msg('Open Item actions'),
+		keys: [key('Shift+F10')],
+		repeat: false
 	}
 ] as const;
 
@@ -59,6 +65,12 @@ export const libraryPreviewCommands = [
 		label: msg('Next Item in preview'),
 		keys: [key('ArrowDown'), key('J', true)],
 		repeat: true
+	},
+	{
+		id: 'actions',
+		label: msg('Open Item actions'),
+		keys: [key('Shift+F10')],
+		repeat: false
 	}
 ] as const;
 

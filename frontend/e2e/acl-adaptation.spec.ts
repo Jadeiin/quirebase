@@ -208,13 +208,30 @@ for (const [role, allowedActions, visible] of [
 		);
 		await page.goto('/workspace/workspace-1/library');
 		await page.getByLabel('Select this page').check();
-		const options = await page
-			.getByRole('combobox', { name: 'Bulk action', exact: true })
-			.locator('option')
-			.evaluateAll((nodes) =>
-				nodes.map((node) => (node as HTMLOptionElement).value).filter(Boolean)
+		const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
+		for (const [action, label] of [
+			['add_project', 'Add to Project'],
+			['add_tag', 'Add Tag'],
+			['bibliography', 'Export bibliography']
+		] as const) {
+			await expect(toolbar.getByRole('button', { name: label, exact: true })).toHaveCount(
+				visible.some((value) => value === action) ? 1 : 0
 			);
-		expect(options).toEqual(visible);
+		}
+		await expect(toolbar.getByRole('button', { name: 'Copy citation', exact: true })).toBeVisible();
+		await toolbar.getByRole('button', { name: 'More actions', exact: true }).click();
+		for (const [action, label] of [
+			['remove_tag', 'Remove Tag'],
+			['documents', 'Download documents'],
+			['delete', 'Permanently delete']
+		] as const) {
+			await expect(page.getByRole('menuitem', { name: label, exact: true })).toHaveCount(
+				visible.some((value) => value === action) ? 1 : 0
+			);
+		}
+		await expect(
+			page.getByRole('menuitem', { name: 'Remove from current Project', exact: true })
+		).toHaveCount(0);
 	});
 }
 

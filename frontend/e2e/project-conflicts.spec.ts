@@ -1,5 +1,6 @@
+import { openLibraryAction } from './helpers';
 import { tagPage, chooseSearchOption } from './helpers';
-import { directoryPage } from './helpers';
+import { directoryPage, projectPage } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import type { AnnotationPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
 import { annotationList, minimalPdf, mockSession, setAnnotationWriteSource } from './helpers';
@@ -218,35 +219,37 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
 		route.fulfill({ json: tagPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
-		route.fulfill({
-			json: directoryPage(
-				[
-					{
-						id: 'project-1',
-						name: 'Reading Project',
-						state: archived ? 'archived' : 'active',
-						participation: 'workspace',
-						is_participating: true,
-						item_count: 0,
-						description: null,
-						authorization: { allowed: archived ? [] : ['project_item.manage'] }
-					},
-					{
-						id: 'project-2',
-						name: 'Another Project',
-						state: 'active',
-						participation: 'workspace',
-						is_participating: true,
-						item_count: 0,
-						description: null,
-						authorization: { allowed: ['project_item.manage'] }
-					}
-				],
-				route
-			)
-		})
+	const projects = () => [
+		{
+			id: 'project-1',
+			name: 'Reading Project',
+			state: archived ? 'archived' : 'active',
+			participation: 'workspace',
+			is_participating: true,
+			item_count: 0,
+			description: null,
+			authorization: { allowed: archived ? [] : ['project_item.manage'] }
+		},
+		{
+			id: 'project-2',
+			name: 'Another Project',
+			state: 'active',
+			participation: 'workspace',
+			is_participating: true,
+			item_count: 0,
+			description: null,
+			authorization: { allowed: ['project_item.manage'] }
+		}
+	];
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+		route.fulfill({ json: projectPage(projects(), route) })
 	);
+	await page.route('**/api/v1/workspaces/workspace-1/projects/project-*', (route) => {
+		const id = new URL(route.request().url()).pathname.split('/').at(-1);
+		return route.fulfill({
+			json: { ...projects().find((project) => project.id === id), active_participants: [] }
+		});
+	});
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
 		route.fulfill({
 			json: {
@@ -282,30 +285,40 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByLabel('Select this page').check();
-	await page
-		.getByRole('combobox', { name: 'Bulk action', exact: true })
-		.selectOption('add_project');
+	await openLibraryAction(page, 'add_project');
 	const target = page.getByRole('combobox', { name: 'Select Project', exact: true });
 	await chooseSearchOption(page, 'Select Project', 'Reading Project');
 	const initialWorkspaceReads = [...workspaceReads];
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Add to Project', exact: true })
+		.click();
 	await expect(page.getByText('This Project is read only in its current state.')).toBeVisible();
-	await target.click();
-	await expect(page.getByRole('option', { name: 'Reading Project', exact: true })).toHaveCount(0);
-	await target.press('Escape');
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Change options', exact: true })
+		.click();
 	await expect(target).toHaveValue('');
-	await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
-	await expect(page.getByText('1 selected')).toBeVisible();
+	await expect(
+		page.getByRole('dialog').getByRole('button', { name: 'Add to Project', exact: true })
+	).toBeDisabled();
+	await expect(page.locator('#library-results [data-library-item-select]:checked')).toHaveCount(1);
+	// The failed target is removed from assignable choices without probing Workspace.
+	expect(workspaceReads).toEqual(initialWorkspaceReads);
+
+	await target.click();
+	await expect(page.getByRole('listbox', { name: 'Select Project', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Reading Project', exact: true })).toHaveCount(0);
+	await chooseSearchOption(page, 'Select Project', 'Another Project');
+	await page
+		.getByRole('dialog')
+		.getByRole('button', { name: 'Add to Project', exact: true })
+		.click();
+	await expect(page.getByText('Bulk action completed')).toBeVisible();
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
 	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
 	await expect(page.getByRole('option', { name: 'Reading Project', exact: true })).toBeVisible();
 	await page.getByRole('combobox', { name: 'Project', exact: true }).press('Escape');
-	// An archived Project remains a read filter, but cannot receive selected Items.
-	expect(workspaceReads).toEqual(initialWorkspaceReads);
-
-	await chooseSearchOption(page, 'Select Project', 'Another Project');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
-	await expect(page.getByText('Bulk action completed')).toBeVisible();
 	expect(submissions.map(({ project_id, item_ids }) => ({ project_id, item_ids }))).toEqual([
 		{ project_id: 'project-1', item_ids: ['item-1'] },
 		{ project_id: 'project-2', item_ids: ['item-1'] }

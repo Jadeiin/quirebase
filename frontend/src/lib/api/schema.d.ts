@@ -3084,26 +3084,72 @@ export interface components {
 			/** Reason */
 			reason: string;
 		};
-		/** BulkActionRequest */
-		BulkActionRequest: {
+		/** BulkAddProjectRequest */
+		BulkAddProjectRequest: {
 			/** Item Ids */
 			item_ids: string[];
-			/** Action */
-			action: string;
-			/** Project Id */
-			project_id?: string | null;
 			/**
-			 * Tag Name
-			 * @default
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
 			 */
+			action: 'add_project';
+			/**
+			 * Project Id
+			 * Format: uuid
+			 */
+			project_id: string;
+		};
+		/** BulkAddTagRequest */
+		BulkAddTagRequest: {
+			/** Item Ids */
+			item_ids: string[];
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			action: 'add_tag';
+			/** Tag Name */
 			tag_name: string;
-			/** Tag Id */
-			tag_id?: string | null;
+		};
+		/** BulkDeleteItemsRequest */
+		BulkDeleteItemsRequest: {
+			/** Item Ids */
+			item_ids: string[];
 			/**
-			 * Confirmation
-			 * @default
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
 			 */
-			confirmation: string;
+			action: 'delete_items';
+		};
+		/** BulkRemoveProjectRequest */
+		BulkRemoveProjectRequest: {
+			/** Item Ids */
+			item_ids: string[];
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			action: 'remove_project';
+			/**
+			 * Project Id
+			 * Format: uuid
+			 */
+			project_id: string;
+		};
+		/** BulkRemoveTagRequest */
+		BulkRemoveTagRequest: {
+			/** Item Ids */
+			item_ids: string[];
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			action: 'remove_tag';
+			/**
+			 * Tag Id
+			 * Format: uuid
+			 */
+			tag_id: string;
 		};
 		/** CandidatePageView */
 		CandidatePageView: {
@@ -3466,11 +3512,6 @@ export interface components {
 			 * @description An ISO 8601 / EDTF level 0 date or partial date (year, year-month, year-month-day, or full date-time).
 			 */
 			other?: string | null;
-		};
-		/** DeleteConfirmationRequest */
-		DeleteConfirmationRequest: {
-			/** Confirmation */
-			confirmation: string;
 		};
 		/** DiscoveryClause */
 		DiscoveryClause: {
@@ -5108,11 +5149,6 @@ export interface components {
 			 * @default
 			 */
 			description: string;
-		};
-		/** ProjectDeleteRequest */
-		ProjectDeleteRequest: {
-			/** Confirmation */
-			confirmation: string;
 		};
 		/** ProjectDetailView */
 		ProjectDetailView: {
@@ -8970,7 +9006,12 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['BulkActionRequest'];
+				'application/json':
+					| components['schemas']['BulkAddProjectRequest']
+					| components['schemas']['BulkRemoveProjectRequest']
+					| components['schemas']['BulkAddTagRequest']
+					| components['schemas']['BulkRemoveTagRequest']
+					| components['schemas']['BulkDeleteItemsRequest'];
 			};
 		};
 		responses: {
@@ -9254,11 +9295,7 @@ export interface operations {
 			};
 			cookie?: never;
 		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['DeleteConfirmationRequest'];
-			};
-		};
+		requestBody?: never;
 		responses: {
 			/** @description Successful Response */
 			200: {
@@ -10346,11 +10383,7 @@ export interface operations {
 			};
 			cookie?: never;
 		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['ProjectDeleteRequest'];
-			};
-		};
+		requestBody?: never;
 		responses: {
 			/** @description Successful Response */
 			200: {

@@ -225,6 +225,15 @@ export function directoryPage(items: unknown[], route: Route) {
 	return { items: items.slice(offset, offset + limit), total: items.length, limit, offset };
 }
 
+export function projectPage<T extends { id: string; name: string }>(items: T[], route: Route) {
+	const params = new URL(route.request().url()).searchParams;
+	const search = params.get('search')?.trim().toLocaleLowerCase() ?? '';
+	return directoryPage(
+		items.filter((project) => project.name.toLocaleLowerCase().includes(search)),
+		route
+	);
+}
+
 export function tagPage<T extends { id: string; name: string }>(items: T[], route: Route) {
 	const params = new URL(route.request().url()).searchParams;
 	const search = params.get('search')?.trim().toLocaleLowerCase() ?? '';
@@ -256,4 +265,36 @@ export async function chooseSearchOption(page: Page, label: string, optionLabel:
 		.getByRole('option', { name: optionLabel, exact: true })
 		.click();
 	await settleFocus();
+}
+
+/** Open the selection action using the same toolbar entry a user sees. */
+export async function openLibraryAction(
+	page: Page,
+	action:
+		| 'add_tag'
+		| 'remove_tag'
+		| 'add_project'
+		| 'remove_project'
+		| 'copy'
+		| 'bibliography'
+		| 'documents'
+		| 'delete_items'
+) {
+	const labels = {
+		add_tag: 'Add Tag',
+		remove_tag: 'Remove Tag',
+		add_project: 'Add to Project',
+		remove_project: 'Remove from current Project',
+		copy: 'Copy citation',
+		bibliography: 'Export bibliography',
+		documents: 'Download documents',
+		delete_items: 'Permanently delete'
+	};
+	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
+	if (['remove_tag', 'remove_project', 'documents', 'delete_items'].includes(action)) {
+		await toolbar.getByRole('button', { name: 'More actions', exact: true }).click();
+		await page.getByRole('menuitem', { name: labels[action], exact: true }).click();
+	} else {
+		await toolbar.getByRole('button', { name: labels[action], exact: true }).click();
+	}
 }

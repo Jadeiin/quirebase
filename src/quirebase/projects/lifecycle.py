@@ -173,13 +173,10 @@ async def delete_project(
     user: User,
     workspace_id: UUID,
     project_id: UUID,
-    confirmation: str,
 ) -> None:
     context = await lock_workspace_context(db, user, workspace_id)
     project = await lock_project_root(db, context, project_id)
     require_action(context, ResourceAction.project_delete)
-    if confirmation.strip() != project.name:
-        raise ValidationFailure("Project name confirmation does not match")
     record_event(
         db,
         user.id,

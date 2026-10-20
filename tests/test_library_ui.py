@@ -913,7 +913,6 @@ async def test_library_pagination_filters_and_bulk_actions(
             json=json_payload({
                 "action": "delete_items",
                 "item_ids": [selected[1].id],
-                "confirmation": "delete",
             }),
         )
         assert deleted.status_code == 200

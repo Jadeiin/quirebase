@@ -123,7 +123,16 @@ overview loaded on demand. Previous/next follows server ordering across pages, p
 drafts, and clears bulk selection only when the loaded page changes. Lazy inline organization edits
 only the previewed Item; removing a Project association requires confirmation of Annotation and Reply
 deletion. Bulk Tag removal and removal from the current Project capture their submitted targets;
-Project removal requires the same confirmation. Item sections and PDF links carry a validated,
+Project removal requires the same confirmation. Selection toolbar actions and Item menus in both
+views and preview share one action dialog. Each request captures its target scope and export
+preferences; retries preserve the submitted payload. Copy and download retain selection. Clipboard
+failures retain generated citation text for retry, manual copy or download without another request.
+Dismissed operations settle without taking focus, and failures remain available to review.
+Bulk mutation requests use five canonical actions, including `delete_items`, with action-specific
+required fields and reject unrelated fields. Destructive-action warnings and confirmation belong
+to the dialog; Item and Project DELETE requests carry no confirmation body. Project and Workspace
+name matching stays local to their dialogs.
+Item sections and PDF links carry a validated,
 same-Workspace Library return URL with the filters, sorting, page and Item focus anchor. Closing a
 preview restores its trigger or current result. Preview autofocus preserves focus moved to another
 control during asynchronous loading. Density, optional
@@ -220,6 +229,11 @@ server search and explicit loading of additional pages. A selected Tag is resolv
 so deep links and renamed selections remain usable outside the first option page. Library counts
 assignments only for Tags in the requested page, preserving zero counts without aggregating the
 whole taxonomy. Tag mutations invalidate Tag lists, option searches and selected-Tag queries.
+Library Project selectors likewise request 25 options only when opened, with debounced server search
+and explicit pagination inside the picker. Opening Library, expanding its filters or focusing the
+Add to Project dialog does not fetch the Project directory. A selected Project is resolved by ID
+independently of option pages; Add to Project waits for a successful detail read with current manage
+permission before submission.
 
 ## Workspace navigation and settings
 

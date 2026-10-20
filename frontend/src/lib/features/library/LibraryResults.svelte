@@ -16,6 +16,7 @@
 	} from './filters.js';
 	import LibraryTable from './LibraryTable.svelte';
 	import type { LibraryPreviewNavigation } from './preview-navigation.js';
+	import type { LibraryBulkAction } from './mutations.js';
 	import type { WorkspacePath } from '#lib/workspaces/href.js';
 	import { t } from '#lib/i18n.js';
 
@@ -37,6 +38,9 @@
 		previewItemId,
 		previewNavigation,
 		itemHref,
+		currentProject,
+		actionsBusy,
+		onItemAction,
 		onSelectionChange,
 		onPreview,
 		onPreviewReady,
@@ -63,6 +67,9 @@
 		previewItemId: string;
 		previewNavigation: LibraryPreviewNavigation;
 		itemHref: (id: string, suffix?: string) => WorkspacePath;
+		currentProject: { id: string; name: string } | null;
+		actionsBusy: boolean;
+		onItemAction: (action: LibraryBulkAction, id: string, trigger: HTMLElement) => void;
 		onSelectionChange: (ids: string[]) => void;
 		onPreview: (id: string, trigger: HTMLElement) => void;
 		onPreviewReady: (heading: HTMLHeadingElement) => void;
@@ -203,6 +210,9 @@
 					{onPreview}
 					{previewItemId}
 					{itemHref}
+					{currentProject}
+					{actionsBusy}
+					{onItemAction}
 					{sort}
 					{direction}
 					onSort={(sort, direction) => {
@@ -233,6 +243,9 @@
 					itemId={previewItemId}
 					navigation={previewNavigation}
 					{shortcutsEnabled}
+					{currentProject}
+					{actionsBusy}
+					onAction={(action, trigger) => onItemAction(action, previewItemId, trigger)}
 					itemHref={(suffix) => itemHref(previewItemId, suffix)}
 					{filterHref}
 					onClose={onClosePreview}

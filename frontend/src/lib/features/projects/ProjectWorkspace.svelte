@@ -360,15 +360,14 @@
 		);
 	}
 
-	async function confirmDeleteProject(confirmation: string) {
+	async function confirmDeleteProject() {
 		const targetProjectId = projectId;
-		const targetProjectName = project?.name ?? confirmation;
+		const targetProjectName = project?.name ?? '';
 		const requestedPath = page.url.pathname;
 		const deleted = await mutate(
 			() =>
 				workspace.api.request('DELETE', '/workspaces/{workspace_id}/projects/{project_id}', {
-					params: { path: { project_id: targetProjectId } },
-					body: { confirmation }
+					params: { path: { project_id: targetProjectId } }
 				}),
 			undefined,
 			false
@@ -913,7 +912,7 @@
 		confirmLabel={$t('Delete Project')}
 		{busy}
 		error={deleteDialogOpen ? error : ''}
-		onConfirm={(value) => void confirmDeleteProject(value)}
+		onConfirm={() => void confirmDeleteProject()}
 	/>
 	<PromptDialog
 		bind:open={moderationDialogOpen}

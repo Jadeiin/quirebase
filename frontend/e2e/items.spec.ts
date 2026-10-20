@@ -2479,6 +2479,7 @@ test('Project item counts refresh after an Item deletion', async ({ page }) => {
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-1', (route) => {
 		if (route.request().method() === 'DELETE') {
+			expect(route.request().postData()).toBeNull();
 			deleted = true;
 			return route.fulfill({ json: { ok: true } });
 		}

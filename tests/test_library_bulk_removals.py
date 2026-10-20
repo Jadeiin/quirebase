@@ -17,7 +17,7 @@ from quirebase.core.errors import (
     ValidationFailure,
     WorkspaceLifecycleError,
 )
-from quirebase.library import apply_bulk_item_action
+from quirebase.library import BulkItemAction, apply_bulk_item_action
 from quirebase.library.tags import list_accessible_tags_with_counts
 from quirebase.models import (
     AuditEvent,
@@ -90,7 +90,7 @@ async def test_bulk_remove_tag_is_idempotent_scoped_and_refreshes_counts(async_d
             owner,
             workspace.id,
             [items[1].id, items[0].id, items[1].id],
-            "remove_tag",
+            BulkItemAction.remove_tag,
             tag_id=tag.id,
         )
         assignments = set(
@@ -213,9 +213,8 @@ async def test_bulk_project_removal_preserves_items_files_and_other_annotation_s
             owner,
             workspace.id,
             [items[1].id, items[0].id],
-            "remove_project",
+            BulkItemAction.remove_project,
             project_id=project.id,
-            confirm_delete="remove_project",
         )
     assert set(await async_db.scalars(select(Item.id))) == {item.id for item in items}
     assert set(await async_db.scalars(select(FileRevision.id))) == {
@@ -244,7 +243,7 @@ async def test_bulk_project_removal_preserves_items_files_and_other_annotation_s
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("action", ["remove_tag", "remove_project"])
+@pytest.mark.parametrize("action", [BulkItemAction.remove_tag, BulkItemAction.remove_project])
 async def test_bulk_removal_rejects_mixed_workspace_items_before_changing_any_links(
     async_db, action
 ):
@@ -265,7 +264,6 @@ async def test_bulk_removal_rejects_mixed_workspace_items_before_changing_any_li
             action,
             project_id=project.id,
             tag_id=tag.id,
-            confirm_delete="remove_project",
         )
     assert len(list(await async_db.scalars(select(ItemTag.item_id)))) == 8
     assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 8
@@ -275,7 +273,7 @@ async def test_bulk_removal_rejects_mixed_workspace_items_before_changing_any_li
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("action", ["remove_tag", "remove_project"])
+@pytest.mark.parametrize("action", [BulkItemAction.remove_tag, BulkItemAction.remove_project])
 async def test_bulk_removal_rejects_foreign_or_missing_target_without_changes(async_db, action):
     owner, workspace, items, _project, _tag = await _context(async_db)
     (
@@ -295,14 +293,13 @@ async def test_bulk_removal_rejects_foreign_or_missing_target_without_changes(as
                 action,
                 project_id=project_id,
                 tag_id=tag_id,
-                confirm_delete="remove_project",
             )
     assert len(list(await async_db.scalars(select(ItemTag.item_id)))) == 8
     assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 8
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("action", ["remove_tag", "remove_project"])
+@pytest.mark.parametrize("action", [BulkItemAction.remove_tag, BulkItemAction.remove_project])
 async def test_bulk_removal_rejects_viewer_and_read_only_workspace(async_db, action):
     owner, workspace, items, project, tag = await _context(async_db)
     viewer = User(username=f"viewer-{uuid4()}", password_hash="unused")
@@ -321,7 +318,6 @@ async def test_bulk_removal_rejects_viewer_and_read_only_workspace(async_db, act
             action,
             project_id=project.id,
             tag_id=tag.id,
-            confirm_delete="remove_project",
         )
     await archive_workspace(async_db, owner, workspace.id)
     with pytest.raises(WorkspaceLifecycleError):
@@ -333,7 +329,6 @@ async def test_bulk_removal_rejects_viewer_and_read_only_workspace(async_db, act
             action,
             project_id=project.id,
             tag_id=tag.id,
-            confirm_delete="remove_project",
         )
     assert len(list(await async_db.scalars(select(ItemTag.item_id)))) == 4
     assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 4
@@ -349,9 +344,8 @@ async def test_bulk_project_removal_rechecks_archived_and_hidden_project(async_d
             owner,
             workspace.id,
             [items[0].id],
-            "remove_project",
+            BulkItemAction.remove_project,
             project_id=project.id,
-            confirm_delete="remove_project",
         )
     project.state = ProjectState.active
     project.participation = ProjectParticipation.managed
@@ -368,9 +362,8 @@ async def test_bulk_project_removal_rechecks_archived_and_hidden_project(async_d
             editor,
             workspace.id,
             [items[0].id],
-            "remove_project",
+            BulkItemAction.remove_project,
             project_id=project.id,
-            confirm_delete="remove_project",
         )
     assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 4
 
@@ -386,7 +379,7 @@ async def test_projects_batch_removal_validates_entire_selection_before_detachin
 
 
 @pytest.mark.anyio
-async def test_bulk_removal_http_contract_requires_configuration_and_explicit_project_confirmation(
+async def test_bulk_http_contract_rejects_legacy_actions_and_irrelevant_fields(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     client, item, _revision = await authenticated_async_client(
@@ -408,16 +401,34 @@ async def test_bulk_removal_http_contract_requires_configuration_and_explicit_pr
     await async_db.commit()
     path = f"/api/v1/workspaces/{item.workspace_id}/items/bulk"
     for payload in [
+        {},
+        {"action": "project_add", "project_id": project.id},
+        {"action": "tag", "tag_name": "Legacy Tag"},
+        {"action": "delete"},
+        {"action": "copy_bibliography"},
+        {"action": "unknown"},
+        {"action": "add_project"},
+        {"action": "add_tag"},
+        {"action": "add_tag", "tag_name": ""},
         {"action": "remove_tag"},
         {"action": "remove_project"},
-        {"action": "remove_project", "project_id": project.id},
-        {"action": "remove_project", "project_id": project.id, "confirmation": "delete"},
+        {"action": "remove_project", "project_id": project.id, "confirmation": "remove_project"},
+        {"action": "delete_items", "confirmation": "delete"},
+        {"action": "add_project", "project_id": project.id, "tag_id": tag.id},
+        {"action": "add_tag", "tag_name": "Extra fields", "project_id": project.id},
+        {"action": "remove_tag", "tag_id": tag.id, "tag_name": "Extra fields"},
+        {"action": "delete_items", "project_id": project.id},
+        {"action": "remove_tag", "tag_id": tag.id, "item_ids": []},
+        {"action": "delete_items", "item_ids": []},
     ]:
         response = await client.post(path, json=json_payload({"item_ids": [item.id], **payload}))
         assert response.status_code == 422
         assert response.json()["code"] == "validation_failed"
     assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 1
     assert len(list(await async_db.scalars(select(ItemTag.item_id)))) == 1
+    assert not list(
+        await async_db.scalars(select(AuditEvent).where(AuditEvent.action.like("library.bulk.%")))
+    )
 
     response = await client.post(
         path,
@@ -431,7 +442,6 @@ async def test_bulk_removal_http_contract_requires_configuration_and_explicit_pr
             "item_ids": [item.id],
             "action": "remove_project",
             "project_id": project.id,
-            "confirmation": "remove_project",
         }),
     )
     assert response.status_code == 200
@@ -439,3 +449,75 @@ async def test_bulk_removal_http_contract_requires_configuration_and_explicit_pr
     assert not list(await async_db.scalars(select(ProjectItem.id)))
     assert not list(await async_db.scalars(select(ItemTag.item_id)))
     await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("action", ["project_add", "tag", "delete", "copy_bibliography"])
+async def test_bulk_domain_rejects_removed_and_unknown_actions_without_side_effects(
+    async_db, action
+):
+    owner, workspace, items, project, tag = await _context(async_db)
+    with pytest.raises(ValidationFailure, match="unknown bulk action"):
+        await apply_bulk_item_action(
+            async_db,
+            owner,
+            workspace.id,
+            [items[0].id],
+            action,
+            project_id=project.id,
+            tag_name="Rejected Tag",
+            tag_id=tag.id,
+        )
+    assert len(list(await async_db.scalars(select(Item.id)))) == 4
+    assert len(list(await async_db.scalars(select(ItemTag.item_id)))) == 4
+    assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 4
+    assert not list(
+        await async_db.scalars(select(AuditEvent).where(AuditEvent.action.like("library.bulk.%")))
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("action", "options"),
+    [
+        (BulkItemAction.add_project, {}),
+        (BulkItemAction.remove_project, {}),
+        (BulkItemAction.add_tag, {"tag_name": "  "}),
+        (BulkItemAction.remove_tag, {}),
+    ],
+)
+async def test_bulk_domain_keeps_configuration_validation(async_db, action, options):
+    owner, workspace, items, _project, _tag = await _context(async_db)
+    with pytest.raises(ValidationFailure):
+        await apply_bulk_item_action(
+            async_db, owner, workspace.id, [items[0].id], action, **options
+        )
+    assert len(list(await async_db.scalars(select(Item.id)))) == 4
+    assert len(list(await async_db.scalars(select(ItemTag.item_id)))) == 4
+    assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 4
+    assert not list(
+        await async_db.scalars(select(AuditEvent).where(AuditEvent.action.like("library.bulk.%")))
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("action", list(BulkItemAction))
+async def test_bulk_domain_rejects_empty_selection_before_any_changes(async_db, action):
+    owner, workspace, items, project, tag = await _context(async_db)
+    with pytest.raises(ValidationFailure, match="select one or more accessible Items"):
+        await apply_bulk_item_action(
+            async_db,
+            owner,
+            workspace.id,
+            [],
+            action,
+            project_id=project.id,
+            tag_name="Rejected Tag",
+            tag_id=tag.id,
+        )
+    assert set(await async_db.scalars(select(Item.id))) == {item.id for item in items}
+    assert len(list(await async_db.scalars(select(ItemTag.item_id)))) == 4
+    assert len(list(await async_db.scalars(select(ProjectItem.id)))) == 4
+    assert not list(
+        await async_db.scalars(select(AuditEvent).where(AuditEvent.action.like("library.bulk.%")))
+    )

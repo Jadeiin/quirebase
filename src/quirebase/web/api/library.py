@@ -100,10 +100,7 @@ async def apply_item_bulk_action(
         workspace_id=workspace_id,
         item_ids=data.item_ids,
         action=data.action,
-        project_id=data.project_id,
-        tag_name=data.tag_name,
-        tag_id=data.tag_id,
-        confirm_delete=data.confirmation,
+        **data.model_dump(exclude={"item_ids", "action"}),
     )
     return OkView()
 

@@ -56,6 +56,7 @@ async function mockReadingWorkflow(page: Page) {
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-11', (route) => {
 		if (route.request().method() === 'DELETE') {
+			expect(route.request().postData()).toBeNull();
 			deleted = true;
 			return route.fulfill({ status: 204 });
 		}
@@ -299,6 +300,7 @@ test('a delayed Item deletion refreshes data without replacing later Library nav
 	const release = Promise.withResolvers<void>();
 	await page.route('**/api/v1/workspaces/workspace-1/items/item-11', async (route) => {
 		if (route.request().method() !== 'DELETE') return route.fallback();
+		expect(route.request().postData()).toBeNull();
 		started.resolve();
 		await release.promise;
 		return route.fulfill({ status: 204 });

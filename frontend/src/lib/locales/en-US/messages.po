@@ -73,6 +73,8 @@ msgstr "{count} pending invitations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
 msgid "{count} selected"
 msgstr "{count} selected"
 
@@ -193,6 +195,7 @@ msgid "Action"
 msgstr "Action"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Actions"
 msgstr "Actions"
@@ -315,7 +318,8 @@ msgid "Add tag"
 msgstr "Add tag"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Add Tag"
 msgstr "Add Tag"
 
@@ -335,7 +339,8 @@ msgid "Add to Library"
 msgstr "Add to Library"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Add to Project"
 msgstr "Add to Project"
 
@@ -565,11 +570,6 @@ msgid "Applied filters"
 msgstr "Applied filters"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Apply"
-msgstr "Apply"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Apply filters"
 msgstr "Apply filters"
@@ -586,8 +586,9 @@ msgstr "Apply JSON changes before saving."
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
-msgid "Applying to the selected Items…"
-msgstr "Applying to the selected Items…"
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Applying action…"
+msgstr "Applying action…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -768,6 +769,7 @@ msgstr "Bibliography"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Bibliography downloaded"
 msgstr "Bibliography downloaded"
 
@@ -892,17 +894,12 @@ msgid "Built-in CSL styles and styles installed by you."
 msgstr "Built-in CSL styles and styles installed by you."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Bulk action"
-msgstr "Bulk action"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Bulk action completed"
 msgstr "Bulk action completed"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Bulk action failed"
 msgstr "Bulk action failed"
 
@@ -928,6 +925,7 @@ msgstr "Can edit"
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
 msgid "Cancel"
@@ -949,6 +947,11 @@ msgstr "Candidate Records"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Chair"
 msgstr "Chair"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Change options"
+msgstr "Change options"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -1003,7 +1006,7 @@ msgid "Choose a new name for this Tag."
 msgstr "Choose a new name for this Tag."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Choose a Project to continue."
 msgstr "Choose a Project to continue."
 
@@ -1023,7 +1026,7 @@ msgid "Choose a supported value."
 msgstr "Choose a supported value."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Choose a Tag to continue."
 msgstr "Choose a Tag to continue."
 
@@ -1042,16 +1045,6 @@ msgstr "Choose a Workspace explicitly"
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 msgid "Choose a workspace to open its library and projects."
 msgstr "Choose a workspace to open its library and projects."
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Choose action"
-msgstr "Choose action"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-msgid "Choose an action to continue."
-msgstr "Choose an action to continue."
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
@@ -1080,7 +1073,7 @@ msgid "Choose how Quirebase looks and speaks to you."
 msgstr "Choose how Quirebase looks and speaks to you."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Choose or enter a Tag to continue."
 msgstr "Choose or enter a Tag to continue."
 
@@ -1128,6 +1121,11 @@ msgid "Citation key updated"
 msgstr "Citation key updated"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Citation Style"
+msgstr "Citation Style"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Citation Style added"
 msgstr "Citation Style added"
@@ -1146,6 +1144,11 @@ msgstr "Citation Style deleted"
 #: src/lib/features/tools/Tools.svelte
 msgid "Citation Styles"
 msgstr "Citation Styles"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Citation text"
+msgstr "Citation text"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -1177,6 +1180,11 @@ msgstr "Clear selection and save"
 #: src/lib/features/account/Account.svelte
 msgid "Client connection guide"
 msgstr "Client connection guide"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Clipboard access was denied. Copy the citation text below or download it."
+msgstr "Clipboard access was denied. Copy the citation text below or download it."
 
 #. js-lingui-explicit-id
 #: src/lib/design/DialogCloseButton.svelte
@@ -1332,6 +1340,11 @@ msgid "Content"
 msgstr "Content"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Continue in Library"
+msgstr "Continue in Library"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Continue reading"
 msgstr "Continue reading"
@@ -1360,6 +1373,7 @@ msgstr "Contributors"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Copied to clipboard"
 msgstr "Copied to clipboard"
@@ -1368,6 +1382,17 @@ msgstr "Copied to clipboard"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Copy"
 msgstr "Copy"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Copy citation"
+msgstr "Copy citation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Copy citations for selected or focused Items"
+msgstr "Copy citations for selected or focused Items"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
@@ -1401,6 +1426,7 @@ msgstr "Copy to another Workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Copy to clipboard"
 msgstr "Copy to clipboard"
 
@@ -1514,6 +1540,12 @@ msgstr "CSL XML"
 #: src/lib/export-preferences.ts
 msgid "CSL-JSON"
 msgstr "CSL-JSON"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
+msgid "Current Item"
+msgstr "Current Item"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
@@ -1817,6 +1849,7 @@ msgstr "Document"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Document bundle downloaded"
 msgstr "Document bundle downloaded"
 
@@ -1895,12 +1928,14 @@ msgstr "Download bundle"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Download documents"
 msgstr "Download documents"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Download file"
 msgstr "Download file"
 
@@ -2099,7 +2134,8 @@ msgstr "Export"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Export bibliography"
 msgstr "Export bibliography"
 
@@ -2248,7 +2284,7 @@ msgstr "Formal analysis"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Format"
 msgstr "Format"
 
@@ -2501,9 +2537,19 @@ msgid "Include abstract"
 msgstr "Include abstract"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Include Annotations"
+msgstr "Include Annotations"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Include annotations in PDF downloads"
 msgstr "Include annotations in PDF downloads"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Include supplementary files"
+msgstr "Include supplementary files"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -2735,6 +2781,8 @@ msgstr "Item action failed"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
 msgid "Item actions"
 msgstr "Item actions"
 
@@ -3025,7 +3073,7 @@ msgid "Load more members"
 msgstr "Load more members"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "Load more Projects"
 msgstr "Load more Projects"
 
@@ -3135,6 +3183,7 @@ msgstr "Loading Project…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "Loading Projects…"
 msgstr "Loading Projects…"
 
@@ -3441,8 +3490,14 @@ msgstr "Moderator actions"
 #. js-lingui-explicit-id
 #: src/lib/app/MobileNavigation.svelte
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionMenu.svelte
 msgid "More"
 msgstr "More"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionMenu.svelte
+msgid "More actions"
+msgstr "More actions"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -3855,6 +3910,11 @@ msgid "Open in Library"
 msgstr "Open in Library"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Open Item actions"
+msgstr "Open Item actions"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Open Library"
 msgstr "Open Library"
@@ -4130,8 +4190,8 @@ msgid "Permanent deletion"
 msgstr "Permanent deletion"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Permanently delete"
 msgstr "Permanently delete"
 
@@ -4141,9 +4201,14 @@ msgid "Permanently delete {name} and its content? This cannot be undone."
 msgstr "Permanently delete {name} and its content? This cannot be undone."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Permanently delete the selected Items?"
 msgstr "Permanently delete the selected Items?"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Permanently delete this Item?"
+msgstr "Permanently delete this Item?"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4271,11 +4336,6 @@ msgstr "Presentation"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Preserve BibTeX title case"
 msgstr "Preserve BibTeX title case"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/LibraryTable.svelte
-msgid "Preview"
-msgstr "Preview"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -4759,13 +4819,13 @@ msgid "Remove from {name}"
 msgstr "Remove from {name}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
 msgid "Remove from current Project"
 msgstr "Remove from current Project"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove from Project"
@@ -4785,7 +4845,8 @@ msgid "Remove message"
 msgstr "Remove message"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/actions.ts
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Remove Tag"
 msgstr "Remove Tag"
 
@@ -4795,9 +4856,14 @@ msgid "Remove the chosen file to paste bibliography data instead."
 msgstr "Remove the chosen file to paste bibliography data instead."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Remove the selected Items from {project}?"
 msgstr "Remove the selected Items from {project}?"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Remove this Item from {project}?"
+msgstr "Remove this Item from {project}?"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -4894,7 +4960,9 @@ msgstr "Restore workspace"
 #: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -4914,6 +4982,11 @@ msgstr "Return to Quirebase"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Review"
 msgstr "Review"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Review action"
+msgstr "Review action"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -4939,6 +5012,11 @@ msgstr "Review the diagnostics below for details."
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Review the preview"
 msgstr "Review the preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Review this action to continue."
+msgstr "Review this action to continue."
 
 #. Workspace role.
 #. js-lingui-explicit-id
@@ -5226,7 +5304,7 @@ msgid "Select {name}"
 msgstr "Select {name}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Select a Project filter to remove Items from it."
 msgstr "Select a Project filter to remove Items from it."
 
@@ -5246,12 +5324,12 @@ msgid "Select or unselect current Item"
 msgstr "Select or unselect current Item"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Select Project"
 msgstr "Select Project"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Select Tag"
 msgstr "Select Tag"
 
@@ -5749,7 +5827,8 @@ msgid "The value does not match the required format."
 msgstr "The value does not match the required format."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/BulkActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "This action is no longer available."
 msgstr "This action is no longer available."
 
@@ -5760,7 +5839,7 @@ msgstr "This action is not available."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "This cannot be undone."
 msgstr "This cannot be undone."
 
@@ -5825,7 +5904,7 @@ msgid "This Item has changed. Your draft is preserved. Review the latest metadat
 msgstr "This Item has changed. Your draft is preserved. Review the latest metadata before retrying."
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved."
 msgstr "This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved."
 
@@ -6137,12 +6216,14 @@ msgid "Unable to load Project discussion."
 msgstr "Unable to load Project discussion."
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Unable to load Project."
 msgstr "Unable to load Project."
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "Unable to load Projects."
 msgstr "Unable to load Projects."
 
@@ -6445,6 +6526,7 @@ msgstr "Users, storage, audit, settings, and durable operations."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Uses the defaults saved in your Account export preferences."
 msgstr "Uses the defaults saved in your Account export preferences."
 

@@ -22,6 +22,8 @@
 	import type { LibraryMetadataFilter } from './filters';
 	import type { LibraryPreviewNavigation } from './preview-navigation.js';
 	import { libraryPreviewCommands, runLibraryShortcut } from './shortcuts.js';
+	import LibraryActionMenu from './LibraryActionMenu.svelte';
+	import type { LibraryActionHandler } from './actions.js';
 	let {
 		workspaceId,
 		itemId,
@@ -30,7 +32,10 @@
 		navigation,
 		shortcutsEnabled = true,
 		itemHref,
-		filterHref
+		filterHref,
+		currentProject,
+		actionsBusy,
+		onAction
 	}: {
 		workspaceId: string;
 		itemId: string;
@@ -42,6 +47,9 @@
 		filterHref: (
 			filter: LibraryMetadataFilter | { tag: string }
 		) => ReturnType<typeof workspaceHref>;
+		currentProject: { id: string; name: string } | null;
+		actionsBusy: boolean;
+		onAction: LibraryActionHandler;
 	} = $props();
 	const queryClient = useQueryClient();
 	const item = createQuery(() => itemOverviewQuery(workspaceId, itemId));
@@ -116,9 +124,18 @@
 							event,
 							() => {
 								if (!previewElement?.contains(document.activeElement)) return false;
+								if (command.id === 'actions') {
+									const menu = previewElement.querySelector<HTMLButtonElement>(
+										'[data-library-item-actions]'
+									);
+									if (!menu || menu.disabled) return false;
+									menu.focus();
+									menu.click();
+									return true;
+								}
 								return move(command.id);
 							},
-							true
+							command.repeat
 						),
 					options: { enabled: !binding.character || shortcutsEnabled }
 				}))
@@ -284,6 +301,7 @@
 							><Icon name="file" size={16} />{$t('Read PDF')}</Button
 						>{/if}
 					<Button as="a" href={resolve(itemHref())}>{$t('Open full details')}</Button>
+					<LibraryActionMenu {itemId} {currentProject} {onAction} disabled={actionsBusy} />
 				</div>
 				{#if doi}
 					<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">

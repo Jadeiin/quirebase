@@ -1,3 +1,4 @@
+import { openLibraryAction } from './helpers';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { directoryPage, mockSession, workspaceView } from './helpers';
@@ -75,8 +76,7 @@ test('Library deletion recovers the last valid page with filters, sorting and pa
 	await page.route('**/api/v1/workspaces/workspace-1/items/bulk', (route) => {
 		expect(route.request().postDataJSON()).toMatchObject({
 			item_ids: ['item-21'],
-			action: 'delete',
-			confirmation: 'delete'
+			action: 'delete_items'
 		});
 		remaining.pop();
 		return route.fulfill({ json: { ok: true } });
@@ -86,8 +86,7 @@ test('Library deletion recovers the last valid page with filters, sorting and pa
 	);
 	await expect(page.getByText('Item 21', { exact: true })).toBeVisible();
 	await page.getByRole('checkbox', { name: 'Select this page', exact: true }).check();
-	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('delete');
-	await page.getByRole('button', { name: 'Apply', exact: true }).click();
+	await openLibraryAction(page, 'delete_items');
 	await page
 		.getByRole('dialog')
 		.getByRole('button', { name: 'Permanently delete', exact: true })

@@ -9,10 +9,6 @@ from quirebase.web.api.common import WorkspaceAuthorizationView
 from quirebase.web.api.library_schemas import ItemDetailView, ItemSearchView
 
 
-class DeleteConfirmationRequest(BaseModel):
-    confirmation: str
-
-
 class MetadataSyncRequest(BaseModel):
     expected_version: int = Field(ge=1)
     provider: str

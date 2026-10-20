@@ -1,3 +1,4 @@
+import { openLibraryAction } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { directoryPage, mockSession, tagPage } from './helpers';
 import type { components } from '../src/lib/api/schema.js';
@@ -33,7 +34,7 @@ test('background refresh restores results focus when the last selected row disap
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByRole('checkbox', { name: 'Select Author 1', exact: true }).check();
 	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
-	const action = toolbar.getByRole('combobox', { name: 'Bulk action', exact: true });
+	const action = toolbar.getByRole('button', { name: 'Add Tag', exact: true });
 	await action.focus();
 	await expect(action).toBeFocused();
 	await page.clock.install();
@@ -81,12 +82,19 @@ test('an old bulk completion preserves a reopened Library selection and toolbar 
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByRole('checkbox', { name: 'Select Author 1', exact: true }).check();
 	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
-	await toolbar.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
-	await toolbar.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('Methods');
-	await page.keyboard.press('Escape');
-	await toolbar.getByRole('button', { name: 'Apply', exact: true }).click();
+	await openLibraryAction(page, 'add_tag');
+	await page
+		.getByRole('dialog')
+		.getByRole('combobox', { name: 'Select Tag', exact: true })
+		.fill('Methods');
+	await page.getByRole('dialog').getByText('Add Tag', { exact: true }).first().click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Add Tag', exact: true }).click();
 	try {
 		await started.promise;
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Continue in Library', exact: true })
+			.click();
 		await page.getByRole('link', { name: 'Projects', exact: true }).first().click();
 		await expect(page).toHaveURL('/workspace/workspace-1/projects');
 		await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
@@ -94,7 +102,7 @@ test('an old bulk completion preserves a reopened Library selection and toolbar 
 		await expect(page).toHaveURL('/workspace/workspace-1/library');
 		const selection = page.getByRole('checkbox', { name: 'Select Author 2', exact: true });
 		await selection.check();
-		const action = toolbar.getByRole('combobox', { name: 'Bulk action', exact: true });
+		const action = toolbar.getByRole('button', { name: 'Add Tag', exact: true });
 		await action.focus();
 		await expect(action).toBeFocused();
 		release.resolve();

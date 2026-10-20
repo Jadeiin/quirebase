@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { defaultExportPreferences } from '#lib/export-preferences.js';
 import {
 	libraryBulkMutationOptions,
+	readLibraryBibliography,
 	runLibraryBulkMutation,
 	type LibraryBulkAction
 } from './mutations';
@@ -15,13 +16,153 @@ import { tagKeys } from '#lib/features/tags/queries.js';
 import { libraryKeys } from './queries.js';
 
 describe('Library bulk request contract', () => {
+	it.each([{ itemIds: ['item-3'] }, { itemIds: ['item-3', 'item-1', 'item-2'] }])(
+		'reads one bibliography request for the ordered selection $itemIds',
+		async ({ itemIds }) => {
+			const content = '@article{Müller2026,\n  title = {Research}\n}\n';
+			let received: Request | undefined;
+			let body: Record<string, unknown> | undefined;
+			const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+				received = request as Request;
+				body = await received.json();
+				return new Response(content, { headers: { 'Content-Type': 'application/x-bibtex' } });
+			});
+			vi.stubGlobal('fetch', fetcher);
+			const preferences = structuredClone(defaultExportPreferences);
+			preferences.citation = {
+				format: 'bibtex',
+				style: 'workspace-style',
+				includeAbstract: false,
+				preserveCase: true,
+				encoding: 'latex',
+				doiPolicy: 'omit',
+				urlPolicy: 'omit_when_doi',
+				excludedFields: 'note, keywords',
+				sortBy: 'title',
+				citationKeyFormula: 'auth + year',
+				citationKeyForceAscii: false
+			};
+
+			await expect(
+				readLibraryBibliography('workspace-1', { itemIds, preferences, exportFormat: 'bibtex' })
+			).resolves.toBe(content);
+
+			expect(fetcher).toHaveBeenCalledOnce();
+			expect(received?.method).toBe('POST');
+			expect(new URL(received!.url).pathname).toBe(
+				'/api/v1/workspaces/workspace-1/items/bibliography'
+			);
+			expect(body).toEqual({
+				item_ids: itemIds,
+				file_format: 'bibtex',
+				style: 'workspace-style',
+				include_abstract: false,
+				preserve_case: true,
+				encoding: 'latex',
+				doi_policy: 'omit',
+				url_policy: 'omit_when_doi',
+				excluded_fields: ['note', 'keywords'],
+				sort_by: 'title',
+				citation_key_formula: 'auth + year',
+				citation_key_force_ascii: false
+			});
+		}
+	);
+
+	it.each(['copy_bibliography', 'bibliography', 'documents'] as const)(
+		'%s preserves cached read models and does not clear the selection',
+		async (action) => {
+			const content = 'A formatted citation\n';
+			const fetcher = vi.fn(async () => new Response(content));
+			vi.stubGlobal('fetch', fetcher);
+			vi.stubGlobal('showSaveFilePicker', async () => ({
+				createWritable: async () => ({
+					write: async () => undefined,
+					close: async () => undefined
+				})
+			}));
+			const client = new QueryClient();
+			const keys = [
+				libraryKeys.list('workspace-1', {}, 1),
+				itemKeys.overview('workspace-1', 'item-1'),
+				projectKeys.detail('workspace-1', 'project-1'),
+				tagKeys.all('workspace-1')
+			];
+			const selected = new Set(['item-2', 'item-1']);
+			const afterMutation = vi.fn(() => selected.clear());
+			try {
+				for (const key of keys) client.setQueryData(key, { cached: true });
+				const mutation = client
+					.getMutationCache()
+					.build(client, libraryBulkMutationOptions('workspace-1', client));
+				const result = await mutation.execute({
+					input: {
+						action,
+						itemIds: [...selected],
+						projectId: '',
+						tagName: '',
+						exportFormat: 'csl',
+						preferences: defaultExportPreferences
+					},
+					afterMutation
+				});
+				expect(result).toBe(action === 'copy_bibliography' ? content : undefined);
+				expect(fetcher).toHaveBeenCalledOnce();
+				expect(afterMutation).not.toHaveBeenCalled();
+				expect([...selected]).toEqual(['item-2', 'item-1']);
+				for (const key of keys) {
+					expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+					expect(client.getQueryData(key)).toEqual({ cached: true });
+				}
+			} finally {
+				client.clear();
+			}
+		}
+	);
+
+	it('preserves structured bibliography text instead of parsing its JSON representation', async () => {
+		const content = '[\n  { "id": "item-1", "title": "Research" }\n]\n';
+		vi.stubGlobal(
+			'fetch',
+			async () =>
+				new Response(content, {
+					headers: { 'Content-Type': 'application/vnd.citationstyles.csl+json' }
+				})
+		);
+		await expect(
+			readLibraryBibliography('workspace-1', {
+				itemIds: ['item-1'],
+				exportFormat: 'csl-json',
+				preferences: defaultExportPreferences
+			})
+		).resolves.toBe(content);
+	});
+
+	it('keeps bibliography authorization failures recoverable through the normal API error contract', async () => {
+		vi.stubGlobal(
+			'fetch',
+			async () =>
+				new Response(JSON.stringify({ code: 'permission_denied', message: 'Export unavailable' }), {
+					status: 403,
+					headers: { 'Content-Type': 'application/json' }
+				})
+		);
+		await expect(
+			readLibraryBibliography('workspace-1', {
+				itemIds: ['item-1'],
+				exportFormat: 'csl',
+				preferences: defaultExportPreferences
+			})
+		).rejects.toMatchObject({ status: 403, code: 'permission_denied' });
+	});
+
 	it.each([
 		'add_tag',
 		'remove_tag',
-		'delete',
+		'delete_items',
 		'add_project',
 		'remove_project'
-	] as LibraryBulkAction[])('serializes valid optional UUIDs for %s', async (action) => {
+	] as LibraryBulkAction[])('serializes only the parameters for %s', async (action) => {
 		const projectId =
 			action === 'add_project' || action === 'remove_project'
 				? '01930abc-0000-7000-8000-000000000001'
@@ -56,10 +197,8 @@ describe('Library bulk request contract', () => {
 		if (action === 'remove_tag') expect(body?.tag_id).toBe(tagId);
 		else expect(body).not.toHaveProperty('tag_id');
 		if (action === 'add_tag') expect(body?.tag_name).toBe('Research');
-		else expect(body?.tag_name).toBe('');
-		if (action === 'delete') expect(body?.confirmation).toBe('delete');
-		else if (action === 'remove_project') expect(body?.confirmation).toBe('remove_project');
-		else expect(body?.confirmation).toBe('');
+		else expect(body).not.toHaveProperty('tag_name');
+		expect(body).not.toHaveProperty('confirmation');
 	});
 
 	it.each(['remove_project', 'remove_tag'] as const)(

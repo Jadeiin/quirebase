@@ -372,8 +372,9 @@ participation mutations. Project archive/restore is controlled by separate `proj
 deletion is limited to the `item.delete` decision. Instance administrators have no implicit delete
 authority. The current break-glass inspection grants no mutation authority.
 
-Project deletion has no archive prerequisite: a caller allowed `project.delete` confirms the
-current Project name before physically deleting an active or archived Project. The same transaction
+Project deletion has no archive prerequisite: a caller allowed `project.delete` may physically
+delete an active or archived Project. As with Workspace deletion, Web confirms the current name
+locally; the DELETE request carries no confirmation body. The same transaction
 records the Audit Event and deletes the Project root; cascading foreign keys remove its participants,
 ProjectItem associations, Project Discussions and Project Annotations with their Replies. Canonical
 Workspace Items, their files, private Annotations and other Projects remain. Root deletion fences
