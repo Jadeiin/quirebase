@@ -181,6 +181,7 @@ msgstr "Account action failed"
 #: src/lib/app/AppShell.svelte
 #: src/lib/app/AppSidebar.svelte
 #: src/lib/app/navigation.ts
+#: src/lib/app/quick-navigation.ts
 msgid "Account settings"
 msgstr "Account settings"
 
@@ -379,6 +380,7 @@ msgstr "admin"
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
 #: src/lib/app/MobileNavigation.svelte
+#: src/lib/app/quick-navigation.ts
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Administration"
 msgstr "Administration"
@@ -2385,6 +2387,11 @@ msgid "Given name"
 msgstr "Given name"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigation.svelte
+msgid "Go to a page, Workspace, or Project."
+msgstr "Go to a page, Workspace, or Project."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Government"
 msgstr "Government"
@@ -3196,6 +3203,11 @@ msgid "Loading metadata editor…"
 msgstr "Loading metadata editor…"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigation.svelte
+msgid "Loading navigation…"
+msgstr "Loading navigation…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Loading organization options…"
@@ -3207,6 +3219,7 @@ msgid "Loading Project…"
 msgstr "Loading Project…"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 msgid "Loading Projects…"
@@ -3234,6 +3247,7 @@ msgid "Loading workspace…"
 msgstr "Loading workspace…"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/routes/(app)/+page.svelte
@@ -3547,6 +3561,7 @@ msgstr "Move up"
 #. js-lingui-explicit-id
 #: src/lib/app/AppSidebar.svelte
 #: src/lib/app/MobileNavigation.svelte
+#: src/lib/app/quick-navigation.ts
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 msgid "My workspaces"
@@ -3633,6 +3648,7 @@ msgid "Next Item in preview"
 msgstr "Next Item in preview"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/design/Pagination.svelte
 msgid "Next page"
 msgstr "Next page"
@@ -3763,6 +3779,12 @@ msgid "No matching options."
 msgstr "No matching options."
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
+msgid "No matching pages."
+msgstr "No matching pages."
+
+#. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "No matching Projects."
 msgstr "No matching Projects."
@@ -3867,6 +3889,7 @@ msgid "No workspaces are available for this account yet."
 msgstr "No workspaces are available for this account yet."
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/app/WorkspaceMenu.svelte
 msgid "No workspaces available"
 msgstr "No workspaces available"
@@ -4112,6 +4135,7 @@ msgid "page"
 msgstr "page"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/design/Pagination.svelte
 msgid "Page {page} of {pageCount}"
 msgstr "Page {page} of {pageCount}"
@@ -4125,6 +4149,11 @@ msgstr "Page Size"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Pages"
 msgstr "Pages"
+
+#. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
+msgid "Pages and settings"
+msgstr "Pages and settings"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
@@ -4434,6 +4463,7 @@ msgid "Previous Item in preview"
 msgstr "Previous Item in preview"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/design/Pagination.svelte
 msgid "Previous page"
 msgstr "Previous page"
@@ -4533,6 +4563,7 @@ msgstr "Project settings saved"
 
 #. js-lingui-explicit-id
 #: src/lib/app/navigation.ts
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
@@ -4620,6 +4651,12 @@ msgstr "Publisher"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Quick actions"
 msgstr "Quick actions"
+
+#. js-lingui-explicit-id
+#: src/lib/app/QuickNavigation.svelte
+#: src/lib/app/QuickNavigationButton.svelte
+msgid "Quick navigation"
+msgstr "Quick navigation"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -5347,10 +5384,20 @@ msgid "Search Library"
 msgstr "Search Library"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
+msgid "Search Library for {query}"
+msgstr "Search Library for {query}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Search members"
 msgstr "Search members"
+
+#. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
+msgid "Search pages, Workspaces, or Projects"
+msgstr "Search pages, Workspaces, or Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -6317,6 +6364,11 @@ msgid "Unable to load metadata editor."
 msgstr "Unable to load metadata editor."
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigation.svelte
+msgid "Unable to load navigation."
+msgstr "Unable to load navigation."
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Unable to load organization options."
@@ -6335,6 +6387,7 @@ msgid "Unable to load Project."
 msgstr "Unable to load Project."
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 msgid "Unable to load Projects."
@@ -6378,11 +6431,13 @@ msgid "Unable to load workspace invitations."
 msgstr "Unable to load workspace invitations."
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
 msgid "Unable to load workspace."
 msgstr "Unable to load workspace."
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/routes/(app)/+page.svelte
@@ -6927,6 +6982,7 @@ msgid "Workspace restored"
 msgstr "Workspace restored"
 
 #. js-lingui-explicit-id
+#: src/lib/app/quick-navigation.ts
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/workspaces/WorkspaceSettings.svelte
 msgid "Workspace settings"
@@ -6949,6 +7005,7 @@ msgid "Workspace-wide"
 msgstr "Workspace-wide"
 
 #. js-lingui-explicit-id
+#: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte

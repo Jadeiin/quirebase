@@ -12,6 +12,7 @@
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import type { ThemePreference } from '#lib/theme.js';
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
+	import QuickNavigationButton from './QuickNavigationButton.svelte';
 
 	let {
 		user,
@@ -22,6 +23,7 @@
 		onThemeChange,
 		actionBusy,
 		onLogout,
+		onQuickNavigation,
 		workspaceId
 	}: {
 		user?: components['schemas']['SessionUserView'] | null;
@@ -32,6 +34,7 @@
 		onThemeChange: (preference: ThemePreference) => void;
 		actionBusy: boolean;
 		onLogout: () => void;
+		onQuickNavigation: () => void;
 		workspaceId?: string;
 	} = $props();
 	const navItems = $derived(
@@ -70,6 +73,7 @@
 					onclick={onToggle}><Icon name="chevron-right" size={16} /></button
 				>
 			{/if}
+			<QuickNavigationButton compact={collapsed} onOpen={onQuickNavigation} />
 			<Navigation.Menu class="flex-none gap-1">
 				{#snippet element(attributes)}
 					<nav {...attributes as HTMLAttributes<HTMLElement>} aria-label={$t('Main navigation')}>

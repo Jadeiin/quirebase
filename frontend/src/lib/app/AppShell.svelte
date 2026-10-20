@@ -28,6 +28,8 @@
 	import AppSidebar from './AppSidebar.svelte';
 	import MobileNavigation from './MobileNavigation.svelte';
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
+	import QuickNavigation from './QuickNavigation.svelte';
+	import QuickNavigationButton from './QuickNavigationButton.svelte';
 	import { isRouteActive } from './navigation';
 
 	let { children }: { children: Snippet } = $props();
@@ -53,6 +55,7 @@
 		);
 	const readerRoute = $derived(/\/item\/[^/]+\/pdf\/[^/]+$/.test(page.url.pathname));
 	let sidebarCollapsed = $state(false);
+	let quickNavigationOpen = $state(false);
 	let actionError = $state('');
 	let contextError = $state(false);
 	let actionBusy = $state(false);
@@ -114,15 +117,24 @@
 	<Login />
 {:else}
 	<WorkflowTray />
+	<QuickNavigation
+		bind:open={quickNavigationOpen}
+		workspaceId={page.params.workspaceId}
+		user={session.data.user}
+	/>
 	<header
 		class={`sticky top-0 z-40 items-center justify-between bg-primary-950 px-4 py-3 text-white md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 	>
 		<WorkspaceMenu workspaceId={page.params.workspaceId} mobile />
-		<a
-			class="grid size-8 grid-cols-1 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
-			href={resolve('account')}
-			aria-label={$t('Account settings')}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
-		>
+		<div class="flex shrink-0 items-center gap-2">
+			<QuickNavigationButton compact onOpen={() => (quickNavigationOpen = true)} />
+			<a
+				class="grid size-8 grid-cols-1 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
+				href={resolve('account')}
+				aria-label={$t('Account settings')}
+				>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
+			>
+		</div>
 	</header>
 	<div
 		class={`min-h-screen md:grid ${sidebarCollapsed ? 'md:grid-cols-[4.75rem_minmax(0,1fr)]' : 'md:grid-cols-[15.5rem_minmax(0,1fr)]'} ${readerRoute ? '' : 'pb-16 md:pb-0'}`}
@@ -137,6 +149,7 @@
 			onThemeChange={setThemePreference}
 			{actionBusy}
 			onLogout={logout}
+			onQuickNavigation={() => (quickNavigationOpen = true)}
 		/>
 		<main
 			class={readerRoute
