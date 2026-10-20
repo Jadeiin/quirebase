@@ -587,6 +587,7 @@ msgstr "请先应用 JSON 修改，再保存。"
 #. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 msgid "Applying action…"
 msgstr "正在执行操作…"
 
@@ -691,6 +692,7 @@ msgstr "审计日志"
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Author"
 msgstr "作者"
@@ -926,6 +928,7 @@ msgstr "可编辑"
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
 msgid "Cancel"
@@ -1690,10 +1693,16 @@ msgstr "默认值"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 #: src/lib/features/item/files/ItemFilesSection.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Delete"
 msgstr "删除"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Delete {name}"
+msgstr "删除 {name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -2233,6 +2242,7 @@ msgstr "文件格式"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Files"
@@ -2926,6 +2936,7 @@ msgstr "键盘快捷键 (?)"
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
 msgid "Keyword"
 msgstr "关键词"
 
@@ -3144,6 +3155,12 @@ msgstr "正在加载讨论…"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Loading documents…"
 msgstr "正在加载文件列表…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Loading filter values…"
+msgstr "正在加载筛选值…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
@@ -3508,6 +3525,11 @@ msgid "More actions"
 msgstr "更多操作"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Most frequent values in the applied results, up to 50 per field. Counts reflect Items, not occurrences."
+msgstr "当前已应用筛选结果中的常见值，每类最多 50 项。计数为条目数，而非出现次数。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Move down"
 msgstr "下移"
@@ -3552,6 +3574,11 @@ msgstr "NCBI API 密钥"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "新条目元数据"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "New name"
+msgstr "新名称"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
@@ -3797,6 +3824,11 @@ msgid "No records in this batch"
 msgstr "该批次中没有记录"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "No saved views yet."
+msgstr "尚无已保存视图。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "No sessions."
 msgstr "暂无登录会话。"
@@ -3818,6 +3850,11 @@ msgstr "没有与此筛选条件匹配的标签。"
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "No users."
 msgstr "暂无用户。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "No values in these results."
+msgstr "当前结果中没有可用值。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
@@ -4434,6 +4471,7 @@ msgid "Producer"
 msgstr "制作者"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Project"
 msgstr "项目"
@@ -4716,6 +4754,11 @@ msgid "References"
 msgstr "参考文献列表"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Refine current results"
+msgstr "细化当前结果"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Refresh"
@@ -4886,9 +4929,15 @@ msgid "Removing this Item from {name} permanently deletes all of its Project Ann
 msgstr "将此条目移出“{name}”后，该项目中此条目的所有项目批注及回复都会被永久删除，且无法撤销。条目、文件、私有批注及其他项目会保留。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Rename"
 msgstr "重命名"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Rename {name}"
+msgstr "重命名 {name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -4941,6 +4990,11 @@ msgid "Reset password"
 msgstr "重置密码"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Reset saved views"
+msgstr "重置已保存视图"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Reset to defaults"
 msgstr "恢复默认设置"
@@ -4975,6 +5029,7 @@ msgstr "恢复工作区"
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
@@ -5148,11 +5203,17 @@ msgid "Same title"
 msgstr "相同标题"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Save current view"
+msgstr "保存当前视图"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Save metadata"
 msgstr "保存元数据"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/workspaces/WorkspaceGeneral.svelte
 msgid "Save name"
 msgstr "保存名称"
@@ -5182,6 +5243,26 @@ msgstr "保存设置"
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saved"
 msgstr "已保存"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saved only in this browser for this account and workspace."
+msgstr "仅保存在当前浏览器中，按账号和工作区独立存储。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saved views"
+msgstr "已保存视图"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saved views reset"
+msgstr "已重置保存的视图"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saves the current filters, sort order, and page size."
+msgstr "保存当前已应用的筛选、排序及每页条目数。"
 
 #. js-lingui-explicit-id
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
@@ -5220,6 +5301,7 @@ msgstr "范围：工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Search"
 msgstr "搜索"
@@ -5427,9 +5509,19 @@ msgid "Show keyboard shortcuts"
 msgstr "显示快捷键"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Show less"
+msgstr "收起"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Show members"
 msgstr "显示成员"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Show more"
+msgstr "显示更多"
 
 #. js-lingui-explicit-id
 #: src/lib/design/SearchSelect.svelte
@@ -6051,6 +6143,7 @@ msgstr "请尝试其他文献库搜索条件。"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
 msgid "Type"
 msgstr "类型"
 
@@ -6153,7 +6246,7 @@ msgstr "无法离开工作区。"
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "Unable to load account."
-msgstr "无法加载账户信息。"
+msgstr "无法加载账号信息。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSectionState.svelte
@@ -6185,6 +6278,12 @@ msgstr "无法加载发现服务。"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Unable to load documents."
 msgstr "无法加载文件列表。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Unable to load filter values."
+msgstr "无法加载筛选值。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -6229,6 +6328,7 @@ msgid "Unable to load Project discussion."
 msgstr "无法加载项目讨论。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Unable to load Project."
@@ -6239,6 +6339,11 @@ msgstr "无法加载项目。"
 #: src/lib/features/projects/ProjectSelect.svelte
 msgid "Unable to load Projects."
 msgstr "无法加载项目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Unable to load saved views."
+msgstr "无法加载已保存视图。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tags/TagSelect.svelte
@@ -6335,6 +6440,11 @@ msgstr "无法登录"
 #: src/lib/features/auth/Invitation.svelte
 msgid "Unable to sign out"
 msgstr "无法退出登录"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Unable to update saved views."
+msgstr "无法更新已保存视图。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -6574,6 +6684,11 @@ msgid "View all"
 msgstr "查看全部"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View deleted"
+msgstr "已删除视图"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "View Items"
 msgstr "查看条目"
@@ -6615,6 +6730,21 @@ msgstr "查看带有标签 {name} 的条目"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "View Items with keyword {name}"
 msgstr "查看包含关键词 {name} 的条目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View name"
+msgstr "视图名称"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View renamed"
+msgstr "已重命名视图"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View saved"
+msgstr "已保存视图"
 
 #. Workspace role.
 #. js-lingui-explicit-id
@@ -6659,6 +6789,7 @@ msgid "Web page"
 msgstr "网页"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "With files"
 msgstr "有文件"
@@ -6670,6 +6801,7 @@ msgid "Withdrawn"
 msgstr "撤回日期"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Without files"
 msgstr "无文件"

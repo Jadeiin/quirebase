@@ -587,6 +587,7 @@ msgstr "Apply JSON changes before saving."
 #. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 msgid "Applying action…"
 msgstr "Applying action…"
 
@@ -691,6 +692,7 @@ msgstr "Audit log"
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Author"
 msgstr "Author"
@@ -926,6 +928,7 @@ msgstr "Can edit"
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
 msgid "Cancel"
@@ -1690,10 +1693,16 @@ msgstr "Defaults"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 #: src/lib/features/item/files/ItemFilesSection.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Delete"
 msgstr "Delete"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Delete {name}"
+msgstr "Delete {name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -2233,6 +2242,7 @@ msgstr "File format"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Files"
@@ -2926,6 +2936,7 @@ msgstr "Keyboard shortcuts (?)"
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
 msgid "Keyword"
 msgstr "Keyword"
 
@@ -3144,6 +3155,12 @@ msgstr "Loading discussion…"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Loading documents…"
 msgstr "Loading documents…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Loading filter values…"
+msgstr "Loading filter values…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
@@ -3508,6 +3525,11 @@ msgid "More actions"
 msgstr "More actions"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Most frequent values in the applied results, up to 50 per field. Counts reflect Items, not occurrences."
+msgstr "Most frequent values in the applied results, up to 50 per field. Counts reflect Items, not occurrences."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Move down"
 msgstr "Move down"
@@ -3552,6 +3574,11 @@ msgstr "NCBI API key"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "New Item metadata"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "New name"
+msgstr "New name"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
@@ -3797,6 +3824,11 @@ msgid "No records in this batch"
 msgstr "No records in this batch"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "No saved views yet."
+msgstr "No saved views yet."
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 msgid "No sessions."
 msgstr "No sessions."
@@ -3818,6 +3850,11 @@ msgstr "No Tags match this filter."
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "No users."
 msgstr "No users."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "No values in these results."
+msgstr "No values in these results."
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
@@ -4434,6 +4471,7 @@ msgid "Producer"
 msgstr "Producer"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Project"
 msgstr "Project"
@@ -4716,6 +4754,11 @@ msgid "References"
 msgstr "References"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Refine current results"
+msgstr "Refine current results"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Refresh"
@@ -4886,9 +4929,15 @@ msgid "Removing this Item from {name} permanently deletes all of its Project Ann
 msgstr "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Rename"
 msgstr "Rename"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Rename {name}"
+msgstr "Rename {name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -4941,6 +4990,11 @@ msgid "Reset password"
 msgstr "Reset password"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Reset saved views"
+msgstr "Reset saved views"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Reset to defaults"
 msgstr "Reset to defaults"
@@ -4975,6 +5029,7 @@ msgstr "Restore workspace"
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
@@ -5148,11 +5203,17 @@ msgid "Same title"
 msgstr "Same title"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Save current view"
+msgstr "Save current view"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Save metadata"
 msgstr "Save metadata"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
 #: src/lib/features/workspaces/WorkspaceGeneral.svelte
 msgid "Save name"
 msgstr "Save name"
@@ -5182,6 +5243,26 @@ msgstr "Save settings"
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Saved"
 msgstr "Saved"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saved only in this browser for this account and workspace."
+msgstr "Saved only in this browser for this account and workspace."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saved views"
+msgstr "Saved views"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saved views reset"
+msgstr "Saved views reset"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Saves the current filters, sort order, and page size."
+msgstr "Saves the current filters, sort order, and page size."
 
 #. js-lingui-explicit-id
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
@@ -5220,6 +5301,7 @@ msgstr "Scope: Workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Search"
 msgstr "Search"
@@ -5427,9 +5509,19 @@ msgid "Show keyboard shortcuts"
 msgstr "Show keyboard shortcuts"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Show less"
+msgstr "Show less"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Show members"
 msgstr "Show members"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Show more"
+msgstr "Show more"
 
 #. js-lingui-explicit-id
 #: src/lib/design/SearchSelect.svelte
@@ -6051,6 +6143,7 @@ msgstr "Try a different Library Search."
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
 msgid "Type"
 msgstr "Type"
 
@@ -6187,6 +6280,12 @@ msgid "Unable to load documents."
 msgstr "Unable to load documents."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Unable to load filter values."
+msgstr "Unable to load filter values."
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import options"
 msgstr "Unable to load Import options"
@@ -6229,6 +6328,7 @@ msgid "Unable to load Project discussion."
 msgstr "Unable to load Project discussion."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Unable to load Project."
@@ -6239,6 +6339,11 @@ msgstr "Unable to load Project."
 #: src/lib/features/projects/ProjectSelect.svelte
 msgid "Unable to load Projects."
 msgstr "Unable to load Projects."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Unable to load saved views."
+msgstr "Unable to load saved views."
 
 #. js-lingui-explicit-id
 #: src/lib/features/tags/TagSelect.svelte
@@ -6335,6 +6440,11 @@ msgstr "Unable to sign in"
 #: src/lib/features/auth/Invitation.svelte
 msgid "Unable to sign out"
 msgstr "Unable to sign out"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "Unable to update saved views."
+msgstr "Unable to update saved views."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -6574,6 +6684,11 @@ msgid "View all"
 msgstr "View all"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View deleted"
+msgstr "View deleted"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "View Items"
 msgstr "View Items"
@@ -6615,6 +6730,21 @@ msgstr "View Items tagged {name}"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "View Items with keyword {name}"
 msgstr "View Items with keyword {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View name"
+msgstr "View name"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View renamed"
+msgstr "View renamed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibrarySavedViews.svelte
+msgid "View saved"
+msgstr "View saved"
 
 #. Workspace role.
 #. js-lingui-explicit-id
@@ -6659,6 +6789,7 @@ msgid "Web page"
 msgstr "Web page"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "With files"
 msgstr "With files"
@@ -6670,6 +6801,7 @@ msgid "Withdrawn"
 msgstr "Withdrawn"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Without files"
 msgstr "Without files"

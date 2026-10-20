@@ -20,16 +20,35 @@ export type LibraryFilters = {
 export type LibraryMetadataFilter =
 	| { author_last_name: string; author_first_name: string }
 	| { publication_title: string }
-	| { year: string };
+	| { year: string }
+	| { keyword_exact: string }
+	| { reference_type: string };
 
 export function refineLibraryFilters(
 	applied: LibraryFilters,
 	filter: LibraryMetadataFilter | { tag: string }
 ): LibraryFilters {
 	// An exact credit replaces both free-text and exact author criteria.
-	return 'author_last_name' in filter
-		? { ...applied, author: undefined, ...filter }
-		: { ...applied, ...filter };
+	if ('author_last_name' in filter) return { ...applied, author: undefined, ...filter };
+	if ('keyword_exact' in filter) return { ...applied, keyword: undefined, ...filter };
+	return { ...applied, ...filter };
+}
+
+export function submitLibraryFilters(
+	applied: LibraryFilters,
+	draft: Pick<
+		LibraryFilters,
+		'query' | 'tag' | 'project' | 'year' | 'keyword' | 'author' | 'has_files'
+	>
+): LibraryFilters {
+	const next = { ...applied, ...draft };
+	// Typing a broad search replaces its exact refinement; unrelated fields preserve it.
+	if (draft.author) {
+		delete next.author_last_name;
+		delete next.author_first_name;
+	}
+	if (draft.keyword) delete next.keyword_exact;
+	return next;
 }
 
 const exactKeys = [

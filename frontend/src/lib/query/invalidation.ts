@@ -2,14 +2,12 @@ import { matchQuery, type Query, type QueryClient, type QueryKey } from '@tansta
 import { exportPreferenceKeys } from '#lib/features/account/queries.js';
 import { dashboardKeys } from '#lib/features/dashboard/queries.js';
 import { itemKeys } from '#lib/features/item/queries.js';
-import { libraryKeys } from '#lib/features/library/queries.js';
+import { libraryKeys, libraryProjectScope } from '#lib/features/library/queries.js';
 import { pdfReaderKeys } from '#lib/features/pdf-reader/queries.js';
 import { projectKeys } from '#lib/features/projects/queries.js';
 import { tagKeys } from '#lib/features/tags/queries.js';
 import { toolKeys } from '#lib/features/tools/queries.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
-import type { LibraryFilters } from '#lib/features/library/filters.js';
-import type { LibrarySearch } from '#lib/features/library/queries.js';
 import type { OrganizeView } from '#lib/features/item/types.js';
 
 async function invalidate(queryClient: QueryClient, keys: QueryKey[]) {
@@ -47,6 +45,7 @@ export function invalidateItemOrganize(
 		itemKeys.organize(workspaceId, itemId),
 		itemKeys.overview(workspaceId, itemId),
 		libraryKeys.lists(workspaceId),
+		[...libraryKeys.all(workspaceId), 'facets'],
 		dashboardKeys.all(workspaceId)
 	]);
 }
@@ -97,12 +96,7 @@ export async function invalidateUnavailableProject(
 	workspaceId: string,
 	projectId: string
 ) {
-	const lists = libraryKeys.lists(workspaceId);
-	const libraryScope = {
-		queryKey: lists,
-		predicate: ({ queryKey }: Query) =>
-			(queryKey[lists.length] as LibraryFilters | undefined)?.project === projectId
-	};
+	const libraryScope = libraryProjectScope(workspaceId, projectId);
 	const organizeScope = {
 		queryKey: itemKeys.all(workspaceId),
 		predicate: ({ queryKey }: Query) => queryKey.at(-1) === 'organize'
@@ -113,7 +107,7 @@ export async function invalidateUnavailableProject(
 		queryClient.cancelQueries(libraryScope, { revert: false }),
 		queryClient.cancelQueries(organizeScope, { revert: false })
 	]);
-	queryClient.setQueriesData<LibrarySearch | null>(libraryScope, null, { updatedAt: 0 });
+	queryClient.setQueriesData(libraryScope, null, { updatedAt: 0 });
 	queryClient.setQueriesData<OrganizeView>(
 		organizeScope,
 		(data) =>

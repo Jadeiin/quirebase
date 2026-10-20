@@ -6,6 +6,7 @@ import {
 	libraryPageSize,
 	libraryParameters,
 	refineLibraryFilters,
+	submitLibraryFilters,
 	readLibraryFilters
 } from './filters.js';
 import { metadataFilterLinks } from '../item/metadata-links.js';
@@ -80,6 +81,45 @@ it('round-trips precise filters, empty given names, Unicode and URL punctuation'
 		'workspace/workspace%20%2F%E4%B8%80/library?'
 	);
 	expect(libraryParameters({ author_last_name: 'Smith' }).has('author_first_name')).toBe(false);
+});
+
+it('replaces a broad keyword with an exact refinement while preserving the result scope', () => {
+	expect(
+		refineLibraryFilters(
+			{ keyword: 'graph', project: 'project-1', has_files: false, sort: 'author' },
+			{ keyword_exact: 'Graph; theory & ML' }
+		)
+	).toEqual({
+		keyword: undefined,
+		keyword_exact: 'Graph; theory & ML',
+		project: 'project-1',
+		has_files: false,
+		sort: 'author'
+	});
+});
+
+it('broad author and keyword searches replace exact criteria without clearing unrelated refinements', () => {
+	const applied = {
+		author_last_name: 'Smith',
+		author_first_name: '',
+		keyword_exact: 'Graph theory',
+		reference_type: 'JournalArticle',
+		project: 'project-1',
+		sort: 'title' as const
+	};
+	expect(submitLibraryFilters(applied, { author: '', keyword: '', year: '2024' })).toEqual({
+		...applied,
+		author: '',
+		keyword: '',
+		year: '2024'
+	});
+	expect(submitLibraryFilters(applied, { author: 'Jones', keyword: 'models' })).toEqual({
+		author: 'Jones',
+		keyword: 'models',
+		reference_type: 'JournalArticle',
+		project: 'project-1',
+		sort: 'title'
+	});
 });
 
 it.each(['NaN', 'Infinity', '-2', '0', ''])('keeps invalid page %s on page one', (page) => {

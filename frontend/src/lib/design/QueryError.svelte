@@ -16,5 +16,5 @@
 
 <Notice as="div" variant="error" class="my-3 flex flex-wrap items-center justify-between gap-3">
 	<span>{message}</span>
-	<Button disabled={busy} onclick={onRetry}>{$t('Retry')}</Button>
+	<Button type="button" disabled={busy} onclick={onRetry}>{$t('Retry')}</Button>
 </Notice>

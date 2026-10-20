@@ -19,6 +19,8 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
+	import { libraryHref } from '#lib/features/library/filters.js';
+	import { libraryItemHref, libraryReturnTo } from '#lib/features/library/return-context.js';
 	import { memberOptionsQuery } from '#lib/workspaces/queries.js';
 	import PromptDialog from '#lib/design/PromptDialog.svelte';
 	import RichText from '#lib/design/RichText.svelte';
@@ -43,6 +45,14 @@
 	const itemPageSize = $derived(listing.pageSize);
 	const itemSort = $derived(listing.sort);
 	const itemSearch = $derived(listing.search);
+	const libraryDestination = $derived(
+		libraryHref(
+			workspaceId,
+			{ query: itemSearch, project: projectId, sort: itemSort },
+			itemPage,
+			itemPageSize
+		)
+	);
 	function navigateItems(change: Partial<ProjectListState>, replace = false) {
 		const parameters = projectListParameters({ ...listing, ...change }, true);
 		const path = workspaceHref(workspaceId, `projects/${projectId}`);
@@ -542,12 +552,7 @@
 							disabled={busy}
 							onclick={() => void leaveProject()}>{$t('Leave Project')}</Button
 						>{/if}
-					<Button
-						as="a"
-						href={resolve(
-							workspaceHref(workspaceId, `library?project=${encodeURIComponent(projectId)}`)
-						)}>{$t('Open in Library')}</Button
-					>
+					<Button as="a" href={resolve(libraryDestination)}>{$t('Open in Library')}</Button>
 					{#if can('project.archive')}<Button
 							variant="tonal"
 							disabled={busy}
@@ -675,7 +680,14 @@
 					>
 						<a
 							class="grid grid-cols-1 gap-1 no-underline"
-							href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
+							href={resolve(
+								libraryItemHref(
+									workspaceId,
+									item.id,
+									'',
+									libraryReturnTo(workspaceId, libraryDestination, item.id)
+								)
+							)}
 							><strong><RichText html={item.title_html} /></strong><span
 								class="text-surface-600-400"
 								>{item.authors.map((author) => author.full_name).join('; ') || ''}</span

@@ -8,6 +8,8 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
+	import type { LibraryFilters, LibraryMetadataFilter, libraryHref } from './filters.js';
 
 	let {
 		searchInput = $bindable(),
@@ -20,6 +22,8 @@
 		author = $bindable(''),
 		fileFilter = $bindable(''),
 		filtersOpen = $bindable(false),
+		applied,
+		filterHref,
 		onSearch,
 		onClear
 	}: {
@@ -33,9 +37,12 @@
 		author: string;
 		fileFilter: string;
 		filtersOpen: boolean;
+		applied: LibraryFilters;
+		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
 		onSearch: () => void;
 		onClear: () => void;
 	} = $props();
+	let refinementAttempt = $state(0);
 </script>
 
 <Panel
@@ -90,6 +97,20 @@
 			<div class="flex flex-wrap justify-end gap-2">
 				<Button type="button" onclick={onClear}>{$t('Clear filters')}</Button>
 			</div>
+			{#if filtersOpen}
+				{#key refinementAttempt}
+					{#await import('./LibraryRefinements.svelte')}
+						<p role="status" class="text-sm text-surface-600-400">{$t('Loading filter values…')}</p>
+					{:then { default: LibraryRefinements }}
+						<LibraryRefinements filters={applied} {filterHref} />
+					{:catch}
+						<QueryError
+							message={$t('Unable to load filter values.')}
+							onRetry={() => refinementAttempt++}
+						/>
+					{/await}
+				{/key}
+			{/if}
 		</Collapsible.Content>
 	</Collapsible>
 </Panel>

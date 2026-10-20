@@ -7,6 +7,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import StatusNotice from '#lib/design/StatusNotice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import BulkActions from '#lib/features/library/BulkActions.svelte';
 	import LibraryFilters from '#lib/features/library/LibraryFilters.svelte';
 	import LibraryResults from '#lib/features/library/LibraryResults.svelte';
@@ -22,9 +23,11 @@
 		libraryHref,
 		libraryParameters,
 		refineLibraryFilters,
+		submitLibraryFilters,
 		type LibraryFilters as AppliedLibraryFilters
 	} from './filters.js';
 	import LibraryActiveFilters from './LibraryActiveFilters.svelte';
+	import LibrarySavedViews from './LibrarySavedViews.svelte';
 	import { projectDetailQuery } from '#lib/features/projects/queries.js';
 	import { getSession } from '#lib/session.js';
 	import { t } from '#lib/i18n.js';
@@ -134,11 +137,14 @@
 		...projectDetailQuery(workspaceId, submitted.project ?? ''),
 		enabled: Boolean(submitted.project)
 	}));
-	const currentProject = $derived(
-		selectedProject.data &&
-			!selectedProject.isError &&
-			can(selectedProject.data.authorization, 'project_item.manage')
+	const appliedProject = $derived(
+		library.data && selectedProject.isSuccess && selectedProject.data?.id === submitted.project
 			? selectedProject.data
+			: null
+	);
+	const currentProject = $derived(
+		appliedProject && can(appliedProject.authorization, 'project_item.manage')
+			? appliedProject
 			: null
 	);
 	const previewIndex = $derived(
@@ -326,16 +332,17 @@
 	}
 
 	function search() {
-		navigate({
-			...submitted,
-			query: query.trim(),
-			tag,
-			project,
-			year: year.trim(),
-			keyword: keyword.trim(),
-			author: author.trim(),
-			has_files: fileFilter ? fileFilter === 'true' : undefined
-		});
+		navigate(
+			submitLibraryFilters(submitted, {
+				query: query.trim(),
+				tag,
+				project,
+				year: year.trim(),
+				keyword: keyword.trim(),
+				author: author.trim(),
+				has_files: fileFilter ? fileFilter === 'true' : undefined
+			})
+		);
 	}
 
 	function removeFilters(keys: (keyof AppliedLibraryFilters)[]) {
@@ -424,7 +431,9 @@
 
 <svelte:document onfocusin={() => focusVersion++} />
 
-<div class="mb-8 flex items-end justify-between gap-4">
+<div
+	class="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
+>
 	<div>
 		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">
 			{$t('Workspace')}
@@ -441,6 +450,7 @@
 					count: library.data.total
 				})}</span
 			>{/if}
+		<LibrarySavedViews filters={submitted} {pageSize} />
 		<LibraryShortcuts
 			bind:enabled={shortcutsEnabled}
 			onSearch={() => searchInput?.focus()}
@@ -461,11 +471,22 @@
 	bind:author
 	bind:fileFilter
 	bind:filtersOpen
+	applied={submitted}
+	filterHref={(filter) =>
+		libraryHref(workspaceId, refineLibraryFilters(submitted, filter), 1, pageSize, previewItemId)}
 	onSearch={search}
 	onClear={clearFilters}
 />
 
-<LibraryActiveFilters filters={submitted} onRemove={removeFilters} />
+<LibraryActiveFilters filters={submitted} project={appliedProject} onRemove={removeFilters} />
+
+{#if submitted.project && (selectedProject.isError || selectedProject.fetchStatus === 'paused')}
+	<QueryError
+		message={$t('Unable to load Project.')}
+		busy={selectedProject.isFetching}
+		onRetry={() => void selectedProject.refetch()}
+	/>
+{/if}
 
 <BulkActions
 	bind:element={bulkActionsElement}
