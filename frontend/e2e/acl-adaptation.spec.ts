@@ -209,7 +209,7 @@ for (const [role, allowedActions, visible] of [
 		await page.goto('/workspace/workspace-1/library');
 		await page.getByLabel('Select this page').check();
 		const options = await page
-			.getByLabel('Bulk action')
+			.getByRole('combobox', { name: 'Bulk action', exact: true })
 			.locator('option')
 			.evaluateAll((nodes) =>
 				nodes.map((node) => (node as HTMLOptionElement).value).filter(Boolean)

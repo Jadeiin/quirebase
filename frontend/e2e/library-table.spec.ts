@@ -71,6 +71,176 @@ async function mockLibrary(page: Page, rows = items) {
 }
 
 for (const view of ['table', 'list'] as const) {
+	test(`${view} pointer and keyboard ranges share an anchor and can shrink`, async ({ page }) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library');
+		const row = (number: number) => page.locator(`[data-library-item-select="item-${number}"]`);
+		const selected = () =>
+			page
+				.locator('[data-library-item-select]:checked')
+				.evaluateAll((elements) =>
+					elements.map((element) => (element as HTMLInputElement).dataset.libraryItemSelect)
+				);
+		await row(2).click();
+		await row(6).click({ modifiers: ['Shift'] });
+		await expect.poll(selected).toEqual(['item-2', 'item-3', 'item-4', 'item-5', 'item-6']);
+		await row(4).click({ modifiers: ['Shift'] });
+		await expect.poll(selected).toEqual(['item-2', 'item-3', 'item-4']);
+		await row(4).press('Shift+ArrowDown');
+		await expect.poll(selected).toEqual(['item-2', 'item-3', 'item-4', 'item-5']);
+		await row(1).click({ modifiers: ['Shift'] });
+		await expect.poll(selected).toEqual(['item-1', 'item-2']);
+		await row(1).press('Shift+ArrowDown');
+		await expect.poll(selected).toEqual(['item-2']);
+		await row(8).click();
+		await row(10).click({ modifiers: ['Shift'] });
+		await expect.poll(selected).toEqual(['item-8', 'item-9', 'item-10']);
+	});
+
+	test(`${view} clearing and changing the listing reset pointer ranges and preserve control focus`, async ({
+		page
+	}) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library');
+		const row = (number: number) => page.locator(`[data-library-item-select="item-${number}"]`);
+		await row(2).click();
+		await row(5).click({ modifiers: ['Shift'] });
+		await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+		await expect(page.locator('#library-results')).toBeFocused();
+		await row(4).click({ modifiers: ['Shift'] });
+		await expect(page.locator('[data-library-item-select]:checked')).toHaveCount(1);
+		const sort = page.getByRole('combobox', { name: 'Sort By', exact: true });
+		await sort.selectOption('title');
+		await expect(page.locator('[data-library-item-select]:checked')).toHaveCount(0);
+		await row(6).click({ modifiers: ['Shift'] });
+		await expect(page.locator('[data-library-item-select]:checked')).toHaveCount(1);
+		await sort.selectOption('updated');
+		await row(7).click({ modifiers: ['Shift'] });
+		await expect(page.locator('[data-library-item-select]:checked')).toHaveCount(1);
+		await page.getByRole('button', { name: 'Next page', exact: true }).click();
+		await row(28).click({ modifiers: ['Shift'] });
+		await expect(page.locator('[data-library-item-select]:checked')).toHaveCount(1);
+		await page.getByRole('button', { name: 'Previous page', exact: true }).click();
+		await row(3).click({ modifiers: ['Shift'] });
+		await expect(page.locator('[data-library-item-select]:checked')).toHaveCount(1);
+		const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+		await search.fill('another query');
+		await search.press('Enter');
+		await expect(page).toHaveURL(/q=another\+query/);
+		await row(9).click({ modifiers: ['Shift'] });
+		await expect(page.locator('[data-library-item-select]:checked')).toHaveCount(1);
+	});
+}
+
+test('bulk toolbar explains requirements, keeps failed targets and restores focus after retry', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockLibrary(page);
+	let attempts = 0;
+	await page.route('**/api/v1/workspaces/*/items/bulk', (route) => {
+		attempts++;
+		return route.fulfill(
+			attempts === 1
+				? { status: 500, json: { code: 'internal_error', message: 'Try again later' } }
+				: { json: { ok: true } }
+		);
+	});
+	await page.goto('/workspace/workspace-1/library');
+	const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+	await row.check();
+	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
+	await expect(toolbar).toContainText('Current page only');
+	const apply = toolbar.getByRole('button', { name: 'Apply', exact: true });
+	await expect(apply).toBeDisabled();
+	await expect(apply).toHaveAccessibleDescription('Choose an action to continue.');
+	await toolbar
+		.getByRole('combobox', { name: 'Bulk action', exact: true })
+		.selectOption('add_project');
+	await expect(apply).toHaveAccessibleDescription('Choose a Project to continue.');
+	await toolbar.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
+	await expect(apply).toHaveAccessibleDescription('Choose or enter a Tag to continue.');
+	await toolbar.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('Methods');
+	await page.keyboard.press('Escape');
+	await expect(apply).toBeEnabled();
+	const bounds = (await toolbar.boundingBox())!;
+	expect(bounds.x).toBeGreaterThanOrEqual(0);
+	expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+	await page.screenshot({ path: '/tmp/quirebase-library-bulk-mobile.png' });
+	await apply.click();
+	await expect(page.getByRole('alert')).toContainText('Something went wrong. Try again.');
+	await expect(row).toBeChecked();
+	await expect(apply).toBeEnabled();
+	await apply.click();
+	await expect(page.getByText('Bulk action completed', { exact: true })).toBeVisible();
+	await expect(row).not.toBeChecked();
+	await expect(page.locator('#library-results')).toBeFocused();
+	expect(attempts).toBe(2);
+});
+
+test('bulk progress keeps the search interactive and preserves its focus on completion', async ({
+	page
+}) => {
+	await mockLibrary(page);
+	const release = Promise.withResolvers<void>();
+	let submitted = false;
+	await page.route('**/api/v1/workspaces/*/items/bulk', async (route) => {
+		submitted = true;
+		await release.promise;
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/library');
+	await page.locator('[data-library-item-select="item-1"]').check();
+	const toolbar = page.getByRole('region', { name: 'Bulk actions', exact: true });
+	await toolbar.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
+	await toolbar.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('Methods');
+	await page.keyboard.press('Escape');
+	await toolbar.getByRole('button', { name: 'Apply', exact: true }).click();
+	const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+	try {
+		await expect.poll(() => submitted).toBe(true);
+		await expect(toolbar).toHaveAttribute('aria-busy', 'true');
+		await expect(toolbar).toContainText('Applying to the selected Items…');
+		await expect(toolbar.getByRole('button', { name: 'Clear selection' })).toBeEnabled();
+		await expect(toolbar.getByRole('combobox', { name: 'Bulk action' })).toBeDisabled();
+		await search.fill('unfinished search');
+	} finally {
+		release.resolve();
+	}
+	await expect(toolbar).toHaveCount(0);
+	await expect(search).toBeFocused();
+	await expect(search).toHaveValue('unfinished search');
+	await expect(page).not.toHaveURL(/q=/);
+});
+
+test('bulk delete returns focus to Apply on cancellation and results after deletion', async ({
+	page
+}) => {
+	const rows = items.slice(0, 3);
+	await mockLibrary(page, rows);
+	await page.route('**/api/v1/workspaces/*/items/bulk', (route) => {
+		rows.splice(0, 1);
+		return route.fulfill({ json: { ok: true } });
+	});
+	await page.goto('/workspace/workspace-1/library');
+	await page.locator('[data-library-item-select="item-1"]').check();
+	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('delete');
+	const apply = page.getByRole('button', { name: 'Apply', exact: true });
+	await apply.click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(apply).toBeFocused();
+	await apply.click();
+	await dialog.getByRole('button', { name: 'Permanently delete', exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(page.locator('[data-library-item-select="item-1"]')).toHaveCount(0);
+	await expect(page.getByRole('region', { name: 'Bulk actions', exact: true })).toHaveCount(0);
+	await expect(page.locator('#library-results')).toBeFocused();
+});
+
+for (const view of ['table', 'list'] as const) {
 	test(`${view} row shortcuts browse, select and preview without changing search drafts`, async ({
 		page
 	}) => {

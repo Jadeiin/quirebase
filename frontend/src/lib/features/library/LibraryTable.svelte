@@ -41,6 +41,7 @@
 		items,
 		toolbar,
 		workspaceId,
+		listingIdentity,
 		shortcutsEnabled,
 		filterHref,
 		selected,
@@ -55,6 +56,7 @@
 		items: LibrarySearch['items'];
 		toolbar: Snippet;
 		workspaceId: string;
+		listingIdentity: string;
 		shortcutsEnabled: boolean;
 		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
 		selected: Set<string>;
@@ -139,6 +141,8 @@
 			return columns;
 		},
 		getRowId: (item) => item.id,
+		// Pointer and keyboard ranges share the fixed anchor below; Table owns selection state.
+		enableRowRangeSelection: false,
 		columnResizeMode: 'onChange',
 		state: {
 			get rowSelection() {
@@ -175,13 +179,43 @@
 	});
 	let rangeStart: string | undefined;
 	let rangeEnd: string | undefined;
+	const rangeScope = $derived(`${listingIdentity}:${items.map((item) => item.id).join(',')}`);
+	let previousRangeScope = '';
+	$effect(() => {
+		const count = selected.size;
+		if (rangeScope !== previousRangeScope || count === 0) resetRange();
+		previousRangeScope = rangeScope;
+	});
 	function resetRange() {
 		rangeStart = undefined;
 		rangeEnd = undefined;
 	}
 	function toggleItem(id: string, checked?: boolean) {
-		resetRange();
+		rangeStart = rangeEnd = id;
 		table.getRow(id).toggleSelected(checked);
+	}
+	function extendRange(endpoint: string, origin?: string) {
+		const ids = table.getRowModel().rows.map((row) => row.id);
+		if (!rangeStart || !ids.includes(rangeStart) || (origin && rangeEnd !== origin))
+			rangeStart = origin ?? endpoint;
+		const anchor = ids.indexOf(rangeStart);
+		const end = ids.indexOf(endpoint);
+		table.setRowSelection(
+			Object.fromEntries(
+				ids.slice(Math.min(anchor, end), Math.max(anchor, end) + 1).map((id) => [id, true])
+			)
+		);
+		rangeEnd = endpoint;
+	}
+	function selectWithPointer(id: string, event: MouseEvent) {
+		const checkbox = event.currentTarget as HTMLInputElement;
+		if (!event.shiftKey) {
+			toggleItem(id, checkbox.checked);
+			return;
+		}
+		extendRange(id);
+		// A checked endpoint may be clicked again while shrinking the same range.
+		checkbox.checked = true;
 	}
 	function selectPage(checked = true) {
 		resetRange();
@@ -217,7 +251,7 @@
 			if (!id) return false;
 			if (command === 'toggle') toggleItem(id);
 			else if (command === 'only') {
-				resetRange();
+				rangeStart = rangeEnd = id;
 				table.setRowSelection({ [id]: true });
 			} else {
 				// Links and buttons keep their native Enter action.
@@ -239,17 +273,8 @@
 							: 0
 						: Math.max(0, Math.min(last, current + (backwards ? -1 : 1)));
 		if (command === 'extendUp' || command === 'extendDown') {
-			const ids = controls.map((control) => control.dataset.libraryItemSelect!);
-			if (rangeEnd !== id || !id || !selected.has(id) || !ids.includes(rangeStart ?? ''))
-				rangeStart = id ?? ids[next];
-			const anchor = ids.indexOf(rangeStart!);
-			table.setRowSelection(
-				Object.fromEntries(
-					ids.slice(Math.min(anchor, next), Math.max(anchor, next) + 1).map((id) => [id, true])
-				)
-			);
-			rangeEnd = ids[next];
-		} else resetRange();
+			extendRange(controls[next].dataset.libraryItemSelect!, id);
+		} else rangeStart = rangeEnd = controls[next].dataset.libraryItemSelect;
 		const control = controls[next];
 		control.focus({ preventScroll: true });
 		control.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -535,7 +560,8 @@
 										data-library-item-select={row.id}
 										aria-describedby={`library-item-title-${row.id}`}
 										checked={row.getIsSelected()}
-										onclick={(event) => toggleItem(row.id, event.currentTarget.checked)}
+										onclick={(event) => selectWithPointer(row.id, event)}
+										title={$t('Shift-click an Item checkbox to select a range on this page.')}
 										aria-label={row.original.authors.length
 											? $t('Select {name}', {
 													name: row.original.authors.map((author) => author.full_name).join('; ')
@@ -609,7 +635,8 @@
 					data-library-item-select={row.id}
 					aria-describedby={`library-item-title-${row.id}`}
 					checked={row.getIsSelected()}
-					onclick={(event) => toggleItem(row.id, event.currentTarget.checked)}
+					onclick={(event) => selectWithPointer(row.id, event)}
+					title={$t('Shift-click an Item checkbox to select a range on this page.')}
 					aria-label={row.original.authors.length
 						? $t('Select {name}', {
 								name: row.original.authors.map((author) => author.full_name).join('; ')

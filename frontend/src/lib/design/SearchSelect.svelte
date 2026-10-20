@@ -122,10 +122,11 @@
 		>
 	</Combobox.Control>
 	<Portal target={portalTarget}>
-		<Combobox.Positioner class="z-100 min-w-[var(--reference-width)]">
+		<Combobox.Positioner class="min-w-[var(--reference-width)]">
+			<!-- Zag derives the positioner's stacking layer from its first child. -->
 			<div
 				hidden={!open}
-				class="overflow-hidden rounded-container border border-surface-200-800 bg-surface-50-950 shadow-xl"
+				class="z-100 overflow-hidden rounded-container border border-surface-200-800 bg-surface-50-950 shadow-xl"
 			>
 				<Combobox.Content class="max-h-72 overflow-y-auto rounded-none border-0">
 					{#each matching as option (option.value)}

@@ -115,6 +115,7 @@
 					{$t(
 						'Focus an Item checkbox to browse and select. Selection stays on the current page. Enter on a title opens the Item.'
 					)}
+					{$t('Shift-click an Item checkbox to select a range on this page.')}
 				</p>
 				<dl class="my-5 grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 text-sm">
 					{#each libraryRowCommands as command (command.id)}

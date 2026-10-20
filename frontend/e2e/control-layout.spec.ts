@@ -141,7 +141,7 @@ test('bulk Tag action offers searchable existing Tags and submits their names', 
 		submitted = route.request().postDataJSON();
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.getByLabel('Bulk action').selectOption('add_tag');
+	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
 	await chooseSearchOption(page, 'Select Tag', 'Reading');
 	await page.getByRole('button', { name: 'Apply', exact: true }).click();
 	await expect
@@ -152,14 +152,18 @@ test('bulk Tag action offers searchable existing Tags and submits their names', 
 test('bulk Project chooser aligns with the action selector', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await library(page);
-	await page.getByLabel('Bulk action').selectOption('add_project');
-	const action = (await page.getByLabel('Bulk action').boundingBox())!;
+	await page
+		.getByRole('combobox', { name: 'Bulk action', exact: true })
+		.selectOption('add_project');
+	const action = (await page
+		.getByRole('combobox', { name: 'Bulk action', exact: true })
+		.boundingBox())!;
 	const project = (await page
 		.getByRole('combobox', { name: 'Select Project', exact: true })
 		.boundingBox())!;
 	expect(Math.abs(action.y - project.y), JSON.stringify({ action, project })).toBeLessThan(2);
 	expect(Math.abs(action.height - project.height)).toBeLessThan(2);
-	await page.getByLabel('Bulk action').selectOption('add_tag');
+	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
 	const tag = (await page
 		.getByRole('combobox', { name: 'Select Tag', exact: true })
 		.boundingBox())!;
@@ -174,7 +178,7 @@ test('bulk Tag action still accepts a new Tag name', async ({ page }) => {
 		submitted = route.request().postDataJSON();
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.getByLabel('Bulk action').selectOption('add_tag');
+	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
 	const tag = page.getByRole('combobox', { name: 'Select Tag', exact: true });
 	await tag.fill('New topic');
 	await tag.press('Escape');

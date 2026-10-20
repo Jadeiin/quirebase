@@ -573,6 +573,11 @@ msgid "Apply JSON changes before saving."
 msgstr "请先应用 JSON 修改，再保存。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Applying to the selected Items…"
+msgstr "正在对所选条目执行操作…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -890,6 +895,11 @@ msgid "Bulk action failed"
 msgstr "批量操作失败"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Bulk actions"
+msgstr "批量操作"
+
+#. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
 msgid "Calendar for {label}"
 msgstr "{label}日历"
@@ -976,6 +986,11 @@ msgid "Choose a new name for this Tag."
 msgstr "为该标签输入一个新名称。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose a Project to continue."
+msgstr "请选择项目以继续。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Choose a role"
 msgstr "选择角色"
@@ -1012,6 +1027,11 @@ msgid "Choose action"
 msgstr "选择操作"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose an action to continue."
+msgstr "请选择操作以继续。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
 msgid "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
 msgstr "请选择一位活跃用户作为此工作区所有者。实例管理员不会因此自动获得内容访问权限。"
@@ -1036,6 +1056,11 @@ msgstr "选择文件"
 #: src/lib/features/account/Account.svelte
 msgid "Choose how Quirebase looks and speaks to you."
 msgstr "选择 Quirebase 的显示与语言方式。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose or enter a Tag to continue."
+msgstr "请选择或输入标签以继续。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1466,6 +1491,11 @@ msgstr "CSL-JSON"
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 msgid "Current owner: {username}"
 msgstr "当前所有者：{username}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Current page only"
+msgstr "仅限当前页"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -5166,6 +5196,12 @@ msgid "Shared identifier"
 msgstr "共享标识符"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Shift-click an Item checkbox to select a range on this page."
+msgstr "按住 Shift 点击条目复选框，可选择当前页内的一段条目。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "显示全部字段"
@@ -5591,6 +5627,11 @@ msgstr "上传的内容过大。"
 #: src/lib/features/item/schema-editor/schema.ts
 msgid "The value does not match the required format."
 msgstr "此值不符合要求的格式。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "This action is no longer available."
+msgstr "此操作已不可用。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

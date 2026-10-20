@@ -282,7 +282,9 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByLabel('Select this page').check();
-	await page.getByLabel('Bulk action').selectOption('add_project');
+	await page
+		.getByRole('combobox', { name: 'Bulk action', exact: true })
+		.selectOption('add_project');
 	const target = page.getByRole('combobox', { name: 'Select Project', exact: true });
 	await chooseSearchOption(page, 'Select Project', 'Reading Project');
 	const initialWorkspaceReads = [...workspaceReads];

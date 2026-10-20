@@ -573,6 +573,11 @@ msgid "Apply JSON changes before saving."
 msgstr "Apply JSON changes before saving."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Applying to the selected Items…"
+msgstr "Applying to the selected Items…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -890,6 +895,11 @@ msgid "Bulk action failed"
 msgstr "Bulk action failed"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Bulk actions"
+msgstr "Bulk actions"
+
+#. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
 msgid "Calendar for {label}"
 msgstr "Calendar for {label}"
@@ -976,6 +986,11 @@ msgid "Choose a new name for this Tag."
 msgstr "Choose a new name for this Tag."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose a Project to continue."
+msgstr "Choose a Project to continue."
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Choose a role"
 msgstr "Choose a role"
@@ -1012,6 +1027,11 @@ msgid "Choose action"
 msgstr "Choose action"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose an action to continue."
+msgstr "Choose an action to continue."
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
 msgid "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
 msgstr "Choose an active user to own this workspace. Instance administrators do not automatically get content access."
@@ -1036,6 +1056,11 @@ msgstr "Choose files"
 #: src/lib/features/account/Account.svelte
 msgid "Choose how Quirebase looks and speaks to you."
 msgstr "Choose how Quirebase looks and speaks to you."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose or enter a Tag to continue."
+msgstr "Choose or enter a Tag to continue."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1466,6 +1491,11 @@ msgstr "CSL-JSON"
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 msgid "Current owner: {username}"
 msgstr "Current owner: {username}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Current page only"
+msgstr "Current page only"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -5166,6 +5196,12 @@ msgid "Shared identifier"
 msgstr "Shared identifier"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Shift-click an Item checkbox to select a range on this page."
+msgstr "Shift-click an Item checkbox to select a range on this page."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "Show all fields"
@@ -5591,6 +5627,11 @@ msgstr "The uploaded content is too large."
 #: src/lib/features/item/schema-editor/schema.ts
 msgid "The value does not match the required format."
 msgstr "The value does not match the required format."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "This action is no longer available."
+msgstr "This action is no longer available."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts

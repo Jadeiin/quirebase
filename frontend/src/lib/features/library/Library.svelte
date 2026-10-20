@@ -72,6 +72,7 @@
 	let shortcutsEnabled = $state(true);
 	let searchInput = $state<HTMLInputElement>();
 	let selected = new SvelteSet<string>();
+	let bulkActionsElement = $state<HTMLElement>();
 	let selectionVersion = 0;
 	let bulkAction = $state('');
 	let bulkProject = $state('');
@@ -82,6 +83,7 @@
 	let confirmDeleteOpen = $state(false);
 	let deleteInput = $state<LibraryBulkInput | null>(null);
 	let deleteSelectionVersion = 0;
+	let deleteTrigger: HTMLElement | null = null;
 	let exportPreferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
@@ -138,6 +140,10 @@
 		if (!library.isSuccess || library.isFetching) return;
 		const available = new Set(library.data.items.map((item) => item.id));
 		// Refetches can remove rows. Do not retain invisible bulk targets.
+		if (selected.size && ![...selected].some((id) => available.has(id))) {
+			clearSelection();
+			return;
+		}
 		for (const id of selected)
 			if (!available.has(id)) {
 				selectionVersion++;
@@ -204,9 +210,15 @@
 		for (const id of ids) if (available.has(id)) selected.add(id);
 	}
 
-	function clearSelection() {
+	function clearSelection(origin: HTMLElement | null = null) {
+		const focused = document.activeElement;
+		const focusWillDisappear =
+			bulkActionsElement?.isConnected &&
+			(bulkActionsElement.contains(focused) ||
+				(focused === document.body && bulkActionsElement.contains(origin)));
 		selectionVersion++;
 		selected.clear();
+		if (focusWillDisappear) document.getElementById('library-results')?.focus();
 	}
 
 	function escape() {
@@ -215,9 +227,7 @@
 			return true;
 		}
 		if (!selected.size) return false;
-		const focusWillDisappear = document.activeElement?.closest('[data-library-bulk-actions]');
 		clearSelection();
-		if (focusWillDisappear) document.getElementById('library-results')?.focus();
 		return true;
 	}
 
@@ -225,6 +235,7 @@
 		if (!bulkAction || selected.size === 0 || bulkMutation.isPending) return;
 		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
 		if (bulkAction === 'delete') {
+			deleteTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 			deleteInput = currentBulkInput();
 			deleteSelectionVersion = selectionVersion;
 			error = '';
@@ -253,11 +264,12 @@
 		error = '';
 		notice = '';
 		const submittedSelectionVersion = deleteInput ? deleteSelectionVersion : selectionVersion;
+		const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		try {
 			await bulkMutation.mutateAsync({
 				input,
 				afterMutation: () => {
-					if (selectionVersion === submittedSelectionVersion) clearSelection();
+					if (selectionVersion === submittedSelectionVersion) clearSelection(trigger);
 				}
 			});
 			confirmDeleteOpen = false;
@@ -313,6 +325,7 @@
 <LibraryActiveFilters filters={submitted} onRemove={removeFilters} />
 
 <BulkActions
+	bind:element={bulkActionsElement}
 	selectedCount={selected.size}
 	bind:bulkAction
 	bind:bulkProject
@@ -321,7 +334,7 @@
 	projects={projectChoices}
 	{busy}
 	onApply={requestBulkAction}
-	onClearSelection={clearSelection}
+	onClearSelection={() => clearSelection()}
 />
 
 {#if projects.hasNextPage}<Button
@@ -331,6 +344,8 @@
 
 <ConfirmDialog
 	bind:open={confirmDeleteOpen}
+	finalFocusEl={() =>
+		deleteTrigger?.isConnected ? deleteTrigger : document.getElementById('library-results')}
 	title={$t('Permanently delete the selected Items?')}
 	body={$t('This cannot be undone.')}
 	confirmLabel={$t('Permanently delete')}
@@ -343,6 +358,7 @@
 
 <LibraryResults
 	{workspaceId}
+	{listingIdentity}
 	{shortcutsEnabled}
 	filterHref={(filter) =>
 		libraryHref(workspaceId, refineLibraryFilters(submitted, filter), 1, pageSize, previewItemId)}

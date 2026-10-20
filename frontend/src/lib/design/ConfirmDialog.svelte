@@ -14,6 +14,7 @@
 		confirmLabel,
 		busy = false,
 		error = '',
+		finalFocusEl,
 		onConfirm
 	}: {
 		open: boolean;
@@ -22,12 +23,14 @@
 		confirmLabel: string;
 		busy?: boolean;
 		error?: string;
+		finalFocusEl?: () => HTMLElement | null;
 		onConfirm: () => void;
 	} = $props();
 </script>
 
 <Dialog
 	{open}
+	{finalFocusEl}
 	onOpenChange={(details) => {
 		if (!busy) open = details.open;
 	}}

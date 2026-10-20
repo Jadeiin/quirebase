@@ -384,7 +384,9 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 	await expect.poll(() => projectReads).toBe(1);
 	await page.getByRole('link', { name: 'Library', exact: true }).first().click();
 	await page.getByLabel('Select this page').check();
-	await page.getByLabel('Bulk action').selectOption('add_project');
+	await page
+		.getByRole('combobox', { name: 'Bulk action', exact: true })
+		.selectOption('add_project');
 	await chooseSearchOption(page, 'Select Project', 'Research');
 	await page.getByRole('button', { name: 'Apply' }).click();
 	await expect(page.getByText('Bulk action completed')).toBeVisible();
@@ -500,7 +502,9 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 
 		await page.goto(`/workspace/${workspaceId}/library`);
 		await page.getByLabel('Select A. Author').check();
-		await page.getByLabel('Bulk action').selectOption('bibliography');
+		await page
+			.getByRole('combobox', { name: 'Bulk action', exact: true })
+			.selectOption('bibliography');
 		await page.getByRole('button', { name: 'Apply' }).click();
 		await expect
 			.poll(() => exportBody)
