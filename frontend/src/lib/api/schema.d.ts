@@ -4106,6 +4106,18 @@ export interface components {
 			expires_at: string;
 		};
 		/**
+		 * ItemAuthorView
+		 * @description An ordered record credit and its exact Library Search name values.
+		 */
+		ItemAuthorView: {
+			/** Full Name */
+			full_name: string;
+			/** Last Name */
+			last_name: string;
+			/** First Name */
+			first_name: string | null;
+		};
+		/**
 		 * ItemCopyTargetView
 		 * @description A currently eligible copy destination; the command rechecks authority.
 		 */
@@ -4218,7 +4230,7 @@ export interface components {
 			/** Title Html */
 			title_html: string;
 			/** Authors */
-			authors: string | null;
+			authors: components['schemas']['ItemAuthorView'][];
 			/** Publication Date */
 			publication_date: string | null;
 			/** Publication Title */
@@ -8994,7 +9006,8 @@ export interface operations {
 			query?: {
 				limit?: number;
 				offset?: number;
-				sort?: 'updated' | 'created' | 'title';
+				sort?: 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
+				direction?: ('asc' | 'desc') | null;
 				query?: string;
 				tag?: string;
 				project?: string | null;

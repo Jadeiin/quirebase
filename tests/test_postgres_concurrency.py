@@ -3079,9 +3079,10 @@ async def test_id_and_token_invitation_acceptance_serialize_once(postgres_race):
 
     async with postgres_race.session("blocker") as db:
         await db.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
-        for name in ("by-id", "by-token"):
+        for name, holder in (("by-id", "blocker"), ("by-token", "by-id")):
             postgres_race.start(name, accept(name))
-            await postgres_race.wait_blocked(name, "blocker")
+            # PostgreSQL queues the second tuple-lock waiter behind the first.
+            await postgres_race.wait_blocked(name, holder)
         await db.commit()
     outcomes = [await postgres_race.join(name) for name in ("by-id", "by-token")]
     assert sorted(outcomes) == ["accepted", "used"]
@@ -3145,9 +3146,9 @@ async def test_workspace_leave_serializes_with_ownership_transfer(postgres_race,
     second = "transfer" if first == "leave" else "leave"
     async with postgres_race.session("blocker") as db:
         await db.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
-        for name in (first, second):
+        for name, holder in ((first, "blocker"), (second, first)):
             postgres_race.start(name, command(name))
-            await postgres_race.wait_blocked(name, "blocker")
+            await postgres_race.wait_blocked(name, holder)
         await db.commit()
     assert await postgres_race.join(first) == first
     assert await postgres_race.join(second) == "denied"

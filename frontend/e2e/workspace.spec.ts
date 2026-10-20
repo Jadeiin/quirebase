@@ -74,7 +74,7 @@ test('an explicit Workspace URL wins over the saved default, and switching chang
 					{
 						id: `item-${workspaceId}`,
 						title_html: `Result ${workspaceId}`,
-						authors: null,
+						authors: [],
 						publication_date: null,
 						publication_title: null,
 						doi: null,
@@ -550,7 +550,7 @@ test('a pending Workspace A response cannot replace Workspace B after switching'
 					{
 						id: `item-${workspaceId}`,
 						title_html: `Result ${workspaceId}`,
-						authors: null,
+						authors: [],
 						publication_date: null,
 						publication_title: null,
 						doi: null,
@@ -768,7 +768,7 @@ test('browser history and two tabs retain their explicit Workspace URLs across r
 						{
 							id: `item-${workspaceId}`,
 							title_html: `Result ${workspaceId}`,
-							authors: null,
+							authors: [],
 							publication_date: null,
 							publication_title: null,
 							doi: null,

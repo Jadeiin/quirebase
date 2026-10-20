@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, update
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import VersionConflict, WorkspaceMembershipRequired, WorkspaceUnavailable
@@ -36,6 +37,191 @@ async def owner(db):
     await provision_initial_workspace(db, actor)
     await db.commit()
     return actor, fixture_workspace_id(actor)
+
+
+async def test_title_sort_keeps_stable_pages_in_both_directions(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    titles = ["Zulu", "Alpha", "Alpha", "Beta", "Étude", "Étude", "研究"]
+    ids = [(await create_item(db, actor, workspace_id, work(title))).item_id for title in titles]
+    ascending = [*sorted(ids[1:3]), ids[3], ids[0], *sorted(ids[4:6]), ids[6]]
+    descending = [ids[6], *sorted(ids[4:6]), ids[0], ids[3], *sorted(ids[1:3])]
+    for direction, expected in [("asc", ascending), ("desc", descending)]:
+        actual = []
+        for offset in range(0, len(ids), 2):
+            rows, total = await search_library(
+                db, actor, workspace_id, sort="title", direction=direction, limit=2, offset=offset
+            )
+            assert total == len(ids)
+            actual.extend(row.id for row in rows)
+        assert actual == expected
+    await revise_item_metadata(db, actor, workspace_id, ids[0], 1, work("Aardvark"))
+    rows, _ = await search_library(db, actor, workspace_id, sort="title")
+    assert rows[0].id == ids[0]
+
+
+async def test_author_sort_uses_first_author_then_editor_before_pagination(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+
+    def person(family, role="Author", **fields):
+        return {"type": "Person", "person": {"family_name": family, **fields}, "roles": [role]}
+
+    credits = [
+        [person("Aardvark", "Editor"), person("Smith", name="Alice Smith"), person("Aaron")],
+        [person("Adams", name="Zoe Adams")],
+        [
+            {
+                "type": "Organization",
+                "organization": {"name": "Baker Council"},
+                "person": {"family_name": "Aardvark"},
+                "roles": ["Author"],
+            }
+        ],
+        [person("Clark", "Editor"), person("Aaron", "Editor")],
+        [{"type": "Person", "person": {"name": "Delta"}, "roles": ["Author"]}],
+        [{"type": "Person", "person": {"given_name": "Echo"}, "roles": ["Author"]}],
+        [],
+        [person("Aaron", "Translator")],
+        [
+            {
+                "type": "Person",
+                "person": {"id": "https://orcid.org/0000-0002-1825-0097"},
+                "roles": ["Author"],
+            },
+            person("Foxtrot", "Editor"),
+        ],
+        [person("Smith", given_name="Bob")],
+        [person("研究")],
+    ]
+    ids = [
+        (
+            await create_item(
+                db, actor, workspace_id, work(str(i), **({"contributors": rows} if rows else {}))
+            )
+        ).item_id
+        for i, rows in enumerate(credits)
+    ]
+    outsider, other_workspace = await owner(db)
+    await create_item(db, outsider, other_workspace, work("Outside", contributors=[person("AAA")]))
+    missing = sorted(ids[6:8])
+    for direction, expected in [
+        ("asc", [*ids[1:6], ids[8], *sorted([ids[0], ids[9]]), ids[10], *missing]),
+        ("desc", [ids[10], *sorted([ids[0], ids[9]]), ids[8], *reversed(ids[1:6]), *missing]),
+    ]:
+        actual = []
+        for offset in range(0, len(ids), 2):
+            rows, total = await search_library(
+                db, actor, workspace_id, sort="author", direction=direction, limit=2, offset=offset
+            )
+            assert total == len(ids)
+            actual.extend(row.id for row in rows)
+        assert actual == expected
+    rows, _ = await search_library(db, actor, workspace_id, sort="author")
+    assert rows[0].id == ids[1]
+    await revise_item_metadata(
+        db, actor, workspace_id, ids[0], 1, work("Revised", contributors=[person("Aaron")])
+    )
+    rows, _ = await search_library(db, actor, workspace_id, sort="author")
+    assert rows[0].id == ids[0]
+
+
+async def test_publication_sort_preserves_precision_and_puts_missing_dates_last(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    dates = [
+        "2023",
+        "2024",
+        "2024-01",
+        "2024-01-01",
+        "2024-02-03T23:00:00Z",
+        "2024-02-03T01:00:00+08:00",
+        None,
+        None,
+    ]
+    ids = [
+        (
+            await create_item(
+                db,
+                actor,
+                workspace_id,
+                work(f"Date {index}", **({"date_published": date} if date else {})),
+            )
+        ).item_id
+        for index, date in enumerate(dates)
+    ]
+    # Items from another Workspace never enter the ordering or count.
+    outsider, other_id = await owner(db)
+    await create_item(db, outsider, other_id, work("Outside", date_published="2099"))
+    for direction, expected in [
+        ("asc", [*ids[:4], *sorted(ids[4:6]), *sorted(ids[6:])]),
+        ("desc", [*sorted(ids[4:6]), *reversed(ids[:4]), *sorted(ids[6:])]),
+    ]:
+        rows, total = await search_library(
+            db, actor, workspace_id, sort="published", direction=direction
+        )
+        assert total == len(ids) and [row.id for row in rows] == expected
+        assert [row.work.get("date_published") for row in rows] == [
+            dates[ids.index(id)] for id in expected
+        ]
+    rows, total = await search_library(
+        db, actor, workspace_id, sort="published", year="2024", limit=2, offset=2
+    )
+    assert total == 5 and [row.id for row in rows] == [ids[3], ids[2]]
+
+
+@pytest.mark.parametrize("sort", ["created", "updated"])
+async def test_timestamp_sort_supports_both_directions_before_pagination(persistence_db, sort):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    ids = [(await create_item(db, actor, workspace_id, work(str(i)))).item_id for i in range(3)]
+    for index, id in enumerate(ids):
+        timestamp = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=index)
+        await db.execute(
+            update(Item).where(Item.id == id).values(created_at=timestamp, updated_at=timestamp)
+        )
+    await db.commit()
+    for direction, expected in [("asc", ids[:2]), ("desc", list(reversed(ids))[:2])]:
+        rows, total = await search_library(
+            db, actor, workspace_id, sort=sort, direction=direction, limit=2
+        )
+        assert total == 3 and [row.id for row in rows] == expected
+
+
+async def test_publication_sort_supports_both_directions_and_missing_names(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    publications = ["Zulu Journal", "Alpha Journal", "Alpha Journal", "特刊", "", None]
+    ids = [
+        (
+            await create_item(
+                db,
+                actor,
+                workspace_id,
+                work(
+                    f"Publication {index}",
+                    **({"container": {"title": publication}} if publication is not None else {}),
+                ),
+            )
+        ).item_id
+        for index, publication in enumerate(publications)
+    ]
+    for direction, expected in [
+        ("asc", [*sorted(ids[1:3]), ids[0], ids[3], *sorted(ids[4:])]),
+        ("desc", [ids[3], ids[0], *sorted(ids[1:3]), *sorted(ids[4:])]),
+    ]:
+        rows, total = await search_library(
+            db, actor, workspace_id, sort="publication", direction=direction
+        )
+        assert total == 6 and [row.id for row in rows] == expected
+    rows, total = await search_library(
+        db, actor, workspace_id, sort="publication", limit=1, offset=2
+    )
+    assert total == 6 and rows[0].id == ids[0]
+    rows, total = await search_library(
+        db, actor, workspace_id, sort="publication", publication_title="Alpha Journal"
+    )
+    assert total == 2 and [row.id for row in rows] == sorted(ids[1:3])
 
 
 async def test_duplicate_identifiers_coexist_and_suggest_connected_groups(persistence_db):
@@ -779,7 +965,9 @@ async def test_contributor_type_selects_active_names_in_library_projections(pers
     created = await create_item(db, actor, workspace_id, metadata)
     item = await db.get(Item, created.item_id)
     assert item.work == metadata
-    assert item_summary(item)["authors"] == "Research Council"
+    assert item_summary(item)["authors"] == [
+        {"full_name": "Research Council", "last_name": "Research Council", "first_name": None}
+    ]
     suggestions = await search_authors_typeahead(db, actor, workspace_id, "Research")
     assert suggestions == [
         {"last_name": "Research Council", "first_name": None, "full_name": "Research Council"}
@@ -790,6 +978,62 @@ async def test_contributor_type_selects_active_names_in_library_projections(pers
     ]
     assert (await search_library(db, actor, workspace_id, author="Ada"))[1] == 0
     assert (await search_library(db, actor, workspace_id, author="Council"))[1] == 1
+
+
+async def test_summary_author_credits_round_trip_exact_library_filters(persistence_db):
+    from quirebase.library import item_summary
+    from quirebase.web.api.library_schemas import item_search_view
+
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    credits = [
+        {
+            "type": "Person",
+            "person": {
+                "name": "Credited display",
+                "family_name": " Smith; & 一 ",
+                "given_name": " Jane ",
+            },
+            "roles": ["Author"],
+        },
+        {
+            "type": "Organization",
+            "organization": {"name": " Council; & 50%_+ "},
+            "person": {"family_name": "Inactive"},
+            "roles": ["Author"],
+        },
+        {"type": "Person", "person": {"name": "Single; Name"}, "roles": ["Author"]},
+        {"type": "Person", "person": {"given_name": "Ada"}, "roles": ["Author"]},
+        {"type": "Person", "person": {"family_name": "Family"}, "roles": ["Author", "Editor"]},
+        {"type": "Person", "person": {"name": "Editor only"}, "roles": ["Editor"]},
+        {
+            "type": "Person",
+            "person": {"id": "https://orcid.org/0000-0002-1825-0097"},
+            "roles": ["Author"],
+        },
+    ]
+    created = await create_item(db, actor, workspace_id, work(contributors=credits))
+    item = await db.get(Item, created.item_id)
+    authors = item_summary(item)["authors"]
+    assert authors == [
+        {"full_name": "Credited display", "last_name": " Smith; & 一 ", "first_name": " Jane "},
+        {"full_name": " Council; & 50%_+ ", "last_name": " Council; & 50%_+ ", "first_name": None},
+        {"full_name": "Single; Name", "last_name": "Single; Name", "first_name": None},
+        {"full_name": "Ada", "last_name": "Ada", "first_name": None},
+        {"full_name": "Family", "last_name": "Family", "first_name": None},
+    ]
+    assert item_search_view(item).model_dump()["authors"] == authors
+    for author in authors:
+        matches, total = await search_library(
+            db,
+            actor,
+            workspace_id,
+            author_last_name=author["last_name"],
+            author_first_name=author["first_name"] or "",
+        )
+        assert total == 1 and [row.id for row in matches] == [created.item_id]
+    empty = await create_item(db, actor, workspace_id, work())
+    assert item_summary(await db.get(Item, empty.item_id))["authors"] == []
 
 
 @pytest.mark.parametrize("source", ["bibliography", "identifier", "pdf"])

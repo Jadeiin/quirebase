@@ -101,15 +101,40 @@ integrated with the Svelte workspace, but do not become a second general-purpose
 Skeleton's Svelte component stylesheet is loaded alongside the core primitives. Navigation owns
 sidebar, mobile and section-link presentation; SvelteKit still owns URL selection and `aria-current`.
 Pagination owns page changes through first/previous/next/last controls, a Page Size selector and the
-current result range. Library and Project Item lists expose server-side Sort By choices in the same
-bar. Library, Project directory and Project Item lists keep filters, page, Page Size and sorting
+current result range. Library keeps server-side Sort By choices alongside view controls in its results
+toolbar; Project Item lists expose them in the pagination bar. Library, Project directory and Project
+Item lists keep filters, page, Page Size and sorting
 in the URL and reset to page one when size, sorting or filters change. Tabs owns local Account
 and Item-action sections, plus URL-selected Tools modes. Combobox owns
 searchable Tag, Project and Workspace selection, Listbox owns the visible CSL style choices,
-SegmentedControl owns duplicate criteria,
+SegmentedControl owns duplicate criteria and the Library’s automatic/table/list view choice,
 Collapsible owns the Library filter disclosure, and Progress owns indeterminate loading feedback.
 Short fixed choices and native form inputs keep Skeleton's CSS primitives. Native details and
 asynchronous Tag assignment actions retain their current product semantics.
+
+Library uses a native table on desktop and a compact list on narrow screens. TanStack Svelte
+Table owns column visibility, constrained resizing and row-selection mechanics; Query and the URL
+retain server filtering, sorting and pagination. Only the loaded page is selectable. A changed list
+query clears selection, and successful refreshes remove selected IDs that are no longer displayed.
+Authoritative access/not-found failures discard cached lists for that Project and clear selection;
+transient refresh failures may retain the last loaded rows.
+Titles remain ordinary Item links. The independent `preview` URL parameter opens a read-only,
+nonmodal Item overview loaded on demand through the existing Item query. Preview navigation preserves
+filter drafts and bulk selection; closing restores its trigger when available. Preview autofocus
+preserves focus moved to another control while its module loads. Density, optional
+columns, widths and the automatic/table/list view choice are local User-scoped display preferences.
+Automatic view follows viewport width; an explicit view choice overrides it. Preview code loads on demand.
+Author credits, publication titles and publication years refine the submitted Library query, replace
+the same facet and reset paging while preserving other filters, sort, page size and preview target.
+Item summaries carry ordered structured author names with exact filter values; no row-level lookup
+or parsing of joined names is needed. Only the year portion of a displayed date acts as a filter.
+Library sorting supports title, first author, publication, publication date, date added and date
+modified in both directions; the toolbar groups a field selector with its direction toggle, synchronized
+with sortable table headers through the URL.
+Author order uses the first named Author’s surname or literal name, falling back to the first named
+Editor; organization credits use their literal names. Missing names and dates always sort last.
+Publication dates compare their supplied
+calendar parts, with shorter precision first in ascending order; times do not distinguish the same calendar day.
 
 Client interactions distinguish four sources of state:
 

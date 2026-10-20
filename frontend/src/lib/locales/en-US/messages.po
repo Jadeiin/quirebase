@@ -61,6 +61,11 @@ msgid "{count} / 50 identifiers"
 msgstr "{count} / 50 identifiers"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "{count} PDF revisions"
+msgstr "{count} PDF revisions"
+
+#. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "{count} pending invitations"
@@ -70,6 +75,11 @@ msgstr "{count} pending invitations"
 #: src/lib/features/library/BulkActions.svelte
 msgid "{count} selected"
 msgstr "{count} selected"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "{count} supplements"
+msgstr "{count} supplements"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -117,10 +127,16 @@ msgid "A managed Project starts with no participants; Workspace owners/admins ca
 msgstr "A managed Project starts with no participants; Workspace owners/admins can add them."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "A–Z"
+msgstr "A–Z"
+
+#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "Abstract"
 msgstr "Abstract"
 
@@ -657,11 +673,13 @@ msgstr "Audit log"
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
 msgid "Author"
 msgstr "Author"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "Authors"
 msgstr "Authors"
 
@@ -670,6 +688,16 @@ msgstr "Authors"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Auto detect"
 msgstr "Auto detect"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Automatic"
+msgstr "Automatic"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Automatic: Table on wide screens, List on narrow screens"
+msgstr "Automatic: Table on wide screens, List on narrow screens"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1105,6 +1133,12 @@ msgid "Close"
 msgstr "Close"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Close preview"
+msgstr "Close preview"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Closed"
 msgstr "Closed"
@@ -1133,6 +1167,11 @@ msgstr "Collected"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Collection"
 msgstr "Collection"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Comfortable"
+msgstr "Comfortable"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -1164,6 +1203,11 @@ msgstr "Commonmeta"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Commonmeta exports retain the complete Work, including its abstract and identifiers."
 msgstr "Commonmeta exports retain the complete Work, including its abstract and identifiers."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Compact"
+msgstr "Compact"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -1490,6 +1534,16 @@ msgid "Date"
 msgstr "Date"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Date added"
+msgstr "Date added"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Date modified"
+msgstr "Date modified"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/PublicationDateField.svelte
 msgid "Date precision"
 msgstr "Date precision"
@@ -1579,6 +1633,11 @@ msgid "Delete this Tag from all accessible Items?"
 msgstr "Delete this Tag from all accessible Items?"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Density"
+msgstr "Density"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/projects/Projects.svelte
@@ -1664,6 +1723,11 @@ msgid "Dismiss"
 msgstr "Dismiss"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Display options"
+msgstr "Display options"
+
+#. js-lingui-explicit-id
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Displayed annotation sources"
 msgstr "Displayed annotation sources"
@@ -1717,6 +1781,11 @@ msgstr "Document processing failed"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Documents"
 msgstr "Documents"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "DOI"
+msgstr "DOI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1775,6 +1844,11 @@ msgstr "Download original"
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Download with annotations"
 msgstr "Download with annotations"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Drag to resize. Use arrow keys to adjust; Home to reset."
+msgstr "Drag to resize. Use arrow keys to adjust; Home to reset."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -2027,6 +2101,7 @@ msgstr "File format"
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "Files"
 msgstr "Files"
 
@@ -2570,6 +2645,11 @@ msgid "Item list read-only"
 msgstr "Item list read-only"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Item preview"
+msgstr "Item preview"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Item removed from Project"
 msgstr "Item removed from Project"
@@ -2732,6 +2812,16 @@ msgid "Library"
 msgstr "Library"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Library controls"
+msgstr "Library controls"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Library Items"
+msgstr "Library Items"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Library maintenance"
 msgstr "Library maintenance"
@@ -2777,6 +2867,11 @@ msgstr "Light theme"
 #: src/lib/domain-labels.ts
 msgid "Line"
 msgstr "Line"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "List"
+msgstr "List"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2853,6 +2948,12 @@ msgstr "Loading documents…"
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Loading invitations…"
 msgstr "Loading invitations…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Loading Item preview…"
+msgstr "Loading Item preview…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3269,6 +3370,11 @@ msgid "New Tag name"
 msgstr "New Tag name"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Newest first"
+msgstr "Newest first"
+
+#. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
 msgid "Next calendar period"
 msgstr "Next calendar period"
@@ -3285,6 +3391,7 @@ msgstr "No"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "No abstract available."
 msgstr "No abstract available."
 
@@ -3466,6 +3573,7 @@ msgstr "No sessions."
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "No tags"
 msgstr "No tags"
 
@@ -3526,6 +3634,11 @@ msgid "Note"
 msgstr "Note"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Oldest first"
+msgstr "Oldest first"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Omit"
 msgstr "Omit"
@@ -3561,6 +3674,11 @@ msgstr "Open annotation workspace"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Open copy"
 msgstr "Open copy"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Open full details"
+msgstr "Open full details"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3975,6 +4093,11 @@ msgid "Preserve BibTeX title case"
 msgstr "Preserve BibTeX title case"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Preview"
+msgstr "Preview"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Preview bibliography"
 msgstr "Preview bibliography"
@@ -3983,6 +4106,16 @@ msgstr "Preview bibliography"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Preview Citation Key"
 msgstr "Preview Citation Key"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Preview Item"
+msgstr "Preview Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Preview Item {number}"
+msgstr "Preview Item {number}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -4124,6 +4257,8 @@ msgstr "Public"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "Publication"
 msgstr "Publication"
 
@@ -4132,8 +4267,14 @@ msgstr "Publication"
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 #: src/lib/features/item/PublicationDateField.svelte
 #: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/library/LibraryResults.svelte
 msgid "Publication date"
 msgstr "Publication date"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Publication Date"
+msgstr "Publication Date"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -4194,6 +4335,7 @@ msgstr "Read only"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "Read PDF"
 msgstr "Read PDF"
 
@@ -4257,13 +4399,11 @@ msgstr "Recent operations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
-#: src/lib/features/library/LibraryResults.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Recently added"
 msgstr "Recently added"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Recently updated"
 msgstr "Recently updated"
@@ -4310,6 +4450,11 @@ msgstr "Refresh"
 #: src/lib/app/AppShell.svelte
 msgid "Refresh page"
 msgstr "Refresh page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Refresh preview"
+msgstr "Refresh preview"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -4479,6 +4624,11 @@ msgid "Researcher"
 msgstr "Researcher"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Reset display"
+msgstr "Reset display"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Reset password"
 msgstr "Reset password"
@@ -4487,6 +4637,11 @@ msgstr "Reset password"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Reset to defaults"
 msgstr "Reset to defaults"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Resize {name} column"
+msgstr "Resize {name} column"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -4832,12 +4987,12 @@ msgid "Searching…"
 msgstr "Searching…"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "Select"
 msgstr "Select"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "Select {name}"
 msgstr "Select {name}"
 
@@ -4857,7 +5012,7 @@ msgid "Select Tag"
 msgstr "Select Tag"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "Select this page"
 msgstr "Select this page"
 
@@ -5002,13 +5157,45 @@ msgstr "Something went wrong. Try again."
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/library/LibraryResults.svelte
 msgid "Sort"
 msgstr "Sort"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
+#: src/lib/features/library/LibraryResults.svelte
 msgid "Sort By"
 msgstr "Sort By"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Sort by authors"
+msgstr "Sort by authors"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Sort by first author or editor"
+msgstr "Sort by first author or editor"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Sort by publication"
+msgstr "Sort by publication"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Sort by publication date"
+msgstr "Sort by publication date"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Sort by title"
+msgstr "Sort by title"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Sort order: {current}. Switch to {next}."
+msgstr "Sort order: {current}. Switch to {next}."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5162,6 +5349,11 @@ msgid "System theme"
 msgstr "System theme"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Table"
+msgstr "Table"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Tag"
@@ -5214,6 +5406,7 @@ msgstr "Tag renamed"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "Tags"
 msgstr "Tags"
 
@@ -5429,6 +5622,7 @@ msgstr "This Workspace stays visible while its owner reassignment form is open."
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/library/LibraryTable.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Title"
 msgstr "Title"
@@ -5691,6 +5885,12 @@ msgid "Unable to load the Library."
 msgstr "Unable to load the Library."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Unable to load this Item preview."
+msgstr "Unable to load this Item preview."
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Unable to load workspace invitations."
 msgstr "Unable to load workspace invitations."
@@ -5729,6 +5929,11 @@ msgstr "Unable to open this PDF."
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to refresh Import preview"
 msgstr "Unable to refresh Import preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Unable to refresh the Library. Showing the last loaded results."
+msgstr "Unable to refresh the Library. Showing the last loaded results."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -5778,7 +5983,7 @@ msgstr "Unicode text"
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
-#: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "Unknown authors"
 msgstr "Unknown authors"
 
@@ -5979,6 +6184,11 @@ msgid "Version"
 msgstr "Version"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "View"
+msgstr "View"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "View all"
 msgstr "View all"
@@ -5990,12 +6200,14 @@ msgstr "View Items"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "View Items by {name}"
 msgstr "View Items by {name}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "View Items in {name}"
 msgstr "View Items in {name}"
 
@@ -6007,6 +6219,7 @@ msgstr "View Items of type {name}"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryTable.svelte
 msgid "View Items published in {year}"
 msgstr "View Items published in {year}"
 
@@ -6025,6 +6238,11 @@ msgstr "View Items with keyword {name}"
 #: src/lib/domain-labels.ts
 msgid "Viewer"
 msgstr "Viewer"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "Visible columns"
+msgstr "Visible columns"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -6314,3 +6532,8 @@ msgstr "Your Projects"
 #: src/lib/features/workspaces/WorkspaceSettings.svelte
 msgid "Your role:"
 msgstr "Your role:"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryResults.svelte
+msgid "Z–A"
+msgstr "Z–A"

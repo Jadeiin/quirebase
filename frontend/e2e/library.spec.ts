@@ -70,7 +70,7 @@ test('library renders canonical rich titles and exposes later pages', async ({ p
 					{
 						id: `item-${requestedPage}`,
 						title_html: requestedPage === 1 ? '<i>Visible</i> $x^2$ Item' : 'Second page Item',
-						authors: null,
+						authors: [],
 						publication_date: null,
 						publication_title: null,
 						doi: null,
@@ -127,7 +127,7 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 				items: [1, 2].map((number) => ({
 					id: `item-${currentPage}-${number}`,
 					title_html: `Page ${currentPage} Item ${number}`,
-					authors: 'A. Reader',
+					authors: [{ full_name: 'A. Reader', last_name: 'A. Reader', first_name: null }],
 					publication_date: '2026',
 					publication_title: null,
 					doi: null,
@@ -142,11 +142,15 @@ test('Library page selection toggles and icon pagination reaches every boundary'
 
 	await page.goto('/workspace/workspace-1/library');
 	const pageSelection = page.getByLabel('Select this page');
-	const itemSelections = page.locator('article input[type="checkbox"]');
+	const itemSelections = page.locator('#library-results input[type="checkbox"][aria-label]');
 	await pageSelection.check();
-	await expect(page.locator('article input[type="checkbox"]:checked')).toHaveCount(2);
+	await expect(
+		page.locator('#library-results input[type="checkbox"][aria-label]:checked')
+	).toHaveCount(2);
 	await pageSelection.uncheck();
-	await expect(page.locator('article input[type="checkbox"]:checked')).toHaveCount(0);
+	await expect(
+		page.locator('#library-results input[type="checkbox"][aria-label]:checked')
+	).toHaveCount(0);
 	await expect(itemSelections).toHaveCount(2);
 
 	await page.getByRole('button', { name: 'Last page' }).click();
@@ -169,7 +173,7 @@ for (const nextPage of [false, true]) {
 		const items = Array.from({ length: 26 }, (_, i) => ({
 			id: `item-${i}`,
 			title_html: `Library Item ${i}`,
-			authors: null,
+			authors: [],
 			publication_date: null,
 			publication_title: null,
 			doi: null,
@@ -206,7 +210,7 @@ for (const nextPage of [false, true]) {
 			return route.fulfill({ json: { ok: true } });
 		});
 		await page.goto('/workspace/workspace-1/library');
-		await page.locator('article input[type=checkbox]').first().check();
+		await page.locator('#library-results input[type=checkbox][aria-label]').first().check();
 		await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('add_tag');
 		await chooseSearchOption(page, 'Select Tag', 'Methods');
 		await page.getByRole('button', { name: 'Apply', exact: true }).click();
@@ -218,7 +222,9 @@ for (const nextPage of [false, true]) {
 			} else {
 				await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
 			}
-			const newerSelection = page.locator('article input[type=checkbox]').first();
+			const newerSelection = page
+				.locator('#library-results input[type=checkbox][aria-label]')
+				.first();
 			await newerSelection.check();
 			release.resolve();
 			await expect(page.getByText('Bulk action completed', { exact: true })).toBeVisible();
@@ -251,7 +257,7 @@ test('Library history navigation restores filter drafts and clears selection', a
 					{
 						id: `item-${query}`,
 						title_html: `Result for ${query}`,
-						authors: 'A. Reader',
+						authors: [{ full_name: 'A. Reader', last_name: 'A. Reader', first_name: null }],
 						publication_date: '2026',
 						publication_title: null,
 						doi: null,
@@ -276,7 +282,7 @@ test('Library history navigation restores filter drafts and clears selection', a
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?q=bar/);
 	await expect(page.getByText('Result for bar')).toBeVisible();
-	await page.locator('article input[type="checkbox"]').check();
+	await page.locator('#library-results input[type="checkbox"][aria-label]').check();
 	await expect(page.getByText('1 selected')).toBeVisible();
 
 	await page.goBack();
@@ -356,7 +362,7 @@ test('adding a Library Item invalidates a previously opened Project', async ({ p
 					{
 						id: 'item-1',
 						title_html: 'Newly added Item',
-						authors: 'A. Reader',
+						authors: [{ full_name: 'A. Reader', last_name: 'A. Reader', first_name: null }],
 						publication_date: '2026',
 						publication_title: null,
 						doi: null,
@@ -465,7 +471,7 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 						{
 							id: 'item-1',
 							title_html: 'Exportable',
-							authors: 'A. Author',
+							authors: [{ full_name: 'A. Author', last_name: 'A. Author', first_name: null }],
 							publication_date: '2026',
 							publication_title: null,
 							doi: null,
@@ -638,6 +644,9 @@ test('Library year calendar keeps numeric year filters and searchable selectors 
 		.getByRole('application', { name: 'Calendar for Year', exact: true })
 		.getByRole('button', { name: '2023', exact: true })
 		.click();
+	// The calendar restores input focus asynchronously when it closes.
+	await expect(year).toHaveValue('2023');
+	await expect(year).toBeFocused();
 	const tag = page.getByRole('combobox', { name: 'Tag', exact: true });
 	await tag.fill('Meth');
 	await expect(page.getByRole('option', { name: 'Methods', exact: true })).toBeVisible();
@@ -713,7 +722,7 @@ test('Library delete retains its submitted targets after pending Back navigation
 	const items = Array.from({ length: 26 }, (_, index) => ({
 		id: `item-${index}`,
 		title_html: `Item ${index}`,
-		authors: null,
+		authors: [],
 		publication_date: null,
 		publication_title: null,
 		doi: null,
@@ -743,7 +752,7 @@ test('Library delete retains its submitted targets after pending Back navigation
 	});
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByRole('button', { name: 'Next page', exact: true }).click();
-	await page.locator('article input[type=checkbox]').first().check();
+	await page.locator('#library-results input[type=checkbox][aria-label]').first().check();
 	await page.getByRole('combobox', { name: 'Bulk action', exact: true }).selectOption('delete');
 	await page.getByRole('button', { name: 'Apply', exact: true }).click();
 	const dialog = page.getByRole('dialog');

@@ -146,9 +146,10 @@
 							>
 							<span
 								class="flex flex-wrap items-center justify-between gap-2 text-xs text-surface-600-400"
-								><span>{recent.item.authors || $t('Unknown authors')}</span><span
-									>{$dateFormat.format(new Date(recent.last_read_at))}</span
-								></span
+								><span
+									>{recent.item.authors.map((author) => author.full_name).join('; ') ||
+										$t('Unknown authors')}</span
+								><span>{$dateFormat.format(new Date(recent.last_read_at))}</span></span
 							>
 						</a>
 					{:else}
@@ -183,9 +184,10 @@
 								><RichText html={item.title_html} /></strong
 							>
 							<span class="flex flex-wrap justify-between gap-2 text-xs text-surface-600-400"
-								><span>{item.authors || $t('Unknown authors')}</span><span
-									>{item.publication_date || $t('Date unknown')}</span
-								></span
+								><span
+									>{item.authors.map((author) => author.full_name).join('; ') ||
+										$t('Unknown authors')}</span
+								><span>{item.publication_date || $t('Date unknown')}</span></span
 							>
 						</a>
 					{:else}

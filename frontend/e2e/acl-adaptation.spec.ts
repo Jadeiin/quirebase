@@ -193,7 +193,7 @@ for (const [role, allowedActions, visible] of [
 						{
 							id: 'item-1',
 							title_html: 'Item',
-							authors: null,
+							authors: [],
 							publication_date: null,
 							publication_title: null,
 							doi: null,

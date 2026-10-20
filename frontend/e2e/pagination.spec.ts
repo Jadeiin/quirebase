@@ -5,7 +5,7 @@ import { directoryPage, mockSession, workspaceView } from './helpers';
 const items = Array.from({ length: 73 }, (_, index) => ({
 	id: `item-${index + 1}`,
 	title_html: `Item ${index + 1}`,
-	authors: 'Researcher',
+	authors: [{ full_name: 'Researcher', last_name: 'Researcher', first_name: null }],
 	publication_date: '2026',
 	publication_title: null
 }));
@@ -27,7 +27,7 @@ test('Library pagination keeps size, sort and exact filters through navigation',
 	);
 	const pagination = page.getByRole('navigation', { name: 'Library pages' });
 	const size = pagination.getByRole('combobox', { name: 'Page Size', exact: true });
-	const sort = pagination.getByRole('combobox', { name: 'Sort By', exact: true });
+	const sort = page.getByRole('combobox', { name: 'Sort By', exact: true });
 	await expect(pagination.getByText('Showing 21–30 of 73')).toBeVisible();
 	await expect(size).toHaveValue('10');
 	await expect(sort).toHaveValue('created');
@@ -99,9 +99,7 @@ test('Library deletion recovers the last valid page with filters, sorting and pa
 	await expect(pagination.getByRole('combobox', { name: 'Page Size', exact: true })).toHaveValue(
 		'20'
 	);
-	await expect(pagination.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue(
-		'created'
-	);
+	await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue('created');
 	const params = new URL(page.url()).searchParams;
 	expect(params.get('q')).toBe('research');
 	expect(params.get('author_first_name')).toBe('');
@@ -127,7 +125,7 @@ for (const total of [0, 1]) {
 		}
 		await pagination.getByRole('combobox', { name: 'Page Size', exact: true }).selectOption('100');
 		await expect(page).toHaveURL(/page_size=100/);
-		await pagination.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('title');
+		await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('title');
 		await expect(page).toHaveURL(/sort=title/);
 		await expect(pagination).toHaveAttribute('aria-busy', 'false');
 		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -160,7 +158,7 @@ test('Chinese pagination fits a narrow screen and remains accessible in dark mod
 	await page.goto('/workspace/workspace-1/library');
 	const pagination = page.getByRole('navigation', { name: '文献库分页' });
 	await expect(pagination.getByRole('combobox', { name: '每页数量' })).toHaveValue('25');
-	await expect(pagination.getByRole('combobox', { name: '排序方式' })).toHaveValue('updated');
+	await expect(page.getByRole('combobox', { name: '排序方式' })).toHaveValue('updated');
 	await expect(pagination.getByText('显示第 1–25 条，共 73 条')).toBeVisible();
 	expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 	const accessibility = await new AxeBuilder({ page })

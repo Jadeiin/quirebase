@@ -19,7 +19,6 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
-	import { librarySort } from '#lib/features/library/filters.js';
 	import { memberOptionsQuery } from '#lib/workspaces/queries.js';
 	import PromptDialog from '#lib/design/PromptDialog.svelte';
 	import RichText from '#lib/design/RichText.svelte';
@@ -665,7 +664,7 @@
 					navigateItems({ search: event.currentTarget.value, page: 1 }, true);
 				}}
 			/>
-			{#if items.isPending}<p>{$t('Loading Items…')}</p>
+			{#if items.isPending || (!items.data && items.isFetching)}<p>{$t('Loading Items…')}</p>
 			{:else if items.isError}<QueryError
 					message={$t('Unable to load Items.')}
 					busy={items.isFetching}
@@ -679,7 +678,8 @@
 							class="grid grid-cols-1 gap-1 no-underline"
 							href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
 							><strong><RichText html={item.title_html} /></strong><span
-								class="text-surface-600-400">{item.authors ?? ''}</span
+								class="text-surface-600-400"
+								>{item.authors.map((author) => author.full_name).join('; ') || ''}</span
 							></a
 						>{#if can('project_item.manage')}<Button
 								disabled={busy || project.state !== 'active'}
@@ -708,7 +708,10 @@
 					{ value: 'title', label: $t('Title') }
 				]}
 				onSort={(value) => {
-					navigateItems({ sort: librarySort(value), page: 1 });
+					navigateItems({
+						sort: value === 'title' || value === 'created' ? value : 'updated',
+						page: 1
+					});
 				}}
 				onPage={(page) => navigateItems({ page })}
 				label={$t('Items pagination')}

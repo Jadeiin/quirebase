@@ -877,7 +877,7 @@ test('cross-Workspace copy refreshes the target Workspace dashboard and Library'
 	const sourceItem = {
 		id: 'item-copy',
 		title_html: 'Copy source',
-		authors: null,
+		authors: [],
 		publication_date: null,
 		publication_title: null,
 		doi: null,
@@ -976,7 +976,7 @@ test('creating a Workspace refreshes cached Item copy destinations', async ({ pa
 	const sourceItem = {
 		id: 'item-copy',
 		title_html: 'Copy source',
-		authors: null,
+		authors: [],
 		publication_date: null,
 		publication_title: null,
 		doi: null,
@@ -2243,7 +2243,7 @@ test('Dashboard read history refreshes after opening an Item', async ({ page }) 
 	const item = {
 		id: 'item-1',
 		title_html: 'Read item',
-		authors: null,
+		authors: [],
 		publication_date: null,
 		publication_title: null,
 		doi: null,
@@ -2601,7 +2601,7 @@ test('Library file filters refresh after an Item file upload', async ({ page }) 
 							{
 								id: 'item-1',
 								title_html: 'Files Item',
-								authors: null,
+								authors: [],
 								publication_date: null,
 								publication_title: null,
 								doi: null,

@@ -1,0 +1,935 @@
+import AxeBuilder from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
+import { expect, test, type Page } from '@playwright/test';
+import { directoryPage, mockSession, tagPage } from './helpers';
+import type { components } from '../src/lib/api/schema.js';
+
+const items: components['schemas']['ItemSearchView'][] = Array.from(
+	{ length: 100 },
+	(_, index) => ({
+		id: `item-${index + 1}`,
+		title_html: index === 0 ? '<i>文献与公式</i> $x^2$ Research' : `Research Item ${index + 1}`,
+		authors:
+			index === 2
+				? []
+				: [
+						{ full_name: `Author ${index + 1}`, last_name: `Author ${index + 1}`, first_name: null }
+					],
+		publication_date: ['2026', '2026-10', '2026-10-19', null][index % 4],
+		publication_title: index === 2 ? null : 'Journal of Research',
+		doi: index === 0 ? '10.1234/research' : null,
+		version: 1
+	})
+);
+
+function overview(id: string) {
+	return {
+		id,
+		version: 1,
+		citation_key: null,
+		metadata: {
+			id: `urn:${id}`,
+			type: 'JournalArticle',
+			title: `Preview ${id}`,
+			description: `<b>Abstract ${id}</b> $x^2$`,
+			date_published: '2026-10'
+		},
+		authorization: { allowed: ['item.update'] },
+		copy_targets: [],
+		counts: { revisions: 2, attachments: 1, annotations: 0, discussion: 0 },
+		tags: [{ id: 'tag-1', name: 'Methods' }],
+		latest_revision_id: 'revision-1',
+		thumbnail: null
+	};
+}
+
+async function mockLibrary(page: Page, rows = items) {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/*/tags?*', (route) =>
+		route.fulfill({ json: tagPage([], route) })
+	);
+	await page.route('**/api/v1/workspaces/*/projects?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
+	const reads: URL[] = [];
+	await page.route('**/api/v1/workspaces/*/items?*', (route) => {
+		const url = new URL(route.request().url());
+		reads.push(url);
+		const limit = Number(url.searchParams.get('limit'));
+		const offset = Number(url.searchParams.get('offset'));
+		return route.fulfill({
+			json: { items: rows.slice(offset, offset + limit), total: rows.length, limit, offset }
+		});
+	});
+	const previews: string[] = [];
+	await page.route('**/api/v1/workspaces/*/items/*/overview', (route) => {
+		const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
+		previews.push(id);
+		return route.fulfill({ json: overview(id) });
+	});
+	return { reads, previews };
+}
+
+for (const view of ['table', 'list'] as const) {
+	test(`${view} sorting shares URL state, resets paging and preserves filters and preview`, async ({
+		page
+	}) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		const { reads } = await mockLibrary(page);
+		await page.goto(
+			'/workspace/workspace-1/library?q=research&sort=created&direction=asc&author_last_name=Smith&author_first_name=&page=2&page_size=10&preview=item-99'
+		);
+		const sort = page.getByRole('combobox', { name: 'Sort By', exact: true });
+		const direction = page.locator('#library-sort-direction');
+		await expect(sort).toHaveValue('created');
+		await expect(direction).toHaveAccessibleName(
+			'Sort order: Oldest first. Switch to Newest first.'
+		);
+		await page.getByRole('checkbox', { name: 'Select this page' }).check();
+		await sort.selectOption('published');
+		await expect.poll(() => reads.at(-1)?.searchParams.get('sort')).toBe('published');
+		let parameters = new URL(page.url()).searchParams;
+		expect(parameters.has('page')).toBe(false);
+		expect(parameters.has('direction')).toBe(false);
+		for (const [key, value] of Object.entries({
+			q: 'research',
+			author_last_name: 'Smith',
+			author_first_name: '',
+			page_size: '10',
+			preview: 'item-99'
+		}))
+			expect(parameters.get(key)).toBe(value);
+		expect(reads.at(-1)?.searchParams.get('offset')).toBe('0');
+		expect(reads.at(-1)?.searchParams.get('direction')).toBe('desc');
+		await expect(page.getByRole('checkbox', { name: 'Select this page' })).not.toBeChecked();
+		await direction.click();
+		await expect.poll(() => reads.at(-1)?.searchParams.get('direction')).toBe('asc');
+		await page.reload();
+		await expect(sort).toHaveValue('published');
+		await expect(direction).toHaveAccessibleName(
+			'Sort order: Oldest first. Switch to Newest first.'
+		);
+		await expect(page.getByRole('complementary', { name: 'Item preview' })).toBeVisible();
+		if (view === 'table') {
+			const date = page.getByRole('button', { name: 'Sort by publication date', exact: true });
+			const heading = page.getByRole('columnheader').filter({ has: date });
+			await expect(heading).toHaveAttribute('aria-sort', 'ascending');
+			await date.focus();
+			await date.press('Enter');
+			await expect(heading).toHaveAttribute('aria-sort', 'descending');
+			await expect(sort).toHaveValue('published');
+			await expect(direction).toHaveAccessibleName(
+				'Sort order: Newest first. Switch to Oldest first.'
+			);
+		}
+		await sort.selectOption('title');
+		await expect(sort).toHaveValue('title');
+		await expect(direction).toHaveAccessibleName('Sort order: A–Z. Switch to Z–A.');
+		if (view === 'table')
+			await page.getByRole('button', { name: 'Sort by title', exact: true }).click();
+		else await direction.click();
+		await expect.poll(() => reads.at(-1)?.searchParams.get('direction')).toBe('desc');
+		parameters = new URL(page.url()).searchParams;
+		expect(parameters.get('sort')).toBe('title');
+		expect(parameters.get('direction')).toBe('desc');
+		await page.goBack();
+		await expect(sort).toHaveValue('title');
+		await expect(direction).toHaveAccessibleName('Sort order: A–Z. Switch to Z–A.');
+		await sort.selectOption('publication');
+		await expect.poll(() => reads.at(-1)?.searchParams.get('sort')).toBe('publication');
+		await expect(sort).toHaveValue('publication');
+		if (view === 'table')
+			await page.getByRole('button', { name: 'Sort by publication', exact: true }).click();
+		else await direction.click();
+		await expect.poll(() => reads.at(-1)?.searchParams.get('direction')).toBe('desc');
+		await expect(sort).toHaveValue('publication');
+		await expect(direction).toHaveAccessibleName('Sort order: Z–A. Switch to A–Z.');
+		if (view === 'table') {
+			const publication = page.getByRole('button', { name: 'Sort by publication', exact: true });
+			await expect(publication).toBeFocused();
+			await expect(publication).toBeInViewport();
+		}
+		await page.reload();
+		await expect(sort).toHaveValue('publication');
+		await expect(direction).toHaveAccessibleName('Sort order: Z–A. Switch to A–Z.');
+		await sort.selectOption('author');
+		await expect.poll(() => reads.at(-1)?.searchParams.get('sort')).toBe('author');
+		await expect(sort).toHaveValue('author');
+		await expect(direction).toHaveAccessibleName('Sort order: A–Z. Switch to Z–A.');
+		if (view === 'table') {
+			const author = page.getByRole('button', {
+				name: 'Sort by authors',
+				exact: true
+			});
+			await expect(page.getByRole('columnheader').filter({ has: author })).toHaveAttribute(
+				'aria-sort',
+				'ascending'
+			);
+			await author.focus();
+			await author.press('Enter');
+			await expect(author).toBeFocused();
+		} else await direction.click();
+		await expect.poll(() => reads.at(-1)?.searchParams.get('direction')).toBe('desc');
+		await page.reload();
+		await expect(sort).toHaveValue('author');
+		await expect(direction).toHaveAccessibleName('Sort order: Z–A. Switch to A–Z.');
+	});
+
+	test(`${view} metadata links refine submitted results, preserve preview and support undo`, async ({
+		page
+	}) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		const rows = items.map((item) => ({
+			...item,
+			authors: [
+				{ full_name: 'Jane Smith', last_name: 'Smith', first_name: 'Jane' },
+				{ full_name: 'Council; & 一', last_name: 'Council; & 一', first_name: null }
+			],
+			publication_title: 'Journal; & 特刊 50%_+',
+			publication_date: '2026-10-19'
+		}));
+		const { reads, previews } = await mockLibrary(page, rows);
+		const initial = new URLSearchParams({
+			q: 'committed',
+			author: 'old text',
+			author_last_name: 'Old',
+			author_first_name: 'Name',
+			year: '2025',
+			publication_title: 'Old journal',
+			keyword_exact: 'Graph & ML',
+			reference_type: 'JournalArticle',
+			has_files: 'false',
+			sort: 'title',
+			page: '2',
+			page_size: '10',
+			preview: 'item-99'
+		});
+		await page.goto(`/workspace/workspace-1/library?${initial}`);
+		await expect(page.getByRole('complementary', { name: 'Item preview' })).toBeVisible();
+		const row = () =>
+			view === 'table'
+				? page.getByRole('table', { name: 'Library Items' }).locator('tbody tr').first()
+				: page.locator('#library-results article').first();
+		await row().getByRole('checkbox').check();
+		await page.getByPlaceholder('Search title, author, Tag, or full text').fill('unsaved draft');
+		const author = row().getByRole('link', { name: 'View Items by Jane Smith', exact: true });
+		await author.focus();
+		await author.press('Enter');
+		await expect.poll(() => new URL(page.url()).searchParams.get('author_last_name')).toBe('Smith');
+		let parameters = new URL(page.url()).searchParams;
+		expect(parameters.get('author_first_name')).toBe('Jane');
+		expect(parameters.has('author')).toBe(false);
+		expect(parameters.has('page')).toBe(false);
+		for (const key of [
+			'q',
+			'year',
+			'publication_title',
+			'keyword_exact',
+			'reference_type',
+			'has_files',
+			'sort',
+			'page_size',
+			'preview'
+		])
+			expect(parameters.get(key)).toBe(initial.get(key));
+		await expect(row().getByRole('checkbox')).not.toBeChecked();
+		await expect.poll(() => reads.at(-1)?.searchParams.get('author_last_name')).toBe('Smith');
+		expect(reads.at(-1)?.searchParams.get('offset')).toBe('0');
+		expect(reads.at(-1)?.searchParams.get('query')).toBe('committed');
+		await expect(
+			page.getByRole('button', { name: 'Remove filter Author: Smith, Jane', exact: true })
+		).toBeVisible();
+
+		await row().getByRole('link', { name: 'View Items by Council; & 一', exact: true }).click();
+		await expect
+			.poll(() => new URL(page.url()).searchParams.get('author_last_name'))
+			.toBe('Council; & 一');
+		expect(new URL(page.url()).searchParams.get('author_first_name')).toBe('');
+		const date = row().getByRole('link', { name: 'View Items published in 2026', exact: true });
+		await expect(date).toHaveText('2026');
+		await expect(row()).toContainText('2026-10-19');
+		await date.click();
+		await expect.poll(() => new URL(page.url()).searchParams.get('year')).toBe('2026');
+		const beforePublication = page.url();
+		await row()
+			.getByRole('link', { name: 'View Items in Journal; & 特刊 50%_+', exact: true })
+			.click();
+		await expect
+			.poll(() => new URL(page.url()).searchParams.get('publication_title'))
+			.toBe(rows[0].publication_title);
+		await page.goBack();
+		await expect(page).toHaveURL(beforePublication);
+		parameters = new URL(page.url()).searchParams;
+		expect(parameters.get('publication_title')).toBe('Old journal');
+		expect(parameters.get('year')).toBe('2026');
+		expect(parameters.get('author_last_name')).toBe('Council; & 一');
+		expect(parameters.get('preview')).toBe('item-99');
+		expect(previews).toEqual(['item-99']);
+		await expect(row().locator('a a')).toHaveCount(0);
+		await expect(row().getByRole('link').first()).toHaveAttribute(
+			'href',
+			'/workspace/workspace-1/item/item-1'
+		);
+	});
+}
+
+test('sorting remains available with empty results', async ({ page }) => {
+	await mockLibrary(page, []);
+	await page.goto('/workspace/workspace-1/library');
+	await expect(page.getByText('No Items found.', { exact: true })).toBeVisible();
+	const sort = page.getByRole('combobox', { name: 'Sort By', exact: true });
+	await sort.selectOption('published');
+	await page
+		.getByRole('button', { name: 'Sort order: Newest first. Switch to Oldest first.' })
+		.click();
+	await expect(page).toHaveURL(/sort=published&direction=asc/);
+});
+
+for (const view of ['table', 'list'] as const) {
+	for (const status of [403, 404, 500]) {
+		test(`${view} Project list handles cached rows after HTTP ${status}`, async ({ page }) => {
+			if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+			await mockLibrary(page);
+			await page.route('**/api/v1/workspaces/*/projects/project-1', (route) =>
+				route.fulfill({
+					json: { id: 'project-1', name: 'Managed Project', authorization: { allowed: [] } }
+				})
+			);
+			let responseStatus = 200;
+			await page.route('**/api/v1/workspaces/*/items?*', (route) =>
+				responseStatus === 200
+					? route.fallback()
+					: route.fulfill({
+							status: responseStatus,
+							json: {
+								code:
+									responseStatus === 404
+										? 'not_found'
+										: responseStatus === 403
+											? 'permission_denied'
+											: 'internal_error',
+								message: 'Read failed'
+							}
+						})
+			);
+			await page.goto('/workspace/workspace-1/library?project=project-1');
+			const item = page.getByRole('link', { name: 'Research Item 2', exact: true });
+			const selection = page.getByRole('checkbox', { name: 'Select Author 2', exact: true });
+			await expect(item).toBeVisible();
+			await selection.check();
+			await page.clock.install();
+			responseStatus = status;
+			await page.clock.fastForward(31_000);
+			await page.evaluate(() => {
+				for (const visibilityState of ['hidden', 'visible']) {
+					Object.defineProperty(document, 'visibilityState', {
+						configurable: true,
+						value: visibilityState
+					});
+					window.dispatchEvent(new Event('visibilitychange'));
+				}
+			});
+			const alert = page.locator('#library-results').getByRole('alert');
+			const retry = alert.getByRole('button', { name: 'Retry', exact: true });
+			await expect(alert).toContainText(
+				status === 500
+					? 'Unable to refresh the Library. Showing the last loaded results.'
+					: 'Unable to load the Library.'
+			);
+			await expect(retry).toBeEnabled();
+			if (status === 500) {
+				await expect(item).toBeVisible();
+				await expect(selection).toBeChecked();
+			} else {
+				await expect(item).toHaveCount(0);
+				await expect(page.getByRole('combobox', { name: 'Bulk action', exact: true })).toHaveCount(
+					0
+				);
+				await expect(page.getByRole('navigation', { name: 'Library pages' })).toContainText(
+					'Showing 0–0 of 0'
+				);
+				responseStatus = 500;
+				const failedRetry = page.waitForResponse(
+					(response) => response.url().includes('/items?') && response.status() === 500
+				);
+				await retry.click();
+				await failedRetry;
+				await expect(retry).toBeEnabled();
+				await expect(alert).toContainText('Unable to load the Library.');
+				await expect(item).toHaveCount(0);
+			}
+			responseStatus = 200;
+			await retry.click();
+			await expect(item).toBeVisible();
+			await expect(alert).toHaveCount(0);
+			if (status === 500) await expect(selection).toBeChecked();
+			else await expect(selection).not.toBeChecked();
+		});
+	}
+}
+
+test('keyboard sorting restores header focus after a slow response without taking focus from another control', async ({
+	page
+}) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const title = page.getByRole('button', { name: 'Sort by title', exact: true });
+	await expect(title).toBeVisible();
+	let release = () => {};
+	let arrived = () => {};
+	let pending = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let requested = new Promise<void>((resolve) => {
+		arrived = resolve;
+	});
+	await page.route('**/api/v1/workspaces/*/items?*', async (route) => {
+		arrived();
+		await pending;
+		await route.fallback();
+	});
+	await title.focus();
+	await title.press('Enter');
+	await requested;
+	await expect(page.getByRole('status').filter({ hasText: 'Loading Library…' })).toBeVisible();
+	release();
+	await expect(page.getByRole('columnheader').filter({ has: title })).toHaveAttribute(
+		'aria-sort',
+		'ascending'
+	);
+	await expect(title).toBeFocused();
+
+	pending = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	requested = new Promise<void>((resolve) => {
+		arrived = resolve;
+	});
+	await title.press('Enter');
+	await requested;
+	const search = page.getByPlaceholder('Search title, author, Tag, or full text');
+	await search.focus();
+	release();
+	await expect(page.getByRole('columnheader').filter({ has: title })).toHaveAttribute(
+		'aria-sort',
+		'descending'
+	);
+	await expect(search).toBeFocused();
+});
+
+test('table keeps native links, partial dates and independent keyboard selection', async ({
+	page
+}) => {
+	const { previews } = await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const table = page.getByRole('table', { name: 'Library Items' });
+	await expect(table).toBeVisible();
+	await expect(table.locator('strong i')).toHaveText('文献与公式');
+	await expect(table.locator('strong math msup')).toBeVisible();
+	await expect(
+		table
+			.locator('td')
+			.filter({ hasText: /^2026-10$/ })
+			.first()
+	).toBeVisible();
+	const first = table.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+	await first.focus();
+	await first.press('Space');
+	await expect(first).toBeChecked();
+	await expect(first).toBeFocused();
+	await expect(page.getByLabel('Select this page')).toHaveJSProperty('indeterminate', true);
+	const title = table.getByRole('link').first();
+	await title.focus();
+	await expect(first).toBeChecked();
+	await expect(title).toHaveAttribute('href', '/workspace/workspace-1/item/item-1');
+	await page.getByLabel('Select this page').check();
+	await expect(table.getByRole('checkbox').filter({ visible: true })).toHaveCount(25);
+	await expect(table.locator('input:checked')).toHaveCount(25);
+	await page.getByLabel('Select this page').uncheck();
+	await expect(table.locator('input:checked')).toHaveCount(0);
+	expect(previews).toEqual([]);
+});
+
+test('preview preserves drafts and selection, shares its URL and restores trigger focus', async ({
+	page
+}) => {
+	const { reads, previews } = await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library?q=committed&page=2');
+	const search = page.getByPlaceholder('Search title, author, Tag, or full text');
+	await search.fill('unsubmitted draft');
+	const row = page.getByRole('checkbox', { name: 'Select Author 26', exact: true });
+	await row.check();
+	const count = reads.length;
+	const trigger = page.getByRole('button', { name: 'Preview Item 1', exact: true });
+	await trigger.click();
+	const preview = page.getByRole('complementary', { name: 'Item preview' });
+	await expect(
+		preview.getByRole('heading', { name: 'Preview item-26', exact: true })
+	).toBeVisible();
+	await expect(preview.getByRole('heading', { name: 'Item preview', exact: true })).toBeFocused();
+	await expect(search).toHaveValue('unsubmitted draft');
+	await expect(row).toBeChecked();
+	await expect(page).toHaveURL(/q=committed&page=2&preview=item-26$/);
+	expect(reads).toHaveLength(count);
+	expect(previews).toEqual(['item-26']);
+	await expect(preview.getByRole('link', { name: 'Open full details' })).toHaveAttribute(
+		'href',
+		'/workspace/workspace-1/item/item-26'
+	);
+	await expect(preview.getByRole('link', { name: 'Read PDF' })).toHaveAttribute(
+		'href',
+		'/workspace/workspace-1/item/item-26/pdf/revision-1'
+	);
+	await preview.getByRole('button', { name: 'Close preview' }).click();
+	await expect(preview).toHaveCount(0);
+	await expect(trigger).toBeFocused();
+	await expect(row).toBeChecked();
+	await expect(search).toHaveValue('unsubmitted draft');
+	await page.goBack();
+	await expect(preview).toBeVisible();
+	await page.reload();
+	await expect(preview.getByRole('heading', { name: 'Preview item-26' })).toBeVisible();
+	await preview.getByRole('heading', { name: 'Item preview', exact: true }).press('Escape');
+	await expect(preview).toHaveCount(0);
+	await expect(page.locator('#library-results')).toBeFocused();
+});
+
+for (const interaction of ['unchanged', 'search', 'selection', 'shared-search'] as const) {
+	test(`delayed preview module respects ${interaction} focus`, async ({ page }) => {
+		await mockLibrary(page);
+		const manifest = JSON.parse(
+			await readFile('.svelte-kit/output/client/.vite/manifest.json', 'utf8')
+		) as Record<string, { name?: string; file: string }>;
+		const entry = Object.values(manifest).find(({ name }) => name === 'LibraryPreview')!;
+		let release = () => {};
+		let arrived = () => {};
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const requested = new Promise<void>((resolve) => {
+			arrived = resolve;
+		});
+		await page.route(`**/${entry.file}`, async (route) => {
+			arrived();
+			await pending;
+			await route.continue();
+		});
+		try {
+			await page.goto(
+				`/workspace/workspace-1/library${interaction === 'shared-search' ? '?preview=item-1' : ''}`,
+				{ waitUntil: 'domcontentloaded' }
+			);
+			if (interaction !== 'shared-search')
+				await page.getByRole('button', { name: 'Preview Item 1', exact: true }).click();
+			await requested;
+			await expect(
+				page.getByRole('status').filter({ hasText: 'Loading Item preview…' })
+			).toBeVisible();
+			const search = page.getByPlaceholder('Search title, author, Tag, or full text');
+			const selection = page.getByRole('checkbox', { name: 'Select this page', exact: true });
+			if (interaction === 'search' || interaction === 'shared-search')
+				await search.fill('typing during load');
+			else if (interaction === 'selection') {
+				await selection.focus();
+				await selection.press('Space');
+			}
+			release();
+			const preview = page.getByRole('complementary', { name: 'Item preview' });
+			await expect(
+				preview.getByRole('heading', { name: 'Preview item-1', exact: true })
+			).toBeVisible();
+			if (interaction === 'search' || interaction === 'shared-search') {
+				await expect(search).toBeFocused();
+				await search.press('End');
+				await search.pressSequentially(' continues');
+				await expect(search).toHaveValue('typing during load continues');
+			} else if (interaction === 'selection') {
+				await expect(selection).toBeFocused();
+				await expect(selection).toBeChecked();
+			} else
+				await expect(
+					preview.getByRole('heading', { name: 'Item preview', exact: true })
+				).toBeFocused();
+		} finally {
+			release();
+		}
+	});
+}
+
+test('closing a shared preview returns focus to results through buttons and history', async ({
+	page
+}) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library?preview=item-1');
+	const preview = page.getByRole('complementary', { name: 'Item preview' });
+	const heading = preview.getByRole('heading', { name: 'Item preview', exact: true });
+	await expect(heading).toBeFocused();
+	await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
+	await expect(preview).toHaveCount(0);
+	await expect(page.locator('#library-results')).toBeFocused();
+	await page.goBack();
+	await expect(heading).toBeFocused();
+	await page.goForward();
+	await expect(preview).toHaveCount(0);
+	await expect(page.locator('#library-results')).toBeFocused();
+});
+
+test('selection clears for server paging and sorting while preview keeps its target', async ({
+	page
+}) => {
+	const { reads } = await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('checkbox', { name: 'Select Author 1', exact: true }).check();
+	await page.getByRole('button', { name: 'Preview Item 1', exact: true }).click();
+	await page.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(
+		page.getByRole('checkbox', { name: 'Select Author 26', exact: true })
+	).not.toBeChecked();
+	await expect(page.getByRole('button', { name: 'Clear selection', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: 'Preview item-1', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Sort by title', exact: true }).click();
+	await expect.poll(() => reads.at(-1)?.searchParams.get('sort')).toBe('title');
+	expect(reads.at(-1)?.searchParams.get('offset')).toBe('0');
+	await expect(
+		page
+			.getByRole('columnheader')
+			.filter({ has: page.getByRole('button', { name: 'Sort by title', exact: true }) })
+	).toHaveAttribute('aria-sort', 'ascending');
+	await expect(page.getByRole('heading', { name: 'Preview item-1', exact: true })).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL(/page=2&preview=item-1/);
+});
+
+test('display controls persist per user and resize by keyboard and pointer', async ({ page }) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('button', { name: 'Display options', exact: true }).click();
+	await page.getByRole('combobox', { name: 'Density', exact: true }).selectOption('compact');
+	await page.keyboard.press('Escape');
+	const resize = page.getByRole('button', { name: 'Resize Title column', exact: true });
+	await resize.focus();
+	await resize.press('ArrowRight');
+	await expect
+		.poll(() =>
+			page
+				.locator('col')
+				.nth(1)
+				.evaluate((element) => element.getBoundingClientRect().width)
+		)
+		.toBe(380);
+	const box = await resize.boundingBox();
+	await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box!.x + box!.width / 2 + 40, box!.y + box!.height / 2);
+	await page.mouse.up();
+	await expect
+		.poll(() =>
+			page
+				.locator('col')
+				.nth(1)
+				.evaluate((element) => element.getBoundingClientRect().width)
+		)
+		.toBe(420);
+	await page.getByRole('button', { name: 'Display options', exact: true }).click();
+	await page.getByRole('checkbox', { name: 'Authors', exact: true }).uncheck();
+	await page.getByRole('checkbox', { name: 'DOI', exact: true }).check();
+	await page.keyboard.press('Escape');
+	await expect(
+		page.getByRole('button', { name: 'Resize Authors column', exact: true })
+	).toHaveCount(0);
+	await expect(page.getByRole('cell', { name: '10.1234/research', exact: true })).toBeVisible();
+	await page.reload();
+	await page.getByRole('button', { name: 'Display options', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toHaveValue('compact');
+	await page.keyboard.press('Escape');
+	await expect(
+		page.getByRole('button', { name: 'Resize Authors column', exact: true })
+	).toHaveCount(0);
+	await expect
+		.poll(() =>
+			page
+				.locator('col')
+				.nth(1)
+				.evaluate((element) => element.getBoundingClientRect().width)
+		)
+		.toBe(420);
+	await page.getByRole('radio', { name: 'List', exact: true }).press('Space');
+	await expect(page.getByRole('table')).toHaveCount(0);
+	await page.reload();
+	await expect(page.getByRole('radio', { name: 'List', exact: true })).toBeChecked();
+	await expect(page.locator('#library-results article')).toHaveCount(25);
+	await page.route('**/api/v1/session', (route) =>
+		route.fulfill({
+			json: { authenticated: true, user: { id: 'user-2', username: 'another', role: 'member' } }
+		})
+	);
+	await page.reload();
+	await expect(page.getByRole('radio', { name: 'Automatic', exact: true })).toBeChecked();
+	await page.getByRole('button', { name: 'Display options', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toHaveValue(
+		'comfortable'
+	);
+	await page.keyboard.press('Escape');
+	await expect(
+		page.getByRole('button', { name: 'Resize Authors column', exact: true })
+	).toBeVisible();
+});
+
+test('pointer resize limits survive reload at both title column bounds', async ({ page }) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	// Keep column widths above the available space so the browser adds no surplus to the title.
+	await page.getByRole('button', { name: 'Display options', exact: true }).click();
+	await page.getByRole('checkbox', { name: 'DOI', exact: true }).check();
+	await page.keyboard.press('Escape');
+	const resize = page.getByRole('button', { name: 'Resize Title column', exact: true });
+	const width = () =>
+		page
+			.locator('col')
+			.nth(1)
+			.evaluate((element) => element.getBoundingClientRect().width);
+	for (const { delta, expected } of [
+		{ delta: 500, expected: 800 },
+		{ delta: -800, expected: 240 }
+	]) {
+		await resize.scrollIntoViewIfNeeded();
+		const box = (await resize.boundingBox())!;
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(box.x + box.width / 2 + delta, box.y + box.height / 2);
+		await page.mouse.up();
+		await expect.poll(width).toBe(expected);
+		await page.reload();
+		await expect.poll(width).toBe(expected);
+	}
+});
+
+test('late preview response never replaces the newly opened Item', async ({ page }) => {
+	await mockLibrary(page);
+	let release!: () => void;
+	let started = false;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', async (route) => {
+		started = true;
+		await gate;
+		await route.fulfill({ json: overview('item-1') });
+	});
+	await page.goto('/workspace/workspace-1/library');
+	await page.getByRole('button', { name: 'Preview Item 1', exact: true }).click();
+	await expect.poll(() => started).toBe(true);
+	await page.getByRole('button', { name: 'Preview Item 2', exact: true }).click();
+	await expect(page.getByRole('heading', { name: 'Preview item-2', exact: true })).toBeVisible();
+	release();
+	await expect(page.getByRole('heading', { name: 'Preview item-1', exact: true })).toHaveCount(0);
+});
+
+test('failed and deleted preview reads are recoverable without displaying old Item content', async ({
+	page
+}) => {
+	await mockLibrary(page);
+	let failed = true;
+	await page.route('**/api/v1/workspaces/workspace-1/items/item-1/overview', (route) =>
+		failed
+			? route.fulfill({ status: 404, json: { code: 'resource_not_found', message: 'Not found' } })
+			: route.fulfill({ json: overview('item-1') })
+	);
+	await page.goto('/workspace/workspace-1/library?preview=item-1');
+	const preview = page.getByRole('complementary', { name: 'Item preview' });
+	await expect(preview.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+	failed = false;
+	await preview.getByRole('button', { name: 'Retry', exact: true }).click();
+	await expect(preview.getByRole('heading', { name: 'Preview item-1', exact: true })).toBeVisible();
+	failed = true;
+	await preview.getByRole('button', { name: 'Refresh preview', exact: true }).click();
+	await expect(preview.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+	await expect(preview.getByRole('heading', { name: 'Preview item-1', exact: true })).toHaveCount(
+		0
+	);
+	await expect(page.getByRole('table')).toBeVisible();
+});
+
+for (const theme of ['light', 'dark']) {
+	test(`table, column settings and preview have no serious accessibility findings in ${theme} mode`, async ({
+		page
+	}) => {
+		await page.addInitScript((value) => localStorage.setItem('quirebase:theme', value), theme);
+		await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library?page_size=100');
+		await expect(page.getByRole('table').getByRole('checkbox')).toHaveCount(100);
+		await page.getByRole('button', { name: 'Preview Item 1', exact: true }).click();
+		await expect(page.getByRole('heading', { name: 'Preview item-1', exact: true })).toBeVisible();
+		const check = async () => {
+			const result = await new AxeBuilder({ page })
+				.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+				.analyze();
+			expect(
+				result.violations
+					.filter((v) => v.impact === 'serious' || v.impact === 'critical')
+					.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) }))
+			).toEqual([]);
+		};
+		await check();
+		await page.getByRole('button', { name: 'Display options', exact: true }).click();
+		await expect(page.getByRole('checkbox', { name: 'DOI', exact: true })).toBeVisible();
+		await check();
+		await page.keyboard.press('Escape');
+		await page.screenshot({ path: `/tmp/quirebase-library-table-${theme}.png`, fullPage: true });
+	});
+}
+
+test('narrow screens use compact reading links without page overflow', async ({ page }) => {
+	await page.setViewportSize({ width: 320, height: 720 });
+	const { reads } = await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	await expect(page.getByRole('table')).toHaveCount(0);
+	await expect(
+		page.locator('#library-results article').first().getByRole('link').first()
+	).toHaveAttribute('href', '/workspace/workspace-1/item/item-1');
+	await page.getByRole('checkbox', { name: 'Select Author 1', exact: true }).check();
+	const trigger = page.getByRole('button', { name: 'Preview Item 1', exact: true });
+	await trigger.click();
+	const preview = page.getByRole('complementary', { name: 'Item preview' });
+	await expect(preview.getByRole('heading', { name: 'Preview item-1', exact: true })).toBeVisible();
+	await expect(
+		preview.getByRole('heading', { name: 'Item preview', exact: true })
+	).toBeInViewport();
+	await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
+	await expect(trigger).toBeFocused();
+	await expect(trigger).toBeInViewport();
+	const view = page.getByRole('radiogroup', { name: 'View', exact: true });
+	const search = page.getByPlaceholder('Search title, author, Tag, or full text');
+	await search.fill('unsubmitted draft');
+	const readCount = reads.length;
+	await view.getByRole('radio', { name: 'Table', exact: true }).press('Space');
+	await expect(page.getByRole('table')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Display options', exact: true })).toBeVisible();
+	await expect(page.getByRole('checkbox', { name: 'Select Author 1', exact: true })).toBeChecked();
+	await expect
+		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+		.toBe(true);
+	await view.getByRole('radio', { name: 'List', exact: true }).press('Space');
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await expect(page.getByRole('table')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Display options', exact: true })).toBeVisible();
+	await view.getByRole('radio', { name: 'Automatic', exact: true }).press('Space');
+	await expect(page.getByRole('table')).toBeVisible();
+	await expect(page.getByRole('checkbox', { name: 'Select Author 1', exact: true })).toBeChecked();
+	await page.setViewportSize({ width: 320, height: 720 });
+	await expect(page.getByRole('table')).toHaveCount(0);
+	await expect(search).toHaveValue('unsubmitted draft');
+	expect(reads).toHaveLength(readCount);
+});
+
+test('desktop controls share one row and density remains available in both views', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const controls = page.getByRole('group', { name: 'Library controls', exact: true });
+	const sort = controls.getByRole('group', { name: 'Sort', exact: true });
+	await expect(sort.getByRole('option')).toHaveText([
+		'Date modified',
+		'Date added',
+		'Publication date',
+		'Publication',
+		'Author',
+		'Title'
+	]);
+	await expect(sort.getByRole('button')).toHaveAccessibleName(
+		'Sort order: Newest first. Switch to Oldest first.'
+	);
+	const view = controls.getByRole('radiogroup', { name: 'View', exact: true });
+	const display = controls.getByRole('button', { name: 'Display options', exact: true });
+	const boxes = await Promise.all([sort, view, display].map((control) => control.boundingBox()));
+	const centers = boxes.map((box) => box!.y + box!.height / 2);
+	expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(2);
+	await view.getByRole('radio', { name: 'List', exact: true }).press('Space');
+	await display.click();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toBeFocused();
+	await page.getByRole('combobox', { name: 'Density', exact: true }).selectOption('compact');
+	await expect(page.getByRole('checkbox', { name: 'Authors', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(display).toBeFocused();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toBeHidden();
+	await view.getByRole('radio', { name: 'Table', exact: true }).press('Space');
+	await display.click();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toBeFocused();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toHaveValue('compact');
+	await expect(page.getByRole('checkbox', { name: 'Authors', exact: true })).toBeChecked();
+	await page.keyboard.press('Escape');
+	await expect(display).toBeFocused();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toBeHidden();
+	await page
+		.locator('#library-results')
+		.screenshot({ path: '/tmp/quirebase-library-controls.png' });
+});
+
+for (const control of ['field', 'direction'] as const) {
+	test(`sort ${control} keeps keyboard focus after slow sorting`, async ({ page }) => {
+		await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library');
+		const target = page.locator(`#library-sort-${control}`);
+		await expect(target).toBeVisible();
+		let release = () => {};
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await page.route('**/api/v1/workspaces/*/items?*', async (route) => {
+			await pending;
+			await route.fallback();
+		});
+		await target.focus();
+		if (control === 'field') await target.selectOption('author');
+		else await target.press('Enter');
+		await expect(page.getByRole('status').filter({ hasText: 'Loading Library…' })).toBeVisible();
+		release();
+		await expect(page.getByRole('checkbox', { name: 'Select this page' })).toBeVisible();
+		await expect(target).toBeFocused();
+	});
+}
+
+test('icon view segments support pointer and arrow keys and retain the chosen mode', async ({
+	page
+}) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const view = page.getByRole('radiogroup', { name: 'View', exact: true });
+	const automatic = view.getByRole('radio', { name: 'Automatic', exact: true });
+	const table = view.getByRole('radio', { name: 'Table', exact: true });
+	const list = view.getByRole('radio', { name: 'List', exact: true });
+	await expect(automatic).toBeChecked();
+	await automatic.focus();
+	await automatic.press('ArrowRight');
+	await expect(table).toBeChecked();
+	await table.press('ArrowRight');
+	await expect(list).toBeChecked();
+	await expect(page.getByRole('table')).toHaveCount(0);
+	await page.reload();
+	await expect(list).toBeChecked();
+	await view.getByTitle('Table', { exact: true }).click();
+	await expect(table).toBeChecked();
+	await expect(page.getByRole('table')).toBeVisible();
+	await view.getByTitle('List', { exact: true }).click();
+	await expect(list).toBeChecked();
+	await list.press('ArrowLeft');
+	await table.press('ArrowLeft');
+	await expect(automatic).toBeChecked();
+	await page.setViewportSize({ width: 320, height: 720 });
+	await expect(page.getByRole('table')).toHaveCount(0);
+	await expect(automatic).toBeChecked();
+	await expect
+		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+		.toBe(true);
+	await page
+		.locator('#library-results')
+		.evaluate((element) =>
+			window.scrollTo({ top: element.getBoundingClientRect().top + scrollY - 80 })
+		);
+	await page.screenshot({
+		path: '/tmp/quirebase-library-controls-mobile.png',
+		animations: 'disabled'
+	});
+});

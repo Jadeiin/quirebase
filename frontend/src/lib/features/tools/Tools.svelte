@@ -370,7 +370,8 @@
 								<ItemRow as="a" href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}>
 									<strong><RichText html={item.title_html} /></strong>
 									<span class="text-surface-600-400"
-										>{item.authors ?? $t('Unknown contributors')}</span
+										>{item.authors.map((author) => author.full_name).join('; ') ||
+											$t('Unknown contributors')}</span
 									>
 									{#if item.doi}<code class="text-xs">{item.doi}</code>{/if}
 								</ItemRow>

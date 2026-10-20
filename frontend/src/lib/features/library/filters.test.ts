@@ -1,13 +1,65 @@
 import { expect, it } from 'vitest';
 import {
+	defaultSortDirection,
 	libraryHref,
 	libraryPage,
 	libraryPageSize,
 	libraryParameters,
+	refineLibraryFilters,
 	readLibraryFilters
 } from './filters.js';
 import { metadataFilterLinks } from '../item/metadata-links.js';
 import type { Metadata } from '../item/metadata-draft.js';
+
+it.each(['updated', 'created', 'published', 'title', 'publication', 'author'] as const)(
+	'round-trips both directions for %s and omits its default direction',
+	(sort) => {
+		for (const direction of ['asc', 'desc'] as const) {
+			const parameters = libraryParameters({ query: 'research', sort, direction }, 2, 50);
+			expect(readLibraryFilters(parameters)).toMatchObject({ query: 'research', sort, direction });
+			expect(parameters.has('direction')).toBe(direction !== defaultSortDirection(sort));
+		}
+		expect(readLibraryFilters(new URLSearchParams({ sort, direction: 'invalid' })).direction).toBe(
+			defaultSortDirection(sort)
+		);
+	}
+);
+
+it('refines submitted results and replaces conflicting author criteria', () => {
+	const applied = {
+		query: 'committed',
+		tag: 'tag-1',
+		project: 'project-1',
+		has_files: false,
+		year: '2025',
+		publication_title: 'Old journal',
+		author: 'old query',
+		author_last_name: 'Old',
+		author_first_name: 'Name',
+		sort: 'title' as const
+	};
+	const author = refineLibraryFilters(applied, {
+		author_last_name: ' Council; & 一 ',
+		author_first_name: ''
+	});
+	expect(author).toEqual({
+		...applied,
+		author: undefined,
+		author_last_name: ' Council; & 一 ',
+		author_first_name: ''
+	});
+	expect(readLibraryFilters(libraryParameters(author))).toMatchObject({
+		author: '',
+		author_last_name: ' Council; & 一 ',
+		author_first_name: '',
+		has_files: false
+	});
+	expect(refineLibraryFilters(author, { year: '2026' })).toEqual({ ...author, year: '2026' });
+	expect(refineLibraryFilters(author, { publication_title: 'New & Journal' })).toEqual({
+		...author,
+		publication_title: 'New & Journal'
+	});
+});
 
 it('round-trips precise filters, empty given names, Unicode and URL punctuation', () => {
 	const filters = {
@@ -41,6 +93,25 @@ it.each([10, 20, 25, 50, 100])('round-trips page size %i with filters and the pa
 	expect(libraryPage(url.searchParams)).toBe(3);
 	expect(readLibraryFilters(url.searchParams)).toMatchObject(filters);
 	expect(url.searchParams.has('page_size')).toBe(pageSize !== 25);
+});
+
+it('keeps a shareable preview independent of the submitted Library query', () => {
+	const filters = { query: '研究 & ML', sort: 'title' as const, author_first_name: '' };
+	const withoutPreview = new URL(`https://test/${libraryHref('workspace-1', filters, 3, 50)}`);
+	const withPreview = new URL(
+		`https://test/${libraryHref('workspace-1', filters, 3, 50, 'item /一')}`
+	);
+	expect(withPreview.searchParams.get('preview')).toBe('item /一');
+	expect(readLibraryFilters(withPreview.searchParams)).toEqual(
+		readLibraryFilters(withoutPreview.searchParams)
+	);
+	expect(
+		libraryParameters(
+			readLibraryFilters(withPreview.searchParams),
+			libraryPage(withPreview.searchParams),
+			libraryPageSize(withPreview.searchParams)
+		).toString()
+	).toBe(withoutPreview.searchParams.toString());
 });
 
 it.each([null, '', 'NaN', 'Infinity', '-1', '0', '1.5', '15', '101', '1000'])(

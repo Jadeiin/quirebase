@@ -254,7 +254,7 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 					{
 						id: 'item-1',
 						title_html: 'Reading Item',
-						authors: null,
+						authors: [],
 						publication_date: null,
 						publication_title: null,
 						doi: null,

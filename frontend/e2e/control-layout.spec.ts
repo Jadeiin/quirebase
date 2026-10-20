@@ -37,7 +37,7 @@ async function library(page: Page) {
 					{
 						id: 'item-1',
 						title_html: 'Selected Item',
-						authors: null,
+						authors: [],
 						publication_date: null,
 						version: 1
 					}

@@ -210,7 +210,8 @@
 						class="border-t border-surface-400 pt-2 dark:border-surface-700"
 					>
 						<RichText html={item.title_html} /><small class="block text-surface-600-400"
-							>{item.authors ?? ''} · {item.publication_date ?? ''}</small
+							>{item.authors.map((author) => author.full_name).join('; ')} · {item.publication_date ??
+								''}</small
 						>
 					</div>{:else}<p>{$t('No Items found.')}</p>{/each}
 			</aside>{/if}

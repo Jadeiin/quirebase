@@ -62,6 +62,23 @@
 		<rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" />
 	{:else if name === 'panel'}
 		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
+	{:else if name === 'panel-right'}
+		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" />
+	{:else if name === 'columns'}
+		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v16" />
+	{:else if name === 'table'}
+		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M3 15h18M10 4v16" />
+	{:else if name === 'list'}
+		<path d="M9 5h12M9 12h12M9 19h12M3 5h.01M3 12h.01M3 19h.01" />
+	{:else if name === 'responsive'}
+		<path d="M12 17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2M8 21h4M10 17v4" />
+		<rect x="15" y="10" width="6" height="11" rx="1" /><path d="M18 18h.01" />
+	{:else if name === 'arrow-up'}
+		<path d="M12 20V4m-6 6 6-6 6 6" />
+	{:else if name === 'arrow-down'}
+		<path d="M12 4v16m-6-6 6 6 6-6" />
+	{:else if name === 'arrows-up-down'}
+		<path d="M8 20V4m-4 4 4-4 4 4m4-4v16m-4-4 4 4 4-4" />
 	{:else if name === 'hand'}
 		<path
 			d="M8 11V6a2 2 0 0 1 4 0v4-6a2 2 0 0 1 4 0v6-4a2 2 0 0 1 4 0v7a8 8 0 0 1-8 8h-1a7 7 0 0 1-6-3l-3-4a2 2 0 0 1 3-3l3 3"

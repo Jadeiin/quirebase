@@ -1135,7 +1135,7 @@ test('Project Item removal confirms, retries and recovers the last page', async 
 		id: `item-${index}`,
 		title_html: `Assigned Item ${String(index).padStart(2, '0')}`,
 		version: 1,
-		authors: null
+		authors: []
 	}));
 	const requests: Array<{ project: string | null; offset: number }> = [];
 	await page.route('**/api/v1/workspaces/workspace-1/projects/project-1', (route) =>

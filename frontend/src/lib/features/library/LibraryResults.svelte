@@ -1,118 +1,233 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import EmptyState from '#lib/design/EmptyState.svelte';
+	import Button from '#lib/design/Button.svelte';
 	import Icon from '#lib/design/Icon.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
-	import RichText from '#lib/design/RichText.svelte';
-	import type { LibrarySearch } from '#lib/features/library/queries.js';
+	import type { LibrarySearch } from './queries';
+	import {
+		defaultSortDirection,
+		librarySort,
+		type libraryHref,
+		type LibraryMetadataFilter,
+		type LibrarySort,
+		type LibrarySortDirection
+	} from './filters.js';
+	import LibraryTable from './LibraryTable.svelte';
 	import { t } from '#lib/i18n.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
 
 	let {
 		data,
 		workspaceId,
+		filterHref,
 		isPending,
 		isError,
 		pageNumber,
 		pageSize,
 		sort,
+		direction,
 		busy,
 		totalPages,
-		allPageSelected,
 		selected,
-		onTogglePage,
-		onToggleItem,
+		previewItemId,
+		onSelectionChange,
+		onPreview,
+		onPreviewReady,
+		onClosePreview,
 		onPage,
 		onPageSize,
 		onSort,
 		onRetry
 	}: {
-		data?: LibrarySearch;
+		data?: LibrarySearch | null;
 		workspaceId: string;
+		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
 		isPending: boolean;
 		isError: boolean;
 		pageNumber: number;
 		pageSize: number;
-		sort: string;
+		sort: LibrarySort;
+		direction: LibrarySortDirection;
 		busy: boolean;
 		totalPages: number;
-		allPageSelected: boolean;
 		selected: Set<string>;
-		onTogglePage: (event: Event) => void;
-		onToggleItem: (id: string) => void;
+		previewItemId: string;
+		onSelectionChange: (ids: string[]) => void;
+		onPreview: (id: string, trigger: HTMLElement) => void;
+		onPreviewReady: (heading: HTMLHeadingElement) => void;
+		onClosePreview: () => void;
 		onPage: (page: number) => void;
 		onPageSize: (size: number) => void;
-		onSort: (sort: string) => void;
+		onSort: (sort: LibrarySort, direction: LibrarySortDirection) => void;
 		onRetry: () => void;
 	} = $props();
+	let previewLoadAttempt = $state(0);
+	let sortFocus = $state<{
+		sort: LibrarySort;
+		direction: LibrarySortDirection;
+		control: 'header' | 'field' | 'direction';
+	} | null>(null);
+	$effect(() => {
+		if (!busy && sortFocus?.sort === sort && sortFocus.direction === direction) {
+			if (document.activeElement === document.body) {
+				document
+					.getElementById(
+						sortFocus.control === 'header'
+							? `library-sort-${sort}`
+							: `library-sort-${sortFocus.control}`
+					)
+					?.focus();
+			}
+			sortFocus = null;
+		}
+	});
+	const sortOptions = $derived([
+		{ value: 'updated', label: $t('Date modified') },
+		{ value: 'created', label: $t('Date added') },
+		{ value: 'published', label: $t('Publication date') },
+		{ value: 'publication', label: $t('Publication') },
+		{ value: 'author', label: $t('Author') },
+		{ value: 'title', label: $t('Title') }
+	] as const);
+	function orderLabel(field: LibrarySort, order: LibrarySortDirection) {
+		return field === 'title' || field === 'publication' || field === 'author'
+			? order === 'asc'
+				? $t('A–Z')
+				: $t('Z–A')
+			: order === 'asc'
+				? $t('Oldest first')
+				: $t('Newest first');
+	}
+	const nextDirection = $derived(direction === 'asc' ? 'desc' : 'asc');
+	const directionHint = $derived(
+		$t('Sort order: {current}. Switch to {next}.', {
+			current: orderLabel(sort, direction),
+			next: orderLabel(sort, nextDirection)
+		})
+	);
 </script>
 
-<Panel padding="none" class="mt-6">
-	{#if isPending}<div class="grid min-h-56 grid-cols-1 place-items-center text-surface-600-400">
-			{$t('Loading Library…')}
-		</div>
-	{:else if isError}<QueryError message={$t('Unable to load the Library.')} {busy} {onRetry} />
-	{:else if !data?.items.length}<EmptyState
-			title={$t('No Items found.')}
-			detail={$t('Try a different Library Search.')}
-		/>
-	{:else}
-		<div
-			class="flex items-center gap-3 border-b border-surface-300-700 bg-surface-100-900 px-5 py-3 text-sm"
+{#snippet sortControls()}
+	<div
+		role="group"
+		aria-label={$t('Sort')}
+		class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
+	>
+		<select
+			id="library-sort-field"
+			aria-label={$t('Sort By')}
+			class="select h-9 w-auto max-w-full text-xs"
+			value={sort}
+			disabled={busy}
+			onchange={(event) => {
+				const nextSort = librarySort(event.currentTarget.value);
+				const order = defaultSortDirection(nextSort);
+				sortFocus = { sort: nextSort, direction: order, control: 'field' };
+				onSort(nextSort, order);
+			}}
 		>
-			<input
-				type="checkbox"
-				checked={allPageSelected}
-				onchange={onTogglePage}
-				aria-label={$t('Select this page')}
-			/><span class="font-semibold">{$t('Select this page')}</span>
-		</div>
-		<div class="divide-y divide-surface-300-700">
-			{#each data.items as item (item.id)}
-				<article
-					class="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 transition-colors hover:bg-primary-50-950/60"
-				>
-					<input
-						type="checkbox"
-						checked={selected.has(item.id)}
-						onchange={() => onToggleItem(item.id)}
-						aria-label={item.authors ? $t('Select {name}', { name: item.authors }) : $t('Select')}
-					/>
-					<a
-						class="grid min-w-0 grid-cols-1 gap-1 no-underline"
-						href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
-						><strong class="text-[0.98rem] leading-snug group-hover:text-primary-800-200"
-							><RichText html={item.title_html} /></strong
-						><span class="truncate text-sm text-surface-600-400"
-							>{item.authors || $t('Unknown authors')}</span
-						>{#if item.publication_title}<span class="truncate text-xs text-surface-600-400"
-								>{item.publication_title}</span
-							>{/if}</a
-					>
-					<span class="flex items-center gap-2 text-xs text-surface-600-400"
-						>{item.publication_date || '—'}<Icon name="chevron-right" size={16} /></span
-					>
-				</article>
+			{#each sortOptions as option (option.value)}
+				<option value={option.value}>{option.label}</option>
 			{/each}
-		</div>
+		</select>
+		<Button
+			id="library-sort-direction"
+			type="button"
+			variant="icon"
+			class="-ml-px size-9"
+			aria-label={directionHint}
+			title={directionHint}
+			disabled={busy}
+			onclick={() => {
+				sortFocus = { sort, direction: nextDirection, control: 'direction' };
+				onSort(sort, nextDirection);
+			}}><Icon name={direction === 'asc' ? 'arrow-up' : 'arrow-down'} size={16} /></Button
+		>
+	</div>
+{/snippet}
+
+<div
+	id="library-results"
+	tabindex="-1"
+	class="mt-6 grid min-w-0 grid-cols-1 items-start gap-4 focus:outline-none"
+	class:xl:grid-cols-[minmax(0,1fr)_22rem]={Boolean(previewItemId)}
+>
+	<Panel padding="none" class="min-w-0">
+		{#if isPending || (isError && !data) || !data?.items.length}
+			<div
+				class="flex flex-wrap items-center justify-end gap-2 border-b border-surface-300-700 px-4 py-3"
+			>
+				{@render sortControls()}
+			</div>
+		{/if}
+		{#if isPending}<div
+				class="grid min-h-56 grid-cols-1 place-items-center text-surface-600-400"
+				role="status"
+			>
+				{$t('Loading Library…')}
+			</div>
+		{:else if isError && !data}<div class="px-4">
+				<QueryError message={$t('Unable to load the Library.')} {busy} {onRetry} />
+			</div>
+		{:else}
+			{#if isError}<div class="px-4">
+					<QueryError
+						message={$t('Unable to refresh the Library. Showing the last loaded results.')}
+						{busy}
+						{onRetry}
+					/>
+				</div>{/if}
+			{#if !data?.items.length}<EmptyState
+					title={$t('No Items found.')}
+					detail={$t('Try a different Library Search.')}
+				/>
+			{:else}<LibraryTable
+					items={data.items}
+					toolbar={sortControls}
+					{workspaceId}
+					{filterHref}
+					{selected}
+					{onSelectionChange}
+					{onPreview}
+					{previewItemId}
+					{sort}
+					{direction}
+					onSort={(sort, direction) => {
+						sortFocus = { sort, direction, control: 'header' };
+						onSort(sort, direction);
+					}}
+					{busy}
+				/>{/if}
+		{/if}
+		<Pagination
+			page={pageNumber}
+			pageCount={totalPages}
+			{pageSize}
+			total={data?.total ?? 0}
+			{busy}
+			label={$t('Library pages')}
+			{onPage}
+			{onPageSize}
+		/>
+	</Panel>
+	{#if previewItemId}
+		{#key `${previewItemId}:${previewLoadAttempt}`}
+			{#await import('./LibraryPreview.svelte')}
+				<p role="status" class="p-4 text-sm text-surface-600-400">{$t('Loading Item preview…')}</p>
+			{:then { default: LibraryPreview }}
+				<LibraryPreview
+					{workspaceId}
+					itemId={previewItemId}
+					onClose={onClosePreview}
+					onReady={onPreviewReady}
+				/>
+			{:catch}<div>
+					<QueryError
+						message={$t('Unable to load this Item preview.')}
+						onRetry={() => previewLoadAttempt++}
+					/><Button onclick={onClosePreview}>{$t('Close preview')}</Button>
+				</div>{/await}
+		{/key}
 	{/if}
-	<Pagination
-		page={pageNumber}
-		pageCount={totalPages}
-		{pageSize}
-		total={data?.total ?? 0}
-		{sort}
-		sortOptions={[
-			{ value: 'updated', label: $t('Recently updated') },
-			{ value: 'created', label: $t('Recently added') },
-			{ value: 'title', label: $t('Title') }
-		]}
-		{busy}
-		label={$t('Library pages')}
-		{onPage}
-		{onPageSize}
-		{onSort}
-	/>
-</Panel>
+</div>

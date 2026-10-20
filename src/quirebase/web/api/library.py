@@ -115,7 +115,8 @@ async def search_items(
     filters: LibraryFilters,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
-    sort: Literal["updated", "created", "title"] = "updated",
+    sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated",
+    direction: Literal["asc", "desc"] | None = None,
 ) -> LibrarySearchView:
     items, total = await search_library(
         db,
@@ -130,6 +131,7 @@ async def search_items(
         limit=limit,
         offset=offset,
         sort=sort,
+        direction=direction,
         has_files=filters.has_files,
         reference_type=filters.reference_type,
         keyword_exact=filters.keyword_exact,

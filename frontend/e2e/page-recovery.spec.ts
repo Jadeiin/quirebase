@@ -672,7 +672,11 @@ for (const scope of ['directory', 'items', 'audit'] as const) {
 						created_at: '2026-10-01T00:00:00Z'
 					}
 				: scope === 'items'
-					? { id: `item-${index}`, title_html: `Record ${index}`, authors: 'Reader' }
+					? {
+							id: `item-${index}`,
+							title_html: `Record ${index}`,
+							authors: [{ full_name: 'Reader', last_name: 'Reader', first_name: null }]
+						}
 					: { ...project, id: `project-${index}`, name: `Research ${index}` }
 		);
 		const endpoint =

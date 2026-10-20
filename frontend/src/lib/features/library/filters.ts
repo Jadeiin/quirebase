@@ -7,7 +7,8 @@ export type LibraryFilters = {
 	year?: string;
 	keyword?: string;
 	author?: string;
-	sort?: 'updated' | 'created' | 'title';
+	sort?: LibrarySort;
+	direction?: LibrarySortDirection;
 	has_files?: boolean;
 	reference_type?: string;
 	publication_title?: string;
@@ -15,6 +16,21 @@ export type LibraryFilters = {
 	author_last_name?: string;
 	author_first_name?: string;
 };
+
+export type LibraryMetadataFilter =
+	| { author_last_name: string; author_first_name: string }
+	| { publication_title: string }
+	| { year: string };
+
+export function refineLibraryFilters(
+	applied: LibraryFilters,
+	filter: LibraryMetadataFilter
+): LibraryFilters {
+	// An exact credit replaces both free-text and exact author criteria.
+	return 'author_last_name' in filter
+		? { ...applied, author: undefined, ...filter }
+		: { ...applied, ...filter };
+}
 
 const exactKeys = [
 	'reference_type',
@@ -24,13 +40,28 @@ const exactKeys = [
 	'author_first_name'
 ] as const;
 
-export function librarySort(value: string | null): 'updated' | 'created' | 'title' {
-	return value === 'created' || value === 'title' ? value : 'updated';
+export type LibrarySort = 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
+export type LibrarySortDirection = 'asc' | 'desc';
+
+export function librarySort(value: string | null): LibrarySort {
+	return value === 'created' ||
+		value === 'title' ||
+		value === 'author' ||
+		value === 'published' ||
+		value === 'publication'
+		? value
+		: 'updated';
+}
+
+export function defaultSortDirection(sort: LibrarySort): LibrarySortDirection {
+	return sort === 'title' || sort === 'publication' || sort === 'author' ? 'asc' : 'desc';
 }
 
 export function readLibraryFilters(
 	parameters: Pick<URLSearchParams, 'get' | 'has'>
 ): LibraryFilters {
+	const sort = librarySort(parameters.get('sort'));
+	const direction = parameters.get('direction');
 	return {
 		query: parameters.get('q')?.trim() ?? '',
 		tag: parameters.get('tag') ?? '',
@@ -38,7 +69,8 @@ export function readLibraryFilters(
 		year: parameters.get('year')?.trim() ?? '',
 		keyword: parameters.get('keyword')?.trim() ?? '',
 		author: parameters.get('author')?.trim() ?? '',
-		sort: librarySort(parameters.get('sort')),
+		sort,
+		direction: direction === 'asc' || direction === 'desc' ? direction : defaultSortDirection(sort),
 		has_files: parameters.has('has_files') ? parameters.get('has_files') === 'true' : undefined,
 		...Object.fromEntries(exactKeys.map((key) => [key, parameters.get(key) ?? undefined]))
 	};
@@ -66,6 +98,9 @@ export function libraryParameters(
 			result.set(key === 'query' ? 'q' : key, value);
 		}
 	}
+	if (filters.direction && filters.direction !== defaultSortDirection(filters.sort ?? 'updated')) {
+		result.set('direction', filters.direction);
+	}
 	if (filters.has_files !== undefined) result.set('has_files', String(filters.has_files));
 	for (const key of exactKeys) {
 		// Empty given names select single-field and organization names exactly.
@@ -80,8 +115,11 @@ export function libraryHref(
 	workspaceId: string,
 	filters: LibraryFilters = {},
 	page = 1,
-	pageSize = 25
+	pageSize = 25,
+	previewItemId = ''
 ) {
-	const query = libraryParameters(filters, page, pageSize).toString();
+	const parameters = libraryParameters(filters, page, pageSize);
+	if (previewItemId) parameters.set('preview', previewItemId);
+	const query = parameters.toString();
 	return workspaceHref(workspaceId, query ? `library?${query}` : 'library');
 }

@@ -13,6 +13,223 @@ async function signIn(page: Page) {
 	return new URL(page.url()).pathname.split('/').at(-1)!;
 }
 
+test('Library sorting orders real records before pagination and keeps undated records last', async ({
+	page
+}) => {
+	const workspaceId = await signIn(page);
+	const base = `/api/v1/workspaces/${workspaceId}/items`;
+	const headers = { Origin: new URL(page.url()).origin };
+	for (const [index, title, date, publication] of [
+		[1, 'zulu sortingcheck', '2025', 'Alpha Journal'],
+		[2, 'Alpha sortingcheck', '2026-10', 'Zulu Journal'],
+		[3, 'Beta sortingcheck', null, null]
+	] as const) {
+		const response = await page.request.post(base, {
+			headers,
+			data: {
+				metadata: {
+					id: `urn:sortingcheck:${index}`,
+					type: 'Dataset',
+					title,
+					...(publication ? { container: { title: publication } } : {}),
+					...(date ? { date_published: date } : {}),
+					...(index < 3
+						? {
+								contributors: [
+									{
+										type: 'Person',
+										person: { family_name: index === 1 ? 'Smith' : 'Adams' },
+										roles: [index === 1 ? 'Author' : 'Editor']
+									}
+								]
+							}
+						: {})
+				}
+			}
+		});
+		expect(response.status()).toBe(201);
+	}
+	await page.goto(`/workspace/${workspaceId}/library?q=sortingcheck&sort=title`);
+	const rows = page.getByRole('table', { name: 'Library Items' }).locator('tbody tr');
+	const titleLinks = rows.locator('strong');
+	await expect(titleLinks).toHaveText([
+		'Alpha sortingcheck',
+		'Beta sortingcheck',
+		'zulu sortingcheck'
+	]);
+	await page.getByRole('button', { name: 'Sort by title', exact: true }).click();
+	await expect(titleLinks).toHaveText([
+		'zulu sortingcheck',
+		'Beta sortingcheck',
+		'Alpha sortingcheck'
+	]);
+	await page.getByRole('button', { name: 'Sort by publication date', exact: true }).click();
+	await expect(titleLinks).toHaveText([
+		'Alpha sortingcheck',
+		'zulu sortingcheck',
+		'Beta sortingcheck'
+	]);
+	await page.getByRole('button', { name: 'Sort by publication date', exact: true }).click();
+	await expect(titleLinks).toHaveText([
+		'zulu sortingcheck',
+		'Alpha sortingcheck',
+		'Beta sortingcheck'
+	]);
+	const response = await page.request.get(
+		`${base}?query=sortingcheck&sort=title&direction=desc&limit=1&offset=1`
+	);
+	expect(response.status()).toBe(200);
+	const result = await response.json();
+	expect(result.total).toBe(3);
+	expect(result.items.map((item: { title_html: string }) => item.title_html)).toEqual([
+		'Beta sortingcheck'
+	]);
+	await page.getByRole('radio', { name: 'List', exact: true }).press('Space');
+	await expect(page.locator('#library-results article strong')).toHaveText([
+		'zulu sortingcheck',
+		'Alpha sortingcheck',
+		'Beta sortingcheck'
+	]);
+	await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('title');
+	await expect(page.locator('#library-results article strong')).toHaveText([
+		'Alpha sortingcheck',
+		'Beta sortingcheck',
+		'zulu sortingcheck'
+	]);
+	await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('published');
+	await expect(page.locator('#library-results article strong')).toHaveText([
+		'Alpha sortingcheck',
+		'zulu sortingcheck',
+		'Beta sortingcheck'
+	]);
+	await page
+		.getByRole('button', { name: 'Sort order: Newest first. Switch to Oldest first.', exact: true })
+		.click();
+	await expect(page.locator('#library-results article strong')).toHaveText([
+		'zulu sortingcheck',
+		'Alpha sortingcheck',
+		'Beta sortingcheck'
+	]);
+	await page.getByRole('radio', { name: 'Table', exact: true }).press('Space');
+	await page.getByRole('button', { name: 'Sort by publication', exact: true }).click();
+	await expect(titleLinks).toHaveText([
+		'zulu sortingcheck',
+		'Alpha sortingcheck',
+		'Beta sortingcheck'
+	]);
+	await page.getByRole('button', { name: 'Sort by publication', exact: true }).click();
+	await expect(titleLinks).toHaveText([
+		'Alpha sortingcheck',
+		'zulu sortingcheck',
+		'Beta sortingcheck'
+	]);
+
+	await page.getByRole('button', { name: 'Sort by authors', exact: true }).click();
+	await expect(titleLinks).toHaveText([
+		'Alpha sortingcheck',
+		'zulu sortingcheck',
+		'Beta sortingcheck'
+	]);
+	await page.getByRole('button', { name: 'Sort by authors', exact: true }).click();
+	await expect(titleLinks).toHaveText([
+		'zulu sortingcheck',
+		'Alpha sortingcheck',
+		'Beta sortingcheck'
+	]);
+	const authorPage = await page.request.get(
+		`${base}?query=sortingcheck&sort=author&limit=1&offset=1`
+	);
+	expect(authorPage.status()).toBe(200);
+	const authorResult = await authorPage.json();
+	expect(authorResult.total).toBe(3);
+	expect(authorResult.items.map((item: { title_html: string }) => item.title_html)).toEqual([
+		'zulu sortingcheck'
+	]);
+});
+
+test('Library metadata links filter real structured author credits in both views', async ({
+	page
+}) => {
+	const workspaceId = await signIn(page);
+	const base = `/api/v1/workspaces/${workspaceId}/items`;
+	const headers = { Origin: new URL(page.url()).origin };
+	const person = {
+		type: 'Person',
+		person: { family_name: 'Smith', given_name: 'Jane' },
+		roles: ['Author']
+	};
+	const organization = {
+		type: 'Organization',
+		organization: { name: 'Council; & 一' },
+		roles: ['Author']
+	};
+	for (const [index, contributors, year, journal] of [
+		[1, [person, organization], '2026-10-19', 'Journal & Alpha'],
+		[2, [person], '2025', 'Journal & Alpha'],
+		[3, [organization], '2026-10', 'Journal & Beta']
+	] as const) {
+		const response = await page.request.post(base, {
+			headers,
+			data: {
+				metadata: {
+					id: `urn:library-facet-smoke:${index}`,
+					type: 'JournalArticle',
+					title: `Library facet smoke ${index}`,
+					contributors,
+					date_published: year,
+					container: { title: journal }
+				}
+			}
+		});
+		expect(response.status()).toBe(201);
+	}
+	await page.goto(`/workspace/${workspaceId}/library?q=Library+facet+smoke&sort=title`);
+	const table = page.getByRole('table', { name: 'Library Items' });
+	const rows = table.locator('tbody tr');
+	await expect(rows).toHaveCount(3);
+	await rows.first().getByRole('link', { name: 'View Items by Jane Smith', exact: true }).click();
+	await expect(rows).toHaveCount(2);
+	await rows
+		.first()
+		.getByRole('link', { name: 'View Items published in 2026', exact: true })
+		.click();
+	await expect(rows).toHaveCount(1);
+	await rows
+		.first()
+		.getByRole('link', { name: 'View Items in Journal & Alpha', exact: true })
+		.click();
+	await expect(
+		page.getByRole('button', { name: 'Remove filter Publication: Journal & Alpha', exact: true })
+	).toBeVisible();
+	await page.getByRole('radio', { name: 'List', exact: true }).press('Space');
+	const cards = page.locator('#library-results article');
+	await expect(cards).toHaveCount(1);
+	await cards
+		.first()
+		.getByRole('link', { name: 'View Items by Council; & 一', exact: true })
+		.click();
+	await expect(
+		page.getByRole('button', { name: 'Remove filter Author: Council; & 一', exact: true })
+	).toBeVisible();
+	await expect(cards).toHaveCount(1);
+	await page
+		.getByRole('button', { name: 'Remove filter Publication: Journal & Alpha', exact: true })
+		.click();
+	await expect(cards).toHaveCount(2);
+	await page.goBack();
+	await expect(cards).toHaveCount(1);
+	const response = await page.request.get(
+		`${base}?author_last_name=Smith&author_first_name=Jane&query=Library+facet+smoke`
+	);
+	const result = await response.json();
+	expect(result.total).toBe(2);
+	expect(result.items[0].authors[0]).toEqual({
+		full_name: 'Jane Smith',
+		last_name: 'Smith',
+		first_name: 'Jane'
+	});
+});
+
 test('received invitation joins and leaves through the real API and only opens on request', async ({
 	page,
 	browser

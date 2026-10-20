@@ -12,10 +12,18 @@ from quirebase.models import MAX_CITATION_KEY_LENGTH
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
 
 
+class ItemAuthorView(BaseModel):
+    """An ordered record credit and its exact Library Search name values."""
+
+    full_name: str
+    last_name: str
+    first_name: str | None
+
+
 class ItemSearchView(BaseModel):
     id: UUID
     title_html: str
-    authors: str | None
+    authors: list[ItemAuthorView]
     publication_date: str | None
     publication_title: str | None
     doi: str | None

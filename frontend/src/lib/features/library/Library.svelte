@@ -24,11 +24,12 @@
 	} from '#lib/features/library/mutations.js';
 	import { libraryListQuery } from '#lib/features/library/queries.js';
 	import {
-		librarySort,
 		readLibraryFilters,
 		libraryPage,
 		libraryPageSize,
 		libraryHref,
+		libraryParameters,
+		refineLibraryFilters,
 		type LibraryFilters as AppliedLibraryFilters
 	} from './filters.js';
 	import LibraryActiveFilters from './LibraryActiveFilters.svelte';
@@ -46,6 +47,19 @@
 	const submitted = $derived(readLibraryFilters(page.url.searchParams));
 	const pageNumber = $derived(libraryPage(page.url.searchParams));
 	const pageSize = $derived(libraryPageSize(page.url.searchParams));
+	const previewItemId = $derived(page.url.searchParams.get('preview') ?? '');
+	const listingIdentity = $derived(libraryParameters(submitted, pageNumber, pageSize).toString());
+	let previewTrigger: HTMLElement | null = null;
+	let wasPreviewOpen = false;
+	$effect(() => {
+		const isPreviewOpen = Boolean(previewItemId);
+		if (wasPreviewOpen && !isPreviewOpen) {
+			if (previewTrigger?.isConnected) previewTrigger.focus();
+			else document.getElementById('library-results')?.focus();
+			previewTrigger = null;
+		}
+		wasPreviewOpen = isPreviewOpen;
+	});
 	let query = $state(page.url.searchParams.get('q') ?? '');
 	let tag = $state(page.url.searchParams.get('tag') ?? '');
 	let project = $state(page.url.searchParams.get('project') ?? '');
@@ -76,9 +90,9 @@
 		if (!confirmDeleteOpen && !busy) deleteInput = null;
 	});
 
-	let previousSearch = page.url.search;
+	let previousSearch = '';
 	$effect(() => {
-		const search = page.url.search;
+		const search = listingIdentity;
 		if (search === previousSearch) return;
 		previousSearch = search;
 		if (!busy) confirmDeleteOpen = false;
@@ -105,18 +119,28 @@
 	);
 	const totalPages = $derived(Math.max(1, Math.ceil((library.data?.total ?? 0) / pageSize)));
 	$effect(() => {
-		if (library.isSuccess && !library.isFetching && pageNumber > totalPages) {
-			void goto(resolve(libraryHref(workspaceId, submitted, totalPages, pageSize)), {
+		if (library.isSuccess && library.data && !library.isFetching && pageNumber > totalPages) {
+			void goto(resolve(libraryHref(workspaceId, submitted, totalPages, pageSize, previewItemId)), {
 				reset: false,
 				replaceState: true
 			});
 		}
 	});
-	const allPageSelected = $derived(
-		((library.data?.items.length ?? 0) > 0 &&
-			library.data?.items.every((item) => selected.has(item.id))) ??
-			false
-	);
+	$effect(() => {
+		if (library.data === null) {
+			clearSelection();
+			confirmDeleteOpen = false;
+			return;
+		}
+		if (!library.isSuccess || library.isFetching) return;
+		const available = new Set(library.data.items.map((item) => item.id));
+		// Refetches can remove rows. Do not retain invisible bulk targets.
+		for (const id of selected)
+			if (!available.has(id)) {
+				selectionVersion++;
+				selected.delete(id);
+			}
+	});
 
 	$effect(() => {
 		if (session.data?.user) {
@@ -128,7 +152,22 @@
 
 	function navigate(filters: AppliedLibraryFilters, nextPage = 1, nextPageSize = pageSize) {
 		clearSelection();
-		void goto(resolve(libraryHref(workspaceId, filters, nextPage, nextPageSize)), { reset: false });
+		void goto(resolve(libraryHref(workspaceId, filters, nextPage, nextPageSize, previewItemId)), {
+			reset: false
+		});
+	}
+
+	function preview(id: string, trigger?: HTMLElement) {
+		if (trigger) previewTrigger = trigger;
+		void goto(resolve(libraryHref(workspaceId, submitted, pageNumber, pageSize, id)), {
+			reset: false
+		});
+	}
+
+	function focusPreview(heading: HTMLHeadingElement) {
+		const focused = document.activeElement;
+		const origin = previewTrigger ?? document.getElementById('library-results');
+		if (focused === origin || (!previewTrigger && focused === document.body)) heading.focus();
 	}
 
 	function search() {
@@ -152,22 +191,14 @@
 
 	function clearFilters() {
 		query = tag = project = year = keyword = author = fileFilter = '';
-		navigate({ sort: submitted.sort });
+		navigate({ sort: submitted.sort, direction: submitted.direction });
 	}
 
-	function togglePageSelection(event: Event) {
+	function setSelection(ids: string[]) {
 		selectionVersion++;
-		const checked = (event.currentTarget as HTMLInputElement).checked;
-		for (const item of library.data?.items ?? []) {
-			if (checked) selected.add(item.id);
-			else selected.delete(item.id);
-		}
-	}
-
-	function toggleItem(id: string) {
-		selectionVersion++;
-		if (selected.has(id)) selected.delete(id);
-		else selected.add(id);
+		const available = new Set(library.data?.items.map((item) => item.id));
+		selected.clear();
+		for (const id of ids) if (available.has(id)) selected.add(id);
 	}
 
 	function clearSelection() {
@@ -288,20 +319,25 @@
 
 <LibraryResults
 	{workspaceId}
+	filterHref={(filter) =>
+		libraryHref(workspaceId, refineLibraryFilters(submitted, filter), 1, pageSize, previewItemId)}
 	data={library.data}
-	isPending={library.isPending ?? false}
+	isPending={library.isPending || (!library.data && library.isFetching)}
 	isError={library.isError ?? false}
 	{pageNumber}
 	{pageSize}
 	sort={submitted.sort ?? 'updated'}
+	direction={submitted.direction ?? 'desc'}
 	busy={library.isFetching}
 	{totalPages}
-	{allPageSelected}
 	{selected}
-	onTogglePage={togglePageSelection}
-	onToggleItem={toggleItem}
+	{previewItemId}
+	onSelectionChange={setSelection}
+	onPreview={preview}
+	onPreviewReady={focusPreview}
+	onClosePreview={() => preview('')}
 	onPage={(next) => navigate(submitted, next)}
 	onPageSize={(size) => navigate(submitted, 1, size)}
-	onSort={(value) => navigate({ ...submitted, sort: librarySort(value) })}
+	onSort={(sort, direction) => navigate({ ...submitted, sort, direction })}
 	onRetry={() => void library.refetch()}
 />

@@ -9,7 +9,7 @@ from uuid import UUID
 from advanced_alchemy.filters import LimitOffset
 from inquiro.richtext import convert_rich_text
 from inquiro.work import work_identifiers
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, func, or_, select
 
 from quirebase.access import (
     ResourceAction,
@@ -34,7 +34,7 @@ from quirebase.models import (
 from quirebase.projects import list_workspace_projects
 from quirebase.search import search_index
 
-from ._json_queries import author_condition, keyword_condition
+from ._json_queries import author_condition, first_contributor_sort_name, keyword_condition
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -149,13 +149,14 @@ async def search_library(
     author: str = "",
     limit: int = 25,
     offset: int = 0,
-    sort: Literal["updated", "created", "title"] = "updated",
+    sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated",
     has_files: bool | None = None,
     reference_type: str | None = None,
     keyword_exact: str | None = None,
     author_last_name: str | None = None,
     author_first_name: str | None = None,
     publication_title: str | None = None,
+    direction: Literal["asc", "desc"] | None = None,
 ) -> tuple[list[Item], int]:
     item_query = await _library_query(
         db,
@@ -176,14 +177,25 @@ async def search_library(
             publication_title=publication_title,
         ),
     )
+    # Binary collation keeps ordering consistent across databases.
+    collation = "C" if db.get_bind().dialect.name == "postgresql" else "BINARY"
     expression = {
         "updated": Item.updated_at,
         "created": Item.created_at,
-        "title": Item.work["title"].as_string(),
+        "title": Item.work["title"].as_string().collate(collation),
+        "author": first_contributor_sort_name(db).collate(collation),
+        "publication": func.nullif(Item.work["container"]["title"].as_string(), "").collate(
+            collation
+        ),
+        # Publication Date is a calendar value, not an instant. Do not invent missing parts.
+        "published": func.substr(Item.work["date_published"].as_string(), 1, 10).collate(collation),
     }[sort]
+    direction = direction or ("asc" if sort in {"title", "publication", "author"} else "desc")
     records, total = await select_page(
         db,
-        item_query.order_by(expression.asc() if sort == "title" else expression.desc(), Item.id),
+        item_query.order_by(
+            (expression.asc() if direction == "asc" else expression.desc()).nulls_last(), Item.id
+        ),
         Item,
         LimitOffset(limit=limit, offset=offset),
     )

@@ -34,6 +34,7 @@
 		"@skeletonlabs/skeleton": "5.0.1",
 		"@skeletonlabs/skeleton-svelte": "5.0.1",
 		"@tanstack/svelte-query": "^6.3.3",
+		"@tanstack/svelte-table": "9.3.1",
 		"openapi-fetch": "^0.17.0",
 		"svelte": "^5.57.2",
 		"temml": "0.13.5"

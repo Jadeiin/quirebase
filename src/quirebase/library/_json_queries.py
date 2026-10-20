@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Text, case, column, func, or_, select
+from sqlalchemy import JSON, Integer, Text, case, column, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 
 from quirebase.models import Item
@@ -51,6 +51,37 @@ def contributor_name_parts(value: Any) -> tuple[Any, Any]:
 def author_role(db: AsyncSession, value: Any) -> ColumnElement[bool]:
     roles = array_elements(db, value["roles"])
     return select(1).select_from(roles).where(roles.c.value == "Author").exists()
+
+
+def first_contributor_sort_name(db: AsyncSession) -> ColumnElement[str]:
+    """First named Author's surname (or literal name), falling back to the first Editor."""
+    if db.get_bind().dialect.name == "postgresql":
+        contributors = (
+            func
+            .jsonb_array_elements(Item.work["contributors"])
+            .table_valued(column("value", JSONB), with_ordinality="position")
+            .render_derived()
+            .lateral()
+        )
+        position = contributors.c.position
+    else:
+        contributors = func.json_each(Item.work["contributors"]).table_valued(
+            column("value", JSON), column("key", Integer)
+        )
+        position = contributors.c.key
+    family, _ = contributor_name_parts(contributors.c.value)
+    is_author = author_role(db, contributors.c.value)
+    roles = array_elements(db, contributors.c.value["roles"])
+    is_editor = select(1).select_from(roles).where(roles.c.value == "Editor").exists()
+    return (
+        select(family)
+        .select_from(contributors)
+        .where(or_(is_author, is_editor), func.trim(family) != "")
+        .order_by(case((is_author, 0), else_=1), position)
+        .limit(1)
+        .correlate(Item)
+        .scalar_subquery()
+    )
 
 
 def author_condition(

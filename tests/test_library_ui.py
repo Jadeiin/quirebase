@@ -116,7 +116,9 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
             f"{base}/items", params={"author_last_name": "Smith", "author_first_name": "John"}
         )
         assert matches.status_code == 200 and matches.json()["total"] == 1
-        assert matches.json()["items"][0]["authors"] == "John Smith"
+        assert matches.json()["items"][0]["authors"] == [
+            {"full_name": "John Smith", "last_name": "Smith", "first_name": "John"}
+        ]
         assert (
             await client.get(f"{base}/items", params={"publication_title": "Journal & 特刊"})
         ).json()["total"] == 1

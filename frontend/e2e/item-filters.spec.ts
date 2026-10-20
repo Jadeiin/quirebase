@@ -58,7 +58,7 @@ async function setup(page: Page) {
 					{
 						id: 'filter-item',
 						title_html: metadata.title,
-						authors: 'Jane Smith',
+						authors: [{ full_name: 'Jane Smith', last_name: 'Smith', first_name: 'Jane' }],
 						publication_date: '2024',
 						publication_title: metadata.container.title,
 						doi: null,

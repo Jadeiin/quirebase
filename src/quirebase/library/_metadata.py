@@ -207,10 +207,22 @@ def get_work_schema() -> dict:
 
 
 def item_summary(item: Item) -> dict:
+    authors = []
+    for row in work_authors(item.work):
+        name = contributor_name(row)
+        if not name.strip():
+            continue
+        entity = row.get(row["type"].lower(), {})
+        family = entity.get("family_name") if row["type"] == "Person" else None
+        authors.append({
+            "full_name": name,
+            "last_name": family or entity.get("name") or entity.get("given_name") or "",
+            "first_name": (entity.get("given_name") or None) if family else None,
+        })
     return {
         "id": item.id,
         "title_html": item.work.get("title", ""),
-        "authors": "; ".join(contributor_name(row) for row in work_authors(item.work)) or None,
+        "authors": authors,
         "publication_date": item.work.get("date_published"),
         "publication_title": item.work.get("container", {}).get("title"),
         "doi": work_doi(item.work),

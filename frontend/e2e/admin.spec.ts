@@ -718,7 +718,7 @@ test('Workspace governance freezes, unfreezes, and performs reason-bound break-g
 				{
 					id: 'item-1',
 					title_html: 'Read-only inspection',
-					authors: 'A. Reader',
+					authors: [{ full_name: 'A. Reader', last_name: 'A. Reader', first_name: null }],
 					publication_date: '2026',
 					publication_title: null,
 					doi: null,
@@ -783,7 +783,7 @@ test('break-glass inspection keeps the Workspace that authorized the displayed r
 				{
 					id: `item-${workspaceId}`,
 					title_html: `Inspected ${workspaceId}`,
-					authors: null,
+					authors: [],
 					publication_date: null,
 					publication_title: null,
 					doi: null,
