@@ -360,9 +360,14 @@ describe('non-JSON API errors', () => {
 		[
 			'text',
 			(fetcher: typeof fetch) =>
-				workspaceApi.text(
-					'/workspaces/{workspace_id}/items/{item_id}/citation/content',
-					{ params: { path: { item_id: 'item-1' } } },
+				workspaceApi.request(
+					'GET',
+					'/workspaces/{workspace_id}/items/{item_id}/bibliography',
+					{
+						params: { path: { item_id: 'item-1' }, query: { file_format: 'csl' } },
+						headers: { Accept: '*/*' },
+						parseAs: 'text'
+					},
 					fetcher
 				)
 		]

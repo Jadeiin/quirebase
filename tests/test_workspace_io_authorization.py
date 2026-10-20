@@ -12,7 +12,7 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.errors import PermissionDenied, WorkspaceMembershipRequired
-from quirebase.library import export_accessible_bibliography, find_duplicates
+from quirebase.library import BibliographyFormat, export_workspace_bibliography, find_duplicates
 from quirebase.library.discovery import DiscoveryClause, search_candidate_records
 from quirebase.library.imports import stage_identifiers_import_batch, stage_pdf_import_batch
 from quirebase.models import (
@@ -61,7 +61,9 @@ async def test_workspace_bibliography_export_requires_membership(async_db):
     )
     await async_db.commit()
     with pytest.raises(WorkspaceMembershipRequired):
-        await export_accessible_bibliography(async_db, outsider, workspace_id, file_format="bibtex")
+        await export_workspace_bibliography(
+            async_db, outsider, workspace_id, file_format=BibliographyFormat.bibtex
+        )
 
 
 @pytest.mark.anyio

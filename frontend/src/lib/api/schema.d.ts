@@ -1166,8 +1166,8 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Export Item Selection */
-		post: operations['library_exports.export_item_selection'];
+		/** Download Selected Bibliography */
+		post: operations['library_exports.download_selected_bibliography'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1198,8 +1198,8 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** Export Library Bibliography */
-		get: operations['library_exports.export_library_bibliography'];
+		/** Download Workspace Bibliography */
+		get: operations['library_exports.download_workspace_bibliography'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1709,42 +1709,8 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** Export Item Bibliography */
-		get: operations['citations.export_item_bibliography'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography/content': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Copy Citation */
-		get: operations['citations.copy_citation'];
-		put?: never;
-		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation/content': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		/** Citation Text */
-		get: operations['citations.citation_text'];
+		/** Download Item Bibliography */
+		get: operations['citations.download_item_bibliography'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -2718,13 +2684,15 @@ export interface components {
 			/** Next Cursor */
 			next_cursor?: string | null;
 		};
+		/**
+		 * AnnotationModerationAction
+		 * @description The supported governance decisions for another author's Project Annotation.
+		 * @enum {string}
+		 */
+		AnnotationModerationAction: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete';
 		/** AnnotationModerationRequest */
 		AnnotationModerationRequest: {
-			/**
-			 * Action
-			 * @enum {string}
-			 */
-			action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete';
+			action: components['schemas']['AnnotationModerationAction'];
 			/** Version */
 			version: number;
 		};
@@ -3027,8 +2995,7 @@ export interface components {
 		};
 		/** BibliographyExportRequest */
 		BibliographyExportRequest: {
-			/** File Format */
-			file_format: string;
+			file_format: components['schemas']['BibliographyFormat'];
 			/**
 			 * Style
 			 * @default apa
@@ -3079,6 +3046,11 @@ export interface components {
 			/** Item Ids */
 			item_ids?: string[];
 		};
+		/**
+		 * BibliographyFormat
+		 * @enum {string}
+		 */
+		BibliographyFormat: 'bibtex' | 'ris' | 'csl-json' | 'commonmeta' | 'csl';
 		/** BreakGlassReadRequest */
 		BreakGlassReadRequest: {
 			/** Reason */
@@ -3620,6 +3592,8 @@ export interface components {
 		DuplicatesReviewView: {
 			/** Groups */
 			groups: components['schemas']['ItemSearchView'][][];
+			/** Scanned */
+			scanned: number;
 		};
 		/** EllipsePayload */
 		EllipsePayload: {
@@ -9052,7 +9026,7 @@ export interface operations {
 				sort?: 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
 				direction?: ('asc' | 'desc') | null;
 				query?: string;
-				tag?: string;
+				tag?: string | null;
 				project?: string | null;
 				year?: string;
 				keyword?: string;
@@ -9150,7 +9124,7 @@ export interface operations {
 			query?: {
 				limit?: number;
 				query?: string;
-				tag?: string;
+				tag?: string | null;
 				project?: string | null;
 				year?: string;
 				keyword?: string;
@@ -9375,7 +9349,7 @@ export interface operations {
 		parameters: {
 			query?: {
 				style?: string;
-				output?: string;
+				output?: 'text' | 'html';
 			};
 			header?: never;
 			path: {
@@ -9808,7 +9782,7 @@ export interface operations {
 			};
 		};
 	};
-	'library_exports.export_item_selection': {
+	'library_exports.download_selected_bibliography': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -9900,11 +9874,20 @@ export interface operations {
 			};
 		};
 	};
-	'library_exports.export_library_bibliography': {
+	'library_exports.download_workspace_bibliography': {
 		parameters: {
 			query: {
-				file_format: string;
+				file_format: components['schemas']['BibliographyFormat'];
 				style?: string;
+				include_abstract?: boolean;
+				preserve_case?: boolean;
+				encoding?: string;
+				doi_policy?: string;
+				url_policy?: string;
+				excluded_fields?: string[];
+				sort_by?: string;
+				citation_key_formula?: string;
+				citation_key_force_ascii?: boolean;
 			};
 			header?: never;
 			path: {
@@ -11551,10 +11534,10 @@ export interface operations {
 			};
 		};
 	};
-	'citations.export_item_bibliography': {
+	'citations.download_item_bibliography': {
 		parameters: {
 			query: {
-				file_format: string;
+				file_format: components['schemas']['BibliographyFormat'];
 				style?: string;
 				include_abstract?: boolean;
 				preserve_case?: boolean;
@@ -11586,104 +11569,6 @@ export interface operations {
 					'application/x-research-info-systems': string;
 					'application/vnd.citationstyles.csl+json': string;
 					'application/vnd.commonmeta+json': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'citations.copy_citation': {
-		parameters: {
-			query?: {
-				file_format?: string;
-				style?: string;
-				include_abstract?: boolean;
-				preserve_case?: boolean;
-				encoding?: string;
-				doi_policy?: string;
-				url_policy?: string;
-				excluded_fields?: string[];
-				sort_by?: string;
-				citation_key_formula?: string;
-				citation_key_force_ascii?: boolean;
-			};
-			header?: never;
-			path: {
-				workspace_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'text/plain': string;
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'citations.citation_text': {
-		parameters: {
-			query?: {
-				style?: string;
-				output?: string;
-			};
-			header?: never;
-			path: {
-				workspace_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'text/plain': string;
-					'text/html': string;
 				};
 			};
 			/** @description Unprocessable Content */
@@ -12891,8 +12776,8 @@ export interface operations {
 	};
 	'tools.duplicate_items': {
 		parameters: {
-			query?: {
-				mode?: string;
+			query: {
+				mode: 'identifier' | 'title' | 'file';
 			};
 			header?: never;
 			path: {

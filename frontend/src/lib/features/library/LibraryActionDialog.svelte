@@ -4,13 +4,13 @@
 	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
 	import { isDownloadCancelled } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { copyBibliographyText, downloadBibliographyText } from '#lib/bibliography-copy.js';
 	import Button from '#lib/design/Button.svelte';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import ProjectSelect from '#lib/features/projects/ProjectSelect.svelte';
 	import TagSelect from '#lib/features/tags/TagSelect.svelte';
 	import {
-		bibliographyFilename,
 		bibliographyFormats,
 		defaultExportPreferences,
 		readExportPreferences,
@@ -53,9 +53,11 @@
 	let tagName = $state('');
 	let tagId = $state('');
 	let preferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
-	let format = $state<string>(defaultExportPreferences.citation.format);
+	let format = $state<ExportPreferences['citation']['format']>(
+		defaultExportPreferences.citation.format
+	);
 	let frozenInput = $state<LibraryBulkInput | null>(null);
-	let citationText = $state<string | null>(null);
+	const citationCopy = $state<{ text: string | null }>({ text: null });
 	let mounted = true;
 	onDestroy(() => {
 		mounted = false;
@@ -83,7 +85,7 @@
 			projectId = next.action === 'remove_project' ? (next.project?.id ?? '') : '';
 			tagName = tagId = error = '';
 			frozenInput = null;
-			citationText = null;
+			citationCopy.text = null;
 			restoreFocus = true;
 			open = next.listing === listingIdentity;
 		});
@@ -179,7 +181,7 @@
 			observedRequest = null;
 			active = null;
 			frozenInput = null;
-			citationText = null;
+			citationCopy.text = null;
 		}
 	}
 
@@ -197,22 +199,44 @@
 	function changeOptions() {
 		if (busy) return;
 		frozenInput = null;
-		citationText = null;
+		citationCopy.text = null;
 		error = '';
 		if (projectId && selectedProject?.id !== projectId) projectId = '';
 	}
 
 	function currentInput(): LibraryBulkInput | null {
 		if (!active) return null;
-		return {
-			action: active.action,
-			itemIds: [...active.itemIds],
-			projectId: active.action === 'remove_project' ? (active.project?.id ?? '') : projectId,
-			tagName: tagName.trim(),
-			tagId,
-			exportFormat: format,
-			preferences: $state.snapshot(preferences)
-		};
+		const itemIds = [...active.itemIds];
+		switch (active.action) {
+			case 'add_project':
+				return { action: active.action, item_ids: itemIds, project_id: projectId };
+			case 'remove_project':
+				return {
+					action: active.action,
+					item_ids: itemIds,
+					project_id: active.project?.id ?? ''
+				};
+			case 'add_tag':
+				return { action: active.action, item_ids: itemIds, tag_name: tagName.trim() };
+			case 'remove_tag':
+				return { action: active.action, item_ids: itemIds, tag_id: tagId };
+			case 'delete_items':
+				return { action: active.action, item_ids: itemIds };
+			case 'bibliography':
+			case 'copy_bibliography':
+				return {
+					action: active.action,
+					itemIds,
+					exportFormat: format,
+					preferences: $state.snapshot(preferences.citation)
+				};
+			case 'documents':
+				return {
+					action: active.action,
+					itemIds,
+					preferences: $state.snapshot(preferences.document)
+				};
+		}
 	}
 
 	function complete(message: string) {
@@ -227,7 +251,7 @@
 		observedRequest = null;
 		active = null;
 		frozenInput = null;
-		citationText = null;
+		citationCopy.text = null;
 	}
 
 	async function execute() {
@@ -240,21 +264,19 @@
 		busy = true;
 		error = '';
 		try {
-			if (input.action === 'copy_bibliography' && citationText !== null) {
-				await navigator.clipboard.writeText(citationText);
-				complete($t('Copied to clipboard'));
-				return;
-			}
-			const result = await mutation.mutateAsync({
-				input,
-				afterMutation: submitted.afterMutation
-			});
-			if (!mounted) return;
 			if (input.action === 'copy_bibliography') {
-				citationText = typeof result === 'string' ? result : '';
-				await navigator.clipboard.writeText(citationText);
+				await copyBibliographyText(
+					citationCopy,
+					async () => {
+						const result = await mutation.mutateAsync({ input });
+						if (typeof result !== 'string') throw new Error('Missing bibliography text');
+						return result;
+					},
+					() => mounted
+				);
 				complete($t('Copied to clipboard'));
 			} else {
+				await mutation.mutateAsync({ input, afterMutation: submitted.afterMutation });
 				complete(
 					input.action === 'bibliography'
 						? $t('Bibliography downloaded')
@@ -270,7 +292,7 @@
 				return;
 			}
 			error =
-				citationText !== null
+				citationCopy.text !== null
 					? $t('Clipboard access was denied. Copy the citation text below or download it.')
 					: apiErrorMessage(reason, $t('Bulk action failed'));
 		} finally {
@@ -279,13 +301,8 @@
 	}
 
 	function downloadCitation() {
-		if (citationText === null || !frozenInput) return;
-		const url = URL.createObjectURL(new Blob([citationText], { type: 'text/plain;charset=utf-8' }));
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = bibliographyFilename(frozenInput.exportFormat);
-		link.click();
-		URL.revokeObjectURL(url);
+		if (citationCopy.text === null || frozenInput?.action !== 'copy_bibliography') return;
+		downloadBibliographyText(citationCopy.text, frozenInput.exportFormat);
 		complete($t('Bibliography downloaded'));
 	}
 </script>
@@ -412,12 +429,12 @@
 							>
 						{/if}
 						{#if error}<Notice variant="error" class="m-0">{error}</Notice>{/if}
-						{#if citationText !== null}
+						{#if citationCopy.text !== null}
 							<label class="grid grid-cols-1 gap-1"
 								>{$t('Citation text')}<textarea
 									class="textarea min-h-40"
 									readonly
-									value={citationText}></textarea></label
+									value={citationCopy.text}></textarea></label
 							>
 						{/if}
 						{#if busy || validationMessage}<p
@@ -434,7 +451,7 @@
 							<Button type="button" data-library-action-cancel onclick={close}
 								>{busy ? $t('Continue in Library') : $t('Cancel')}</Button
 							>
-							{#if citationText !== null}<Button
+							{#if citationCopy.text !== null}<Button
 									type="button"
 									disabled={busy}
 									onclick={downloadCitation}>{$t('Download file')}</Button
@@ -445,7 +462,7 @@
 								variant={destructive ? 'danger-filled' : 'filled'}
 								disabled={busy || Boolean(validationMessage)}
 								aria-describedby={busy || validationMessage ? 'library-action-hint' : undefined}
-								>{error && citationText === null ? $t('Retry') : submitLabel}</Button
+								>{error && citationCopy.text === null ? $t('Retry') : submitLabel}</Button
 							>
 						</div>
 					</form>

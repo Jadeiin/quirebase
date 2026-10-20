@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -990,6 +991,7 @@ async def test_graphical_abstract_upload_admits_worker_without_creating_attachme
         assert topic == "upload-complete"
         assert receipt["status"] == "complete"
         assert receipt["size"] == len(content)
+        assert receipt["checksum"] == f"sha256:{sha256(content).hexdigest()}"
         assert enqueue["attributes"]["object_key"] == receipt["key"]
         assert await db.scalar(select(Attachment).where(Attachment.item_id == item_id)) is None
     finally:
@@ -1039,6 +1041,7 @@ async def test_uploaded_graphical_abstract_is_served_as_item_thumbnail(
         assert saved is not None
         assert saved.role is AttachmentRole.graphical_abstract
         assert saved.file.content_type == "image/png"
+        assert saved.file.checksum == f"sha256:{sha256(image).hexdigest()}"
         thumbnail = await client.get(f"{workspace_base}/items/{item_id}/thumbnail")
         assert thumbnail.status_code == 200
         assert thumbnail.headers["content-type"] == "image/png"
@@ -1202,16 +1205,14 @@ async def test_content_media_types_at_runtime(
         assert att_resp.status_code == 200
         assert att_resp.headers["content-type"] == "application/pdf"
         assert 'filename="test.pdf"' in att_resp.headers["content-disposition"]
-        cite_text = await client.get(
-            f"{workspace_base}/items/{item_id}/citation/content?output=text"
-        )
+        cite_text = await client.get(f"{workspace_base}/items/{item_id}/citation?output=text")
         assert cite_text.status_code == 200
-        assert "text/plain" in cite_text.headers["content-type"]
-        cite_html = await client.get(
-            f"{workspace_base}/items/{item_id}/citation/content?output=html"
-        )
+        assert cite_text.json()["media_type"] == "text/plain"
+        assert cite_text.json()["content"]
+        cite_html = await client.get(f"{workspace_base}/items/{item_id}/citation?output=html")
         assert cite_html.status_code == 200
-        assert "text/html" in cite_html.headers["content-type"]
+        assert cite_html.json()["media_type"] == "text/html"
+        assert cite_html.json()["content"]
         bib_resp = await client.get(
             f"{workspace_base}/items/{item_id}/bibliography?file_format=bibtex"
         )

@@ -949,6 +949,7 @@ msgid "Chair"
 msgstr "主席"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Change options"
 msgstr "修改选项"
@@ -983,6 +984,11 @@ msgstr "检查存储对象"
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Check this value against the metadata standard."
 msgstr "请检查此值是否符合元数据标准。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Checked {count, plural, one {# Item} other {# Items}}."
+msgstr "已检查 {count, plural, other {# 条文献}}。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -1146,6 +1152,7 @@ msgid "Citation Styles"
 msgstr "引文样式"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Citation text"
 msgstr "引用文本"
@@ -1182,6 +1189,7 @@ msgid "Client connection guide"
 msgstr "客户端连接指南"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Clipboard access was denied. Copy the citation text below or download it."
 msgstr "剪贴板访问被拒绝。请复制下方引用文本或下载文件。"
@@ -2072,6 +2080,11 @@ msgstr "活动"
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Exact username"
 msgstr "精确用户名"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Exact values, case and formatting."
+msgstr "内容、大小写和格式须一致。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -4618,6 +4631,11 @@ msgid "Ready"
 msgstr "已就绪"
 
 #. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Ready PDFs only; older files may be skipped."
+msgstr "仅比较就绪的 PDF，旧文件可能不参与。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason (at least 10 characters)"
@@ -5121,6 +5139,11 @@ msgstr "运行时设置"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
+msgid "Same PDF"
+msgstr "相同 PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
 msgid "Same title"
 msgstr "相同标题"
 
@@ -5453,11 +5476,6 @@ msgstr "已登录"
 #: src/lib/features/auth/Login.svelte
 msgid "Signing in…"
 msgstr "正在登录…"
-
-#. js-lingui-explicit-id
-#: src/lib/features/tools/Tools.svelte
-msgid "Similar title"
-msgstr "相似标题"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte

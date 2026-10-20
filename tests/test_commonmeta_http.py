@@ -12,7 +12,7 @@ from quirebase.models import AuditEvent, Item
 pytestmark = pytest.mark.anyio
 
 
-@pytest.mark.parametrize("endpoint", ["download", "content", "selection"])
+@pytest.mark.parametrize("endpoint", ["item", "selection"])
 async def test_export_preferences_apply_across_http_entry_points(
     async_db, async_session_factory, tmp_path, monkeypatch, endpoint
 ):
@@ -46,8 +46,7 @@ async def test_export_preferences_apply_across_http_entry_points(
                 f"{base}/bibliography", json={"item_ids": [created.json()["id"]], **options}
             )
         else:
-            suffix = "/content" if endpoint == "content" else ""
-            response = await client.get(f"{item_path}/bibliography{suffix}", params=options)
+            response = await client.get(f"{item_path}/bibliography", params=options)
         assert response.status_code == 200, response.text
         entry = bibtexparser.loads(response.text).entries[0]
         assert entry["ID"] == "Manual"
@@ -258,7 +257,7 @@ async def test_given_name_only_author_suggestions_are_valid_http_responses(
 
 @pytest.mark.parametrize(
     "path",
-    ["bibliography?file_format=csl-json", "bibliography?file_format=csl", "citation/content"],
+    ["bibliography?file_format=csl-json", "bibliography?file_format=csl", "citation"],
 )
 async def test_unsupported_csl_export_returns_a_validation_error(
     async_db, async_session_factory, tmp_path, monkeypatch, path
@@ -329,7 +328,7 @@ async def test_bibtex_parse_failure_stages_valid_siblings_over_http(
 
 @pytest.mark.parametrize(
     "path",
-    ["bibliography?file_format=csl-json", "bibliography?file_format=csl", "citation/content"],
+    ["bibliography?file_format=csl-json", "bibliography?file_format=csl", "citation"],
 )
 async def test_licensed_article_citation_endpoints_remain_supported(
     async_db, async_session_factory, tmp_path, monkeypatch, path
@@ -357,7 +356,7 @@ async def test_licensed_article_citation_endpoints_remain_supported(
 
 @pytest.mark.parametrize(
     "path",
-    ["bibliography?file_format=csl-json", "bibliography?file_format=csl", "citation/content"],
+    ["bibliography?file_format=csl-json", "bibliography?file_format=csl", "citation"],
 )
 async def test_versioned_software_citations_are_explicit_errors(
     async_db, async_session_factory, tmp_path, monkeypatch, path
@@ -445,12 +444,13 @@ async def test_html_citation_download_sanitizes_stored_rich_text(
         created = await client.post(base, json={"metadata": work})
         assert created.status_code == 201
         item_path = f"{base}/{created.json()['id']}"
-        response = await client.get(f"{item_path}/citation/content?output=html")
+        response = await client.get(f"{item_path}/citation?output=html")
         assert response.status_code == 200
-        assert response.headers["content-type"].startswith("text/html")
-        assert "Research" in response.text and "safe" in response.text.lower()
-        assert "alert(" not in response.text
-        CitationMarkup().feed(response.text)
+        assert response.json()["media_type"] == "text/html"
+        content = response.json()["content"]
+        assert "Research" in content and "safe" in content.lower()
+        assert "alert(" not in content
+        CitationMarkup().feed(content)
         assert (await client.get(item_path)).json()["metadata"] == work
     finally:
         await client.aclose()

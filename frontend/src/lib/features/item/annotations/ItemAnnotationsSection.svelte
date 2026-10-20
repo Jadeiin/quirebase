@@ -5,7 +5,7 @@
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import type { components } from '#lib/api/schema.js';
-	import { can, type AuthorizationAction } from '#lib/authorization/can.js';
+	import { can } from '#lib/authorization/can.js';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
@@ -19,6 +19,8 @@
 	import { itemAnnotationsQuery } from '../queries';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
+
+	type AnnotationModerationAction = components['schemas']['AnnotationModerationRequest']['action'];
 
 	let { itemId }: { itemId: string } = $props();
 	const { workspaceId } = getWorkspaceContext();
@@ -43,7 +45,6 @@
 		Math.max(1, Math.ceil((annotations.data?.total ?? 0) / (annotations.data?.per_page ?? 50)))
 	);
 	const workspaceRevisionId = $derived(revision === 'all' ? revisions[0]?.id : revision);
-	const moderationActions = ['hide', 'archive', 'restore', 'lock', 'unlock', 'delete'] as const;
 	const moderationLabels = {
 		hide: msg('Hide'),
 		archive: msg('Archive'),
@@ -51,26 +52,19 @@
 		lock: msg('Lock'),
 		unlock: msg('Unlock'),
 		delete: msg('Delete')
-	} as const satisfies Record<(typeof moderationActions)[number], MessageKey>;
-	const authorizationActions = {
-		hide: 'project_annotation.hide',
-		archive: 'project_annotation.archive',
-		restore: 'project_annotation.restore',
-		lock: 'project_annotation.lock',
-		unlock: 'project_annotation.unlock',
-		delete: 'project_annotation.delete'
-	} as const satisfies Record<(typeof moderationActions)[number], AuthorizationAction>;
+	} as const satisfies Record<AnnotationModerationAction, MessageKey>;
+	const moderationActions = Object.keys(moderationLabels) as AnnotationModerationAction[];
 
 	function annotationCanModerate(
 		annotation: components['schemas']['AnnotationView'],
-		action: (typeof moderationActions)[number]
+		action: AnnotationModerationAction
 	): boolean {
-		return !annotation.mine && can(annotation.authorization, authorizationActions[action]);
+		return !annotation.mine && can(annotation.authorization, `project_annotation.${action}`);
 	}
 
 	async function moderate(
 		annotation: components['schemas']['AnnotationView'],
-		action: 'hide' | 'archive' | 'restore' | 'lock' | 'unlock' | 'delete'
+		action: AnnotationModerationAction
 	) {
 		moderating = annotation.id;
 		moderationError = '';

@@ -19,3 +19,4 @@ class TagMergeRequest(BaseModel):
 
 class DuplicatesReviewView(BaseModel):
     groups: list[list[ItemSearchView]]
+    scanned: int

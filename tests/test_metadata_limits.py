@@ -219,9 +219,17 @@ async def test_title_search_sort_and_duplicate_results(persistence_db):
     matches, total = await search_library(db, actor, workspace_id, q="spectral", sort="title")
     assert total == 2
     assert {item.id for item in matches} == {ids[0], ids[2]}
-    duplicates = await find_duplicates(db, actor, workspace_id, "title")
+    duplicates = (await find_duplicates(db, actor, workspace_id, "title")).groups
+    assert duplicates == []
+    exact = await create_item(
+        db,
+        actor,
+        workspace_id,
+        {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": titles[0]},
+    )
+    duplicates = (await find_duplicates(db, actor, workspace_id, "title")).groups
     assert len(duplicates) == 1
-    assert {item.id for item in duplicates[0]} == {ids[0], ids[2]}
+    assert {item.id for item in duplicates[0]} == {ids[0], exact.item_id}
 
 
 @pytest.mark.parametrize("origin", ["regenerate", "import"])

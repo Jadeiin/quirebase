@@ -196,6 +196,139 @@ async function setup(page: Page, admin = false) {
 	);
 }
 
+test('Item document selection follows successful file replacement and preserves explicit choices', async ({
+	page
+}) => {
+	await setup(page);
+	let currentFiles = [file];
+	await page.route('**/api/v1/workspaces/*/items/item-1/documents', (route) =>
+		route.fulfill({ json: { item_id: 'item-1', files: currentFiles } })
+	);
+	await page.route('**/api/v1/workspaces/*/items/item-1/overview', (route) =>
+		route.fulfill({
+			json: {
+				...item,
+				authorization: { allowed: [...item.authorization.allowed, 'file.delete'] }
+			}
+		})
+	);
+	await page.route('**/api/v1/workspaces/*/items/item-1/revisions/*', (route) =>
+		route.fulfill({ json: { ok: true } })
+	);
+	await page.goto('/workspace/workspace-1/item/item-1');
+	const open = page.getByRole('button', { name: 'Download', exact: true }).first();
+	const dialog = page.getByRole('dialog');
+	const download = dialog.getByRole('button', { name: 'Download bundle', exact: true });
+	async function replaceFile(id: string, name: string) {
+		await page.getByRole('link', { name: 'Files', exact: true }).click();
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		currentFiles = [{ ...file, id, original_name: name }];
+		await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+		await expect(page.getByText(name, { exact: true })).toBeVisible();
+	}
+	await open.click();
+	await expect(dialog.getByRole('checkbox', { name: /Audit.pdf/ })).toBeChecked();
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+
+	await replaceFile('revision-2', 'Replacement.pdf');
+	await open.click();
+	const replacement = dialog.getByRole('checkbox', { name: /Replacement.pdf/ });
+	await expect(replacement).toBeChecked();
+	await replacement.uncheck();
+	await replacement.check();
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+
+	await replaceFile('revision-3', 'Latest.pdf');
+	await open.click();
+	const latest = dialog.getByRole('checkbox', { name: /Latest.pdf/ });
+	await expect(latest).not.toBeChecked();
+	await expect(download).toBeDisabled();
+	await latest.check();
+	await expect(download).toBeEnabled();
+});
+
+test('single Item citation copy retains text for manual copy, download and clipboard retry', async ({
+	page
+}) => {
+	await setup(page);
+	await page.addInitScript(() => {
+		let attempts = 0;
+		Object.defineProperty(navigator, 'clipboard', {
+			value: {
+				writeText: async () => {
+					if (++attempts === 1) throw new Error('Clipboard denied');
+				}
+			}
+		});
+	});
+	const formats: string[] = [];
+	let bibliography = 'Captured Item bibliography';
+	await page.route('**/api/v1/workspaces/*/items/item-1/bibliography?*', (route) => {
+		formats.push(new URL(route.request().url()).searchParams.get('file_format') ?? '');
+		return route.fulfill({
+			body: bibliography,
+			contentType: 'application/x-bibtex'
+		});
+	});
+	await page.goto('/workspace/workspace-1/item/item-1');
+	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	const format = dialog.getByRole('combobox', { name: 'Format', exact: true });
+	await format.selectOption('bibtex');
+	const copy = dialog.getByRole('button', { name: 'Copy to clipboard', exact: true });
+	await copy.click();
+	await expect(dialog.getByRole('alert')).toContainText('Clipboard access was denied');
+	await expect(dialog.getByRole('textbox', { name: 'Citation text', exact: true })).toHaveValue(
+		'Captured Item bibliography'
+	);
+	await expect(format).toBeDisabled();
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	await expect(format).toBeDisabled();
+	await expect(dialog.getByRole('textbox', { name: 'Citation text', exact: true })).toHaveValue(
+		'Captured Item bibliography'
+	);
+	const downloaded = page.waitForEvent('download');
+	await dialog.getByRole('button', { name: 'Download file', exact: true }).click();
+	expect((await downloaded).suggestedFilename()).toBe('quirebase-export.bib');
+	await copy.click();
+	await expect(dialog.getByRole('status')).toContainText('Copied to clipboard');
+	expect(formats).toEqual(['bibtex']);
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+	bibliography = 'Updated Item bibliography';
+	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	await expect(format).toBeEnabled();
+	await expect(dialog.getByRole('textbox', { name: 'Citation text', exact: true })).toHaveCount(0);
+	await copy.click();
+	await expect(dialog.getByRole('textbox', { name: 'Citation text', exact: true })).toHaveValue(
+		'Updated Item bibliography'
+	);
+	expect(formats).toEqual(['bibtex', 'bibtex']);
+	await dialog.getByRole('button', { name: 'Change options', exact: true }).click();
+	await expect(format).toBeEnabled();
+	await expect(dialog.getByRole('textbox', { name: 'Citation text', exact: true })).toHaveCount(0);
+});
+
+test('first Item document read while offline provides retry feedback and resumes', async ({
+	page,
+	context
+}) => {
+	await setup(page);
+	await page.goto('/workspace/workspace-1/item/item-1');
+	const download = page.getByRole('button', { name: 'Download', exact: true });
+	await expect(download).toBeVisible();
+	await context.setOffline(true);
+	await download.click();
+	const dialog = page.getByRole('dialog');
+	await expect(dialog.getByRole('alert')).toContainText('Unable to load documents.');
+	await expect(dialog.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+	await expect(dialog.getByText('Loading documents…', { exact: true })).toHaveCount(0);
+	await expect(dialog.getByRole('button', { name: 'Download bundle', exact: true })).toBeDisabled();
+	await context.setOffline(false);
+	await expect(dialog.getByRole('checkbox', { name: /Audit.pdf/ })).toBeChecked();
+	await expect(dialog.getByRole('alert')).toHaveCount(0);
+});
+
 for (const scenario of [
 	'account',
 	'duplicates',
@@ -223,7 +356,7 @@ for (const scenario of [
 			scenario === 'account'
 				? account
 				: scenario === 'duplicates'
-					? { groups: [] }
+					? { groups: [], scanned: 0 }
 					: scenario === 'providers'
 						? providers
 						: scenario === 'documents'
@@ -366,7 +499,7 @@ test('Tools restores its URL position and fetches only the active tool, without 
 		styles = 0;
 	await page.route('**/api/v1/workspaces/*/duplicates*', (route) => {
 		scans++;
-		return route.fulfill({ json: { groups: [] } });
+		return route.fulfill({ json: { groups: [], scanned: 0 } });
 	});
 	await page.route('**/api/v1/workspaces/*/citation-styles*', (route) => {
 		styles++;

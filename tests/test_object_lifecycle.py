@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4, uuid5
+from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
@@ -17,7 +17,6 @@ from quirebase.documents import (
 )
 from quirebase.models import FileRevision, Item, User
 from quirebase.operations.maintenance import reconcile_objects
-from quirebase.operations.object_migration import migrate_legacy_objects
 
 
 async def _user(db, username: str) -> User:
@@ -27,69 +26,6 @@ async def _user(db, username: str) -> User:
     await provision_initial_workspace(db, user)
     await db.commit()
     return user
-
-
-@pytest.mark.anyio
-async def test_shared_legacy_cas_migrates_to_independent_uuid_objects(async_db):
-    content = b"%PDF-shared-legacy"
-    old_key = "aa/bb/" + "0" * 64 + ".pdf"
-    store = get_object_store()
-    await store.put(old_key, content)
-    user = await _user(async_db, "migration-owner")
-    first_item = Item(
-        workspace_id=fixture_workspace_id(user),
-        created_by=user.id,
-        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "First"},
-    )
-    second_item = Item(
-        workspace_id=fixture_workspace_id(user),
-        created_by=user.id,
-        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Second"},
-    )
-    async_db.add_all([first_item, second_item])
-    await async_db.flush()
-    first = FileRevision(
-        workspace_id=fixture_workspace_id(user),
-        item_id=first_item.id,
-        created_by=user.id,
-        file=FileObject(
-            backend="documents",
-            filename=old_key,
-            size=len(content),
-            content_type="application/pdf",
-            metadata={"original_name": "first.pdf"},
-        ),
-    )
-    second = FileRevision(
-        workspace_id=fixture_workspace_id(user),
-        item_id=second_item.id,
-        created_by=user.id,
-        file=FileObject(
-            backend="documents",
-            filename=old_key,
-            size=len(content),
-            content_type="application/pdf",
-            metadata={"original_name": "second.pdf"},
-        ),
-    )
-    async_db.add_all([first, second])
-    await async_db.commit()
-
-    dry_run = await migrate_legacy_objects(async_db)
-    assert dry_run.planned == 2
-    assert first.file.path == old_key
-
-    report = await migrate_legacy_objects(async_db, apply=True)
-    await async_db.refresh(first)
-    await async_db.refresh(second)
-    assert report.references_updated == 2
-    assert first.file.path != second.file.path
-    assert await store.exists(first.file.path)
-    assert await store.exists(second.file.path)
-    assert not await store.exists(old_key)
-
-    repeated = await migrate_legacy_objects(async_db, apply=True)
-    assert repeated.planned == 0
 
 
 @pytest.mark.anyio
@@ -219,43 +155,3 @@ async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
     os.utime(get_settings().object_dir / recent.key, (old, old))
     assert await reconcile_objects(async_db, retention_hours=1) == ()
     assert await store.exists(recent.key)
-
-
-@pytest.mark.anyio
-async def test_migration_repeat_cleans_legacy_thumbnail_when_target_is_recorded(async_db):
-    store = get_object_store()
-    user = await _user(async_db, "thumbnail-migration-owner")
-    item = Item(
-        workspace_id=fixture_workspace_id(user),
-        created_by=user.id,
-        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Thumbnail migration"},
-    )
-    async_db.add(item)
-    await async_db.flush()
-    revision = FileRevision(
-        workspace_id=fixture_workspace_id(user),
-        item_id=item.id,
-        created_by=user.id,
-        file=FileObject(
-            backend="documents",
-            filename="aa/bb/" + "1" * 64 + ".pdf",
-            size=8,
-            content_type="application/pdf",
-            metadata={"original_name": "paper.pdf"},
-        ),
-    )
-    async_db.add(revision)
-    await async_db.flush()
-    thumbnail_id = uuid5(UUID("9a8c5b31-a356-5c30-884d-45c17722d8b8"), f"thumbnail:{revision.id}")
-    revision.thumbnail = FileObject(
-        backend="documents",
-        filename=f"{thumbnail_id.hex[:2]}/{thumbnail_id.hex[2:4]}/{thumbnail_id.hex}.png",
-        content_type="image/png",
-    )
-    await async_db.commit()
-    legacy = f"thumbnails/{revision.id}.png"
-    await store.put(revision.file.path, b"%PDF-1.4")
-    await store.put(legacy, b"legacy-thumbnail")
-    report = await migrate_legacy_objects(async_db, apply=True)
-    assert report.legacy_deleted >= 1
-    assert not await store.exists(legacy)

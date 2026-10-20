@@ -4,11 +4,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from quirebase.library import DEFAULT_CITATION_KEY_FORMULA, BibliographyExportOptions
+from quirebase.library import (
+    DEFAULT_CITATION_KEY_FORMULA,
+    BibliographyExportOptions,
+    BibliographyFormat,
+)
 
 
 class BibliographyExportQuery(BaseModel):
-    file_format: str
+    file_format: BibliographyFormat
     style: str = "apa"
     include_abstract: bool = True
     preserve_case: bool = False
@@ -32,10 +36,6 @@ class BibliographyExportQuery(BaseModel):
             citation_key_formula=self.citation_key_formula.strip() or DEFAULT_CITATION_KEY_FORMULA,
             citation_key_force_ascii=self.citation_key_force_ascii,
         )
-
-
-class BibliographyCopyQuery(BibliographyExportQuery):
-    file_format: str = "csl"
 
 
 class BibliographyExportRequest(BibliographyExportQuery):

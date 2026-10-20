@@ -92,6 +92,7 @@ class StagedPdf:
     object_key: str
     size: int
     original_name: str
+    checksum: str
 
 
 @dataclass(frozen=True)
@@ -143,6 +144,7 @@ async def stage_pdf(
         staged.key,
         staged.size,
         Path(filename).name,
+        staged.checksum,
     )
     validation = asyncio.create_task(_validate_staged_pdf(store, staged.key))
     try:
@@ -192,9 +194,9 @@ async def attach_staged_pdf(
     db: AsyncSession,
     user: User,
     item: Item,
-    staged: tuple[str, int, str],
+    staged: FileObject,
 ) -> FileRevision:
-    key, size, original_name = staged
+    key = staged.path
     revision = FileRevision(
         workspace_id=item.workspace_id,
         item_id=item.id,
@@ -202,9 +204,10 @@ async def attach_staged_pdf(
         file=FileObject(
             backend="documents",
             filename=key,
-            size=size,
+            size=staged.size,
+            checksum=staged.checksum,
             content_type="application/pdf",
-            metadata={"original_name": original_name},
+            metadata={"original_name": staged.metadata["original_name"]},
         ),
     )
     db.add(revision)
@@ -344,7 +347,12 @@ async def store_pdf_revision(
         )
         await durable_operations().send(
             workflow_id,
-            {"status": "complete", "key": stored.key, "size": stored.size},
+            {
+                "status": "complete",
+                "key": stored.key,
+                "size": stored.size,
+                "checksum": stored.checksum,
+            },
             topic=UPLOAD_COMPLETE_TOPIC,
             idempotency_key=f"upload-complete:{revision_id}",
         )
@@ -429,7 +437,12 @@ async def create_attachment(
         )
         await durable_operations().send(
             workflow_id,
-            {"status": "complete", "key": stored.key, "size": stored.size},
+            {
+                "status": "complete",
+                "key": stored.key,
+                "size": stored.size,
+                "checksum": stored.checksum,
+            },
             topic=UPLOAD_COMPLETE_TOPIC,
             idempotency_key=f"upload-complete:{attachment_id}",
         )

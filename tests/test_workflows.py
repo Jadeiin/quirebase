@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -406,6 +407,7 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
             backend="documents",
             filename=stored.key,
             size=stored.size,
+            checksum=stored.checksum,
             content_type="application/pdf",
             metadata={"original_name": "imported.pdf"},
         ),
@@ -442,6 +444,9 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     )
 
     assert enqueued == [(revision.id, item.id, user.id, fixture_workspace_id(user))]
+    await async_db.refresh(revision)
+    assert revision.file.checksum == f"sha256:{sha256(b'%PDF-imported').hexdigest()}"
+    assert revision.thumbnail.checksum == f"sha256:{sha256(b'thumbnail').hexdigest()}"
 
 
 @pytest.mark.anyio
@@ -564,6 +569,7 @@ async def test_annotation_export_workflow_records_expiring_artifact(monkeypatch)
         "filename": "artifact.pdf",
         "object_key": "aa/bb/artifact.pdf",
         "size_bytes": 42,
+        "checksum": f"sha256:{sha256(b'exported annotations').hexdigest()}",
         "revision_id": "revision-id",
         "project_id": None,
         "project_item_id": None,
@@ -636,6 +642,7 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
             "filename": "artifact.pdf",
             "object_key": "aa/bb/artifact.pdf",
             "size_bytes": 42,
+            "checksum": f"sha256:{sha256(b'exported annotations').hexdigest()}",
             "revision_id": revision.id,
             "project_id": None,
             "project_item_id": None,
@@ -647,6 +654,7 @@ async def test_annotation_export_artifact_transaction_records_lifetime(async_db,
     assert artifact.file.path == "aa/bb/artifact.pdf"
     assert artifact.file.metadata["original_name"] == "artifact.pdf"
     assert artifact.file.size == 42
+    assert artifact.file.checksum == f"sha256:{sha256(b'exported annotations').hexdigest()}"
     assert artifact.expires_at.replace(tzinfo=UTC) >= before + timedelta(minutes=59)
 
 
@@ -711,6 +719,7 @@ async def test_project_annotation_export_rejects_replaced_assignment(async_db, m
                 "filename": "artifact.pdf",
                 "object_key": "aa/bb/stale-artifact.pdf",
                 "size_bytes": 42,
+                "checksum": f"sha256:{sha256(b'exported annotations').hexdigest()}",
                 "revision_id": revision.id,
                 "project_id": project.id,
                 "project_item_id": original_assignment_id,
@@ -785,6 +794,7 @@ async def test_annotation_export_finalizer_rechecks_current_authority(
         "filename": "artifact.pdf",
         "object_key": "aa/bb/revoked-artifact.pdf",
         "size_bytes": 42,
+        "checksum": f"sha256:{sha256(b'exported annotations').hexdigest()}",
         "revision_id": revision.id,
         "project_id": project.id,
         "project_item_id": assignment.id,
@@ -951,6 +961,75 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_revision_upload_carries_stream_checksum_through_finalizer_retry(
+    async_db, fake_durable_operations, monkeypatch
+):
+    from quirebase.documents import store_pdf_revision
+
+    user = await _provisioned_user(async_db, "streamed-revision-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Streamed PDF"},
+    )
+    async_db.add(item)
+    await async_db.commit()
+    item_id, workspace_id = item.id, item.workspace_id
+    content = b"%PDF-streamed file"
+
+    async def source():
+        for chunk in (content[:2], content[2:8], content[8:]):
+            await asyncio.sleep(0)
+            yield chunk
+
+    await store_pdf_revision(async_db, user, workspace_id, item_id, source(), "streamed.pdf")
+    enqueue = fake_durable_operations.enqueues[-1]
+    _, receipt, _, _ = fake_durable_operations.messages[-1]
+    assert receipt["checksum"] == f"sha256:{sha256(content).hexdigest()}"
+
+    async def receive(_topic, *, timeout_seconds):
+        await asyncio.sleep(0)
+        return receipt
+
+    async def enqueue_change(*_args):
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
+    monkeypatch.setattr(document_workflows, "validate_pdf_container", lambda _source: None)
+    monkeypatch.setattr(document_workflows, "inspect_pdf", lambda _source: (1, "text", []))
+    monkeypatch.setattr(
+        document_workflows,
+        "create_thumbnail",
+        lambda _source, destination: destination.write_bytes(b"thumbnail"),
+    )
+    monkeypatch.setattr(document_workflows, "_enqueue_file_revision_changed", enqueue_change)
+    workflow_body = document_workflows.upload_revision_workflow.__wrapped__.__wrapped__
+
+    first = await workflow_body(*enqueue["args"])
+    retried = await workflow_body(*enqueue["args"])
+
+    assert retried == first
+    revisions = list(
+        await async_db.scalars(select(FileRevision).where(FileRevision.item_id == item_id))
+    )
+    assert len(revisions) == 1
+    assert revisions[0].file.checksum == f"sha256:{sha256(content).hexdigest()}"
+    assert revisions[0].thumbnail.checksum == f"sha256:{sha256(b'thumbnail').hexdigest()}"
+
+
+@pytest.mark.parametrize(
+    "checksum",
+    [None, "", 123, "md5:" + "a" * 32, "sha256:" + "a" * 63, "sha256:" + "A" * 64],
+)
+def test_upload_receipt_rejects_missing_or_malformed_checksum(checksum):
+    with pytest.raises(TypeError, match="invalid PDF upload receipt"):
+        document_workflows._require_upload_receipt(
+            {"status": "complete", "key": "object.pdf", "size": 10, "checksum": checksum},
+            description="PDF",
+        )
+
+
+@pytest.mark.anyio
 async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     user = await _provisioned_user(async_db, "upload-tx-user")
     item = Item(
@@ -967,7 +1046,9 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
         "object_key": "aa/bb/doc.pdf",
         "thumbnail_object_key": "aa/bb/thumb.png",
         "thumbnail_size": 128,
+        "thumbnail_checksum": f"sha256:{sha256(b'thumbnail').hexdigest()}",
         "size": 1024,
+        "checksum": f"sha256:{sha256(b'uploaded PDF').hexdigest()}",
         "page_count": 2,
         "full_text": "Extracted text content",
         "page_geometry": [],
@@ -980,6 +1061,8 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     saved = await async_db.get(FileRevision, rev_id)
     assert saved is not None
     assert saved.file.path == "aa/bb/doc.pdf"
+    assert saved.file.checksum == inspected["checksum"]
+    assert saved.thumbnail.checksum == inspected["thumbnail_checksum"]
     assert saved.page_count == 2
     assert saved.full_text == "Extracted text content"
 
@@ -996,7 +1079,11 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
     await async_db.commit()
 
     att_id = uuid4()
-    receipt = {"object_key": "aa/bb/data.bin", "size": 256}
+    receipt = {
+        "object_key": "aa/bb/data.bin",
+        "size": 256,
+        "checksum": f"sha256:{sha256(b'uploaded attachment').hexdigest()}",
+    }
     result = await document_workflows.commit_uploaded_attachment(
         user.id,
         fixture_workspace_id(user),
@@ -1013,6 +1100,7 @@ async def test_commit_uploaded_attachment_uses_datasource_transaction(async_db):
     assert saved is not None
     assert saved.file.path == "aa/bb/data.bin"
     assert saved.file.size == 256
+    assert saved.file.checksum == receipt["checksum"]
 
 
 @pytest.mark.anyio
@@ -1032,7 +1120,12 @@ async def test_invalid_graphical_abstract_worker_deletes_owned_object_and_writes
     store = get_object_store()
     object_id = uuid4()
     stored = await store.put_object(object_id, ObjectSuffix.BINARY, content, max_bytes=100)
-    receipt = {"status": "complete", "key": stored.key, "size": stored.size}
+    receipt = {
+        "status": "complete",
+        "key": stored.key,
+        "size": stored.size,
+        "checksum": stored.checksum,
+    }
 
     async def receive(topic, *, timeout_seconds):
         await asyncio.sleep(0)
@@ -1081,7 +1174,12 @@ async def test_cancelled_graphical_abstract_validation_deletes_owned_object(asyn
     stored = await store.put_object(
         object_id, ObjectSuffix.BINARY, b"\x89PNG\r\n\x1a\nimage", max_bytes=100
     )
-    receipt = {"status": "complete", "key": stored.key, "size": stored.size}
+    receipt = {
+        "status": "complete",
+        "key": stored.key,
+        "size": stored.size,
+        "checksum": stored.checksum,
+    }
     receipt_delivered = asyncio.Event()
     read_started = asyncio.Event()
 

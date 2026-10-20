@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from uuid import uuid4
 
 import pymupdf
@@ -19,6 +20,7 @@ from workspace_helpers import (
 )
 
 from quirebase.access import (
+    AnnotationModerationAction,
     ResourceAction,
     action_allowed,
     effective_resource_actions,
@@ -2902,7 +2904,13 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
     async_db.add(annotation)
     await async_db.commit()
     moderated = await moderate_document_annotation(
-        async_db, owner, fixture_workspace_id(owner), item.id, annotation.id, "hide", 1
+        async_db,
+        owner,
+        fixture_workspace_id(owner),
+        item.id,
+        annotation.id,
+        AnnotationModerationAction.hide,
+        1,
     )
     assert moderated["body"] == "Authored body"
     assert moderated["moderated_by"] == owner.id
@@ -2975,6 +2983,73 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("action", "initial_state", "expected_state"),
+    [
+        (AnnotationModerationAction.hide, (False, False, False), (True, False, False, False)),
+        (AnnotationModerationAction.archive, (False, False, False), (False, True, False, False)),
+        (AnnotationModerationAction.restore, (True, True, True), (False, False, True, False)),
+        (AnnotationModerationAction.lock, (False, False, False), (False, False, True, False)),
+        (AnnotationModerationAction.unlock, (True, True, True), (True, True, False, False)),
+        (AnnotationModerationAction.delete, (True, True, True), (True, True, True, True)),
+    ],
+)
+async def test_annotation_moderation_changes_only_requested_state(
+    async_db, action, initial_state, expected_state
+):
+    (
+        author,
+        moderator,
+        item,
+        project,
+        _revision,
+        annotation,
+        reply,
+    ) = await _shared_annotation_context(async_db, f"moderation-state-{action}")
+    workspace_id = fixture_workspace_id(author)
+    membership = await async_db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == moderator.id,
+        )
+    )
+    membership.role = WorkspaceRole.admin
+    for field, active in zip(("hidden_at", "archived_at", "locked_at"), initial_state, strict=True):
+        setattr(annotation, field, datetime.now(UTC) if active else None)
+    authored_payload = annotation.payload
+    await async_db.commit()
+
+    result = await moderate_document_annotation(
+        async_db, moderator, workspace_id, item.id, annotation.id, action, 1
+    )
+
+    assert result["version"] == 2
+    assert (
+        tuple(
+            getattr(annotation, field) is not None
+            for field in ("hidden_at", "archived_at", "locked_at", "deleted_at")
+        )
+        == expected_state
+    )
+    assert annotation.deleted_by_moderation is (action is AnnotationModerationAction.delete)
+    assert annotation.body == "Shared note"
+    assert annotation.payload == authored_payload
+    assert annotation.author_id == author.id
+    assert annotation.moderated_by == moderator.id
+    assert reply.body == "Shared reply"
+    assert reply.version == 1
+    event = await async_db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == f"annotation.moderate.{action}",
+            AuditEvent.target_id == str(annotation.id),
+        )
+    )
+    assert event is not None
+    assert event.project_id == project.id
+    assert event.authorization_resource_action == f"project_annotation.{action}"
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("moderation_field", ["hidden_at", "archived_at", "locked_at"])
 async def test_moderated_own_annotation_does_not_project_moderation_actions(
     async_db, moderation_field
@@ -3036,7 +3111,13 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
     }
     with pytest.raises(ValidationFailure, match="cannot moderate their own"):
         await moderate_document_annotation(
-            async_db, author, workspace_id, item.id, annotation.id, "hide", 1
+            async_db,
+            author,
+            workspace_id,
+            item.id,
+            annotation.id,
+            AnnotationModerationAction.hide,
+            1,
         )
     membership = await async_db.scalar(
         select(WorkspaceMember).where(
@@ -3053,11 +3134,23 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
         )
     with pytest.raises(VersionConflict) as conflict:
         await moderate_document_annotation(
-            async_db, administrator, workspace_id, item.id, annotation.id, "delete", 2
+            async_db,
+            administrator,
+            workspace_id,
+            item.id,
+            annotation.id,
+            AnnotationModerationAction.delete,
+            2,
         )
     assert conflict.value.current_version == 1
     deleted = await moderate_document_annotation(
-        async_db, administrator, workspace_id, item.id, annotation.id, "delete", 1
+        async_db,
+        administrator,
+        workspace_id,
+        item.id,
+        annotation.id,
+        AnnotationModerationAction.delete,
+        1,
     )
     assert deleted["version"] == 2
     assert deleted["authorization"]["allowed"] == []
@@ -3142,7 +3235,7 @@ async def test_author_can_restore_self_deleted_annotation_and_replies(
         membership.role = WorkspaceRole.admin
     await async_db.commit()
     if prior_moderation:
-        for action in ("hide", "restore"):
+        for action in (AnnotationModerationAction.hide, AnnotationModerationAction.restore):
             await moderate_document_annotation(
                 async_db,
                 moderator,
@@ -3666,7 +3759,10 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
 
 
 @pytest.mark.anyio
-async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, monkeypatch):
+@pytest.mark.parametrize("with_checksum", [False, True])
+async def test_cross_workspace_copy_creates_detached_item_and_file(
+    async_db, monkeypatch, with_checksum
+):
     actor = await _user(async_db, "copy-actor")
     target_owner = await _user(async_db, "copy-target-owner")
     async_db.add(
@@ -3724,6 +3820,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
             backend="documents",
             filename=stored.key,
             size=stored.size,
+            checksum=stored.checksum if with_checksum else None,
             content_type="application/pdf",
             metadata={"original_name": "source.pdf"},
         ),
@@ -3731,6 +3828,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
             backend="documents",
             filename=thumbnail.key,
             size=thumbnail.size,
+            checksum=thumbnail.checksum if with_checksum else None,
             content_type="image/png",
             metadata={"original_name": "source-thumbnail.png"},
         ),
@@ -3744,6 +3842,7 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
             backend="documents",
             filename=supplement.key,
             size=supplement.size,
+            checksum=supplement.checksum if with_checksum else None,
             content_type="image/png",
             metadata={"original_name": "source-supplement.png"},
         ),
@@ -3788,14 +3887,19 @@ async def test_cross_workspace_copy_creates_detached_item_and_file(async_db, mon
     assert copied_revision.page_count == 1
     assert copied_revision.page_geometry == [[100.0, 200.0]]
     assert copied_attachment.role == source_attachment.role
-    for source_file, copied_file in (
-        (source_revision.file, copied_revision.file),
-        (source_revision.thumbnail, copied_revision.thumbnail),
-        (source_attachment.file, copied_attachment.file),
+    for source_file, copied_file, content in (
+        (source_revision.file, copied_revision.file, b"%PDF-independent-copy"),
+        (source_revision.thumbnail, copied_revision.thumbnail, b"thumbnail"),
+        (source_attachment.file, copied_attachment.file, b"supplement"),
     ):
         assert source_file is not None and copied_file is not None
         assert source_file.path != copied_file.path
-        assert copied_file.to_dict() == source_file.to_dict() | {"filename": copied_file.path}
+        checksum = f"sha256:{sha256(content).hexdigest()}"
+        assert copied_file.checksum == checksum
+        assert copied_file.to_dict() == source_file.to_dict() | {
+            "filename": copied_file.path,
+            "checksum": checksum,
+        }
         assert await get_object_store().exists(source_file.path)
         assert await get_object_store().exists(copied_file.path)
     assert await search_index(async_db).search(async_db, "copied PDF search") == [copied.id]

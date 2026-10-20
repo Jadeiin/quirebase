@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event, func, select, update
+from sqlalchemy import event, func, insert, select, update
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import VersionConflict, WorkspaceMembershipRequired, WorkspaceUnavailable
@@ -224,27 +224,314 @@ async def test_publication_sort_supports_both_directions_and_missing_names(persi
     assert total == 2 and [row.id for row in rows] == sorted(ids[1:3])
 
 
-async def test_duplicate_identifiers_coexist_and_suggest_connected_groups(persistence_db):
+async def test_duplicate_identifiers_group_each_shared_key_without_transitive_matching(
+    persistence_db,
+):
     db = persistence_db
     actor, workspace_id = await owner(db)
     a = work(
         "First",
         resource_id="https://doi.org/10.1234/ONE",
-        identifiers=[{"identifier_type": "DOI", "identifier": "10.1234/two"}],
+        identifiers=[
+            {"identifier_type": "DOI", "identifier": "10.1234/one"},
+            {"identifier_type": "DOI", "identifier": "10.1234/two"},
+        ],
     )
     b = work(
         "Second",
         identifiers=[
-            {"identifier_type": "DOI", "identifier": "doi:10.1234/one"},
+            {"identifier_type": "DOI", "identifier": "10.1234/one"},
             {"identifier_type": "PMID", "identifier": "42"},
         ],
     )
     c = work("Third", identifiers=[{"identifier_type": "PMID", "identifier": "42"}])
     results = [await create_item(db, actor, workspace_id, value) for value in (a, b, c)]
-    groups = await find_duplicates(db, actor, workspace_id, "identifier")
-    assert len(groups) == 1
-    assert {item.id for item in groups[0]} == {row.item_id for row in results}
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    assert {frozenset(item.id for item in group) for group in groups} == {
+        frozenset([results[0].item_id, results[1].item_id]),
+        frozenset([results[1].item_id, results[2].item_id]),
+    }
     assert (await db.get(Item, results[0].item_id)).work == a
+
+
+async def test_identifier_scan_keeps_exact_namespace_scheme_and_workspace_boundaries(
+    persistence_db,
+):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    outsider, private_id = await owner(db)
+    identifiers = [
+        {"identifier_type": "DOI", "identifier": "10.1234/shared"},
+        {"identifier_type": "DOI", "identifier": "10.1234/shared"},
+        {"identifier_type": "PMID", "identifier": "42"},
+        {"identifier_type": "PMCID", "identifier": "42"},
+        {"identifier_type": "Other", "scheme": "local", "identifier": "custom"},
+        {"identifier_type": "Other", "scheme": "local", "identifier": "custom"},
+        {"identifier_type": "Other", "scheme": "different", "identifier": "custom"},
+        {"identifier_type": "Other", "scheme": "DOI", "identifier": "10.1234/shared"},
+        {"identifier_type": "DOI", "identifier": "10.1234/CASE"},
+        {"identifier_type": "DOI", "identifier": "10.1234/case"},
+        {"identifier_type": "DOI", "identifier": "10.1234/spaces"},
+        {"identifier_type": "DOI", "identifier": " 10.1234/spaces "},
+        {"identifier_type": "DOI", "identifier": "https://doi.org/10.1234/shared"},
+        {"identifier_type": "DOI", "identifier": "10.1234/private"},
+    ]
+    created = [
+        await create_item(db, actor, workspace_id, work(str(index), identifiers=[identifier]))
+        for index, identifier in enumerate(identifiers)
+    ]
+    # A matching external identifier in a different Workspace is not a candidate.
+    await create_item(db, outsider, private_id, work("Private", identifiers=[identifiers[-1]]))
+    # Primary Work URIs and additional identifiers have separate exact keys.
+    await create_item(
+        db, actor, workspace_id, work("Primary URI", resource_id=identifiers[-2]["identifier"])
+    )
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    assert {frozenset(item.id for item in group) for group in groups} == {
+        frozenset([created[0].item_id, created[1].item_id]),
+        frozenset([created[4].item_id, created[5].item_id]),
+    }
+    assert all(item.workspace_id == workspace_id for group in groups for item in group)
+
+
+async def test_identifier_scan_ignores_empty_and_repeated_keys_within_one_item(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    repeated = {"identifier_type": "DOI", "identifier": "10.1234/only-one-item"}
+    await create_item(db, actor, workspace_id, work("Repeated", identifiers=[repeated, repeated]))
+    empty = [
+        {"identifier_type": "DOI", "identifier": ""},
+        {"identifier_type": "DOI", "identifier": "   "},
+        {"identifier_type": "DOI", "identifier": "\t\n\r"},
+        {"identifier_type": "Other", "identifier": "no-scheme"},
+        {"identifier_type": "Other", "scheme": "", "identifier": "empty-scheme"},
+        {"identifier_type": "Other", "scheme": "   ", "identifier": "blank-scheme"},
+        {"identifier_type": "Other", "scheme": "\t\n", "identifier": "blank-scheme"},
+    ]
+    for index in range(2):
+        await create_item(db, actor, workspace_id, work(str(index), identifiers=empty))
+    scan = await find_duplicates(db, actor, workspace_id, "identifier")
+    assert scan.scanned == 3
+    assert scan.groups == []
+
+
+async def test_identifier_scan_returns_one_group_for_multiple_shared_keys(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    shared = work(
+        resource_id=f"urn:uuid:{uuid4()}",
+        identifiers=[
+            {"identifier_type": "DOI", "identifier": "10.1234/shared"},
+            {"identifier_type": "DOI", "identifier": "10.1234/shared"},
+            {"identifier_type": "PMID", "identifier": "42"},
+        ],
+    )
+    created = [await create_item(db, actor, workspace_id, shared) for _ in range(2)]
+    scan = await find_duplicates(db, actor, workspace_id, "identifier")
+    assert scan.scanned == 2
+    assert len(scan.groups) == 1
+    assert {item.id for item in scan.groups[0]} == {row.item_id for row in created}
+
+
+@pytest.mark.parametrize("mode,old_limit", [("identifier", 2000), ("title", 2000)])
+async def test_duplicate_scan_finds_late_matches_beyond_old_limits(persistence_db, mode, old_limit):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    outsider, private_id = await owner(db)
+    # Matching Items sort after the old cap; unique prefixes exercise the full scan.
+    matched_ids = [uuid4(), uuid4()]
+    matching = [
+        work("zzzz common duplicate reference alpha", resource_id="https://doi.org/10.1234/shared"),
+        work(
+            "zzzz common duplicate reference alpha",
+            resource_id="https://doi.org/10.1234/shared",
+        ),
+    ]
+    await db.execute(
+        insert(Item),
+        [
+            {"workspace_id": workspace_id, "created_by": actor.id, "work": work(f"a-{uuid4()}")}
+            for _ in range(old_limit)
+        ]
+        + [
+            {"id": item_id, "workspace_id": workspace_id, "created_by": actor.id, "work": value}
+            for item_id, value in zip(matched_ids, matching, strict=True)
+        ]
+        + [{"workspace_id": private_id, "created_by": outsider.id, "work": matching[0]}],
+    )
+    await db.commit()
+
+    scan = await find_duplicates(db, actor, workspace_id, mode)
+    assert scan.scanned == old_limit + 2
+    assert {item.id for group in scan.groups for item in group} == set(matched_ids)
+    assert all(item.workspace_id == workspace_id for group in scan.groups for item in group)
+
+
+async def test_empty_duplicate_scan(persistence_db):
+    actor, workspace_id = await owner(persistence_db)
+    scan = await find_duplicates(persistence_db, actor, workspace_id, "title")
+    assert scan.groups == []
+    assert scan.scanned == 0
+
+
+async def test_same_title_scan_groups_exact_values_with_stable_order(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    outsider, private_id = await owner(db)
+    titles = [
+        "Alpha Research",
+        "Alpha Research",
+        "alpha research",
+        "Alpha <i>Research</i>",
+        "Alpha Research!",
+        "研究",
+        "研究",
+        "Annual report 2023",
+        "Annual report 2024",
+        "",
+        "",
+        None,
+    ]
+    ids = [uuid4() for _ in titles]
+    await db.execute(
+        insert(Item),
+        [
+            {
+                "id": item_id,
+                "workspace_id": workspace_id,
+                "created_by": actor.id,
+                "work": work(title),
+            }
+            for item_id, title in zip(ids, titles, strict=True)
+        ]
+        # A title seen once here and once elsewhere is not a Workspace duplicate.
+        + [{"workspace_id": private_id, "created_by": outsider.id, "work": work(titles[2])}],
+    )
+    await db.commit()
+
+    scan = await find_duplicates(db, actor, workspace_id, "title")
+    assert scan.scanned == len(titles)
+    assert [[item.id for item in group] for group in scan.groups] == [
+        sorted(ids[:2]),
+        sorted(ids[5:7]),
+    ]
+
+
+@pytest.mark.parametrize("mode", ["identifier", "title"])
+async def test_duplicate_scan_aggregates_in_sql_and_loads_only_matching_items(persistence_db, mode):
+    from sqlalchemy.sql import visitors
+
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    unique_id = uuid4()
+    shared = work("Shared", resource_id="https://doi.org/10.1234/shared", abstract="x" * 4096)
+    await db.execute(
+        insert(Item),
+        [
+            {"workspace_id": workspace_id, "created_by": actor.id, "work": shared}
+            for _ in range(1001)
+        ]
+        + [
+            {
+                "id": unique_id,
+                "workspace_id": workspace_id,
+                "created_by": actor.id,
+                "work": work("Unique"),
+            }
+        ],
+    )
+    await db.commit()
+    queries = []
+
+    def capture(execution):
+        statement = execution.statement
+        if execution.is_select and (
+            Item.__table__ in statement.get_final_froms()
+            or any(node is Item.__table__ for node in visitors.iterate(statement))
+        ):
+            queries.append(statement)
+
+    event.listen(db.sync_session, "do_orm_execute", capture)
+    try:
+        scan = await find_duplicates(db, actor, workspace_id, mode)
+    finally:
+        event.remove(db.sync_session, "do_orm_execute", capture)
+
+    assert scan.scanned == 1002
+    assert len(scan.groups) == 1 and len(scan.groups[0]) == 1001
+    # Count the scope, then detect and hydrate matches in one statement. No
+    # candidate projection or per-batch hydration leaves a metadata race.
+    assert len(queries) == 2
+    assert len(queries[0].selected_columns) == 1
+    assert len(queries[1].selected_columns) >= len(Item.__table__.columns)
+    assert "HAVING count(" in str(queries[1])
+    assert (Item, (unique_id,), None) not in db.identity_map
+
+
+@pytest.mark.parametrize("mode", ["identifier", "title", "file"])
+@pytest.mark.parametrize("has_matches", [False, True])
+async def test_duplicate_scan_rechecks_access_after_detection(
+    persistence_db, persistence_sessions, monkeypatch, mode, has_matches
+):
+    from quirebase.library import duplicates
+    from quirebase.models import WorkspaceMemberState
+
+    db = persistence_db
+    _, workspace_id = await owner(db)
+    actor = User(username=f"viewer-{uuid4()}", password_hash="hash")
+    db.add(actor)
+    await db.flush()
+    db.add(WorkspaceMember(workspace_id=workspace_id, user_id=actor.id, role=WorkspaceRole.viewer))
+    shared = work("Shared")
+    await db.execute(
+        insert(Item),
+        [
+            {"workspace_id": workspace_id, "created_by": actor.id, "work": shared}
+            for _ in range(2 if has_matches else 1)
+        ],
+    )
+    if mode == "file":
+        from advanced_alchemy.types import FileObject
+
+        from quirebase.models import FileRevision, FileRevisionProcessingState
+
+        for item in await db.scalars(select(Item).where(Item.workspace_id == workspace_id)):
+            db.add(
+                FileRevision(
+                    workspace_id=workspace_id,
+                    item_id=item.id,
+                    created_by=actor.id,
+                    file=FileObject(
+                        backend="documents",
+                        filename=f"{uuid4().hex}.pdf",
+                        checksum="sha256:" + "a" * 64,
+                    ),
+                    processing_state=FileRevisionProcessingState.ready,
+                )
+            )
+    await db.commit()
+    original_require = duplicates.require_workspace_action
+    checks = 0
+
+    async def revoke_after_detection(*args, **kwargs):
+        nonlocal checks
+        checks += 1
+        if checks == 2:
+            async with persistence_sessions() as governor_db:
+                await governor_db.execute(
+                    update(WorkspaceMember)
+                    .where(
+                        WorkspaceMember.workspace_id == workspace_id,
+                        WorkspaceMember.user_id == actor.id,
+                    )
+                    .values(state=WorkspaceMemberState.suspended)
+                )
+                await governor_db.commit()
+        return await original_require(*args, **kwargs)
+
+    monkeypatch.setattr(duplicates, "require_workspace_action", revoke_after_detection)
+    with pytest.raises(WorkspaceMembershipRequired):
+        await find_duplicates(db, actor, workspace_id, mode)
 
 
 @pytest.mark.parametrize(
@@ -254,7 +541,7 @@ async def test_duplicate_identifiers_coexist_and_suggest_connected_groups(persis
         ("PMCID", "pmcid", "https://pmc.ncbi.nlm.nih.gov/articles/PMC42/", "PMC42"),
     ],
 )
-async def test_openalex_pubmed_urls_suggest_the_same_duplicates_as_bare_identifiers(
+async def test_identifier_scan_preserves_url_and_bare_identifier_forms(
     persistence_db, kind, key, url, bare
 ):
     from inquiro.work import read_work
@@ -270,9 +557,8 @@ async def test_openalex_pubmed_urls_suggest_the_same_duplicates_as_bare_identifi
         await create_item(db, actor, workspace_id, value)
         for value in (source, work(identifiers=[{"identifier_type": kind, "identifier": bare}]))
     ]
-    groups = await find_duplicates(db, actor, workspace_id, "identifier")
-    assert len(groups) == 1
-    assert {item.id for item in groups[0]} == {row.item_id for row in created}
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    assert groups == []
     assert (await db.get(Item, created[0].item_id)).work == original
 
 
@@ -293,12 +579,13 @@ async def test_malformed_identifier_urls_do_not_block_creation_or_import_confirm
     imported = await commit_import_batch(db, actor, workspace_id, preview.id)
     assert len(imported) == 1
     assert await commit_import_batch(db, actor, workspace_id, preview.id) == imported
-    assert await find_duplicates(db, actor, workspace_id, "identifier") == []
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    assert [{item.id for item in group} for group in groups] == [{created.item_id, imported[0]}]
     assert (await db.get(Item, created.item_id)).work == value
     assert (await db.get(Item, imported[0])).work == value
 
 
-async def test_csl_reimport_keeps_unicode_doi_duplicates_distinct_from_lowercase_doi(
+async def test_csl_reimport_preserves_identifier_forms_without_implicit_normalization(
     persistence_db,
 ):
     from inquiro.bibliography import export_bibliography_records
@@ -314,10 +601,12 @@ async def test_csl_reimport_keeps_unicode_doi_duplicates_distinct_from_lowercase
     preview = await stage_import_batch(db, actor, workspace_id, content.encode(), "csl-json")
     assert len(preview.records) == 1, preview.errors
     imported = await commit_import_batch(db, actor, workspace_id, preview.id)
-    groups = await find_duplicates(db, actor, workspace_id, "identifier")
-    assert len(groups) == 1
-    assert {item.id for item in groups[0]} == {originals[0].item_id, imported[0]}
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    # CSL conversion writes a resolver URI into Work.id. The raw additional DOI
+    # is preserved on the source Item and is not compared across those fields.
+    assert groups == []
     assert (await db.get(Item, originals[0].item_id)).work == values[0]
+    assert (await db.get(Item, imported[0])).work["id"].startswith("https://doi.org/")
 
 
 async def test_container_related_and_credit_identifiers_are_isolated(persistence_db):
@@ -342,10 +631,10 @@ async def test_container_related_and_credit_identifiers_are_isolated(persistence
     )
     await create_item(db, actor, workspace_id, dataset)
     await create_item(db, actor, workspace_id, work(resource_id="https://doi.org/10.1234/paper"))
-    assert await find_duplicates(db, actor, workspace_id, "identifier") == []
+    assert (await find_duplicates(db, actor, workspace_id, "identifier")).groups == []
 
 
-async def test_legacy_pubmed_url_does_not_match_a_pmc_article(persistence_db):
+async def test_primary_identifier_uris_require_exact_values(persistence_db):
     db = persistence_db
     actor, workspace_id = await owner(db)
     ids = [
@@ -356,10 +645,11 @@ async def test_legacy_pubmed_url_does_not_match_a_pmc_article(persistence_db):
             "https://www.ncbi.nlm.nih.gov/pubmed/42",
             "https://pubmed.ncbi.nlm.nih.gov/42/",
             "https://pmc.ncbi.nlm.nih.gov/articles/PMC42/",
+            "https://pubmed.ncbi.nlm.nih.gov/42/",
         ])
     ]
-    groups = await find_duplicates(db, actor, workspace_id, "identifier")
-    assert [{item.id for item in group} for group in groups] == [set(ids[:2])]
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    assert [{item.id for item in group} for group in groups] == [{ids[1], ids[3]}]
 
 
 @pytest.mark.parametrize("role", ["Author", "Editor"])
@@ -396,7 +686,7 @@ async def test_identifier_lookup_is_authorized_and_workspace_scoped(persistence_
     actor, workspace_id = await owner(db)
     outsider, private_id = await owner(db)
     await create_item(db, outsider, private_id, work(resource_id="https://doi.org/10.1234/private"))
-    assert await find_duplicates(db, actor, workspace_id, "identifier") == []
+    assert (await find_duplicates(db, actor, workspace_id, "identifier")).groups == []
     with pytest.raises((WorkspaceUnavailable, WorkspaceMembershipRequired)):
         await find_duplicates(db, actor, private_id, "identifier")
 
@@ -441,7 +731,7 @@ async def test_copy_into_workspace_with_same_identifier_preserves_work(persisten
     copied = await copy_item_to_workspace(db, actor, source_id, destination.id, source.item_id)
     assert copied.id != source.item_id
     assert copied.work == metadata
-    assert len(await find_duplicates(db, actor, destination.id, "identifier")) == 1
+    assert len((await find_duplicates(db, actor, destination.id, "identifier")).groups) == 1
 
 
 async def test_full_work_revision_keeps_hidden_fields_and_enforces_cas(persistence_db):

@@ -22,13 +22,13 @@ from quirebase.library import (
     copy_item_to_workspace,
     create_item,
     delete_discussion_message,
-    get_item_citation_text_response,
     get_library_facets,
     get_work_schema,
     list_accessible_tags_with_counts,
     moderate_discussion_message,
     open_item_section,
     remove_tag_from_item,
+    render_item_citation,
     revise_item_metadata,
     search_library,
 )
@@ -59,7 +59,7 @@ router = APIRouter(tags=["Library"])
 
 def library_filters(
     query: str = "",
-    tag: str = "",
+    tag: UUID | None = None,
     project: UUID | None = None,
     year: str = "",
     keyword: str = "",
@@ -230,12 +230,12 @@ async def format_item_citation(
     user: ApiUser,
     db: Database,
     style: str = "apa",
-    output: Annotated[str, Query(pattern="^(text|html)$")] = "text",
+    output: Literal["text", "html"] = "text",
 ) -> CitationView:
-    content, media_type = await get_item_citation_text_response(
+    citation = await render_item_citation(
         db, user, workspace_id, item_id, style_key=style, output=output
     )
-    return CitationView(content=content, media_type=media_type)
+    return CitationView(content=citation.content, media_type=citation.media_type)
 
 
 @router.get("/tags", response_model=OffsetPagination[TagView])

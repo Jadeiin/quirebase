@@ -257,7 +257,7 @@ async function rawRequest<Path extends ApiPath, Method extends HttpMethod>(
 	method: Method,
 	options: ApiRequestOptions<Path, Method> | undefined,
 	accept: string,
-	parseAs: 'text' | 'blob' | 'stream',
+	parseAs: 'blob' | 'stream',
 	fetcher: typeof fetch
 ): Promise<{ data: unknown; response: Response }> {
 	const call = (client as unknown as Record<string, ClientCall>)[method.toUpperCase()];
@@ -434,15 +434,6 @@ export async function apiDownloadGet<Path extends PathsWithMethod<'get'>>(
 	saveBlob(data as Blob, filename);
 }
 
-export async function apiText<Path extends PathsWithMethod<'get'>>(
-	path: Path,
-	options: ApiRequestOptions<Path, 'get'>,
-	fetcher: typeof fetch = fetch
-): Promise<string> {
-	const { data } = await rawRequest(path, 'get', options, 'text/plain', 'text', fetcher);
-	return (data as string) ?? '';
-}
-
 type WorkspaceRequestArguments<
 	Path extends WorkspaceApiPath,
 	Method extends HttpMethod
@@ -488,12 +479,7 @@ export function createWorkspaceApi(workspaceId: string) {
 			options: WorkspaceApiRequestOptions<Path, 'get'>,
 			fetcherOrOptions: typeof fetch | ApiDownloadOptions = fetch
 		): Promise<void> =>
-			apiDownloadGet(path, withWorkspacePath(workspaceId, options), fetcherOrOptions),
-		text: async <Path extends WorkspacePathsWithMethod<'get'>>(
-			path: Path,
-			options: WorkspaceApiRequestOptions<Path, 'get'>,
-			fetcher: typeof fetch = fetch
-		): Promise<string> => apiText(path, withWorkspacePath(workspaceId, options), fetcher)
+			apiDownloadGet(path, withWorkspacePath(workspaceId, options), fetcherOrOptions)
 	};
 }
 

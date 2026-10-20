@@ -6,7 +6,7 @@ import pytest
 from inquiro.bibliography import parse_bibliography_records
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.library import create_item, export_accessible_bibliography
+from quirebase.library import BibliographyFormat, create_item, export_workspace_bibliography
 from quirebase.models import Item, User
 
 pytestmark = [pytest.mark.anyio, pytest.mark.shared_postgres]
@@ -47,9 +47,10 @@ async def test_duplicate_items_export_from_work_in_fresh_session(persistence_db,
         ids.append(result.item_id)
     db.expunge_all()
     actor = await db.get(User, actor.id)
-    contents, _media_type, _filename = await export_accessible_bibliography(
-        db, actor, workspace_id, file_format
+    export = await export_workspace_bibliography(
+        db, actor, workspace_id, BibliographyFormat(file_format)
     )
+    contents = export.content
     if file_format == "csl":
         assert "Smith" in contents and "Research 0" in contents and "Research 1" in contents
     else:

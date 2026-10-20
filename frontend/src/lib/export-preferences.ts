@@ -1,4 +1,7 @@
 import { msg } from '#lib/i18n.js';
+import type { components } from '#lib/api/schema.js';
+
+export type BibliographyFormat = components['schemas']['BibliographyFormat'];
 
 export const bibliographyFormats = [
 	{ value: 'csl', label: msg('CSL citation'), extension: 'txt', importable: false },
@@ -10,7 +13,7 @@ export const bibliographyFormats = [
 
 export type ExportPreferences = {
 	citation: {
-		format: (typeof bibliographyFormats)[number]['value'];
+		format: BibliographyFormat;
 		style: string;
 		includeAbstract: boolean;
 		preserveCase: boolean;
@@ -123,7 +126,7 @@ export function readExportPreferences(userId: string, workspaceId = ''): ExportP
 
 export function bibliographyExportParameters(
 	citation: ExportPreferences['citation'],
-	format: string
+	format: BibliographyFormat
 ) {
 	const bibtex = format === 'bibtex';
 	const structured = bibtex || format === 'csl-json';

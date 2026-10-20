@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any, Literal
-from uuid import UUID
 
 from advanced_alchemy.filters import LimitOffset
-from inquiro.richtext import convert_rich_text
-from inquiro.work import work_identifiers
 from sqlalchemy import Select, func, or_, select
 
 from quirebase.access import (
@@ -28,7 +23,6 @@ from quirebase.models import (
     ItemTag,
     LoginSession,
     ProjectItem,
-    Tag,
     User,
 )
 from quirebase.projects import list_workspace_projects
@@ -37,14 +31,15 @@ from quirebase.search import search_index
 from ._json_queries import author_condition, first_contributor_sort_name, keyword_condition
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.sql.elements import ColumnElement
 
 
 @dataclass(frozen=True)
 class LibraryFilter:
     q: str = ""
-    tag: str = ""
+    tag: UUID | None = None
     project: UUID | None = None
     year: str = ""
     keyword: str = ""
@@ -71,22 +66,12 @@ async def _library_query(
     )
     if matching_ids is not None:
         item_query = item_query.where(Item.id.in_(matching_ids))
-    if filters.tag:
-        tag_filter: ColumnElement[bool]
-        try:
-            tag_id = UUID(filters.tag)
-        except ValueError:
-            tag_filter = Tag.name == filters.tag
-        else:
-            tag_filter = or_(Tag.id == tag_id, Tag.name == filters.tag)
+    if filters.tag is not None:
         item_query = item_query.where(
             Item.id.in_(
                 workspace_select(ItemTag, context)
                 .with_only_columns(ItemTag.item_id)
-                .join(Tag, Tag.id == ItemTag.tag_id)
-                .where(
-                    tag_filter,
-                )
+                .where(ItemTag.tag_id == filters.tag)
             )
         )
     if filters.project:
@@ -142,7 +127,7 @@ async def search_library(
     user: User,
     workspace_id: UUID,
     q: str = "",
-    tag: str = "",
+    tag: UUID | None = None,
     project: UUID | None = None,
     year: str = "",
     keyword: str = "",
@@ -202,14 +187,6 @@ async def search_library(
     return list(records), total
 
 
-def _normalized_title(title: str) -> str:
-    return re.sub(
-        r"[^\w]+",
-        " ",
-        convert_rich_text(title, source="html", target="text").casefold(),
-    ).strip()
-
-
 async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -> dict[str, Any]:
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     new_items = list(
@@ -252,65 +229,3 @@ async def get_dashboard_data(db: AsyncSession, user: User, workspace_id: UUID) -
         "project_count": project_count,
         "sessions": sessions,
     }
-
-
-async def find_duplicates(
-    db: AsyncSession, user: User, workspace_id: UUID, mode: str
-) -> list[list[Item]]:
-    if mode not in ("", "identifier", "title", "similar"):
-        raise ValidationFailure(f"unknown duplicate mode: {mode}")
-    if not mode:
-        return []
-    context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    limit = 500 if mode == "similar" else 2000
-    items = list(
-        (
-            await db.scalars(
-                workspace_items_query(context).order_by(Item.work["title"].as_string()).limit(limit)
-            )
-        ).all()
-    )
-    groups: list[list[Item]] = []
-    buckets: dict[str, list[Item]] = {}
-    if mode == "identifier":
-        # Connected suggestions handle A↔B↔C overlaps without arbitrarily
-        # selecting one identifier or treating a match as a merge command.
-        parents = {item.id: item.id for item in items}
-
-        def root(item_id):
-            while parents[item_id] != item_id:
-                parents[item_id] = parents[parents[item_id]]
-                item_id = parents[item_id]
-            return item_id
-
-        owners: dict[tuple[str, str], UUID] = {}
-        for item in items:
-            for pair in work_identifiers(item.work):
-                if pair in owners:
-                    parents[root(item.id)] = root(owners[pair])
-                else:
-                    owners[pair] = item.id
-        for item in items:
-            buckets.setdefault(root(item.id), []).append(item)
-    elif mode == "title":
-        for item in items:
-            buckets.setdefault(_normalized_title(item.work.get("title", "")), []).append(item)
-    elif mode == "similar":
-        remaining = items.copy()
-        while remaining:
-            anchor = remaining.pop(0)
-            key = _normalized_title(anchor.work.get("title", ""))
-            matches = [anchor]
-            for candidate in remaining.copy():
-                if (
-                    SequenceMatcher(
-                        None, key, _normalized_title(candidate.work.get("title", ""))
-                    ).ratio()
-                    >= 0.9
-                ):
-                    matches.append(candidate)
-                    remaining.remove(candidate)
-            if len(matches) > 1:
-                groups.append(matches)
-        return groups
-    return [group for group in buckets.values() if len({row.id for row in group}) > 1]

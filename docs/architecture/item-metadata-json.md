@@ -105,7 +105,7 @@ syncs retain separate Author and Editor rows.
 ## Identifier comparison and suggestions
 
 The persisted sources are `Work.id` and top-level `Work.identifiers`. No identifier table,
-workspace uniqueness invariant or identifier reservation exists. Comparison supports Inquiro's
+workspace uniqueness invariant or identifier reservation exists. Lookup comparison supports Inquiro's
 existing DOI, arXiv, PMID, PMCID, ISBN, OpenAlex, Bibcode and IEEE lookup parsers. Multiple
 identifiers in a namespace and duplicate Items may coexist. OpenAlex identifiers use the
 Commonmeta URL form, such as `https://openalex.org/W123`; short IDs remain query input only.
@@ -118,13 +118,26 @@ separately from the encoded resolver URI. Temporary reader guards preserve non-A
 the existing parser's longer DOI prefixes through pinned upstream conversion. Provider-built
 DOI Work IDs also percent-encode the resolver path while retaining raw source identifiers.
 
-Library groups connected Items sharing comparison keys as suggestions. It examines authorized
-Workspace Items only. Container identifiers (including book ISBN or journal ISSN), relations,
-references, funders and contributor identifiers are excluded. Detection runs only for an explicit
-Library duplicate request (up to 2,000 Items; similar-title matching up to 500). Discovery and
+Duplicate suggestions use exact stored values, independently of lookup normalization. SQL groups
+equal primary `Work.id` values, or equal top-level identifier type/value pairs; `Other` identifiers
+also require the same nonempty scheme. Primary IDs and additional identifiers are separate keys.
+Empty or whitespace-only keys are ignored; values otherwise preserve case, whitespace and URI
+spelling. A key must occur on at least two different Items. Groups do not connect transitively
+across different keys, and identical groups are shown once. Only authorized Workspace Items are
+examined. Container identifiers (including book ISBN or journal ISSN), relations, references,
+funders and contributor identifiers are excluded. Detection runs only for an explicit Library
+duplicate request across the authorized Workspace. Discovery and
 Import do not load stored Works or infer an `imported` state. PDF batches can still report repeated
 DOIs within the bounded batch. PDF scanning preserves an existing manual DOI and
 may add a DOI already used by another Item. Valid imports are never rejected for shared identity.
+
+Exact-title mode groups equal stored Work titles with the same case-sensitive comparison.
+Same-PDF mode groups equal `FileRevision.file.checksum` values across distinct Items, considering
+only ready PDF revisions; Attachments and thumbnails are excluded. Upload, import and copy streams
+compute SHA-256 once and persist `sha256:<lowercase hex>` in the existing FileObject JSON.
+Scanning performs database reads only and does not download or backfill historical files.
+Its scanned count is the number of distinct Items with an eligible PDF checksum; other modes
+count all Items in the authorized Workspace. File paths and physical ownership remain UUID-based.
 
 ImportBatch stages `{work, citation_key?, _source_id?}` and diagnostics. Valid records can be
 confirmed even when other input records failed. Confirmation locks the batch, creates each Item
@@ -236,10 +249,22 @@ and expected version come from the same response. Library list responses retain 
 
 Item bibliographic links open the current Workspace Library with one exact filter: contributor
 name parts, publication year, `publication_title`, `reference_type`, Tag UUID or `keyword_exact`.
+Tag filters accept only UUIDs; Tag names are create/edit values and never alternative identifiers.
 Publication titles compare the complete `container.title` string; they do not merge journal
 identities or aliases. Author links use the existing Author-role name projection, including an
 explicit empty given-name parameter for single-field or organization names. Library URLs retain
 these exact values through search and pagination and expose removable applied-filter chips.
+
+Duplicate checks require an explicit `identifier` or `title` mode and scan the entire authorized
+Workspace. Both use SQLAlchemy `GROUP BY`/`HAVING` and join matching keys to load only matching
+Items in one streamed statement. Titles compare the stored Work string exactly, including
+formatting, case and punctuation, with SQLite `BINARY` or PostgreSQL `C` collation; missing or
+whitespace-only titles are not candidates. Identifier arrays use the existing JSON dialect
+expressions and SQL `UNION` to exclude repeated keys within a single Item. No normalized column,
+database function, fuzzy matcher, worker thread or application-side connected-component algorithm
+is required. Results include `groups` and the `scanned` count. Every path rechecks Workspace
+access after detection, including empty results.
+Opening Tools or changing match criteria never starts a check.
 
 Organize responses contain authorization, Projects and one Tag matrix. Assigned Tag display is
 derived from the complete matrix groups and `assigned_ids`; group names and separate suggestion

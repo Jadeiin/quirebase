@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -93,12 +94,15 @@ class UploadReceipt(TypedDict):
     status: Literal["complete"]
     key: str
     size: int
+    checksum: str
 
 
 class PdfInspectionData(TypedDict):
     thumbnail_object_key: str
     thumbnail_size: int
+    thumbnail_checksum: str
     size: int
+    checksum: str
     page_count: int
     full_text: str
     page_geometry: list[list[float]]
@@ -126,6 +130,7 @@ class ImportedRevisionWorkflowResult(TypedDict):
 class ValidatedAttachment(TypedDict):
     object_key: str
     size: int
+    checksum: str
 
 
 class AttachmentWorkflowResult(TypedDict):
@@ -137,6 +142,7 @@ class AnnotationExportResult(TypedDict):
     filename: str
     object_key: str
     size_bytes: int
+    checksum: str
     revision_id: UUID
     project_id: UUID | None
     project_item_id: UUID | None
@@ -147,7 +153,14 @@ def _require_upload_receipt(value: Any, *, description: str) -> UploadReceipt:
         raise TimeoutError(f"{description} upload did not complete")
     key = value.get("key")
     size = value.get("size")
-    if not isinstance(key, str) or not isinstance(size, int) or isinstance(size, bool):
+    checksum = value.get("checksum")
+    if (
+        not isinstance(key, str)
+        or not isinstance(size, int)
+        or isinstance(size, bool)
+        or not isinstance(checksum, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", checksum) is None
+    ):
         raise TypeError(f"invalid {description} upload receipt")
     return cast("UploadReceipt", value)
 
@@ -196,6 +209,7 @@ async def _inspect_pdf_object(
     object_key_value: str,
     thumbnail_object_id: UUID,
     *,
+    checksum: str,
     expected_size: int | None = None,
 ) -> PdfInspectionData:
     metadata = await get_object_store().head(object_key_value)
@@ -220,7 +234,9 @@ async def _inspect_pdf_object(
     return {
         "thumbnail_object_key": thumbnail_key,
         "thumbnail_size": thumbnail.size,
+        "thumbnail_checksum": thumbnail.checksum,
         "size": metadata.size,
+        "checksum": checksum,
         "page_count": page_count,
         "full_text": text,
         "page_geometry": geometry,
@@ -240,6 +256,7 @@ async def inspect_uploaded_pdf(
     inspected = await _inspect_pdf_object(
         expected_key,
         thumbnail_object_id,
+        checksum=receipt["checksum"],
         expected_size=receipt["size"],
     )
     return {
@@ -255,6 +272,7 @@ def _ready_revision_values(inspected: PdfInspectionData, key: str, filename: str
             backend="documents",
             filename=key,
             size=inspected["size"],
+            checksum=inspected["checksum"],
             content_type="application/pdf",
             metadata={"original_name": Path(filename).name[:255]},
         ),
@@ -262,6 +280,7 @@ def _ready_revision_values(inspected: PdfInspectionData, key: str, filename: str
             backend="documents",
             filename=inspected["thumbnail_object_key"],
             size=inspected["thumbnail_size"],
+            checksum=inspected["thumbnail_checksum"],
             content_type="image/png",
         ),
         "page_count": inspected["page_count"],
@@ -397,7 +416,14 @@ async def inspect_imported_revision_workflow(
 async def inspect_imported_pdf(
     revision_id: UUID, object_key_value: str, thumbnail_object_id: UUID
 ) -> PdfInspection:
-    inspected = await _inspect_pdf_object(object_key_value, thumbnail_object_id)
+    async with AsyncSessionLocal() as db:
+        file = await db.scalar(select(FileRevision.file).where(FileRevision.id == revision_id))
+        if file is None or file.path != object_key_value:
+            raise ValueError("imported revision no longer exists")
+        checksum = file.checksum
+        if checksum is None:
+            raise ValueError("imported revision has no checksum")
+    inspected = await _inspect_pdf_object(object_key_value, thumbnail_object_id, checksum=checksum)
     return {
         "revision_id": revision_id,
         **inspected,
@@ -463,7 +489,7 @@ async def validate_attachment_upload(
         header = b"".join([bytes(chunk) async for chunk in response.body])
         if not _is_image_header(header, content_type):
             raise ValueError("graphical abstract content does not match its image type")
-    return {"object_key": key, "size": metadata.size}
+    return {"object_key": key, "size": metadata.size, "checksum": receipt["checksum"]}
 
 
 @ads.transaction()
@@ -504,6 +530,7 @@ async def commit_uploaded_attachment(
             backend="documents",
             filename=receipt["object_key"],
             size=receipt["size"],
+            checksum=receipt["checksum"],
             content_type=content_type[:100],
             metadata={"original_name": Path(filename).name[:255]},
         ),
@@ -658,6 +685,7 @@ async def build_annotation_export(
             "filename": f"{object_id}.pdf",
             "object_key": stored.key,
             "size_bytes": stored.size,
+            "checksum": stored.checksum,
             "revision_id": revision_id,
             "project_id": project_id,
             "project_item_id": project_item_id,
@@ -764,6 +792,7 @@ async def record_annotation_export_artifact(
                 backend="documents",
                 filename=result["object_key"],
                 size=result["size_bytes"],
+                checksum=result["checksum"],
                 content_type="application/pdf",
                 metadata={"original_name": result["filename"]},
             ),

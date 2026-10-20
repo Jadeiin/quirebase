@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from quirebase.access import AnnotationModerationAction
 from quirebase.documents import AnnotationKind, AnnotationPayload, AnnotationScope
 from quirebase.library import ItemFilesData
 from quirebase.web.api.common import WorkspaceAuthorizationView
@@ -65,7 +66,7 @@ class AnnotationView(BaseModel):
 
 
 class AnnotationModerationRequest(BaseModel):
-    action: Literal["hide", "archive", "restore", "lock", "unlock", "delete"]
+    action: AnnotationModerationAction
     version: int = Field(ge=1)
 
 

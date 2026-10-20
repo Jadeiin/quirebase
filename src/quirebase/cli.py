@@ -30,7 +30,6 @@ from .core.workflows import (
 from .library.tag_recommendations import validate_engine_configuration
 from .models import SystemRole, User
 from .operations import check_objects, create_backup, restore_backup, verify_backup
-from .operations.object_migration import migrate_legacy_objects
 from .operations.workflows import maintenance_schedules
 from .projects import check_project_integrity
 from .search import reindex_all
@@ -253,26 +252,6 @@ def recover_workflows_command(
     for workflow_id in workflow_ids:
         typer.echo(f"{mode}: {workflow_id}")
     typer.echo(f"{len(workflow_ids)} workflow(s) {mode} for executor {dead_executor_id}.")
-
-
-@app.command("migrate-objects")
-def migrate_objects_command(
-    apply: bool = typer.Option(
-        False,
-        "--apply",
-        help="Copy objects and update references; Web and workers must be stopped",
-    ),
-):
-    async def run():
-        async with AsyncSessionLocal() as db:
-            return await migrate_legacy_objects(db, apply=apply)
-
-    report = asyncio.run(run())
-    mode = "applied" if apply else "dry-run"
-    typer.echo(
-        f"Object migration {mode}: planned={report.planned}, copied={report.copied}, "
-        f"updated={report.references_updated}, deleted={report.legacy_deleted}"
-    )
 
 
 @app.command("reindex")

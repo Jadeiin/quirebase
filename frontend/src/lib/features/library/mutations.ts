@@ -10,29 +10,35 @@ import {
 import {
 	bibliographyExportParameters,
 	bibliographyFilename,
+	type BibliographyFormat,
 	type ExportPreferences
 } from '#lib/export-preferences.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
-type LibraryMutationRequest =
+export type LibraryMutationInput =
 	paths['/api/v1/workspaces/{workspace_id}/items/bulk']['post']['requestBody']['content']['application/json'];
 
 export type LibraryBulkAction =
-	LibraryMutationRequest['action'] | 'copy_bibliography' | 'bibliography' | 'documents';
+	LibraryMutationInput['action'] | 'copy_bibliography' | 'bibliography' | 'documents';
 
-export type LibraryBulkInput = {
-	action: LibraryBulkAction;
+export type LibraryBibliographyInput = {
 	itemIds: string[];
-	projectId: string;
-	tagName: string;
-	tagId?: string;
-	exportFormat: string;
-	preferences: ExportPreferences;
+	exportFormat: BibliographyFormat;
+	preferences: ExportPreferences['citation'];
+} & ({ action: 'copy_bibliography' } | { action: 'bibliography' });
+
+export type LibraryDocumentsInput = {
+	action: 'documents';
+	itemIds: string[];
+	preferences: ExportPreferences['document'];
 };
+
+export type LibraryBulkInput =
+	LibraryMutationInput | LibraryBibliographyInput | LibraryDocumentsInput;
 
 export async function readLibraryBibliography(
 	workspaceId: string,
-	input: Pick<LibraryBulkInput, 'itemIds' | 'preferences' | 'exportFormat'>
+	input: Omit<LibraryBibliographyInput, 'action'>
 ): Promise<string> {
 	return createWorkspaceApi(workspaceId).request(
 		'POST',
@@ -40,7 +46,7 @@ export async function readLibraryBibliography(
 		{
 			body: {
 				item_ids: input.itemIds,
-				...bibliographyExportParameters(input.preferences.citation, input.exportFormat)
+				...bibliographyExportParameters(input.preferences, input.exportFormat)
 			},
 			headers: { Accept: '*/*' },
 			parseAs: 'text'
@@ -62,7 +68,7 @@ function archiveFilename(includeAnnotations: boolean, includeSupplements: boolea
 
 export async function runLibraryBulkDownload(
 	workspaceId: string,
-	input: LibraryBulkInput
+	input: Extract<LibraryBulkInput, { action: 'bibliography' | 'documents' }>
 ): Promise<void> {
 	const api = createWorkspaceApi(workspaceId);
 	if (input.action === 'bibliography') {
@@ -71,7 +77,7 @@ export async function runLibraryBulkDownload(
 			{
 				body: {
 					item_ids: input.itemIds,
-					...bibliographyExportParameters(input.preferences.citation, input.exportFormat)
+					...bibliographyExportParameters(input.preferences, input.exportFormat)
 				}
 			},
 			{ suggestedName: bibliographyFilename(input.exportFormat) }
@@ -83,15 +89,15 @@ export async function runLibraryBulkDownload(
 		{
 			body: {
 				item_ids: input.itemIds,
-				include_annotations: input.preferences.document.includeAnnotations,
-				include_supplements: input.preferences.document.includeSupplements,
+				include_annotations: input.preferences.includeAnnotations,
+				include_supplements: input.preferences.includeSupplements,
 				timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
 			}
 		},
 		{
 			suggestedName: archiveFilename(
-				input.preferences.document.includeAnnotations,
-				input.preferences.document.includeSupplements
+				input.preferences.includeAnnotations,
+				input.preferences.includeSupplements
 			)
 		}
 	);
@@ -99,40 +105,12 @@ export async function runLibraryBulkDownload(
 
 export async function runLibraryBulkMutation(
 	workspaceId: string,
-	input: LibraryBulkInput,
+	input: LibraryMutationInput,
 	queryClient: QueryClient
 ): Promise<void> {
-	if (
-		input.action === 'copy_bibliography' ||
-		input.action === 'bibliography' ||
-		input.action === 'documents'
-	) {
-		throw new Error('Exports must use the Library export operations');
-	}
 	const api = createWorkspaceApi(workspaceId);
-	const body: LibraryMutationRequest = (() => {
-		const item_ids = input.itemIds;
-		switch (input.action) {
-			case 'add_project':
-				return { action: input.action, item_ids, project_id: input.projectId };
-			case 'remove_project':
-				return {
-					action: input.action,
-					item_ids,
-					project_id: input.projectId
-				};
-			case 'add_tag':
-				return { action: input.action, item_ids, tag_name: input.tagName };
-			case 'remove_tag':
-				return { action: input.action, item_ids, tag_id: input.tagId ?? '' };
-			case 'delete_items':
-				return { action: input.action, item_ids };
-			default:
-				throw new Error('Exports must use the Library export operations');
-		}
-	})();
 	await api.request('POST', '/workspaces/{workspace_id}/items/bulk', {
-		body
+		body: input
 	});
 	const changesProjects =
 		input.action === 'delete_items' ||
@@ -187,8 +165,8 @@ export function libraryBulkMutationOptions(workspaceId: string, queryClient: Que
 				!(reason instanceof ApiError)
 			)
 				return;
-			if ([403, 404].includes(reason.status) && input.projectId) {
-				await invalidateUnavailableProject(queryClient, workspaceId, input.projectId);
+			if ([403, 404].includes(reason.status)) {
+				await invalidateUnavailableProject(queryClient, workspaceId, input.project_id);
 			} else if (reason.code === 'project_lifecycle_error') {
 				await invalidateProject(queryClient, workspaceId);
 			}

@@ -11,7 +11,7 @@ from advanced_alchemy.types import FileObject
 from sqlalchemy import select
 
 from quirebase.core.errors import ValidationFailure
-from quirebase.core.storage import ObjectSuffix, get_object_store
+from quirebase.core.storage import ObjectSuffix, StoredObject, get_object_store
 from quirebase.documents.objects import delete_unreferenced_objects
 from quirebase.models import Attachment, AttachmentRole, FileRevision, FileRevisionProcessingState
 from quirebase.search import search_index
@@ -103,29 +103,29 @@ class ItemDocumentCopy:
         self._revisions = revisions
         self._attachments = attachments
         self._object_keys: list[str] = []
-        self._revision_objects: list[tuple[str, int, str | None, int | None]] = []
-        self._attachment_objects: list[tuple[str, int]] = []
+        self._revision_objects: list[tuple[StoredObject, StoredObject | None]] = []
+        self._attachment_objects: list[StoredObject] = []
         self._copied = False
 
-    async def _copy_object(self, source_key: str, suffix: ObjectSuffix) -> tuple[str, int]:
+    async def _copy_object(self, source_key: str, suffix: ObjectSuffix) -> StoredObject:
         store = get_object_store()
         response = await store.get(source_key)
         copied = await store.put_object(
             uuid4(), suffix, response.body, max_bytes=response.metadata.size
         )
         self._object_keys.append(copied.key)
-        return copied.key, copied.size
+        return copied
 
     async def copy_objects(self) -> None:
         """Copy independent UUID objects outside the caller's database transaction."""
         for revision in self._revisions:
-            key, size = await self._copy_object(revision.file["filename"], ObjectSuffix.PDF)
-            thumbnail_key, thumbnail_size = (
+            copied = await self._copy_object(revision.file["filename"], ObjectSuffix.PDF)
+            thumbnail = (
                 await self._copy_object(revision.thumbnail["filename"], ObjectSuffix.PNG)
                 if revision.thumbnail is not None
-                else (None, None)
+                else None
             )
-            self._revision_objects.append((key, size, thumbnail_key, thumbnail_size))
+            self._revision_objects.append((copied, thumbnail))
         for attachment in self._attachments:
             self._attachment_objects.append(
                 await self._copy_object(attachment.file["filename"], ObjectSuffix.BINARY)
@@ -142,8 +142,9 @@ class ItemDocumentCopy:
         if current != (self._revisions, self._attachments):
             raise ValidationFailure("source Item changed while its files were copied")
         revisions: list[FileRevision] = []
-        for source, copied in zip(self._revisions, self._revision_objects, strict=True):
-            key, size, thumbnail_key, thumbnail_size = copied
+        for source, (copied, thumbnail) in zip(
+            self._revisions, self._revision_objects, strict=True
+        ):
             revision = FileRevision(
                 workspace_id=workspace_id,
                 item_id=item_id,
@@ -152,11 +153,27 @@ class ItemDocumentCopy:
                 page_geometry=source.page_geometry,
                 processing_state=source.processing_state,
                 created_by=actor_id,
-                file=FileObject(**(source.file | {"filename": key, "size": size})),
+                file=FileObject(
+                    **(
+                        source.file
+                        | {
+                            "filename": copied.key,
+                            "size": copied.size,
+                            "checksum": copied.checksum,
+                        }
+                    )
+                ),
                 thumbnail=FileObject(
-                    **(source.thumbnail | {"filename": thumbnail_key, "size": thumbnail_size})
+                    **(
+                        source.thumbnail
+                        | {
+                            "filename": thumbnail.key,
+                            "size": thumbnail.size,
+                            "checksum": thumbnail.checksum,
+                        }
+                    )
                 )
-                if source.thumbnail is not None
+                if source.thumbnail is not None and thumbnail is not None
                 else None,
             )
             db.add(revision)
@@ -164,12 +181,20 @@ class ItemDocumentCopy:
         for source_attachment, copied_attachment in zip(
             self._attachments, self._attachment_objects, strict=True
         ):
-            key, size = copied_attachment
             db.add(
                 Attachment(
                     workspace_id=workspace_id,
                     item_id=item_id,
-                    file=FileObject(**(source_attachment.file | {"filename": key, "size": size})),
+                    file=FileObject(
+                        **(
+                            source_attachment.file
+                            | {
+                                "filename": copied_attachment.key,
+                                "size": copied_attachment.size,
+                                "checksum": copied_attachment.checksum,
+                            }
+                        )
+                    ),
                     role=source_attachment.role,
                     created_by=actor_id,
                 )

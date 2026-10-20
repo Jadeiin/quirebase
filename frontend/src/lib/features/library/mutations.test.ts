@@ -7,7 +7,7 @@ import {
 	libraryBulkMutationOptions,
 	readLibraryBibliography,
 	runLibraryBulkMutation,
-	type LibraryBulkAction
+	type LibraryMutationInput
 } from './mutations';
 import { itemKeys } from '#lib/features/item/queries.js';
 import { projectKeys } from '#lib/features/projects/queries.js';
@@ -44,7 +44,11 @@ describe('Library bulk request contract', () => {
 			};
 
 			await expect(
-				readLibraryBibliography('workspace-1', { itemIds, preferences, exportFormat: 'bibtex' })
+				readLibraryBibliography('workspace-1', {
+					itemIds,
+					preferences: preferences.citation,
+					exportFormat: 'bibtex'
+				})
 			).resolves.toBe(content);
 
 			expect(fetcher).toHaveBeenCalledOnce();
@@ -96,14 +100,19 @@ describe('Library bulk request contract', () => {
 					.getMutationCache()
 					.build(client, libraryBulkMutationOptions('workspace-1', client));
 				const result = await mutation.execute({
-					input: {
-						action,
-						itemIds: [...selected],
-						projectId: '',
-						tagName: '',
-						exportFormat: 'csl',
-						preferences: defaultExportPreferences
-					},
+					input:
+						action === 'documents'
+							? {
+									action,
+									itemIds: [...selected],
+									preferences: defaultExportPreferences.document
+								}
+							: {
+									action,
+									itemIds: [...selected],
+									exportFormat: 'csl',
+									preferences: defaultExportPreferences.citation
+								},
 					afterMutation
 				});
 				expect(result).toBe(action === 'copy_bibliography' ? content : undefined);
@@ -133,7 +142,7 @@ describe('Library bulk request contract', () => {
 			readLibraryBibliography('workspace-1', {
 				itemIds: ['item-1'],
 				exportFormat: 'csl-json',
-				preferences: defaultExportPreferences
+				preferences: defaultExportPreferences.citation
 			})
 		).resolves.toBe(content);
 	});
@@ -151,55 +160,45 @@ describe('Library bulk request contract', () => {
 			readLibraryBibliography('workspace-1', {
 				itemIds: ['item-1'],
 				exportFormat: 'csl',
-				preferences: defaultExportPreferences
+				preferences: defaultExportPreferences.citation
 			})
 		).rejects.toMatchObject({ status: 403, code: 'permission_denied' });
 	});
 
 	it.each([
-		'add_tag',
-		'remove_tag',
-		'delete_items',
-		'add_project',
-		'remove_project'
-	] as LibraryBulkAction[])('serializes only the parameters for %s', async (action) => {
-		const projectId =
-			action === 'add_project' || action === 'remove_project'
-				? '01930abc-0000-7000-8000-000000000001'
-				: '';
-		const tagId = '01930abc-0000-7000-8000-000000000004';
-		let body: Record<string, unknown> | undefined;
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (input: RequestInfo | URL) => {
-				body = await (input as Request).json();
-				return new Response(JSON.stringify({ affected: 1 }), {
-					headers: { 'Content-Type': 'application/json' }
-				});
-			})
-		);
-		await runLibraryBulkMutation(
-			'01930abc-0000-7000-8000-000000000002',
-			{
-				action,
-				itemIds: ['01930abc-0000-7000-8000-000000000003'],
-				projectId,
-				tagName: 'Research',
-				tagId,
-				exportFormat: 'bibtex',
-				preferences: defaultExportPreferences
-			},
-			new QueryClient()
-		);
-		expect(body?.action).toBe(action);
-		if (projectId) expect(body?.project_id).toBe(projectId);
-		else expect(body).not.toHaveProperty('project_id');
-		if (action === 'remove_tag') expect(body?.tag_id).toBe(tagId);
-		else expect(body).not.toHaveProperty('tag_id');
-		if (action === 'add_tag') expect(body?.tag_name).toBe('Research');
-		else expect(body).not.toHaveProperty('tag_name');
-		expect(body).not.toHaveProperty('confirmation');
-	});
+		{ action: 'add_tag', item_ids: ['item-1'], tag_name: 'Research' },
+		{ action: 'remove_tag', item_ids: ['item-1'], tag_id: 'tag-1' },
+		{ action: 'delete_items', item_ids: ['item-1'] },
+		{ action: 'add_project', item_ids: ['item-1'], project_id: 'project-1' },
+		{ action: 'remove_project', item_ids: ['item-1'], project_id: 'project-1' }
+	] satisfies LibraryMutationInput[])(
+		'serializes only the parameters for $action',
+		async (input) => {
+			let body: Record<string, unknown> | undefined;
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async (input: RequestInfo | URL) => {
+					body = await (input as Request).json();
+					return new Response(JSON.stringify({ affected: 1 }), {
+						headers: { 'Content-Type': 'application/json' }
+					});
+				})
+			);
+			await runLibraryBulkMutation(
+				'01930abc-0000-7000-8000-000000000002',
+				input,
+				new QueryClient()
+			);
+			expect(body?.action).toBe(input.action);
+			if ('project_id' in input) expect(body?.project_id).toBe(input.project_id);
+			else expect(body).not.toHaveProperty('project_id');
+			if (input.action === 'remove_tag') expect(body?.tag_id).toBe(input.tag_id);
+			else expect(body).not.toHaveProperty('tag_id');
+			if (input.action === 'add_tag') expect(body?.tag_name).toBe('Research');
+			else expect(body).not.toHaveProperty('tag_name');
+			expect(body).not.toHaveProperty('confirmation');
+		}
+	);
 
 	it.each(['remove_project', 'remove_tag'] as const)(
 		'invalidates associated read models after %s without affecting another Workspace',
@@ -225,15 +224,9 @@ describe('Library bulk request contract', () => {
 			client.setQueryData(otherWorkspace, { stale: false });
 			await runLibraryBulkMutation(
 				'workspace-1',
-				{
-					action,
-					itemIds: ['item-1'],
-					projectId: 'project-1',
-					tagName: 'Research',
-					tagId: 'tag-1',
-					exportFormat: 'bibtex',
-					preferences: defaultExportPreferences
-				},
+				action === 'remove_project'
+					? { action, item_ids: ['item-1'], project_id: 'project-1' }
+					: { action, item_ids: ['item-1'], tag_id: 'tag-1' },
 				client
 			);
 			for (const key of keys) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
@@ -277,11 +270,8 @@ describe('Library bulk request contract', () => {
 					mutation.execute({
 						input: {
 							action,
-							itemIds: ['item-1'],
-							projectId: 'project-1',
-							tagName: '',
-							exportFormat: 'bibtex',
-							preferences: defaultExportPreferences
+							item_ids: ['item-1'],
+							project_id: 'project-1'
 						}
 					})
 				).rejects.toMatchObject({ status });

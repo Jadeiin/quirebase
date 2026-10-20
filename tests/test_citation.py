@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from uuid import uuid4
+
 import pytest
 from app_helpers import json_payload
 from inquiro.bibliography import (
@@ -13,18 +16,20 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import (
     PermissionDenied,
+    ResourceUnavailable,
     ValidationFailure,
     WorkspaceLifecycleError,
     WorkspaceMembershipRequired,
 )
 from quirebase.library.citations import (
+    BibliographyFormat,
     create_custom_citation_style,
     delete_custom_citation_style,
-    format_csl_export,
-    format_standard_export,
-    get_item_citation_text_response,
+    export_item_bibliography,
+    export_selected_bibliography,
     list_custom_citation_styles,
     preview_citation_key,
+    render_item_citation,
     resolve_style_xml,
     select_builtin_citation_styles,
 )
@@ -219,24 +224,84 @@ async def test_standard_export_applies_citation_key_formula_to_keyless_items(asy
             credit for credit in item.work["contributors"] if "Author" in credit["roles"]
         ],
     }
-    contents, _media_type, _filename = format_standard_export(
-        [item],
-        "bibtex",
+    user = await async_db.get(User, item.created_by)
+    assert user is not None
+    export = await export_item_bibliography(
+        async_db,
+        user,
+        item.workspace_id,
+        item.id,
+        BibliographyFormat.bibtex,
         options=BibliographyExportOptions(
             citation_key_formula="auth.lower + year", citation_key_force_ascii=True
         ),
     )
-    assert "@article{doe2025," in contents
+    assert "@article{doe2025," in export.content
 
 
 @pytest.mark.anyio
 async def test_standard_export_rejects_invalid_citation_key_formula(async_db):
+    item = await _async_item(async_db)
+    user = await async_db.get(User, item.created_by)
+    assert user is not None
     with pytest.raises(ValidationFailure):
-        format_standard_export(
-            [await _async_item(async_db)],
-            "bibtex",
+        await export_item_bibliography(
+            async_db,
+            user,
+            item.workspace_id,
+            item.id,
+            BibliographyFormat.bibtex,
             options=BibliographyExportOptions(citation_key_formula="auth + unknown"),
         )
+
+
+@pytest.mark.anyio
+async def test_selected_bibliography_preserves_requested_order_and_deduplicates(async_db):
+    first = await _async_item(async_db)
+    second = Item(
+        workspace_id=first.workspace_id,
+        created_by=first.created_by,
+        work={**first.work, "title": "Second result"},
+    )
+    async_db.add(second)
+    await async_db.flush()
+    user = await async_db.get(User, first.created_by)
+    assert user is not None
+    export = await export_selected_bibliography(
+        async_db,
+        user,
+        first.workspace_id,
+        [second.id, first.id, second.id],
+        BibliographyFormat.csl_json,
+    )
+    assert [entry["title"] for entry in json.loads(export.content)] == [
+        "Second result",
+        "An Example Paper",
+    ]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("scope", ["item", "selection"])
+@pytest.mark.parametrize("target", ["missing", "other_workspace"])
+async def test_bibliography_rejects_missing_and_other_workspace_items(async_db, scope, target):
+    item = await _async_item(async_db)
+    user = await async_db.get(User, item.created_by)
+    assert user is not None
+    target_id = (await _async_item(async_db)).id if target == "other_workspace" else uuid4()
+    if scope == "item":
+        with pytest.raises(ResourceUnavailable, match="Item not found"):
+            await export_item_bibliography(
+                async_db, user, item.workspace_id, target_id, BibliographyFormat.bibtex
+            )
+    else:
+        with pytest.raises(ValidationFailure, match="accessible Items"):
+            await export_selected_bibliography(
+                async_db,
+                user,
+                item.workspace_id,
+                [item.id, target_id],
+                BibliographyFormat.bibtex,
+            )
 
 
 def test_builtin_style_catalog_is_searchable():
@@ -270,8 +335,9 @@ def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_citation_copy_endpoint_accepts_export_options(
-    async_db, async_session_factory, tmp_path, monkeypatch
+@pytest.mark.parametrize("scope", ["item", "selection", "workspace"])
+async def test_bibliography_entry_points_share_export_options_and_download_headers(
+    async_db, async_session_factory, tmp_path, monkeypatch, scope
 ):
     from test_http import authenticated_async_client
 
@@ -280,15 +346,63 @@ async def test_citation_copy_endpoint_accepts_export_options(
     client, item, _revision = await authenticated_async_client(
         async_db, async_session_factory, tmp_path, monkeypatch
     )
+    item.work = {**item.work, "description": "An abstract that must be excluded."}
+    await async_db.commit()
+    base = f"/api/v1/workspaces/{item.workspace_id}"
     try:
-        response = await client.get(
-            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/bibliography/content",
-            params={"file_format": "bibtex", "include_abstract": "false"},
-        )
+        options = {"file_format": "bibtex", "include_abstract": False}
+        if scope == "selection":
+            response = await client.post(
+                f"{base}/items/bibliography",
+                json={"item_ids": [str(item.id)], **options},
+            )
+        else:
+            path = (
+                f"{base}/items/{item.id}/bibliography"
+                if scope == "item"
+                else f"{base}/bibliography"
+            )
+            response = await client.get(path, params=options)
         assert response.status_code == 200
-        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+        assert response.headers["content-type"] == "application/x-bibtex; charset=utf-8"
+        assert response.headers["cache-control"] == "private, no-store"
+        assert ".bib" in response.headers["content-disposition"]
         assert "abstract" not in response.text
+        assert "An abstract that must be excluded." not in response.text
         assert "title = {Paper}" in response.text
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("scope", ["item", "selection", "workspace"])
+async def test_bibliography_entry_points_reject_unsupported_formats(
+    async_db, async_session_factory, tmp_path, monkeypatch, scope
+):
+    from test_http import authenticated_async_client
+
+    from quirebase.core.config import get_settings
+
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    base = f"/api/v1/workspaces/{item.workspace_id}"
+    try:
+        if scope == "selection":
+            response = await client.post(
+                f"{base}/items/bibliography",
+                json={"item_ids": [str(item.id)], "file_format": "unsupported"},
+            )
+        else:
+            path = (
+                f"{base}/items/{item.id}/bibliography"
+                if scope == "item"
+                else f"{base}/bibliography"
+            )
+            response = await client.get(path, params={"file_format": "unsupported"})
+        assert response.status_code == 422
+        assert response.json()["code"] == "validation_failed"
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -440,7 +554,14 @@ async def test_csl_export_preserves_unexpected_rendering_errors(async_db, monkey
 
     monkeypatch.setattr(citations, "render_bibliography", rendering_failure)
     with pytest.raises(RuntimeError, match="rendering failed"):
-        await format_csl_export(db, user, item.workspace_id, [item], style_key=str(style.id))
+        await export_item_bibliography(
+            db,
+            user,
+            item.workspace_id,
+            item.id,
+            BibliographyFormat.csl,
+            style_key=str(style.id),
+        )
 
 
 @pytest.mark.anyio
@@ -465,9 +586,7 @@ async def test_citation_text_preserves_unexpected_rendering_errors(async_db, mon
 
     monkeypatch.setattr(citations, "render_citation", rendering_failure)
     with pytest.raises(RuntimeError, match="rendering failed"):
-        await get_item_citation_text_response(
-            db, user, item.workspace_id, item.id, style_key=str(style.id)
-        )
+        await render_item_citation(db, user, item.workspace_id, item.id, style_key=str(style.id))
 
 
 @pytest.mark.anyio
@@ -499,12 +618,12 @@ async def test_citation_routes_enforce_custom_style_ownership(
             db, user_b, fixture_workspace_id(user_b), "User B Style", csl_xml
         )
         res = await client.get(
-            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={style_a.id}"
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation?style={style_a.id}"
         )
         assert res.status_code == 200
-        assert item.work.get("title") in res.text
+        assert item.work.get("title") in res.json()["content"]
         res_forbidden = await client.get(
-            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={style_b.id}"
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation?style={style_b.id}"
         )
         assert res_forbidden.status_code == 422
         res_csl_forbidden = await client.get(
@@ -545,10 +664,10 @@ async def test_custom_styles_accessible_in_item_sections(
             for style in response.json()["styles"]
         )
         text_res = await client.get(
-            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation/content?style={custom_style.id}"
+            f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation?style={custom_style.id}"
         )
         assert text_res.status_code == 200
-        assert item.work.get("title") in text_res.text
+        assert item.work.get("title") in text_res.json()["content"]
     finally:
         await client.aclose()
         get_settings.cache_clear()

@@ -5,6 +5,7 @@ import io
 import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from io import BytesIO
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -931,6 +932,8 @@ async def test_pdf_import_batch_previews_before_creating_items(
         db, async_session_factory, tmp_path, monkeypatch
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
+    first_pdf = published_pdf_bytes("10.1000/first")
+    second_pdf = published_pdf_bytes("10.1000/second")
     try:
         monkeypatch.setattr(
             "quirebase.library.imports.lookup_candidate",
@@ -945,13 +948,13 @@ async def test_pdf_import_batch_previews_before_creating_items(
             files=[
                 (
                     "pdfs",
-                    ("first.pdf", BytesIO(published_pdf_bytes("10.1000/first")), "application/pdf"),
+                    ("first.pdf", BytesIO(first_pdf), "application/pdf"),
                 ),
                 (
                     "pdfs",
                     (
                         "second.pdf",
-                        BytesIO(published_pdf_bytes("10.1000/second")),
+                        BytesIO(second_pdf),
                         "application/pdf",
                     ),
                 ),
@@ -968,6 +971,11 @@ async def test_pdf_import_batch_previews_before_creating_items(
         )
         batch = await db.scalar(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         assert batch is not None
+        expected_checksums = [
+            f"sha256:{sha256(first_pdf).hexdigest()}",
+            f"sha256:{sha256(second_pdf).hexdigest()}",
+        ]
+        assert [file.checksum for file in batch.staged_files] == expected_checksums
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
         assert preview.status_code == 200
@@ -1002,6 +1010,8 @@ async def test_pdf_import_batch_previews_before_creating_items(
         assert first is not None and second is not None
         assert first.revisions[0].file.metadata["original_name"] == "first.pdf"
         assert second.revisions[0].file.metadata["original_name"] == "second.pdf"
+        assert first.revisions[0].file.checksum == expected_checksums[0]
+        assert second.revisions[0].file.checksum == expected_checksums[1]
         committed_batch = await db.get(ImportBatch, batch.id)
         assert committed_batch is not None
         assert committed_batch.status == "committed"

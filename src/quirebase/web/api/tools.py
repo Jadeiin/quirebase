@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from quirebase.library import (
+    DuplicateMode,
     create_custom_citation_style,
     delete_custom_citation_style,
     delete_tag,
@@ -75,12 +76,11 @@ async def citation_styles(
 
 
 @router.get("/duplicates", response_model=DuplicatesReviewView)
-async def duplicate_items(workspace_id: UUID, user: ApiUser, db: Database, mode: str = ""):
+async def duplicate_items(workspace_id: UUID, user: ApiUser, db: Database, mode: DuplicateMode):
+    scan = await find_duplicates(db, user, workspace_id, mode)
     return {
-        "groups": [
-            [item_search_view(item) for item in group]
-            for group in await find_duplicates(db, user, workspace_id, mode)
-        ]
+        "groups": [[item_search_view(item) for item in group] for group in scan.groups],
+        "scanned": scan.scanned,
     }
 
 

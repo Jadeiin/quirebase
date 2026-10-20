@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
+    AnnotationModerationAction,
     ResourceAction,
     WorkspaceContext,
     action_allowed,
@@ -18,7 +19,6 @@ from quirebase.access import (
 )
 from quirebase.access.annotations import (
     annotation_decisions,
-    annotation_moderation_action,
     editable_annotation_ids,
     editable_annotation_reply_ids,
     require_deletable_annotation,
@@ -905,13 +905,10 @@ async def moderate_document_annotation(
     workspace_id: UUID,
     item_id: UUID,
     annotation_id: UUID,
-    action: str,
+    action: AnnotationModerationAction,
     version: int,
 ) -> dict[str, Any]:
     """Change moderation state without rewriting authored content or attribution."""
-    moderation_actions = {"hide", "archive", "restore", "lock", "unlock", "delete"}
-    if action not in moderation_actions:
-        raise ValidationFailure("invalid Annotation moderation action")
     workspace = await require_workspace_action(
         db, user, workspace_id, ResourceAction.workspace_read
     )
@@ -939,7 +936,7 @@ async def moderate_document_annotation(
     relation = "own" if record.author_id == workspace.actor_id else "other"
     if relation == "own":
         raise ValidationFailure("authors cannot moderate their own Annotation")
-    moderation_action = annotation_moderation_action(action)
+    moderation_action = action.resource_action
     project_item = await db.scalar(
         select(ProjectItem).where(
             ProjectItem.id == record.project_item_id,
@@ -972,22 +969,23 @@ async def moderate_document_annotation(
     values: dict[str, object] = {
         "moderated_by": user.id,
     }
-    if action == "hide":
-        values["hidden_at"] = changed_at
-    elif action == "archive":
-        values["archived_at"] = changed_at
-    elif action == "restore":
-        values["hidden_at"] = None
-        values["archived_at"] = None
-    elif action == "lock":
-        values["locked_at"] = changed_at
-    elif action == "unlock":
-        values["locked_at"] = None
-    elif action == "delete":
-        values["deleted_at"] = changed_at
-        values["deleted_by_moderation"] = True
-    else:  # Pydantic and the guard above keep this branch unreachable.
-        raise ValidationFailure("invalid Annotation moderation action")
+    match action:
+        case AnnotationModerationAction.hide:
+            values["hidden_at"] = changed_at
+        case AnnotationModerationAction.archive:
+            values["archived_at"] = changed_at
+        case AnnotationModerationAction.restore:
+            values["hidden_at"] = None
+            values["archived_at"] = None
+        case AnnotationModerationAction.lock:
+            values["locked_at"] = changed_at
+        case AnnotationModerationAction.unlock:
+            values["locked_at"] = None
+        case AnnotationModerationAction.delete:
+            values["deleted_at"] = changed_at
+            values["deleted_by_moderation"] = True
+        case _:
+            assert_never(action)
 
     new_version = await db.scalar(
         update(PdfAnnotation)
@@ -1014,7 +1012,9 @@ async def moderate_document_annotation(
         f"annotation.moderate.{action}",
         "pdf_annotation",
         record.id,
-        detail={"author_id": record.author_id} if action == "delete" else None,
+        detail={"author_id": record.author_id}
+        if action is AnnotationModerationAction.delete
+        else None,
         workspace_id=workspace_id,
         project_id=project_item.project_id,
         authorization_role=workspace.role.value,

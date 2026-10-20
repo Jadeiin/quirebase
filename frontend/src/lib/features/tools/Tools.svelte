@@ -45,7 +45,7 @@
 	const location = $derived(readToolsState(page.url.searchParams));
 	const activeTool = $derived(location.tool);
 	const mode = $derived(location.mode);
-	let scannedMode = $state('');
+	let scannedMode = $state<ToolsState['mode'] | null>(null);
 	const submittedTagFilter = $derived(location.tagSearch);
 	const tagFilter = createUrlDraft({
 		read: (url) => readToolsState(url.searchParams).tagSearch,
@@ -322,15 +322,13 @@
 					onValueChange={(details) =>
 						navigateTools({
 							mode:
-								details.value === 'title' || details.value === 'similar'
-									? details.value
-									: 'identifier'
+								details.value === 'title' || details.value === 'file' ? details.value : 'identifier'
 						})}
 				>
 					<SegmentedControl.Label>{$t('Match criteria')}</SegmentedControl.Label>
 					<SegmentedControl.Control class="flex-wrap">
 						<SegmentedControl.Indicator />
-						{#each [{ value: 'identifier', label: $t('Shared identifier') }, { value: 'title', label: $t('Same title') }, { value: 'similar', label: $t('Similar title') }] as option (option.value)}
+						{#each [{ value: 'identifier', label: $t('Shared identifier') }, { value: 'title', label: $t('Same title') }, { value: 'file', label: $t('Same PDF') }] as option (option.value)}
 							<SegmentedControl.Item value={option.value}>
 								<SegmentedControl.ItemText>{option.label}</SegmentedControl.ItemText>
 								<SegmentedControl.ItemHiddenInput />
@@ -338,6 +336,11 @@
 						{/each}
 					</SegmentedControl.Control>
 				</SegmentedControl>
+				<p class="mt-2 mb-0 text-sm text-surface-600-400">
+					{mode === 'file'
+						? $t('Ready PDFs only; older files may be skipped.')
+						: $t('Exact values, case and formatting.')}
+				</p>
 			</div>
 			<div class="p-5">
 				{#if !scannedMode || (duplicates.isPending && !duplicates.isFetching)}
@@ -361,9 +364,13 @@
 						busy={duplicates.isFetching}
 						onRetry={() => void scanDuplicates()}
 					/>
-				{:else}{#each duplicates.data?.groups ?? [] as group, index (group
-						.map((item) => item.id)
-						.join(':'))}
+				{:else if duplicates.data}
+					<p class="text-sm text-surface-600-400">
+						{$t('Checked {count, plural, one {# Item} other {# Items}}.', {
+							count: duplicates.data.scanned
+						})}
+					</p>
+					{#each duplicates.data.groups as group, index (group.map((item) => item.id).join(':'))}
 						<article class="mb-4 rounded-lg border border-surface-300-700 p-3 last:mb-0">
 							<h3>{$t('Duplicate group {number}', { number: index + 1 })}</h3>
 							{#each group as item (item.id)}
@@ -377,7 +384,12 @@
 								</ItemRow>
 							{/each}
 						</article>
-					{:else}<p class="text-surface-600-400">{$t('No duplicate groups found.')}</p>{/each}{/if}
+					{:else}
+						<p class="text-surface-600-400">
+							{$t('No duplicate groups found.')}
+						</p>
+					{/each}
+				{/if}
 			</div>
 		</Panel>
 	</Tabs.Content>

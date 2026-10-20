@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, false, or_, select
@@ -38,18 +39,19 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
 
 
-ANNOTATION_MODERATION_ACTIONS = {
-    "hide": ResourceAction.project_annotation_hide,
-    "archive": ResourceAction.project_annotation_archive,
-    "restore": ResourceAction.project_annotation_restore,
-    "lock": ResourceAction.project_annotation_lock,
-    "unlock": ResourceAction.project_annotation_unlock,
-    "delete": ResourceAction.project_annotation_delete,
-}
+class AnnotationModerationAction(StrEnum):
+    """The supported governance decisions for another author's Project Annotation."""
 
+    hide = "hide"
+    archive = "archive"
+    restore = "restore"
+    lock = "lock"
+    unlock = "unlock"
+    delete = "delete"
 
-def annotation_moderation_action(action: str) -> ResourceAction:
-    return ANNOTATION_MODERATION_ACTIONS[action]
+    @property
+    def resource_action(self) -> ResourceAction:
+        return ResourceAction(f"project_annotation.{self.value}")
 
 
 def annotation_decisions(
@@ -78,14 +80,18 @@ def annotation_decisions(
         and project_active
     ):
         candidates = (
-            ["restore"]
+            [AnnotationModerationAction.restore]
             if annotation.hidden_at is not None or annotation.archived_at is not None
-            else ["hide", "archive"]
+            else [AnnotationModerationAction.hide, AnnotationModerationAction.archive]
         )
-        candidates += ["unlock"] if annotation.locked_at is not None else ["lock"]
-        candidates.append("delete")
+        candidates.extend((
+            AnnotationModerationAction.unlock
+            if annotation.locked_at is not None
+            else AnnotationModerationAction.lock,
+            AnnotationModerationAction.delete,
+        ))
         for candidate in candidates:
-            resource_action = annotation_moderation_action(candidate)
+            resource_action = candidate.resource_action
             if action_allowed(context, resource_action, relation="other"):
                 actions.add(resource_action)
 

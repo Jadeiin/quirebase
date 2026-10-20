@@ -4,6 +4,7 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -418,6 +419,7 @@ async def test_remote_document_upload_survives_authorization_rollback(
         assert topic == "upload-complete"
         assert receipt["status"] == "complete"
         assert receipt["size"] == len(payload)
+        assert receipt["checksum"] == f"sha256:{sha256(payload).hexdigest()}"
         assert receipt["key"] == enqueue["attributes"]["object_key"]
         async with get_object_store().materialize(receipt["key"]) as path:
             assert path.read_bytes() == payload

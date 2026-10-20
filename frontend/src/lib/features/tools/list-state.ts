@@ -5,7 +5,7 @@ export function readToolsState(parameters: Pick<URLSearchParams, 'get'>) {
 	const size = Number(parameters.get('tag_size'));
 	return {
 		tool: tool === 'tags' || tool === 'citation-styles' ? tool : 'duplicates',
-		mode: mode === 'title' || mode === 'similar' ? mode : 'identifier',
+		mode: mode === 'title' || mode === 'file' ? mode : 'identifier',
 		tagSearch: parameters.get('tag_search') ?? '',
 		tagPage: Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1,
 		pageSize: [10, 20, 25, 50, 100].includes(size) ? size : 20,

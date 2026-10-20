@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from uuid import UUID, uuid4
 
@@ -9,7 +10,6 @@ from quirebase.core.config import Settings
 from quirebase.core.storage import (
     ObjectStore,
     ObjectSuffix,
-    is_legacy_cas_key,
     is_managed_object_key,
     object_key,
 )
@@ -27,8 +27,6 @@ def test_object_key_is_strict_two_level_uuid_layout():
     assert is_managed_object_key("ab/cd/abcdef0123456789abcdef0123456789.pdf")
     assert not is_managed_object_key("ac/cd/abcdef0123456789abcdef0123456789.pdf")
     assert not is_managed_object_key("ab/cd/abcdef0123456789abcdef0123456789.exe")
-    assert is_legacy_cas_key("aa/bb/" + "0" * 64 + ".pdf")
-    assert not is_legacy_cas_key(".doctor/probe")
 
 
 def test_s3_store_omits_unset_optional_configuration(monkeypatch, tmp_path):
@@ -74,6 +72,7 @@ async def test_object_store_upload_head_range_and_delete(object_store):
         uuid4(), ObjectSuffix.BINARY, chunks(content), max_bytes=len(content)
     )
     assert stored.size == len(content)
+    assert stored.checksum == f"sha256:{hashlib.sha256(content).hexdigest()}"
     assert await object_store.exists(stored.key)
     response = await object_store.get_range(stored.key, 7, 31)
     assert b"".join([bytes(part) async for part in response.body]) == content[7:31]
@@ -94,8 +93,88 @@ async def test_equal_concurrent_uploads_have_independent_keys(object_store):
         ),
     )
     assert first.key != second.key
+    assert first.checksum == second.checksum
     await object_store.delete(first.key)
     assert await object_store.exists(second.key)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("suffix", ObjectSuffix)
+async def test_upload_checksums_one_shot_stream_without_readback_or_temporary_file(
+    object_store, monkeypatch, suffix
+):
+    content = b"streamed content\x00\xff" * 1000
+
+    class OneShotSource:
+        iterations = 0
+
+        def __aiter__(self):
+            assert self.iterations == 0, "the upload source must only be consumed once"
+            self.iterations += 1
+            return chunks(content, 19)
+
+    def unexpected_materialization(*args, **kwargs):
+        pytest.fail("upload checksum must not materialize or reread the object")
+
+    source = OneShotSource()
+    with monkeypatch.context() as patch:
+        patch.setattr("quirebase.core.storage._temporary_path", unexpected_materialization)
+        patch.setattr(ObjectStore, "get", unexpected_materialization)
+        stored = await object_store.put_object(uuid4(), suffix, source, max_bytes=len(content))
+    assert source.iterations == 1
+    assert stored.size == len(content)
+    assert stored.checksum == f"sha256:{hashlib.sha256(content).hexdigest()}"
+    response = await object_store.get(stored.key)
+    assert b"".join([bytes(part) async for part in response.body]) == content
+
+
+@pytest.mark.anyio
+async def test_upload_checksum_is_independent_of_source_and_chunk_boundaries(
+    object_store, tmp_path
+):
+    content = b"same uploaded bytes" * 23
+    source = tmp_path / "source.bin"
+    source.write_bytes(content)
+    receipts = [
+        await object_store.put_object(uuid4(), ObjectSuffix.BINARY, value, max_bytes=len(content))
+        for value in (content, source, chunks(content, 1), chunks(content, 97))
+    ]
+    assert {receipt.checksum for receipt in receipts} == {
+        f"sha256:{hashlib.sha256(content).hexdigest()}"
+    }
+    assert len({receipt.key for receipt in receipts}) == len(receipts)
+
+
+@pytest.mark.anyio
+async def test_empty_upload_has_standard_sha256_checksum(object_store):
+    stored = await object_store.put_object(uuid4(), ObjectSuffix.BINARY, chunks(b""), max_bytes=0)
+    assert stored.size == 0
+    assert stored.checksum == (
+        "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("content", "max_bytes", "required_prefix", "error"),
+    [
+        (b"%PDF-contents", 6, b"%PDF-", "file exceeds configured size limit"),
+        (b"%PDX-contents", 100, b"%PDF-", "file content does not match the required format"),
+    ],
+)
+async def test_rejected_streamed_upload_cleans_owned_object(
+    object_store, content, max_bytes, required_prefix, error
+):
+    object_id = uuid4()
+    with pytest.raises(ValueError, match=error):
+        await object_store.put_object(
+            object_id,
+            ObjectSuffix.PDF,
+            chunks(content, 2),
+            max_bytes=max_bytes,
+            required_prefix=required_prefix,
+        )
+    assert not await object_store.exists(object_key(object_id, ObjectSuffix.PDF))
 
 
 @pytest.mark.anyio

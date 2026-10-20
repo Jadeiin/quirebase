@@ -949,6 +949,7 @@ msgid "Chair"
 msgstr "Chair"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Change options"
 msgstr "Change options"
@@ -983,6 +984,11 @@ msgstr "Check stored objects"
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Check this value against the metadata standard."
 msgstr "Check this value against the metadata standard."
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Checked {count, plural, one {# Item} other {# Items}}."
+msgstr "Checked {count, plural, one {# Item} other {# Items}}."
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -1146,6 +1152,7 @@ msgid "Citation Styles"
 msgstr "Citation Styles"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Citation text"
 msgstr "Citation text"
@@ -1182,6 +1189,7 @@ msgid "Client connection guide"
 msgstr "Client connection guide"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Clipboard access was denied. Copy the citation text below or download it."
 msgstr "Clipboard access was denied. Copy the citation text below or download it."
@@ -2072,6 +2080,11 @@ msgstr "Event"
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Exact username"
 msgstr "Exact username"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Exact values, case and formatting."
+msgstr "Exact values, case and formatting."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -4618,6 +4631,11 @@ msgid "Ready"
 msgstr "Ready"
 
 #. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Ready PDFs only; older files may be skipped."
+msgstr "Ready PDFs only; older files may be skipped."
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason (at least 10 characters)"
@@ -5121,6 +5139,11 @@ msgstr "Runtime settings"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
+msgid "Same PDF"
+msgstr "Same PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
 msgid "Same title"
 msgstr "Same title"
 
@@ -5453,11 +5476,6 @@ msgstr "Signed in"
 #: src/lib/features/auth/Login.svelte
 msgid "Signing in…"
 msgstr "Signing in…"
-
-#. js-lingui-explicit-id
-#: src/lib/features/tools/Tools.svelte
-msgid "Similar title"
-msgstr "Similar title"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte

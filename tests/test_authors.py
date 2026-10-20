@@ -9,7 +9,7 @@ from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.errors import WorkspaceMembershipRequired
 from quirebase.library import create_item, search_authors_typeahead
-from quirebase.library.citations import format_standard_export
+from quirebase.library.citations import BibliographyFormat, export_item_bibliography
 from quirebase.models import Item, User
 
 pytestmark = [pytest.mark.anyio, pytest.mark.shared_postgres]
@@ -50,8 +50,10 @@ async def test_contributors_keep_each_records_spelling_and_literal_punctuation(p
             contributor(family, given),
             contributor("Research; Council"),
         ]
-        content, _, _ = format_standard_export([item], "bibtex")
-        records, errors = parse_bibliography_records(content, "bibtex")
+        export = await export_item_bibliography(
+            db, actor, workspace, item.id, BibliographyFormat.bibtex
+        )
+        records, errors = parse_bibliography_records(export.content, "bibtex")
         assert not any(row["severity"] == "error" for row in errors)
         assert len(records[0].work["contributors"]) == 2
         snapshots.append(item.work["contributors"])

@@ -4,14 +4,18 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from advanced_alchemy.types import FileObject
 from app_helpers import json_payload
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 from test_http import authenticated_async_client
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.models import (
+    FileRevision,
+    FileRevisionProcessingState,
     Item,
     ItemTag,
     LoginSession,
@@ -143,7 +147,7 @@ async def test_tools_detect_title_duplicates_and_manage_owned_tags(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     db = async_db
-    client, item, _revision = await authenticated_async_client(
+    client, item, revision = await authenticated_async_client(
         db, async_session_factory, tmp_path, monkeypatch
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
@@ -154,7 +158,7 @@ async def test_tools_detect_title_duplicates_and_manage_owned_tags(
             work={
                 "id": f"urn:uuid:{uuid4()}",
                 "type": "Document",
-                "title": "Paper!",
+                "title": item.work["title"],
                 "identifiers": [{"identifier_type": "DOI", "identifier": "10.1000/same"}],
             },
         )
@@ -175,26 +179,68 @@ async def test_tools_detect_title_duplicates_and_manage_owned_tags(
         db.add(ItemTag(workspace_id=item.workspace_id, item_id=item.id, tag_id=tag.id))
         await db.commit()
 
-        tools = await client.get(f"{workspace_base}/duplicates?mode=similar")
+        tools = await client.get(f"{workspace_base}/duplicates?mode=title")
         assert tools.status_code == 200
         assert len(tools.json()["groups"]) == 1
         assert {row["id"] for row in tools.json()["groups"][0]} == set(
             map(str, {item.id, duplicate.id})
         )
-        invalid_mode = await client.get(f"{workspace_base}/duplicates?mode=unknown")
-        assert invalid_mode.status_code == 422
+        assert tools.json()["scanned"] == 2
+        assert set(tools.json()) == {"groups", "scanned"}
+        unhashed = await client.get(f"{workspace_base}/duplicates?mode=file")
+        assert unhashed.status_code == 200
+        assert unhashed.json() == {"groups": [], "scanned": 0}
+        checksum = "sha256:" + "a" * 64
+        revision.file = FileObject(**(revision.file.to_dict() | {"checksum": checksum}))
+        flag_modified(revision, "file")
+        revision.processing_state = FileRevisionProcessingState.ready
+        db.add(
+            FileRevision(
+                workspace_id=item.workspace_id,
+                item_id=duplicate.id,
+                created_by=item.created_by,
+                processing_state=FileRevisionProcessingState.ready,
+                file=FileObject(
+                    backend="documents", filename=f"{uuid4().hex}.pdf", checksum=checksum
+                ),
+            )
+        )
+        await db.commit()
+        same_pdf = await client.get(f"{workspace_base}/duplicates?mode=file")
+        assert same_pdf.status_code == 200
+        assert same_pdf.json()["scanned"] == 2
+        assert len(same_pdf.json()["groups"]) == 1
+        assert {row["id"] for row in same_pdf.json()["groups"][0]} == {
+            str(item.id),
+            str(duplicate.id),
+        }
+        for query in ("", "?mode=", "?mode=unknown", "?mode=similar", "?mode=author"):
+            invalid_mode = await client.get(f"{workspace_base}/duplicates{query}")
+            assert invalid_mode.status_code == 422
         tags = await client.get(f"{workspace_base}/tags")
         assert tags.json()["items"][0]["name"] == "Old tag"
         assert tags.json()["items"][0]["accessible_item_count"] == 1
 
-        # The Library API accepts Tag UUIDs and names.
+        # Tag filters identify a single Tag, even when another Tag is named after its UUID.
+        misleading_tag = Tag(
+            workspace_id=item.workspace_id, name=str(tag.id), created_by=item.created_by
+        )
+        db.add(misleading_tag)
+        await db.flush()
+        db.add(
+            ItemTag(workspace_id=item.workspace_id, item_id=duplicate.id, tag_id=misleading_tag.id)
+        )
+        await db.commit()
         filtered_by_id = await client.get(f"{workspace_base}/items", params={"tag": tag.id})
         assert filtered_by_id.status_code == 200
         assert [row["id"] for row in filtered_by_id.json()["items"]] == [str(item.id)]
 
         filtered_by_name = await client.get(f"{workspace_base}/items", params={"tag": "Old tag"})
-        assert filtered_by_name.status_code == 200
-        assert [row["id"] for row in filtered_by_name.json()["items"]] == [str(item.id)]
+        assert filtered_by_name.status_code == 422
+        invalid_facets = await client.get(
+            f"{workspace_base}/items/facets", params={"tag": "Old tag"}
+        )
+        assert invalid_facets.status_code == 422
 
         orphan_tag = Tag(
             workspace_id=item.workspace_id,

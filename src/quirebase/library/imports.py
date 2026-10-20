@@ -16,7 +16,6 @@ from inquiro.identifiers import canonical_doi
 from sqlalchemy import select, update
 
 from quirebase.access import ResourceAction, require_workspace_action
-from quirebase.access.items import require_accessible_items, visible_items_query
 from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
@@ -36,10 +35,9 @@ from quirebase.documents.revisions import (
     attach_staged_pdf,
     stage_pdf,
 )
-from quirebase.library.citations import format_csl_export, format_standard_export
 from quirebase.library.providers import lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import ImportBatch, ImportBatchStatus, Item, User
+from quirebase.models import ImportBatch, ImportBatchStatus, User
 from quirebase.search import search_index
 
 from ._metadata import Work, metadata_write, validate_citation_key
@@ -49,7 +47,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from inquiro import CandidateRecord
-    from inquiro.bibliography import BibliographyExportOptions
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -330,6 +327,7 @@ async def stage_pdf_import_batch(
                         filename=staged.object_key,
                         content_type="application/pdf",
                         size=staged.size,
+                        checksum=staged.checksum,
                         metadata={
                             "row": row,
                             "source_id": str(uuid4()),
@@ -739,16 +737,7 @@ async def commit_import_batch(
             db, item.id, workspace_id=workspace_id, actor_id=actor.id
         )
         if pdf is not None:
-            await attach_staged_pdf(
-                db,
-                actor,
-                item,
-                (
-                    pdf.path,
-                    pdf.size if pdf.size is not None else 0,
-                    pdf.metadata["original_name"],
-                ),
-            )
+            await attach_staged_pdf(db, actor, item, pdf)
         await search_index(db).index_item(db, item.id)
         record_event(
             db,
@@ -802,44 +791,6 @@ async def discard_import_batch(
         target_id=batch.id,
     )
     await db.commit()
-
-
-async def export_accessible_bibliography(
-    db: AsyncSession,
-    user: User,
-    workspace_id: UUID,
-    file_format: str,
-    style_key: str = "apa",
-    options: BibliographyExportOptions | None = None,
-) -> tuple[str, str, str]:
-    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
-    items = list(
-        await db.scalars(
-            visible_items_query(workspace_id).order_by(Item.updated_at.desc(), Item.id)
-        )
-    )
-    if file_format == "csl":
-        return await format_csl_export(
-            db, user, workspace_id, items, style_key=style_key, options=options
-        )
-    return format_standard_export(items, file_format, options=options)
-
-
-async def export_selected_bibliography(
-    db: AsyncSession,
-    user: User,
-    workspace_id: UUID,
-    item_ids: list[UUID],
-    file_format: str,
-    style_key: str = "apa",
-    options: BibliographyExportOptions | None = None,
-) -> tuple[str, str, str]:
-    items = await require_accessible_items(db, user, workspace_id, item_ids)
-    if file_format == "csl":
-        return await format_csl_export(
-            db, user, workspace_id, items, style_key=style_key, options=options
-        )
-    return format_standard_export(items, file_format, options=options)
 
 
 async def import_staging_object_keys(

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from quirebase.access.annotations import (
+    AnnotationModerationAction,
     annotation_decisions,
-    annotation_moderation_action,
     can_edit_annotation,
     require_editable_annotation,
     visible_annotation_scope_predicate,
@@ -71,6 +71,7 @@ from quirebase.access.workspace_policy import (
 )
 
 __all__ = [
+    "AnnotationModerationAction",
     "AuthorizationProjection",
     "ProjectContext",
     "ResourceAction",
@@ -78,7 +79,6 @@ __all__ = [
     "WorkspaceContext",
     "action_allowed",
     "annotation_decisions",
-    "annotation_moderation_action",
     "can_delete_item",
     "can_edit_annotation",
     "can_edit_item",

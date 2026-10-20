@@ -15,8 +15,9 @@ but are infrastructure state, not Quirebase domain models.
 
 Every logical upload owns a preallocated UUID object identity. Its key is the lowercase,
 hyphenless UUID split into two directory shards (`ab/cd/<uuid>.<suffix>`), with the suffix selected
-from a closed set. Object-store transport and size checks provide upload integrity; Quirebase does
-not persist content digests. Because equal uploads never share an object, a failed workflow can
+from a closed set. Object-store transport and size checks provide upload integrity. SHA-256 is
+computed in the upload stream and saved in the FileObject descriptor for content comparison.
+Because equal uploads never share an object, a failed workflow can
 delete the object it owns without reservations or file locks. Object type,
 owner, references, and lifecycle remain in database and workflow metadata rather than key prefixes.
 

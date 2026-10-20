@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from inquiro.bibliography import (
@@ -29,14 +31,39 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import ResourceAction, require_workspace_action
-from quirebase.access.items import require_readable_item
+from quirebase.access.items import (
+    require_accessible_items,
+    require_readable_item,
+    visible_items_query,
+)
 from quirebase.core.errors import ResourceNotFound, ValidationFailure
-from quirebase.models import CitationStyle
+from quirebase.models import CitationStyle, Item
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.models import Item, User
+    from quirebase.models import User
+
+
+class BibliographyFormat(StrEnum):
+    bibtex = "bibtex"
+    ris = "ris"
+    csl_json = "csl-json"
+    commonmeta = "commonmeta"
+    csl = "csl"
+
+
+@dataclass(frozen=True)
+class BibliographyExport:
+    content: str
+    media_type: str
+    filename: str
+
+
+@dataclass(frozen=True)
+class ItemCitation:
+    content: str
+    media_type: str
 
 
 def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
@@ -126,14 +153,17 @@ async def delete_custom_citation_style(
     await db.commit()
 
 
-async def format_csl_export(
+async def _format_bibliography(
     db: AsyncSession,
     user: User,
     workspace_id: UUID,
     items: list[Item],
+    file_format: BibliographyFormat,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
-) -> tuple[str, str, str]:
+) -> BibliographyExport:
+    if file_format != BibliographyFormat.csl:
+        return _format_standard_bibliography(items, file_format, options=options)
     style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
         raise ValidationFailure("unknown citation style")
@@ -152,12 +182,14 @@ async def format_csl_export(
         )
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
-    return "\n\n".join(entries), "text/plain", "quirebase-citations.txt"
+    return BibliographyExport("\n\n".join(entries), "text/plain", "quirebase-citations.txt")
 
 
-def format_standard_export(
-    items: list[Item], file_format: str, options: BibliographyExportOptions | None = None
-) -> tuple[str, str, str]:
+def _format_standard_bibliography(
+    items: list[Item],
+    file_format: BibliographyFormat,
+    options: BibliographyExportOptions | None = None,
+) -> BibliographyExport:
     if file_format not in SUPPORTED_FORMATS:
         raise ValidationFailure("format must be bibtex, ris, csl-json, or commonmeta")
     try:
@@ -172,34 +204,66 @@ def format_standard_export(
     media_type = BIBLIOGRAPHY_MEDIA_TYPES[file_format]
     extension = BIBLIOGRAPHY_EXTENSIONS[file_format]
     filename = f"quirebase-export.{extension}"
-    return contents, media_type, filename
+    return BibliographyExport(contents, media_type, filename)
 
 
-async def get_item_citation_response(
+async def export_item_bibliography(
     db: AsyncSession,
     user: User,
     workspace_id: UUID,
     item_id: UUID,
-    file_format: str,
+    file_format: BibliographyFormat,
     style_key: str = "apa",
     options: BibliographyExportOptions | None = None,
-) -> tuple[str, str, str]:
+) -> BibliographyExport:
     item = await require_readable_item(db, user, workspace_id, item_id)
-    if file_format == "csl":
-        return await format_csl_export(
-            db, user, workspace_id, [item], style_key=style_key, options=options
+    return await _format_bibliography(
+        db, user, workspace_id, [item], file_format, style_key=style_key, options=options
+    )
+
+
+async def export_selected_bibliography(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    item_ids: list[UUID],
+    file_format: BibliographyFormat,
+    style_key: str = "apa",
+    options: BibliographyExportOptions | None = None,
+) -> BibliographyExport:
+    items = await require_accessible_items(db, user, workspace_id, item_ids)
+    return await _format_bibliography(
+        db, user, workspace_id, items, file_format, style_key=style_key, options=options
+    )
+
+
+async def export_workspace_bibliography(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    file_format: BibliographyFormat,
+    style_key: str = "apa",
+    options: BibliographyExportOptions | None = None,
+) -> BibliographyExport:
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
+    items = list(
+        await db.scalars(
+            visible_items_query(workspace_id).order_by(Item.updated_at.desc(), Item.id)
         )
-    return format_standard_export([item], file_format, options=options)
+    )
+    return await _format_bibliography(
+        db, user, workspace_id, items, file_format, style_key=style_key, options=options
+    )
 
 
-async def get_item_citation_text_response(
+async def render_item_citation(
     db: AsyncSession,
     user: User,
     workspace_id: UUID,
     item_id: UUID,
     style_key: str = "apa",
-    output: str = "text",
-) -> tuple[str, str]:
+    output: Literal["text", "html"] = "text",
+) -> ItemCitation:
     item = await require_readable_item(db, user, workspace_id, item_id)
     style_xml = await resolve_style_xml(db, user, workspace_id, style_key)
     if style_xml is None:
@@ -209,24 +273,27 @@ async def get_item_citation_text_response(
     except ValueError as error:
         raise ValidationFailure(str(error)) from error
     media_type = "text/html" if output == "html" else "text/plain"
-    return rendered, media_type
+    return ItemCitation(rendered, media_type)
 
 
 __all__ = [
     "BIBLIOGRAPHY_EXTENSIONS",
     "BIBLIOGRAPHY_MEDIA_TYPES",
     "DEFAULT_CITATION_KEY_FORMULA",
+    "BibliographyExport",
     "BibliographyExportOptions",
+    "BibliographyFormat",
     "CitationStyleOption",
     "CitationStyleSelection",
+    "ItemCitation",
     "create_custom_citation_style",
     "delete_custom_citation_style",
-    "format_csl_export",
-    "format_standard_export",
-    "get_item_citation_response",
-    "get_item_citation_text_response",
+    "export_item_bibliography",
+    "export_selected_bibliography",
+    "export_workspace_bibliography",
     "list_custom_citation_styles",
     "preview_citation_key",
+    "render_item_citation",
     "resolve_style_xml",
     "select_builtin_citation_styles",
 ]

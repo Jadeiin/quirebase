@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import tempfile
@@ -37,9 +38,6 @@ class ObjectSuffix(StrEnum):
 _MANAGED_OBJECT_RE = re.compile(
     r"^(?P<a>[0-9a-f]{2})/(?P<b>[0-9a-f]{2})/(?P<id>[0-9a-f]{32})(?P<suffix>\.pdf|\.bin|\.png)$"
 )
-_LEGACY_CAS_RE = re.compile(
-    r"^(?:[0-9a-f]{2}/[0-9a-f]{2}/)?(?P<digest>[0-9a-f]{64})(?:\.[a-z0-9]+)?$"
-)
 
 
 def object_key(object_id: UUID, suffix: ObjectSuffix) -> str:
@@ -57,10 +55,6 @@ def managed_object_id(key: str) -> UUID | None:
 
 def is_managed_object_key(key: str) -> bool:
     return managed_object_id(key) is not None
-
-
-def is_legacy_cas_key(key: str) -> bool:
-    return _LEGACY_CAS_RE.fullmatch(key) is not None and not is_managed_object_key(key)
 
 
 def _temporary_path(*, prefix: str, suffix: str = "") -> Path:
@@ -94,6 +88,7 @@ class SignedDownload:
 class StoredObject:
     key: str
     size: int
+    checksum: str
 
 
 def _metadata(value: ObjectMeta) -> ObjectMetadata:
@@ -168,6 +163,7 @@ class ObjectStore:
         key = object_key(object_id, suffix)
         size = 0
         prefix = bytearray()
+        digest = hashlib.sha256()
 
         async def checked_chunks() -> AsyncIterator[bytes]:
             nonlocal size
@@ -175,6 +171,7 @@ class ObjectStore:
                 size += len(chunk)
                 if size > max_bytes:
                     raise ValueError("file exceeds configured size limit")
+                digest.update(chunk)
                 if required_prefix is not None and len(prefix) < len(required_prefix):
                     prefix.extend(chunk[: len(required_prefix) - len(prefix)])
                 yield chunk
@@ -184,7 +181,13 @@ class ObjectStore:
             await file.save_async(checked_chunks())
             if required_prefix is not None and bytes(prefix) != required_prefix:
                 raise ValueError("file content does not match the required format")
-            return StoredObject(key=file.path, size=file.size if file.size is not None else size)
+            checksum = f"sha256:{digest.hexdigest()}"
+            file.checksum = checksum
+            return StoredObject(
+                key=file.path,
+                size=file.size if file.size is not None else size,
+                checksum=checksum,
+            )
         except BaseException:
             with suppress(Exception):
                 await self._store.delete_async(key)

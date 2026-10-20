@@ -359,5 +359,19 @@ async def test_provider_sync_retains_replaced_primary_identity_for_search_and_du
         == 1
     )
     sibling = await create_item(db, actor, workspace_id, metadata("Sibling", id=primary))
-    groups = await find_duplicates(db, actor, workspace_id, "identifier")
-    assert [{row.id for row in group} for group in groups] == [{created.item_id, sibling.item_id}]
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    assert groups == []
+    # Exact stored identifiers remain usable after sync, without comparing a
+    # primary Work URI against an additional identifier of a different shape.
+    matching = await create_item(
+        db,
+        actor,
+        workspace_id,
+        metadata(
+            "Matching",
+            identifiers=[{"identifier_type": "OpenAlex", "identifier": primary}],
+        ),
+    )
+    groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
+    assert [{row.id for row in group} for group in groups] == [{created.item_id, matching.item_id}]
+    assert (await db.get(Item, sibling.item_id)).work["id"] == primary

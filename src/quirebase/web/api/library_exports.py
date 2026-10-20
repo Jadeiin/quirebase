@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import Response, StreamingResponse
 
 from quirebase.library import (
     download_selected_item_documents,
-    export_accessible_bibliography,
     export_selected_bibliography,
+    export_workspace_bibliography,
 )
-from quirebase.web.api.citations import BIBLIOGRAPHY_CONTENT_TYPES
+from quirebase.web.api.citations import BIBLIOGRAPHY_CONTENT_TYPES, bibliography_response
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.export_schemas import BibliographyExportRequest, DocumentArchiveRequest
+from quirebase.web.api.export_schemas import (
+    BibliographyExportQuery,
+    BibliographyExportRequest,
+    DocumentArchiveRequest,
+)
 from quirebase.web.responses import content_disposition
 
 router = APIRouter(tags=["Library exports"])
@@ -23,10 +28,10 @@ router = APIRouter(tags=["Library exports"])
     response_class=Response,
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
-async def export_item_selection(
+async def download_selected_bibliography(
     workspace_id: UUID, data: BibliographyExportRequest, user: ApiUser, db: Database
 ) -> Response:
-    contents, media_type, filename = await export_selected_bibliography(
+    export = await export_selected_bibliography(
         db,
         user,
         workspace_id,
@@ -35,14 +40,7 @@ async def export_item_selection(
         style_key=data.style,
         options=data.to_options(),
     )
-    return Response(
-        contents,
-        media_type=f"{media_type}; charset=utf-8",
-        headers={
-            "Content-Disposition": content_disposition(filename),
-            "Cache-Control": "private, no-store",
-        },
-    )
+    return bibliography_response(export)
 
 
 @router.post(
@@ -79,17 +77,18 @@ async def download_item_selection(
     response_class=Response,
     responses={200: {"content": BIBLIOGRAPHY_CONTENT_TYPES}},
 )
-async def export_library_bibliography(
-    workspace_id: UUID, user: ApiUser, db: Database, file_format: str, style: str = "apa"
+async def download_workspace_bibliography(
+    workspace_id: UUID,
+    user: ApiUser,
+    db: Database,
+    data: Annotated[BibliographyExportQuery, Query()],
 ) -> Response:
-    contents, media_type, filename = await export_accessible_bibliography(
-        db, user, workspace_id, file_format, style_key=style
+    export = await export_workspace_bibliography(
+        db,
+        user,
+        workspace_id,
+        data.file_format,
+        style_key=data.style,
+        options=data.to_options(),
     )
-    return Response(
-        contents,
-        media_type=f"{media_type}; charset=utf-8",
-        headers={
-            "Content-Disposition": content_disposition(filename),
-            "Cache-Control": "private, no-store",
-        },
-    )
+    return bibliography_response(export)

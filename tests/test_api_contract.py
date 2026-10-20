@@ -172,16 +172,6 @@ def test_openapi_media_type_contracts() -> None:
         content = paths[bib_path][method]["responses"]["200"]["content"]
         assert set(content.keys()) == bib_expected, f"Mismatched media types in {bib_path}"
 
-    bib_copy_content = paths[
-        "/api/v1/workspaces/{workspace_id}/items/{item_id}/bibliography/content"
-    ]["get"]["responses"]["200"]["content"]
-    assert set(bib_copy_content.keys()) == {"text/plain"}
-
-    citation_content = paths["/api/v1/workspaces/{workspace_id}/items/{item_id}/citation/content"][
-        "get"
-    ]["responses"]["200"]["content"]
-    assert set(citation_content.keys()) == {"text/plain", "text/html"}
-
     thumbnail_content = paths["/api/v1/workspaces/{workspace_id}/items/{item_id}/thumbnail"]["get"][
         "responses"
     ]["200"]["content"]

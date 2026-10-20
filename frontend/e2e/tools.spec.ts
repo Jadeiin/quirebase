@@ -48,7 +48,7 @@ test('returning to stale duplicate results waits for an explicit check', async (
 	let scans = 0;
 	await page.route('**/api/v1/workspaces/workspace-1/duplicates*', (route) => {
 		scans++;
-		return route.fulfill({ json: { groups: [] } });
+		return route.fulfill({ json: { groups: [], scanned: 0 } });
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
 		route.fulfill({ json: tagPage([], route) })
@@ -71,6 +71,33 @@ test('returning to stale duplicate results waits for an explicit check', async (
 	await expect.poll(() => scans).toBe(2);
 });
 
+test('duplicate scans show coverage beyond the former limit', async ({ page }) => {
+	await mockSession(page);
+	await page.route('**/api/v1/workspaces/workspace-1/duplicates*', (route) =>
+		route.fulfill({ json: { groups: [], scanned: 2500 } })
+	);
+	await page.goto('/workspace/workspace-1/tools');
+	await page.getByRole('button', { name: 'Check for duplicates', exact: true }).click();
+	await expect(page.getByText('Checked 2,500 Items.', { exact: true })).toBeVisible();
+	await expect(page.getByText('No duplicate groups found.', { exact: true })).toBeVisible();
+});
+
+test('Same PDF scans stay explicit and explain older-file coverage', async ({ page }) => {
+	await mockSession(page);
+	const modes: string[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/duplicates*', (route) => {
+		modes.push(new URL(route.request().url()).searchParams.get('mode')!);
+		return route.fulfill({ json: { groups: [], scanned: 2 } });
+	});
+	await page.goto('/workspace/workspace-1/tools?mode=file');
+	await expect(page.getByRole('radio', { name: 'Same PDF', exact: true })).toBeChecked();
+	await expect(page.getByText('Ready PDFs only; older files may be skipped.')).toBeVisible();
+	expect(modes).toEqual([]);
+	await page.getByRole('button', { name: 'Check for duplicates', exact: true }).click();
+	await expect(page.getByText('Checked 2 Items.', { exact: true })).toBeVisible();
+	expect(modes).toEqual(['file']);
+});
+
 test('an in-flight duplicate scan stays with its submitted criteria', async ({ page }) => {
 	await mockSession(page);
 	const modes: string[] = [];
@@ -82,7 +109,7 @@ test('an in-flight duplicate scan stays with its submitted criteria', async ({ p
 			started.resolve();
 			await release.promise;
 		}
-		return route.fulfill({ json: { groups: [] } });
+		return route.fulfill({ json: { groups: [], scanned: 0 } });
 	});
 	await page.goto('/workspace/workspace-1/tools');
 	const check = page.getByRole('button', { name: 'Check for duplicates', exact: true });
@@ -120,7 +147,7 @@ test('leaving an unfinished duplicate scan restores an idle explicit check', asy
 			started.resolve();
 			await release.promise;
 		}
-		await route.fulfill({ json: { groups: [] } });
+		await route.fulfill({ json: { groups: [], scanned: 0 } });
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
@@ -331,7 +358,7 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 	let duplicateReads = 0;
 	await page.route('**/api/v1/workspaces/workspace-1/duplicates*', (route) => {
 		duplicateReads += 1;
-		return route.fulfill({ json: { groups: [] } });
+		return route.fulfill({ json: { groups: [], scanned: 0 } });
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/tags?*', (route) =>
 		route.fulfill({
@@ -460,7 +487,7 @@ for (const concurrentChange of ['created', 'renamed']) {
 		});
 		await page.route('**/api/v1/workspaces/workspace-1/duplicates*', (route) => {
 			duplicateReads++;
-			return route.fulfill({ json: { groups: [] } });
+			return route.fulfill({ json: { groups: [], scanned: 0 } });
 		});
 		await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) => {
 			styleReads++;

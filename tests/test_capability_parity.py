@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from hashlib import sha256
 from uuid import uuid4
 
 import pymupdf
@@ -340,7 +341,12 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
             upload.object_id,
             upload.object_id,
             uuid4(),
-            {"status": "complete", "key": upload.object_key, "size": len(pdf)},
+            {
+                "status": "complete",
+                "key": upload.object_key,
+                "size": len(pdf),
+                "checksum": f"sha256:{sha256(pdf).hexdigest()}",
+            },
         )
         result = await commit_uploaded_revision(
             actor_id, workspace_id, item_id, "independent.pdf", inspected
@@ -358,7 +364,11 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
             "independent.txt",
             "text/plain",
             None,
-            {"object_key": attachment.object_key, "size": 4},
+            {
+                "object_key": attachment.object_key,
+                "size": 4,
+                "checksum": f"sha256:{sha256(b'data').hexdigest()}",
+            },
         )
         assert await async_db.get(Attachment, result["attachment_id"]) is not None
         assert (

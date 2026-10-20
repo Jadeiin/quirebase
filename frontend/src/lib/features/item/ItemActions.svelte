@@ -5,10 +5,11 @@
 	import { page } from '$app/state';
 	import { Dialog, Portal, Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { ApiError, isDownloadCancelled, type ItemOverviewView } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { copyBibliographyText, downloadBibliographyText } from '#lib/bibliography-copy.js';
 	import { can } from '#lib/authorization/can.js';
 	import Button from '#lib/design/Button.svelte';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
@@ -26,6 +27,7 @@
 		type ExportPreferences
 	} from '#lib/export-preferences.js';
 	import { itemFilesQuery, itemMetadataSourcesQuery } from '#lib/features/item/queries.js';
+	import { reconcileRevisionSelection } from '#lib/features/item/revision-selection.js';
 	import { invalidateLibrary, invalidateProject, invalidateTags } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -58,7 +60,14 @@
 	let preferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	let doiProvider = $state('auto');
 	let selectedRevisions = new SvelteSet<string>();
-	let revisionSelectionInitialized = false;
+	let revisionSelectionExplicit = $state(false);
+	const citationCopy = $state<{ text: string | null }>({ text: null });
+	let citationCompleted = false;
+	let citationInput = $state<{
+		itemId: string;
+		format: ExportPreferences['citation']['format'];
+		parameters: ReturnType<typeof bibliographyExportParameters>;
+	} | null>(null);
 	let deleteArmed = $state(false);
 	const queryClient = useQueryClient();
 	const workspaceContext = getWorkspaceContext();
@@ -71,6 +80,14 @@
 		itemFilesQuery(workspaceId, itemId, open && section === 'documents')
 	);
 	const revisions = $derived(files.data?.files.filter((file) => file.kind === 'revision') ?? []);
+	const selectedRevisionIds = $derived(
+		revisions
+			.filter((revision) => selectedRevisions.has(revision.id))
+			.map((revision) => revision.id)
+	);
+	const documentsAvailable = $derived(
+		files.isSuccess && files.fetchStatus === 'idle' && (files.isFetchedAfterMount || !files.isStale)
+	);
 	const copyDestinations = $derived(overview.copy_targets);
 	const sources = createQuery(() =>
 		itemMetadataSourcesQuery(workspaceId, itemId, open && section === 'sources')
@@ -98,12 +115,27 @@
 	});
 
 	$effect(() => {
-		if (revisionSelectionInitialized || files.isPending || !files.data) return;
-		revisionSelectionInitialized = true;
-		for (const revision of revisions) selectedRevisions.add(revision.id);
+		if (!documentsAvailable) return;
+		const availableIds = revisions.map((revision) => revision.id);
+		untrack(() => {
+			const next = reconcileRevisionSelection(
+				availableIds,
+				selectedRevisions,
+				revisionSelectionExplicit
+			);
+			selectedRevisions.clear();
+			for (const id of next) selectedRevisions.add(id);
+		});
 	});
 
+	function toggleRevision(id: string) {
+		revisionSelectionExplicit = true;
+		if (selectedRevisions.has(id)) selectedRevisions.delete(id);
+		else selectedRevisions.add(id);
+	}
+
 	function show(next: ActionSection) {
+		if (citationCompleted) changeCitationOptions();
 		section = next;
 		deleteArmed = false;
 		error = '';
@@ -129,54 +161,104 @@
 		return `quirebase-${kind}.zip`;
 	}
 
-	async function action(operation: () => Promise<unknown>, success: string) {
+	async function action(
+		operation: () => Promise<unknown>,
+		success: string,
+		failure?: () => string | undefined
+	) {
 		if (busy) return;
 		busy = true;
 		error = '';
 		notice = '';
 		try {
 			await operation();
+			if (!mounted) return;
 			notice = success;
 		} catch (reason) {
+			if (!mounted) return;
 			if (isDownloadCancelled(reason)) return;
 			if (reason instanceof ApiError && reason.status === 409) {
 				await onchanged();
 				error = $t('This Item changed. Latest state was loaded; review it and explicitly retry.');
 				return;
 			}
-			error = apiErrorMessage(reason, $t('Item action failed'));
+			error = failure?.() ?? apiErrorMessage(reason, $t('Item action failed'));
 		} finally {
 			busy = false;
 		}
 	}
 
 	function downloadBibliography() {
-		void action(
-			() =>
-				workspaceContext.api.downloadGet(
-					'/workspaces/{workspace_id}/items/{item_id}/bibliography',
-					{
-						params: { path: { item_id: itemId }, query: bibliographyParameters() }
-					},
-					{ suggestedName: bibliographyFilename(format) }
-				),
-			$t('Bibliography downloaded')
-		);
+		if (busy) return;
+		if (citationCopy.text !== null && citationInput) {
+			downloadBibliographyText(citationCopy.text, citationInput.format);
+			citationCompleted = true;
+			error = '';
+			notice = $t('Bibliography downloaded');
+			return;
+		}
+		const input = citationInput ?? {
+			itemId,
+			format,
+			parameters: bibliographyParameters()
+		};
+		citationInput = input;
+		void action(async () => {
+			await workspaceContext.api.downloadGet(
+				'/workspaces/{workspace_id}/items/{item_id}/bibliography',
+				{
+					params: { path: { item_id: input.itemId }, query: input.parameters }
+				},
+				{ suggestedName: bibliographyFilename(input.format) }
+			);
+			citationCompleted = true;
+		}, $t('Bibliography downloaded'));
 	}
 
 	function copyBibliography() {
-		void action(async () => {
-			const content = await workspaceContext.api.text(
-				'/workspaces/{workspace_id}/items/{item_id}/bibliography/content',
-				{
-					params: { path: { item_id: itemId }, query: bibliographyParameters() }
-				}
-			);
-			await navigator.clipboard.writeText(content);
-		}, $t('Copied to clipboard'));
+		if (busy) return;
+		const input = citationInput ?? {
+			itemId,
+			format,
+			parameters: bibliographyParameters()
+		};
+		citationInput = input;
+		void action(
+			async () => {
+				await copyBibliographyText(
+					citationCopy,
+					() =>
+						workspaceContext.api.request(
+							'GET',
+							'/workspaces/{workspace_id}/items/{item_id}/bibliography',
+							{
+								params: { path: { item_id: input.itemId }, query: input.parameters },
+								headers: { Accept: '*/*' },
+								parseAs: 'text'
+							}
+						),
+					() => mounted
+				);
+				citationCompleted = true;
+			},
+			$t('Copied to clipboard'),
+			() =>
+				citationCopy.text !== null
+					? $t('Clipboard access was denied. Copy the citation text below or download it.')
+					: undefined
+		);
+	}
+
+	function changeCitationOptions() {
+		citationCompleted = false;
+		citationInput = null;
+		citationCopy.text = null;
+		error = notice = '';
 	}
 
 	function downloadDocuments() {
+		if (!documentsAvailable || selectedRevisionIds.length === 0) return;
+		const revisionIds = [...selectedRevisionIds];
 		void action(
 			() =>
 				workspaceContext.api.downloadGet(
@@ -185,7 +267,7 @@
 						params: {
 							path: { item_id: itemId },
 							query: {
-								revisions: [...selectedRevisions].join(','),
+								revisions: revisionIds.join(','),
 								include_annotations: preferences.document.includeAnnotations,
 								include_supplements: preferences.document.includeSupplements,
 								timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -393,13 +475,28 @@
 										</p>
 									</div>
 									<label
-										>{$t('Format')}<select class="select" bind:value={format}>
+										>{$t('Format')}<select
+											class="select"
+											bind:value={format}
+											disabled={busy || citationInput !== null}
+										>
 											{#each bibliographyFormats as choice (choice.value)}
 												<option value={choice.value}>{$t(choice.label)}</option>
 											{/each}
 										</select></label
 									>
+									{#if citationCopy.text !== null}
+										<label class="grid grid-cols-1 gap-1"
+											>{$t('Citation text')}<textarea
+												class="textarea min-h-40"
+												readonly
+												value={citationCopy.text}></textarea></label
+										>
+									{/if}
 									<div class="flex flex-wrap gap-2">
+										{#if citationInput}<Button disabled={busy} onclick={changeCitationOptions}
+												>{$t('Change options')}</Button
+											>{/if}
 										<Button variant="filled" disabled={busy} onclick={downloadBibliography}
 											>{$t('Download file')}</Button
 										>
@@ -461,11 +558,8 @@
 												type="checkbox"
 												class="mt-1 shrink-0"
 												checked={selectedRevisions.has(revision.id)}
-												disabled={busy || files.isFetching || files.isError}
-												onchange={() =>
-													selectedRevisions.has(revision.id)
-														? selectedRevisions.delete(revision.id)
-														: selectedRevisions.add(revision.id)}
+												disabled={busy || !documentsAvailable}
+												onchange={() => toggleRevision(revision.id)}
 											/><span class="min-w-0 flex-1"
 												><strong class="block wrap-anywhere">{revision.original_name}</strong><small
 													class="block text-surface-600-400"
@@ -477,8 +571,14 @@
 											message={apiErrorMessage(files.error, $t('Unable to load documents.'))}
 											busy={files.isFetching}
 											onRetry={() => void files.refetch()}
+										/>{:else if files.isPaused}<QueryError
+											message={$t('Unable to load documents.')}
+											busy={false}
+											onRetry={() => void files.refetch()}
 										/>{:else if files.isPending}<LoadingState label={$t('Loading documents…')} />
-									{:else if revisions.length === 0}<p>{$t('No PDF revisions available.')}</p>{/if}
+									{:else if revisions.length === 0}<p>
+											{$t('No PDF revisions available.')}
+										</p>{/if}
 									<p class="text-sm text-surface-600-400">
 										{$t('Annotations: {state}', {
 											state: preferences.document.includeAnnotations
@@ -494,10 +594,7 @@
 									<div class="flex flex-wrap gap-2">
 										<Button
 											variant="filled"
-											disabled={busy ||
-												files.isPending ||
-												files.isError ||
-												selectedRevisions.size === 0}
+											disabled={busy || !documentsAvailable || selectedRevisionIds.length === 0}
 											onclick={downloadDocuments}>{$t('Download bundle')}</Button
 										>
 										<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button
