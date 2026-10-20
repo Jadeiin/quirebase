@@ -3,6 +3,7 @@
 	import type { Snippet } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { Popover, Portal, SegmentedControl } from '@skeletonlabs/skeleton-svelte';
+	import { createHotkeysAttachment } from '@tanstack/svelte-hotkeys';
 	import {
 		createTable,
 		tableFeatures,
@@ -21,6 +22,7 @@
 	import { t } from '#lib/i18n.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import type { LibrarySearch } from './queries';
+	import { libraryRowCommands, runLibraryShortcut, type LibraryRowCommand } from './shortcuts.js';
 	import {
 		defaultSortDirection,
 		type libraryHref,
@@ -39,6 +41,7 @@
 		items,
 		toolbar,
 		workspaceId,
+		shortcutsEnabled,
 		filterHref,
 		selected,
 		onSelectionChange,
@@ -52,6 +55,7 @@
 		items: LibrarySearch['items'];
 		toolbar: Snippet;
 		workspaceId: string;
+		shortcutsEnabled: boolean;
 		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
 		selected: Set<string>;
 		onSelectionChange: (ids: string[]) => void;
@@ -169,6 +173,95 @@
 			save({ ...preferences, widths });
 		}
 	});
+	let rangeStart: string | undefined;
+	let rangeEnd: string | undefined;
+	function resetRange() {
+		rangeStart = undefined;
+		rangeEnd = undefined;
+	}
+	function toggleItem(id: string, checked?: boolean) {
+		resetRange();
+		table.getRow(id).toggleSelected(checked);
+	}
+	function selectPage(checked = true) {
+		resetRange();
+		table.toggleAllRowsSelected(checked);
+	}
+	const rowHotkeys = createHotkeysAttachment(
+		() =>
+			libraryRowCommands.flatMap((command) =>
+				command.keys.map((binding) => ({
+					hotkey: binding.hotkey,
+					callback: (event: KeyboardEvent) =>
+						runLibraryShortcut(event, () => runRowCommand(command.id, event), command.repeat),
+					options: { enabled: !busy && (!binding.character || shortcutsEnabled) }
+				}))
+			),
+		{ preventDefault: false, stopPropagation: false, ignoreInputs: false, requireReset: false }
+	);
+	function runRowCommand(command: LibraryRowCommand, event: KeyboardEvent) {
+		const region = event.currentTarget;
+		const target = event.target;
+		if (!(region instanceof HTMLElement) || !(target instanceof HTMLElement)) return false;
+		const controls = [...region.querySelectorAll<HTMLInputElement>('[data-library-item-select]')];
+		const current = controls.findIndex((control) =>
+			control.closest('[data-library-item]')?.contains(target)
+		);
+		if (!controls.length || (current < 0 && target !== region)) return false;
+		if (command === 'all') {
+			selectPage();
+			return true;
+		}
+		const id = controls[current]?.dataset.libraryItemSelect;
+		if (command === 'toggle' || command === 'only' || command === 'preview') {
+			if (!id) return false;
+			if (command === 'toggle') toggleItem(id);
+			else if (command === 'only') {
+				resetRange();
+				table.setRowSelection({ [id]: true });
+			} else {
+				// Links and buttons keep their native Enter action.
+				if (event.key === 'Enter' && target !== controls[current]) return false;
+				onPreview(id, target);
+			}
+			return true;
+		}
+		const last = controls.length - 1;
+		const backwards = command === 'previous' || command === 'extendUp';
+		const next =
+			command === 'first'
+				? 0
+				: command === 'last'
+					? last
+					: current < 0
+						? backwards
+							? last
+							: 0
+						: Math.max(0, Math.min(last, current + (backwards ? -1 : 1)));
+		if (command === 'extendUp' || command === 'extendDown') {
+			const ids = controls.map((control) => control.dataset.libraryItemSelect!);
+			if (rangeEnd !== id || !id || !selected.has(id) || !ids.includes(rangeStart ?? ''))
+				rangeStart = id ?? ids[next];
+			const anchor = ids.indexOf(rangeStart!);
+			table.setRowSelection(
+				Object.fromEntries(
+					ids.slice(Math.min(anchor, next), Math.max(anchor, next) + 1).map((id) => [id, true])
+				)
+			);
+			rangeEnd = ids[next];
+		} else resetRange();
+		const control = controls[next];
+		control.focus({ preventScroll: true });
+		control.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+		// Sticky headers and mobile navigation can cover a natively scrolled focus target.
+		const bounds = control.getBoundingClientRect();
+		if (
+			document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) !==
+			control
+		)
+			control.scrollIntoView({ block: 'center', inline: 'nearest' });
+		return true;
+	}
 
 	function resizeWithKeyboard(event: KeyboardEvent, id: string) {
 		if (event.isComposing || !['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) return;
@@ -234,7 +327,7 @@
 			type="checkbox"
 			checked={table.getIsAllRowsSelected()}
 			indeterminate={table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()}
-			onchange={table.getToggleAllRowsSelectedHandler()}
+			onchange={(event) => selectPage(event.currentTarget.checked)}
 		/>
 		{$t('Select this page')}
 	</label>
@@ -317,7 +410,13 @@
 {#if showTable}
 	<!-- The scroll region needs a tab stop for native keyboard scrolling. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-	<div class="max-h-[65vh] table-wrap" tabindex="0" role="region" aria-label={$t('Library Items')}>
+	<div
+		class="max-h-[65vh] table-wrap"
+		tabindex="0"
+		role="region"
+		aria-label={$t('Library Items')}
+		{@attach rowHotkeys}
+	>
 		<!-- Column dimensions come from TanStack's constrained sizing state. -->
 		<table
 			class="table min-w-(--library-table-width) table-fixed"
@@ -418,7 +517,11 @@
 			</thead>
 			<tbody>
 				{#each table.getRowModel().rows as row (row.id)}
-					<tr class="hover:bg-surface-100-900" class:bg-primary-50-950={row.getIsSelected()}>
+					<tr
+						data-library-item={row.id}
+						class="focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-primary-500 hover:bg-surface-100-900"
+						class:bg-primary-50-950={row.getIsSelected()}
+					>
 						{#each row.getVisibleCells() as cell (cell.id)}
 							<td
 								class="px-4 align-top"
@@ -429,8 +532,10 @@
 							>
 								{#if cell.column.id === 'select'}<input
 										type="checkbox"
+										data-library-item-select={row.id}
+										aria-describedby={`library-item-title-${row.id}`}
 										checked={row.getIsSelected()}
-										onclick={row.getToggleSelectedHandler()}
+										onclick={(event) => toggleItem(row.id, event.currentTarget.checked)}
 										aria-label={row.original.authors.length
 											? $t('Select {name}', {
 													name: row.original.authors.map((author) => author.full_name).join('; ')
@@ -438,6 +543,7 @@
 											: $t('Select')}
 									/>
 								{:else if cell.column.id === 'title_html'}<a
+										id={`library-item-title-${row.id}`}
 										class="block break-words text-surface-950-50 no-underline hover:text-primary-700-300"
 										href={resolve(workspaceHref(workspaceId, `item/${row.id}`))}
 										><strong
@@ -481,17 +587,29 @@
 		</table>
 	</div>
 {:else}
-	<div class="divide-y divide-surface-300-700">
+	<!-- The region is a keyboard entry point; rows retain native checkbox and link semantics. -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<div
+		class="divide-y divide-surface-300-700"
+		tabindex="0"
+		role="region"
+		aria-label={$t('Library Items')}
+		{@attach rowHotkeys}
+	>
 		{#each table.getRowModel().rows as row (row.id)}
 			<article
-				class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 px-4"
+				data-library-item={row.id}
+				class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 px-4 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-primary-500"
+				class:bg-primary-50-950={row.getIsSelected()}
 				class:py-4={preferences.density === 'comfortable'}
 				class:py-2={preferences.density === 'compact'}
 			>
 				<input
 					type="checkbox"
+					data-library-item-select={row.id}
+					aria-describedby={`library-item-title-${row.id}`}
 					checked={row.getIsSelected()}
-					onclick={row.getToggleSelectedHandler()}
+					onclick={(event) => toggleItem(row.id, event.currentTarget.checked)}
 					aria-label={row.original.authors.length
 						? $t('Select {name}', {
 								name: row.original.authors.map((author) => author.full_name).join('; ')
@@ -499,7 +617,11 @@
 						: $t('Select')}
 				/>
 				<div class="grid min-w-0 grid-cols-1 gap-1">
-					<a class="no-underline" href={resolve(workspaceHref(workspaceId, `item/${row.id}`))}>
+					<a
+						id={`library-item-title-${row.id}`}
+						class="no-underline"
+						href={resolve(workspaceHref(workspaceId, `item/${row.id}`))}
+					>
 						<strong class="leading-relaxed font-semibold break-words"
 							><RichText html={row.original.title_html} /></strong
 						>

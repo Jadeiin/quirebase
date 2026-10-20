@@ -11,6 +11,8 @@
 	import Button from '#lib/design/Button.svelte';
 
 	let {
+		searchInput = $bindable(),
+		shortcutsEnabled,
 		query = $bindable(''),
 		tag = $bindable(''),
 		project = $bindable(''),
@@ -23,6 +25,8 @@
 		onSearch,
 		onClear
 	}: {
+		searchInput: HTMLInputElement | undefined;
+		shortcutsEnabled: boolean;
 		query: string;
 		tag: string;
 		project: string;
@@ -53,10 +57,16 @@
 		<div class="flex flex-wrap items-center gap-2">
 			<span class="ml-1 text-surface-600-400"><Icon name="search" /></span>
 			<input
+				bind:this={searchInput}
+				aria-label={$t('Library Search')}
+				aria-keyshortcuts={shortcutsEnabled ? '/' : undefined}
 				class="min-w-40 flex-1 border-0 bg-transparent px-1 py-2 text-base outline-none placeholder:text-surface-600-400"
 				bind:value={query}
 				placeholder={$t('Search title, author, Tag, or full text')}
 			/>
+			{#if shortcutsEnabled}<kbd class="hidden kbd text-xs pointer-fine:inline" aria-hidden="true"
+					>/</kbd
+				>{/if}
 			<Collapsible.Trigger class={`ml-auto ${buttonClass('tonal')}`}
 				>{$t('Filters')}</Collapsible.Trigger
 			>

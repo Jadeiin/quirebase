@@ -43,6 +43,7 @@
 
 {#if selectedCount}
 	<section
+		data-library-bulk-actions
 		class="sticky top-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary-700-300/30 bg-surface-50-950 p-3 shadow-lg"
 	>
 		<strong class="mr-2">{$t('{count} selected', { count: selectedCount })}</strong>

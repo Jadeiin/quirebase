@@ -20,6 +20,7 @@
 	let {
 		data,
 		workspaceId,
+		shortcutsEnabled,
 		filterHref,
 		isPending,
 		isError,
@@ -42,6 +43,7 @@
 	}: {
 		data?: LibrarySearch | null;
 		workspaceId: string;
+		shortcutsEnabled: boolean;
 		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
 		isPending: boolean;
 		isError: boolean;
@@ -186,6 +188,7 @@
 					items={data.items}
 					toolbar={sortControls}
 					{workspaceId}
+					{shortcutsEnabled}
 					{filterHref}
 					{selected}
 					{onSelectionChange}

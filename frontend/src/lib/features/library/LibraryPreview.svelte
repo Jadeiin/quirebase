@@ -33,21 +33,12 @@
 		// Loading content can move the preview through browser scroll anchoring.
 		if (document.activeElement === heading) heading.scrollIntoView({ block: 'nearest' });
 	});
-	function keydown(event: KeyboardEvent) {
-		if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
-		event.preventDefault();
-		event.stopPropagation();
-		onClose();
-	}
 </script>
 
-<!-- The preview is a nonmodal region; keyboard handling is limited to its own descendants. -->
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <aside
 	id="library-preview"
 	aria-labelledby="library-preview-heading"
 	class="min-w-0 max-xl:order-first xl:sticky xl:top-4"
-	onkeydown={keydown}
 >
 	<Panel padding="none">
 		<header
@@ -73,6 +64,7 @@
 					variant="icon"
 					size="sm"
 					aria-label={$t('Close preview')}
+					aria-keyshortcuts="Escape"
 					title={$t('Close preview')}
 					onclick={onClose}><Icon name="close" size={16} /></Button
 				>

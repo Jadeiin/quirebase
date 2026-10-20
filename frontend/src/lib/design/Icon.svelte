@@ -38,6 +38,10 @@
 		<rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 11h18" />
 	{:else if name === 'search'}
 		<circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
+	{:else if name === 'keyboard'}
+		<rect x="2" y="5" width="20" height="14" rx="2" /><path
+			d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 15h10"
+		/>
 	{:else if name === 'projects'}
 		<path d="M3 7h7l2 2h9v10H3Z" /><path d="M3 7V5h7l2 2" />
 	{:else if name === 'settings'}

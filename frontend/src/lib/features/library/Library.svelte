@@ -17,6 +17,7 @@
 	import BulkActions from '#lib/features/library/BulkActions.svelte';
 	import LibraryFilters from '#lib/features/library/LibraryFilters.svelte';
 	import LibraryResults from '#lib/features/library/LibraryResults.svelte';
+	import LibraryShortcuts from './LibraryShortcuts.svelte';
 	import {
 		libraryBulkMutationOptions,
 		type LibraryBulkAction,
@@ -68,6 +69,8 @@
 	let author = $state(page.url.searchParams.get('author') ?? '');
 	let fileFilter = $state(page.url.searchParams.get('has_files') ?? '');
 	let filtersOpen = $state(false);
+	let shortcutsEnabled = $state(true);
+	let searchInput = $state<HTMLInputElement>();
 	let selected = new SvelteSet<string>();
 	let selectionVersion = 0;
 	let bulkAction = $state('');
@@ -206,6 +209,18 @@
 		selected.clear();
 	}
 
+	function escape() {
+		if (previewItemId) {
+			preview('');
+			return true;
+		}
+		if (!selected.size) return false;
+		const focusWillDisappear = document.activeElement?.closest('[data-library-bulk-actions]');
+		clearSelection();
+		if (focusWillDisappear) document.getElementById('library-results')?.focus();
+		return true;
+	}
+
 	function requestBulkAction() {
 		if (!bulkAction || selected.size === 0 || bulkMutation.isPending) return;
 		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
@@ -264,15 +279,24 @@
 			{$t('Search, select, organize, and export your scholarly Items.')}
 		</p>
 	</div>
-	{#if library.data}<span
-			class="hidden rounded-full border border-surface-300-700 bg-surface-50-950 px-3 py-1.5 text-xs font-semibold text-surface-600-400 sm:inline"
-			>{$t('{count, plural, one {# Item} other {# Items}}', {
-				count: library.data.total
-			})}</span
-		>{/if}
+	<div class="flex shrink-0 items-center gap-2">
+		{#if library.data}<span
+				class="hidden rounded-full border border-surface-300-700 bg-surface-50-950 px-3 py-1.5 text-xs font-semibold text-surface-600-400 sm:inline"
+				>{$t('{count, plural, one {# Item} other {# Items}}', {
+					count: library.data.total
+				})}</span
+			>{/if}
+		<LibraryShortcuts
+			bind:enabled={shortcutsEnabled}
+			onSearch={() => searchInput?.focus()}
+			onEscape={escape}
+		/>
+	</div>
 </div>
 
 <LibraryFilters
+	bind:searchInput
+	{shortcutsEnabled}
 	bind:query
 	bind:tag
 	bind:project
@@ -319,6 +343,7 @@
 
 <LibraryResults
 	{workspaceId}
+	{shortcutsEnabled}
 	filterHref={(filter) =>
 		libraryHref(workspaceId, refineLibraryFilters(submitted, filter), 1, pageSize, previewItemId)}
 	data={library.data}

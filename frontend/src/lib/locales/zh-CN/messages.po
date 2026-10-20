@@ -710,6 +710,11 @@ msgid "Available"
 msgstr "可用日期"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Available in the Library when you are not typing in a field."
+msgstr "在文献库中且未在输入框内输入时可用。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Award number"
 msgstr "资助编号"
@@ -1131,6 +1136,11 @@ msgstr "客户端连接指南"
 #: src/lib/design/PopoverCloseButton.svelte
 msgid "Close"
 msgstr "关闭"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Close a popup or preview, then clear selection"
+msgstr "依次关闭弹窗或预览、清除选择"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
@@ -1909,6 +1919,11 @@ msgid "Ellipse"
 msgstr "椭圆"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Enable letter and symbol shortcuts"
+msgstr "启用字母和符号快捷键"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Enable user"
 msgstr "启用用户"
@@ -1948,6 +1963,11 @@ msgstr "条目"
 #: src/lib/domain-labels.ts
 msgid "Error"
 msgstr "错误"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Esc"
+msgstr "Esc"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -2045,6 +2065,16 @@ msgid "Export settings"
 msgstr "导出设置"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Extend selection down"
+msgstr "向下扩展选择"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Extend selection up"
+msgstr "向上扩展选择"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "External links"
 msgstr "外部链接"
@@ -2127,10 +2157,25 @@ msgid "Find the people in this workspace and view their roles."
 msgstr "查找此工作区中的成员并查看其角色。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "First Item on this page"
+msgstr "本页首个条目"
+
+#. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "First page"
 msgstr "第一页"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Focus an Item checkbox to browse and select. Selection stays on the current page. Enter on a title opens the Item."
+msgstr "聚焦条目的复选框即可浏览和选择，选择范围限于当前页。在标题上按 Enter 打开条目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Focus Library Search"
+msgstr "聚焦文献库搜索"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2738,6 +2783,16 @@ msgid "Key"
 msgstr "键"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Keyboard shortcuts"
+msgstr "键盘快捷键"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Keyboard shortcuts (?)"
+msgstr "键盘快捷键 (?)"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Keyword"
@@ -2756,6 +2811,11 @@ msgstr "关键词"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Language"
 msgstr "语言"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Last Item on this page"
+msgstr "本页最后一个条目"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -2835,6 +2895,16 @@ msgstr "文献库顺序"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Library pages"
 msgstr "文献库分页"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Library results"
+msgstr "文献库结果"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Library Search"
+msgstr "文献库搜索"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -3378,6 +3448,11 @@ msgstr "最新在前"
 #: src/lib/design/DateField.svelte
 msgid "Next calendar period"
 msgstr "下一时段"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Next Item"
+msgstr "下一个条目"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -4108,6 +4183,11 @@ msgid "Preview Citation Key"
 msgstr "引用键预览"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Preview current Item"
+msgstr "预览当前条目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Preview Item"
 msgstr "预览文献"
@@ -4126,6 +4206,11 @@ msgstr "预览元数据"
 #: src/lib/design/DateField.svelte
 msgid "Previous calendar period"
 msgstr "上一时段"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Previous Item"
+msgstr "上一个条目"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -5002,6 +5087,16 @@ msgid "Select a Tag"
 msgstr "选择标签"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Select only current Item"
+msgstr "仅选择当前条目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Select or unselect current Item"
+msgstr "选择或取消选择当前条目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Select Project"
 msgstr "选择项目"
@@ -5013,6 +5108,7 @@ msgstr "选择标签"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
+#: src/lib/features/library/shortcuts.ts
 msgid "Select this page"
 msgstr "选择本页"
 
@@ -5073,6 +5169,11 @@ msgstr "共享标识符"
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "显示全部字段"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Show keyboard shortcuts"
+msgstr "显示快捷键"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte

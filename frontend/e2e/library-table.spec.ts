@@ -71,6 +71,442 @@ async function mockLibrary(page: Page, rows = items) {
 }
 
 for (const view of ['table', 'list'] as const) {
+	test(`${view} row shortcuts browse, select and preview without changing search drafts`, async ({
+		page
+	}) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		const { reads } = await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library?q=committed');
+		const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+		await search.fill('unsubmitted draft');
+		const count = reads.length;
+		const region = page.getByRole('region', { name: 'Library Items', exact: true });
+		const first = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+		const second = page.getByRole('checkbox', { name: 'Select Author 2', exact: true });
+		await region.press('ArrowDown');
+		await expect(first).toBeFocused();
+		await expect(first).not.toBeChecked();
+		await first.press('j');
+		await expect(second).toBeFocused();
+		await expect(second).not.toBeChecked();
+		await second.press('x');
+		await expect(second).toBeChecked();
+		await second.press('k');
+		await expect(first).toBeFocused();
+		await first.press('x');
+		await expect(first).toBeChecked();
+		await expect(second).toBeChecked();
+		await first.press('Shift+X');
+		await expect(first).toBeChecked();
+		await expect(second).not.toBeChecked();
+		await first.press('i');
+		const preview = page.getByRole('complementary', { name: 'Item preview' });
+		await expect(preview.getByRole('heading', { name: 'Item preview', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(preview).toHaveCount(0);
+		await expect(first).toBeFocused();
+		await first.press('Enter');
+		await expect(preview.getByRole('heading', { name: 'Item preview', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(first).toBeFocused();
+		await first.press('End');
+		const last = page.getByRole('checkbox', { name: 'Select Author 25', exact: true });
+		await expect(last).toBeFocused();
+		await last.press('ArrowDown');
+		await expect(last).toBeFocused();
+		await expect(page).not.toHaveURL(/page=/);
+		await last.press('Home');
+		await expect(first).toBeFocused();
+		expect(
+			await first.evaluate((control) => {
+				const bounds = control.getBoundingClientRect();
+				return (
+					document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) ===
+					control
+				);
+			})
+		).toBe(true);
+		await expect(search).toHaveValue('unsubmitted draft');
+		await expect(first).toBeChecked();
+		expect(reads).toHaveLength(count);
+		await page.screenshot({ path: `/tmp/quirebase-library-row-focus-${view}.png` });
+		await page.getByRole('link', { name: 'Research Item 2', exact: true }).press('Enter');
+		await expect(page).toHaveURL(/\/item\/item-2$/);
+	});
+
+	test(`${view} range selection grows, shrinks and resets after clearing or toggling`, async ({
+		page
+	}) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library');
+		const first = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+		const second = page.getByRole('checkbox', { name: 'Select Author 2', exact: true });
+		const third = page.getByRole('checkbox', { name: 'Select', exact: true });
+		await first.press('Shift+ArrowDown');
+		await expect(second).toBeFocused();
+		await expect(first).toBeChecked();
+		await expect(second).toBeChecked();
+		await second.press('Shift+ArrowDown');
+		await expect(third).toBeFocused();
+		await expect(third).toBeChecked();
+		await third.press('Shift+ArrowUp');
+		await expect(second).toBeFocused();
+		await expect(third).not.toBeChecked();
+		await second.press('Shift+ArrowUp');
+		await expect(first).toBeFocused();
+		await expect(first).toBeChecked();
+		await expect(second).not.toBeChecked();
+		await first.press('ArrowDown');
+		await second.press('Shift+ArrowDown');
+		await expect(first).not.toBeChecked();
+		await expect(second).toBeChecked();
+		await expect(third).toBeChecked();
+		await third.press('Escape');
+		await expect(second).not.toBeChecked();
+		await expect(third).not.toBeChecked();
+		await third.press('Shift+ArrowUp');
+		await expect(second).toBeFocused();
+		await expect(second).toBeChecked();
+		await expect(third).toBeChecked();
+		await second.press('x');
+		await second.press('Shift+ArrowUp');
+		await expect(first).toBeChecked();
+		await expect(second).toBeChecked();
+		await expect(third).not.toBeChecked();
+		await first.press('Shift+X');
+		await page.keyboard.down('x');
+		await expect(first).not.toBeChecked();
+		await page.keyboard.down('x');
+		await expect(first).not.toBeChecked();
+		await page.keyboard.up('x');
+		await page.keyboard.down('j');
+		await page.keyboard.down('j');
+		await page.keyboard.up('j');
+		await expect(third).toBeFocused();
+	});
+
+	test(`${view} keyboard search and help preserve drafts, focus and selection`, async ({
+		page
+	}) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		const { reads } = await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library?q=committed');
+		const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+		const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+		await row.check();
+		const count = reads.length;
+		await row.press('/');
+		await expect(search).toBeFocused();
+		await expect(search).toHaveValue('committed');
+		await search.fill('draft');
+		await search.press('/');
+		await search.press('?');
+		await expect(search).toHaveValue('draft/?');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await row.focus();
+		await row.press('?');
+		const help = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true });
+		await expect(help).toBeVisible();
+		await page.keyboard.press('/');
+		await expect(help.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+		const accessibility = await new AxeBuilder({ page })
+			.include('[role="dialog"]')
+			.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+			.analyze();
+		expect(
+			accessibility.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
+		).toEqual([]);
+		await page.screenshot({ path: `/tmp/quirebase-library-shortcuts-${view}.png` });
+		await page.keyboard.press('Escape');
+		await expect(help).toHaveCount(0);
+		await expect(row).toBeFocused();
+		await expect(row).toBeChecked();
+		await expect(search).toHaveValue('draft/?');
+		expect(reads).toHaveLength(count);
+		await expect(page).toHaveURL(/q=committed$/);
+	});
+
+	test(`${view} Escape dismisses one layer at a time and restores result focus`, async ({
+		page
+	}) => {
+		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
+		await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library');
+		const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+		await row.check();
+		const trigger = page.getByRole('button', { name: 'Preview Item 1', exact: true });
+		await trigger.click();
+		const preview = page.getByRole('complementary', { name: 'Item preview' });
+		await expect(preview.getByRole('heading', { name: 'Item preview', exact: true })).toBeFocused();
+		await page.getByRole('button', { name: 'Keyboard shortcuts', exact: true }).click();
+		await expect(
+			page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true })
+		).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(preview).toBeVisible();
+		await expect(row).toBeChecked();
+		const display = page.getByRole('button', { name: 'Display options', exact: true });
+		await display.click();
+		await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(display).toBeFocused();
+		await expect(preview).toBeVisible();
+		await expect(row).toBeChecked();
+		await page.keyboard.press('Escape');
+		await expect(preview).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		await expect(row).toBeChecked();
+		const bulk = page.getByRole('combobox', { name: 'Bulk action', exact: true });
+		await bulk.selectOption('delete');
+		const apply = page.getByRole('button', { name: 'Apply', exact: true });
+		await apply.click();
+		await expect(
+			page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true })
+		).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(row).toBeChecked();
+		await expect(apply).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(row).not.toBeChecked();
+		await expect(page.locator('#library-results')).toBeFocused();
+	});
+}
+
+test('single-key shortcuts can be disabled, persist per user and remain reachable by button', async ({
+	page
+}) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const button = page.getByRole('button', { name: 'Keyboard shortcuts', exact: true });
+	const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+	const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+	const enabled = page.getByRole('checkbox', {
+		name: 'Enable letter and symbol shortcuts',
+		exact: true
+	});
+	const glyph = button.locator('svg');
+	await expect(glyph).toBeVisible();
+	await expect.poll(() => glyph.evaluate((icon) => icon.childElementCount)).toBeGreaterThan(0);
+	await button.click();
+	await enabled.uncheck();
+	await page.keyboard.press('Escape');
+	await expect(search).not.toHaveAttribute('aria-keyshortcuts');
+	await page.reload();
+	await row.check();
+	await row.press('/');
+	await row.press('?');
+	for (const key of ['j', 'k', 'x', 'Shift+X', 'i']) await row.press(key);
+	await expect(row).toBeFocused();
+	await expect(row).toBeChecked();
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await row.press('ArrowDown');
+	await expect(page.getByRole('checkbox', { name: 'Select Author 2', exact: true })).toBeFocused();
+	await row.press('Escape');
+	await expect(row).not.toBeChecked();
+	await button.click();
+	await expect(enabled).not.toBeChecked();
+	await enabled.check();
+	await page.keyboard.press('Escape');
+	await row.press('/');
+	await expect(search).toBeFocused();
+	await button.click();
+	await enabled.uncheck();
+	await page.keyboard.press('Escape');
+	await page.route('**/api/v1/session', (route) =>
+		route.fulfill({
+			json: {
+				authenticated: true,
+				user: { id: 'user-2', username: 'another', role: 'member' }
+			}
+		})
+	);
+	await page.reload();
+	await row.press('/');
+	await expect(search).toBeFocused();
+});
+
+test('Library shortcuts respect editing, IME, modifiers and consumed events', async ({ page }) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library?preview=item-1');
+	const preview = page.getByRole('complementary', { name: 'Item preview' });
+	await expect(preview.getByRole('heading', { name: 'Item preview', exact: true })).toBeFocused();
+	const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+	await row.check();
+	const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+	await search.fill('unsubmitted draft');
+	await search.press('Escape');
+	await expect(search).toBeFocused();
+	await expect(search).toHaveValue('unsubmitted draft');
+	await expect(preview).toBeVisible();
+	await expect(row).toBeChecked();
+	await row.focus();
+	for (const properties of [
+		{ key: '/', isComposing: true },
+		{ key: '?', keyCode: 229 },
+		{ key: '/', ctrlKey: true },
+		{ key: '?', metaKey: true },
+		{ key: '/', altKey: true },
+		{ key: 'Escape', repeat: true },
+		{ key: 'Escape', isComposing: true },
+		{ key: 'j', isComposing: true },
+		{ key: 'x', keyCode: 229 },
+		{ key: 'x', ctrlKey: true }
+	]) {
+		await row.dispatchEvent('keydown', properties);
+		await expect(row).toBeFocused();
+		await expect(preview).toBeVisible();
+		await expect(row).toBeChecked();
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+	}
+	for (const key of ['x', 'Escape']) {
+		await row.evaluate((element) => {
+			element.addEventListener('keydown', (event) => event.preventDefault(), { once: true });
+		});
+		await row.press(key);
+		await expect(preview).toBeVisible();
+		await expect(row).toBeChecked();
+	}
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	const project = page.getByRole('combobox', { name: 'Project', exact: true });
+	await project.click();
+	await project.press('Escape');
+	await expect(preview).toBeVisible();
+	await expect(row).toBeChecked();
+	await page.getByRole('button', { name: 'Choose date for Year', exact: true }).click();
+	await page.keyboard.press('Escape');
+	await expect(preview).toBeVisible();
+	await expect(row).toBeChecked();
+});
+
+for (const [platform, modifier] of [
+	['MacIntel', 'Meta'],
+	['Win32', 'Control']
+] as const) {
+	test(`${platform} select-all stays in Library results and help shows the platform binding`, async ({
+		page
+	}) => {
+		await page.addInitScript((platform) => {
+			Object.defineProperty(navigator, 'platform', { get: () => platform });
+			Object.defineProperty(navigator, 'userAgent', { get: () => platform });
+		}, platform);
+		await mockLibrary(page);
+		await page.goto('/workspace/workspace-1/library');
+		const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+		await search.fill('typing a draft');
+		// Navigator overrides exercise app mappings; native text editing still uses the host OS.
+		await search.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+a`);
+		expect(
+			await search.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])
+		).toEqual([0, 14]);
+		await expect(page.getByRole('checkbox', { name: 'Select this page' })).not.toBeChecked();
+		const first = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+		await first.press(`${modifier}+a`);
+		await expect(page.getByRole('checkbox', { name: 'Select this page' })).toBeChecked();
+		await expect(page.getByText('25 selected', { exact: true })).toBeVisible();
+		await first.press('?');
+		const help = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true });
+		await expect(
+			help.locator('kbd').filter({ hasText: modifier === 'Meta' ? '⌘' : 'Ctrl' })
+		).toHaveText(modifier === 'Meta' ? '⌘ A' : 'Ctrl+A');
+		await expect(help.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(first).toBeFocused();
+		for (const key of ['j', 'x', 'ArrowDown']) {
+			const untouched = await page.locator('body').evaluate((element, key) => {
+				const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+				element.dispatchEvent(event);
+				return !event.defaultPrevented;
+			}, key);
+			expect(untouched).toBe(true);
+		}
+		await expect(first).toBeFocused();
+		await expect(first).toBeChecked();
+	});
+}
+
+test('holding Escape never dismisses the next Library layer', async ({ page }) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+	await row.check();
+	const trigger = page.getByRole('button', { name: 'Preview Item 1', exact: true });
+	await trigger.click();
+	const preview = page.getByRole('complementary', { name: 'Item preview' });
+	await expect(preview.getByRole('heading', { name: 'Item preview', exact: true })).toBeFocused();
+	await page.keyboard.press('?');
+	const help = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true });
+	await expect(help.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+	await page.keyboard.down('Escape');
+	await expect(help).toHaveCount(0);
+	await page.keyboard.down('Escape');
+	await expect(preview).toBeVisible();
+	await expect(row).toBeChecked();
+	await page.keyboard.up('Escape');
+	await page.keyboard.down('Escape');
+	await expect(preview).toHaveCount(0);
+	await expect(trigger).toBeFocused();
+	await page.keyboard.down('Escape');
+	await expect(row).toBeChecked();
+	await page.keyboard.up('Escape');
+	await page.keyboard.press('Escape');
+	await expect(row).not.toBeChecked();
+});
+
+test('Library shortcuts recover when a key release happens outside the page', async ({ page }) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+	const search = page.getByRole('textbox', { name: 'Library Search', exact: true });
+	// Model a press whose keyup never reaches this page, e.g. when switching windows.
+	await row.dispatchEvent('keydown', { key: '/', code: 'Slash' });
+	await expect(search).toBeFocused();
+	await row.press('/');
+	await expect(search).toBeFocused();
+});
+
+test('Library hotkeys release their bindings on navigation and work again on return', async ({
+	page
+}) => {
+	await mockLibrary(page);
+	await page.goto('/workspace/workspace-1/library');
+	const row = page.getByRole('checkbox', { name: 'Select Author 1', exact: true });
+	await row.press('/');
+	await expect(page.getByRole('textbox', { name: 'Library Search', exact: true })).toBeFocused();
+	await page
+		.getByRole('navigation', { name: 'Main navigation', exact: true })
+		.getByRole('link', { name: 'Projects', exact: true })
+		.click();
+	await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+	for (const key of ['/', '?', 'Escape', 'j', 'x', 'ArrowDown']) {
+		const untouched = await page.locator('body').evaluate((element, key) => {
+			const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+			element.dispatchEvent(event);
+			element.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+			return !event.defaultPrevented;
+		}, key);
+		expect(untouched).toBe(true);
+	}
+	await page.goBack();
+	await row.press('j');
+	const next = page.getByRole('checkbox', { name: 'Select Author 2', exact: true });
+	await expect(next).toBeFocused();
+	await next.press('k');
+	await expect(row).toBeFocused();
+	await row.press('/');
+	await expect(page.getByRole('textbox', { name: 'Library Search', exact: true })).toBeFocused();
+	await row.press('?');
+	const help = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true });
+	await expect(help.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(help).toHaveCount(0);
+	await expect(row).toBeFocused();
+});
+
+for (const view of ['table', 'list'] as const) {
 	test(`${view} sorting shares URL state, resets paging and preserves filters and preview`, async ({
 		page
 	}) => {

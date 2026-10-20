@@ -710,6 +710,11 @@ msgid "Available"
 msgstr "Available"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Available in the Library when you are not typing in a field."
+msgstr "Available in the Library when you are not typing in a field."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Award number"
 msgstr "Award number"
@@ -1131,6 +1136,11 @@ msgstr "Client connection guide"
 #: src/lib/design/PopoverCloseButton.svelte
 msgid "Close"
 msgstr "Close"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Close a popup or preview, then clear selection"
+msgstr "Close a popup or preview, then clear selection"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
@@ -1909,6 +1919,11 @@ msgid "Ellipse"
 msgstr "Ellipse"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Enable letter and symbol shortcuts"
+msgstr "Enable letter and symbol shortcuts"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Enable user"
 msgstr "Enable user"
@@ -1948,6 +1963,11 @@ msgstr "Entry"
 #: src/lib/domain-labels.ts
 msgid "Error"
 msgstr "Error"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Esc"
+msgstr "Esc"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -2045,6 +2065,16 @@ msgid "Export settings"
 msgstr "Export settings"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Extend selection down"
+msgstr "Extend selection down"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Extend selection up"
+msgstr "Extend selection up"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "External links"
 msgstr "External links"
@@ -2127,10 +2157,25 @@ msgid "Find the people in this workspace and view their roles."
 msgstr "Find the people in this workspace and view their roles."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "First Item on this page"
+msgstr "First Item on this page"
+
+#. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "First page"
 msgstr "First page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Focus an Item checkbox to browse and select. Selection stays on the current page. Enter on a title opens the Item."
+msgstr "Focus an Item checkbox to browse and select. Selection stays on the current page. Enter on a title opens the Item."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Focus Library Search"
+msgstr "Focus Library Search"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2738,6 +2783,16 @@ msgid "Key"
 msgstr "Key"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Keyboard shortcuts"
+msgstr "Keyboard shortcuts"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Keyboard shortcuts (?)"
+msgstr "Keyboard shortcuts (?)"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Keyword"
@@ -2756,6 +2811,11 @@ msgstr "Keywords"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Language"
 msgstr "Language"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Last Item on this page"
+msgstr "Last Item on this page"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -2835,6 +2895,16 @@ msgstr "Library order"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Library pages"
 msgstr "Library pages"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Library results"
+msgstr "Library results"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Library Search"
+msgstr "Library Search"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -3378,6 +3448,11 @@ msgstr "Newest first"
 #: src/lib/design/DateField.svelte
 msgid "Next calendar period"
 msgstr "Next calendar period"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Next Item"
+msgstr "Next Item"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -4108,6 +4183,11 @@ msgid "Preview Citation Key"
 msgstr "Preview Citation Key"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Preview current Item"
+msgstr "Preview current Item"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Preview Item"
 msgstr "Preview Item"
@@ -4126,6 +4206,11 @@ msgstr "Preview metadata"
 #: src/lib/design/DateField.svelte
 msgid "Previous calendar period"
 msgstr "Previous calendar period"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Previous Item"
+msgstr "Previous Item"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -5002,6 +5087,16 @@ msgid "Select a Tag"
 msgstr "Select a Tag"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Select only current Item"
+msgstr "Select only current Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Select or unselect current Item"
+msgstr "Select or unselect current Item"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/BulkActions.svelte
 msgid "Select Project"
 msgstr "Select Project"
@@ -5013,6 +5108,7 @@ msgstr "Select Tag"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
+#: src/lib/features/library/shortcuts.ts
 msgid "Select this page"
 msgstr "Select this page"
 
@@ -5073,6 +5169,11 @@ msgstr "Shared identifier"
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "Show all fields"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Show keyboard shortcuts"
+msgstr "Show keyboard shortcuts"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
