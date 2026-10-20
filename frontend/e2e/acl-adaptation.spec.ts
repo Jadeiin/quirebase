@@ -164,17 +164,17 @@ for (const [role, allowedActions, visible] of [
 	[
 		'editor',
 		['workspace.read', 'workspace.export', 'project_item.manage', 'tag.use'],
-		['add_project', 'add_tag', 'bibliography', 'documents']
+		['add_project', 'add_tag', 'remove_tag', 'bibliography', 'documents']
 	],
 	[
 		'admin',
 		['workspace.read', 'workspace.export', 'project_item.manage', 'tag.use', 'item.delete'],
-		['add_project', 'add_tag', 'bibliography', 'documents', 'delete']
+		['add_project', 'add_tag', 'remove_tag', 'bibliography', 'documents', 'delete']
 	],
 	[
 		'owner',
 		['workspace.read', 'workspace.export', 'project_item.manage', 'tag.use', 'item.delete'],
-		['add_project', 'add_tag', 'bibliography', 'documents', 'delete']
+		['add_project', 'add_tag', 'remove_tag', 'bibliography', 'documents', 'delete']
 	]
 ] as const) {
 	test(`${role} sees only permitted Library bulk actions`, async ({ page }) => {

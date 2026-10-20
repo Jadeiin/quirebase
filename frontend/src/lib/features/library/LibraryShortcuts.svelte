@@ -7,7 +7,7 @@
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { getSession } from '#lib/session.js';
 	import { t } from '#lib/i18n.js';
-	import { libraryRowCommands, runLibraryShortcut } from './shortcuts.js';
+	import { libraryPreviewCommands, libraryRowCommands, runLibraryShortcut } from './shortcuts.js';
 
 	let {
 		enabled = $bindable(true),
@@ -128,6 +128,22 @@
 								{/each}
 							</dd>
 						{/if}
+					{/each}
+				</dl>
+				<h3 class="text-sm font-semibold">{$t('Item preview')}</h3>
+				<p class="mt-2 text-sm text-surface-600-400">
+					{$t(
+						'Focus the preview to browse the current results, including the next or previous page.'
+					)}
+				</p>
+				<dl class="my-5 grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 text-sm">
+					{#each libraryPreviewCommands as command (command.id)}
+						<dt>{$t(command.label)}</dt>
+						<dd class="flex justify-end gap-1.5">
+							{#each command.keys.filter((binding) => enabled || !binding.character) as binding (binding.hotkey)}
+								<kbd class="kbd">{formatForDisplay(binding.hotkey)}</kbd>
+							{/each}
+						</dd>
 					{/each}
 				</dl>
 				<label class="flex items-center gap-2 border-t border-surface-300-700 pt-4 text-sm">

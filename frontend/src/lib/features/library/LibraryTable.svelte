@@ -20,7 +20,7 @@
 	import RichText from '#lib/design/RichText.svelte';
 	import { getSession } from '#lib/session.js';
 	import { t } from '#lib/i18n.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
+	import type { WorkspacePath } from '#lib/workspaces/href.js';
 	import type { LibrarySearch } from './queries';
 	import { libraryRowCommands, runLibraryShortcut, type LibraryRowCommand } from './shortcuts.js';
 	import {
@@ -40,7 +40,6 @@
 	let {
 		items,
 		toolbar,
-		workspaceId,
 		listingIdentity,
 		shortcutsEnabled,
 		filterHref,
@@ -48,6 +47,7 @@
 		onSelectionChange,
 		onPreview,
 		previewItemId,
+		itemHref,
 		sort,
 		direction,
 		onSort,
@@ -55,7 +55,6 @@
 	}: {
 		items: LibrarySearch['items'];
 		toolbar: Snippet;
-		workspaceId: string;
 		listingIdentity: string;
 		shortcutsEnabled: boolean;
 		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
@@ -63,6 +62,7 @@
 		onSelectionChange: (ids: string[]) => void;
 		onPreview: (id: string, trigger: HTMLElement) => void;
 		previewItemId: string;
+		itemHref: (id: string, suffix?: string) => WorkspacePath;
 		sort: LibrarySort;
 		direction: LibrarySortDirection;
 		onSort: (sort: LibrarySort, direction: LibrarySortDirection) => void;
@@ -557,6 +557,7 @@
 							>
 								{#if cell.column.id === 'select'}<input
 										type="checkbox"
+										id={`library-item-${row.id}`}
 										data-library-item-select={row.id}
 										aria-describedby={`library-item-title-${row.id}`}
 										checked={row.getIsSelected()}
@@ -571,7 +572,7 @@
 								{:else if cell.column.id === 'title_html'}<a
 										id={`library-item-title-${row.id}`}
 										class="block break-words text-surface-950-50 no-underline hover:text-primary-700-300"
-										href={resolve(workspaceHref(workspaceId, `item/${row.id}`))}
+										href={resolve(itemHref(row.id))}
 										><strong
 											class="leading-relaxed font-semibold"
 											class:line-clamp-2={preferences.density === 'compact'}
@@ -632,6 +633,7 @@
 			>
 				<input
 					type="checkbox"
+					id={`library-item-${row.id}`}
 					data-library-item-select={row.id}
 					aria-describedby={`library-item-title-${row.id}`}
 					checked={row.getIsSelected()}
@@ -647,7 +649,7 @@
 					<a
 						id={`library-item-title-${row.id}`}
 						class="no-underline"
-						href={resolve(workspaceHref(workspaceId, `item/${row.id}`))}
+						href={resolve(itemHref(row.id))}
 					>
 						<strong class="leading-relaxed font-semibold break-words"
 							><RichText html={row.original.title_html} /></strong

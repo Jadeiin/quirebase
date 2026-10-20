@@ -15,8 +15,10 @@
 		bulkAction = $bindable(''),
 		bulkProject = $bindable(''),
 		bulkTag = $bindable(''),
+		bulkTagId = $bindable(''),
 		exportFormat = $bindable('bibtex'),
 		projects = [],
+		currentProject = null,
 		busy,
 		onApply,
 		onClearSelection
@@ -26,8 +28,10 @@
 		bulkAction: string;
 		bulkProject: string;
 		bulkTag: string;
+		bulkTagId?: string;
 		exportFormat: string;
 		projects: LibraryProject[];
+		currentProject?: { id: string; name: string } | null;
 		busy: boolean;
 		onApply: () => void;
 		onClearSelection: () => void;
@@ -37,7 +41,7 @@
 		projects.filter((project: LibraryProject) => can(project.authorization, 'project_item.manage'))
 	);
 	const needsConfiguration = $derived(
-		['add_project', 'add_tag', 'bibliography'].includes(bulkAction)
+		['add_project', 'add_tag', 'remove_tag', 'remove_project', 'bibliography'].includes(bulkAction)
 	);
 	const validationMessage = $derived(
 		!bulkAction
@@ -48,7 +52,11 @@
 					? $t('Choose a Project to continue.')
 					: bulkAction === 'add_tag' && !bulkTag.trim()
 						? $t('Choose or enter a Tag to continue.')
-						: ''
+						: bulkAction === 'remove_tag' && !bulkTagId
+							? $t('Choose a Tag to continue.')
+							: bulkAction === 'remove_project' && !currentProject
+								? $t('Select a Project filter to remove Items from it.')
+								: ''
 	);
 	$effect(() => {
 		if (bulkProject && !assignableProjects.some((project) => project.id === bulkProject)) {
@@ -91,6 +99,12 @@
 				{#if canRunBulkAction(workspace.can, 'add_tag')}<option value="add_tag"
 						>{$t('Add Tag')}</option
 					>{/if}
+				{#if currentProject && canRunBulkAction(workspace.can, 'remove_project')}<option
+						value="remove_project">{$t('Remove from current Project')}</option
+					>{/if}
+				{#if canRunBulkAction(workspace.can, 'remove_tag')}<option value="remove_tag"
+						>{$t('Remove Tag')}</option
+					>{/if}
 				{#if canRunBulkAction(workspace.can, 'bibliography')}<option value="bibliography"
 						>{$t('Export bibliography')}</option
 					>{/if}
@@ -125,6 +139,20 @@
 					disabled={busy}
 					bind:value={bulkTag}
 				/>{/if}
+			{#if bulkAction === 'remove_tag'}<TagSelect
+					class="w-full min-w-0 sm:w-56"
+					label={$t('Select Tag')}
+					emptyLabel={$t('Select Tag')}
+					hideLabel
+					valueBy="id"
+					disabled={busy}
+					bind:value={bulkTagId}
+				/>{/if}
+			{#if bulkAction === 'remove_project' && currentProject}
+				<span class="min-w-0 truncate text-sm font-semibold sm:max-w-56" title={currentProject.name}
+					>{currentProject.name}</span
+				>
+			{/if}
 			{#if bulkAction === 'bibliography'}<select
 					class="select h-8 w-full min-w-0 sm:w-auto sm:min-w-36"
 					aria-label={$t('Format')}

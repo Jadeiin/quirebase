@@ -5,7 +5,9 @@ export type CanResourceAction = (action: AuthorizationAction) => boolean;
 
 const bulkResourceActions: Record<LibraryBulkAction, AuthorizationAction> = {
 	add_project: 'project_item.manage',
+	remove_project: 'project_item.manage',
 	add_tag: 'tag.use',
+	remove_tag: 'tag.use',
 	bibliography: 'workspace.export',
 	documents: 'workspace.export',
 	delete: 'item.delete'

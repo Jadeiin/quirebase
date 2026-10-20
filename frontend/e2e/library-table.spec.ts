@@ -301,7 +301,10 @@ for (const view of ['table', 'list'] as const) {
 		expect(reads).toHaveLength(count);
 		await page.screenshot({ path: `/tmp/quirebase-library-row-focus-${view}.png` });
 		await page.getByRole('link', { name: 'Research Item 2', exact: true }).press('Enter');
-		await expect(page).toHaveURL(/\/item\/item-2$/);
+		await expect(page).toHaveURL(/\/item\/item-2\?/);
+		expect(new URL(page.url()).searchParams.get('return_to')).toBe(
+			'workspace/workspace-1/library?q=committed#library-item-item-2'
+		);
 	});
 
 	test(`${view} range selection grows, shrinks and resets after clearing or toggling`, async ({
@@ -872,10 +875,16 @@ for (const view of ['table', 'list'] as const) {
 		expect(parameters.get('preview')).toBe('item-99');
 		expect(previews).toEqual(['item-99']);
 		await expect(row().locator('a a')).toHaveCount(0);
-		await expect(row().getByRole('link').first()).toHaveAttribute(
-			'href',
-			'/workspace/workspace-1/item/item-1'
+		const details = new URL(
+			(await row().getByRole('link').first().getAttribute('href'))!,
+			page.url()
 		);
+		expect(details.pathname).toBe('/workspace/workspace-1/item/item-1');
+		const returnTo = new URL(details.searchParams.get('return_to')!, page.url());
+		expect(returnTo.searchParams.get('preview')).toBe('item-99');
+		expect(returnTo.searchParams.get('author_last_name')).toBe('Council; & 一');
+		expect(returnTo.searchParams.get('year')).toBe('2026');
+		expect(returnTo.hash).toBe('#library-item-item-1');
 	});
 }
 
@@ -1143,7 +1152,12 @@ test('table keeps native links, partial dates and independent keyboard selection
 	const title = table.getByRole('link').first();
 	await title.focus();
 	await expect(first).toBeChecked();
-	await expect(title).toHaveAttribute('href', '/workspace/workspace-1/item/item-1');
+	await expect(title).toHaveAttribute(
+		'href',
+		`/workspace/workspace-1/item/item-1?${new URLSearchParams({
+			return_to: 'workspace/workspace-1/library#library-item-item-1'
+		})}`
+	);
 	await page.getByLabel('Select this page').check();
 	await expect(table.getByRole('checkbox').filter({ visible: true })).toHaveCount(25);
 	await expect(table.locator('input:checked')).toHaveCount(25);
@@ -1174,13 +1188,17 @@ test('preview preserves drafts and selection, shares its URL and restores trigge
 	await expect(page).toHaveURL(/q=committed&page=2&preview=item-26$/);
 	expect(reads).toHaveLength(count);
 	expect(previews).toEqual(['item-26']);
+	const context = new URLSearchParams({
+		return_to:
+			'workspace/workspace-1/library?q=committed&page=2&preview=item-26#library-item-item-26'
+	});
 	await expect(preview.getByRole('link', { name: 'Open full details' })).toHaveAttribute(
 		'href',
-		'/workspace/workspace-1/item/item-26'
+		`/workspace/workspace-1/item/item-26?${context}`
 	);
 	await expect(preview.getByRole('link', { name: 'Read PDF' })).toHaveAttribute(
 		'href',
-		'/workspace/workspace-1/item/item-26/pdf/revision-1'
+		`/workspace/workspace-1/item/item-26/pdf/revision-1?${context}`
 	);
 	await preview.getByRole('button', { name: 'Close preview' }).click();
 	await expect(preview).toHaveCount(0);
@@ -1306,8 +1324,10 @@ test('display controls persist per user and resize by keyboard and pointer', asy
 	await mockLibrary(page);
 	await page.goto('/workspace/workspace-1/library');
 	await page.getByRole('button', { name: 'Display options', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Density', exact: true })).toBeFocused();
 	await page.getByRole('combobox', { name: 'Density', exact: true }).selectOption('compact');
 	await page.keyboard.press('Escape');
+	await expect(page.getByRole('button', { name: 'Display options', exact: true })).toBeFocused();
 	const resize = page.getByRole('button', { name: 'Resize Title column', exact: true });
 	await resize.focus();
 	await resize.press('ArrowRight');
@@ -1488,7 +1508,12 @@ test('narrow screens use compact reading links without page overflow', async ({ 
 	await expect(page.getByRole('table')).toHaveCount(0);
 	await expect(
 		page.locator('#library-results article').first().getByRole('link').first()
-	).toHaveAttribute('href', '/workspace/workspace-1/item/item-1');
+	).toHaveAttribute(
+		'href',
+		`/workspace/workspace-1/item/item-1?${new URLSearchParams({
+			return_to: 'workspace/workspace-1/library#library-item-item-1'
+		})}`
+	);
 	await page.getByRole('checkbox', { name: 'Select Author 1', exact: true }).check();
 	const trigger = page.getByRole('button', { name: 'Preview Item 1', exact: true });
 	await trigger.click();

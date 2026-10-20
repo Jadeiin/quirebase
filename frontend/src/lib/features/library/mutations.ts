@@ -1,6 +1,11 @@
 import { mutationOptions, type QueryClient } from '@tanstack/svelte-query';
 import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
-import { invalidateLibrary, invalidateProject, invalidateTags } from '#lib/query/invalidation.js';
+import {
+	invalidateLibrary,
+	invalidateProject,
+	invalidateTags,
+	invalidateUnavailableProject
+} from '#lib/query/invalidation.js';
 import {
 	bibliographyExportParameters,
 	bibliographyFilename,
@@ -8,13 +13,21 @@ import {
 } from '#lib/export-preferences.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
-export type LibraryBulkAction = 'add_project' | 'add_tag' | 'bibliography' | 'documents' | 'delete';
+export type LibraryBulkAction =
+	| 'add_project'
+	| 'remove_project'
+	| 'add_tag'
+	| 'remove_tag'
+	| 'bibliography'
+	| 'documents'
+	| 'delete';
 
 export type LibraryBulkInput = {
 	action: LibraryBulkAction;
 	itemIds: string[];
 	projectId: string;
 	tagName: string;
+	tagId?: string;
 	exportFormat: string;
 	preferences: ExportPreferences;
 };
@@ -78,20 +91,31 @@ export async function runLibraryBulkMutation(
 		body: {
 			item_ids: input.itemIds,
 			action: input.action,
-			project_id: input.projectId || undefined,
-			tag_name: input.tagName,
-			confirmation: input.action === 'delete' ? 'delete' : ''
+			project_id:
+				input.action === 'add_project' || input.action === 'remove_project'
+					? input.projectId || undefined
+					: undefined,
+			tag_name: input.action === 'add_tag' ? input.tagName : '',
+			tag_id: input.action === 'remove_tag' ? input.tagId || undefined : undefined,
+			confirmation:
+				input.action === 'delete'
+					? 'delete'
+					: input.action === 'remove_project'
+						? 'remove_project'
+						: ''
 		}
 	});
-	const invalidations = [invalidateLibrary(queryClient, workspaceId)];
-	if (input.action === 'add_project' && input.projectId) {
-		invalidations.push(invalidateProject(queryClient, workspaceId));
-	}
-	if (input.action === 'delete') {
-		// Deleting Items also removes them from their Projects.
-		invalidations.push(invalidateProject(queryClient, workspaceId));
-	}
-	if (input.action === 'add_tag') {
+	const changesProjects =
+		input.action === 'delete' ||
+		input.action === 'add_project' ||
+		input.action === 'remove_project';
+	// Project invalidation includes Library, dashboard and reader projections.
+	const invalidations = [
+		changesProjects
+			? invalidateProject(queryClient, workspaceId)
+			: invalidateLibrary(queryClient, workspaceId)
+	];
+	if (input.action === 'add_tag' || input.action === 'remove_tag' || input.action === 'delete') {
 		invalidations.push(invalidateTags(queryClient, workspaceId));
 	}
 	await Promise.all(invalidations);
@@ -117,10 +141,13 @@ export function libraryBulkMutationOptions(workspaceId: string, queryClient: Que
 		},
 		onError: async (reason, { input }) => {
 			if (
-				input.action === 'add_project' &&
-				reason instanceof ApiError &&
-				reason.code === 'project_lifecycle_error'
-			) {
+				(input.action !== 'add_project' && input.action !== 'remove_project') ||
+				!(reason instanceof ApiError)
+			)
+				return;
+			if ([403, 404].includes(reason.status) && input.projectId) {
+				await invalidateUnavailableProject(queryClient, workspaceId, input.projectId);
+			} else if (reason.code === 'project_lifecycle_error') {
 				await invalidateProject(queryClient, workspaceId);
 			}
 		}

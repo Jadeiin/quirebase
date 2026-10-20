@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import type { ItemOverviewView } from '#lib/api/client.js';
 	import { can } from '#lib/authorization/can.js';
 	import Panel from '#lib/design/Panel.svelte';
@@ -15,8 +16,8 @@
 		workKeywords
 	} from '../metadata-draft.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { libraryHref } from '#lib/features/library/filters.js';
+	import { libraryItemHref, readLibraryReturnTo } from '#lib/features/library/return-context.js';
 	import { metadataFilterLinks } from '../metadata-links.js';
 
 	let {
@@ -29,6 +30,7 @@
 
 	let imageLoadFailed = $state(false);
 	const { workspaceId } = getWorkspaceContext();
+	const returnTo = $derived(readLibraryReturnTo(workspaceId, page.url.searchParams));
 
 	function isSafeExternalUrl(value: string): boolean {
 		try {
@@ -157,7 +159,7 @@
 				{#if can(data.authorization, 'item.update')}
 					<a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
-						href={resolve(workspaceHref(workspaceId, `item/${itemId}/metadata`))}
+						href={resolve(libraryItemHref(workspaceId, itemId, 'metadata', returnTo))}
 						>{$t('Edit metadata')}</a
 					>
 				{/if}
@@ -212,8 +214,10 @@
 				<a
 					class="group block overflow-hidden rounded-lg bg-surface-100-900 transition hover:opacity-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
 					href={data.thumbnail.source_kind === 'pdf_thumbnail'
-						? resolve(workspaceHref(workspaceId, `item/${itemId}/pdf/${data.thumbnail.source_id}`))
-						: resolve(workspaceHref(workspaceId, `item/${itemId}/files`))}
+						? resolve(
+								libraryItemHref(workspaceId, itemId, `pdf/${data.thumbnail.source_id}`, returnTo)
+							)
+						: resolve(libraryItemHref(workspaceId, itemId, 'files', returnTo))}
 					aria-label={$t('Item thumbnail')}
 				>
 					<img

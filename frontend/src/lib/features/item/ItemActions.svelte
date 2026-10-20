@@ -2,9 +2,10 @@
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Dialog, Portal, Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { ApiError, isDownloadCancelled, type ItemOverviewView } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -25,10 +26,15 @@
 		type ExportPreferences
 	} from '#lib/export-preferences.js';
 	import { itemFilesQuery, itemMetadataSourcesQuery } from '#lib/features/item/queries.js';
-	import { invalidateLibrary, invalidateProject } from '#lib/query/invalidation.js';
+	import { invalidateLibrary, invalidateProject, invalidateTags } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
+	import {
+		libraryItemHref,
+		libraryReturnHref,
+		readLibraryReturnTo
+	} from '#lib/features/library/return-context.js';
 
 	type ActionSection = 'documents' | 'citation' | 'sources' | 'danger' | 'copy';
 
@@ -59,6 +65,8 @@
 	const { workspaceId } = workspaceContext;
 	let targetWorkspaceId = $state('');
 	let copiedItemUrl = $state('');
+	let mounted = true;
+	onDestroy(() => (mounted = false));
 	const files = createQuery(() =>
 		itemFilesQuery(workspaceId, itemId, open && section === 'documents')
 	);
@@ -239,18 +247,23 @@
 	function confirmDeleteItem() {
 		deleteArmed = false;
 		if (!can(overview.authorization, 'item.delete')) return;
+		const originUrl = page.url;
+		const deletedItemId = itemId;
+		const destination = libraryReturnHref(workspaceId, page.url.searchParams, {
+			deletedItemId
+		});
 		void action(async () => {
 			await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
-				params: { path: { item_id: itemId } },
+				params: { path: { item_id: deletedItemId } },
 				body: { confirmation: 'delete' }
 			});
 			// Deletion also removes the Item from its Projects, changing their
 			// counts, lists and reader sources.
 			await Promise.all([
-				invalidateLibrary(queryClient, workspaceId),
+				invalidateTags(queryClient, workspaceId),
 				invalidateProject(queryClient, workspaceId)
 			]);
-			await goto(resolve(workspaceHref(workspaceId, 'library')));
+			if (mounted && page.url === originUrl) await goto(resolve(destination));
 		}, $t('Item deleted'));
 	}
 
@@ -285,7 +298,12 @@
 			variant="filled"
 			class="inline-flex items-center gap-2"
 			href={resolve(
-				workspaceHref(workspaceId, `item/${itemId}/pdf/${overview.latest_revision_id}`)
+				libraryItemHref(
+					workspaceId,
+					itemId,
+					`pdf/${overview.latest_revision_id}`,
+					readLibraryReturnTo(workspaceId, page.url.searchParams)
+				)
 			)}>{$t('Read PDF')}</Button
 		>{#if can(overview.authorization, 'workspace.export')}<Button
 				class="inline-flex items-center gap-2"

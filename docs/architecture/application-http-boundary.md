@@ -118,10 +118,15 @@ retain server filtering, sorting and pagination. Only the loaded page is selecta
 query clears selection, and successful refreshes remove selected IDs that are no longer displayed.
 Authoritative access/not-found failures discard cached lists for that Project and clear selection;
 transient refresh failures may retain the last loaded rows.
-Titles remain ordinary Item links. The independent `preview` URL parameter opens a read-only,
-nonmodal Item overview loaded on demand through the existing Item query. Preview navigation preserves
-filter drafts and bulk selection; closing restores its trigger when available. Preview autofocus
-preserves focus moved to another control while its module loads. Density, optional
+Titles remain ordinary Item links. The independent `preview` URL parameter opens a nonmodal Item
+overview loaded on demand. Previous/next follows server ordering across pages, preserves filter
+drafts, and clears bulk selection only when the loaded page changes. Lazy inline organization edits
+only the previewed Item; removing a Project association requires confirmation of Annotation and Reply
+deletion. Bulk Tag removal and removal from the current Project capture their submitted targets;
+Project removal requires the same confirmation. Item sections and PDF links carry a validated,
+same-Workspace Library return URL with the filters, sorting, page and Item focus anchor. Closing a
+preview restores its trigger or current result. Preview autofocus preserves focus moved to another
+control during asynchronous loading. Density, optional
 columns, widths and the automatic/table/list view choice are local User-scoped display preferences.
 Automatic view follows viewport width; an explicit view choice overrides it. Preview code loads on demand.
 Author credits, publication titles and publication years refine the submitted Library query, replace

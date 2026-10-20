@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page as appPage } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -14,13 +15,14 @@
 	import { invalidateItemAnnotations } from '#lib/query/invalidation.js';
 	import { t, msg, type MessageKey } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { libraryItemHref, readLibraryReturnTo } from '#lib/features/library/return-context.js';
 	import { itemAnnotationsQuery } from '../queries';
 	import Button from '#lib/design/Button.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 
 	let { itemId }: { itemId: string } = $props();
 	const { workspaceId } = getWorkspaceContext();
+	const returnTo = $derived(readLibraryReturnTo(workspaceId, appPage.url.searchParams));
 	const workspace = getWorkspaceContext();
 	const queryClient = useQueryClient();
 	let revision = $state('all');
@@ -150,9 +152,11 @@
 					><a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
 						href={resolve(
-							workspaceHref(
+							libraryItemHref(
 								workspaceId,
-								`item/${itemId}/pdf/${annotation.revision_id}${annotation.project_id ? `?${new URLSearchParams({ project_id: annotation.project_id })}` : ''}`
+								itemId,
+								`pdf/${annotation.revision_id}${annotation.project_id ? `?${new URLSearchParams({ project_id: annotation.project_id })}` : ''}`,
+								returnTo
 							)
 						)}>{$t('Open PDF')}</a
 					>
@@ -192,9 +196,11 @@
 			as="a"
 			variant="filled"
 			href={resolve(
-				workspaceHref(
+				libraryItemHref(
 					workspaceId,
-					`item/${itemId}/pdf/${workspaceRevisionId}${source !== 'all' && source !== 'private' ? `?${new URLSearchParams({ project_id: source })}` : ''}`
+					itemId,
+					`pdf/${workspaceRevisionId}${source !== 'all' && source !== 'private' ? `?${new URLSearchParams({ project_id: source })}` : ''}`,
+					returnTo
 				)
 			)}>{$t('Open annotation workspace')}</Button
 		>

@@ -3,7 +3,8 @@ import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
 import {
 	invalidateItemOrganize,
 	invalidateProject,
-	invalidateTags
+	invalidateTags,
+	invalidateUnavailableProject
 } from '#lib/query/invalidation.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 import type { OrganizeView } from '../types';
@@ -48,15 +49,12 @@ export function projectAssignmentMutationOptions(
 				: api.request('PUT', '/workspaces/{workspace_id}/projects/{project_id}/items/{item_id}', {
 						params: { path: { project_id: project.id, item_id: itemId } }
 					}),
-		// Project lists and details expose item_count; invalidateProject also
-		// refreshes this Item's organize and overview projections.
 		onSuccess: () => invalidateProject(queryClient, workspaceId),
-		onError: async (reason) => {
-			if (reason instanceof ApiError && reason.code === 'project_lifecycle_error') {
-				await Promise.all([
-					invalidateItemOrganize(queryClient, workspaceId, itemId),
-					invalidateProject(queryClient, workspaceId)
-				]);
+		onError: async (reason, { project }) => {
+			if (reason instanceof ApiError && [403, 404].includes(reason.status)) {
+				await invalidateUnavailableProject(queryClient, workspaceId, project.id);
+			} else if (reason instanceof ApiError && reason.code === 'project_lifecycle_error') {
+				await invalidateProject(queryClient, workspaceId);
 			}
 		}
 	});

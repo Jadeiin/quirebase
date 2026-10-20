@@ -228,6 +228,7 @@ msgstr "操作者：{actor}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Add"
 msgstr "添加"
 
@@ -240,6 +241,11 @@ msgstr "从 URL 添加 PDF"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "Add a PDF revision to begin annotating."
 msgstr "添加 PDF 修订后即可开始批注。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Add a Tag to this Item"
+msgstr "为此条目添加标签"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/schema.ts
@@ -304,6 +310,7 @@ msgstr "通过标识符、书目文件、PDF 或元数据编辑器添加条目�
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Add tag"
 msgstr "添加标签"
 
@@ -316,6 +323,11 @@ msgstr "添加标签"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Add Tags as you read, group related Items in Projects, and review duplicates only when needed."
 msgstr "阅读时添加标签，将相关条目归入项目，并仅在需要时检查重复项。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Add to a Project"
+msgstr "添加到项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -944,6 +956,11 @@ msgid "Change password"
 msgstr "修改密码"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Changes apply only to the Item in this preview."
+msgstr "更改仅应用于当前预览的条目。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Check for duplicates"
 msgstr "检查重复项"
@@ -1004,6 +1021,11 @@ msgstr "选择来源"
 #: src/lib/features/item/schema-editor/schema.ts
 msgid "Choose a supported value."
 msgstr "请选择标准支持的值。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose a Tag to continue."
+msgstr "请选择标签后继续。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1338,6 +1360,7 @@ msgstr "贡献者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "Copied to clipboard"
 msgstr "已复制到剪贴板"
 
@@ -1345,6 +1368,11 @@ msgstr "已复制到剪贴板"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Copy"
 msgstr "复制"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Copy DOI"
+msgstr "复制 DOI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -1823,6 +1851,7 @@ msgid "Documents"
 msgstr "文档"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "DOI"
 msgstr "DOI"
@@ -2206,6 +2235,11 @@ msgstr "聚焦条目的复选框即可浏览和选择，选择范围限于当前
 #: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Focus Library Search"
 msgstr "聚焦文献库搜索"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Focus the preview to browse the current results, including the next or previous page."
+msgstr "聚焦预览后可连续浏览当前结果，包括上一页或下一页。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2689,6 +2723,11 @@ msgid "Item"
 msgstr "条目"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Item {position} of {total}"
+msgstr "第 {position} 条，共 {total} 条"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Item action failed"
@@ -2720,7 +2759,13 @@ msgid "Item list read-only"
 msgstr "条目列表只读"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Item organization updated"
+msgstr "条目整理已更新"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Item preview"
 msgstr "文献预览"
 
@@ -2898,6 +2943,7 @@ msgstr "法律文书"
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/Library.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Library"
 msgstr "文献库"
 
@@ -3075,6 +3121,12 @@ msgstr "正在加载成员…"
 #: src/lib/features/item/ItemMetadataForm.svelte
 msgid "Loading metadata editor…"
 msgstr "正在加载元数据编辑器…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Loading organization options…"
+msgstr "正在加载整理选项…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3480,9 +3532,15 @@ msgid "Next calendar period"
 msgstr "下一时段"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/shortcuts.ts
 msgid "Next Item"
 msgstr "下一个条目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Next Item in preview"
+msgstr "预览下一条目"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -3514,6 +3572,11 @@ msgstr "暂无批注。"
 #: src/lib/features/account/Account.svelte
 msgid "No API Tokens."
 msgstr "暂无 API 令牌。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "No assigned Projects"
+msgstr "尚未加入任何项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
@@ -3679,6 +3742,7 @@ msgstr "暂无登录会话。"
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "No tags"
 msgstr "暂无标签"
 
@@ -3868,6 +3932,12 @@ msgid "Organize a collection"
 msgstr "整理研究集合"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Organize this Item"
+msgstr "整理此条目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Other"
@@ -3887,6 +3957,11 @@ msgstr "成果管理计划"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Output sorting"
 msgstr "输出排序"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Outside current results"
+msgstr "不在当前结果中"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -4233,14 +4308,25 @@ msgid "Preview metadata"
 msgstr "预览元数据"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Preview navigation"
+msgstr "预览导航"
+
+#. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
 msgid "Previous calendar period"
 msgstr "上一时段"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/shortcuts.ts
 msgid "Previous Item"
 msgstr "上一个条目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Previous Item in preview"
+msgstr "预览上一条目"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -4343,6 +4429,7 @@ msgstr "项目设置已保存"
 #: src/lib/app/navigation.ts
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Projects"
@@ -4629,6 +4716,7 @@ msgstr "相关性"
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove"
 msgstr "移除"
@@ -4636,6 +4724,7 @@ msgstr "移除"
 #. js-lingui-explicit-id
 #: src/lib/design/FilePicker.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Remove {name}"
 msgstr "移除 {name}"
 
@@ -4665,13 +4754,26 @@ msgid "Remove filter {name}"
 msgstr "移除筛选条件 {name}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Remove from {name}"
+msgstr "从“{name}”移除"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Remove from current Project"
+msgstr "从当前项目移除"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove from Project"
 msgstr "从项目移除"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove Item from Project?"
 msgstr "将条目移出项目？"
@@ -4683,12 +4785,23 @@ msgid "Remove message"
 msgstr "移除消息"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Remove Tag"
+msgstr "移除标签"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Remove the chosen file to paste bibliography data instead."
 msgstr "移除已选文件即可改为粘贴书目数据。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Remove the selected Items from {project}?"
+msgstr "将所选条目移出“{project}”？"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
 msgstr "将此条目移出“{name}”后，该项目中此条目的所有项目批注及回复都会被永久删除，且无法撤销。条目、文件、私有批注及其他项目会保留。"
@@ -4781,6 +4894,7 @@ msgstr "恢复工作区"
 #: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -5110,6 +5224,11 @@ msgstr "选择"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Select {name}"
 msgstr "选择 {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Select a Project filter to remove Items from it."
+msgstr "请先筛选项目，再从中移除条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -5544,6 +5663,7 @@ msgstr "标签已重命名"
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Tags"
 msgstr "标签"
 
@@ -5703,6 +5823,11 @@ msgstr "此条目已更改。已加载最新状态；请检查后手动重试。
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "This Item has changed. Your draft is preserved. Review the latest metadata before retrying."
 msgstr "此条目已发生变化。草稿已保留，请检查最新元数据后再重试。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved."
+msgstr "这会永久删除所选条目在此项目中的批注和回复。条目、文件、私有批注及其他项目会保留。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
@@ -5889,6 +6014,11 @@ msgid "Unable to confirm whether you joined. Check status before trying again."
 msgstr "暂时无法确认是否已加入。请先核实状态，再重试。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Unable to copy DOI. Select and copy it manually."
+msgstr "无法复制 DOI，请选中后手动复制。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Unable to copy the invitation link. Select and copy it manually."
 msgstr "无法复制邀请链接，请手动选择并复制。"
@@ -5996,6 +6126,12 @@ msgid "Unable to load metadata editor."
 msgstr "无法加载元数据编辑器。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Unable to load organization options."
+msgstr "无法加载整理选项。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Unable to load Project discussion."
 msgstr "无法加载项目讨论。"
@@ -6015,6 +6151,11 @@ msgstr "无法加载项目。"
 #: src/lib/features/tools/Tools.svelte
 msgid "Unable to load Tags"
 msgstr "无法加载标签"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Unable to load the adjacent Library page."
+msgstr "无法加载文献库的相邻页。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -6083,6 +6224,7 @@ msgid "Unable to retry Import"
 msgstr "无法重试导入"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
@@ -6125,6 +6267,7 @@ msgstr "Unicode 文本"
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Unknown authors"
 msgstr "未知作者"
@@ -6342,6 +6485,7 @@ msgstr "查看条目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View Items by {name}"
 msgstr "查看 {name} 创作的条目"
@@ -6349,6 +6493,7 @@ msgstr "查看 {name} 创作的条目"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View Items in {name}"
 msgstr "查看发表于 {name} 的条目"
@@ -6361,6 +6506,7 @@ msgstr "查看类型为 {name} 的条目"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View Items published in {year}"
 msgstr "查看 {year} 年发表的条目"

@@ -24,7 +24,7 @@ export type LibraryMetadataFilter =
 
 export function refineLibraryFilters(
 	applied: LibraryFilters,
-	filter: LibraryMetadataFilter
+	filter: LibraryMetadataFilter | { tag: string }
 ): LibraryFilters {
 	// An exact credit replaces both free-text and exact author criteria.
 	return 'author_last_name' in filter

@@ -47,6 +47,21 @@ export const libraryRowCommands = [
 
 export type LibraryRowCommand = (typeof libraryRowCommands)[number]['id'];
 
+export const libraryPreviewCommands = [
+	{
+		id: 'previous',
+		label: msg('Previous Item in preview'),
+		keys: [key('ArrowUp'), key('K', true)],
+		repeat: true
+	},
+	{
+		id: 'next',
+		label: msg('Next Item in preview'),
+		keys: [key('ArrowDown'), key('J', true)],
+		repeat: true
+	}
+] as const;
+
 export function runLibraryShortcut(
 	event: KeyboardEvent,
 	action: () => boolean | void,

@@ -228,6 +228,7 @@ msgstr "Actor: {actor}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Add"
 msgstr "Add"
 
@@ -240,6 +241,11 @@ msgstr "Add a PDF from URL"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "Add a PDF revision to begin annotating."
 msgstr "Add a PDF revision to begin annotating."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Add a Tag to this Item"
+msgstr "Add a Tag to this Item"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/schema.ts
@@ -304,6 +310,7 @@ msgstr "Add records using identifiers, bibliography files, PDFs, or the metadata
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Add tag"
 msgstr "Add tag"
 
@@ -316,6 +323,11 @@ msgstr "Add Tag"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Add Tags as you read, group related Items in Projects, and review duplicates only when needed."
 msgstr "Add Tags as you read, group related Items in Projects, and review duplicates only when needed."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Add to a Project"
+msgstr "Add to a Project"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -944,6 +956,11 @@ msgid "Change password"
 msgstr "Change password"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Changes apply only to the Item in this preview."
+msgstr "Changes apply only to the Item in this preview."
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Check for duplicates"
 msgstr "Check for duplicates"
@@ -1004,6 +1021,11 @@ msgstr "Choose a source"
 #: src/lib/features/item/schema-editor/schema.ts
 msgid "Choose a supported value."
 msgstr "Choose a supported value."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Choose a Tag to continue."
+msgstr "Choose a Tag to continue."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1338,6 +1360,7 @@ msgstr "Contributors"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 msgid "Copied to clipboard"
 msgstr "Copied to clipboard"
 
@@ -1345,6 +1368,11 @@ msgstr "Copied to clipboard"
 #: src/lib/features/item/ItemActions.svelte
 msgid "Copy"
 msgstr "Copy"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Copy DOI"
+msgstr "Copy DOI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -1823,6 +1851,7 @@ msgid "Documents"
 msgstr "Documents"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "DOI"
 msgstr "DOI"
@@ -2206,6 +2235,11 @@ msgstr "Focus an Item checkbox to browse and select. Selection stays on the curr
 #: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Focus Library Search"
 msgstr "Focus Library Search"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Focus the preview to browse the current results, including the next or previous page."
+msgstr "Focus the preview to browse the current results, including the next or previous page."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2689,6 +2723,11 @@ msgid "Item"
 msgstr "Item"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Item {position} of {total}"
+msgstr "Item {position} of {total}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Item action failed"
@@ -2720,7 +2759,13 @@ msgid "Item list read-only"
 msgstr "Item list read-only"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Item organization updated"
+msgstr "Item organization updated"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Item preview"
 msgstr "Item preview"
 
@@ -2898,6 +2943,7 @@ msgstr "Legal document"
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/Library.svelte
+#: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Library"
 msgstr "Library"
 
@@ -3075,6 +3121,12 @@ msgstr "Loading members…"
 #: src/lib/features/item/ItemMetadataForm.svelte
 msgid "Loading metadata editor…"
 msgstr "Loading metadata editor…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Loading organization options…"
+msgstr "Loading organization options…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3480,9 +3532,15 @@ msgid "Next calendar period"
 msgstr "Next calendar period"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/shortcuts.ts
 msgid "Next Item"
 msgstr "Next Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Next Item in preview"
+msgstr "Next Item in preview"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -3514,6 +3572,11 @@ msgstr "No annotations."
 #: src/lib/features/account/Account.svelte
 msgid "No API Tokens."
 msgstr "No API Tokens."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "No assigned Projects"
+msgstr "No assigned Projects"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
@@ -3679,6 +3742,7 @@ msgstr "No sessions."
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "No tags"
 msgstr "No tags"
 
@@ -3868,6 +3932,12 @@ msgid "Organize a collection"
 msgstr "Organize a collection"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Organize this Item"
+msgstr "Organize this Item"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Other"
@@ -3887,6 +3957,11 @@ msgstr "Output management plan"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Output sorting"
 msgstr "Output sorting"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Outside current results"
+msgstr "Outside current results"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -4233,14 +4308,25 @@ msgid "Preview metadata"
 msgstr "Preview metadata"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Preview navigation"
+msgstr "Preview navigation"
+
+#. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
 msgid "Previous calendar period"
 msgstr "Previous calendar period"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/shortcuts.ts
 msgid "Previous Item"
 msgstr "Previous Item"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/shortcuts.ts
+msgid "Previous Item in preview"
+msgstr "Previous Item in preview"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
@@ -4343,6 +4429,7 @@ msgstr "Project settings saved"
 #: src/lib/app/navigation.ts
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Projects"
@@ -4629,6 +4716,7 @@ msgstr "Relevance"
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove"
 msgstr "Remove"
@@ -4636,6 +4724,7 @@ msgstr "Remove"
 #. js-lingui-explicit-id
 #: src/lib/design/FilePicker.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Remove {name}"
 msgstr "Remove {name}"
 
@@ -4665,13 +4754,26 @@ msgid "Remove filter {name}"
 msgstr "Remove filter {name}"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Remove from {name}"
+msgstr "Remove from {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Remove from current Project"
+msgstr "Remove from current Project"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/Library.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove from Project"
 msgstr "Remove from Project"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Remove Item from Project?"
 msgstr "Remove Item from Project?"
@@ -4683,12 +4785,23 @@ msgid "Remove message"
 msgstr "Remove message"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Remove Tag"
+msgstr "Remove Tag"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Remove the chosen file to paste bibliography data instead."
 msgstr "Remove the chosen file to paste bibliography data instead."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Remove the selected Items from {project}?"
+msgstr "Remove the selected Items from {project}?"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
 msgstr "Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved."
@@ -4781,6 +4894,7 @@ msgstr "Restore workspace"
 #: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -5110,6 +5224,11 @@ msgstr "Select"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Select {name}"
 msgstr "Select {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/BulkActions.svelte
+msgid "Select a Project filter to remove Items from it."
+msgstr "Select a Project filter to remove Items from it."
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -5544,6 +5663,7 @@ msgstr "Tag renamed"
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Tags"
 msgstr "Tags"
 
@@ -5703,6 +5823,11 @@ msgstr "This Item changed. Latest state was loaded; review it and explicitly ret
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "This Item has changed. Your draft is preserved. Review the latest metadata before retrying."
 msgstr "This Item has changed. Your draft is preserved. Review the latest metadata before retrying."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved."
+msgstr "This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved."
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
@@ -5889,6 +6014,11 @@ msgid "Unable to confirm whether you joined. Check status before trying again."
 msgstr "Unable to confirm whether you joined. Check status before trying again."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+msgid "Unable to copy DOI. Select and copy it manually."
+msgstr "Unable to copy DOI. Select and copy it manually."
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Unable to copy the invitation link. Select and copy it manually."
 msgstr "Unable to copy the invitation link. Select and copy it manually."
@@ -5996,6 +6126,12 @@ msgid "Unable to load metadata editor."
 msgstr "Unable to load metadata editor."
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
+msgid "Unable to load organization options."
+msgstr "Unable to load organization options."
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Unable to load Project discussion."
 msgstr "Unable to load Project discussion."
@@ -6015,6 +6151,11 @@ msgstr "Unable to load Projects."
 #: src/lib/features/tools/Tools.svelte
 msgid "Unable to load Tags"
 msgstr "Unable to load Tags"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Unable to load the adjacent Library page."
+msgstr "Unable to load the adjacent Library page."
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -6083,6 +6224,7 @@ msgid "Unable to retry Import"
 msgstr "Unable to retry Import"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
@@ -6125,6 +6267,7 @@ msgstr "Unicode text"
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Unknown authors"
 msgstr "Unknown authors"
@@ -6342,6 +6485,7 @@ msgstr "View Items"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View Items by {name}"
 msgstr "View Items by {name}"
@@ -6349,6 +6493,7 @@ msgstr "View Items by {name}"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View Items in {name}"
 msgstr "View Items in {name}"
@@ -6361,6 +6506,7 @@ msgstr "View Items of type {name}"
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+#: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View Items published in {year}"
 msgstr "View Items published in {year}"

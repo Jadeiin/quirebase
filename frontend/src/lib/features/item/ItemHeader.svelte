@@ -9,8 +9,12 @@
 	import { msg, t, type MessageKey } from '#lib/i18n.js';
 	import type { ItemOverview, ItemSection } from './queries';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { metadataFilterLinks } from './metadata-links.js';
+	import {
+		libraryItemHref,
+		libraryReturnHref,
+		readLibraryReturnTo
+	} from '#lib/features/library/return-context.js';
 
 	let {
 		itemId,
@@ -40,12 +44,10 @@
 	});
 	const title = $derived(overview?.metadata.title);
 	const links = $derived(overview && metadataFilterLinks(workspaceId, overview.metadata));
+	const returnTo = $derived(readLibraryReturnTo(workspaceId, page.url.searchParams));
 
 	function sectionPath(key: string) {
-		return workspaceHref(
-			workspaceId,
-			key === 'overview' ? `item/${itemId}` : `item/${itemId}/${key}`
-		);
+		return libraryItemHref(workspaceId, itemId, key === 'overview' ? '' : key, returnTo);
 	}
 </script>
 
@@ -53,7 +55,7 @@
 	<div class="min-w-0">
 		<a
 			class="mb-2 inline-flex items-center gap-1 text-xs font-bold tracking-[0.1em] text-primary-700-300 uppercase no-underline hover:text-primary-800-200"
-			href={resolve(workspaceHref(workspaceId, 'library'))}>{$t('Library')}</a
+			href={resolve(libraryReturnHref(workspaceId, page.url.searchParams))}>{$t('Library')}</a
 		>
 		<h1 class="max-w-4xl text-balance">
 			{#if title}<RichText html={title} />{:else}{$t('Item details')}{/if}

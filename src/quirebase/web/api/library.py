@@ -102,6 +102,7 @@ async def apply_item_bulk_action(
         action=data.action,
         project_id=data.project_id,
         tag_name=data.tag_name,
+        tag_id=data.tag_id,
         confirm_delete=data.confirmation,
     )
     return OkView()

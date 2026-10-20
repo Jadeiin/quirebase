@@ -1,4 +1,4 @@
-import { matchQuery, type QueryClient, type QueryKey } from '@tanstack/svelte-query';
+import { matchQuery, type Query, type QueryClient, type QueryKey } from '@tanstack/svelte-query';
 import { exportPreferenceKeys } from '#lib/features/account/queries.js';
 import { dashboardKeys } from '#lib/features/dashboard/queries.js';
 import { itemKeys } from '#lib/features/item/queries.js';
@@ -8,6 +8,9 @@ import { projectKeys } from '#lib/features/projects/queries.js';
 import { tagKeys } from '#lib/features/tags/queries.js';
 import { toolKeys } from '#lib/features/tools/queries.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
+import type { LibraryFilters } from '#lib/features/library/filters.js';
+import type { LibrarySearch } from '#lib/features/library/queries.js';
+import type { OrganizeView } from '#lib/features/item/types.js';
 
 async function invalidate(queryClient: QueryClient, keys: QueryKey[]) {
 	// Overlapping scopes must refresh each query once, without cancelling and restarting it.
@@ -42,7 +45,9 @@ export function invalidateItemOrganize(
 ) {
 	return invalidate(queryClient, [
 		itemKeys.organize(workspaceId, itemId),
-		itemKeys.overview(workspaceId, itemId)
+		itemKeys.overview(workspaceId, itemId),
+		libraryKeys.lists(workspaceId),
+		dashboardKeys.all(workspaceId)
 	]);
 }
 export function invalidateItemDiscussion(
@@ -82,9 +87,41 @@ export function invalidateProject(queryClient: QueryClient, workspaceId: string)
 	return invalidate(queryClient, [
 		projectKeys.all(workspaceId),
 		libraryKeys.all(workspaceId),
+		dashboardKeys.all(workspaceId),
 		pdfReaderKeys.all(workspaceId)
 	]);
 }
+
+export async function invalidateUnavailableProject(
+	queryClient: QueryClient,
+	workspaceId: string,
+	projectId: string
+) {
+	const lists = libraryKeys.lists(workspaceId);
+	const libraryScope = {
+		queryKey: lists,
+		predicate: ({ queryKey }: Query) =>
+			(queryKey[lists.length] as LibraryFilters | undefined)?.project === projectId
+	};
+	const organizeScope = {
+		queryKey: itemKeys.all(workspaceId),
+		predicate: ({ queryKey }: Query) => queryKey.at(-1) === 'organize'
+	};
+	// A denied Project audience affects cached working sets and every Item's
+	// organization projection. Late responses must not restore those associations.
+	await Promise.all([
+		queryClient.cancelQueries(libraryScope, { revert: false }),
+		queryClient.cancelQueries(organizeScope, { revert: false })
+	]);
+	queryClient.setQueriesData<LibrarySearch | null>(libraryScope, null, { updatedAt: 0 });
+	queryClient.setQueriesData<OrganizeView>(
+		organizeScope,
+		(data) =>
+			data && { ...data, projects: data.projects.filter((project) => project.id !== projectId) }
+	);
+	await invalidateProject(queryClient, workspaceId);
+}
+
 export function invalidateWorkspaces(queryClient: QueryClient) {
 	// The Workspace directory and each caller's eligibility in it feed every
 	// Workspace-scoped projection, such as an Item's copy destinations.

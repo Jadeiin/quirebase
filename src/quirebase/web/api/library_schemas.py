@@ -38,6 +38,7 @@ class BulkActionRequest(BaseModel):
     action: str
     project_id: UUID | None = None
     tag_name: str = ""
+    tag_id: UUID | None = None
     confirmation: str = ""
 
 

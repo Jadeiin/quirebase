@@ -3097,6 +3097,8 @@ export interface components {
 			 * @default
 			 */
 			tag_name: string;
+			/** Tag Id */
+			tag_id?: string | null;
 			/**
 			 * Confirmation
 			 * @default

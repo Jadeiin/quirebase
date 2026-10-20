@@ -119,6 +119,7 @@ from quirebase.projects import (
     delete_project,
     join_project,
     leave_project,
+    remove_items_from_project,
     remove_project_participant,
     update_project_settings,
 )
@@ -1893,6 +1894,51 @@ async def test_reply_create_waits_for_project_item_detachment_and_rechecks(postg
         finally:
             await detach_db.commit()
         assert await asyncio.wait_for(reply_task, timeout=5) == "rejected"
+
+
+@pytest.mark.concurrency_case("annotation-recheck")
+async def test_reply_create_rechecks_after_bulk_project_item_removal(
+    postgres_sessions, postgres_race
+):
+    async with postgres_sessions() as db:
+        (
+            workspace_id,
+            owner_id,
+            item_id,
+            project_id,
+            _assignment_id,
+            annotation_id,
+        ) = await _project_annotation_context(db, "reply-bulk-detachment")
+    async with postgres_race.session("detach") as detach_db:
+        owner = await detach_db.get(User, owner_id)
+        assert owner is not None
+        assert (
+            await remove_items_from_project(detach_db, owner, workspace_id, project_id, [item_id])
+            == 1
+        )
+
+        async def reply() -> str:
+            async with postgres_race.session("reply") as reply_db:
+                actor = await reply_db.get(User, owner_id)
+                assert actor is not None
+                try:
+                    await create_annotation_reply(
+                        reply_db,
+                        actor,
+                        workspace_id,
+                        item_id,
+                        annotation_id,
+                        AnnotationReplyCreate(id=uuid4(), body="Concurrent bulk removal reply"),
+                    )
+                except ResourceUnavailable:
+                    await reply_db.rollback()
+                    return "rejected"
+                return "committed"
+
+        postgres_race.start("reply", reply())
+        await postgres_race.wait_blocked("reply", "detach")
+        await detach_db.commit()
+        assert await postgres_race.join("reply") == "rejected"
 
 
 @pytest.mark.concurrency_case("annotation-recheck")

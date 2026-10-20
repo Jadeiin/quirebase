@@ -15,6 +15,8 @@
 		type LibrarySortDirection
 	} from './filters.js';
 	import LibraryTable from './LibraryTable.svelte';
+	import type { LibraryPreviewNavigation } from './preview-navigation.js';
+	import type { WorkspacePath } from '#lib/workspaces/href.js';
 	import { t } from '#lib/i18n.js';
 
 	let {
@@ -33,6 +35,8 @@
 		totalPages,
 		selected,
 		previewItemId,
+		previewNavigation,
+		itemHref,
 		onSelectionChange,
 		onPreview,
 		onPreviewReady,
@@ -46,7 +50,7 @@
 		workspaceId: string;
 		listingIdentity: string;
 		shortcutsEnabled: boolean;
-		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
+		filterHref: (filter: LibraryMetadataFilter | { tag: string }) => ReturnType<typeof libraryHref>;
 		isPending: boolean;
 		isError: boolean;
 		pageNumber: number;
@@ -57,6 +61,8 @@
 		totalPages: number;
 		selected: Set<string>;
 		previewItemId: string;
+		previewNavigation: LibraryPreviewNavigation;
+		itemHref: (id: string, suffix?: string) => WorkspacePath;
 		onSelectionChange: (ids: string[]) => void;
 		onPreview: (id: string, trigger: HTMLElement) => void;
 		onPreviewReady: (heading: HTMLHeadingElement) => void;
@@ -189,7 +195,6 @@
 			{:else}<LibraryTable
 					items={data.items}
 					toolbar={sortControls}
-					{workspaceId}
 					{listingIdentity}
 					{shortcutsEnabled}
 					{filterHref}
@@ -197,6 +202,7 @@
 					{onSelectionChange}
 					{onPreview}
 					{previewItemId}
+					{itemHref}
 					{sort}
 					{direction}
 					onSort={(sort, direction) => {
@@ -225,6 +231,10 @@
 				<LibraryPreview
 					{workspaceId}
 					itemId={previewItemId}
+					navigation={previewNavigation}
+					{shortcutsEnabled}
+					itemHref={(suffix) => itemHref(previewItemId, suffix)}
+					{filterHref}
 					onClose={onClosePreview}
 					onReady={onPreviewReady}
 				/>

@@ -346,6 +346,52 @@ async def add_items_to_project(
         raise ResourceUnavailable("Item or Project not found") from error
 
 
+async def remove_items_from_project(
+    db: AsyncSession, user: User, workspace_id: UUID, project_id: UUID, item_ids: list[UUID]
+) -> int:
+    """Detach an authorized working set in the caller's transaction.
+
+    ProjectItem owns its Project Annotations and Replies; its foreign-key cascade
+    retires only that context. Library retains bulk Audit and transaction completion.
+    """
+    workspace = await lock_workspace_context(db, user, workspace_id)
+    project = await lock_project_root(db, workspace, project_id, lock="shared")
+    require_action(workspace, ResourceAction.project_item_manage)
+    if project.state is not ProjectState.active:
+        raise ProjectLifecycleError("Project is read-only")
+    ids = tuple(sorted(set(item_ids)))
+    if not ids:
+        return 0
+    accessible = set(
+        await db.scalars(select(Item.id).where(Item.workspace_id == workspace_id, Item.id.in_(ids)))
+    )
+    if accessible != set(ids):
+        raise ResourceUnavailable("Item or Project not found")
+    # These links are about to be deleted, so FOR UPDATE must fence Annotation
+    # and Reply writes. Match Item teardown's stable ProjectItem lock order.
+    links = tuple(
+        await db.scalars(
+            select(ProjectItem.id)
+            .where(
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.project_id == project_id,
+                ProjectItem.item_id.in_(ids),
+            )
+            .order_by(ProjectItem.id)
+            .with_for_update()
+        )
+    )
+    for link_id in links:
+        await db.execute(
+            delete(ProjectItem).where(
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.project_id == project_id,
+                ProjectItem.id == link_id,
+            )
+        )
+    return len(links)
+
+
 async def _add_missing_project_items(
     db: AsyncSession, workspace_id: UUID, project_id: UUID, item_ids: Sequence[UUID], actor_id: UUID
 ) -> int:

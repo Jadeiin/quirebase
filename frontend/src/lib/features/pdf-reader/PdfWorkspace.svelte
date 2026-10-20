@@ -13,11 +13,12 @@
 	import EmbeddedPdfViewer from '#lib/pdf/EmbeddedPdfViewer.svelte';
 	import { annotationSourceFilters } from '#lib/pdf/annotation-sources.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { libraryItemHref, readLibraryReturnTo } from '#lib/features/library/return-context.js';
 
 	let { itemId, revisionId }: { itemId: string; revisionId: string } = $props();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
+	const returnTo = $derived(readLibraryReturnTo(workspaceId, page.url.searchParams));
 	const queryClient = useQueryClient();
 	let includePrivate = $state(true);
 	let visibleProjects = $state(page.url.searchParams.getAll('project_id'));
@@ -115,9 +116,13 @@
 		<a
 			class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
 			aria-label={$t('Item')}
-			href={resolve(workspaceHref(workspaceId, `item/${itemId}`))}
+			href={resolve(libraryItemHref(workspaceId, itemId, '', returnTo))}
 			><Icon name="chevron-left" /> <span class="hidden sm:inline">{$t('Item')}</span></a
 		>
+		{#if returnTo}<a
+				class="inline-flex min-h-9 shrink-0 items-center rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
+				href={resolve(returnTo)}>{$t('Library')}</a
+			>{/if}
 		<div class="grid min-w-0 flex-1 grid-cols-1">
 			<strong class="truncate text-sm"
 				><RichText html={viewer.data?.item.title_html ?? $t('PDF Reader')} /></strong

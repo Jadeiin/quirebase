@@ -1,7 +1,8 @@
 <script lang="ts">
 	import Button from '#lib/design/Button.svelte';
 	import { resolve } from '$app/paths';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
+	import { onDestroy, tick, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import {
 		createMutation,
@@ -44,6 +45,14 @@
 	import { t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { canRunBulkAction } from '#lib/workspaces/actions.js';
+	import { can } from '#lib/authorization/can.js';
+	import {
+		libraryPreviewStep,
+		reconcileLibraryPreviewPosition,
+		type LibraryPreviewNavigation,
+		type LibraryPreviewPosition
+	} from './preview-navigation.js';
+	import { libraryItemHref, libraryReturnItemId, libraryReturnTo } from './return-context.js';
 
 	const submitted = $derived(readLibraryFilters(page.url.searchParams));
 	const pageNumber = $derived(libraryPage(page.url.searchParams));
@@ -51,13 +60,41 @@
 	const previewItemId = $derived(page.url.searchParams.get('preview') ?? '');
 	const listingIdentity = $derived(libraryParameters(submitted, pageNumber, pageSize).toString());
 	let previewTrigger: HTMLElement | null = null;
+	let previewFocusOrigin: Element | null = null;
+	let previewReturnItemId = '';
+	let focusVersion = 0;
+	let returnFocus = $state<{ id: string; href: string; version: number } | null>(null);
+	let previewRequest = 0;
+	let mounted = true;
+	let previewBusy = $state(false);
+	let previewError = $state('');
+	let previewRetryDirection: -1 | 1 = 1;
+	let previewPosition = $state<(LibraryPreviewPosition & { listing: string }) | null>(null);
+	beforeNavigate(() => {
+		previewRequest++;
+		previewBusy = false;
+		previewError = '';
+	});
+	afterNavigate(() => {
+		const id = libraryReturnItemId(page.url.hash);
+		returnFocus = id ? { id, href: page.url.href, version: focusVersion } : null;
+	});
+	onDestroy(() => {
+		mounted = false;
+		previewRequest++;
+	});
 	let wasPreviewOpen = false;
 	$effect(() => {
 		const isPreviewOpen = Boolean(previewItemId);
 		if (wasPreviewOpen && !isPreviewOpen) {
-			if (previewTrigger?.isConnected) previewTrigger.focus();
+			const target = previewReturnItemId
+				? document.getElementById(`library-item-${previewReturnItemId}`)
+				: previewTrigger;
+			if (target?.isConnected) target.focus();
 			else document.getElementById('library-results')?.focus();
 			previewTrigger = null;
+			previewFocusOrigin = null;
+			previewReturnItemId = '';
 		}
 		wasPreviewOpen = isPreviewOpen;
 	});
@@ -77,13 +114,15 @@
 	let bulkAction = $state('');
 	let bulkProject = $state('');
 	let bulkTag = $state('');
+	let bulkTagId = $state('');
 	let exportFormat = $state('bibtex');
 	let error = $state('');
 	let notice = $state('');
-	let confirmDeleteOpen = $state(false);
-	let deleteInput = $state<LibraryBulkInput | null>(null);
-	let deleteSelectionVersion = 0;
-	let deleteTrigger: HTMLElement | null = null;
+	let confirmBulkOpen = $state(false);
+	let confirmedInput = $state<LibraryBulkInput | null>(null);
+	let confirmedSelectionVersion = 0;
+	let confirmationTrigger: HTMLElement | null = null;
+	let confirmationProjectName = $state('');
 	let exportPreferences = $state<ExportPreferences>(structuredClone(defaultExportPreferences));
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
@@ -92,7 +131,7 @@
 	const bulkMutation = createMutation(() => libraryBulkMutationOptions(workspaceId, queryClient));
 	const busy = $derived(bulkMutation.isPending);
 	$effect(() => {
-		if (!confirmDeleteOpen && !busy) deleteInput = null;
+		if (!confirmBulkOpen && !busy) confirmedInput = null;
 	});
 
 	let previousSearch = '';
@@ -100,7 +139,18 @@
 		const search = listingIdentity;
 		if (search === previousSearch) return;
 		previousSearch = search;
-		if (!busy) confirmDeleteOpen = false;
+		if (!busy) confirmBulkOpen = false;
+		clearSelection();
+	});
+	let previousFilters = '';
+	$effect(() => {
+		const search = libraryParameters({
+			...submitted,
+			sort: undefined,
+			direction: undefined
+		}).toString();
+		if (search === previousFilters) return;
+		previousFilters = search;
 		query = page.url.searchParams.get('q') ?? '';
 		tag = page.url.searchParams.get('tag') ?? '';
 		project = page.url.searchParams.get('project') ?? '';
@@ -108,7 +158,6 @@
 		keyword = page.url.searchParams.get('keyword') ?? '';
 		author = page.url.searchParams.get('author') ?? '';
 		fileFilter = page.url.searchParams.get('has_files') ?? '';
-		clearSelection();
 	});
 
 	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber, pageSize));
@@ -122,9 +171,90 @@
 			? [selectedProject.data, ...(projects.data ?? [])]
 			: (projects.data ?? [])
 	);
+	const currentProject = $derived(
+		projectChoices.find(
+			(candidate) =>
+				candidate.id === submitted.project && can(candidate.authorization, 'project_item.manage')
+		) ?? null
+	);
+	const previewIndex = $derived(
+		library.data?.items.findIndex((item) => item.id === previewItemId) ?? -1
+	);
+	$effect(() => {
+		const data = library.data;
+		const itemId = previewItemId;
+		const listing = listingIdentity;
+		if (!itemId || data === null) {
+			previewPosition = null;
+			return;
+		}
+		if (!data) return;
+		const settled = library.isSuccess && library.fetchStatus === 'idle';
+		untrack(() => {
+			const previous = previewPosition?.listing === listing ? previewPosition : undefined;
+			// A cached target page can be shorter than the authoritative page-clamp position.
+			if (!settled && previous?.itemId === itemId && !previous.itemIds.length) return;
+			const position = reconcileLibraryPreviewPosition(data.items, itemId, previous);
+			previewPosition = position ? { ...position, listing } : null;
+		});
+	});
+	const rememberedPreviewIndex = $derived(
+		previewPosition?.listing === listingIdentity && previewPosition.itemId === previewItemId
+			? previewPosition.index
+			: undefined
+	);
+	function previewStep(direction: -1 | 1) {
+		return (
+			library.data &&
+			libraryPreviewStep(
+				{ ...library.data, page: pageNumber, pageSize },
+				previewItemId,
+				direction,
+				rememberedPreviewIndex
+			)
+		);
+	}
+	const previewNavigation: LibraryPreviewNavigation = $derived({
+		position: previewIndex < 0 ? null : (pageNumber - 1) * pageSize + previewIndex + 1,
+		total: library.data?.total ?? 0,
+		canPrevious: Boolean(previewStep(-1)),
+		canNext: Boolean(previewStep(1)),
+		busy: previewBusy || library.isFetching,
+		error: previewError,
+		previous: () => void movePreview(-1),
+		next: () => void movePreview(1),
+		retry: () => void movePreview(previewRetryDirection)
+	});
+	$effect(() => {
+		const target = returnFocus;
+		if (!target || library.isPending || library.isFetching) return;
+		void tick().then(() => {
+			if (returnFocus !== target || page.url.href !== target.href) return;
+			returnFocus = null;
+			if (focusVersion !== target.version) return;
+			const element =
+				document.getElementById(`library-item-${target.id}`) ??
+				document.getElementById('library-results');
+			element?.focus({ preventScroll: true });
+			element?.scrollIntoView({ block: 'nearest' });
+		});
+	});
 	const totalPages = $derived(Math.max(1, Math.ceil((library.data?.total ?? 0) / pageSize)));
 	$effect(() => {
 		if (library.isSuccess && library.data && !library.isFetching && pageNumber > totalPages) {
+			const total = library.data.total;
+			untrack(() => {
+				if (previewItemId && previewIndex < 0 && rememberedPreviewIndex !== undefined) {
+					// Removing the final result can remove its whole page. Keep its insertion
+					// position at the end of the preceding page for continuous backward browsing.
+					previewPosition = {
+						listing: libraryParameters(submitted, totalPages, pageSize).toString(),
+						itemId: previewItemId,
+						index: Math.max(0, total - (totalPages - 1) * pageSize),
+						itemIds: []
+					};
+				}
+			});
 			void goto(resolve(libraryHref(workspaceId, submitted, totalPages, pageSize, previewItemId)), {
 				reset: false,
 				replaceState: true
@@ -134,7 +264,7 @@
 	$effect(() => {
 		if (library.data === null) {
 			clearSelection();
-			confirmDeleteOpen = false;
+			confirmBulkOpen = false;
 			return;
 		}
 		if (!library.isSuccess || library.isFetching) return;
@@ -167,16 +297,76 @@
 	}
 
 	function preview(id: string, trigger?: HTMLElement) {
-		if (trigger) previewTrigger = trigger;
+		if (trigger) {
+			previewTrigger = trigger;
+			previewFocusOrigin = trigger;
+			previewReturnItemId = '';
+		}
 		void goto(resolve(libraryHref(workspaceId, submitted, pageNumber, pageSize, id)), {
 			reset: false
 		});
 	}
 
 	function focusPreview(heading: HTMLHeadingElement) {
+		if (libraryReturnItemId(page.url.hash)) return;
 		const focused = document.activeElement;
-		const origin = previewTrigger ?? document.getElementById('library-results');
-		if (focused === origin || (!previewTrigger && focused === document.body)) heading.focus();
+		const origin = previewFocusOrigin ?? document.getElementById('library-results');
+		if (
+			focused === origin ||
+			(focused === document.body &&
+				(!previewFocusOrigin ||
+					!previewFocusOrigin.isConnected ||
+					(previewFocusOrigin instanceof HTMLButtonElement && previewFocusOrigin.disabled)))
+		)
+			heading.focus();
+	}
+
+	async function movePreview(direction: -1 | 1) {
+		if (previewBusy || library.isFetching) return;
+		const step = previewStep(direction);
+		if (!step) return;
+		const request = ++previewRequest;
+		const originUrl = page.url;
+		const originFocus = document.activeElement;
+		previewRetryDirection = direction;
+		previewError = '';
+		try {
+			let id: string;
+			if ('itemId' in step) id = step.itemId;
+			else {
+				previewBusy = true;
+				const adjacent = await queryClient.fetchQuery({
+					...libraryListQuery(workspaceId, submitted, step.page, pageSize),
+					// An explicit navigation must settle with retry feedback even while offline.
+					networkMode: 'always',
+					retry: false
+				});
+				if (!mounted || request !== previewRequest || page.url !== originUrl) return;
+				const item = step.edge === 'first' ? adjacent?.items[0] : adjacent?.items.at(-1);
+				if (!item) throw new Error('Unavailable adjacent Library page');
+				id = item.id;
+			}
+			previewFocusOrigin = originFocus;
+			previewReturnItemId = id;
+			await goto(resolve(libraryHref(workspaceId, submitted, step.page, pageSize, id)), {
+				reset: false
+			});
+		} catch (reason) {
+			if (mounted && request === previewRequest && page.url === originUrl) {
+				previewError = apiErrorMessage(reason, $t('Unable to load the adjacent Library page.'));
+			}
+		} finally {
+			if (mounted && request === previewRequest) previewBusy = false;
+		}
+	}
+
+	function itemHref(id: string, suffix = '') {
+		return libraryItemHref(
+			workspaceId,
+			id,
+			suffix,
+			libraryReturnTo(workspaceId, new URL(page.url.href), id)
+		);
 	}
 
 	function search() {
@@ -234,12 +424,15 @@
 	function requestBulkAction() {
 		if (!bulkAction || selected.size === 0 || bulkMutation.isPending) return;
 		if (!canRunBulkAction(workspace.can, bulkAction as LibraryBulkAction)) return;
-		if (bulkAction === 'delete') {
-			deleteTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			deleteInput = currentBulkInput();
-			deleteSelectionVersion = selectionVersion;
+		if (bulkAction === 'remove_project' && !currentProject) return;
+		if (bulkAction === 'delete' || bulkAction === 'remove_project') {
+			confirmationTrigger =
+				document.activeElement instanceof HTMLElement ? document.activeElement : null;
+			confirmedInput = currentBulkInput();
+			confirmedSelectionVersion = selectionVersion;
+			confirmationProjectName = currentProject?.name ?? '';
 			error = '';
-			confirmDeleteOpen = true;
+			confirmBulkOpen = true;
 			return;
 		}
 		void executeBulkAction();
@@ -249,8 +442,9 @@
 		return {
 			action: bulkAction as LibraryBulkAction,
 			itemIds: [...selected],
-			projectId: bulkProject,
+			projectId: bulkAction === 'remove_project' ? (currentProject?.id ?? '') : bulkProject,
 			tagName: bulkTag,
+			tagId: bulkTagId,
 			exportFormat,
 			preferences: $state.snapshot(exportPreferences)
 		};
@@ -258,12 +452,12 @@
 
 	async function executeBulkAction() {
 		if (busy) return;
-		const input = deleteInput ?? currentBulkInput();
+		const input = confirmedInput ?? currentBulkInput();
 		if (!input.action || input.itemIds.length === 0) return;
 		if (!canRunBulkAction(workspace.can, input.action)) return;
 		error = '';
 		notice = '';
-		const submittedSelectionVersion = deleteInput ? deleteSelectionVersion : selectionVersion;
+		const submittedSelectionVersion = confirmedInput ? confirmedSelectionVersion : selectionVersion;
 		const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		try {
 			await bulkMutation.mutateAsync({
@@ -272,7 +466,7 @@
 					if (selectionVersion === submittedSelectionVersion) clearSelection(trigger);
 				}
 			});
-			confirmDeleteOpen = false;
+			confirmBulkOpen = false;
 			notice = $t('Bulk action completed');
 		} catch (reason) {
 			if (isDownloadCancelled(reason)) return;
@@ -280,6 +474,8 @@
 		}
 	}
 </script>
+
+<svelte:document onfocusin={() => focusVersion++} />
 
 <div class="mb-8 flex items-end justify-between gap-4">
 	<div>
@@ -330,6 +526,8 @@
 	bind:bulkAction
 	bind:bulkProject
 	bind:bulkTag
+	bind:bulkTagId
+	{currentProject}
 	bind:exportFormat
 	projects={projectChoices}
 	{busy}
@@ -343,18 +541,28 @@
 	>{/if}
 
 <ConfirmDialog
-	bind:open={confirmDeleteOpen}
+	bind:open={confirmBulkOpen}
 	finalFocusEl={() =>
-		deleteTrigger?.isConnected ? deleteTrigger : document.getElementById('library-results')}
-	title={$t('Permanently delete the selected Items?')}
-	body={$t('This cannot be undone.')}
-	confirmLabel={$t('Permanently delete')}
+		confirmationTrigger?.isConnected
+			? confirmationTrigger
+			: document.getElementById('library-results')}
+	title={confirmedInput?.action === 'remove_project'
+		? $t('Remove the selected Items from {project}?', { project: confirmationProjectName })
+		: $t('Permanently delete the selected Items?')}
+	body={confirmedInput?.action === 'remove_project'
+		? $t(
+				'This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved.'
+			)
+		: $t('This cannot be undone.')}
+	confirmLabel={confirmedInput?.action === 'remove_project'
+		? $t('Remove from Project')
+		: $t('Permanently delete')}
 	{busy}
-	error={confirmDeleteOpen ? error : ''}
+	error={confirmBulkOpen ? error : ''}
 	onConfirm={() => void executeBulkAction()}
 />
 
-<StatusNotice error={confirmDeleteOpen ? '' : error} {notice} />
+<StatusNotice error={confirmBulkOpen ? '' : error} {notice} />
 
 <LibraryResults
 	{workspaceId}
@@ -373,6 +581,8 @@
 	{totalPages}
 	{selected}
 	{previewItemId}
+	{previewNavigation}
+	{itemHref}
 	onSelectionChange={setSelection}
 	onPreview={preview}
 	onPreviewReady={focusPreview}

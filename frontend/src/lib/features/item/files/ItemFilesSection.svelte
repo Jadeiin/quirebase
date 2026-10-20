@@ -2,6 +2,7 @@
 	import { pdfFileUrls, type Metadata } from '../metadata-draft.js';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { kilobytes, numberFormat } from '#lib/format.js';
 	import Panel from '#lib/design/Panel.svelte';
@@ -12,7 +13,7 @@
 	import Icon from '#lib/design/Icon.svelte';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
-	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { libraryItemHref, readLibraryReturnTo } from '#lib/features/library/return-context.js';
 
 	let {
 		itemId,
@@ -79,8 +80,14 @@
 						<Button
 							as="a"
 							variant="primary"
-							href={resolve(workspaceHref(workspaceId, `item/${itemId}/pdf/${file.id}`))}
-							>{$t('Read')}</Button
+							href={resolve(
+								libraryItemHref(
+									workspaceId,
+									itemId,
+									`pdf/${file.id}`,
+									readLibraryReturnTo(workspaceId, page.url.searchParams)
+								)
+							)}>{$t('Read')}</Button
 						>
 					{/if}
 					{#if workspace.can('workspace.export')}<Button onclick={() => onDownload(file)}

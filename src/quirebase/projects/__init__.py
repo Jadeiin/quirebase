@@ -29,6 +29,7 @@ from quirebase.projects.workspaces import (
     list_workspace_projects,
     open_project_workspace,
     remove_item_from_project,
+    remove_items_from_project,
 )
 
 __all__ = [
@@ -49,6 +50,7 @@ __all__ = [
     "list_workspace_projects",
     "open_project_workspace",
     "remove_item_from_project",
+    "remove_items_from_project",
     "remove_project_participant",
     "require_project",
     "set_project_state",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import ResourceAction, require_workspace_action
@@ -25,9 +25,11 @@ from quirebase.documents.bundles import (
 from quirebase.library.tags import TagConflict, _assign_item_tags, get_or_create_tag
 from quirebase.models import (
     Item,
+    ItemTag,
+    Tag,
     User,
 )
-from quirebase.projects import add_items_to_project
+from quirebase.projects import add_items_to_project, remove_items_from_project
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -45,6 +47,7 @@ async def apply_bulk_item_action(
     project_id: UUID | None = None,
     tag_name: str = "",
     confirm_delete: str = "",
+    tag_id: UUID | None = None,
 ) -> None:
     items = await require_accessible_items(db, user, workspace_id, item_ids)
 
@@ -59,6 +62,15 @@ async def apply_bulk_item_action(
         except ResourceUnavailable as error:
             raise ValidationFailure("choose an editable project") from error
         audit_action = "library.bulk.add_project"
+    elif action == "remove_project":
+        if project_id is None:
+            raise ValidationFailure("Project is required")
+        if confirm_delete != "remove_project":
+            raise ValidationFailure("confirm removal from the selected Project")
+        await remove_items_from_project(
+            db, user, workspace_id, project_id, [item.id for item in items]
+        )
+        audit_action = "library.bulk.remove_project"
     elif action in ("add_tag", "tag"):
         # Revalidate each Item's Tag-use authority and existence before adding
         # associations. Stable Item ordering keeps these checks deterministic.
@@ -74,6 +86,29 @@ async def apply_bulk_item_action(
                 "tag associations changed concurrently; retry the bulk action"
             ) from error
         audit_action = "library.bulk.add_tag"
+    elif action == "remove_tag":
+        if tag_id is None:
+            raise ValidationFailure("Tag is required")
+        for item in sorted(items, key=lambda candidate: candidate.id):
+            await require_item_action(db, user, workspace_id, item.id, ResourceAction.tag_use)
+        # Protect the validated taxonomy root from deletion/merge until the
+        # association changes commit. Item roots remain independent.
+        tag = await db.scalar(
+            select(Tag)
+            .where(Tag.workspace_id == workspace_id, Tag.id == tag_id)
+            .with_for_update(read=True)
+        )
+        if tag is None:
+            raise ResourceUnavailable("Tag not found")
+        for item_id in sorted({item.id for item in items}):
+            await db.execute(
+                delete(ItemTag).where(
+                    ItemTag.workspace_id == workspace_id,
+                    ItemTag.item_id == item_id,
+                    ItemTag.tag_id == tag_id,
+                )
+            )
+        audit_action = "library.bulk.remove_tag"
     elif action in ("delete_items", "delete"):
         await require_workspace_action(db, user, workspace_id, ResourceAction.item_delete)
         if confirm_delete != "delete":
@@ -110,13 +145,18 @@ async def apply_bulk_item_action(
         audit_action,
         "item",
         None,
-        detail={"item_ids": [item.id for item in items]},
+        detail={
+            "item_ids": [item.id for item in items],
+            **({"project_id": project_id} if action == "remove_project" else {}),
+            **({"tag_id": tag_id} if action == "remove_tag" else {}),
+        },
         workspace_id=workspace_id,
+        project_id=project_id if action == "remove_project" else None,
         authorization_resource_action=(
             ResourceAction.project_item_manage.value
-            if action in ("add_project", "project_add")
+            if action in ("add_project", "project_add", "remove_project")
             else ResourceAction.tag_use.value
-            if action in ("add_tag", "tag")
+            if action in ("add_tag", "tag", "remove_tag")
             else ResourceAction.item_delete.value
         ),
     )
