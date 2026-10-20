@@ -154,7 +154,7 @@
 	class:xl:grid-cols-[minmax(0,1fr)_22rem]={Boolean(previewItemId)}
 >
 	<Panel padding="none" class="min-w-0">
-		{#if isPending || (isError && !data) || !data?.items.length}
+		{#if isPending || !data?.items.length}
 			<div
 				class="flex flex-wrap items-center justify-end gap-2 border-b border-surface-300-700 px-4 py-3"
 			>
@@ -167,7 +167,7 @@
 			>
 				{$t('Loading Library…')}
 			</div>
-		{:else if isError && !data}<div class="px-4">
+		{:else if !data}<div class="px-4">
 				<QueryError message={$t('Unable to load the Library.')} {busy} {onRetry} />
 			</div>
 		{:else}

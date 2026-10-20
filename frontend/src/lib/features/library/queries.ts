@@ -50,7 +50,7 @@ export function libraryListQuery(
 				});
 			} catch (reason) {
 				if (reason instanceof ApiError && [401, 403, 404].includes(reason.status)) {
-					// A null snapshot keeps the request error and stays empty through later transient failures.
+					// Null marks purged snapshots as unavailable, even if a later refetch pauses or fails.
 					if (filters.project) {
 						const prefix = libraryKeys.lists(workspaceId);
 						const scope = {
