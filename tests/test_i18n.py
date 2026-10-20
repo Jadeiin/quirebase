@@ -45,6 +45,7 @@ def test_translated_catalog_does_not_leave_english_copy():
         re.MULTILINE,
     )
     exempt = {
+        "A\N{EN DASH}Z",
         "BibTeX",
         "CSL XML",
         "CSL-JSON",
@@ -55,6 +56,7 @@ def test_translated_catalog_does_not_leave_english_copy():
         "PDF",
         "RIS",
         "URL",
+        "Z\N{EN DASH}A",
         "{kind} · {size} KB",
         "{size} KB",
         "{size} MB",
