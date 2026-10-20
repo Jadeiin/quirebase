@@ -368,62 +368,100 @@ for (const view of ['table', 'list'] as const) {
 	}
 }
 
-for (const status of [403, 404]) {
-	test(`purged Project pages and sort orders stay unavailable offline after HTTP ${status}`, async ({
-		page,
-		context
-	}) => {
-		const { reads } = await mockLibrary(page);
-		await page.route('**/api/v1/workspaces/*/projects/project-1', (route) =>
-			route.fulfill({
-				json: { id: 'project-1', name: 'Managed Project', authorization: { allowed: [] } }
-			})
-		);
-		let denied = false;
-		await page.route('**/api/v1/workspaces/*/items?*', (route) =>
-			denied
-				? route.fulfill({
-						status,
-						json: { code: status === 404 ? 'not_found' : 'permission_denied', message: 'Denied' }
-					})
-				: route.fallback()
-		);
-		await page.goto('/workspace/workspace-1/library?project=project-1');
-		const item = page.getByRole('link', { name: 'Research Item 2', exact: true });
-		await expect(item).toBeVisible();
-		const sort = page.getByRole('combobox', { name: 'Sort By', exact: true });
-		await sort.selectOption('title');
-		await expect.poll(() => reads.at(-1)?.searchParams.get('sort')).toBe('title');
-		await expect(item).toBeVisible();
-		await page.getByRole('button', { name: 'Next page', exact: true }).click();
-		await expect(page.getByRole('link', { name: 'Research Item 26', exact: true })).toBeVisible();
-		denied = true;
-		await sort.selectOption('published');
-		const alert = page.locator('#library-results').getByRole('alert');
-		await expect(alert).toContainText('Unable to load the Library.');
-		await context.setOffline(true);
-		await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-		const readCount = reads.length;
-		for (const expected of [
-			{ sort: 'title', page: '2' },
-			{ sort: 'title', page: null },
-			{ sort: null, page: null }
-		]) {
-			await page.goBack();
-			await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe(expected.sort);
-			await expect(sort).toHaveValue(expected.sort ?? 'updated');
-			await expect(alert).toContainText('Unable to load the Library.');
-			await expect(alert.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
-			await expect(page.getByText('No Items found.', { exact: true })).toHaveCount(0);
-			await expect(page.getByRole('checkbox', { name: /^Select Author/ })).toHaveCount(0);
-			expect(new URL(page.url()).searchParams.get('page')).toBe(expected.page);
-			expect(reads).toHaveLength(readCount);
-		}
-		denied = false;
-		await context.setOffline(false);
-		await expect(item).toBeVisible();
-		await expect(alert).toHaveCount(0);
-	});
+for (const surface of ['Library', 'Project'] as const) {
+	for (const status of [403, 404]) {
+		test(`purged Project pages and sort orders stay unavailable offline in ${surface} after HTTP ${status}`, async ({
+			page,
+			context
+		}) => {
+			const { reads } = await mockLibrary(page);
+			await page.route('**/api/v1/workspaces/*/projects/project-1', (route) =>
+				route.fulfill({
+					json: {
+						id: 'project-1',
+						name: 'Managed Project',
+						description: '',
+						state: 'active',
+						participation: 'managed',
+						item_count: items.length,
+						is_participating: true,
+						allowed_participation_changes: [],
+						authorization: { allowed: [] },
+						active_participants: []
+					}
+				})
+			);
+			await page.route('**/api/v1/workspaces/*/projects/project-1/discussions', (route) =>
+				route.fulfill({ json: [] })
+			);
+			let denied = false;
+			await page.route('**/api/v1/workspaces/*/items?*', (route) =>
+				denied
+					? route.fulfill({
+							status,
+							json: { code: status === 404 ? 'not_found' : 'permission_denied', message: 'Denied' }
+						})
+					: route.fallback()
+			);
+			await page.goto(
+				surface === 'Library'
+					? '/workspace/workspace-1/library?project=project-1'
+					: '/workspace/workspace-1/projects/project-1'
+			);
+			const item = page.getByRole('link', {
+				name: surface === 'Library' ? 'Research Item 2' : 'Research Item 2 Author 2',
+				exact: true
+			});
+			await expect(item).toBeVisible();
+			const sort = page.getByRole('combobox', { name: 'Sort By', exact: true });
+			await sort.selectOption('title');
+			await expect.poll(() => reads.at(-1)?.searchParams.get('sort')).toBe('title');
+			await expect(item).toBeVisible();
+			await page.getByRole('button', { name: 'Next page', exact: true }).click();
+			await expect(
+				page.getByRole('link', {
+					name: surface === 'Library' ? 'Research Item 26' : 'Research Item 26 Author 26',
+					exact: true
+				})
+			).toBeVisible();
+			denied = true;
+			await sort.selectOption(surface === 'Library' ? 'published' : 'created');
+			const results =
+				surface === 'Library'
+					? page.locator('#library-results')
+					: page.getByRole('heading', { name: 'Items', exact: true }).locator('..');
+			const alert = results.getByRole('alert');
+			const failure =
+				surface === 'Library' ? 'Unable to load the Library.' : 'Unable to load Items.';
+			await expect(alert).toContainText(failure);
+			await context.setOffline(true);
+			await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+			const readCount = reads.length;
+			for (const expected of [
+				{ sort: 'title', page: '2' },
+				{ sort: 'title', page: null },
+				{ sort: null, page: null }
+			]) {
+				await page.goBack();
+				await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe(expected.sort);
+				await expect(sort).toHaveValue(expected.sort ?? 'updated');
+				await expect(alert).toContainText(failure);
+				await expect(alert.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
+				await expect(results.getByText('No Items found.', { exact: true })).toHaveCount(0);
+				await expect(results.getByText('No Items in this Project.', { exact: true })).toHaveCount(
+					0
+				);
+				await expect(results.getByRole('link', { name: /^Research Item/ })).toHaveCount(0);
+				await expect(page.getByRole('checkbox', { name: /^Select Author/ })).toHaveCount(0);
+				expect(new URL(page.url()).searchParams.get('page')).toBe(expected.page);
+				expect(reads).toHaveLength(readCount);
+			}
+			denied = false;
+			await context.setOffline(false);
+			await expect(item).toBeVisible();
+			await expect(alert).toHaveCount(0);
+		});
+	}
 }
 
 test('keyboard sorting restores header focus after a slow response without taking focus from another control', async ({

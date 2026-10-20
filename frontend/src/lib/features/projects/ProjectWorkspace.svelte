@@ -665,7 +665,7 @@
 				}}
 			/>
 			{#if items.isPending || (!items.data && items.isFetching)}<p>{$t('Loading Items…')}</p>
-			{:else if items.isError}<QueryError
+			{:else if items.isError || !items.data}<QueryError
 					message={$t('Unable to load Items.')}
 					busy={items.isFetching}
 					onRetry={() => void items.refetch()}
