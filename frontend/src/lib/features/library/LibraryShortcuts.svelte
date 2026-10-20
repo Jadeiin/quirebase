@@ -111,7 +111,7 @@
 					<dt>{$t('Show keyboard shortcuts')}</dt>
 					<dd><kbd class="kbd">?</kbd></dd>
 					<dt>{$t('Close a popup or preview, then clear selection')}</dt>
-					<dd><kbd class="kbd">{$t('Esc')}</kbd></dd>
+					<dd><kbd class="kbd">{formatForDisplay('Escape')}</kbd></dd>
 					<dt>{$t('Copy citations for selected or focused Items')}</dt>
 					<dd><kbd class="kbd">{formatForDisplay('Mod+Shift+C')}</kbd></dd>
 				</dl>

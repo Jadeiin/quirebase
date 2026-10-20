@@ -2059,11 +2059,6 @@ msgid "Error"
 msgstr "错误"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryShortcuts.svelte
-msgid "Esc"
-msgstr "Esc"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Established"
 msgstr "成立日期"
