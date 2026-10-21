@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from collections import Counter
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 from item_helpers import contributor
 from workspace_helpers import provision_initial_workspace
 
-from quirebase.core.errors import ResourceUnavailable, WorkspaceMembershipRequired
+from quirebase.core.errors import (
+    ResourceUnavailable,
+    ValidationFailure,
+    WorkspaceMembershipRequired,
+)
 from quirebase.library import (
     LibraryFilter,
     create_item,
@@ -116,7 +122,7 @@ async def test_facets_count_distinct_items_and_retain_multivalued_terms(persiste
         ("JournalArticle", 1)
     ]
     limited = await get_library_facets(persistence_db, owner, workspace_id, limit=1)
-    assert len(limited.authors) == len(limited.keywords) == len(limited.reference_types) == 1
+    assert sum(row.item_count for row in limited.reference_types) == 1
     empty = await get_library_facets(
         persistence_db, owner, workspace_id, LibraryFilter(q="missingterm")
     )
@@ -265,4 +271,280 @@ async def test_facets_and_suggestions_obey_workspace_and_project_discovery(persi
     suggestions = await search_authors_typeahead(
         db, owner, workspace_id, "Smith", project=project_id
     )
-    assert suggestions == [{"last_name": "Smith", "first_name": "John", "full_name": "Smith, John"}]
+    assert suggestions == [{"last_name": "Smith", "first_name": "John", "full_name": "John Smith"}]
+
+
+async def test_facets_follow_the_same_result_page_for_every_sort(persistence_db):
+    from quirebase.library import item_summary
+
+    db = persistence_db
+    owner, _, workspace_id, _, ids, _ = await _library(db)
+    for item_id in ids[:2]:
+        item = await db.get(Item, item_id)
+        item.work = {
+            **item.work,
+            "title": "Same title",
+            "container": {"title": "Same publication"},
+        }
+        item.created_at = datetime(2025, 1, 1, tzinfo=UTC)
+        item.updated_at = datetime(2025, 1, 2, tzinfo=UTC)
+    await db.commit()
+    for sort in ["title", "author", "publication", "published", "created", "updated"]:
+        for direction in [None, "asc", "desc"]:
+            for limit, offset in [(2, 0), (2, 2), (3, 1), (1, 3), (2, 50)]:
+                rows, total = await search_library(
+                    db,
+                    owner,
+                    workspace_id,
+                    limit=limit,
+                    offset=offset,
+                    sort=sort,
+                    direction=direction,
+                )
+                assert total == 4
+                facets = await get_library_facets(
+                    db,
+                    owner,
+                    workspace_id,
+                    limit=limit,
+                    offset=offset,
+                    sort=sort,
+                    direction=direction,
+                )
+                authors = Counter()
+                keywords = Counter()
+                for item in rows:
+                    authors.update({
+                        (author["last_name"], author["first_name"])
+                        for author in item_summary(item)["authors"]
+                    })
+                    keywords.update({
+                        subject["subject"] for subject in item.work.get("subjects", [])
+                    })
+                assert {
+                    (row.last_name, row.first_name): row.item_count for row in facets.authors
+                } == dict(authors)
+                assert {row.value: row.item_count for row in facets.keywords} == dict(keywords)
+                assert {row.value: row.item_count for row in facets.reference_types} == dict(
+                    Counter(item.work["type"] for item in rows)
+                )
+    for parameters in [
+        {"limit": 0},
+        {"limit": 101},
+        {"offset": -1},
+        {"sort": "unknown"},
+        {"direction": "unknown"},
+    ]:
+        with pytest.raises(ValidationFailure):
+            await get_library_facets(db, owner, workspace_id, **parameters)
+    with pytest.raises(ValidationFailure):
+        await get_library_facets(db, owner, workspace_id, LibraryFilter(author_first_name="John"))
+
+
+async def test_facets_return_all_values_in_the_item_page_without_top_fifty_cutoff(persistence_db):
+    db = persistence_db
+    owner, _, workspace_id, _, _, _ = await _library(db)
+    credits = [contributor(f"Rare {index:03}") for index in range(73)]
+    subjects = [{"subject": f"Keyword {index:03}"} for index in range(73)]
+    await create_item(
+        db,
+        owner,
+        workspace_id,
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Many choices",
+            "contributors": [*credits, credits[-1]],
+            "subjects": [*subjects, subjects[-1]],
+        },
+    )
+    await create_item(
+        db,
+        owner,
+        workspace_id,
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Book",
+            "title": "Many other",
+            "contributors": [contributor("Other page")],
+            "subjects": [{"subject": "Other"}],
+        },
+    )
+    facets = await get_library_facets(
+        db, owner, workspace_id, LibraryFilter(q="Many"), limit=1, sort="title"
+    )
+    assert len(facets.authors) == len(facets.keywords) == 73
+    assert (facets.authors[-1].last_name, facets.authors[-1].item_count) == ("Rare 072", 1)
+    assert (facets.keywords[-1].value, facets.keywords[-1].item_count) == ("Keyword 072", 1)
+    second = await get_library_facets(
+        db, owner, workspace_id, LibraryFilter(q="Many"), limit=1, offset=1, sort="title"
+    )
+    assert [(row.last_name, row.item_count) for row in second.authors] == [("Other page", 1)]
+    assert [(row.value, row.item_count) for row in second.keywords] == [("Other", 1)]
+    assert [(row.value, row.item_count) for row in second.reference_types] == [("Book", 1)]
+
+
+async def test_author_facets_and_suggestions_display_record_names_without_reidentifying_them(
+    persistence_db,
+):
+    from quirebase.library import item_summary
+
+    db = persistence_db
+    owner, _, workspace_id, _, _, _ = await _library(db)
+    credits = [
+        {
+            "type": "Person",
+            "person": {"name": " 王伟 ", "family_name": "Wang", "given_name": " Wei "},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Organization",
+            "organization": {"name": " Research Council "},
+            "person": {"name": "Inactive Person"},
+            "roles": ["Author"],
+        },
+        {"type": "Person", "person": {"given_name": " Ada "}, "roles": ["Author"]},
+        {
+            "type": "Person",
+            "person": {"name": " \t ", "family_name": "Smith ", "given_name": " Jane "},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Person",
+            "person": {"name": "John Smith Jr.", "family_name": "Smith", "given_name": "John"},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Person",
+            "person": {"name": "John Smith Sr.", "family_name": "Smith", "given_name": "John"},
+            "roles": ["Author"],
+        },
+        {"type": "Person", "person": {"name": "\t\u3000"}, "roles": ["Author"]},
+        {
+            "type": "Person",
+            "person": {"family_name": "\t", "given_name": "\u3000"},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Organization",
+            "organization": {"name": " \n "},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Person",
+            "person": {"name": "Different A", "family_name": "\t", "given_name": "\u3000"},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Person",
+            "person": {"name": "Different B", "family_name": "\t", "given_name": "\u3000"},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Person",
+            "person": {"name": "Visible Name", "family_name": "\n"},
+            "roles": ["Author"],
+        },
+        {
+            "type": "Person",
+            "person": {"name": " \t ", "family_name": "\n"},
+            "roles": ["Author"],
+        },
+    ]
+    for index, credit in enumerate(credits):
+        created = await create_item(
+            db,
+            owner,
+            workspace_id,
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "Document",
+                "title": f"Name projections {index}",
+                "contributors": [credit],
+            },
+        )
+        item = await db.get(Item, created.item_id)
+        assert item.work["contributors"] == [credit]
+        if index == 3:
+            assert item_summary(item)["authors"] == [
+                {"full_name": "Jane Smith", "last_name": "Smith ", "first_name": " Jane "}
+            ]
+        if 6 <= index < 9:
+            assert item_summary(item)["authors"] == []
+    facets = await get_library_facets(db, owner, workspace_id, LibraryFilter(q="projections"))
+    names = {
+        (row.last_name, row.first_name): (row.full_name, row.item_count) for row in facets.authors
+    }
+    assert names == {
+        ("Wang", " Wei "): ("王伟", 1),
+        (" Research Council ", None): ("Research Council", 1),
+        (" Ada ", None): ("Ada", 1),
+        ("Smith ", " Jane "): ("Jane Smith", 1),
+        ("Smith", "John"): ("John Smith", 2),
+        ("\n", None): ("Visible Name", 2),
+    }
+    for choice in facets.authors:
+        _, total = await search_library(
+            db,
+            owner,
+            workspace_id,
+            q="projections",
+            author_last_name=choice.last_name,
+            author_first_name=choice.first_name or "",
+        )
+        assert total == choice.item_count
+    assert await search_authors_typeahead(db, owner, workspace_id, "王") == [
+        {"last_name": "Wang", "first_name": " Wei ", "full_name": "王伟"}
+    ]
+    john = await search_authors_typeahead(db, owner, workspace_id, "John")
+    assert john == [{"last_name": "Smith", "first_name": "John", "full_name": "John Smith"}]
+    assert await search_authors_typeahead(db, owner, workspace_id, "Visible") == [
+        {"last_name": "\n", "first_name": None, "full_name": "Visible Name"}
+    ]
+
+
+async def test_facet_endpoint_uses_the_item_paging_sorting_and_validation_contract(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    from test_http import authenticated_async_client
+
+    from quirebase.core.config import get_settings
+
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    owner = await async_db.get(User, item.created_by)
+    await create_item(
+        async_db,
+        owner,
+        item.workspace_id,
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "Document",
+            "title": "Zeta",
+            "contributors": [contributor("Second")],
+        },
+    )
+    path = f"/api/v1/workspaces/{item.workspace_id}/items"
+    try:
+        response = await client.get(
+            f"{path}/facets", params={"sort": "title", "direction": "asc", "limit": 1, "offset": 1}
+        )
+        assert response.status_code == 200
+        assert response.json()["authors"] == [
+            {"last_name": "Second", "first_name": None, "full_name": "Second", "item_count": 1}
+        ]
+        empty = await client.get(f"{path}/facets", params={"offset": 20})
+        assert empty.json() == {"authors": [], "keywords": [], "reference_types": []}
+        for parameters in [
+            {"limit": 0},
+            {"limit": 101},
+            {"offset": -1},
+            {"sort": "unknown"},
+            {"direction": "unknown"},
+        ]:
+            assert (await client.get(f"{path}/facets", params=parameters)).status_code == 422
+            assert (await client.get(path, params=parameters)).status_code == 422
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()

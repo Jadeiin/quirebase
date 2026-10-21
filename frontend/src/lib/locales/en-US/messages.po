@@ -37,6 +37,7 @@ msgstr "{count, plural, one {# error} other {# errors}}"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
 #: src/lib/features/library/Library.svelte
+#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "{count, plural, one {# Item} other {# Items}}"
 msgstr "{count, plural, one {# Item} other {# Items}}"
@@ -147,6 +148,10 @@ msgstr "A managed Project starts with no participants; Workspace owners/admins c
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/tools/Tools.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "A–Z"
 msgstr "A–Z"
 
@@ -218,6 +223,7 @@ msgstr "Action"
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/library/LibraryTable.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Actions"
 msgstr "Actions"
@@ -233,6 +239,8 @@ msgstr "Actions for {username}"
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/metadata-labels.ts
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Active"
 msgstr "Active"
 
@@ -496,11 +504,14 @@ msgstr "All revisions"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "All roles"
 msgstr "All roles"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+#: src/lib/features/tools/Tools.svelte
 msgid "All sources"
 msgstr "All sources"
 
@@ -559,6 +570,8 @@ msgstr "Any field"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Any state"
 msgstr "Any state"
 
@@ -641,13 +654,9 @@ msgstr "Archive workspace"
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/projects/Projects.svelte
 msgid "Archived"
 msgstr "Archived"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Archived Projects"
-msgstr "Archived Projects"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
@@ -742,6 +751,11 @@ msgstr "Authorization role"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Authors"
 msgstr "Authors"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Authors, keywords and types on this page. Counts refer to Items on this page."
+msgstr "Authors, keywords and types on this page. Counts refer to Items on this page."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -947,8 +961,13 @@ msgstr "Build a precise query, then review candidates before Import."
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
-msgid "Built-in CSL styles and styles installed by you."
-msgstr "Built-in CSL styles and styles installed by you."
+msgid "Built-in"
+msgstr "Built-in"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Built-in CSL styles and custom styles shared in this Workspace."
+msgstr "Built-in CSL styles and custom styles shared in this Workspace."
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
@@ -1597,6 +1616,8 @@ msgstr "Create workspace"
 #: src/lib/features/admin/AdminWorkflows.svelte
 #: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/item/schema-editor/labels.ts
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Created"
 msgstr "Created"
 
@@ -1640,6 +1661,11 @@ msgstr "Current password"
 #: src/lib/features/account/Account.svelte
 msgid "Current session"
 msgstr "Current session"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Custom"
+msgstr "Custom"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1717,6 +1743,11 @@ msgstr "Date"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Date added"
 msgstr "Date added"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
+msgid "Date joined"
+msgstr "Date joined"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
@@ -1918,6 +1949,7 @@ msgstr "Discussion posted"
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 #: src/lib/features/workflows/WorkflowJobRow.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Dismiss"
 msgstr "Dismiss"
 
@@ -2080,6 +2112,7 @@ msgstr "Each inspection requires a reason and returns at most 100 Items. It gran
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Earliest first"
 msgstr "Earliest first"
 
@@ -2226,15 +2259,11 @@ msgid "Expired"
 msgstr "Expired"
 
 #. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceInvitations.svelte
-msgid "expires"
-msgstr "expires"
-
-#. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 #: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Expires"
 msgstr "Expires"
 
@@ -2860,6 +2889,11 @@ msgstr "Invitations are not available for this workspace."
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
+msgid "Invitations pagination"
+msgstr "Invitations pagination"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Invite an existing user to join this workspace."
 msgstr "Invite an existing user to join this workspace."
 
@@ -3024,7 +3058,6 @@ msgstr "Item thumbnail"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminOverview.svelte
-#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Items"
 msgstr "Items"
@@ -3041,11 +3074,6 @@ msgid "Join"
 msgstr "Join"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Join an open research direction to add it to Your Projects."
-msgstr "Join an open research direction to add it to Your Projects."
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Join Project"
 msgstr "Join Project"
@@ -3054,6 +3082,11 @@ msgstr "Join Project"
 #: src/lib/features/auth/Invitation.svelte
 msgid "Join Quirebase"
 msgstr "Join Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Joined"
+msgstr "Joined"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3134,6 +3167,7 @@ msgstr "Last page"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Latest first"
 msgstr "Latest first"
 
@@ -3153,6 +3187,7 @@ msgid "Leave {name}? You will lose access to its library and projects. Your cont
 msgstr "Leave {name}? You will lose access to its library and projects. Your contributions will remain in the workspace."
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Leave Project"
 msgstr "Leave Project"
@@ -3257,6 +3292,11 @@ msgstr "Line"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "List"
 msgstr "List"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Load more Citation Styles"
+msgstr "Load more Citation Styles"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3529,11 +3569,6 @@ msgid "Managed"
 msgstr "Managed"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Managed participation"
-msgstr "Managed participation"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Managed Projects"
 msgstr "Managed Projects"
@@ -3543,11 +3578,6 @@ msgstr "Managed Projects"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Managed Projects are visible only to their participants and Workspace owners/admins."
 msgstr "Managed Projects are visible only to their participants and Workspace owners/admins."
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Managed Projects are visible to participants and Workspace owners/admins; Workspace owners/admins curate their participant lists."
-msgstr "Managed Projects are visible to participants and Workspace owners/admins; Workspace owners/admins curate their participant lists."
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3718,11 +3748,6 @@ msgid "More actions"
 msgstr "More actions"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryRefinements.svelte
-msgid "Most frequent values in the applied results, up to 50 per field. Counts reflect Items, not occurrences."
-msgstr "Most frequent values in the applied results, up to 50 per field. Counts reflect Items, not occurrences."
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Move down"
 msgstr "Move down"
@@ -3751,6 +3776,7 @@ msgstr "My workspaces"
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/lib/features/tools/Tools.svelte
 #: src/lib/features/workspaces/WorkspaceGeneral.svelte
 msgid "Name"
 msgstr "Name"
@@ -3815,6 +3841,9 @@ msgstr "New Tag name"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Newest first"
 msgstr "Newest first"
 
@@ -3950,6 +3979,11 @@ msgid "No keywords."
 msgstr "No keywords."
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+msgid "No matching invitations."
+msgstr "No matching invitations."
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No matching Items."
 msgstr "No matching Items."
@@ -3973,6 +4007,7 @@ msgstr "No matching pages."
 #. js-lingui-explicit-id
 #: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/Projects.svelte
 msgid "No matching Projects."
 msgstr "No matching Projects."
 
@@ -3996,16 +4031,6 @@ msgstr "No new Tag suggestions."
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "No note text"
 msgstr "No note text"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "No open Projects are available to join."
-msgstr "No open Projects are available to join."
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "No participating Projects on this page."
-msgstr "No participating Projects on this page."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -4067,8 +4092,8 @@ msgstr "No users."
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryRefinements.svelte
-msgid "No values in these results."
-msgstr "No values in these results."
+msgid "No values on this page."
+msgstr "No values on this page."
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
@@ -4136,6 +4161,9 @@ msgstr "Object integrity"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Oldest first"
 msgstr "Oldest first"
 
@@ -4187,6 +4215,7 @@ msgid "Open import"
 msgstr "Open import"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Open in Library"
 msgstr "Open in Library"
@@ -5338,8 +5367,6 @@ msgstr "Result"
 #: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
-#: src/lib/features/workspaces/WorkspaceInvitations.svelte
-#: src/lib/features/workspaces/WorkspaceMembers.svelte
 #: src/routes/(app)/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "Retry"
@@ -5440,6 +5467,11 @@ msgstr "Revoke current session"
 #: src/lib/features/admin/AdminInvitations.svelte
 msgid "Revoke invitation"
 msgstr "Revoke invitation"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+msgid "Revoke invitation for {username}"
+msgstr "Revoke invitation for {username}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
@@ -5634,6 +5666,7 @@ msgstr "Search active users"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/tools/Tools.svelte
 msgid "Search Citation Styles"
 msgstr "Search Citation Styles"
 
@@ -5656,6 +5689,11 @@ msgstr "Search failed"
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Search field"
 msgstr "Search field"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+msgid "Search invitations"
+msgstr "Search invitations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -5845,6 +5883,11 @@ msgid "Show less"
 msgstr "Show less"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Show less {field}"
+msgstr "Show less {field}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Show members"
 msgstr "Show members"
@@ -5853,6 +5896,11 @@ msgstr "Show members"
 #: src/lib/features/library/LibraryRefinements.svelte
 msgid "Show more"
 msgstr "Show more"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Show more {field}"
+msgstr "Show more {field}"
 
 #. js-lingui-explicit-id
 #: src/lib/design/SearchSelect.svelte
@@ -5934,6 +5982,9 @@ msgstr "Something went wrong. Try again."
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Sort"
 msgstr "Sort"
 
@@ -5941,6 +5992,10 @@ msgstr "Sort"
 #: src/lib/design/Pagination.svelte
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/tools/Tools.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Sort By"
 msgstr "Sort By"
 
@@ -5972,6 +6027,10 @@ msgstr "Sort by title"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/tools/Tools.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Sort order: {current}. Switch to {next}."
 msgstr "Sort order: {current}. Switch to {next}."
 
@@ -5982,6 +6041,7 @@ msgstr "Sound"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
+#: src/lib/features/tools/Tools.svelte
 msgid "Source"
 msgstr "Source"
 
@@ -6021,6 +6081,8 @@ msgstr "Starting…"
 #: src/lib/features/admin/AdminWorkflows.svelte
 #: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "State"
 msgstr "State"
 
@@ -6115,6 +6177,11 @@ msgstr "Suspend"
 #: src/lib/domain-labels.ts
 msgid "suspended"
 msgstr "suspended"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
+msgid "Suspended"
+msgstr "Suspended"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -6601,6 +6668,11 @@ msgid "Unable to join Project"
 msgstr "Unable to join Project"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Unable to leave Project"
+msgstr "Unable to leave Project"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceLeave.svelte
 msgid "Unable to leave workspace."
 msgstr "Unable to leave workspace."
@@ -6881,6 +6953,7 @@ msgstr "Update the name members see across this workspace."
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
 #: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/projects/Projects.svelte
 msgid "Updated"
 msgstr "Updated"
 
@@ -7008,6 +7081,7 @@ msgstr "User sessions revoked"
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/auth/Login.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Username"
 msgstr "Username"
@@ -7333,11 +7407,6 @@ msgid "Workspace name updated"
 msgstr "Workspace name updated"
 
 #. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Workspace Projects"
-msgstr "Workspace Projects"
-
-#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
 msgid "Workspace reindex"
 msgstr "Workspace reindex"
@@ -7512,5 +7581,9 @@ msgstr "Your role:"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
+#: src/lib/features/projects/Projects.svelte
+#: src/lib/features/tools/Tools.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Z–A"
 msgstr "Z–A"

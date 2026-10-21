@@ -7,14 +7,18 @@
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref, type WorkspacePath } from '#lib/workspaces/href.js';
 	import { t } from '#lib/i18n.js';
+	import { authorFilterLabel } from './author-names.js';
 	import type { LibraryFilters } from './filters.js';
+	import type { LibrarySearch } from './queries.js';
 
 	let {
 		filters,
+		authors = [],
 		project = null,
 		onRemove
 	}: {
 		filters: LibraryFilters;
+		authors?: LibrarySearch['items'][number]['authors'];
 		project?: { id: string; name: string } | null;
 		onRemove: (keys: (keyof LibraryFilters)[]) => void;
 	} = $props();
@@ -59,7 +63,7 @@
 		if (filters.author_last_name !== undefined)
 			add(
 				$t('Author'),
-				[filters.author_last_name, filters.author_first_name].filter(Boolean).join(', '),
+				authorFilterLabel(filters.author_last_name, filters.author_first_name, authors),
 				['author_last_name', 'author_first_name']
 			);
 		if (filters.author) add($t('Contributor'), filters.author, ['author']);

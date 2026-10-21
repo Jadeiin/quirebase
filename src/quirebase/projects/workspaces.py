@@ -117,19 +117,34 @@ async def list_workspace_projects(
     limit: int | None = 25,
     offset: int = 0,
     search: str = "",
+    state: Literal["", "active", "archived"] = "",
+    sort: Literal["name", "created", "updated"] = "name",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> tuple[list[tuple[Project, int, bool]], int]:
     """List discoverable Projects, optionally limited to the caller's participation view."""
     if view not in {"mine", "joinable", "all"}:
         raise ValidationFailure("invalid Project list view")
     require_action(context, ResourceAction.workspace_read)
+    columns = {"name": Project.name, "created": Project.created_at, "updated": Project.updated_at}
+    if sort not in columns:
+        raise ValidationFailure(f"unknown Project sort: {sort}")
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure(f"unknown sort direction: {direction}")
+    if state and state not in ProjectState:
+        raise ValidationFailure(f"unknown Project state: {state}")
     is_participating = _participation_predicate(context)
     query = (
         workspace_select(Project, context)
         .where(
             Project.id.in_(discoverable_project_ids_query(context)),
         )
-        .order_by(Project.name, Project.id)
+        .order_by(
+            columns[sort].desc() if direction == "desc" else columns[sort].asc(),
+            Project.id.desc() if direction == "desc" else Project.id.asc(),
+        )
     )
+    if state:
+        query = query.where(Project.state == state)
     if view == "mine":
         query = query.where(is_participating)
     elif view == "joinable":

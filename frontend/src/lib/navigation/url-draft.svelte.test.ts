@@ -71,6 +71,22 @@ afterEach(() => {
 });
 
 describe('URL search drafts', () => {
+	it('pauses publishing until IME composition finishes and then debounces the final input', async () => {
+		draft.value = 'initial';
+		await advance(100);
+		draft.compositionStart();
+		draft.value = 'zhong';
+		await advance(500);
+		expect(router.goto).not.toHaveBeenCalled();
+		draft.value = '中文 ';
+		draft.compositionEnd();
+		await advance(199);
+		expect(router.goto).not.toHaveBeenCalled();
+		await advance(1);
+		expect(url.searchParams.get('search')).toBe('中文');
+		expect(draft.value).toBe('中文 ');
+	});
+
 	it('debounces the latest raw input and preserves spaces after its URL acknowledgement', async () => {
 		draft.value = 'machine';
 		await advance(100);

@@ -375,6 +375,12 @@ def test_lookup_aliases_and_malformed_values_do_not_become_identity_matches():
         ({"name": "Wang Wei", "given_name": "Wei", "family_name": "Wang"}, "Wang Wei"),
         ({"given_name": "Ada"}, "Ada"),
         ({"family_name": "Lovelace"}, "Lovelace"),
+        ({"name": " 王伟 ", "given_name": "Wei", "family_name": "Wang"}, "王伟"),
+        ({"name": " \t ", "given_name": " Jane ", "family_name": " Smith "}, "Jane Smith"),
+        ({"name": "\u3000", "given_name": " Ada "}, "Ada"),
+        ({"given_name": "\t ", "family_name": "Smith"}, "Smith"),
+        ({"given_name": "Ada", "family_name": "\n "}, "Ada"),
+        ({"name": " \n ", "given_name": "\t", "family_name": "\u3000"}, ""),
         ({}, ""),
     ],
 )
@@ -382,6 +388,17 @@ def test_contributor_display_name_uses_reading_order_without_a_full_name(person,
     from inquiro.work import contributor_name
 
     assert contributor_name({"type": "Person", "person": person}) == expected
+
+
+@pytest.mark.parametrize(
+    "name, expected", [("  Research Council ", "Research Council"), ("\t ", "")]
+)
+def test_organization_display_names_trim_without_changing_metadata(name, expected):
+    from inquiro.work import contributor_name
+
+    credit = {"type": "Organization", "organization": {"name": name}}
+    assert contributor_name(credit) == expected
+    assert credit["organization"]["name"] == name
 
 
 def test_contributor_type_selects_active_names_keys_and_writer_credits_without_losing_work():

@@ -6,9 +6,10 @@
 	import { page } from '$app/state';
 	import { tick } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { SegmentedControl, Tabs } from '@skeletonlabs/skeleton-svelte';
+	import { Collapsible, SegmentedControl, Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { isUnavailableReadError } from '#lib/api/query-state.js';
 	import { can, type AuthorizationDecisionSet } from '#lib/authorization/can.js';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import Notice from '#lib/design/Notice.svelte';
@@ -27,6 +28,10 @@
 	} from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
+	import Badge from '#lib/design/Badge.svelte';
+	import { buttonClass } from '#lib/design/button-classes.js';
+	import Icon from '#lib/design/Icon.svelte';
+	import { numberFormat } from '#lib/format.js';
 	import ItemRow from '#lib/design/ItemRow.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
@@ -42,6 +47,7 @@
 	};
 	type CitationStyle = { key: string; name: string; scope: 'builtin' | 'custom' };
 
+	const id = $props.id();
 	const location = $derived(readToolsState(page.url.searchParams));
 	const activeTool = $derived(location.tool);
 	const mode = $derived(location.mode);
@@ -55,12 +61,20 @@
 	let sourceTag = $state('');
 	let targetTag = $state('');
 	const styleQuery = $derived(location.styleQuery);
+	const styleListing = $derived({
+		styleQuery,
+		stylePage: location.stylePage,
+		styleSize: location.styleSize,
+		styleScope: location.styleScope,
+		styleDirection: location.styleDirection
+	});
 	const styleSearch = createUrlDraft({
 		read: (url) => readToolsState(url.searchParams).styleQuery,
-		href: (styleQuery) => toolsHref({ styleQuery })
+		href: (styleQuery) => toolsHref({ styleQuery, stylePage: 1 })
 	});
 	let styleName = $state('');
 	let styleCsl = $state('');
+	let styleInstallOpen = $state(false);
 	let busy = $state(false);
 	let error = $state('');
 	let notice = $state('');
@@ -96,9 +110,32 @@
 		enabled: false
 	}));
 	const citationStyles = createQuery(() => ({
-		...citationStylesQuery(workspaceId, styleQuery),
+		...citationStylesQuery(workspaceId, styleListing),
 		enabled: activeTool === 'citation-styles'
 	}));
+	const stylesAvailable = $derived(
+		citationStyles.data != null && !isUnavailableReadError(citationStyles.error)
+	);
+	const styleTotal = $derived(stylesAvailable ? (citationStyles.data?.total ?? 0) : 0);
+	const stylePageCount = $derived(Math.max(1, Math.ceil(styleTotal / location.styleSize)));
+	$effect(() => {
+		if (
+			activeTool === 'citation-styles' &&
+			citationStyles.isSuccess &&
+			!citationStyles.isFetching &&
+			stylesAvailable &&
+			location.stylePage > stylePageCount
+		)
+			navigateTools({ stylePage: stylePageCount }, 'replace');
+	});
+	const nextStyleDirection = $derived(location.styleDirection === 'asc' ? 'desc' : 'asc');
+	const styleOrderLabel = $derived(location.styleDirection === 'asc' ? $t('A–Z') : $t('Z–A'));
+	const styleDirectionHint = $derived(
+		$t('Sort order: {current}. Switch to {next}.', {
+			current: styleOrderLabel,
+			next: nextStyleDirection === 'asc' ? $t('A–Z') : $t('Z–A')
+		})
+	);
 
 	const tagPageCount = $derived(Math.max(1, Math.ceil((tags.data?.total ?? 0) / pageSize)));
 	$effect(() => {
@@ -280,15 +317,19 @@
 >
 	<Tabs.List class="max-w-full overflow-x-auto" aria-label={$t('Library tools')}>
 		<Tabs.Indicator class="bg-primary-700-300" />
-		<Tabs.Trigger value="duplicates" class="whitespace-nowrap data-selected:text-primary-800-200"
+		<Tabs.Trigger
+			value="duplicates"
+			class="min-w-0 flex-1 text-center whitespace-normal data-selected:text-primary-800-200 sm:flex-none sm:whitespace-nowrap"
 			>{$t('Duplicate review')}</Tabs.Trigger
 		>
-		<Tabs.Trigger value="tags" class="whitespace-nowrap data-selected:text-primary-800-200"
+		<Tabs.Trigger
+			value="tags"
+			class="min-w-0 flex-1 text-center whitespace-normal data-selected:text-primary-800-200 sm:flex-none sm:whitespace-nowrap"
 			>{$t('Manage Tags')}</Tabs.Trigger
 		>
 		<Tabs.Trigger
 			value="citation-styles"
-			class="whitespace-nowrap data-selected:text-primary-800-200"
+			class="min-w-0 flex-1 text-center whitespace-normal data-selected:text-primary-800-200 sm:flex-none sm:whitespace-nowrap"
 			>{$t('Citation Styles')}</Tabs.Trigger
 		>
 	</Tabs.List>
@@ -487,66 +528,156 @@
 		</div>
 	</Tabs.Content>
 	<Tabs.Content value="citation-styles">
-		<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,1fr)]">
-			<Panel>
-				<SectionHeader class="flex-col items-stretch sm:flex-row sm:items-center">
-					<div>
-						<h2>{$t('Citation Style catalog')}</h2>
-						<p class="text-surface-600-400">
-							{$t('Built-in CSL styles and styles installed by you.')}
-						</p>
+		<Panel padding="none" class="min-w-0">
+			<div class="border-b border-surface-300-700 p-5">
+				<h2>
+					{$t('Citation Style catalog')}
+					{#if stylesAvailable}<span class="text-base font-normal text-surface-600-400"
+							>{$numberFormat.format(styleTotal)}</span
+						>{/if}
+				</h2>
+				<p class="mt-1 mb-4 text-sm text-surface-600-400">
+					{$t('Built-in CSL styles and custom styles shared in this Workspace.')}
+				</p>
+				<Collapsible
+					open={styleInstallOpen}
+					onOpenChange={(details) => (styleInstallOpen = details.open)}
+					class="items-stretch"
+				>
+					<div class="flex flex-wrap items-end gap-3">
+						<label class="grid min-w-0 grow basis-60 grid-cols-1 gap-1 text-sm">
+							<span>{$t('Search Citation Styles')}</span>
+							<input
+								type="search"
+								class="input h-9 min-w-0 field-sm"
+								bind:value={styleSearch.value}
+								placeholder={$t('Search styles')}
+							/>
+						</label>
+						<label class="grid min-w-32 grow basis-32 grid-cols-1 gap-1 text-sm sm:grow-0">
+							<span>{$t('Source')}</span>
+							<select
+								class="select h-9 min-w-0 field-sm"
+								value={location.styleScope}
+								onchange={(event) => {
+									const scope = event.currentTarget.value;
+									navigateTools({
+										styleScope: scope === 'builtin' || scope === 'custom' ? scope : '',
+										stylePage: 1
+									});
+								}}
+							>
+								<option value="">{$t('All sources')}</option>
+								<option value="builtin">{$t('Built-in')}</option>
+								<option value="custom">{$t('Custom')}</option>
+							</select>
+						</label>
+						<div class="grid min-w-32 grow basis-32 grid-cols-1 gap-1 text-sm sm:grow-0">
+							<span>{$t('Sort By')}</span>
+							<Button
+								type="button"
+								size="sm"
+								class="h-9 justify-between"
+								aria-describedby={`${id}-style-direction`}
+								title={styleDirectionHint}
+								onclick={() => navigateTools({ styleDirection: nextStyleDirection, stylePage: 1 })}
+							>
+								<span>{$t('Name')}</span>
+								<span class="text-xs font-normal">{styleOrderLabel}</span>
+								<Icon
+									name={location.styleDirection === 'asc' ? 'arrow-up' : 'arrow-down'}
+									size={16}
+								/>
+							</Button>
+							<span id={`${id}-style-direction`} class="sr-only">{styleDirectionHint}</span>
+						</div>
+						{#if workspace.can('citation_style.manage')}
+							<Collapsible.Trigger class={`${buttonClass('tonal', 'sm')} h-9`}>
+								<Icon name={styleInstallOpen ? 'minus' : 'plus'} size={16} />
+								{$t('Add custom Citation Style')}
+							</Collapsible.Trigger>
+						{/if}
 					</div>
-					{#snippet actions()}
-						<input
-							class="input w-full sm:w-auto sm:min-w-36"
-							bind:value={styleSearch.value}
-							placeholder={$t('Search styles')}
-						/>
-					{/snippet}
-				</SectionHeader>
-				{#if citationStyles.isError}<QueryError
+					{#if workspace.can('citation_style.manage')}
+						<Collapsible.Content>
+							<form
+								class="mt-4 grid min-w-0 grid-cols-1 gap-4 border-t border-surface-300-700 pt-4"
+								onsubmit={(event) => {
+									event.preventDefault();
+									void createStyle();
+								}}
+							>
+								<label class="grid grid-cols-1 gap-1 text-sm sm:max-w-md">
+									{$t('Style name')}<input class="input" bind:value={styleName} required />
+								</label>
+								<label class="grid min-w-0 grid-cols-1 gap-1 text-sm">
+									{$t('CSL XML')}<textarea
+										class="textarea min-h-48 font-mono text-sm"
+										bind:value={styleCsl}
+										spellcheck="false"
+										required></textarea>
+								</label>
+								<div class="flex flex-wrap justify-end gap-2">
+									<Button variant="filled" type="submit" disabled={busy}>
+										{$t('Install Citation Style')}
+									</Button>
+								</div>
+							</form>
+						</Collapsible.Content>
+					{/if}
+				</Collapsible>
+			</div>
+			<div class="p-5">
+				{#if citationStyles.isError || citationStyles.fetchStatus === 'paused' || (!citationStyles.isPending && !stylesAvailable)}<QueryError
 						message={apiErrorMessage(citationStyles.error, $t('Unable to load Citation Styles.'))}
 						busy={citationStyles.isFetching}
 						onRetry={() => void citationStyles.refetch()}
 					/>{/if}
-				{#if citationStyles.isPending}<LoadingState label={$t('Loading Citation Styles…')} />{/if}
-				{#each citationStyles.data?.styles ?? [] as style (style.key)}
-					<ItemRow
-						class="grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-					>
-						<div>
-							<strong>{style.name}</strong>
-							<p class="mb-0 text-sm text-surface-600-400">{style.scope}</p>
-						</div>
-						{#if style.scope === 'custom' && workspace.can('citation_style.manage')}<Button
-								variant="danger"
-								disabled={busy}
-								onclick={() => deleteStyle(style)}>{$t('Delete')}</Button
-							>{/if}
-					</ItemRow>
-				{:else}{#if citationStyles.isSuccess}<p class="text-surface-600-400">
-							{$t('No Citation Styles match this search.')}
-						</p>{/if}{/each}
-			</Panel>
-			{#if workspace.can('citation_style.manage')}<Panel
-					as="form"
-					class="grid grid-cols-1 gap-3 self-start"
-					onsubmit={(event) => {
-						event.preventDefault();
-						void createStyle();
-					}}
-				>
-					<h2>{$t('Add custom Citation Style')}</h2>
-					<label>{$t('Style name')}<input class="input" bind:value={styleName} required /></label>
-					<label
-						>{$t('CSL XML')}<textarea
-							class="textarea min-h-64 font-mono text-xs"
-							bind:value={styleCsl}
-							required></textarea></label
-					>
-					<Button variant="filled" disabled={busy}>{$t('Install Citation Style')}</Button>
-				</Panel>{/if}
-		</div>
+				{#if citationStyles.isPending && citationStyles.fetchStatus !== 'paused'}<LoadingState
+						label={$t('Loading Citation Styles…')}
+					/>{/if}
+				{#if stylesAvailable && citationStyles.data}
+					<ul aria-label={$t('Citation Styles')}>
+						{#each citationStyles.data.items as style (style.key)}
+							<li
+								aria-label={style.name}
+								class="flex min-w-0 flex-col items-start gap-3 border-b border-surface-300-700 py-3 last:border-b-0 sm:flex-row sm:items-center"
+							>
+								<div class="flex min-w-0 flex-1 items-start gap-2">
+									<strong class="line-clamp-2 min-w-0 wrap-anywhere" title={style.name}
+										>{style.name}</strong
+									>
+									{#if !location.styleScope}<Badge
+											>{style.scope === 'custom' ? $t('Custom') : $t('Built-in')}</Badge
+										>{/if}
+								</div>
+								{#if style.scope === 'custom' && workspace.can('citation_style.manage')}
+									<Button
+										variant="danger"
+										size="sm"
+										class="shrink-0"
+										disabled={busy}
+										onclick={() => deleteStyle(style)}>{$t('Delete')}</Button
+									>
+								{/if}
+							</li>
+						{:else}
+							<li class="text-surface-600-400">{$t('No Citation Styles match this search.')}</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+			<Pagination
+				page={location.stylePage}
+				pageCount={stylePageCount}
+				pageSize={location.styleSize}
+				total={styleTotal}
+				onPage={(stylePage) => navigateTools({ stylePage })}
+				onPageSize={(styleSize) => navigateTools({ styleSize, stylePage: 1 })}
+				busy={citationStyles.isFetching}
+				label={$t('Citation Styles')}
+			/>
+		</Panel>
 	</Tabs.Content>
 </Tabs>
 

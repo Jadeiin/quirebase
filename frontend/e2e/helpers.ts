@@ -231,6 +231,23 @@ export function directoryPage(items: unknown[], route: Route) {
 	return { items: items.slice(offset, offset + limit), total: items.length, limit, offset };
 }
 
+export function citationStylePage<T extends { key: string; name: string }>(
+	items: T[],
+	route: Route
+) {
+	const params = new URL(route.request().url()).searchParams;
+	const query = params.get('query')?.trim().toLowerCase() ?? '';
+	const key = params.get('key');
+	return directoryPage(
+		items.filter(
+			(style) =>
+				(!key || style.key === key) &&
+				(style.name.toLowerCase().includes(query) || style.key.toLowerCase().includes(query))
+		),
+		route
+	);
+}
+
 export function projectPage<T extends { id: string; name: string }>(items: T[], route: Route) {
 	const params = new URL(route.request().url()).searchParams;
 	const search = params.get('search')?.trim().toLocaleLowerCase() ?? '';

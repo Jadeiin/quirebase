@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { mockSession, workspaceView } from './helpers';
+import { directoryPage, mockSession, workspaceView } from './helpers';
 
 test('revoking a Workspace invitation retires its displayed one-time link', async ({ page }) => {
 	await mockSession(page);
@@ -11,7 +11,7 @@ test('revoking a Workspace invitation retires its displayed one-time link', asyn
 	let created = false;
 	const revoked = new Set<string>();
 	let failRevoke = true;
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) => {
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) => {
 		if (route.request().method() === 'POST') {
 			created = true;
 			return route.fulfill({
@@ -21,6 +21,7 @@ test('revoking a Workspace invitation retires its displayed one-time link', asyn
 					user_id: 'invited-user-id',
 					username: 'invited-user',
 					role: 'viewer',
+					created_at: '2026-10-01T00:00:00Z',
 					expires_at: '2099-01-01T00:00:00Z',
 					token: 'workspace-audit-token'
 				}
@@ -31,6 +32,7 @@ test('revoking a Workspace invitation retires its displayed one-time link', asyn
 				id: 'older-invitation',
 				username: 'earlier-invitee',
 				role: 'viewer',
+				created_at: '2026-10-01T00:00:00Z',
 				expires_at: '2099-01-01T00:00:00Z'
 			}
 		];
@@ -39,9 +41,15 @@ test('revoking a Workspace invitation retires its displayed one-time link', asyn
 				id: 'workspace-invitation',
 				username: 'invited-user',
 				role: 'viewer',
+				created_at: '2026-10-01T00:00:00Z',
 				expires_at: '2099-01-01T00:00:00Z'
 			});
-		return route.fulfill({ json: items.filter((invitation) => !revoked.has(invitation.id)) });
+		return route.fulfill({
+			json: directoryPage(
+				items.filter((invitation) => !revoked.has(invitation.id)),
+				route
+			)
+		});
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/invitations/*', (route) => {
 		if (failRevoke) {
@@ -58,18 +66,18 @@ test('revoking a Workspace invitation retires its displayed one-time link', asyn
 	await page.getByLabel('Exact username').fill('invited-user');
 	await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
 	await expect(page.getByText(/invite\/workspace-audit-token/)).toBeVisible();
-	const currentRow = page.getByRole('listitem').filter({ hasText: 'invited-user' });
-	await currentRow.getByRole('button', { name: 'Revoke', exact: true }).click();
+	const currentRow = page.getByRole('rowgroup').filter({ hasText: 'invited-user' });
+	await currentRow.getByRole('button', { name: /^Revoke invitation for / }).click();
 	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(page.getByText(/invite\/workspace-audit-token/)).toBeVisible();
 	await page
-		.getByRole('listitem')
+		.getByRole('rowgroup')
 		.filter({ hasText: 'earlier-invitee' })
-		.getByRole('button', { name: 'Revoke', exact: true })
+		.getByRole('button', { name: /^Revoke invitation for / })
 		.click();
 	await expect(page.getByText('Invitation revoked', { exact: true })).toBeVisible();
 	await expect(page.getByText(/invite\/workspace-audit-token/)).toBeVisible();
-	await currentRow.getByRole('button', { name: 'Revoke', exact: true }).click();
+	await currentRow.getByRole('button', { name: /^Revoke invitation for / }).click();
 	await expect(page.getByText('Invitation revoked', { exact: true })).toBeVisible();
 	await expect(page.getByText(/invite\/workspace-audit-token/)).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Copy one-time link', exact: true })).toHaveCount(

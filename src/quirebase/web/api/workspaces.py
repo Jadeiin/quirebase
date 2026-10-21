@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from advanced_alchemy.service import OffsetPagination
@@ -17,7 +17,7 @@ from quirebase.access import (
     workspace_project_participations,
 )
 from quirebase.core.errors import ResourceNotFound
-from quirebase.models import User
+from quirebase.models import User, WorkspaceInvitationRole, WorkspaceMemberState, WorkspaceRole
 from quirebase.operations import dispatch_workspace_reindex
 from quirebase.web.api.common import OkView, WriteResult, authorization_view
 from quirebase.web.api.dependencies import ApiUser, Database, WorkspaceAccess
@@ -221,9 +221,11 @@ async def get_workspace_members(
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     search: str = "",
+    role: WorkspaceRole | Literal[""] = "",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> OffsetPagination[WorkspaceMemberDirectoryView]:
     members, total = await list_workspace_members(
-        db, context, limit=limit, offset=offset, search=search
+        db, context, limit=limit, offset=offset, search=search, role=role, direction=direction
     )
     usernames = await _usernames(db, {member.user_id for member in members})
     items = [
@@ -247,9 +249,21 @@ async def get_workspace_governance_members(
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     search: str = "",
+    role: WorkspaceRole | Literal[""] = "",
+    state: WorkspaceMemberState | Literal[""] = "",
+    sort: Literal["username", "joined"] = "username",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> OffsetPagination[WorkspaceGovernanceMemberView]:
     members, total = await list_workspace_governance_members(
-        db, context, limit=limit, offset=offset, search=search
+        db,
+        context,
+        limit=limit,
+        offset=offset,
+        search=search,
+        role=role,
+        state=state,
+        sort=sort,
+        direction=direction,
     )
     usernames = await _usernames(db, {member.user_id for member in members})
     items = [
@@ -299,14 +313,31 @@ async def create_workspace_invitation(
 
 @workspace_router.get(
     "/invitations",
-    response_model=list[WorkspaceInvitationView],
+    response_model=OffsetPagination[WorkspaceInvitationView],
 )
 async def get_workspace_invitations(
-    workspace_id: UUID, context: WorkspaceAccess, db: Database
-) -> list[WorkspaceInvitationView]:
-    invitations = await list_workspace_invitations(db, context)
+    workspace_id: UUID,
+    context: WorkspaceAccess,
+    db: Database,
+    search: str = "",
+    role: WorkspaceInvitationRole | Literal[""] = "",
+    sort: Literal["username", "created", "expires"] = "created",
+    direction: Literal["asc", "desc"] = "desc",
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> OffsetPagination[WorkspaceInvitationView]:
+    invitations, total = await list_workspace_invitations(
+        db,
+        context,
+        search=search,
+        role=role,
+        sort=sort,
+        direction=direction,
+        limit=limit,
+        offset=offset,
+    )
     usernames = await _usernames(db, {invitation.user_id for invitation in invitations})
-    return [
+    items = [
         WorkspaceInvitationView(
             id=invitation.id,
             user_id=invitation.user_id,
@@ -318,6 +349,7 @@ async def get_workspace_invitations(
         )
         for invitation in invitations
     ]
+    return OffsetPagination(items=items, total=total, limit=limit, offset=offset)
 
 
 @workspace_router.delete(

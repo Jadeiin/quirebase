@@ -251,23 +251,50 @@ async def invite_workspace_member(
 
 
 async def list_workspace_invitations(
-    db: AsyncSession, context: WorkspaceContext
-) -> list[WorkspaceInvitation]:
+    db: AsyncSession,
+    context: WorkspaceContext,
+    *,
+    search: str = "",
+    role: WorkspaceInvitationRole | Literal[""] = "",
+    sort: Literal["username", "created", "expires"] = "created",
+    direction: Literal["asc", "desc"] = "desc",
+    limit: int = 25,
+    offset: int = 0,
+) -> tuple[list[WorkspaceInvitation], int]:
     require_action(context, ResourceAction.workspace_invitation_read)
-    workspace_id = context.workspace_id
-    return list(
-        (
-            await db.scalars(
-                select(WorkspaceInvitation)
-                .where(
-                    WorkspaceInvitation.workspace_id == workspace_id,
-                    WorkspaceInvitation.accepted_at.is_(None),
-                    WorkspaceInvitation.revoked_at.is_(None),
-                    WorkspaceInvitation.expires_at > datetime.now(UTC),
-                )
-                .order_by(WorkspaceInvitation.created_at, WorkspaceInvitation.id)
-            )
-        ).all()
+    columns = {
+        "username": User.username,
+        "created": WorkspaceInvitation.created_at,
+        "expires": WorkspaceInvitation.expires_at,
+    }
+    if sort not in columns:
+        raise ValidationFailure(f"unknown Workspace invitation sort: {sort}")
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure(f"unknown sort direction: {direction}")
+    query = (
+        select(WorkspaceInvitation)
+        .join(User, User.id == WorkspaceInvitation.user_id)
+        .where(
+            WorkspaceInvitation.workspace_id == context.workspace_id,
+            WorkspaceInvitation.accepted_at.is_(None),
+            WorkspaceInvitation.revoked_at.is_(None),
+            WorkspaceInvitation.expires_at > datetime.now(UTC),
+        )
+    )
+    if term := search.strip():
+        query = query.where(User.username.icontains(term, autoescape=True))
+    if role:
+        if role not in WorkspaceInvitationRole:
+            raise ValidationFailure(f"unknown Workspace invitation role: {role}")
+        query = query.where(WorkspaceInvitation.role == role)
+    return await select_page(
+        db,
+        query.order_by(
+            columns[sort].desc() if direction == "desc" else columns[sort].asc(),
+            WorkspaceInvitation.id.desc() if direction == "desc" else WorkspaceInvitation.id.asc(),
+        ),
+        WorkspaceInvitation,
+        LimitOffset(limit=limit, offset=offset),
     )
 
 

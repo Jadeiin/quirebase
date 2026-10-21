@@ -10,8 +10,8 @@ export const libraryKeys = {
 	lists: (workspaceId: string) => [...libraryKeys.all(workspaceId), 'list'] as const,
 	list: (workspaceId: string, filters: LibraryFilters, page: number, pageSize = 25) =>
 		[...libraryKeys.lists(workspaceId), filters, page, pageSize] as const,
-	facets: (workspaceId: string, filters: LibraryFilters, limit = 50) =>
-		[...libraryKeys.all(workspaceId), 'facets', libraryFilterParameters(filters), limit] as const
+	facets: (workspaceId: string, filters: LibraryFilters, page = 1, pageSize = 25) =>
+		[...libraryKeys.all(workspaceId), 'facets', filters, page, pageSize] as const
 };
 
 function libraryFilterParameters(filters: LibraryFilters) {
@@ -117,15 +117,28 @@ export function libraryListQuery(
 	});
 }
 
-export function libraryFacetsQuery(workspaceId: string, filters: LibraryFilters, limit = 50) {
+export function libraryFacetsQuery(
+	workspaceId: string,
+	filters: LibraryFilters,
+	page = 1,
+	pageSize = 25
+) {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: libraryKeys.facets(workspaceId, filters, limit),
+		queryKey: libraryKeys.facets(workspaceId, filters, page, pageSize),
 		queryFn: async ({ signal, client, queryKey }): Promise<LibraryFacets | null> => {
 			try {
 				return await api.request('GET', '/workspaces/{workspace_id}/items/facets', {
 					querySerializer: createQuerySerializer(),
-					params: { query: { ...libraryFilterParameters(filters), limit } },
+					params: {
+						query: {
+							...libraryFilterParameters(filters),
+							limit: pageSize,
+							offset: (page - 1) * pageSize,
+							sort: filters.sort,
+							direction: filters.direction
+						}
+					},
 					signal
 				});
 			} catch (reason) {

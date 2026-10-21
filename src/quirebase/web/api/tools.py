@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from advanced_alchemy.service import OffsetPagination
+from fastapi import APIRouter, Query, status
 
 from quirebase.library import (
     DuplicateMode,
@@ -10,15 +12,14 @@ from quirebase.library import (
     delete_custom_citation_style,
     delete_tag,
     find_duplicates,
-    list_custom_citation_styles,
+    list_citation_styles,
     merge_tags,
     rename_tag,
-    select_builtin_citation_styles,
 )
 from quirebase.web.api.common import OkView, WriteResult
 from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import (
-    CitationStylesResponseView,
+    CitationStyleItemView,
     NameRequest,
     item_search_view,
 )
@@ -31,48 +32,36 @@ from quirebase.web.api.tool_schemas import (
 router = APIRouter(tags=["Library tools"])
 
 
-@router.get("/citation-styles", response_model=CitationStylesResponseView)
+@router.get("/citation-styles", response_model=OffsetPagination[CitationStyleItemView])
 async def citation_styles(
     workspace_id: UUID,
     user: ApiUser,
     db: Database,
     query: str = "",
-    limit: int = 50,
-    include: str = "",
-):
-    normalized = query.strip().casefold()
-    builtin_selection = select_builtin_citation_styles(query, limit=limit, include=include)
-    owned_custom_styles = await list_custom_citation_styles(db, user, workspace_id)
-    custom = [
-        {"key": str(style.id), "name": style.name, "scope": "custom"}
-        for style in owned_custom_styles
-        if str(style.id) != include and (not normalized or normalized in style.name.casefold())
-    ]
-    exact_custom = next(
-        (
-            {"key": str(style.id), "name": style.name, "scope": "custom"}
-            for style in owned_custom_styles
-            if include and str(style.id) == include
-        ),
-        None,
+    key: str = "",
+    scope: Literal["", "builtin", "custom"] = "",
+    sort: Literal["name"] = "name",
+    direction: Literal["asc", "desc"] = "asc",
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> OffsetPagination[CitationStyleItemView]:
+    rows, total = await list_citation_styles(
+        db,
+        user,
+        workspace_id,
+        query=query,
+        key=key,
+        scope=scope,
+        direction=direction,
+        limit=limit,
+        offset=offset,
     )
-    included: list[dict[str, str]] = []
-    if builtin_selection.included is not None:
-        included.append({
-            "key": builtin_selection.included.key,
-            "name": builtin_selection.included.name,
-            "scope": "builtin",
-        })
-    if exact_custom is not None:
-        included.append(exact_custom)
-    styles = [
-        {"key": style.key, "name": style.name, "scope": "builtin"}
-        for style in builtin_selection.matches
-    ][:limit] + custom[:limit]
-    included = [
-        style for style in included if not any(style["key"] == item["key"] for item in styles)
-    ]
-    return {"styles": styles + included}
+    return OffsetPagination(
+        items=[CitationStyleItemView(key=row.key, name=row.name, scope=row.scope) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/duplicates", response_model=DuplicatesReviewView)

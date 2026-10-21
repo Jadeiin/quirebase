@@ -3,7 +3,11 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { readProjectListState, projectListParameters, type ProjectListState } from './list-state';
+	import {
+		readProjectItemListState,
+		projectItemListParameters,
+		type ProjectItemListState
+	} from './list-state';
 	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -40,7 +44,7 @@
 	const queryClient = useQueryClient();
 	const detail = createQuery(() => projectDetailQuery(workspaceId, projectId));
 	const project = $derived(detail.data);
-	const listing = $derived(readProjectListState(page.url.searchParams));
+	const listing = $derived(readProjectItemListState(page.url.searchParams));
 	const itemPage = $derived(listing.page);
 	const itemPageSize = $derived(listing.pageSize);
 	const itemSort = $derived(listing.sort);
@@ -53,8 +57,8 @@
 			itemPageSize
 		)
 	);
-	function navigateItems(change: Partial<ProjectListState>, replace = false) {
-		const parameters = projectListParameters({ ...listing, ...change }, true);
+	function navigateItems(change: Partial<ProjectItemListState>, replace = false) {
+		const parameters = projectItemListParameters({ ...listing, ...change });
 		const path = workspaceHref(workspaceId, `projects/${projectId}`);
 		void goto(resolve(parameters ? `${path}?${parameters}` : path), {
 			reset: false,

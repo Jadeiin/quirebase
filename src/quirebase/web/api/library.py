@@ -154,9 +154,21 @@ async def get_item_facets(
     user: ApiUser,
     db: Database,
     filters: LibraryFilters,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated",
+    direction: Literal["asc", "desc"] | None = None,
 ) -> LibraryFacets:
-    return await get_library_facets(db, user, workspace_id, filters, limit=limit)
+    return await get_library_facets(
+        db,
+        user,
+        workspace_id,
+        filters,
+        limit=limit,
+        offset=offset,
+        sort=sort,
+        direction=direction,
+    )
 
 
 @router.post(

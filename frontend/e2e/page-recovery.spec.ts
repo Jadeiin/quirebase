@@ -97,6 +97,8 @@ for (const task of ['library', 'projects', 'project', 'items', 'discussion'] as 
 }
 
 const project = {
+	created_at: '2026-10-01T00:00:00Z',
+	updated_at: '2026-10-01T00:00:00Z',
 	id: 'project-1',
 	name: 'Research direction',
 	description: 'A Workspace research context',
@@ -158,8 +160,10 @@ async function setup(page: Page, admin = false) {
 	await page.route('**/api/v1/account/citation-key-preview*', (route) =>
 		route.fulfill({ json: { key: 'Reader2026' } })
 	);
-	await page.route('**/api/v1/workspaces/*/citation-styles*', (route) =>
-		route.fulfill({ json: { styles: [{ key: 'apa', name: 'APA', scope: 'builtin' }] } })
+	await page.route('**/api/v1/workspaces/*/citation-styles?*', (route) =>
+		route.fulfill({
+			json: directoryPage([{ key: 'apa', name: 'APA', scope: 'builtin' }], route)
+		})
 	);
 	await page.route('**/api/v1/workspaces/*/tags?*', (route) =>
 		route.fulfill({
@@ -351,7 +355,7 @@ for (const scenario of [
 						? '**/api/v1/workspaces/*/discovery/providers'
 						: scenario === 'documents'
 							? '**/api/v1/workspaces/*/items/item-1/documents'
-							: '**/api/v1/workspaces/*/citation-styles*';
+							: '**/api/v1/workspaces/*/citation-styles?*';
 		const data =
 			scenario === 'account'
 				? account
@@ -361,9 +365,15 @@ for (const scenario of [
 						? providers
 						: scenario === 'documents'
 							? { item_id: 'item-1', files: [file] }
-							: { styles: [{ key: 'apa', name: 'APA', scope: 'builtin' }] };
+							: undefined;
 		await page.route(endpoint, (route) =>
-			route.fulfill(failing ? { status: 500, json: { code: 'internal_error' } } : { json: data })
+			route.fulfill(
+				failing
+					? { status: 500, json: { code: 'internal_error' } }
+					: {
+							json: data ?? directoryPage([{ key: 'apa', name: 'APA', scope: 'builtin' }], route)
+						}
+			)
 		);
 		await page.goto(
 			scenario === 'account' || scenario === 'export-styles'
@@ -470,7 +480,7 @@ test('renaming a Tag retains the edited name on failure and retries without reop
 	expect(names).toEqual(['Results', 'Results']);
 });
 
-test('Project directories wrap valid long names in every group on narrow screens', async ({
+test('Project directories wrap valid long names in unified results on narrow screens', async ({
 	page
 }) => {
 	await setup(page);
@@ -501,9 +511,9 @@ test('Tools restores its URL position and fetches only the active tool, without 
 		scans++;
 		return route.fulfill({ json: { groups: [], scanned: 0 } });
 	});
-	await page.route('**/api/v1/workspaces/*/citation-styles*', (route) => {
+	await page.route('**/api/v1/workspaces/*/citation-styles?*', (route) => {
 		styles++;
-		return route.fulfill({ json: { styles: [] } });
+		return route.fulfill({ json: directoryPage([], route) });
 	});
 	await page.goto('/workspace/workspace-1/tools');
 	await page.getByRole('tab', { name: 'Manage Tags', exact: true }).click();
@@ -566,7 +576,7 @@ for (const section of ['users', 'workflows'] as const) {
 		await started.promise;
 		const draft =
 			section === 'users'
-				? page.getByRole('textbox', { name: 'Search', exact: true })
+				? page.getByRole('searchbox', { name: 'Search', exact: true })
 				: page.getByRole('combobox', { name: 'State', exact: true });
 		if (section === 'users') {
 			await draft.fill(' reader-1 ');
@@ -615,7 +625,7 @@ test('admin drafts reset on explicit clear and section changes', async ({ page }
 		);
 	}
 	await page.goto('/admin/audit');
-	const search = page.getByRole('textbox', { name: 'Search', exact: true });
+	const search = page.getByRole('searchbox', { name: 'Search', exact: true });
 	const action = page.getByRole('textbox', { name: 'Action', exact: true });
 	const targetType = page.getByRole('textbox', { name: 'Target type', exact: true });
 	await search.fill(' local search ');
@@ -736,7 +746,10 @@ for (const scope of ['tag', 'style', 'project'] as const) {
 		if (scope === 'style')
 			await page.route('**/api/v1/workspaces/workspace-1/citation-styles?*', (route) =>
 				route.fulfill({
-					json: { styles: [{ key: 'custom-style', name: 'House style', scope: 'custom' }] }
+					json: directoryPage(
+						[{ key: 'custom-style', name: 'House style', scope: 'custom' }],
+						route
+					)
 				})
 			);
 		await page.goto(

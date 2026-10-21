@@ -380,8 +380,8 @@ test('Workspace rename refreshes the chooser cache and reindex tracks a scoped w
 	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
-		route.fulfill({ json: [] })
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/maintenance/reindex', (route) => {
 		reindexRequests += 1;
@@ -439,8 +439,8 @@ test('a lifecycle conflict refreshes the Workspace action projection', async ({ 
 	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
-		route.fulfill({ json: [] })
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.goto('/workspace/workspace-1/settings');
 	await page.getByLabel('Name', { exact: true }).fill('Attempted rename');
@@ -460,8 +460,8 @@ test('missing Workspace context opens recovery and emits a diagnostic', async ({
 	await page.route('**/api/v1/workspaces/workspace-1/governance/members?*', (route) =>
 		route.fulfill({ json: directoryPage([], route) })
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
-		route.fulfill({ json: [] })
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.addInitScript(() => {
 		(window as Window & { diagnostics?: unknown[] }).diagnostics = [];

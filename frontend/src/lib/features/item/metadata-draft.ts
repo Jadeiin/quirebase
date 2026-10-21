@@ -16,12 +16,13 @@ export function objects(value: unknown): Record<string, unknown>[] {
 	return Array.isArray(value) ? value.map(object) : [];
 }
 
+export function displayNameFromParts(givenName: unknown, familyName: unknown): string {
+	return [text(givenName).trim(), text(familyName).trim()].filter(Boolean).join(' ');
+}
+
 export function contributorName(row: Record<string, unknown>): string {
 	const entity = object(row[row.type === 'Organization' ? 'organization' : 'person']);
-	return (
-		text(entity.name) ||
-		[text(entity.given_name), text(entity.family_name)].filter(Boolean).join(' ')
-	);
+	return text(entity.name).trim() || displayNameFromParts(entity.given_name, entity.family_name);
 }
 
 export function contributorAffiliations(work: Metadata): string[] {

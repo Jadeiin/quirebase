@@ -1315,7 +1315,7 @@ async def test_summary_author_credits_round_trip_exact_library_filters(persisten
     authors = item_summary(item)["authors"]
     assert authors == [
         {"full_name": "Credited display", "last_name": " Smith; & 一 ", "first_name": " Jane "},
-        {"full_name": " Council; & 50%_+ ", "last_name": " Council; & 50%_+ ", "first_name": None},
+        {"full_name": "Council; & 50%_+", "last_name": " Council; & 50%_+ ", "first_name": None},
         {"full_name": "Single; Name", "last_name": "Single; Name", "first_name": None},
         {"full_name": "Ada", "last_name": "Ada", "first_name": None},
         {"full_name": "Family", "last_name": "Family", "first_name": None},

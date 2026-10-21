@@ -350,7 +350,7 @@ test('a failed availability refetch preserves an explicit Workspace route', asyn
 	await page.goto('/workspace/workspace-1');
 	await expect.poll(() => listRequests).toBeGreaterThanOrEqual(2);
 	await expect(page.getByRole('main').getByRole('alert')).toContainText(
-		'The request could not be completed.'
+		'Unable to load workspace.'
 	);
 	expect(listRequests).toBe(2);
 	expect(detailRequests).toBe(2);
@@ -414,7 +414,7 @@ test('availability recovery releases its guard for a later membership revocation
 
 	await page.goto('/workspace/workspace-1');
 	await expect(page.getByRole('main').getByRole('alert')).toContainText(
-		'The request could not be completed.'
+		'Unable to load workspace.'
 	);
 	expect(detailRequests).toBe(2);
 	detailAvailable = true;
@@ -639,8 +639,8 @@ test('Workspace admins do not get governance controls for other admin members', 
 			)
 		})
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
-		route.fulfill({ json: [] })
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 
 	await page.goto('/workspace/workspace-1/settings/members');
@@ -729,20 +729,22 @@ for (const roles of [['reviewer'], []]) {
 			route.fulfill({ json: directoryPage([], route) })
 		);
 		let invitedRole = '';
-		await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) => {
+		await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) => {
 			if (route.request().method() === 'POST') {
 				invitedRole = route.request().postDataJSON().role;
 				return route.fulfill({ status: 201, json: { token: 'one-time-token' } });
 			}
-			return route.fulfill({ json: [] });
+			return route.fulfill({ json: directoryPage([], route) });
 		});
 		await page.goto('/workspace/workspace-1/settings/invitations');
 		await expect(page.getByRole('heading', { name: 'Invitations', exact: true })).toBeVisible();
 		if (roles.length === 0) {
 			await expect(page.getByRole('button', { name: 'Create invitation' })).toHaveCount(0);
-			await expect(page.getByRole('combobox', { name: 'Role', exact: true })).toHaveCount(0);
+			await expect(
+				page.locator('form').getByRole('combobox', { name: 'Role', exact: true })
+			).toHaveCount(0);
 		} else {
-			const selection = page.getByRole('combobox', { name: 'Role', exact: true });
+			const selection = page.locator('form').getByRole('combobox', { name: 'Role', exact: true });
 			await expect(selection.locator('option')).toHaveCount(1);
 			await expect(selection).toHaveValue('reviewer');
 			await page.getByLabel('Exact username').fill('collaborator');
@@ -944,8 +946,8 @@ test('member role choices use the concrete projection even when no generic role 
 			)
 		})
 	);
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
-		route.fulfill({ json: [] })
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/members/target-member/role', (route) => {
 		requestedRole = route.request().postDataJSON().role;
@@ -1056,14 +1058,14 @@ test('Workspace member governance supports later pages and username search', asy
 			)
 		});
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
-		route.fulfill({ json: [] })
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
+		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.goto('/workspace/workspace-1/settings/members');
 	const pager = page.getByRole('navigation', { name: 'Members pagination' });
 	await pager.getByRole('button', { name: 'Next page', exact: true }).click();
 	await expect(page.getByText('member-27', { exact: true })).toBeVisible();
-	await page.getByRole('textbox', { name: 'Search members' }).fill('member-12');
+	await page.getByRole('searchbox', { name: 'Search members' }).fill('member-12');
 	await expect(page.getByText('member-12', { exact: true })).toBeVisible();
 	await expect(page.getByText('member-27', { exact: true })).toHaveCount(0);
 	await expect(pager.getByText('Page 1 of 1')).toBeVisible();

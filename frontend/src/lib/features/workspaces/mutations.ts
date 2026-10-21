@@ -76,7 +76,8 @@ export function workspaceMemberMutationOptions(workspaceId: string, client: Quer
 					});
 			}
 		},
-		onSuccess: () => invalidateWorkspaces(client)
+		// A lost response may follow a committed command; read back without replaying it.
+		onSettled: () => invalidateWorkspaces(client)
 	});
 }
 
@@ -86,7 +87,7 @@ export function workspaceInvitationMutationOptions(workspaceId: string, client: 
 		mutationKey: workspaceKeys.mutation(workspaceId, 'invitation-create'),
 		mutationFn: (body: components['schemas']['WorkspaceInvitationRequest']) =>
 			api.request('POST', '/workspaces/{workspace_id}/invitations', { body }),
-		onSuccess: () =>
+		onSettled: () =>
 			Promise.all([
 				client.invalidateQueries({ queryKey: workspaceKeys.invitations(workspaceId) }),
 				client.invalidateQueries({ queryKey: workspaceKeys.list() })
@@ -102,7 +103,7 @@ export function workspaceInvitationRevokeMutationOptions(workspaceId: string, cl
 			api.request('DELETE', '/workspaces/{workspace_id}/invitations/{invitation_id}', {
 				params: { path: { invitation_id: invitationId } }
 			}),
-		onSuccess: () => invalidateWorkspaces(client)
+		onSettled: () => invalidateWorkspaces(client)
 	});
 }
 

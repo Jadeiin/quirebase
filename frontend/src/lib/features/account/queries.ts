@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/svelte-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/svelte-query';
 import { apiRequest, createWorkspaceApi } from '#lib/api/client.js';
 
 export const accountKeys = {
@@ -15,25 +15,54 @@ export function accountQuery() {
 
 export const exportPreferenceKeys = {
 	all: ['export-preferences'] as const,
-	citationStyles: (workspaceId: string, query: string, include: string) =>
-		[...exportPreferenceKeys.all, 'citation-styles', workspaceId, query, include] as const,
+	citationStyles: (workspaceId: string, query: string) =>
+		[...exportPreferenceKeys.all, 'citation-styles', workspaceId, 'options', query] as const,
+	citationStyle: (workspaceId: string, key: string) =>
+		[...exportPreferenceKeys.all, 'citation-styles', workspaceId, 'selected', key] as const,
 	citationKeyPreview: (formula: string, forceAscii: boolean) =>
 		[...exportPreferenceKeys.all, 'citation-key-preview', formula, forceAscii] as const
 };
 
-export function exportCitationStylesQuery(workspaceId: string, query: string, include: string) {
+export function exportCitationStylesQuery(workspaceId: string, query: string) {
 	const api = createWorkspaceApi(workspaceId);
-	return queryOptions({
-		queryKey: exportPreferenceKeys.citationStyles(workspaceId, query, include),
+	return infiniteQueryOptions({
+		queryKey: exportPreferenceKeys.citationStyles(workspaceId, query),
 		enabled: Boolean(workspaceId),
-		queryFn: async ({ signal }) => ({
+		initialPageParam: 0,
+		queryFn: async ({ signal, pageParam }) => ({
 			...(await api.request('GET', '/workspaces/{workspace_id}/citation-styles', {
-				params: { query: { query, limit: 30, include } },
+				params: { query: { query, sort: 'name', direction: 'asc', limit: 30, offset: pageParam } },
 				signal
 			})),
 			workspaceId,
-			query,
-			include
+			query
+		}),
+		getNextPageParam: (page) =>
+			page.offset + page.limit < page.total ? page.offset + page.limit : undefined,
+		select: (data) => ({
+			workspaceId: data.pages[0]?.workspaceId,
+			query: data.pages[0]?.query,
+			items: [
+				...new Map(
+					data.pages.flatMap((page) => page.items).map((style) => [style.key, style])
+				).values()
+			]
+		})
+	});
+}
+
+export function exportCitationStyleQuery(workspaceId: string, key: string) {
+	const api = createWorkspaceApi(workspaceId);
+	return queryOptions({
+		queryKey: exportPreferenceKeys.citationStyle(workspaceId, key),
+		enabled: Boolean(workspaceId && key),
+		queryFn: async ({ signal }) => ({
+			...(await api.request('GET', '/workspaces/{workspace_id}/citation-styles', {
+				params: { query: { key, limit: 1, offset: 0 } },
+				signal
+			})),
+			workspaceId,
+			key
 		})
 	});
 }

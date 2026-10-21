@@ -39,9 +39,9 @@ test('settings sections load their own data and preserve member search across na
 		memberReads += 1;
 		return route.fulfill({ json: directoryPage([], route) });
 	});
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) => {
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) => {
 		invitationReads += 1;
-		return route.fulfill({ json: [] });
+		return route.fulfill({ json: directoryPage([], route) });
 	});
 	await page.goto('/workspace/workspace-1/settings');
 	const sections = page.getByRole('navigation', { name: 'Workspace settings', exact: true });
@@ -53,16 +53,16 @@ test('settings sections load their own data and preserve member search across na
 	expect(invitationReads).toBe(0);
 	await expect(page.getByRole('button', { name: 'Archive workspace', exact: true })).toHaveCount(0);
 	await sections.getByRole('link', { name: 'Members', exact: true }).click();
-	await page.getByRole('textbox', { name: 'Search members', exact: true }).fill('reader');
+	await page.getByRole('searchbox', { name: 'Search members', exact: true }).fill('reader');
 	await expect(page).toHaveURL(/settings\/members\?q=reader$/);
 	await page.reload();
-	await expect(page.getByRole('textbox', { name: 'Search members', exact: true })).toHaveValue(
+	await expect(page.getByRole('searchbox', { name: 'Search members', exact: true })).toHaveValue(
 		'reader'
 	);
 	await sections.getByRole('link', { name: 'General', exact: true }).click();
 	await expect(page).toHaveURL(/\/settings$/);
 	await page.goBack();
-	await expect(page.getByRole('textbox', { name: 'Search members', exact: true })).toHaveValue(
+	await expect(page.getByRole('searchbox', { name: 'Search members', exact: true })).toHaveValue(
 		'reader'
 	);
 	expect(memberReads).toBeGreaterThan(0);
@@ -72,11 +72,11 @@ test('settings sections load their own data and preserve member search across na
 test('invitation read errors offer a local retry', async ({ page }) => {
 	await mockSession(page);
 	let fail = true;
-	await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
+	await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
 		route.fulfill(
 			fail
 				? { status: 500, json: { code: 'internal_error', message: 'Fixture failure' } }
-				: { json: [] }
+				: { json: directoryPage([], route) }
 		)
 	);
 	await page.goto('/workspace/workspace-1/settings/invitations');
@@ -232,8 +232,8 @@ for (const scenario of [
 				)
 			})
 		);
-		await page.route('**/api/v1/workspaces/workspace-1/invitations', (route) =>
-			route.fulfill({ json: [] })
+		await page.route(/\/api\/v1\/workspaces\/workspace-1\/invitations(?:\?.*)?$/, (route) =>
+			route.fulfill({ json: directoryPage([], route) })
 		);
 		for (const path of [
 			'/workspace',

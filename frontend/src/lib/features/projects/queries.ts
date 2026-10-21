@@ -1,14 +1,17 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/svelte-query';
 import { createWorkspaceApi } from '#lib/api/client.js';
 import type { components } from '#lib/api/schema.js';
+import { readScopedQuery } from '#lib/api/query-state.js';
+import type { ProjectListState } from './list-state.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type ProjectSummary = components['schemas']['ProjectSummaryView'];
 
 export const projectKeys = {
 	all: (workspaceId: string) => workspaceKeys.projects(workspaceId),
+	directory: (workspaceId: string) => [...projectKeys.all(workspaceId), 'list'] as const,
 	lists: (workspaceId: string, view: 'mine' | 'joinable' | 'all') =>
-		[...projectKeys.all(workspaceId), 'list', view] as const,
+		[...projectKeys.directory(workspaceId), view] as const,
 	detail: (workspaceId: string, projectId: string) => workspaceKeys.project(workspaceId, projectId)
 };
 
@@ -17,16 +20,27 @@ export function projectListQuery(
 	view: 'mine' | 'joinable' | 'all' = 'all',
 	offset = 0,
 	search = '',
-	pageSize = 25
+	pageSize = 25,
+	options: Pick<ProjectListState, 'state' | 'sort' | 'direction'> = {
+		state: '',
+		sort: 'name',
+		direction: 'asc'
+	}
 ) {
 	const api = createWorkspaceApi(workspaceId);
 	return queryOptions({
-		queryKey: [...projectKeys.lists(workspaceId, view), 'page', offset, search, pageSize],
-		queryFn: ({ signal }) =>
-			api.request('GET', '/workspaces/{workspace_id}/projects', {
-				params: { query: { view, limit: pageSize, offset, search } },
-				signal
-			})
+		queryKey: [...projectKeys.lists(workspaceId, view), 'page', offset, search, pageSize, options],
+		staleTime: 0,
+		queryFn: ({ signal, client, queryKey }) =>
+			readScopedQuery(
+				client,
+				projectKeys.directory(workspaceId),
+				queryKey,
+				api.request('GET', '/workspaces/{workspace_id}/projects', {
+					params: { query: { view, limit: pageSize, offset, search, ...options } },
+					signal
+				})
+			)
 	});
 }
 

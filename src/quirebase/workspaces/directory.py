@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from advanced_alchemy.filters import LimitOffset, OrderBy, SearchFilter
 from sqlalchemy import func, select
@@ -10,6 +10,7 @@ from quirebase.access import (
     WorkspaceContext,
     require_action,
 )
+from quirebase.core.errors import ValidationFailure
 from quirebase.core.persistence import select_page
 from quirebase.models import (
     User,
@@ -146,6 +147,8 @@ async def list_workspace_members(
     limit: int = 25,
     offset: int = 0,
     search: str = "",
+    role: WorkspaceRole | Literal[""] = "",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> tuple[list[WorkspaceMember], int]:
     require_action(context, ResourceAction.workspace_read)
     query = (
@@ -158,7 +161,7 @@ async def list_workspace_members(
             User.active.is_(True),
         )
     )
-    return await _member_page(db, query, limit, offset, search)
+    return await _member_page(db, query, limit, offset, search, role=role, direction=direction)
 
 
 async def list_workspace_governance_members(
@@ -168,6 +171,10 @@ async def list_workspace_governance_members(
     limit: int = 25,
     offset: int = 0,
     search: str = "",
+    role: WorkspaceRole | Literal[""] = "",
+    state: WorkspaceMemberState | Literal[""] = "",
+    sort: Literal["username", "joined"] = "username",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> tuple[list[WorkspaceMember], int]:
     require_action(context, ResourceAction.workspace_membership_read)
     query = (
@@ -178,12 +185,35 @@ async def list_workspace_governance_members(
             WorkspaceMember.terminated_at.is_(None),
         )
     )
-    return await _member_page(db, query, limit, offset, search)
+    if state:
+        if state not in WorkspaceMemberState:
+            raise ValidationFailure(f"unknown Workspace membership state: {state}")
+        query = query.where(WorkspaceMember.state == state)
+    return await _member_page(
+        db, query, limit, offset, search, role=role, sort=sort, direction=direction
+    )
 
 
 async def _member_page(
-    db: AsyncSession, query: Select[tuple[WorkspaceMember]], limit: int, offset: int, search: str
+    db: AsyncSession,
+    query: Select[tuple[WorkspaceMember]],
+    limit: int,
+    offset: int,
+    search: str,
+    *,
+    role: WorkspaceRole | Literal[""] = "",
+    sort: Literal["username", "joined"] = "username",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> tuple[list[WorkspaceMember], int]:
+    columns = {"username": User.username, "joined": WorkspaceMember.created_at}
+    if sort not in columns:
+        raise ValidationFailure(f"unknown Workspace member sort: {sort}")
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure(f"unknown sort direction: {direction}")
+    if role:
+        if role not in WorkspaceRole:
+            raise ValidationFailure(f"unknown Workspace role: {role}")
+        query = query.where(WorkspaceMember.role == role)
     if search.strip():
         matching_users = SearchFilter(field_name="username", value=search.strip(), ignore_case=True)
         query = query.where(
@@ -194,7 +224,7 @@ async def _member_page(
         query,
         WorkspaceMember,
         LimitOffset(limit=limit, offset=offset),
-        OrderBy(field_name=User.username),
-        OrderBy(field_name="id"),
+        OrderBy(field_name=columns[sort], sort_order=direction),
+        OrderBy(field_name="id", sort_order=direction),
     )
     return list(records), total

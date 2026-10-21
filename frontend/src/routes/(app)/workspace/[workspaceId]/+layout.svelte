@@ -14,8 +14,9 @@
 		clearDefaultWorkspacePreference,
 		defaultWorkspacePreference
 	} from '#lib/workspaces/preference.js';
-	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { isUnavailableReadError } from '#lib/api/query-state.js';
 	import Notice from '#lib/design/Notice.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import { t } from '#lib/i18n.js';
 
 	let { children } = $props();
@@ -88,13 +89,19 @@
 	});
 </script>
 
-{#if workspace.isPending}<p class="text-surface-600-400">{$t('Loading workspace…')}</p>
-{:else if workspace.isError}<Notice variant="error"
-		>{unavailable
+{#if workspace.isError || (!workspace.isPending && workspace.data == null)}
+	<QueryError
+		message={unavailable
 			? $t('This workspace is unavailable. Choose another workspace.')
-			: apiErrorMessage(workspace.error, $t('Unable to load workspace.'))}</Notice
-	>
-{:else}
+			: $t('Unable to load workspace.')}
+		busy={workspace.isFetching || recoveryStarted}
+		onRetry={() => void recover()}
+	/>
+{/if}
+{#if workspace.isPending && workspace.data == null}<p class="text-surface-600-400">
+		{$t('Loading workspace…')}
+	</p>
+{:else if workspace.data && !isUnavailableReadError(workspace.error)}
 	{#if workspace.data?.governance_frozen}
 		<Notice variant="warning"
 			>{$t(

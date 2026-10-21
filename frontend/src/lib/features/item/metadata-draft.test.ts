@@ -13,6 +13,11 @@ it.each([
 	[{ name: '', given_name: 'Xiang', family_name: 'Yu' }, 'Xiang Yu'],
 	[{ name: null, given_name: 'Juan', family_name: 'de la Cruz' }, 'Juan de la Cruz'],
 	[{ name: 'Wang Wei', given_name: 'Wei', family_name: 'Wang' }, 'Wang Wei'],
+	[{ name: ' 王伟 ', given_name: '伟', family_name: '王' }, '王伟'],
+	[{ name: '  ', given_name: ' Ada ', family_name: ' Lovelace ' }, 'Ada Lovelace'],
+	[{ name: '\t', given_name: ' Ada ', family_name: '\n' }, 'Ada'],
+	[{ name: '', given_name: '  ', family_name: ' Lovelace ' }, 'Lovelace'],
+	[{ name: 'Ada  Lovelace', given_name: 'Ada', family_name: 'Lovelace' }, 'Ada  Lovelace'],
 	[{ given_name: 'Ada' }, 'Ada'],
 	[{ family_name: 'Lovelace' }, 'Lovelace'],
 	[{}, '']
@@ -22,6 +27,17 @@ it.each([
 		expect(contributorName({ type: 'Person', person })).toBe(name);
 	}
 );
+
+it('keeps Organization credit names literal and does not use a stale Person snapshot', () => {
+	const contributor = {
+		type: 'Organization',
+		organization: { name: '  Research, Development & 方法  ' },
+		person: { name: 'Ada Researcher', given_name: 'Ada', family_name: 'Researcher' }
+	};
+	expect(contributorName(contributor)).toBe('Research, Development & 方法');
+	contributor.organization.name = ' \t ';
+	expect(contributorName(contributor)).toBe('');
+});
 
 it('projects the selected contributor entity while preserving both entity snapshots', () => {
 	const credit = {

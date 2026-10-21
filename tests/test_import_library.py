@@ -174,6 +174,16 @@ async def test_readonly_import_library_intersects_search_project_tag_and_metadat
         db, viewer, workspace.id, import_batch=preview.id, sort="title", limit=1, offset=1
     )
     assert total == 3 and [row.id for row in rows] == [item_ids[1]]
+    page_facets = await get_library_facets(
+        db,
+        viewer,
+        workspace.id,
+        LibraryFilter(import_batch=preview.id),
+        sort="title",
+        limit=1,
+        offset=2,
+    )
+    assert [(row.value, row.item_count) for row in page_facets.reference_types] == [("Book", 1)]
     filters = {
         "import_batch": preview.id,
         "q": "Imported",

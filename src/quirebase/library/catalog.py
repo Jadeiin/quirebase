@@ -150,6 +150,36 @@ async def _library_query(
     return item_query
 
 
+def _ordered_library_query(
+    db: AsyncSession,
+    query: Select[tuple[Item]],
+    sort: Literal["updated", "created", "title", "published", "publication", "author"],
+    direction: Literal["asc", "desc"] | None,
+) -> Select[tuple[Item]]:
+    """Share result ordering, null placement and stable ties with page projections."""
+    collation = "C" if db.get_bind().dialect.name == "postgresql" else "BINARY"
+    columns = {
+        "updated": Item.updated_at,
+        "created": Item.created_at,
+        "title": Item.work["title"].as_string().collate(collation),
+        "author": first_contributor_sort_name(db).collate(collation),
+        "publication": func.nullif(Item.work["container"]["title"].as_string(), "").collate(
+            collation
+        ),
+        # Publication Date is a calendar value; do not invent missing parts.
+        "published": func.substr(Item.work["date_published"].as_string(), 1, 10).collate(collation),
+    }
+    if sort not in columns:
+        raise ValidationFailure("unknown Library sort")
+    if direction not in {None, "asc", "desc"}:
+        raise ValidationFailure("unknown sort direction")
+    expression = columns[sort]
+    direction = direction or ("asc" if sort in {"title", "publication", "author"} else "desc")
+    return query.order_by(
+        (expression.asc() if direction == "asc" else expression.desc()).nulls_last(), Item.id
+    )
+
+
 async def search_library(
     db: AsyncSession,
     user: User,
@@ -192,25 +222,9 @@ async def search_library(
             import_batch=import_batch,
         ),
     )
-    # Binary collation keeps ordering consistent across databases.
-    collation = "C" if db.get_bind().dialect.name == "postgresql" else "BINARY"
-    expression = {
-        "updated": Item.updated_at,
-        "created": Item.created_at,
-        "title": Item.work["title"].as_string().collate(collation),
-        "author": first_contributor_sort_name(db).collate(collation),
-        "publication": func.nullif(Item.work["container"]["title"].as_string(), "").collate(
-            collation
-        ),
-        # Publication Date is a calendar value, not an instant. Do not invent missing parts.
-        "published": func.substr(Item.work["date_published"].as_string(), 1, 10).collate(collation),
-    }[sort]
-    direction = direction or ("asc" if sort in {"title", "publication", "author"} else "desc")
     records, total = await select_page(
         db,
-        item_query.order_by(
-            (expression.asc() if direction == "asc" else expression.desc()).nulls_last(), Item.id
-        ),
+        _ordered_library_query(db, item_query, sort, direction),
         Item,
         LimitOffset(limit=limit, offset=offset),
     )

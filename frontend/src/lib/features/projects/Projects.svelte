@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { ApiError } from '#lib/api/client.js';
+	import { isUnavailableReadError } from '#lib/api/query-state.js';
 	import { can } from '#lib/authorization/can.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Badge from '#lib/design/Badge.svelte';
@@ -13,7 +13,6 @@
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import DialogTriggerButton from '#lib/design/DialogTriggerButton.svelte';
 	import Icon from '#lib/design/Icon.svelte';
-	import ItemRow from '#lib/design/ItemRow.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
 	import Panel from '#lib/design/Panel.svelte';
@@ -22,58 +21,66 @@
 	import { projectListQuery } from '#lib/features/projects/queries.js';
 	import { invalidateProject } from '#lib/query/invalidation.js';
 	import { t } from '#lib/i18n.js';
+	import { numberFormat } from '#lib/format.js';
+	import { createUrlDraft } from '#lib/navigation/url-draft.svelte.js';
+	import { libraryHref } from '#lib/features/library/filters.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
-	import { readProjectListState, projectListParameters, type ProjectListState } from './list-state';
+	import {
+		readProjectListState,
+		projectListParameters,
+		defaultProjectSortDirection,
+		type ProjectListState
+	} from './list-state';
 
 	const workspace = getWorkspaceContext();
 	const workspaceId = workspace.workspaceId;
 	const queryClient = useQueryClient();
 	const listing = $derived(readProjectListState(page.url.searchParams));
+	const id = $props.id();
 	const offset = $derived((listing.page - 1) * listing.pageSize);
-	const pageSize = $derived(listing.pageSize);
-	const search = $derived(listing.search);
-	const view = $derived(listing.view);
-	function navigate(change: Partial<ProjectListState>, replace = false) {
+	function destination(change: Partial<ProjectListState>) {
 		const parameters = projectListParameters({ ...listing, ...change });
 		const path = workspaceHref(workspaceId, 'projects');
-		void goto(resolve(parameters ? `${path}?${parameters}` : path), {
-			reset: false,
-			replace
-		});
+		return resolve(parameters ? `${path}?${parameters}` : path);
 	}
-	const projects = createQuery(() => projectListQuery(workspaceId, view, offset, search, pageSize));
-	const pageCount = $derived(Math.max(1, Math.ceil((projects.data?.total ?? 0) / pageSize)));
+	function navigate(change: Partial<ProjectListState>, replace = false) {
+		void goto(destination(change), { reset: false, replace });
+	}
+	const searchDraft = createUrlDraft({
+		read: (url) => readProjectListState(url.searchParams).search,
+		href: (search) => destination({ search, page: 1 })
+	});
+	const projects = createQuery(() =>
+		projectListQuery(workspaceId, listing.view, offset, listing.search, listing.pageSize, {
+			state: listing.state,
+			sort: listing.sort,
+			direction: listing.direction
+		})
+	);
+	const available = $derived(projects.data != null && !isUnavailableReadError(projects.error));
+	const total = $derived(available ? (projects.data?.total ?? 0) : 0);
+	const pageCount = $derived(Math.max(1, Math.ceil(total / listing.pageSize)));
 	$effect(() => {
-		if (projects.isSuccess && !projects.isFetching && offset >= projects.data.total && offset > 0)
+		if (
+			projects.isSuccess &&
+			!projects.isFetching &&
+			projects.data != null &&
+			offset >= projects.data.total &&
+			offset > 0
+		)
 			navigate({ page: pageCount }, true);
 	});
-	const joinable = $derived(
-		(projects.data?.items ?? []).filter(
-			(project) =>
-				project.participation === 'open' && project.state === 'active' && !project.is_participating
-		)
-	);
-	const workspaceProjects = $derived(
-		(projects.data?.items ?? []).filter((project) => project.participation === 'workspace')
-	);
-	const myProjects = $derived(
-		(projects.data?.items ?? []).filter(
-			(project) => project.is_participating && project.participation !== 'workspace'
-		)
-	);
-	const managedProjects = $derived(
-		(projects.data?.items ?? []).filter(
-			(project) => project.participation === 'managed' && !project.is_participating
-		)
-	);
-	const archivedOpenProjects = $derived(
-		(projects.data?.items ?? []).filter(
-			(project) =>
-				project.participation === 'open' &&
-				project.state === 'archived' &&
-				!project.is_participating
-		)
+	const nextDirection = $derived(listing.direction === 'asc' ? 'desc' : 'asc');
+	function orderLabel(direction: ProjectListState['direction']) {
+		if (listing.sort === 'name') return direction === 'asc' ? $t('A–Z') : $t('Z–A');
+		return direction === 'asc' ? $t('Oldest first') : $t('Newest first');
+	}
+	const directionHint = $derived(
+		$t('Sort order: {current}. Switch to {next}.', {
+			current: orderLabel(listing.direction),
+			next: orderLabel(nextDirection)
+		})
 	);
 
 	let createOpen = $state(false);
@@ -117,22 +124,36 @@
 		}
 	}
 
-	async function join(projectId: string) {
+	async function changeParticipation(projectId: string, action: 'join' | 'leave') {
+		if (busy) return;
 		busy = true;
 		error = '';
 		try {
-			await workspace.api.request('POST', '/workspaces/{workspace_id}/projects/{project_id}/join', {
-				params: { path: { project_id: projectId } }
-			});
+			if (action === 'join') {
+				await workspace.api.request(
+					'POST',
+					'/workspaces/{workspace_id}/projects/{project_id}/join',
+					{
+						params: { path: { project_id: projectId } }
+					}
+				);
+			} else {
+				await workspace.api.request(
+					'POST',
+					'/workspaces/{workspace_id}/projects/{project_id}/leave',
+					{
+						params: { path: { project_id: projectId } }
+					}
+				);
+			}
 			await refresh();
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to join Project'));
-			if (
-				reason instanceof ApiError &&
-				['project_lifecycle_error', 'project_participation_conflict'].includes(reason.code)
-			) {
-				await refresh();
-			}
+			error = apiErrorMessage(
+				reason,
+				action === 'join' ? $t('Unable to join Project') : $t('Unable to leave Project')
+			);
+			// A failed response can follow a committed membership change.
+			await refresh();
 		} finally {
 			busy = false;
 		}
@@ -230,182 +251,188 @@
 	{/snippet}
 </SectionHeader>
 
-<form
-	class="mb-4 flex flex-wrap items-end gap-3"
-	onsubmit={(event) => {
-		event.preventDefault();
-		navigate({ page: 1 });
-	}}
->
-	<label
-		>{$t('Search Projects')}<input
-			class="input"
-			value={search}
-			oninput={(event) => {
-				navigate({ search: event.currentTarget.value, page: 1 }, true);
-			}}
-		/></label
+<Panel class="mb-4">
+	<form
+		class="flex min-w-0 flex-wrap items-end gap-3"
+		onsubmit={(event) => {
+			event.preventDefault();
+			navigate({ search: searchDraft.value.trim(), page: 1 });
+		}}
 	>
-	<label
-		>{$t('Projects')}<select
-			class="select"
-			value={view}
-			onchange={(event) => {
-				const value = event.currentTarget.value;
-				navigate({ view: value === 'mine' || value === 'joinable' ? value : 'all', page: 1 });
-			}}
-		>
-			<option value="all">{$t('All Projects')}</option>
-			<option value="mine">{$t('Your Projects')}</option>
-			<option value="joinable">{$t('Open Projects')}</option>
-		</select></label
-	>
-</form>
-
-{#if error}<Notice variant="error">{error}</Notice>{/if}
-
-{#if workspaceProjects.length > 0}
-	<Panel class="mb-5">
-		<h2>{$t('Workspace Projects')}</h2>
-		{#each workspaceProjects as project (project.id)}
-			<ItemRow
-				as="a"
-				class="group rounded-lg px-2 hover:bg-surface-200-800"
-				href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
-			>
-				<div class="flex items-center justify-between gap-3">
-					<strong class="group-hover:text-primary-800-200">{project.name}</strong>
-					<Badge>{$t(domainLabel(project.state))}</Badge>
-				</div>
-				{#if project.description}<span class="text-sm text-surface-700-300"
-						>{project.description}</span
-					>{/if}
-				<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
-			</ItemRow>
-		{/each}
-	</Panel>
-{/if}
-
-<div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-	<Panel>
-		<h2>{$t('Your Projects')}</h2>
-		{#if projects.isPending}<p class="text-surface-600-400">{$t('Loading Projects…')}</p>
-		{:else if projects.isError}<QueryError
-				message={$t('Unable to load Projects.')}
-				busy={projects.isFetching}
-				onRetry={() => void projects.refetch()}
+		<label class="grid min-w-0 grow basis-full grid-cols-1 gap-1 text-sm xl:basis-48">
+			{$t('Search Projects')}
+			<input
+				class="input h-9 field-sm"
+				type="search"
+				bind:value={searchDraft.value}
+				oncompositionstart={() => searchDraft.compositionStart()}
+				oncompositionend={() => searchDraft.compositionEnd()}
 			/>
-		{:else}{#each myProjects as project (project.id)}
-				<ItemRow
-					as="a"
-					class="group rounded-lg px-2 hover:bg-surface-200-800"
-					href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
-				>
-					<div class="flex items-center justify-between gap-3">
-						<strong class="group-hover:text-primary-800-200">{project.name}</strong>
-						<Badge>{$t(domainLabel(project.state))}</Badge>
-					</div>
-					{#if project.description}<span class="text-sm text-surface-700-300"
-							>{project.description}</span
-						>{/if}
-					<span class="text-sm text-surface-600-400"
-						>{project.item_count} {$t('Items')} · {$t(domainLabel(project.participation))}</span
-					>
-				</ItemRow>
-			{:else}<p class="text-surface-600-400">
-					{$t('No participating Projects on this page.')}
-				</p>{/each}{/if}
-	</Panel>
-	<Panel as="aside">
-		<h2>{$t('Open Projects')}</h2>
-		<p class="text-sm text-surface-600-400">
-			{$t('Join an open research direction to add it to Your Projects.')}
-		</p>
-		{#if projects.isPending}<p class="text-surface-600-400">{$t('Loading Projects…')}</p>
-		{:else if projects.isError}<QueryError
-				message={$t('Unable to load Projects.')}
-				busy={projects.isFetching}
-				onRetry={() => void projects.refetch()}
-			/>
-		{:else}{#each joinable as project (project.id)}
-				<ItemRow>
-					<a
-						href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
-						class="font-semibold hover:text-primary-800-200">{project.name}</a
-					>
-					{#if project.description}<span class="text-sm text-surface-700-300"
-							>{project.description}</span
-						>{/if}
-					<div class="flex items-center justify-between gap-2">
-						<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
-						{#if can(project.authorization, 'project_participation.join')}<Button
-								disabled={busy}
-								onclick={() => join(project.id)}>{$t('Join')}</Button
-							>{/if}
-					</div>
-				</ItemRow>
-			{:else}<p class="text-surface-600-400">
-					{$t('No open Projects are available to join.')}
-				</p>{/each}{/if}
-	</Panel>
-</div>
-
-{#if managedProjects.length > 0}
-	<Panel class="mt-5">
-		<h2>{$t('Managed participation')}</h2>
-		<p class="text-sm text-surface-600-400">
-			{$t(
-				'Managed Projects are visible to participants and Workspace owners/admins; Workspace owners/admins curate their participant lists.'
-			)}
-		</p>
-		{#each managedProjects as project (project.id)}
-			<ItemRow
-				as="a"
-				class="group rounded-lg px-2 hover:bg-surface-200-800"
-				href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
+		</label>
+		<label class="grid min-w-0 grow basis-36 grid-cols-1 gap-1 text-sm xl:grow-0">
+			{$t('Projects')}
+			<select
+				class="select h-9 field-sm"
+				value={listing.view}
+				onchange={(event) => {
+					const value = event.currentTarget.value;
+					navigate({ view: value === 'mine' || value === 'joinable' ? value : 'all', page: 1 });
+				}}
 			>
-				<strong class="group-hover:text-primary-800-200">{project.name}</strong>
-				{#if project.description}<span class="text-sm text-surface-700-300"
-						>{project.description}</span
-					>{/if}
-				<span class="text-sm text-surface-600-400"
-					>{project.item_count} {$t('Items')} · {$t(domainLabel(project.state))}</span
+				<option value="all">{$t('All Projects')}</option>
+				<option value="mine">{$t('Your Projects')}</option>
+				<option value="joinable">{$t('Open Projects')}</option>
+			</select>
+		</label>
+		<label class="grid min-w-0 grow basis-36 grid-cols-1 gap-1 text-sm xl:grow-0">
+			{$t('State')}
+			<select
+				class="select h-9 field-sm"
+				value={listing.state}
+				onchange={(event) => {
+					const value = event.currentTarget.value;
+					navigate({ state: value === 'active' || value === 'archived' ? value : '', page: 1 });
+				}}
+			>
+				<option value="">{$t('Any state')}</option>
+				<option value="active">{$t('Active')}</option>
+				<option value="archived">{$t('Archived')}</option>
+			</select>
+		</label>
+		<div class="grid min-w-37 grow basis-36 grid-cols-1 gap-1 text-sm xl:grow-0">
+			<label for={`${id}-sort`}>{$t('Sort By')}</label>
+			<div
+				role="group"
+				aria-label={$t('Sort')}
+				class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
+			>
+				<select
+					id={`${id}-sort`}
+					class="select h-9 min-w-28 field-sm"
+					value={listing.sort}
+					onchange={(event) => {
+						const value = event.currentTarget.value;
+						const sort = value === 'created' || value === 'updated' ? value : 'name';
+						navigate({ sort, direction: defaultProjectSortDirection(sort), page: 1 });
+					}}
 				>
-			</ItemRow>
-		{/each}
-	</Panel>
+					<option value="name">{$t('Name')}</option>
+					<option value="created">{$t('Created')}</option>
+					<option value="updated">{$t('Updated')}</option>
+				</select>
+				<Button
+					type="button"
+					variant="icon"
+					class="-ml-px size-9"
+					aria-label={directionHint}
+					title={directionHint}
+					onclick={() => navigate({ direction: nextDirection, page: 1 })}
+				>
+					<Icon name={listing.direction === 'asc' ? 'arrow-up' : 'arrow-down'} size={16} />
+				</Button>
+			</div>
+		</div>
+	</form>
+</Panel>
+
+{#if error}<Notice variant="error" class="mb-4">{error}</Notice>{/if}
+{#if projects.isError || (!projects.isPending && !available)}
+	<QueryError
+		message={$t('Unable to load Projects.')}
+		busy={projects.isFetching}
+		onRetry={() => void projects.refetch()}
+	/>
 {/if}
 
-{#if archivedOpenProjects.length > 0}
-	<Panel class="mt-5">
-		<h2>{$t('Archived Projects')}</h2>
-		{#each archivedOpenProjects as project (project.id)}
-			<ItemRow
-				as="a"
-				class="group rounded-lg px-2 hover:bg-surface-200-800"
-				href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
-			>
-				<strong class="group-hover:text-primary-800-200">{project.name}</strong>
-				{#if project.description}<span class="text-sm text-surface-700-300"
-						>{project.description}</span
-					>{/if}
-				<span class="text-sm text-surface-600-400">{project.item_count} {$t('Items')}</span>
-			</ItemRow>
-		{/each}
-	</Panel>
-{/if}
-
-<Pagination
-	page={Math.floor(offset / pageSize) + 1}
-	{pageCount}
-	{pageSize}
-	total={projects.data?.total ?? 0}
-	onPageSize={(size) => {
-		navigate({ pageSize: size, page: 1 });
-	}}
-	onPage={(page) => {
-		navigate({ page });
-	}}
-	busy={projects.isFetching}
-	label={$t('Projects')}
-/>
+<Panel padding="none" class="min-w-0">
+	<SectionHeader class="px-5 pt-5" spacing="compact">
+		<h2>
+			{$t('Projects')}
+			{#if available}<span class="text-base font-normal text-surface-600-400"
+					>{$numberFormat.format(total)}</span
+				>{/if}
+		</h2>
+	</SectionHeader>
+	{#if available && projects.data}
+		{#if projects.data.items.length}
+			<ul aria-label={$t('Projects')}>
+				{#each projects.data.items as project (project.id)}
+					<li
+						aria-label={project.name}
+						class="flex min-w-0 flex-col gap-4 border-b border-surface-300-700 px-5 py-4 last:border-b-0 sm:flex-row"
+					>
+						<div class="min-w-0 flex-1">
+							<h3 class="text-base">
+								<a
+									class="line-clamp-2 font-semibold wrap-anywhere hover:text-primary-800-200"
+									href={resolve(workspaceHref(workspaceId, `projects/${project.id}`))}
+									title={project.name}>{project.name}</a
+								>
+							</h3>
+							{#if project.description}
+								<p
+									class="mt-1 line-clamp-2 text-sm wrap-anywhere text-surface-600-400"
+									title={project.description}
+								>
+									{project.description}
+								</p>
+							{/if}
+							<div
+								class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-surface-600-400"
+							>
+								<span
+									>{$t('{count, plural, one {# Item} other {# Items}}', {
+										count: project.item_count
+									})}</span
+								>
+								<span aria-hidden="true">·</span>
+								<span>{$t(domainLabel(project.participation))}</span>
+								{#if project.is_participating && project.participation !== 'workspace'}
+									<span aria-hidden="true">·</span>
+									<span>{$t('Joined')}</span>
+								{/if}
+								{#if project.state === 'archived'}
+									<Badge>{$t(domainLabel(project.state))}</Badge>
+								{/if}
+							</div>
+						</div>
+						<div class="flex shrink-0 flex-wrap items-center gap-2 self-start">
+							<Button
+								as="a"
+								size="sm"
+								href={resolve(libraryHref(workspaceId, { project: project.id }))}
+								>{$t('Open in Library')}</Button
+							>
+							{#if can(project.authorization, 'project_participation.join')}
+								<Button
+									size="sm"
+									disabled={busy}
+									onclick={() => changeParticipation(project.id, 'join')}>{$t('Join')}</Button
+								>
+							{:else if can(project.authorization, 'project_participation.leave')}
+								<Button
+									size="sm"
+									disabled={busy}
+									onclick={() => changeParticipation(project.id, 'leave')}
+									>{$t('Leave Project')}</Button
+								>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{:else}<p class="px-5 pb-5 text-surface-600-400">{$t('No matching Projects.')}</p>{/if}
+	{:else if projects.isPending}<p class="px-5 pb-5 text-surface-600-400">
+			{$t('Loading Projects…')}
+		</p>{/if}
+	<Pagination
+		page={listing.page}
+		{pageCount}
+		pageSize={listing.pageSize}
+		{total}
+		onPageSize={(pageSize) => navigate({ pageSize, page: 1 })}
+		onPage={(page) => navigate({ page })}
+		busy={projects.isFetching}
+		label={$t('Projects')}
+	/>
+</Panel>

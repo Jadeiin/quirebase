@@ -65,7 +65,12 @@ function receiptCaches(workspaceId: string, batchId: string) {
 		},
 		{ key: libraryFacetsQuery(workspaceId, { import_batch: batchId }).queryKey, data: facets },
 		{
-			key: libraryFacetsQuery(workspaceId, { import_batch: batchId, year: '2025' }, 8).queryKey,
+			key: libraryFacetsQuery(
+				workspaceId,
+				{ import_batch: batchId, year: '2025', sort: 'author', direction: 'asc' },
+				3,
+				50
+			).queryKey,
 			data: facets
 		}
 	];

@@ -87,12 +87,12 @@ async def test_search_authors_typeahead_uses_only_workspace_item_names(persisten
         {
             "last_name": "Shannon",
             "first_name": "Claude",
-            "full_name": "Shannon, Claude",
+            "full_name": "Claude Shannon",
         },
         {
             "last_name": "Shapiro",
             "first_name": "Alex",
-            "full_name": "Shapiro, Alex",
+            "full_name": "Alex Shapiro",
         },
     ]
     assert await search_authors_typeahead(db, reader, workspace, "Sha", limit=1) == results[:1]

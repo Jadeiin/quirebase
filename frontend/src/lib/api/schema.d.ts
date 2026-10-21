@@ -3031,6 +3031,8 @@ export interface components {
 			last_name: string;
 			/** First Name */
 			first_name: string | null;
+			/** Full Name */
+			full_name: string;
 			/** Item Count */
 			item_count: number;
 		};
@@ -3230,11 +3232,6 @@ export interface components {
 			 * @enum {string}
 			 */
 			scope: 'builtin' | 'custom';
-		};
-		/** CitationStylesResponseView */
-		CitationStylesResponseView: {
-			/** Styles */
-			styles: components['schemas']['CitationStyleItemView'][];
 		};
 		/** CitationView */
 		CitationView: {
@@ -4571,6 +4568,20 @@ export interface components {
 		 * OffsetPagination
 		 * @description Container for data returned using limit/offset pagination.
 		 */
+		OffsetPagination_CitationStyleItemView_: {
+			/** Items */
+			items: components['schemas']['CitationStyleItemView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
 		OffsetPagination_ImportBatchSummary_: {
 			/** Items */
 			items: components['schemas']['ImportBatchSummary'][];
@@ -4658,6 +4669,20 @@ export interface components {
 		OffsetPagination_WorkspaceGovernanceMemberView_: {
 			/** Items */
 			items: components['schemas']['WorkspaceGovernanceMemberView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_WorkspaceInvitationView_: {
+			/** Items */
+			items: components['schemas']['WorkspaceInvitationView'][];
 			/** Limit */
 			limit: number;
 			/** Offset */
@@ -5233,6 +5258,16 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+			/**
+			 * Updated At
+			 * Format: date-time
+			 */
+			updated_at: string;
 			/** Item Count */
 			item_count: number;
 			state: components['schemas']['ProjectState'];
@@ -5296,6 +5331,16 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+			/**
+			 * Updated At
+			 * Format: date-time
+			 */
+			updated_at: string;
 			/** Item Count */
 			item_count: number;
 			state: components['schemas']['ProjectState'];
@@ -8534,6 +8579,8 @@ export interface operations {
 				limit?: number;
 				offset?: number;
 				search?: string;
+				role?: components['schemas']['WorkspaceRole'] | '';
+				direction?: 'asc' | 'desc';
 			};
 			header?: never;
 			path: {
@@ -8578,6 +8625,10 @@ export interface operations {
 				limit?: number;
 				offset?: number;
 				search?: string;
+				role?: components['schemas']['WorkspaceRole'] | '';
+				state?: components['schemas']['WorkspaceMemberState'] | '';
+				sort?: 'username' | 'joined';
+				direction?: 'asc' | 'desc';
 			};
 			header?: never;
 			path: {
@@ -8618,7 +8669,14 @@ export interface operations {
 	};
 	'workspaces.get_workspace_invitations': {
 		parameters: {
-			query?: never;
+			query?: {
+				search?: string;
+				role?: components['schemas']['WorkspaceInvitationRole'] | '';
+				sort?: 'username' | 'created' | 'expires';
+				direction?: 'asc' | 'desc';
+				limit?: number;
+				offset?: number;
+			};
 			header?: never;
 			path: {
 				workspace_id: string;
@@ -8633,7 +8691,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['WorkspaceInvitationView'][];
+					'application/json': components['schemas']['OffsetPagination_WorkspaceInvitationView_'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -9309,6 +9367,9 @@ export interface operations {
 		parameters: {
 			query?: {
 				limit?: number;
+				offset?: number;
+				sort?: 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
+				direction?: ('asc' | 'desc') | null;
 				query?: string;
 				tag?: string | null;
 				project?: string | null;
@@ -10464,6 +10525,9 @@ export interface operations {
 				limit?: number;
 				offset?: number;
 				search?: string;
+				state?: '' | 'active' | 'archived';
+				sort?: 'name' | 'created' | 'updated';
+				direction?: 'asc' | 'desc';
 			};
 			header?: never;
 			path: {
@@ -12961,8 +13025,12 @@ export interface operations {
 		parameters: {
 			query?: {
 				query?: string;
+				key?: string;
+				scope?: '' | 'builtin' | 'custom';
+				sort?: 'name';
+				direction?: 'asc' | 'desc';
 				limit?: number;
-				include?: string;
+				offset?: number;
 			};
 			header?: never;
 			path: {
@@ -12978,7 +13046,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['CitationStylesResponseView'];
+					'application/json': components['schemas']['OffsetPagination_CitationStyleItemView_'];
 				};
 			};
 			/** @description Unprocessable Content */

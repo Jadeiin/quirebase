@@ -476,13 +476,20 @@
 	bind:fileFilter
 	bind:filtersOpen
 	applied={submitted}
+	{pageNumber}
+	{pageSize}
 	filterHref={(filter) =>
 		libraryHref(workspaceId, refineLibraryFilters(submitted, filter), 1, pageSize, previewItemId)}
 	onSearch={search}
 	onClear={clearFilters}
 />
 
-<LibraryActiveFilters filters={submitted} project={appliedProject} onRemove={removeFilters} />
+<LibraryActiveFilters
+	filters={submitted}
+	authors={library.data?.items.flatMap((item) => item.authors) ?? []}
+	project={appliedProject}
+	onRemove={removeFilters}
+/>
 
 {#if submitted.project && (selectedProject.isError || selectedProject.fetchStatus === 'paused')}
 	<QueryError

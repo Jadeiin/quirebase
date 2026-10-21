@@ -10,6 +10,7 @@
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import {
 		citationKeyPreviewQuery,
+		exportCitationStyleQuery,
 		exportCitationStylesQuery
 	} from '#lib/features/account/queries.js';
 	import {
@@ -39,12 +40,40 @@
 		return format === 'csl' ? 'csl' : format === 'bibtex' ? 'bibtex' : 'bibliography';
 	}
 	const workspaces = createInfiniteQuery(() => workspaceOptionsQuery());
-	const styles = createQuery(() =>
-		exportCitationStylesQuery(workspaceId, styleQuery, preferences.citation.style)
+	const styles = createInfiniteQuery(() => ({
+		...exportCitationStylesQuery(workspaceId, styleQuery),
+		enabled: ready && Boolean(workspaceId) && loadedWorkspaceId === workspaceId
+	}));
+	const selection = createQuery(() => ({
+		...exportCitationStyleQuery(workspaceId, preferences.citation.style),
+		enabled:
+			ready &&
+			Boolean(workspaceId && preferences.citation.style) &&
+			loadedWorkspaceId === workspaceId
+	}));
+	const styleOptions = $derived.by(() => {
+		if (!workspaceId || loadedWorkspaceId !== workspaceId) return [];
+		const catalog = styles.data;
+		const selected = selection.data;
+		const candidates =
+			catalog?.workspaceId === workspaceId && catalog.query === styleQuery ? catalog.items : [];
+		const selectedItems =
+			selected?.workspaceId === workspaceId && selected.key === preferences.citation.style
+				? selected.items
+				: [];
+		return [
+			...new Map([...candidates, ...selectedItems].map((style) => [style.key, style])).values()
+		];
+	});
+	const stylesUnavailable = $derived(
+		styles.isError ||
+			styles.fetchStatus === 'paused' ||
+			selection.isError ||
+			selection.fetchStatus === 'paused'
 	);
 	const styleCollection = $derived(
 		useListCollection({
-			items: styles.data?.styles ?? [],
+			items: styleOptions,
 			itemToValue: (style) => style.key,
 			itemToString: (style) => style.name
 		})
@@ -86,21 +115,20 @@
 	});
 
 	$effect(() => {
-		const catalog = styles.data;
+		const selected = selection.data;
 		if (
 			!ready ||
+			!workspaceId ||
 			loadedWorkspaceId !== workspaceId ||
-			!catalog ||
-			catalog.workspaceId !== workspaceId ||
-			catalog.query !== styleQuery ||
-			catalog.include !== preferences.citation.style
+			!selection.isSuccess ||
+			selection.fetchStatus !== 'idle' ||
+			!selected ||
+			selected.workspaceId !== workspaceId ||
+			selected.key !== preferences.citation.style ||
+			selected.items.length
 		)
 			return;
-		const available = catalog.styles;
-		if (available.some((style) => style.key === preferences.citation.style)) return;
-		// `apa` is a built-in style and the include parameter will make it
-		// available in the next catalog response even when the search filter
-		// currently excludes it.
+		// Only the exact selected-key read can establish that a saved style disappeared.
 		preferences.citation.style = 'apa';
 	});
 
@@ -222,12 +250,15 @@
 					busy={workspaces.isFetching}
 					onRetry={() => void workspaces.refetch()}
 				/>{/if}
-			{#if workspaceId && styles.isError}<QueryError
-					message={apiErrorMessage(styles.error, $t('Unable to load Citation Styles.'))}
-					busy={styles.isFetching}
-					onRetry={() => void styles.refetch()}
+			{#if workspaceId && stylesUnavailable}<QueryError
+					message={apiErrorMessage(
+						styles.error ?? selection.error,
+						$t('Unable to load Citation Styles.')
+					)}
+					busy={styles.isFetching || selection.isFetching}
+					onRetry={() => void Promise.all([styles.refetch(), selection.refetch()])}
 				/>{/if}
-			{#if workspaceId && styles.isPending}<LoadingState
+			{#if workspaceId && !stylesUnavailable && (styles.isPending || selection.isPending)}<LoadingState
 					label={$t('Loading Citation Styles…')}
 				/>{/if}
 			<div class="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
@@ -252,14 +283,14 @@
 					class="md:col-span-2"
 					collection={styleCollection}
 					value={[preferences.citation.style]}
-					disabled={!workspaceId}
+					disabled={!workspaceId || loadedWorkspaceId !== workspaceId}
 					onValueChange={(details) => {
 						if (details.value[0]) preferences.citation.style = details.value[0];
 					}}
 				>
 					<Listbox.Label>{$t('Default CSL style')}</Listbox.Label>
 					<Listbox.Content class="max-h-52 overflow-y-auto">
-						{#each styles.data?.styles ?? [] as style (style.key)}
+						{#each styleOptions as style (style.key)}
 							<Listbox.Item item={style}>
 								<Listbox.ItemText>{style.name}</Listbox.ItemText>
 								<Listbox.ItemIndicator aria-hidden="true">✓</Listbox.ItemIndicator>
@@ -268,9 +299,13 @@
 					</Listbox.Content>
 				</Listbox>
 			</div>
-			{#if workspaceId && styles.isSuccess && styles.data.styles.length === 0}
+			{#if workspaceId && styles.isSuccess && styles.fetchStatus === 'idle' && styles.data.items.length === 0}
 				<p>{$t('No Citation Styles match this search.')}</p>
 			{/if}
+			{#if workspaceId && styles.hasNextPage}<Button
+					disabled={styles.fetchStatus !== 'idle'}
+					onclick={() => void styles.fetchNextPage()}>{$t('Load more Citation Styles')}</Button
+				>{/if}
 			{#if workspaces.hasNextPage}<Button
 					disabled={workspaces.isFetchingNextPage}
 					onclick={() => void workspaces.fetchNextPage()}>{$t('Load more workspaces')}</Button

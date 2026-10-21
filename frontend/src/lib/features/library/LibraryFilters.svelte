@@ -23,6 +23,8 @@
 		fileFilter = $bindable(''),
 		filtersOpen = $bindable(false),
 		applied,
+		pageNumber,
+		pageSize,
 		filterHref,
 		onSearch,
 		onClear
@@ -38,6 +40,8 @@
 		fileFilter: string;
 		filtersOpen: boolean;
 		applied: LibraryFilters;
+		pageNumber: number;
+		pageSize: number;
 		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
 		onSearch: () => void;
 		onClear: () => void;
@@ -102,7 +106,7 @@
 					{#await import('./LibraryRefinements.svelte')}
 						<p role="status" class="text-sm text-surface-600-400">{$t('Loading filter values…')}</p>
 					{:then { default: LibraryRefinements }}
-						<LibraryRefinements filters={applied} {filterHref} />
+						<LibraryRefinements filters={applied} {pageNumber} {pageSize} {filterHref} />
 					{:catch}
 						<QueryError
 							message={$t('Unable to load filter values.')}

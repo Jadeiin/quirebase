@@ -7,8 +7,10 @@ import pytest
 from app_helpers import json_payload
 from inquiro.bibliography import (
     BibliographyExportOptions,
+    CitationStyleOption,
     builtin_style_xml,
     render_citation,
+    select_builtin_citation_styles,
     work_to_csl_json,
 )
 from item_helpers import contributor_values
@@ -23,15 +25,15 @@ from quirebase.core.errors import (
 )
 from quirebase.library.citations import (
     BibliographyFormat,
+    CitationStyleSummary,
     create_custom_citation_style,
     delete_custom_citation_style,
     export_item_bibliography,
     export_selected_bibliography,
-    list_custom_citation_styles,
+    list_citation_styles,
     preview_citation_key,
     render_item_citation,
     resolve_style_xml,
-    select_builtin_citation_styles,
 )
 from quirebase.models import CitationStyle, Item, User, WorkspaceMember, WorkspaceRole
 from quirebase.workspaces import archive_workspace
@@ -133,7 +135,9 @@ async def test_shared_citation_styles_require_workspace_membership_to_list(async
     await provision_initial_workspace(async_db, outsider)
     await async_db.commit()
     with pytest.raises(WorkspaceMembershipRequired):
-        await list_custom_citation_styles(async_db, outsider, item.workspace_id)
+        await list_citation_styles(async_db, outsider, item.workspace_id)
+    with pytest.raises(WorkspaceMembershipRequired):
+        await list_citation_styles(async_db, outsider, item.workspace_id, key="apa", limit=1)
 
 
 @pytest.mark.anyio
@@ -314,12 +318,10 @@ def test_builtin_style_catalog_is_searchable():
 def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
     from inquiro.bibliography import styles
 
-    from quirebase.library import citations
-
     catalog_calls = 0
     catalog = (
-        citations.CitationStyleOption(key="matching", name="Matching Style"),
-        citations.CitationStyleOption(key="saved", name="Saved Style"),
+        CitationStyleOption(key="matching", name="Matching Style"),
+        CitationStyleOption(key="saved", name="Saved Style"),
     )
 
     def load_catalog():
@@ -328,7 +330,7 @@ def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
         return catalog
 
     monkeypatch.setattr(styles, "builtin_style_catalog", load_catalog)
-    selection = citations.select_builtin_citation_styles("matching", limit=1, include="saved")
+    selection = select_builtin_citation_styles("matching", limit=1, include="saved")
     assert catalog_calls == 1
     assert selection.matches == (catalog[0],)
     assert selection.included == catalog[1]
@@ -431,14 +433,15 @@ async def test_citation_style_search_includes_owned_custom_styles(
             f"/api/v1/workspaces/{item.workspace_id}/citation-styles?query=searchable"
         )
         assert response.status_code == 200
-        assert response.json()["styles"][0]["name"] == "My Searchable Style"
+        assert response.json()["items"][0]["name"] == "My Searchable Style"
+        assert response.json()["total"] == 1
     finally:
         await client.aclose()
         get_settings.cache_clear()
 
 
 @pytest.mark.anyio
-async def test_citation_style_search_includes_requested_saved_style(
+async def test_citation_style_directory_finds_requested_saved_style(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
     from test_http import authenticated_async_client
@@ -451,12 +454,350 @@ async def test_citation_style_search_includes_requested_saved_style(
     try:
         response = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/citation-styles",
-            params={"limit": 1, "include": "apa"},
+            params={"limit": 1, "key": " APA "},
         )
         assert response.status_code == 200
-        styles = response.json()["styles"]
-        assert len(styles) == 2
-        assert styles[-1] == {"key": "apa", "name": "APA Style 7th edition", "scope": "builtin"}
+        assert response.json()["total"] == 1
+        assert response.json()["items"] == [
+            {"key": "apa", "name": "APA Style 7th edition", "scope": "builtin"}
+        ]
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("scope", ["", "builtin", "custom"])
+@pytest.mark.parametrize("direction", ["asc", "desc"])
+async def test_citation_style_catalog_pages_one_stable_workspace_catalog(
+    persistence_db, monkeypatch, scope, direction
+):
+    from quirebase.library import citations
+
+    async_db = persistence_db
+    item = await _async_item(async_db)
+    user = await async_db.get(User, item.created_by)
+    assert user is not None
+    custom = [
+        CitationStyle(
+            workspace_id=item.workspace_id,
+            created_by=user.id,
+            name=f"style {index:03}",
+            csl_xml="not needed for catalog reads",
+        )
+        for index in range(73)
+    ]
+    async_db.add_all(custom)
+    other_item = await _async_item(async_db)
+    async_db.add(
+        CitationStyle(
+            workspace_id=other_item.workspace_id,
+            created_by=other_item.created_by,
+            name="style 003",
+            csl_xml="another Workspace",
+        )
+    )
+    await async_db.commit()
+    builtin = (
+        CitationStyleOption("same-z", "STYLE 003"),
+        CitationStyleOption("last", "Style 999"),
+        CitationStyleOption("same-a", "STYLE 003"),
+    )
+    monkeypatch.setattr(citations, "builtin_style_catalog", lambda: builtin)
+    builtin_rows = [
+        CitationStyleSummary("same-a", "STYLE 003", "builtin"),
+        CitationStyleSummary("same-z", "STYLE 003", "builtin"),
+        CitationStyleSummary("last", "Style 999", "builtin"),
+    ]
+    custom_rows = [CitationStyleSummary(str(style.id), style.name, "custom") for style in custom]
+    expected = (
+        builtin_rows
+        if scope == "builtin"
+        else custom_rows
+        if scope == "custom"
+        else [*custom_rows[:3], *builtin_rows[:2], *custom_rows[3:], builtin_rows[-1]]
+    )
+    if direction == "desc":
+        expected = list(reversed(expected))
+
+    actual = []
+    for offset in range(0, len(expected) + 7, 7):
+        page, total = await list_citation_styles(
+            async_db,
+            user,
+            item.workspace_id,
+            scope=scope,
+            direction=direction,
+            limit=7,
+            offset=offset,
+        )
+        assert total == len(expected)
+        assert len(page) <= 7
+        actual.extend(page)
+    assert actual == expected
+    assert len({row.key for row in actual}) == len(actual)
+
+
+@pytest.mark.anyio
+async def test_citation_style_catalog_unicode_order_matches_sql_window(persistence_db, monkeypatch):
+    from quirebase.library import citations
+
+    async_db = persistence_db
+    item = await _async_item(async_db)
+    user = await async_db.get(User, item.created_by)
+    assert user is not None
+    async_db.add_all([
+        CitationStyle(
+            workspace_id=item.workspace_id,
+            created_by=user.id,
+            name=name,
+            csl_xml="unused",
+        )
+        for name in ["éclair", "Zebra", "Éclair", "alpha", "İstanbul"]
+    ])
+    await async_db.commit()
+    monkeypatch.setattr(
+        citations,
+        "builtin_style_catalog",
+        lambda: (
+            CitationStyleOption("e", "Éclair"),
+            CitationStyleOption("a", "ALPHA"),
+        ),
+    )
+    expected = ["ALPHA", "alpha", "Zebra", "Éclair", "Éclair", "éclair", "İstanbul"]
+    for direction in ["asc", "desc"]:
+        actual = []
+        for offset in range(7):
+            page, total = await list_citation_styles(
+                async_db, user, item.workspace_id, limit=1, offset=offset, direction=direction
+            )
+            assert total == 7
+            actual.extend(style.name for style in page)
+        assert actual == (expected if direction == "asc" else list(reversed(expected)))
+
+
+@pytest.mark.anyio
+async def test_citation_style_search_uses_literal_ascii_folding_for_both_sources(
+    persistence_db, monkeypatch
+):
+    from quirebase.library import citations
+
+    db = persistence_db
+    item = await _async_item(db)
+    user = await db.get(User, item.created_by)
+    assert user is not None
+    names = ["Éclair", "éclair", "İstanbul", "100%_É", "100ABCÉ", "100%XÉ", "A/B"]
+    db.add_all([
+        CitationStyle(
+            workspace_id=item.workspace_id,
+            created_by=user.id,
+            name=name,
+            csl_xml="unused",
+        )
+        for name in names
+    ])
+    await db.commit()
+    monkeypatch.setattr(
+        citations,
+        "builtin_style_catalog",
+        lambda: tuple(CitationStyleOption(str(index), name) for index, name in enumerate(names)),
+    )
+    for query, expected in [
+        ("  ÉCLAIR  ", "Éclair"),
+        ("éclair", "éclair"),
+        ("İSTANBUL", "İstanbul"),
+        ("%_É", "100%_É"),
+        ("a/b", "A/B"),
+    ]:
+        page, total = await list_citation_styles(db, user, item.workspace_id, query=query)
+        assert total == 2
+        assert [(style.name, style.scope) for style in page] == [
+            (expected, "builtin"),
+            (expected, "custom"),
+        ]
+    page, total = await list_citation_styles(db, user, item.workspace_id, query="istanbul")
+    assert page == []
+    assert total == 0
+
+
+@pytest.mark.anyio
+async def test_citation_style_catalog_search_and_exact_key_filters(async_db, monkeypatch):
+    from quirebase.library import citations
+
+    item = await _async_item(async_db)
+    user = await async_db.get(User, item.created_by)
+    assert user is not None
+    selected = CitationStyle(
+        workspace_id=item.workspace_id, created_by=user.id, name="Saved custom", csl_xml="unused"
+    )
+    literal = CitationStyle(
+        workspace_id=item.workspace_id, created_by=user.id, name="100%_Style", csl_xml="unused"
+    )
+    async_db.add_all([selected, literal])
+    await async_db.commit()
+    monkeypatch.setattr(
+        citations,
+        "builtin_style_catalog",
+        lambda: (
+            CitationStyleOption("needle-key", "A builtin"),
+            CitationStyleOption("b", "B builtin"),
+            CitationStyleOption("saved", "Saved builtin"),
+        ),
+    )
+    page, total = await list_citation_styles(async_db, user, item.workspace_id, query="  NEEDLE  ")
+    assert total == 1
+    assert [style.key for style in page] == ["needle-key"]
+    page, total = await list_citation_styles(async_db, user, item.workspace_id, query="%_")
+    assert total == 1
+    assert [style.key for style in page] == [str(literal.id)]
+
+    for key, expected in [
+        (" SAVED ", "saved"),
+        (f" {str(selected.id).upper()} ", str(selected.id)),
+    ]:
+        page, total = await list_citation_styles(
+            async_db, user, item.workspace_id, limit=1, key=key
+        )
+        assert total == 1
+        assert [style.key for style in page] == [expected]
+    for filters in [
+        {"key": "saved", "query": "custom"},
+        {"key": "saved", "scope": "custom"},
+        {"key": str(selected.id), "query": "builtin"},
+        {"key": str(selected.id), "scope": "builtin"},
+        {"key": "save"},
+        {"key": "   "},
+        {"key": "invalid-uuid"},
+        {"key": str(uuid4())},
+    ]:
+        page, total = await list_citation_styles(async_db, user, item.workspace_id, **filters)
+        assert page == []
+        assert total == 0
+    for key, scope in [("saved", "builtin"), (str(selected.id), "custom")]:
+        page, total = await list_citation_styles(
+            async_db, user, item.workspace_id, key=key, query="saved", scope=scope, limit=1
+        )
+        assert total == 1
+        assert [style.key for style in page] == [key]
+        page, total = await list_citation_styles(
+            async_db, user, item.workspace_id, key=key, offset=1, limit=1
+        )
+        assert page == []
+        assert total == 1
+    other_item = await _async_item(async_db)
+    other_style = CitationStyle(
+        workspace_id=other_item.workspace_id,
+        created_by=other_item.created_by,
+        name="Secret custom",
+        csl_xml="unused",
+    )
+    async_db.add(other_style)
+    await async_db.commit()
+    page, total = await list_citation_styles(
+        async_db, user, item.workspace_id, key=str(other_style.id)
+    )
+    assert page == []
+    assert total == 0
+
+
+@pytest.mark.anyio
+async def test_citation_style_catalog_reads_a_bounded_metadata_window(async_db, monkeypatch):
+    from sqlalchemy import event
+
+    from quirebase.library import citations
+
+    item = await _async_item(async_db)
+    user = await async_db.get(User, item.created_by)
+    assert user is not None
+    async_db.add_all([
+        CitationStyle(
+            workspace_id=item.workspace_id,
+            created_by=user.id,
+            name=f"Style {index:03}",
+            csl_xml="Large CSL documents must not be read by the directory.",
+        )
+        for index in range(200)
+    ])
+    await async_db.commit()
+    monkeypatch.setattr(
+        citations,
+        "builtin_style_catalog",
+        lambda: (CitationStyleOption("builtin", "Style 050"),),
+    )
+    statements = []
+
+    def capture(_conn, _cursor, statement, parameters, _context, _executemany):
+        if "FROM citation_styles" in statement:
+            statements.append((statement, parameters))
+
+    engine = async_db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        page, total = await list_citation_styles(
+            async_db, user, item.workspace_id, limit=5, offset=150
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    assert total == 201
+    assert [style.name for style in page] == [f"Style {index:03}" for index in range(149, 154)]
+    assert all("csl_xml" not in statement for statement, _params in statements)
+    metadata_queries = [params for statement, params in statements if "LIMIT" in statement]
+    assert len(metadata_queries) == 1
+    assert metadata_queries[0][-2:] == (6, 149)
+
+
+@pytest.mark.anyio
+async def test_citation_style_api_validates_pages_and_exact_key_lookup(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    from test_http import authenticated_async_client
+
+    from quirebase.core.config import get_settings
+    from quirebase.library import citations
+
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    monkeypatch.setattr(
+        citations,
+        "builtin_style_catalog",
+        lambda: tuple(CitationStyleOption(f"style-{i:02}", f"Style {i:02}") for i in range(61)),
+    )
+    path = f"/api/v1/workspaces/{item.workspace_id}/citation-styles"
+    try:
+        first = await client.get(path, params={"limit": 50})
+        assert first.status_code == 200
+        assert len(first.json()["items"]) == 50
+        assert first.json()["total"] == 61
+        assert first.json()["limit"] == 50
+        assert first.json()["offset"] == 0
+        second = await client.get(path, params={"limit": 50, "offset": 50})
+        assert len(second.json()["items"]) == 11
+        assert second.json()["items"][-1]["key"] == "style-60"
+        assert (await client.get(path, params={"offset": 1000})).json()["items"] == []
+        selected = await client.get(path, params={"key": " STYLE-60 ", "limit": 1})
+        assert selected.json()["total"] == 1
+        assert selected.json()["items"] == [
+            {"key": "style-60", "name": "Style 60", "scope": "builtin"}
+        ]
+        for params in [
+            {"key": "style-60", "query": "missing"},
+            {"key": "style-60", "scope": "custom"},
+            {"key": "missing"},
+        ]:
+            filtered = await client.get(path, params=params)
+            assert filtered.json()["total"] == 0
+            assert filtered.json()["items"] == []
+        for params in [
+            {"limit": 0},
+            {"limit": 101},
+            {"offset": -1},
+            {"direction": "sideways"},
+            {"sort": "created"},
+            {"scope": "other"},
+        ]:
+            invalid = await client.get(path, params=params)
+            assert invalid.status_code == 422
     finally:
         await client.aclose()
         get_settings.cache_clear()
@@ -656,12 +997,12 @@ async def test_custom_styles_accessible_in_item_sections(
         )
         response = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/citation-styles",
-            params={"include": custom_style.id},
+            params={"key": custom_style.id, "limit": 1},
         )
         assert response.status_code == 200
         assert any(
             style["key"] == str(custom_style.id) and style["scope"] == "custom"
-            for style in response.json()["styles"]
+            for style in response.json()["items"]
         )
         text_res = await client.get(
             f"/api/v1/workspaces/{item.workspace_id}/items/{item.id}/citation?style={custom_style.id}"

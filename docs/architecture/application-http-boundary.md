@@ -167,6 +167,11 @@ Author credits, publication titles and publication years refine the submitted Li
 the same facet and reset paging while preserving other filters, sort, page size and preview target.
 Item summaries carry ordered structured author names with exact filter values; no row-level lookup
 or parsing of joined names is needed. Only the year portion of a displayed date acts as a filter.
+Refinement candidates load only when filters are expanded and describe the current Item page.
+They use the same filters, ordering and pagination as the result list; paging or sorting updates
+their distinct-Item counts. Every candidate on that page is available, with five initially visible
+per group and scrolling on expansion. Author labels use credited display names separately from
+the raw exact-filter values, without guessing name order from the interface locale.
 Library sorting supports title, first author, publication, publication date, date added and date
 modified in both directions; the toolbar groups a field selector with its direction toggle, synchronized
 with sortable table headers through the URL.
@@ -198,8 +203,13 @@ Automatic page clamps replace history only after a successful, settled read esta
 page. User pagination pushes history. Administration exposes separate `setPage` and `correctPage`
 actions so query effects cannot accidentally select the user-navigation policy.
 
-Tools stores the active mode, duplicate criteria, Tag filter/page/size and Citation Style search
-in its URL. Returning to or refreshing a duplicate view never initiates a scan. Only the explicit
+Tools stores the active mode, duplicate criteria, Tag filter/page/size and Citation Style
+search/source/page/size/name order in its URL. The Citation Style directory returns globally
+ordered, paginated built-in and custom metadata with a total count; it does not load custom CSL
+documents. Default-style selectors page the same directory and resolve their current selection
+through its exact `key` filter, independently of the candidate search. They combine the selected
+metadata with candidates locally without changing server page sizes or totals. Returning to or
+refreshing a duplicate view never initiates a scan. Only the explicit
 check captures submitted criteria and calls the disabled query's `refetch`; URL criteria changes
 leave that in-flight query attached to the submitted criteria. Revisiting stale results does not
 refetch. Leaving the view may cancel the request; returning requires another explicit check.
@@ -296,16 +306,26 @@ lifetime, even if navigation happens during that read. An unavailable response e
 path as a successful leave; other read failures retain uncertainty and never replay the command.
 Finishing an operation after navigation to another Workspace does not redirect that new context.
 
-Directory and member search, page and page size live in URL parameters. Search and page-size
-changes reset to page one; settled results clamp an out-of-range page. Unsubmitted drafts remain
-local and are not overwritten by background refreshes. A Workspace-ID change retains the existing
-keyed Provider isolation. Governance mutations invalidate the shared Workspace projections once,
+Projects uses one paginated result list with participation scope, lifecycle state and name/created/
+updated ordering. Members supports role and username ordering; the governance projection also
+supports membership state and join-date ordering. Sent invitations returns only pending invitations,
+with recipient search, role filtering and username/created/expiry ordering. Filtering, counting,
+ordering and pagination run on the server. These list choices live in URL parameters; changing
+filters, ordering or page size resets to page one. Search publishes after a 200 ms debounce and waits
+for IME composition. Settled results clamp an out-of-range page with history replacement;
+user pagination pushes history. Raw search drafts survive unrelated list changes and background
+refreshes, while Back restores the submitted URL value. A Workspace-ID change retains the existing
+keyed Provider isolation. Settled governance commands, including lost responses, invalidate the shared Workspace projections once,
 including dependent research views; starting reindex registers its scoped job with the global
 Workflow Center.
 
 Read sections distinguish loading, failure, no matches and empty data, with local retries for
-failures. Invitation read failures do not remove a newly created one-time link. Only successful
-revocation of that exact invitation retires its displayed link. Confirmation dialogs identify the
+failures. Transient invitation read failures and unrelated revocations retain a newly created
+one-time link; dismissing it, successfully revoking that invitation or confirming lost read access
+retires it. Authoritative access failures cancel and clear related cached list variants; cleared data
+remains unavailable with Retry, including when a refetch pauses offline. A transient Workspace root
+refresh retains mounted tasks and their drafts; a denied command alone does not establish lost read
+access. Confirmation dialogs identify the
 affected Workspace or member, retain failures for retry and block dismissal while a submission is
 pending. Permanent Workspace deletion requires the current Workspace name in the confirmation
 dialog; the API still requires an archived, unfrozen Workspace and owner authorization. ESLint rejects native browser

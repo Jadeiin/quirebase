@@ -68,14 +68,27 @@ async def list_projects(
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     search: str = "",
+    state: Literal["", "active", "archived"] = "",
+    sort: Literal["name", "created", "updated"] = "name",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> OffsetPagination[ProjectSummaryView]:
     rows, total = await list_workspace_projects(
-        db, context, view=view, limit=limit, offset=offset, search=search
+        db,
+        context,
+        view=view,
+        limit=limit,
+        offset=offset,
+        search=search,
+        state=state,
+        sort=sort,
+        direction=direction,
     )
     items = [
         ProjectSummaryView(
             id=project.id,
             name=project.name,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
             item_count=count,
             state=project.state,
             participation=project.participation,

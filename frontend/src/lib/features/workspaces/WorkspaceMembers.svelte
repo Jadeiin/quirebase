@@ -8,8 +8,14 @@
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
+	import { isUnavailableReadError } from '#lib/api/query-state.js';
+	import { createUrlDraft } from '#lib/navigation/url-draft.svelte.js';
 	import { domainLabel } from '#lib/domain-labels.js';
+	import { dateFormat } from '#lib/format.js';
 	import Button from '#lib/design/Button.svelte';
+	import Icon from '#lib/design/Icon.svelte';
+	import DataTable from '#lib/design/DataTable.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import { buttonClass } from '#lib/design/button-classes.js';
 	import Panel from '#lib/design/Panel.svelte';
 	import Notice from '#lib/design/Notice.svelte';
@@ -19,21 +25,25 @@
 	import { msg, t } from '#lib/i18n.js';
 	import { workspaceMembersQuery, type GovernanceMember } from './queries';
 	import { workspaceMemberMutationOptions, type MemberCommand } from './mutations';
-	import { readWorkspaceListState, workspaceListParameters } from './list-state';
+	import {
+		readWorkspaceMembersState,
+		workspaceMemberParameters,
+		workspaceRoles,
+		type WorkspaceMembersState
+	} from './list-state';
 
 	const workspace = getWorkspaceContext();
 	const client = useQueryClient();
-	const listing = $derived(readWorkspaceListState(page.url.searchParams));
 	const governance = $derived(workspace.can('workspace_membership.read'));
+	const listing = $derived(readWorkspaceMembersState(page.url.searchParams, governance));
 	const members = createQuery(() =>
-		workspaceMembersQuery(
-			workspace.workspaceId,
-			governance,
-			listing.page,
-			listing.pageSize,
-			listing.search
-		)
+		workspaceMembersQuery(workspace.workspaceId, governance, listing)
 	);
+	const available = $derived(members.data != null && !isUnavailableReadError(members.error));
+	const search = createUrlDraft({
+		read: (url) => url.searchParams.get('q') ?? '',
+		href: (value) => href({ ...listing, search: value, page: 1 })
+	});
 	const mutation = createMutation(() =>
 		workspaceMemberMutationOptions(workspace.workspaceId, client)
 	);
@@ -51,22 +61,41 @@
 		terminate: msg('Member removed'),
 		transfer: msg('Ownership transferred')
 	};
-	function navigate(search: string, nextPage = 1, size = listing.pageSize, replace = false) {
-		const parameters = workspaceListParameters(search, nextPage, size);
-		void goto(
-			resolve(
-				workspaceHref(
-					workspace.workspaceId,
-					`settings/members${parameters ? `?${parameters}` : ''}`
-				)
-			),
-			{ reset: false, replaceState: replace }
+	function href(state: WorkspaceMembersState) {
+		const parameters = workspaceMemberParameters(state);
+		return resolve(
+			workspaceHref(workspace.workspaceId, `settings/members${parameters ? `?${parameters}` : ''}`)
 		);
 	}
+	function navigate(state: WorkspaceMembersState, replace = false) {
+		void goto(href(state), { reset: false, replace });
+	}
 	$effect(() => {
-		if (members.isSuccess && !members.isFetching && listing.page > lastPage)
-			navigate(listing.search, lastPage, listing.pageSize, true);
+		if (members.isSuccess && available && !members.isFetching && listing.page > lastPage)
+			navigate({ ...listing, page: lastPage }, true);
 	});
+	$effect(() => {
+		if (!governance || members.data === null || isUnavailableReadError(members.error)) {
+			confirmOpen = false;
+			confirmation = null;
+		}
+	});
+	const nextDirection = $derived(listing.direction === 'asc' ? 'desc' : 'asc');
+	function orderLabel(direction: WorkspaceMembersState['direction']) {
+		return listing.sort === 'username'
+			? direction === 'asc'
+				? $t('A–Z')
+				: $t('Z–A')
+			: direction === 'asc'
+				? $t('Oldest first')
+				: $t('Newest first');
+	}
+	const directionHint = $derived(
+		$t('Sort order: {current}. Switch to {next}.', {
+			current: orderLabel(listing.direction),
+			next: orderLabel(nextDirection)
+		})
+	);
 	async function run(command: MemberCommand) {
 		if (mutation.isPending) return;
 		error = '';
@@ -93,42 +122,113 @@
 			{$t('Find the people in this workspace and view their roles.')}
 		</p>
 	</div>
-	<label class="grid max-w-xl grid-cols-1 gap-1"
-		>{$t('Search members')}<input
-			class="input"
-			value={listing.search}
-			oninput={(event) => navigate(event.currentTarget.value, 1, listing.pageSize, true)}
-		/></label
-	>
+	<Panel>
+		<div class="flex min-w-0 flex-wrap items-end gap-3">
+			<label class="grid min-w-0 grow basis-56 grid-cols-1 gap-1 text-sm">
+				{$t('Search members')}<input
+					class="input h-9 field-sm"
+					type="search"
+					bind:value={search.value}
+					oncompositionstart={search.compositionStart}
+					oncompositionend={search.compositionEnd}
+				/>
+			</label>
+			<label class="grid min-w-0 grow basis-32 grid-cols-1 gap-1 text-sm">
+				{$t('Role')}<select
+					class="select h-9 field-sm"
+					value={listing.role}
+					onchange={(event) =>
+						navigate({
+							...listing,
+							role: event.currentTarget.value as WorkspaceMembersState['role'],
+							page: 1
+						})}
+				>
+					<option value="">{$t('All roles')}</option>
+					{#each workspaceRoles as role (role)}<option value={role}>{$t(domainLabel(role))}</option
+						>{/each}
+				</select>
+			</label>
+			{#if governance}
+				<label class="grid min-w-0 grow basis-32 grid-cols-1 gap-1 text-sm">
+					{$t('State')}<select
+						class="select h-9 field-sm"
+						value={listing.state}
+						onchange={(event) =>
+							navigate({
+								...listing,
+								state: event.currentTarget.value as WorkspaceMembersState['state'],
+								page: 1
+							})}
+					>
+						<option value="">{$t('Any state')}</option>
+						<option value="active">{$t('Active')}</option>
+						<option value="suspended">{$t('Suspended')}</option>
+					</select>
+				</label>
+			{/if}
+			<div class="grid min-w-40 grow basis-40 grid-cols-1 gap-1 text-sm">
+				<label for="workspace-members-sort">{$t('Sort By')}</label>
+				<div
+					role="group"
+					aria-label={$t('Sort')}
+					class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
+				>
+					<select
+						id="workspace-members-sort"
+						class="select h-9 field-sm"
+						value={listing.sort}
+						onchange={(event) =>
+							navigate({
+								...listing,
+								sort: event.currentTarget.value === 'joined' && governance ? 'joined' : 'username',
+								direction: 'asc',
+								page: 1
+							})}
+					>
+						<option value="username">{$t('Username')}</option>
+						{#if governance}<option value="joined">{$t('Date joined')}</option>{/if}
+					</select>
+					<Button
+						type="button"
+						variant="icon"
+						class="-ml-px size-9"
+						aria-label={directionHint}
+						title={directionHint}
+						onclick={() => navigate({ ...listing, direction: nextDirection, page: 1 })}
+					>
+						<Icon name={listing.direction === 'asc' ? 'arrow-up' : 'arrow-down'} size={16} />
+					</Button>
+				</div>
+			</div>
+		</div>
+	</Panel>
 	<StatusNotice error={confirmOpen ? '' : error} {notice} />
-	{#if members.isPending}<p class="text-surface-700-300">{$t('Loading members…')}</p>
-	{:else if members.isError}<Notice variant="error"
-			>{$t('Unable to load members.')}
-			<Button disabled={members.isFetching} onclick={() => void members.refetch()}
-				>{$t('Retry')}</Button
-			></Notice
-		>
-	{:else if members.data?.items.length}
+	{#if members.isError || (!members.isPending && !available)}
+		<QueryError
+			message={$t('Unable to load members.')}
+			busy={members.isFetching}
+			onRetry={() => void members.refetch()}
+		/>
+	{/if}
+	{#if !available && members.isPending}<p class="text-surface-700-300">{$t('Loading members…')}</p>
+	{:else if available && members.data?.items.length}
 		<Panel padding="none">
-			<table class="w-full table-fixed text-left text-sm">
+			<DataTable label={$t('Members')}>
 				<thead
 					><tr
 						><th class="p-3">{$t('Username')}</th><th class="p-3">{$t('Role')}</th
-						>{#if governance}<th class="w-24 p-3">{$t('Actions')}</th>{/if}</tr
+						>{#if governance}<th>{$t('State')}</th><th>{$t('Date joined')}</th><th class="w-28"
+								>{$t('Actions')}</th
+							>{/if}</tr
 					></thead
 				>
-				<tbody>
-					{#each members.data.items as member (member.user_id)}
-						{@const target = member.governance}
+				{#each members.data.items as member (member.user_id)}
+					{@const target = member.governance}
+					<tbody>
 						<tr class="border-t border-surface-300-700">
-							<td class="p-3"
-								><strong class="font-medium break-all">{member.username}</strong>{#if target}<p
-										class="text-xs text-surface-700-300"
-									>
-										{$t(domainLabel(target.state))}
-									</p>{/if}</td
-							>
-							<td class="p-3"
+							<th scope="row"><strong class="font-medium break-all">{member.username}</strong></th>
+							<td data-label={$t('Role')}
 								><span>{$t(domainLabel(member.role))}</span>
 								{#if target && target.allowed_roles.length > 0}
 									<select
@@ -149,7 +249,11 @@
 									>
 								{/if}
 							</td>
-							{#if governance}<td class="p-3">
+							{#if governance}<td data-label={$t('State')}
+									>{target ? $t(domainLabel(target.state)) : ''}</td
+								><td data-label={$t('Date joined')}
+									>{target ? $dateFormat.format(new Date(target.joined_at)) : ''}</td
+								><td data-label={$t('Actions')}>
 									{#if target && (can(target.authorization, 'workspace_member.suspend') || can(target.authorization, 'workspace_member.reactivate') || can(target.authorization, 'workspace_member.transfer_ownership') || can(target.authorization, 'workspace_member.terminate'))}
 										<Menu positioning={{ placement: 'bottom-end', gutter: 8 }}>
 											<Menu.Trigger
@@ -193,20 +297,22 @@
 									{/if}
 								</td>{/if}
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</tbody>
+				{/each}
+			</DataTable>
 		</Panel>
-	{:else}<Notice
-			>{listing.search ? $t('No matching members.') : $t('No members to display.')}</Notice
+	{:else if available}<Notice
+			>{listing.search || listing.role || listing.state
+				? $t('No matching members.')
+				: $t('No members to display.')}</Notice
 		>{/if}
-	{#if members.isSuccess}<Pagination
+	{#if available && members.data}<Pagination
 			page={listing.page}
 			pageCount={lastPage}
 			pageSize={listing.pageSize}
 			total={members.data.total}
-			onPage={(next) => navigate(listing.search, next)}
-			onPageSize={(size) => navigate(listing.search, 1, size)}
+			onPage={(next) => navigate({ ...listing, page: next })}
+			onPageSize={(size) => navigate({ ...listing, page: 1, pageSize: size })}
 			busy={members.isFetching}
 			label={$t('Members pagination')}
 		/>{/if}

@@ -18,6 +18,7 @@ export function createUrlDraft({ read, href }: UrlDraftOptions) {
 	let committed = read(page.url);
 	let value = $state(committed);
 	let publishing = $state(false);
+	let composing = $state(false);
 	let failed = $state(false);
 	let publishedHref: string | undefined;
 
@@ -35,7 +36,7 @@ export function createUrlDraft({ read, href }: UrlDraftOptions) {
 	$effect(() => {
 		const submitted = read(page.url);
 		const draft = value.trim();
-		if (navigating.to || publishing || failed || draft === submitted) return;
+		if (navigating.to || publishing || composing || failed || draft === submitted) return;
 		const timeout = setTimeout(() => {
 			const target = href(draft);
 			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- only the immutable href string is retained
@@ -55,6 +56,12 @@ export function createUrlDraft({ read, href }: UrlDraftOptions) {
 	});
 
 	return {
+		compositionStart() {
+			composing = true;
+		},
+		compositionEnd() {
+			composing = false;
+		},
 		get value() {
 			return value;
 		},

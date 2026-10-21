@@ -7,6 +7,8 @@ const project = {
 	name: 'Research direction',
 	description: 'A Workspace research context',
 	item_count: 0,
+	created_at: '2026-09-01T00:00:00Z',
+	updated_at: '2026-09-02T00:00:00Z',
 	state: 'active',
 	participation: 'managed',
 	is_participating: false,
@@ -241,7 +243,9 @@ test('Workspace admins can open and govern managed Projects without being partic
 	await expect(page.getByRole('heading', { name: 'Items', exact: true })).toBeVisible();
 });
 
-test('Workspace-wide Projects are listed separately from joined Projects', async ({ page }) => {
+test('Workspace-wide and joined Projects share a list with distinct participation labels', async ({
+	page
+}) => {
 	await page.route('**/api/v1/workspaces/workspace-1/projects?view=all*', (route) =>
 		route.fulfill({
 			json: directoryPage(
@@ -270,12 +274,98 @@ test('Workspace-wide Projects are listed separately from joined Projects', async
 	);
 
 	await page.goto('/workspace/workspace-1/projects');
-	const shared = page.getByRole('heading', { name: 'Workspace Projects' }).locator('..');
-	const mine = page.getByRole('heading', { name: 'Your Projects' }).locator('..');
-	await expect(shared.getByRole('link', { name: /Shared library/ })).toBeVisible();
-	await expect(mine.getByRole('link', { name: /My reading group/ })).toBeVisible();
-	await expect(mine.getByRole('link', { name: /Shared library/ })).toHaveCount(0);
+	const list = page.getByRole('list', { name: 'Projects', exact: true });
+	await expect(list).toHaveCount(1);
+	const shared = list.getByRole('listitem', { name: 'Shared library', exact: true });
+	const mine = list.getByRole('listitem', { name: 'My reading group', exact: true });
+	await expect(shared.getByRole('link', { name: 'Shared library', exact: true })).toBeVisible();
+	await expect(shared.getByText('Workspace-wide', { exact: true })).toBeVisible();
+	await expect(shared.getByText('Joined', { exact: true })).toHaveCount(0);
+	await expect(mine.getByRole('link', { name: 'My reading group', exact: true })).toBeVisible();
+	await expect(mine.getByText('Open', { exact: true })).toBeVisible();
+	await expect(mine.getByText('Joined', { exact: true })).toBeVisible();
+	await expect(page.getByText('Showing 1–2 of 2', { exact: true })).toBeVisible();
 });
+
+for (const width of [1440, 390]) {
+	test(`Project directory keeps long names and descriptions readable without widening rows at ${width}px`, async ({
+		page
+	}, testInfo) => {
+		await page.setViewportSize({ width, height: 1000 });
+		const name =
+			'A collaborative research programme on interoperable reference collections and shared evidence '.repeat(
+				8
+			) + 'UnbrokenProjectIdentifier'.repeat(6);
+		const description =
+			'We collect and discuss the research questions, methods, findings and open issues for this project. '.repeat(
+				12
+			) + 'UnbrokenDescription'.repeat(8);
+		await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) =>
+			route.fulfill({
+				json: directoryPage(
+					[
+						{
+							...project,
+							name,
+							description,
+							item_count: 12,
+							participation: 'open',
+							authorization: { allowed: ['project_participation.join'] }
+						},
+						{
+							...project,
+							id: 'archived-project',
+							name: 'Archived research direction',
+							state: 'archived',
+							authorization: { allowed: [] }
+						}
+					],
+					route
+				)
+			})
+		);
+		await page.goto('/workspace/workspace-1/projects');
+		const list = page.getByRole('list', { name: 'Projects', exact: true });
+		const row = list.getByRole('listitem', { name, exact: true });
+		const title = row.getByRole('link', { name, exact: true });
+		const summary = row.getByText(description, { exact: true });
+		await expect(title).toBeVisible();
+		await expect(row.getByRole('heading', { name, exact: true, level: 3 })).toBeVisible();
+		await expect(summary).toBeVisible();
+		for (const text of [title, summary]) {
+			const dimensions = await text.evaluate((element) => ({
+				height: element.getBoundingClientRect().height,
+				lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+				hiddenHeight: element.scrollHeight
+			}));
+			expect(dimensions.height).toBeLessThanOrEqual(dimensions.lineHeight * 2 + 2);
+			expect(dimensions.hiddenHeight).toBeGreaterThan(dimensions.height);
+		}
+		const rowBounds = (await row.boundingBox())!;
+		const titleBounds = (await title.boundingBox())!;
+		if (width === 1440) expect(titleBounds.width).toBeGreaterThan(rowBounds.width * 0.6);
+		await expect(row.getByText('Active', { exact: true })).toHaveCount(0);
+		await expect(row.locator('time')).toHaveCount(0);
+		await expect(
+			list
+				.getByRole('listitem', { name: 'Archived research direction', exact: true })
+				.getByText('Archived', { exact: true })
+		).toBeVisible();
+		const open = row.getByRole('link', { name: 'Open in Library', exact: true });
+		await expect(open).toHaveAttribute('href', '/workspace/workspace-1/library?project=project-1');
+		await row.getByRole('button', { name: 'Join', exact: true }).focus();
+		await expect(row.getByRole('button', { name: 'Join', exact: true })).toBeFocused();
+		await expect
+			.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+			.toBe(true);
+		await testInfo.attach(`project-directory-${width}`, {
+			body: await page.screenshot({ fullPage: true }),
+			contentType: 'image/png'
+		});
+		await open.click();
+		await expect(page).toHaveURL(/\/library\?project=project-1$/);
+	});
+}
 
 test('Workspace viewers can read Project Discussion without mutation controls', async ({
 	page
@@ -325,20 +415,17 @@ for (const scenario of [
 	{
 		name: 'an archived Project',
 		workspace: { state: 'active', governance_frozen: false },
-		projectState: 'archived',
-		section: 'Archived Projects'
+		projectState: 'archived'
 	},
 	{
 		name: 'a frozen Workspace',
 		workspace: { state: 'active', governance_frozen: true },
-		projectState: 'active',
-		section: 'Open Projects'
+		projectState: 'active'
 	},
 	{
 		name: 'an archived Workspace',
 		workspace: { state: 'archived', governance_frozen: false },
-		projectState: 'active',
-		section: 'Open Projects'
+		projectState: 'active'
 	}
 ] as const) {
 	test(`an unjoined open Project remains readable in ${scenario.name}`, async ({ page }) => {
@@ -381,7 +468,14 @@ for (const scenario of [
 		);
 
 		await page.goto('/workspace/workspace-1/projects');
-		const section = page.getByRole('heading', { name: scenario.section }).locator('..');
+		const section = page
+			.getByRole('list', { name: 'Projects', exact: true })
+			.getByRole('listitem', { name: 'Reading group', exact: true });
+		if (scenario.projectState === 'archived') {
+			await expect(section.getByText('Archived', { exact: true })).toBeVisible();
+		} else {
+			await expect(section.getByText('Active', { exact: true })).toHaveCount(0);
+		}
 		await expect(section.getByRole('button', { name: 'Join' })).toHaveCount(0);
 		await section.getByRole('link', { name: /Reading group/ }).click();
 		await expect(page).toHaveURL(/\/workspace\/workspace-1\/projects\/read-only-open$/);
@@ -710,7 +804,9 @@ test('an action without variant projection exposes no Project creation variants'
 		route.fulfill({ json: directoryPage([], route) })
 	);
 	await page.goto('/workspace/workspace-1/projects');
-	await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Projects', exact: true, level: 1 })
+	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
 });
 
@@ -1043,7 +1139,7 @@ test('Project history navigation discards pending participant-clear changes', as
 		.toEqual([{ projectId: 'project-a', body: { participation: 'workspace' } }]);
 });
 
-test('Project groups come from one collection while Join follows the server capability', async ({
+test('the Project list comes from one collection while Join follows the server capability', async ({
 	page
 }) => {
 	const requests: string[] = [];
@@ -1072,7 +1168,7 @@ test('Project groups come from one collection while Join follows the server capa
 		});
 	});
 	await page.goto('/workspace/workspace-1/projects');
-	const open = page.getByRole('heading', { name: 'Open Projects', exact: true }).locator('..');
+	const open = page.getByRole('list', { name: 'Projects', exact: true });
 	await expect(open.getByText('Visible direction')).toBeVisible();
 	await expect(open.getByRole('button', { name: 'Join', exact: true })).toHaveCount(1);
 	expect(requests).toEqual(['all']);
@@ -1209,4 +1305,118 @@ test('Project Item removal confirms, retries and recovers the last page', async 
 	await page.getByRole('textbox', { name: 'Search Items' }).fill('Assigned Item 12');
 	await expect(page.getByText('Assigned Item 12', { exact: true })).toBeVisible();
 	await expect(page.getByText('Assigned Item 00', { exact: true })).toHaveCount(0);
+});
+
+test('Project directory filters, ordering and pagination preserve search drafts and restore history', async ({
+	page
+}) => {
+	const rows = Array.from({ length: 34 }, (_, index) => ({
+		...project,
+		id: `directory-${index}`,
+		name: `Reading ${String(index).padStart(2, '0')}`,
+		created_at: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+		updated_at: new Date(Date.UTC(2026, 1, index + 1)).toISOString(),
+		state: index < 30 ? 'active' : 'archived',
+		participation: 'open',
+		is_participating: true,
+		authorization: { allowed: ['project_participation.leave'] }
+	}));
+	const requests: Array<Record<string, string>> = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) => {
+		const parameters = new URL(route.request().url()).searchParams;
+		requests.push(Object.fromEntries(parameters));
+		const search = parameters.get('search') ?? '';
+		const state = parameters.get('state');
+		const sort = parameters.get('sort') ?? 'name';
+		const direction = parameters.get('direction') ?? 'asc';
+		const key = sort === 'created' ? 'created_at' : sort === 'updated' ? 'updated_at' : 'name';
+		const filtered = rows.filter(
+			(row) => row.name.includes(search) && (!state || row.state === state)
+		);
+		filtered.sort(
+			(left, right) => left[key].localeCompare(right[key]) * (direction === 'asc' ? 1 : -1)
+		);
+		return route.fulfill({ json: directoryPage(filtered, route) });
+	});
+	await page.goto('/workspace/workspace-1/projects');
+	const search = page.getByRole('searchbox', { name: 'Search Projects', exact: true });
+	const list = page.getByRole('list', { name: 'Projects', exact: true });
+	const pager = page.getByRole('navigation', { name: 'Projects', exact: true });
+	await expect(list.getByRole('listitem', { name: 'Reading 00', exact: true })).toBeVisible();
+	await search.fill('  Reading  ');
+	await expect(page).toHaveURL(/q=Reading/);
+	await expect(search).toHaveValue('  Reading  ');
+	await page.getByRole('combobox', { name: 'Projects', exact: true }).selectOption('mine');
+	await expect.poll(() => new URL(page.url()).searchParams.get('view')).toBe('mine');
+	await page.getByRole('combobox', { name: 'State', exact: true }).selectOption('active');
+	await expect.poll(() => new URL(page.url()).searchParams.get('state')).toBe('active');
+	await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('created');
+	await expect(
+		list.getByRole('listitem').first().getByRole('link', { name: 'Reading 29', exact: true })
+	).toBeVisible();
+	await page
+		.getByRole('button', { name: 'Sort order: Newest first. Switch to Oldest first.', exact: true })
+		.click();
+	await expect(
+		list.getByRole('listitem').first().getByRole('link', { name: 'Reading 00', exact: true })
+	).toBeVisible();
+	await page
+		.getByRole('button', { name: 'Sort order: Oldest first. Switch to Newest first.', exact: true })
+		.click();
+	await expect(
+		list.getByRole('listitem').first().getByRole('link', { name: 'Reading 29', exact: true })
+	).toBeVisible();
+	await expect(
+		page.getByRole('button', {
+			name: 'Sort order: Newest first. Switch to Oldest first.',
+			exact: true
+		})
+	).toBeVisible();
+	await pager.getByRole('combobox', { name: 'Page Size', exact: true }).selectOption('10');
+	await expect(pager.getByText('Page 1 of 3', { exact: true })).toBeVisible();
+	await pager.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(pager.getByText('Page 2 of 3', { exact: true })).toBeVisible();
+	await expect(
+		list.getByRole('listitem').first().getByRole('link', { name: 'Reading 19', exact: true })
+	).toBeVisible();
+	await expect(search).toHaveValue('  Reading  ');
+	await page.goBack();
+	await expect(pager.getByText('Page 1 of 3', { exact: true })).toBeVisible();
+	await expect(search).toHaveValue('Reading');
+	await expect(page.getByRole('combobox', { name: 'Projects', exact: true })).toHaveValue('mine');
+	await expect(page.getByRole('combobox', { name: 'State', exact: true })).toHaveValue('active');
+	await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue('created');
+	expect(requests).toContainEqual({
+		view: 'mine',
+		limit: '10',
+		offset: '10',
+		search: 'Reading',
+		state: 'active',
+		sort: 'created',
+		direction: 'desc'
+	});
+});
+
+test('Project directory waits for IME composition before publishing a search', async ({ page }) => {
+	const searches: string[] = [];
+	await page.route('**/api/v1/workspaces/workspace-1/projects?*', (route) => {
+		const search = new URL(route.request().url()).searchParams.get('search') ?? '';
+		searches.push(search);
+		return route.fulfill({
+			json: directoryPage([{ ...project, name: `Project ${search || 'initial'}` }], route)
+		});
+	});
+	await page.goto('/workspace/workspace-1/projects');
+	await expect(page.getByRole('link', { name: 'Project initial', exact: true })).toBeVisible();
+	const search = page.getByRole('searchbox', { name: 'Search Projects', exact: true });
+	await search.dispatchEvent('compositionstart');
+	await search.fill('未完成');
+	// Wait past the publication debounce to prove that composing text is still local.
+	await page.waitForTimeout(300);
+	expect(searches).toEqual(['']);
+	await expect(page).toHaveURL(/\/projects$/);
+	await search.dispatchEvent('compositionend');
+	await expect(page.getByRole('link', { name: 'Project 未完成', exact: true })).toBeVisible();
+	await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('未完成');
+	expect(searches).toEqual(['', '未完成']);
 });

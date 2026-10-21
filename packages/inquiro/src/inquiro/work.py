@@ -261,8 +261,13 @@ def work_doi(work: dict[str, Any]) -> str | None:
 
 def contributor_name(contributor: dict[str, Any]) -> str:
     entity = contributor.get(contributor["type"].lower(), {})
-    return entity.get("name") or " ".join(
-        part for part in (entity.get("given_name"), entity.get("family_name")) if part
+    name = entity.get("name")
+    if name and name.strip():
+        return name.strip()
+    return " ".join(
+        part.strip()
+        for part in (entity.get("given_name"), entity.get("family_name"))
+        if part and part.strip()
     )
 
 

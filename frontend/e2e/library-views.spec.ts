@@ -4,19 +4,29 @@ import { directoryPage, mockSession, tagPage } from './helpers';
 const libraryPath = '/workspace/workspace-1/library';
 const facets = {
 	authors: [
-		{ last_name: 'Research & Council', first_name: null, item_count: 26 },
-		{ last_name: 'Smith', first_name: 'Ada', item_count: 20 },
-		{ last_name: 'Chen', first_name: 'Li', item_count: 18 },
-		{ last_name: 'García', first_name: 'Ana', item_count: 15 },
-		{ last_name: 'Jones', first_name: 'Sam', item_count: 12 },
-		{ last_name: 'Visible after expansion', first_name: null, item_count: 8 }
+		{
+			last_name: 'Research & Council',
+			first_name: null,
+			full_name: 'Research & Council',
+			item_count: 6
+		},
+		{ last_name: 'Smith', first_name: 'Ada', full_name: 'Ada Smith', item_count: 5 },
+		{ last_name: 'Chen', first_name: 'Li', full_name: '陈丽', item_count: 4 },
+		{ last_name: 'García', first_name: 'Ana', full_name: 'Ana García', item_count: 3 },
+		{ last_name: 'Jones', first_name: 'Sam', full_name: 'Sam Jones', item_count: 2 },
+		{
+			last_name: 'Visible after expansion',
+			first_name: null,
+			full_name: 'Visible after expansion',
+			item_count: 1
+		}
 	],
 	keywords: [
-		{ value: ' graph; theory & ML ', item_count: 24 },
-		{ value: 'Search', item_count: 12 }
+		{ value: ' graph; theory & ML ', item_count: 6 },
+		{ value: 'Search', item_count: 4 }
 	],
 	reference_types: [
-		{ value: 'JournalArticle', item_count: 25 },
+		{ value: 'JournalArticle', item_count: 5 },
 		{ value: 'Book', item_count: 5 }
 	]
 };
@@ -161,20 +171,22 @@ test('refinement values load on demand from submitted filters and expand without
 	const authors = refinements.getByRole('group', { name: 'Author', exact: true });
 	await expect(authors.getByRole('link')).toHaveCount(5);
 	await expect(
-		authors.getByRole('link', { name: 'Research & Council 26', exact: true })
+		authors.getByRole('link', { name: 'Research & Council 6', exact: true })
 	).toBeVisible();
-	await expect(refinements).toContainText('Counts reflect Items, not occurrences.');
 	expect(facetReads).toHaveLength(1);
 	expect(Object.fromEntries(facetReads[0].searchParams)).toEqual({
 		query: 'committed',
 		project: 'project-1',
-		limit: '50'
+		limit: '10',
+		offset: '10',
+		sort: 'title',
+		direction: 'asc'
 	});
-	await authors.getByRole('button', { name: 'Show more', exact: true }).click();
+	await authors.getByRole('button', { name: 'Show more Author', exact: true }).click();
 	await expect(
-		authors.getByRole('link', { name: 'Visible after expansion 8', exact: true })
+		authors.getByRole('link', { name: 'Visible after expansion 1', exact: true })
 	).toBeVisible();
-	await authors.getByRole('button', { name: 'Show less', exact: true }).click();
+	await authors.getByRole('button', { name: 'Show less Author', exact: true }).click();
 	await expect(authors.getByRole('link')).toHaveCount(5);
 	await page.getByRole('textbox', { name: 'Library Search', exact: true }).fill('draft search');
 	await page.getByRole('textbox', { name: 'Contributor', exact: true }).fill('draft contributor');
@@ -190,6 +202,109 @@ test('refinement values load on demand from submitted filters and expand without
 	await expect.poll(() => facetReads.at(-1)?.searchParams.get('query')).toBe('draft search');
 	expect(facetReads.at(-1)?.searchParams.get('author')).toBe('draft contributor');
 	expect(facetReads.at(-1)?.searchParams.get('keyword')).toBe('draft keyword');
+});
+
+test('refinements follow the displayed Item page, page size and sorting', async ({ page }) => {
+	const { itemReads, facetReads } = await mockLibraryViews(page);
+	await page.route(/\/api\/v1\/workspaces\/[^/]+\/items\/facets(?:\?.*)?$/, (route) => {
+		const url = new URL(route.request().url());
+		facetReads.push(url);
+		const label = `Author for ${url.searchParams.get('offset') ?? '0'} ${url.searchParams.get('limit')} ${url.searchParams.get('sort') ?? 'updated'} ${url.searchParams.get('direction') ?? 'default'}`;
+		return route.fulfill({
+			json: {
+				authors: [{ last_name: label, first_name: null, full_name: label, item_count: 1 }],
+				keywords: [],
+				reference_types: []
+			}
+		});
+	});
+	await page.goto(`${libraryPath}?project=project-1&page_size=10`);
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	const refinements = page.getByRole('region', { name: 'Refine current results', exact: true });
+	await expect(
+		refinements.getByRole('link', { name: 'Author for 0 10 updated desc 1', exact: true })
+	).toBeVisible();
+	await expect(page.locator('[data-library-item-select]')).toHaveCount(10);
+	expect(facetReads).toHaveLength(1);
+	expect(Object.fromEntries(facetReads[0].searchParams)).toEqual({
+		project: 'project-1',
+		limit: '10',
+		offset: '0',
+		sort: 'updated',
+		direction: 'desc'
+	});
+
+	await page.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(page.locator('[data-library-item-select="item-11"]')).toBeVisible();
+	await expect(
+		refinements.getByRole('link', { name: 'Author for 10 10 updated desc 1', exact: true })
+	).toBeVisible();
+	await page.getByRole('combobox', { name: 'Page Size', exact: true }).selectOption('20');
+	await expect(page.locator('[data-library-item-select]')).toHaveCount(20);
+	await expect(
+		refinements.getByRole('link', { name: 'Author for 0 20 updated desc 1', exact: true })
+	).toBeVisible();
+	await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('author');
+	await expect.poll(() => itemReads.at(-1)?.searchParams.get('sort')).toBe('author');
+	await expect(
+		refinements.getByRole('link', { name: 'Author for 0 20 author asc 1', exact: true })
+	).toBeVisible();
+	await page.locator('#library-sort-direction').click();
+	await expect.poll(() => itemReads.at(-1)?.searchParams.get('direction')).toBe('desc');
+	await expect(
+		refinements.getByRole('link', { name: 'Author for 0 20 author desc 1', exact: true })
+	).toBeVisible();
+	expect(facetReads).toHaveLength(5);
+});
+
+test('author refinements and applied chips retain the credited display name and raw exact values', async ({
+	page
+}) => {
+	const { facetReads } = await mockLibraryViews(page);
+	await page.route(/\/api\/v1\/workspaces\/[^/]+\/items\/facets(?:\?.*)?$/, (route) => {
+		facetReads.push(new URL(route.request().url()));
+		return route.fulfill({
+			json: {
+				authors: [{ last_name: 'Chen', first_name: 'Li', full_name: '陈丽', item_count: 1 }],
+				keywords: [],
+				reference_types: []
+			}
+		});
+	});
+	await page.route('**/api/v1/workspaces/*/items?*', (route) =>
+		route.fulfill({
+			json: directoryPage(
+				[
+					{
+						id: 'item-1',
+						title_html: 'Names in original order',
+						authors: [{ last_name: 'Chen', first_name: 'Li', full_name: '陈丽' }],
+						publication_date: null,
+						publication_title: null,
+						doi: null,
+						version: 1
+					}
+				],
+				route
+			)
+		})
+	);
+	await page.goto(`${libraryPath}?author_last_name=Chen&author_first_name=Li&preview=item-1`);
+	const applied = page.getByRole('group', { name: 'Applied filters', exact: true });
+	await expect(
+		applied.getByRole('button', { name: 'Remove filter Author: 陈丽', exact: true })
+	).toBeVisible();
+	expect(facetReads).toHaveLength(0);
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	const authors = page
+		.getByRole('region', { name: 'Refine current results', exact: true })
+		.getByRole('group', { name: 'Author', exact: true });
+	const credited = authors.getByRole('link', { name: '陈丽 1', exact: true });
+	await expect(credited).toBeVisible();
+	const parameters = await linkParameters(credited, page);
+	expect(parameters.get('author_last_name')).toBe('Chen');
+	expect(parameters.get('author_first_name')).toBe('Li');
+	expect(parameters.get('preview')).toBe('item-1');
 });
 
 test('native refinement links replace broad criteria with exact values while preserving the Library scope', async ({
@@ -215,7 +330,7 @@ test('native refinement links replace broad criteria with exact values while pre
 	const refinements = page.getByRole('region', { name: 'Refine current results', exact: true });
 	const author = refinements
 		.getByRole('group', { name: 'Author', exact: true })
-		.getByRole('link', { name: 'Research & Council 26', exact: true });
+		.getByRole('link', { name: 'Research & Council 6', exact: true });
 	const authorParameters = await linkParameters(author, page);
 	expect(authorParameters.get('author_last_name')).toBe('Research & Council');
 	expect(authorParameters.has('author_first_name')).toBe(true);
@@ -227,7 +342,7 @@ test('native refinement links replace broad criteria with exact values while pre
 	await expect(page).toHaveURL(`${libraryPath}?${authorParameters}`);
 	const keyword = refinements
 		.getByRole('group', { name: 'Keyword', exact: true })
-		.getByRole('link', { name: 'graph; theory & ML 24', exact: true });
+		.getByRole('link', { name: 'graph; theory & ML 6', exact: true });
 	const keywordParameters = await linkParameters(keyword, page);
 	expect(keywordParameters.get('keyword_exact')).toBe(' graph; theory & ML ');
 	expect(keywordParameters.has('keyword')).toBe(false);
@@ -492,14 +607,12 @@ test('failed refinement reads expose a local retry and preserve unsubmitted sear
 	const refinements = page.getByRole('region', { name: 'Refine current results', exact: true });
 	await expect(refinements.getByRole('alert')).toContainText('Unable to load filter values.');
 	await expect(refinements.getByRole('link')).toHaveCount(0);
-	await expect(refinements.getByText('No values in these results.', { exact: true })).toHaveCount(
-		0
-	);
+	await expect(refinements.getByText('No values on this page.', { exact: true })).toHaveCount(0);
 	await page.getByRole('textbox', { name: 'Library Search', exact: true }).fill('keep this draft');
 	failing = false;
 	await refinements.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(
-		refinements.getByRole('link', { name: 'Research & Council 26', exact: true })
+		refinements.getByRole('link', { name: 'Research & Council 6', exact: true })
 	).toBeVisible();
 	await expect(refinements.getByRole('alert')).toHaveCount(0);
 	await expect(page.getByRole('textbox', { name: 'Library Search', exact: true })).toHaveValue(
@@ -515,7 +628,7 @@ test('authoritative Project denial purges earlier refinement snapshots before a 
 	await page.goto(`${libraryPath}?project=project-1`);
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
 	const refinements = page.getByRole('region', { name: 'Refine current results', exact: true });
-	const author = refinements.getByRole('link', { name: 'Research & Council 26', exact: true });
+	const author = refinements.getByRole('link', { name: 'Research & Council 6', exact: true });
 	await expect(author).toBeVisible();
 	const denied = (url: string) => new URL(url).searchParams.has('author_last_name');
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
@@ -638,6 +751,23 @@ test('narrow Library refinements and long saved-view names stay within the viewp
 }, testInfo) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await mockLibraryViews(page);
+	const longAuthorName = 'International Research Council for Scientific Communication '.repeat(3);
+	await page.route(/\/api\/v1\/workspaces\/[^/]+\/items\/facets(?:\?.*)?$/, (route) =>
+		route.fulfill({
+			json: {
+				...facets,
+				authors: [
+					facets.authors[0],
+					...Array.from({ length: 60 }, (_, index) => ({
+						last_name: `Council ${index + 1}`,
+						first_name: null,
+						full_name: `${longAuthorName}${index + 1}`,
+						item_count: 1
+					}))
+				]
+			}
+		})
+	);
 	await page.goto(libraryPath);
 	await expect(page.getByRole('button', { name: 'Saved views', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
@@ -646,7 +776,7 @@ test('narrow Library refinements and long saved-view names stay within the viewp
 	const keywords = refinements.getByRole('group', { name: 'Keyword', exact: true });
 	const types = refinements.getByRole('group', { name: 'Type', exact: true });
 	await expect(
-		authors.getByRole('link', { name: 'Research & Council 26', exact: true })
+		authors.getByRole('link', { name: 'Research & Council 6', exact: true })
 	).toBeVisible();
 	const [authorBox, keywordBox, typeBox] = await Promise.all([
 		authors.boundingBox(),
@@ -655,6 +785,24 @@ test('narrow Library refinements and long saved-view names stay within the viewp
 	]);
 	expect(keywordBox!.y).toBeGreaterThanOrEqual(authorBox!.y + authorBox!.height);
 	expect(typeBox!.y).toBeGreaterThanOrEqual(keywordBox!.y + keywordBox!.height);
+	const moreAuthors = authors.getByRole('button', { name: 'Show more Author', exact: true });
+	await moreAuthors.focus();
+	await moreAuthors.press('Enter');
+	await expect(authors.getByRole('link')).toHaveCount(61);
+	const authorList = authors.getByRole('list');
+	await expect
+		.poll(() =>
+			authorList.evaluate(
+				(list) => list.scrollHeight > list.clientHeight && list.clientHeight <= 400
+			)
+		)
+		.toBe(true);
+	const lastAuthor = authors.getByRole('link').last();
+	await lastAuthor.focus();
+	await expect(lastAuthor).toBeInViewport();
+	await expect.poll(() => authorList.evaluate((list) => list.scrollTop)).toBeGreaterThan(0);
+	await authors.getByRole('button', { name: 'Show less Author', exact: true }).click();
+	await expect(authors.getByRole('link')).toHaveCount(5);
 	await expect
 		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
 		.toBe(true);

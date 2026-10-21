@@ -57,6 +57,48 @@ def contributor_name_parts(value: Any) -> tuple[Any, Any]:
     return family, given
 
 
+_NAME_WHITESPACE = (
+    " \t\n\r\v\f\x1c\x1d\x1e\x1f\x85\xa0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
+
+
+def _visible_name(value: Any) -> Any:
+    # Check display content without rewriting the Work's exact filter values.
+    return func.coalesce(func.trim(value, _NAME_WHITESPACE), "")
+
+
+def _joined_name(given: Any, family: Any) -> Any:
+    first, last = _visible_name(given), _visible_name(family)
+    return first + case(((first != "") & (last != ""), " "), else_="") + last
+
+
+def _contributor_display_name(value: Any) -> Any:
+    """SQL projection matching Inquiro's active-entity contributor_name display."""
+    person = value["person"]
+    provided = _visible_name(person["name"].as_string())
+    return case(
+        (
+            value["type"].as_string() == "Person",
+            case(
+                (provided != "", provided),
+                else_=_joined_name(
+                    person["given_name"].as_string(), person["family_name"].as_string()
+                ),
+            ),
+        ),
+        else_=_visible_name(value["organization"]["name"].as_string()),
+    )
+
+
+def _grouped_contributor_name(family: Any, given: Any, display: Any) -> Any:
+    """Use a supplied name only when it describes the entire exact-name bucket."""
+    visible = func.nullif(display, "")
+    first = func.min(visible)
+    return case((first == func.max(visible), first), else_=_joined_name(given, family))
+
+
 def author_role(db: AsyncSession, value: Any) -> ColumnElement[bool]:
     roles = array_elements(db, value["roles"])
     return select(1).select_from(roles).where(roles.c.value == "Author").exists()

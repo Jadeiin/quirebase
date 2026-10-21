@@ -147,10 +147,16 @@ stable source IDs, checkpoint replay, authorization rechecks and object cleanup.
 Search indexes title, descriptions, Author/Editor names, subjects and only the Work's own
 identifiers. Existing SQLite FTS5 and PostgreSQL tsvector projections remain rebuildable.
 Filtering and distinct-Item facets query nested Work contributors/subjects directly over the
-same authorized candidates. No targeted JSON index is added without query/performance evidence.
+same authorized scope. Facets use Library's filters, ordering and Item-page bounds before expanding
+contributors/subjects, and return all candidates and distinct-Item counts on that page. No targeted
+JSON index is added without query/performance evidence.
 Exact author and keyword selection compares returned facet values verbatim, preserving
 leading/trailing whitespace and repeated interior whitespace. An empty given name projects as
 an absent first name in facets, suggestions and exact filtering; the stored Work stays intact.
+Author display names prefer the active entity's credited name, falling back to given then family
+parts when it is blank. Display parts are trimmed without changing exact-filter values. A grouped
+family/given pair retains its credited name only when all matching credits agree; otherwise it uses
+the structured fallback rather than attributing one credit's name variant to the whole group.
 The search projection includes the active contributor's credit name and supplied family/given
 parts. Legacy NCBI URLs are interpreted by their resource path: `/pubmed/` identifies PubMed,
 while `/pmc/articles/` identifies PMC; unrelated paths do not supply a comparison identifier.

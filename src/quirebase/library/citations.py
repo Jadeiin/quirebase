@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import string
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
@@ -13,21 +14,19 @@ from inquiro.bibliography import (
     SUPPORTED_FORMATS,
     BibliographyExportOptions,
     CitationKeyFormulaError,
-    CitationStyleOption,
-    CitationStyleSelection,
     InvalidExportOptions,
+    builtin_style_catalog,
     builtin_style_xml,
     export_bibliography_records,
     is_valid_csl,
     render_bibliography,
     render_citation,
-    select_builtin_citation_styles,
     work_to_csl_json,
 )
 from inquiro.bibliography import (
     preview_citation_key as preview_formula,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import ResourceAction, require_workspace_action
@@ -66,6 +65,22 @@ class ItemCitation:
     media_type: str
 
 
+@dataclass(frozen=True)
+class CitationStyleSummary:
+    key: str
+    name: str
+    scope: Literal["builtin", "custom"]
+
+
+_ASCII_UPPER = string.ascii_uppercase
+_ASCII_LOWER = string.ascii_lowercase
+_NAME_TRANSLATION = str.maketrans(_ASCII_UPPER, _ASCII_LOWER)
+
+
+def _style_sort_key(style: CitationStyleSummary) -> tuple[str, str, str]:
+    return style.name.translate(_NAME_TRANSLATION), style.scope, style.key
+
+
 def preview_citation_key(formula: str, *, force_ascii: bool = False) -> str:
     if len(formula) > 1000:
         raise ValidationFailure("citation key formula is too long")
@@ -98,16 +113,92 @@ async def resolve_style_xml(
     return style.csl_xml
 
 
-async def list_custom_citation_styles(
-    db: AsyncSession, user: User, workspace_id: UUID
-) -> list[CitationStyle]:
+async def list_citation_styles(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    *,
+    query: str = "",
+    key: str = "",
+    scope: Literal["", "builtin", "custom"] = "",
+    direction: Literal["asc", "desc"] = "asc",
+    limit: int = 25,
+    offset: int = 0,
+) -> tuple[list[CitationStyleSummary], int]:
+    """Page one ordered catalog without loading custom CSL documents.
+
+    ASCII case folding and binary collation give SQL and the static catalog the
+    same search and order on SQLite and PostgreSQL; other characters remain literal.
+    """
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    styles = await db.scalars(
-        select(CitationStyle)
-        .where(CitationStyle.workspace_id == workspace_id)
-        .order_by(CitationStyle.name, CitationStyle.id)
+    if scope not in {"", "builtin", "custom"}:
+        raise ValidationFailure("unknown citation style scope")
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure("unknown sort direction")
+    if not 1 <= limit <= 100 or offset < 0:
+        raise ValidationFailure("invalid citation style page")
+    normalized = query.strip().translate(_NAME_TRANSLATION)
+    normalized_key = key.strip().translate(_NAME_TRANSLATION)
+    builtin = (
+        [
+            CitationStyleSummary(option.key, option.name, "builtin")
+            for option in builtin_style_catalog()
+            if (not key or option.key.translate(_NAME_TRANSLATION) == normalized_key)
+            and (
+                not normalized
+                or normalized in option.name.translate(_NAME_TRANSLATION)
+                or normalized in option.key.translate(_NAME_TRANSLATION)
+            )
+        ]
+        if scope != "custom"
+        else []
     )
-    return list(styles)
+    descending = direction == "desc"
+    builtin.sort(key=_style_sort_key, reverse=descending)
+    if scope == "builtin":
+        return builtin[offset : offset + limit], len(builtin)
+    style_id = None
+    if key:
+        try:
+            style_id = UUID(key.strip())
+        except ValueError:
+            return builtin[offset : offset + limit], len(builtin)
+
+    dialect = db.get_bind().dialect.name
+    folded_name = (
+        func.translate(CitationStyle.name, _ASCII_UPPER, _ASCII_LOWER)
+        if dialect == "postgresql"
+        else func.lower(CitationStyle.name)
+    ).collate("C" if dialect == "postgresql" else "BINARY")
+    custom_query = select(CitationStyle.id, CitationStyle.name).where(
+        CitationStyle.workspace_id == workspace_id
+    )
+    if style_id is not None:
+        custom_query = custom_query.where(CitationStyle.id == style_id)
+    if normalized:
+        custom_query = custom_query.where(folded_name.contains(normalized, autoescape=True))
+    custom_total = await db.scalar(select(func.count()).select_from(custom_query.subquery()))
+    total = len(builtin) + (custom_total or 0)
+    if offset >= total:
+        return [], total
+
+    ordering = (folded_name, CitationStyle.id)
+    custom_query = custom_query.order_by(
+        *(column.desc() if descending else column.asc() for column in ordering)
+    )
+    # At most len(builtin) static entries can precede any custom row. Skip the
+    # guaranteed custom prefix, then fetch a window bounded independently of offset.
+    custom_offset = max(0, offset - len(builtin))
+    custom_limit = limit + min(offset, len(builtin))
+    custom = [
+        CitationStyleSummary(str(style_id), name, "custom")
+        for style_id, name in await db.execute(
+            custom_query.offset(custom_offset).limit(custom_limit)
+        )
+    ]
+    merged = sorted([*builtin, *custom], key=_style_sort_key, reverse=descending)
+    start = offset - custom_offset
+    return merged[start : start + limit], total
 
 
 async def create_custom_citation_style(
@@ -283,17 +374,15 @@ __all__ = [
     "BibliographyExport",
     "BibliographyExportOptions",
     "BibliographyFormat",
-    "CitationStyleOption",
-    "CitationStyleSelection",
+    "CitationStyleSummary",
     "ItemCitation",
     "create_custom_citation_style",
     "delete_custom_citation_style",
     "export_item_bibliography",
     "export_selected_bibliography",
     "export_workspace_bibliography",
-    "list_custom_citation_styles",
+    "list_citation_styles",
     "preview_citation_key",
     "render_item_citation",
     "resolve_style_xml",
-    "select_builtin_citation_styles",
 ]

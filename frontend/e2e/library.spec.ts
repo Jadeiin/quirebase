@@ -1,5 +1,5 @@
 import { openLibraryAction } from './helpers';
-import { tagPage, directoryPage, projectPage } from './helpers';
+import { tagPage, directoryPage, projectPage, citationStylePage } from './helpers';
 import { expect, test } from '@playwright/test';
 import { chooseSearchOption, mockSession } from './helpers';
 
@@ -429,14 +429,15 @@ for (const workspaceId of ['workspace-1', 'workspace-2']) {
 				}
 			})
 		);
-		await page.route('**/api/v1/workspaces/workspace-1/citation-styles*', (route) =>
+		await page.route('**/api/v1/workspaces/workspace-1/citation-styles?*', (route) =>
 			route.fulfill({
-				json: {
-					styles: [
+				json: citationStylePage(
+					[
 						{ key: 'apa', name: 'APA' },
 						{ key: 'custom-style-1', name: 'Custom style' }
-					]
-				}
+					],
+					route
+				)
 			})
 		);
 		await page.route('**/api/v1/account/citation-key-preview*', (route) =>

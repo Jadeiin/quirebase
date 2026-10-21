@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +15,8 @@ from quirebase.web.api.common import WorkspaceAuthorizationView
 class ProjectSummaryView(BaseModel):
     id: UUID
     name: str
+    created_at: datetime
+    updated_at: datetime
     item_count: int
     state: ProjectState
     participation: ProjectParticipation
@@ -38,6 +41,8 @@ def project_detail_view(
     return ProjectDetailView(
         id=workspace.project.id,
         name=workspace.project.name,
+        created_at=workspace.project.created_at,
+        updated_at=workspace.project.updated_at,
         item_count=workspace.item_count,
         state=workspace.project.state,
         participation=workspace.project.participation,

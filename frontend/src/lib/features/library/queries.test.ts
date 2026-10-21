@@ -31,7 +31,7 @@ const snapshot: LibrarySearch = {
 };
 
 const facetSnapshot: LibraryFacets = {
-	authors: [{ last_name: 'Smith', first_name: null, item_count: 1 }],
+	authors: [{ last_name: 'Smith', first_name: null, full_name: 'Smith', item_count: 1 }],
 	keywords: [{ value: 'Graph theory', item_count: 1 }],
 	reference_types: [{ value: 'Dataset', item_count: 1 }]
 };
@@ -111,7 +111,7 @@ it('fetches different page sizes independently and uses the size to compute the 
 	}
 });
 
-it('shares facet caches across sorting while preserving exact filters and limit in requests', async () => {
+it('reads facets for the current page, size and sorting while preserving exact filters', async () => {
 	const received: URL[] = [];
 	vi.stubGlobal('fetch', async (request: Request) => {
 		received.push(new URL(request.url));
@@ -135,13 +135,24 @@ it('shares facet caches across sorting while preserving exact filters and limit 
 	};
 	try {
 		await client.fetchQuery(
-			libraryFacetsQuery('workspace-1', { ...filters, sort: 'title', direction: 'asc' }, 8)
+			libraryFacetsQuery('workspace-1', { ...filters, sort: 'title', direction: 'asc' }, 2, 10)
 		);
 		await client.fetchQuery(
-			libraryFacetsQuery('workspace-1', { ...filters, sort: 'published', direction: 'desc' }, 8)
+			libraryFacetsQuery('workspace-1', { ...filters, sort: 'published', direction: 'desc' }, 2, 10)
 		);
-		await client.fetchQuery(libraryFacetsQuery('workspace-1', filters, 12));
-		expect(received).toHaveLength(2);
+		await client.fetchQuery(
+			libraryFacetsQuery('workspace-1', { ...filters, sort: 'published', direction: 'desc' }, 3, 10)
+		);
+		await client.fetchQuery(
+			libraryFacetsQuery('workspace-1', { ...filters, sort: 'published', direction: 'desc' }, 3, 50)
+		);
+		await client.fetchQuery(
+			libraryFacetsQuery('workspace-1', { ...filters, sort: 'published', direction: 'asc' }, 3, 50)
+		);
+		await client.fetchQuery(
+			libraryFacetsQuery('workspace-1', { ...filters, sort: 'title', direction: 'asc' }, 2, 10)
+		);
+		expect(received).toHaveLength(5);
 		expect(received[0].pathname).toBe('/api/v1/workspaces/workspace-1/items/facets');
 		expect(Object.fromEntries(received[0].searchParams)).toEqual({
 			project: 'project-1',
@@ -154,9 +165,25 @@ it('shares facet caches across sorting while preserving exact filters and limit 
 			author_last_name: '研究 Council & Co.',
 			author_first_name: '',
 			has_files: 'false',
-			limit: '8'
+			limit: '10',
+			offset: '10',
+			sort: 'title',
+			direction: 'asc'
 		});
-		expect(received[1].searchParams.get('limit')).toBe('12');
+		expect(
+			received.map(({ searchParams }) => ({
+				limit: searchParams.get('limit'),
+				offset: searchParams.get('offset'),
+				sort: searchParams.get('sort'),
+				direction: searchParams.get('direction')
+			}))
+		).toEqual([
+			{ limit: '10', offset: '10', sort: 'title', direction: 'asc' },
+			{ limit: '10', offset: '10', sort: 'published', direction: 'desc' },
+			{ limit: '10', offset: '20', sort: 'published', direction: 'desc' },
+			{ limit: '50', offset: '100', sort: 'published', direction: 'desc' },
+			{ limit: '50', offset: '100', sort: 'published', direction: 'asc' }
+		]);
 	} finally {
 		client.clear();
 		vi.unstubAllGlobals();
@@ -205,7 +232,12 @@ it.each(
 			},
 			{ key: currentFacets.queryKey, data: facetSnapshot },
 			{
-				key: libraryFacetsQuery('workspace-1', { project: 'project-1', year: '2025' }, 8).queryKey,
+				key: libraryFacetsQuery(
+					'workspace-1',
+					{ project: 'project-1', year: '2025', sort: 'title', direction: 'asc' },
+					3,
+					10
+				).queryKey,
 				data: facetSnapshot
 			}
 		];
@@ -278,8 +310,12 @@ it.each(
 			},
 			{ key: facets.queryKey, data: facetSnapshot },
 			{
-				key: libraryFacetsQuery('workspace-1', { import_batch: 'batch-1', year: '2026' }, 8)
-					.queryKey,
+				key: libraryFacetsQuery(
+					'workspace-1',
+					{ import_batch: 'batch-1', year: '2026', sort: 'published', direction: 'desc' },
+					2,
+					50
+				).queryKey,
 				data: facetSnapshot
 			}
 		];
@@ -374,7 +410,7 @@ it.each(
 		].flatMap(({ workspaceId, filters }) =>
 			[
 				{ key: libraryListQuery(workspaceId, filters, 2, 10).queryKey, data: snapshot },
-				{ key: libraryFacetsQuery(workspaceId, filters, 8).queryKey, data: facetSnapshot }
+				{ key: libraryFacetsQuery(workspaceId, filters, 3, 50).queryKey, data: facetSnapshot }
 			].map((cache) => ({
 				...cache,
 				denied:

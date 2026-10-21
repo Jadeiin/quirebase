@@ -227,6 +227,8 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 			participation: 'workspace',
 			is_participating: true,
 			item_count: 0,
+			created_at: '2026-09-01T00:00:00Z',
+			updated_at: '2026-09-02T00:00:00Z',
 			description: null,
 			authorization: { allowed: archived ? [] : ['project_item.manage'] }
 		},
@@ -237,6 +239,8 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 			participation: 'workspace',
 			is_participating: true,
 			item_count: 0,
+			created_at: '2026-09-01T00:00:00Z',
+			updated_at: '2026-09-02T00:00:00Z',
 			description: null,
 			authorization: { allowed: ['project_item.manage'] }
 		}
@@ -341,6 +345,8 @@ for (const code of ['project_participation_conflict', 'project_lifecycle_error']
 				participation: changed && code === 'project_participation_conflict' ? 'managed' : 'open',
 				is_participating: false,
 				item_count: 0,
+				created_at: '2026-09-01T00:00:00Z',
+				updated_at: '2026-09-02T00:00:00Z',
 				description: '',
 				authorization: { allowed: changed ? [] : ['project_participation.join'] }
 			};
@@ -358,12 +364,13 @@ for (const code of ['project_participation_conflict', 'project_lifecycle_error']
 		await expect(join).toBeEnabled();
 		const initialWorkspaceReads = [...workspaceReads];
 		await join.click();
-		await expect(page.getByText('No open Projects are available to join.')).toBeVisible();
 		await expect(join).toHaveCount(0);
+		const row = page
+			.getByRole('list', { name: 'Projects', exact: true })
+			.getByRole('listitem', { name: 'Reading Project', exact: true });
+		await expect(row.getByRole('link', { name: 'Reading Project', exact: true })).toBeVisible();
 		await expect(
-			page.getByRole('heading', {
-				name:
-					code === 'project_participation_conflict' ? 'Managed participation' : 'Archived Projects',
+			row.getByText(code === 'project_participation_conflict' ? 'Managed' : 'Archived', {
 				exact: true
 			})
 		).toBeVisible();
@@ -388,6 +395,8 @@ for (const action of ['Delete', 'Moderate']) {
 					state: archived ? 'archived' : 'active',
 					participation: 'workspace',
 					item_count: 0,
+					created_at: '2026-09-01T00:00:00Z',
+					updated_at: '2026-09-02T00:00:00Z',
 					active_participants: [],
 					authorization: { allowed: archived ? [] : ['project_discussion.create'] }
 				}

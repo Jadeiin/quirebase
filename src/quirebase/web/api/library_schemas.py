@@ -116,10 +116,6 @@ class CitationStyleItemView(BaseModel):
     scope: Literal["builtin", "custom"]
 
 
-class CitationStylesResponseView(BaseModel):
-    styles: list[CitationStyleItemView]
-
-
 def item_search_view(item: Any) -> ItemSearchView:
     return ItemSearchView(**item_summary(item))
 
