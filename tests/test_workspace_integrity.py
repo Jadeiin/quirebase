@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from workspace_helpers import fixture_membership_id
 
 from quirebase.audit import record_event
+from quirebase.core.errors import ResourceNotFound
 from quirebase.models import (
     AuditEvent,
     Project,
@@ -27,6 +28,8 @@ from quirebase.workspaces import (
     archive_workspace,
     check_workspace_integrity,
     delete_workspace,
+    get_workspace_for_governance,
+    list_workspaces_for_governance,
     provision_initial_workspace,
     suspend_workspace_member,
     terminate_workspace_member,
@@ -113,6 +116,10 @@ async def test_owner_lookup_and_diagnostics_reject_invalid_surviving_roots(
         await db.commit()
         with pytest.raises(RuntimeError, match=str(workspace_id)):
             await workspace_owner_ids(db, {workspace_id})
+        with pytest.raises(RuntimeError, match=str(workspace_id)):
+            await get_workspace_for_governance(db, owner, workspace_id)
+        with pytest.raises(RuntimeError, match=str(workspace_id)):
+            await list_workspaces_for_governance(db, owner, search=str(workspace_id))
         findings = await check_workspace_integrity(db)
         assert len(findings) == 1 and str(workspace_id) in findings[0]
 
@@ -195,6 +202,12 @@ async def test_permanent_workspace_delete_retains_audit_project_history(integrit
         assert retained.workspace_id == workspace_id
         assert retained.project_id == project_id
         assert await workspace_owner_ids(fresh, {workspace_id}) == {}
+        assert await list_workspaces_for_governance(fresh, owner, search=str(workspace_id)) == (
+            [],
+            0,
+        )
+        with pytest.raises(ResourceNotFound):
+            await get_workspace_for_governance(fresh, owner, workspace_id)
         assert await check_workspace_integrity(fresh) == []
         assert await check_project_integrity(fresh) == []
 

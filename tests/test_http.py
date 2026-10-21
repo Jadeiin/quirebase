@@ -107,7 +107,7 @@ async def authenticated_async_client(db, session_factory, tmp_path, monkeypatch)
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("surface", ["list", "detail", "admin"])
-async def test_workspace_read_tolerates_deletion_before_owner_lookup(
+async def test_workspace_read_tolerates_deletion_during_read(
     async_db, async_session_factory, tmp_path, monkeypatch, surface
 ):
     client, item, _revision = await authenticated_async_client(
@@ -133,15 +133,31 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
     else:
         url = f"/api/v1/workspaces/{workspace_id}" if detail else "/api/v1/workspaces"
         api = workspace_api
-    lookup_name = "workspace_owners" if surface == "admin" else "workspace_owner_ids"
-    owner_lookup = getattr(api, lookup_name)
 
-    async def delete_before_owner_lookup(db, workspace_ids):
-        assert workspace_id in workspace_ids
+    async def remove_workspace():
         async with async_session_factory() as delete_db:
             owner = await delete_db.get(User, owner_id)
             await delete_workspace(delete_db, owner, workspace_id)
-        return await owner_lookup(db, workspace_ids)
+
+    if surface == "admin":
+        lookup_name = "list_workspaces_for_governance"
+        read_page = getattr(api, lookup_name)
+
+        async def delete_before_read_page(db, actor, **parameters):
+            await remove_workspace()
+            return await read_page(db, actor, **parameters)
+
+        interrupted_read = delete_before_read_page
+    else:
+        lookup_name = "workspace_owner_ids"
+        owner_lookup = getattr(api, lookup_name)
+
+        async def delete_before_owner_lookup(db, workspace_ids):
+            assert workspace_id in workspace_ids
+            await remove_workspace()
+            return await owner_lookup(db, workspace_ids)
+
+        interrupted_read = delete_before_owner_lookup
 
     try:
         before = await client.get(url)
@@ -149,20 +165,18 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
         if detail:
             assert before.json()["owner_id"] == str(owner_id)
         else:
-            assert {
-                view["id"]
-                for view in (before.json()["items"] if surface == "list" else before.json())
-            } == set(map(str, {workspace_id, retained.id}))
-        monkeypatch.setattr(api, lookup_name, delete_before_owner_lookup)
+            assert {view["id"] for view in before.json()["items"]} == set(
+                map(str, {workspace_id, retained.id})
+            )
+        monkeypatch.setattr(api, lookup_name, interrupted_read)
         response = await client.get(url)
         if detail:
             assert response.status_code == 404
         else:
             assert response.status_code == 200
-            assert [
-                (view["id"], view["owner_id"])
-                for view in (response.json()["items"] if surface == "list" else response.json())
-            ] == [(str(retained.id), str(owner_id))]
+            assert [(view["id"], view["owner_id"]) for view in response.json()["items"]] == [
+                (str(retained.id), str(owner_id))
+            ]
     finally:
         await client.aclose()
 

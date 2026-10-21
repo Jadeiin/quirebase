@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from advanced_alchemy.filters import BooleanFilter, LimitOffset
@@ -44,8 +44,16 @@ async def list_users_paginated(
     active: bool | None = None,
     limit: int = 20,
     offset: int = 0,
+    *,
+    sort: Literal["username", "created"] = "username",
+    direction: Literal["asc", "desc"] = "asc",
 ) -> tuple[list[User], int]:
     await require_system_action(db, admin, SystemAction.users_read)
+    columns = {"username": User.username, "created": User.created_at}
+    if sort not in columns:
+        raise ValidationFailure(f"unknown user sort: {sort}")
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure(f"unknown sort direction: {direction}")
     query = select(User)
     filters = []
     if search.strip():
@@ -54,7 +62,9 @@ async def list_users_paginated(
         with contextlib.suppress(ValueError):
             matches.append(User.id == UUID(search.strip()))
         filters.append(or_(*matches))
-    if role.strip() and role in SystemRole:
+    if role and role not in SystemRole:
+        raise ValidationFailure("invalid user role")
+    if role:
         filters.append(User.role == role)
     if active is not None:
         query = BooleanFilter(field_name="active", value=active).append_to_statement(query, User)
@@ -62,7 +72,10 @@ async def list_users_paginated(
         query = query.where(*filters)
     records, total = await select_page(
         db,
-        query.order_by(User.username, User.id),
+        query.order_by(
+            columns[sort].desc() if direction == "desc" else columns[sort].asc(),
+            User.id.desc() if direction == "desc" else User.id.asc(),
+        ),
         User,
         LimitOffset(limit=limit, offset=offset),
     )
@@ -238,11 +251,38 @@ async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: UUID) -> 
 
 
 async def list_invitations(
-    db: AsyncSession, admin: User, *, state: str = "", limit: int = 20, offset: int = 0
+    db: AsyncSession,
+    admin: User,
+    *,
+    state: str = "",
+    search: str = "",
+    role: str = "",
+    sort: Literal["created", "expires", "username"] = "created",
+    direction: Literal["asc", "desc"] = "desc",
+    limit: int = 20,
+    offset: int = 0,
 ) -> tuple[list[Invitation], int]:
     await require_system_action(db, admin, SystemAction.invitations_read)
+    columns = {
+        "created": Invitation.created_at,
+        "expires": Invitation.expires_at,
+        "username": Invitation.username,
+    }
+    if sort not in columns:
+        raise ValidationFailure(f"unknown invitation sort: {sort}")
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure(f"unknown sort direction: {direction}")
+    if role and role not in SystemRole:
+        raise ValidationFailure("invalid user role")
     now = datetime.now(UTC)
     query = select(Invitation)
+    if search.strip():
+        matches: list[ColumnElement[bool]] = [Invitation.username.ilike(f"%{search.strip()}%")]
+        with contextlib.suppress(ValueError):
+            matches.append(Invitation.id == UUID(search.strip()))
+        query = query.where(or_(*matches))
+    if role:
+        query = query.where(Invitation.role == role)
     if state == "accepted":
         query = query.where(Invitation.accepted_at.is_not(None))
     elif state == "revoked":
@@ -257,7 +297,10 @@ async def list_invitations(
         raise ValidationFailure(f"unknown invitation state: {state}")
     return await select_page(
         db,
-        query.order_by(Invitation.created_at.desc(), Invitation.id.desc()),
+        query.order_by(
+            columns[sort].desc() if direction == "desc" else columns[sort].asc(),
+            Invitation.id.desc() if direction == "desc" else Invitation.id.asc(),
+        ),
         Invitation,
         LimitOffset(limit=limit, offset=offset),
     )

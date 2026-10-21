@@ -135,14 +135,20 @@ class DurableOperations(Protocol):
     async def get(self, workflow_id: str) -> WorkflowSummary | None: ...
 
     async def list(
-        self, *, status: str = "", limit: int = 100, offset: int = 0, name: str | None = None
+        self,
+        *,
+        status: str = "",
+        limit: int = 100,
+        offset: int = 0,
+        name: str | None = None,
+        direction: Literal["asc", "desc"] = "desc",
     ) -> tuple[WorkflowSummary, ...]: ...
 
     async def list_active(
         self, *, limit: int = 100, offset: int = 0, name: str | None = None
     ) -> tuple[WorkflowSummary, ...]: ...
 
-    async def state_counts(self) -> dict[WorkflowState, int]: ...
+    async def state_counts(self, *, name: str | None = None) -> dict[WorkflowState, int]: ...
 
 
 def _sync_database_url() -> str:
@@ -376,8 +382,16 @@ class DBOSAdapter:
         return _summary(status) if status is not None else None
 
     async def list(
-        self, *, status: str = "", limit: int = 100, offset: int = 0, name: str | None = None
+        self,
+        *,
+        status: str = "",
+        limit: int = 100,
+        offset: int = 0,
+        name: str | None = None,
+        direction: Literal["asc", "desc"] = "desc",
     ) -> tuple[WorkflowSummary, ...]:
+        if direction not in {"asc", "desc"}:
+            raise ValueError(f"unknown sort direction: {direction}")
         raw_status: str | list[str] | None = None
         requested: str | None = None
         if status:
@@ -398,8 +412,9 @@ class DBOSAdapter:
                         name=name,
                         limit=scan_limit,
                         offset=scan_offset,
-                        sort_desc=True,
+                        sort_desc=direction == "desc",
                         load_input=False,
+                        load_output=False,
                         application_name="quirebase",
                     )
                     if not page:
@@ -415,8 +430,9 @@ class DBOSAdapter:
             name=name,
             limit=limit,
             offset=offset,
-            sort_desc=True,
+            sort_desc=direction == "desc",
             load_input=False,
+            load_output=False,
             application_name="quirebase",
         )
         return tuple(_summary(row) for row in rows)
@@ -436,16 +452,18 @@ class DBOSAdapter:
         )
         return tuple(_summary(row) for row in rows)
 
-    async def state_counts(self) -> dict[WorkflowState, int]:
+    async def state_counts(self, *, name: str | None = None) -> dict[WorkflowState, int]:
         """Aggregate workflow states in the DBOS system database without loading history."""
         # DBOS 2.31 exposes aggregation only on its system database implementation.
         # Keep this private SDK dependency local until DBOSClient gains an equivalent method.
         system_database: Any = self._client._sys_db
+        filters = {"name": [name]} if name is not None else {}
         rows = await asyncio.to_thread(
             system_database.get_workflow_aggregates,
             group_by_status=True,
             select_count=True,
             application_name=["quirebase"],
+            **filters,
         )
         counts: dict[WorkflowState, int] = {}
         for row in rows:

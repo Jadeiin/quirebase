@@ -34,6 +34,7 @@ class WorkspaceOwnerReassignRequest(BaseModel):
 class AdminWorkspaceView(BaseModel):
     id: UUID
     name: str
+    created_at: datetime
     owner_id: UUID
     owner_username: str
     owner_active: bool
@@ -189,8 +190,3 @@ class AdminSettingsView(BaseModel):
     export_ttl_hours: int
     database_url: str
     data_dir: str
-
-
-class AdminMaintenanceView(BaseModel):
-    storage: StorageMetricsView
-    workflows: list[WorkflowSummaryView]

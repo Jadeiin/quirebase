@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+from uuid import UUID
 
-from sqlalchemy import inspect, select
+from sqlalchemy import Nullable, func, inspect, or_, select
 
 from quirebase.access import (
     SystemAction,
@@ -23,14 +25,16 @@ from quirebase.models import (
     WorkspaceMember,
     WorkspaceMemberState,
     WorkspaceRole,
+    WorkspaceState,
 )
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
+    from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.elements import ColumnElement
 
 from ._locking import _lock_workspace
+from .directory import _workspace_owners_query
 from .invitations import _revoke_pending_invitations
 
 
@@ -140,7 +144,29 @@ async def reassign_workspace_owner(
     return workspace
 
 
-async def list_workspaces_for_governance(db: AsyncSession, actor: User) -> list[Workspace]:
+def _governance_workspace_query() -> Select[tuple[Workspace, User | None]]:
+    owners = _workspace_owners_query().subquery()
+    return (
+        select(Workspace, Nullable(User))
+        .select_from(Workspace)
+        .join(owners, owners.c.id == Workspace.id)
+        .outerjoin(User, User.id == owners.c.owner_id)
+    )
+
+
+async def list_workspaces_for_governance(
+    db: AsyncSession,
+    actor: User,
+    *,
+    search: str = "",
+    state: Literal["", "active", "archived"] = "",
+    frozen: bool | None = None,
+    owner_active: bool | None = None,
+    sort: Literal["name", "owner", "created"] = "name",
+    direction: Literal["asc", "desc"] = "asc",
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[tuple[Workspace, User]], int]:
     await require_system_action(
         db,
         actor,
@@ -148,7 +174,74 @@ async def list_workspaces_for_governance(db: AsyncSession, actor: User) -> list[
         message="Workspace not found",
         denied_error=ResourceNotFound,
     )
-    return list((await db.scalars(select(Workspace).order_by(Workspace.created_at.desc()))).all())
+    if not 1 <= limit <= 100 or offset < 0:
+        raise ValidationFailure(
+            "Workspace page limit must be between 1 and 100; offset must be nonnegative"
+        )
+    columns = {"name": Workspace.name, "owner": User.username, "created": Workspace.created_at}
+    if sort not in columns:
+        raise ValidationFailure(f"unknown Workspace sort: {sort}")
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure(f"unknown sort direction: {direction}")
+    if state and state not in WorkspaceState:
+        raise ValidationFailure(f"unknown Workspace state: {state}")
+    query = _governance_workspace_query()
+    if term := search.strip():
+        matches: list[ColumnElement[bool]] = [
+            Workspace.name.icontains(term, autoescape=True),
+            User.username.icontains(term, autoescape=True),
+        ]
+        with contextlib.suppress(ValueError):
+            identity = UUID(term)
+            matches.extend([Workspace.id == identity, User.id == identity])
+        query = query.where(or_(*matches))
+    if state:
+        query = query.where(Workspace.state == state)
+    if frozen is not None:
+        query = query.where(
+            Workspace.governance_frozen_at.is_not(None)
+            if frozen
+            else Workspace.governance_frozen_at.is_(None)
+        )
+    if owner_active is not None:
+        query = query.where(User.active == owner_active)
+    total = await db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    rows = await db.execute(
+        query
+        .order_by(
+            columns[sort].desc() if direction == "desc" else columns[sort].asc(),
+            Workspace.id.desc() if direction == "desc" else Workspace.id.asc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    workspaces = []
+    for workspace, owner in rows.tuples():
+        if owner is None:
+            raise RuntimeError(f"Workspace owner invariant failed for: {workspace.id}")
+        workspaces.append((workspace, owner))
+    return workspaces, total
+
+
+async def get_workspace_for_governance(
+    db: AsyncSession, actor: User, workspace_id: UUID
+) -> tuple[Workspace, User]:
+    await require_system_action(
+        db,
+        actor,
+        SystemAction.workspaces_governance_read,
+        message="Workspace not found",
+        denied_error=ResourceNotFound,
+    )
+    row = (
+        await db.execute(_governance_workspace_query().where(Workspace.id == workspace_id))
+    ).one_or_none()
+    if row is None:
+        raise ResourceNotFound("Workspace not found")
+    workspace, owner = row
+    if owner is None:
+        raise RuntimeError(f"Workspace owner invariant failed for: {workspace.id}")
+    return workspace, owner
 
 
 async def freeze_workspace_governance(

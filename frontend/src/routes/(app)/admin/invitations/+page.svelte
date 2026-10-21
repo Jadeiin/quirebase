@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createMutation, createQuery } from '@tanstack/svelte-query';
+	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import type { components } from '#lib/api/schema.js';
 	import { apiRequest } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -9,7 +9,8 @@
 	import AdminNotices from '#lib/features/admin/AdminNotices.svelte';
 	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
 	import { adminMutationOptions } from '#lib/features/admin/mutations.js';
-	import { adminInvitationsQuery, type InvitationState } from '#lib/features/admin/queries.js';
+	import { getAdminFilters } from '#lib/features/admin/filters.js';
+	import { adminInvitationsQuery } from '#lib/features/admin/queries.js';
 	import { msg, t, type MessageKey } from '#lib/i18n.js';
 
 	type InvitationCreated = components['schemas']['AdminInvitationCreatedView'];
@@ -18,20 +19,19 @@
 	let notice = $state<MessageKey | null>(null);
 	let oneTimeInvitation = $state<{ id: string; url: string } | null>(null);
 	const invitationUrl = $derived(oneTimeInvitation?.url ?? '');
-	let invitationState = $state<InvitationState | ''>('');
-	let invitationPage = $state(1);
-	let invitationPageSize = $state(20);
-	const invitations = createQuery(() =>
-		adminInvitationsQuery(invitationPage, invitationPageSize, invitationState)
-	);
+	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
+	const invitations = createQuery(() => adminInvitationsQuery(filters()));
+	const queryClient = useQueryClient();
 	const adminMutation = createMutation(() =>
-		adminMutationOptions('invitations', () => invitations.refetch())
+		adminMutationOptions('invitations', () =>
+			queryClient.invalidateQueries({ queryKey: ['admin', 'invitations'] })
+		)
 	);
 	const busy = $derived(adminMutation.isPending);
 	$effect(() => {
-		if (invitations.isFetching || !invitations.data) return;
-		const lastPage = Math.max(1, Math.ceil(invitations.data.total / invitationPageSize));
-		if (invitationPage > lastPage) invitationPage = lastPage;
+		if (!invitations.isSuccess || invitations.isFetching || !invitations.data) return;
+		const lastPage = Math.max(1, Math.ceil(invitations.data.total / filters().pageSize));
+		correctPage(lastPage);
 	});
 
 	function mutate(
@@ -40,6 +40,7 @@
 		form?: HTMLFormElement,
 		onSuccess?: (result: unknown) => void
 	) {
+		if (busy) return;
 		error = '';
 		notice = null;
 		void adminMutation
@@ -122,6 +123,8 @@
 	</Notice>
 {/if}
 <AdminSectionState
+	available={invitations.data != null}
+	error={invitations.error}
 	busy={invitations.isFetching}
 	onRetry={() => void invitations.refetch()}
 	loading={invitations.isPending}
@@ -131,30 +134,21 @@
 	<AdminInvitations
 		invitations={invitations.data!}
 		{busy}
-		{invitationState}
-		onInvitationState={(state) => {
-			invitationState = state;
-			invitationPage = 1;
-		}}
+		onRefresh={() => void invitations.refetch()}
 		onCreateInvitation={createInvitation}
 		onRevokeInvitation={revokeInvitation}
 		onReissueInvitation={reissueInvitation}
 	>
 		{#snippet pagination()}
 			<Pagination
-				page={invitationPage}
-				pageSize={invitationPageSize}
-				pageCount={Math.max(1, Math.ceil((invitations.data?.total ?? 0) / invitationPageSize))}
+				page={filters().page}
+				pageSize={filters().pageSize}
+				pageCount={Math.max(1, Math.ceil((invitations.data?.total ?? 0) / filters().pageSize))}
 				total={invitations.data?.total ?? 0}
 				busy={invitations.isFetching || busy}
 				label={$t('Invitation pages')}
-				onPage={(page) => {
-					invitationPage = page;
-				}}
-				onPageSize={(size) => {
-					invitationPageSize = size;
-					invitationPage = 1;
-				}}
+				onPage={setPage}
+				onPageSize={setPageSize}
 			/>
 		{/snippet}
 	</AdminInvitations>

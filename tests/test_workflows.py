@@ -267,7 +267,43 @@ async def test_unknown_workflow_id_is_reported_as_absent(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_workflow_state_counts_use_database_aggregation():
+@pytest.mark.parametrize(
+    ("raw_status", "output", "failure"),
+    [("SUCCESS", {"checked": 3}, None), ("ERROR", None, RuntimeError("Inspection failed"))],
+)
+async def test_workflow_detail_keeps_output_and_failure(raw_status, output, failure):
+    from quirebase.core.workflows import DBOSAdapter
+
+    class Handle:
+        async def get_status(self):
+            return SimpleNamespace(
+                workflow_id="details-workflow",
+                name="operations.check_objects",
+                status=raw_status,
+                queue_name="operations",
+                executor_id=None,
+                created_at=None,
+                updated_at=None,
+                output=output,
+                error=failure,
+                attributes={},
+                authenticated_user=None,
+            )
+
+    class Client:
+        async def retrieve_workflow_async(self, workflow_id):
+            assert workflow_id == "details-workflow"
+            return Handle()
+
+    detail = await DBOSAdapter(Client()).get("details-workflow")
+    assert detail is not None
+    assert detail.output == output
+    assert detail.error == (str(failure) if failure is not None else None)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", [None, "operations.check_objects"])
+async def test_workflow_state_counts_use_database_aggregation(name):
     from quirebase.core.workflows import DBOSAdapter
 
     class AggregateDatabase:
@@ -287,7 +323,7 @@ async def test_workflow_state_counts_use_database_aggregation():
     database = AggregateDatabase()
     client = SimpleNamespace(_sys_db=database)
 
-    assert await DBOSAdapter(client).state_counts() == {
+    assert await DBOSAdapter(client).state_counts(name=name) == {
         "succeeded": 7,
         "failed": 7,
         "pending": 3,
@@ -296,7 +332,52 @@ async def test_workflow_state_counts_use_database_aggregation():
         "group_by_status": True,
         "select_count": True,
         "application_name": ["quirebase"],
+        **({"name": [name]} if name is not None else {}),
     }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("direction", ["asc", "desc"])
+async def test_workflow_list_passes_order_and_exact_name_to_sdk(direction):
+    from quirebase.core.workflows import DBOSAdapter
+
+    class ListingClient:
+        def __init__(self):
+            self.options = None
+
+        async def list_workflows_async(self, **options):
+            self.options = options
+            return []
+
+    client = ListingClient()
+    assert (
+        await DBOSAdapter(client).list(
+            name="operations.check_objects",
+            status="pending",
+            direction=direction,
+            limit=10,
+            offset=20,
+        )
+        == ()
+    )
+    assert client.options == {
+        "status": ["ENQUEUED", "DELAYED"],
+        "name": "operations.check_objects",
+        "limit": 10,
+        "offset": 20,
+        "sort_desc": direction == "desc",
+        "load_input": False,
+        "load_output": False,
+        "application_name": "quirebase",
+    }
+
+
+@pytest.mark.anyio
+async def test_workflow_list_rejects_unknown_order():
+    from quirebase.core.workflows import DBOSAdapter
+
+    with pytest.raises(ValueError, match="unknown sort direction"):
+        await DBOSAdapter(SimpleNamespace()).list(direction="newest")
 
 
 @pytest.mark.anyio
@@ -350,6 +431,7 @@ async def test_failed_workflow_filter_includes_unknown_raw_statuses():
 
         async def list_workflows_async(self, **options):
             assert options["status"] is None
+            assert options["load_output"] is False
             self.calls += 1
             return [status("FUTURE_STATUS"), status("SUCCESS")] if self.calls == 1 else []
 

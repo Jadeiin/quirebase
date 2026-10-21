@@ -4,7 +4,7 @@ import pytest
 
 from quirebase.audit import query_events, record_event
 from quirebase.core.crypto import hash_password
-from quirebase.core.errors import ResourceUnavailable
+from quirebase.core.errors import ResourceUnavailable, ValidationFailure
 from quirebase.models import User
 
 
@@ -90,3 +90,10 @@ async def test_non_admin_cannot_query_events(async_db):
     member = await create_test_member(db, "member_aud_blocked")
     with pytest.raises(ResourceUnavailable, match="administrator required"):
         await query_events(db, member)
+
+
+@pytest.mark.anyio
+async def test_query_events_rejects_invalid_ordering(async_db):
+    admin = await create_test_admin(async_db, "admin-invalid-audit-order")
+    with pytest.raises(ValidationFailure):
+        await query_events(async_db, admin, direction="newest")

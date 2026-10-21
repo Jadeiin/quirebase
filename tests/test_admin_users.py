@@ -295,3 +295,11 @@ async def test_list_users_paginated_and_filtered(async_db):
     users, total = await list_users_paginated(db, admin, active=False)
     assert total == 1
     assert users[0].username == "gamma_disabled"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("options", [{"sort": "role"}, {"direction": "newest"}])
+async def test_list_users_rejects_invalid_ordering(async_db, options):
+    admin = await create_test_admin(async_db, "admin-invalid-user-order")
+    with pytest.raises(ValidationFailure):
+        await list_users_paginated(async_db, admin, **options)

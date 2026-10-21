@@ -3,10 +3,11 @@ from __future__ import annotations
 import pytest
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.core.errors import ResourceNotFound, WorkspaceMembershipRequired
+from quirebase.core.errors import ResourceNotFound, ValidationFailure, WorkspaceMembershipRequired
 from quirebase.library import get_storage_metrics
 from quirebase.models import User
 from quirebase.workspaces import (
+    get_workspace_for_governance,
     list_workspaces_for_governance,
     read_workspace_items_break_glass,
 )
@@ -30,9 +31,47 @@ async def test_instance_admin_can_list_tenancy_metadata_without_membership(async
     owner = await _user(async_db, "governance-owner")
     admin = await _user(async_db, "governance-admin", administrator=True)
 
-    workspaces = await list_workspaces_for_governance(async_db, admin)
+    workspaces, total = await list_workspaces_for_governance(async_db, admin)
 
-    assert fixture_workspace_id(owner) in {workspace.id for workspace in workspaces}
+    assert total == 2
+    assert fixture_workspace_id(owner) in {workspace.id for workspace, _owner in workspaces}
+
+
+@pytest.mark.anyio
+async def test_governance_reads_retain_disabled_owner_accounts(async_db):
+    owner = await _user(async_db, "disabled-governance-owner")
+    admin = await _user(async_db, "active-governance-admin", administrator=True)
+    workspace_id = fixture_workspace_id(owner)
+    owner.active = False
+    await async_db.commit()
+
+    rows, total = await list_workspaces_for_governance(
+        async_db, admin, search=str(workspace_id), owner_active=False
+    )
+    assert total == 1
+    assert [(workspace.id, user.id) for workspace, user in rows] == [(workspace_id, owner.id)]
+    workspace, current_owner = await get_workspace_for_governance(async_db, admin, workspace_id)
+    assert workspace.id == workspace_id
+    assert current_owner.id == owner.id
+    assert current_owner.active is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"sort": "owner_active"},
+        {"direction": "newest"},
+        {"state": "deleted"},
+        {"limit": 0},
+        {"limit": 101},
+        {"offset": -1},
+    ],
+)
+async def test_governance_directory_rejects_invalid_order_and_bounds(async_db, parameters):
+    admin = await _user(async_db, "invalid-governance-admin", administrator=True)
+    with pytest.raises(ValidationFailure):
+        await list_workspaces_for_governance(async_db, admin, **parameters)
 
 
 @pytest.mark.anyio

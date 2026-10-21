@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import httpx2
 import pytest
@@ -15,7 +16,16 @@ from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.database import get_db
 from quirebase.core.workflows import WorkflowSummary
-from quirebase.models import AuditEvent, Invitation, LoginSession, SystemSetting, User
+from quirebase.models import (
+    AuditEvent,
+    Invitation,
+    LoginSession,
+    MaintenanceSnapshot,
+    SystemSetting,
+    User,
+    Workspace,
+    WorkspaceMember,
+)
 from quirebase.web.app import app
 
 
@@ -86,6 +96,63 @@ async def member_client(db, tmp_path, monkeypatch):
     )
     client.cookies.set(get_settings().session_cookie, raw)
     return client, user, login
+
+
+async def governance_directory_records(db, admin):
+    created = datetime.now(UTC) - timedelta(days=4)
+    owners = [
+        User(
+            id=UUID(int=701),
+            username="owner%_active",
+            password_hash="unused",
+            active=True,
+        ),
+        User(
+            id=UUID(int=702),
+            username="ownerXXdisabled",
+            password_hash="unused",
+            active=False,
+        ),
+    ]
+    db.add_all(owners)
+    await db.flush()
+    workspaces = [
+        Workspace(
+            id=UUID(int=identity),
+            name=name,
+            created_by=owners[owner_index].id,
+            state=state,
+            created_at=created + timedelta(days=days),
+            archived_at=created if state == "archived" else None,
+            governance_frozen_at=created if frozen else None,
+            governance_frozen_by=admin.id if frozen else None,
+        )
+        for identity, name, owner_index, state, frozen, days in [
+            (801, "Governance space%_ Alpha", 0, "active", False, 0),
+            (802, "Governance space%_ Beta", 0, "archived", True, 0),
+            (803, "Governance spaceXX Other", 1, "active", True, 1),
+            (804, "Governance Zeta", 1, "archived", False, 2),
+        ]
+    ]
+    db.add_all(workspaces)
+    await db.flush()
+    db.add_all([
+        WorkspaceMember(workspace_id=workspace.id, user_id=owners[index // 2].id, role="owner")
+        for index, workspace in enumerate(workspaces)
+    ])
+    # A former member and a non-owner must not become additional owner search matches.
+    db.add_all([
+        WorkspaceMember(
+            workspace_id=workspaces[2].id,
+            user_id=owners[0].id,
+            role="admin",
+            state="active",
+            terminated_at=created,
+        ),
+        WorkspaceMember(workspace_id=workspaces[0].id, user_id=owners[1].id, role="viewer"),
+    ])
+    await db.commit()
+    return workspaces, owners
 
 
 @pytest.mark.anyio
@@ -194,16 +261,128 @@ async def test_admin_workspace_governance_directory(async_db, tmp_path, monkeypa
     client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
     response = await client.get("/api/v1/admin/workspaces")
     assert response.status_code == 200
-    assert any(row["id"] == str(fixture_workspace_id(admin)) for row in response.json())
+    page = response.json()
+    assert page["total"] == 1 and page["limit"] == 20 and page["offset"] == 0
+    assert any(row["id"] == str(fixture_workspace_id(admin)) for row in page["items"])
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_workspace_directory_filters_and_sorts_current_owners_in_sql(
+    async_db, tmp_path, monkeypatch
+):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    workspaces, owners = await governance_directory_records(async_db, admin)
+    try:
+        response = await client.get(
+            "/api/v1/admin/workspaces",
+            params={"search": "Governance", "sort": "created", "limit": 1, "offset": 1},
+        )
+        assert response.status_code == 200
+        page = response.json()
+        assert (page["total"], page["limit"], page["offset"]) == (4, 1, 1)
+        assert page["items"][0]["id"] == str(workspaces[1].id)
+        assert datetime.fromisoformat(page["items"][0]["created_at"]) == workspaces[1].created_at
+        assert page["items"][0]["owner_id"] == str(owners[0].id)
+
+        filtered = await client.get(
+            "/api/v1/admin/workspaces",
+            params={
+                "search": "Governance",
+                "state": "active",
+                "frozen": True,
+                "owner_active": False,
+            },
+        )
+        assert filtered.status_code == 200
+        assert filtered.json()["total"] == 1
+        assert filtered.json()["items"][0]["id"] == str(workspaces[2].id)
+        assert filtered.json()["items"][0]["owner_active"] is False
+        assert filtered.json()["items"][0]["can_reassign_owner"] is False
+
+        owner_order = await client.get(
+            "/api/v1/admin/workspaces",
+            params={"search": "Governance", "sort": "owner", "direction": "desc", "limit": 2},
+        )
+        assert owner_order.status_code == 200
+        assert owner_order.json()["total"] == 4
+        assert [row["id"] for row in owner_order.json()["items"]] == [
+            str(workspaces[3].id),
+            str(workspaces[2].id),
+        ]
+        empty = await client.get(
+            "/api/v1/admin/workspaces",
+            params={"search": "Governance", "state": "archived", "frozen": False, "offset": 100},
+        )
+        assert empty.status_code == 200
+        assert empty.json()["items"] == [] and empty.json()["total"] == 1
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_workspace_search_escapes_wildcards_and_matches_both_identities(
+    async_db, tmp_path, monkeypatch
+):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    workspaces, owners = await governance_directory_records(async_db, admin)
+    try:
+        for search in ["SPACE%_", "OWNER%_", str(owners[0].id)]:
+            response = await client.get("/api/v1/admin/workspaces", params={"search": search})
+            assert response.status_code == 200
+            assert response.json()["total"] == 2
+            assert [row["id"] for row in response.json()["items"]] == [
+                str(workspaces[0].id),
+                str(workspaces[1].id),
+            ]
+        identity = await client.get(
+            "/api/v1/admin/workspaces", params={"search": str(workspaces[3].id)}
+        )
+        assert identity.status_code == 200
+        assert identity.json()["total"] == 1
+        assert identity.json()["items"][0]["id"] == str(workspaces[3].id)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_can_read_selected_governance_target_without_workspace_membership(
+    async_db, tmp_path, monkeypatch
+):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    workspaces, owners = await governance_directory_records(async_db, admin)
+    try:
+        response = await client.get(f"/api/v1/admin/workspaces/{workspaces[3].id}")
+        assert response.status_code == 200
+        target = response.json()
+        assert target["owner_id"] == str(owners[1].id)
+        assert target["owner_active"] is False
+        assert target["state"] == "archived"
+        assert target["can_reassign_owner"] is True
+        missing = await client.get(f"/api/v1/admin/workspaces/{UUID(int=899)}")
+        assert missing.status_code == 404
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_member_cannot_read_workspace_governance_directory_or_selected_target(
+    async_db, tmp_path, monkeypatch
+):
+    client, member, _login = await member_client(async_db, tmp_path, monkeypatch)
+    workspace = await provision_initial_workspace(async_db, member)
+    await async_db.commit()
+    try:
+        for path in ["/api/v1/admin/workspaces", f"/api/v1/admin/workspaces/{workspace.id}"]:
+            assert (await client.get(path)).status_code == 404
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio
 async def test_administrator_can_disable_owner_then_explicitly_reassign_workspace(
     async_db, tmp_path, monkeypatch
 ):
-    from quirebase.models import WorkspaceMember
-
     client, admin, _ = await admin_client(async_db, tmp_path, monkeypatch)
     admin_id = admin.id
     try:
@@ -220,7 +399,7 @@ async def test_administrator_can_disable_owner_then_explicitly_reassign_workspac
         )
         assert disabled.status_code == 200 and disabled.json()["active"] is False
         directory = (await client.get("/api/v1/admin/workspaces")).json()
-        workspace = next(row for row in directory if row["owner_id"] == owner_id)
+        workspace = next(row for row in directory["items"] if row["owner_id"] == owner_id)
         assert workspace["owner_username"] == "offboarding-owner"
         assert workspace["owner_active"] is False and workspace["can_reassign_owner"] is True
         path = f"/api/v1/admin/workspaces/{workspace['id']}/owner"
@@ -385,7 +564,218 @@ async def test_admin_workflows_pages_complete_history_and_counts_filtered_states
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("section", ["overview", "workflows"])
+async def test_admin_users_sort_filtered_pages_with_stable_ties(async_db, tmp_path, monkeypatch):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    created = datetime.now(UTC)
+    async_db.add_all([
+        User(
+            id=UUID(int=index),
+            username=f"directory-{name}",
+            password_hash="unused",
+            role="member",
+            active=active,
+            created_at=created,
+        )
+        for index, name, active in [(1, "zeta", True), (2, "alpha", True), (3, "beta", False)]
+    ])
+    await async_db.commit()
+    try:
+        params = {"search": "DIRECTORY", "role": "member", "active": True, "limit": 1}
+        alphabetical = await client.get("/api/v1/admin/users", params=params)
+        assert alphabetical.status_code == 200
+        assert alphabetical.json()["total"] == 2
+        assert alphabetical.json()["items"][0]["username"] == "directory-alpha"
+
+        newest = await client.get(
+            "/api/v1/admin/users",
+            params={**params, "sort": "created", "direction": "desc", "offset": 1},
+        )
+        assert newest.status_code == 200
+        assert newest.json()["total"] == 2
+        assert newest.json()["items"][0]["id"] == str(UUID(int=1))
+
+        identity = await client.get(
+            "/api/v1/admin/users", params={"search": str(UUID(int=3)), "sort": "created"}
+        )
+        assert identity.status_code == 200
+        assert identity.json()["total"] == 1
+        assert identity.json()["items"][0]["username"] == "directory-beta"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_invitations_search_sort_and_role_keep_state_and_totals(
+    async_db, tmp_path, monkeypatch
+):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    created = datetime.now(UTC)
+    async_db.add_all([
+        Invitation(
+            id=UUID(int=index),
+            username=f"directory-{name}",
+            token_hash=token_hash(f"directory-invitation-{index}"),
+            created_by=admin.id,
+            role=role,
+            created_at=created,
+            expires_at=created + timedelta(days=days),
+        )
+        for index, name, role, days in [
+            (1, "zeta", "member", 1),
+            (2, "alpha", "member", 1),
+            (3, "beta", "administrator", 2),
+            (4, "expired", "member", -1),
+        ]
+    ])
+    await async_db.commit()
+    try:
+        params = {"search": "DIRECTORY", "state": "pending", "role": "member", "limit": 1}
+        alphabetical = await client.get(
+            "/api/v1/admin/invitations", params={**params, "sort": "username", "direction": "asc"}
+        )
+        assert alphabetical.status_code == 200
+        assert alphabetical.json()["total"] == 2
+        assert alphabetical.json()["items"][0]["username"] == "directory-alpha"
+
+        expiry = await client.get(
+            "/api/v1/admin/invitations",
+            params={**params, "sort": "expires", "direction": "asc", "offset": 1},
+        )
+        assert expiry.status_code == 200
+        assert expiry.json()["total"] == 2
+        assert expiry.json()["items"][0]["id"] == str(UUID(int=2))
+
+        identity = await client.get(
+            "/api/v1/admin/invitations", params={"search": str(UUID(int=3))}
+        )
+        assert identity.status_code == 200
+        assert identity.json()["total"] == 1
+        assert identity.json()["items"][0]["username"] == "directory-beta"
+        empty = await client.get("/api/v1/admin/invitations", params={**params, "offset": 20})
+        assert empty.status_code == 200
+        assert empty.json()["total"] == 2
+        assert empty.json()["items"] == []
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_audit_chronology_preserves_filtered_pagination(
+    async_db, tmp_path, monkeypatch
+):
+    client, admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    created = datetime.now(UTC)
+    async_db.add_all([
+        AuditEvent(
+            id=UUID(int=index),
+            actor_id=admin.id,
+            action="directory.test",
+            target_type="instance",
+            detail={"message": "directory history"},
+            created_at=created,
+        )
+        for index in range(1, 4)
+    ])
+    await async_db.commit()
+    try:
+        params = {
+            "actor_id": str(admin.id),
+            "action": "directory.test",
+            "target_type": "instance",
+            "search": "history",
+            "limit": 1,
+        }
+        oldest = await client.get("/api/v1/admin/audit", params={**params, "direction": "asc"})
+        newest = await client.get("/api/v1/admin/audit", params=params)
+        assert oldest.status_code == newest.status_code == 200
+        assert oldest.json()["total"] == newest.json()["total"] == 3
+        assert oldest.json()["items"][0]["id"] == str(UUID(int=1))
+        assert newest.json()["items"][0]["id"] == str(UUID(int=3))
+        second = await client.get(
+            "/api/v1/admin/audit", params={**params, "direction": "asc", "offset": 1}
+        )
+        assert second.status_code == 200
+        assert second.json()["items"][0]["id"] == str(UUID(int=2))
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_workflow_name_and_chronology_use_filtered_total(
+    async_db, tmp_path, monkeypatch, fake_durable_operations
+):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    now = datetime.now(UTC)
+    for index, name, state in [
+        (1, "operations.check_objects", "succeeded"),
+        (2, "operations.check_objects", "failed"),
+        (3, "operations.check_objects", "failed"),
+        (4, "documents.check_objects", "failed"),
+    ]:
+        row = WorkflowSummary(
+            id=f"workflow-{index}",
+            name=name,
+            state=state,
+            raw_status="SUCCESS" if state == "succeeded" else "ERROR",
+            queue_name="operations",
+            executor_id=None,
+            created_at=now + timedelta(seconds=index),
+            updated_at=now + timedelta(seconds=index),
+        )
+        fake_durable_operations.workflows[row.id] = row
+    try:
+        response = await client.get(
+            "/api/v1/admin/workflows",
+            params={
+                "name": " operations.check_objects ",
+                "state": "failed",
+                "direction": "asc",
+                "limit": 1,
+                "offset": 1,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["total"] == 2
+        assert [row["id"] for row in response.json()["items"]] == ["workflow-3"]
+        empty = await client.get("/api/v1/admin/workflows", params={"name": "check_objects"})
+        assert empty.status_code == 200
+        assert empty.json()["total"] == 0
+        assert empty.json()["items"] == []
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("section", "params"),
+    [
+        ("users", {"sort": "role"}),
+        ("users", {"role": "editor"}),
+        ("users", {"direction": "newest"}),
+        ("invitations", {"sort": "state"}),
+        ("invitations", {"role": "editor"}),
+        ("invitations", {"direction": "newest"}),
+        ("audit", {"direction": "newest"}),
+        ("workflows", {"direction": "newest"}),
+        ("workspaces", {"direction": "newest"}),
+        ("workspaces", {"sort": "state"}),
+        ("workspaces", {"state": "deleted"}),
+        ("workspaces", {"owner_active": "unknown"}),
+    ],
+)
+async def test_admin_directory_rejects_unsupported_ordering(
+    async_db, tmp_path, monkeypatch, section, params
+):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    try:
+        response = await client.get(f"/api/v1/admin/{section}", params=params)
+        assert response.status_code == 422
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("section", ["overview", "workflows", "workspaces"])
 @pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
 async def test_admin_pagination_rejects_invalid_bounds(
     async_db, tmp_path, monkeypatch, section, params
@@ -416,18 +806,24 @@ async def test_admin_pages_forbidden_for_member(async_db, tmp_path, monkeypatch)
 
 
 @pytest.mark.anyio
-async def test_admin_endpoint_relies_only_on_its_concrete_action(async_db, tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("endpoint", "allowed_action"),
+    [("audit", SystemAction.audit_read), ("maintenance", SystemAction.storage_metrics_read)],
+)
+async def test_admin_endpoint_relies_only_on_its_concrete_action(
+    async_db, tmp_path, monkeypatch, endpoint, allowed_action
+):
     client, _user, _login = await member_client(async_db, tmp_path, monkeypatch)
 
-    def allow_audit_only(_role, action, *, relation="any"):
-        return action is SystemAction.audit_read and relation == "any"
+    def allow_concrete_action_only(_role, action, *, relation="any"):
+        return action is allowed_action and relation == "any"
 
     monkeypatch.setattr(
         "quirebase.access.authorization.system_action_allowed",
-        allow_audit_only,
+        allow_concrete_action_only,
     )
     try:
-        response = await client.get("/api/v1/admin/audit")
+        response = await client.get(f"/api/v1/admin/{endpoint}")
         assert response.status_code == 200
     finally:
         await client.aclose()
@@ -480,6 +876,65 @@ async def test_admin_settings_endpoint(async_db, tmp_path, monkeypatch):
     assert setting is not None
     assert setting.value == "http_admin@institution.edu"
     await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_maintenance_metrics_preserve_latest_checks_without_reading_history(
+    async_db, tmp_path, monkeypatch, fake_durable_operations
+):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    checked = datetime.now(UTC) - timedelta(hours=2)
+    cleaned = datetime.now(UTC) - timedelta(hours=1)
+    async_db.add(
+        MaintenanceSnapshot(
+            id=1,
+            status="failed",
+            missing_count=2,
+            error_count=2,
+            errors=["Missing file A", "Missing file B"],
+            checked_at=checked,
+            cleanup_started_at=cleaned - timedelta(seconds=5),
+            cleanup_checked_at=cleaned,
+            cleanup_counts={"import_batches": 4, "audit_events": 20},
+            cleanup_error=None,
+        )
+    )
+    await async_db.commit()
+    history = AsyncMock(side_effect=AssertionError("maintenance must not read workflow history"))
+    monkeypatch.setattr(fake_durable_operations, "list", history)
+    try:
+        response = await client.get("/api/v1/admin/maintenance")
+        assert response.status_code == 200
+        metrics = response.json()
+        assert "storage" not in metrics and "workflows" not in metrics
+        assert metrics["items_count"] == 0
+        assert metrics["database_allocated_bytes"] > 0
+        assert metrics["integrity_status"] == "failed"
+        assert metrics["missing_files_count"] == metrics["integrity_error_count"] == 2
+        assert metrics["integrity_errors"] == ["Missing file A", "Missing file B"]
+        assert datetime.fromisoformat(metrics["integrity_checked_at"]) == checked
+        assert datetime.fromisoformat(metrics["cleanup_checked_at"]) == cleaned
+        assert metrics["cleanup_counts"] == {"import_batches": 4, "audit_events": 20}
+        assert metrics["cleanup_error"] is None
+        assert {
+            "workflow_history_count",
+            "workflow_checkpoint_count",
+            "datasource_checkpoint_count",
+        } <= metrics.keys()
+        history.assert_not_awaited()
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_admin_maintenance_rejects_unauthenticated_reads(async_db, tmp_path, monkeypatch):
+    client, _admin, _login = await admin_client(async_db, tmp_path, monkeypatch)
+    client.cookies.clear()
+    try:
+        response = await client.get("/api/v1/admin/maintenance")
+        assert response.status_code == 401
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio

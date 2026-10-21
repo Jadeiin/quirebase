@@ -36,7 +36,6 @@ from quirebase.web.api.admin_schemas import (
     AdminAuditEventView,
     AdminInvitationCreatedView,
     AdminInvitationView,
-    AdminMaintenanceView,
     AdminOverviewView,
     AdminSettingsView,
     AdminUserCreateRequest,
@@ -47,6 +46,7 @@ from quirebase.web.api.admin_schemas import (
     InvitationCreateRequest,
     PasswordResetRequest,
     RuntimeSettingsRequest,
+    StorageMetricsView,
     UserRoleRequest,
     UserStatusRequest,
     WorkflowSummaryView,
@@ -57,6 +57,7 @@ from quirebase.web.api.dependencies import ApiUser, Database
 from quirebase.web.api.library_schemas import ItemSearchView, item_search_view
 from quirebase.workspaces import (
     freeze_workspace_governance,
+    get_workspace_for_governance,
     list_workspaces_for_governance,
     read_workspace_items_break_glass,
     reassign_workspace_owner,
@@ -108,13 +109,23 @@ async def admin_users(
     user: ApiUser,
     db: Database,
     search: str = "",
-    role: str = "",
+    role: Literal["", "administrator", "member"] = "",
     active: bool | None = None,
+    sort: Literal["username", "created"] = "username",
+    direction: Literal["asc", "desc"] = "asc",
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
     users, total = await list_users_paginated(
-        db, user, search=search, role=role, active=active, limit=limit, offset=offset
+        db,
+        user,
+        search=search,
+        role=role,
+        active=active,
+        sort=sort,
+        direction=direction,
+        limit=limit,
+        offset=offset,
     )
     page = result_converter.to_schema(
         users,
@@ -189,10 +200,24 @@ async def admin_invitations(
     user: ApiUser,
     db: Database,
     state: Literal["", "pending", "expired", "revoked", "accepted"] = "",
+    search: str = "",
+    role: Literal["", "administrator", "member"] = "",
+    sort: Literal["created", "expires", "username"] = "created",
+    direction: Literal["asc", "desc"] = "desc",
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
-    invitations, total = await list_invitations(db, user, state=state, limit=limit, offset=offset)
+    invitations, total = await list_invitations(
+        db,
+        user,
+        state=state,
+        search=search,
+        role=role,
+        sort=sort,
+        direction=direction,
+        limit=limit,
+        offset=offset,
+    )
     return result_converter.to_schema(
         invitations,
         total=total,
@@ -232,6 +257,7 @@ async def admin_audit(
     actor_id: UUID | None = None,
     action: str = "",
     target_type: str = "",
+    direction: Literal["asc", "desc"] = "desc",
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
@@ -242,6 +268,7 @@ async def admin_audit(
         action=action.strip() or None,
         target_type=target_type.strip() or None,
         search=search,
+        direction=direction,
         limit=limit,
         offset=offset,
     )
@@ -258,6 +285,8 @@ async def admin_workflows(
     user: ApiUser,
     db: Database,
     state: str = "",
+    name: str = "",
+    direction: Literal["asc", "desc"] = "desc",
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
@@ -266,8 +295,11 @@ async def admin_workflows(
     if normalized not in {"", "pending", "running", "succeeded", "failed", "cancelled"}:
         raise ValidationFailure(f"unknown workflow state: {state}")
     operations = durable_operations()
-    rows = await operations.list(status=normalized, limit=limit, offset=offset)
-    counts = await operations.state_counts()
+    workflow_name = name.strip() or None
+    rows = await operations.list(
+        status=normalized, name=workflow_name, direction=direction, limit=limit, offset=offset
+    )
+    counts = await operations.state_counts(name=workflow_name)
     total = sum(count for state, count in counts.items() if not normalized or state == normalized)
     return OffsetPagination(
         items=[WorkflowSummaryView(**_workflow_view(row)) for row in rows],
@@ -291,35 +323,55 @@ async def admin_update_settings(
     return OkView()
 
 
-@router.get("/maintenance", response_model=AdminMaintenanceView)
+@router.get("/maintenance", response_model=StorageMetricsView)
 async def admin_maintenance(user: ApiUser, db: Database):
-    await require_system_action(db, user, SystemAction.workflows_read)
-    workflows = await durable_operations().list(limit=100)
-    return {
-        "storage": await get_storage_metrics(db, user),
-        "workflows": [
-            _workflow_view(workflow)
-            for workflow in workflows
-            if (workflow.attributes or {}).get("capability") == "operations"
-        ][:20],
-    }
+    return await get_storage_metrics(db, user)
 
 
-@router.get("/workspaces", response_model=list[AdminWorkspaceView])
-async def admin_workspaces(user: ApiUser, db: Database) -> list[AdminWorkspaceView]:
-    workspaces = await list_workspaces_for_governance(db, user)
-    owners = await workspace_owners(db, {workspace.id for workspace in workspaces})
-    return [
-        _admin_workspace_view(workspace, owners[workspace.id], user)
-        for workspace in workspaces
-        if workspace.id in owners
-    ]
+@router.get("/workspaces", response_model=OffsetPagination[AdminWorkspaceView])
+async def admin_workspaces(
+    user: ApiUser,
+    db: Database,
+    search: str = "",
+    state: Literal["", "active", "archived"] = "",
+    frozen: bool | None = None,
+    owner_active: bool | None = None,
+    sort: Literal["name", "owner", "created"] = "name",
+    direction: Literal["asc", "desc"] = "asc",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> OffsetPagination[AdminWorkspaceView]:
+    rows, total = await list_workspaces_for_governance(
+        db,
+        user,
+        search=search,
+        state=state,
+        frozen=frozen,
+        owner_active=owner_active,
+        sort=sort,
+        direction=direction,
+        limit=limit,
+        offset=offset,
+    )
+    return OffsetPagination(
+        items=[_admin_workspace_view(workspace, owner, user) for workspace, owner in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/workspaces/{workspace_id}", response_model=AdminWorkspaceView)
+async def admin_workspace(workspace_id: UUID, user: ApiUser, db: Database) -> AdminWorkspaceView:
+    workspace, owner = await get_workspace_for_governance(db, user, workspace_id)
+    return _admin_workspace_view(workspace, owner, user)
 
 
 def _admin_workspace_view(workspace: Workspace, owner: User, actor: User) -> AdminWorkspaceView:
     return AdminWorkspaceView(
         id=workspace.id,
         name=workspace.name,
+        created_at=workspace.created_at,
         owner_id=owner.id,
         owner_username=owner.username,
         owner_active=owner.active,

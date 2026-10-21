@@ -19,7 +19,7 @@ from quirebase.accounts import (
     revoke_invitation,
 )
 from quirebase.core.crypto import hash_password, token_hash
-from quirebase.core.errors import ResourceNotFound
+from quirebase.core.errors import ResourceNotFound, ValidationFailure
 from quirebase.models import AuditEvent, Invitation, User, WorkspaceMember, WorkspaceRole
 
 pytestmark = pytest.mark.anyio
@@ -158,6 +158,13 @@ async def test_invitation_states_and_pagination_exclude_expired_from_pending(per
     assert [row.id for row in rows] == [expired.id, revoked.id]
     rows, total = await list_invitations(db, admin, offset=100)
     assert rows == [] and total == 4
+
+
+@pytest.mark.parametrize("options", [{"sort": "state"}, {"direction": "newest"}])
+async def test_list_invitations_rejects_invalid_ordering(persistence_db, options):
+    admin = await _admin(persistence_db)
+    with pytest.raises(ValidationFailure):
+        await list_invitations(persistence_db, admin, **options)
 
 
 async def test_partial_unique_index_allows_history_but_only_one_pending_link(persistence_db):

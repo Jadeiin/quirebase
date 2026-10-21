@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from advanced_alchemy.filters import LimitOffset
 from sqlalchemy import Text, cast, or_, select
@@ -73,8 +73,12 @@ async def query_events(
     search: str = "",
     limit: int = 50,
     offset: int = 0,
+    *,
+    direction: Literal["asc", "desc"] = "desc",
 ) -> tuple[list[AuditEvent], int]:
     await require_system_action(db, admin, SystemAction.audit_read)
+    if direction not in {"asc", "desc"}:
+        raise ValidationFailure(f"unknown sort direction: {direction}")
     query = select(AuditEvent)
     filters = []
     if actor_id:
@@ -97,7 +101,10 @@ async def query_events(
         query = query.where(*filters)
     records, total = await select_page(
         db,
-        query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()),
+        query.order_by(
+            AuditEvent.created_at.desc() if direction == "desc" else AuditEvent.created_at.asc(),
+            AuditEvent.id.desc() if direction == "desc" else AuditEvent.id.asc(),
+        ),
         AuditEvent,
         LimitOffset(limit=limit, offset=offset),
     )

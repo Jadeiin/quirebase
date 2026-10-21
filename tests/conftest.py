@@ -78,9 +78,19 @@ class InMemoryDurableOperations:
         return self.workflows.get(workflow_id)
 
     async def list(
-        self, *, status: str = "", limit: int = 100, offset: int = 0, name: str | None = None
+        self,
+        *,
+        status: str = "",
+        limit: int = 100,
+        offset: int = 0,
+        name: str | None = None,
+        direction: str = "desc",
     ):
-        rows = tuple(reversed(tuple(self.workflows.values())))
+        rows = sorted(
+            self.workflows.values(),
+            key=lambda row: row.created_at or datetime.min.replace(tzinfo=UTC),
+            reverse=direction == "desc",
+        )
         return tuple(
             row
             for row in rows
@@ -95,9 +105,11 @@ class InMemoryDurableOperations:
             if row.state in {"pending", "running"} and (name is None or row.name == name)
         )[offset : offset + limit]
 
-    async def state_counts(self):
+    async def state_counts(self, *, name: str | None = None):
         counts = {}
         for workflow in self.workflows.values():
+            if name is not None and workflow.name != name:
+                continue
             counts[workflow.state] = counts.get(workflow.state, 0) + 1
         return counts
 

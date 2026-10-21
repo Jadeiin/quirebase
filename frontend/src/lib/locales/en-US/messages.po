@@ -145,6 +145,7 @@ msgid "A managed Project starts with no participants; Workspace owners/admins ca
 msgstr "A managed Project starts with no participants; Workspace owners/admins can add them."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "A–Z"
 msgstr "A–Z"
@@ -172,7 +173,7 @@ msgstr "Accept invitation"
 #. Invitation state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Accepted"
 msgstr "Accepted"
@@ -207,11 +208,15 @@ msgid "Acronym"
 msgstr "Acronym"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Action"
 msgstr "Action"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/library/LibraryTable.svelte
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Actions"
@@ -243,8 +248,8 @@ msgstr "Active Workspace members can choose to join or leave this Project."
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
-msgid "Actor: {actor}"
-msgstr "Actor: {actor}"
+msgid "Actor ID"
+msgstr "Actor ID"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -413,6 +418,7 @@ msgstr "Administration action failed"
 #: src/routes/(app)/admin/audit/+page.svelte
 #: src/routes/(app)/admin/users/+page.svelte
 #: src/routes/(app)/admin/workflows/+page.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Administration pages"
 msgstr "Administration pages"
 
@@ -450,11 +456,6 @@ msgstr "Affiliation"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Affiliations"
 msgstr "Affiliations"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminInvitations.svelte
-msgid "All"
-msgstr "All"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
@@ -639,6 +640,7 @@ msgstr "Archive workspace"
 #. Workspace or Project lifecycle state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Archived"
 msgstr "Archived"
 
@@ -690,6 +692,11 @@ msgid "Attachment file"
 msgstr "Attachment file"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Attributes"
+msgstr "Attributes"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Audiovisual"
 msgstr "Audiovisual"
@@ -706,6 +713,11 @@ msgid "Audit log"
 msgstr "Audit log"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Authenticated user"
+msgstr "Authenticated user"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/item/metadata-labels.ts
@@ -714,6 +726,16 @@ msgstr "Audit log"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Author"
 msgstr "Author"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Authorization action"
+msgstr "Authorization action"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Authorization role"
+msgstr "Authorization role"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
@@ -902,6 +924,11 @@ msgstr "BREAK GLASS"
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "BREAK GLASS · read-only item inspection"
 msgstr "BREAK GLASS · read-only item inspection"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Break-glass inspection was denied"
+msgstr "Break-glass inspection was denied"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
@@ -1565,7 +1592,10 @@ msgstr "Create workspace"
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 #: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminWorkflows.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Created"
 msgstr "Created"
@@ -1678,6 +1708,7 @@ msgid "Dataset"
 msgstr "Dataset"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Date"
 msgstr "Date"
@@ -1805,6 +1836,12 @@ msgstr "Density"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Description"
 msgstr "Description"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+#: src/lib/features/admin/AdminWorkflows.svelte
+msgid "Details"
+msgstr "Details"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -2042,6 +2079,11 @@ msgid "Each inspection requires a reason and returns at most 100 Items. It grant
 msgstr "Each inspection requires a reason and returns at most 100 Items. It grants no continuing access."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Earliest first"
+msgstr "Earliest first"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Edit metadata"
 msgstr "Edit metadata"
@@ -2117,6 +2159,7 @@ msgstr "Entry"
 #. Import diagnostic severity.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
 msgid "Error"
 msgstr "Error"
 
@@ -2129,6 +2172,16 @@ msgstr "Established"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Event"
 msgstr "Event"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Event detail"
+msgstr "Event detail"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Event ID"
+msgstr "Event ID"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -2151,6 +2204,11 @@ msgid "Excluded fields"
 msgstr "Excluded fields"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Executor ID"
+msgstr "Executor ID"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Expand"
 msgstr "Expand"
@@ -2163,7 +2221,7 @@ msgstr "Expand sidebar"
 #. API Token or invitation state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Expired"
 msgstr "Expired"
 
@@ -2175,6 +2233,7 @@ msgstr "expires"
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
 #: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Expires"
 msgstr "Expires"
@@ -2263,6 +2322,11 @@ msgstr "Facility"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Failed"
 msgstr "Failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Failed to load users"
+msgstr "Failed to load users"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminOverview.svelte
@@ -2364,7 +2428,7 @@ msgid "Free text"
 msgstr "Free text"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 msgid "Freeze writes"
 msgstr "Freeze writes"
 
@@ -2372,6 +2436,11 @@ msgstr "Freeze writes"
 #: src/lib/features/discovery/Discovery.svelte
 msgid "From year"
 msgstr "From year"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Frozen"
+msgstr "Frozen"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/PublicationDateField.svelte
@@ -2771,7 +2840,6 @@ msgid "Invitation revoked"
 msgstr "Invitation revoked"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Invitation status"
 msgstr "Invitation status"
@@ -3065,6 +3133,11 @@ msgid "Last page"
 msgstr "Last page"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Latest first"
+msgstr "Latest first"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata/ItemMetadataSection.svelte
 msgid "Latest saved metadata"
 msgstr "Latest saved metadata"
@@ -3344,6 +3417,11 @@ msgid "Loading Tags…"
 msgstr "Loading Tags…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Loading workflow details…"
+msgstr "Loading workflow details…"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
 msgid "Loading workspace…"
 msgstr "Loading workspace…"
@@ -3353,7 +3431,6 @@ msgstr "Loading workspace…"
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/routes/(app)/+page.svelte
-#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Loading workspaces…"
 msgstr "Loading workspaces…"
 
@@ -3670,6 +3747,7 @@ msgid "My workspaces"
 msgstr "My workspaces"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3735,6 +3813,7 @@ msgid "New Tag name"
 msgstr "New Tag name"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Newest first"
 msgstr "Newest first"
@@ -3871,11 +3950,6 @@ msgid "No keywords."
 msgstr "No keywords."
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminMaintenance.svelte
-msgid "No maintenance workflows."
-msgstr "No maintenance workflows."
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No matching Items."
 msgstr "No matching Items."
@@ -3903,8 +3977,8 @@ msgid "No matching Projects."
 msgstr "No matching Projects."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
-#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "No matching workspaces."
 msgstr "No matching workspaces."
 
@@ -4013,11 +4087,6 @@ msgid "No workspaces available"
 msgstr "No workspaces available"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "No workspaces."
-msgstr "No workspaces."
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Nonprofit"
 msgstr "Nonprofit"
@@ -4036,6 +4105,12 @@ msgstr "Not checked"
 #: src/routes/+error.svelte
 msgid "Not found"
 msgstr "Not found"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
+msgid "Not frozen"
+msgstr "Not frozen"
 
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -4059,6 +4134,7 @@ msgid "Object integrity"
 msgstr "Object integrity"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Oldest first"
 msgstr "Oldest first"
@@ -4167,11 +4243,6 @@ msgid "Opening your workspace…"
 msgstr "Opening your workspace…"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/AdminMaintenance.svelte
-msgid "Operation"
-msgstr "Operation"
-
-#. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "OR"
 msgstr "OR"
@@ -4215,6 +4286,11 @@ msgid "Other open Projects"
 msgstr "Other open Projects"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Output"
+msgstr "Output"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Output management plan"
 msgstr "Output management plan"
@@ -4236,21 +4312,28 @@ msgstr "Outside current results"
 msgid "Overview"
 msgstr "Overview"
 
-#. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "owner"
-msgstr "owner"
-
 #. Workspace role or resource owner label.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 msgid "Owner"
 msgstr "Owner"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Owner account"
+msgstr "Owner account"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkspaces.svelte
 msgid "Owner account disabled"
 msgstr "Owner account disabled"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Owner reassignment is currently unavailable for this Workspace."
+msgstr "Owner reassignment is currently unavailable for this Workspace."
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
@@ -4381,7 +4464,6 @@ msgstr "Peer review"
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "Pending"
@@ -4670,6 +4752,11 @@ msgid "Project deleted"
 msgstr "Project deleted"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Project ID"
+msgstr "Project ID"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Project leader"
 msgstr "Project leader"
@@ -4796,6 +4883,11 @@ msgid "Publisher"
 msgstr "Publisher"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Queue"
+msgstr "Queue"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Quick actions"
 msgstr "Quick actions"
@@ -4810,6 +4902,11 @@ msgstr "Quick navigation"
 #: src/lib/features/tools/Tools.svelte
 msgid "Quirebase will not inspect your Library until you start the check."
 msgstr "Quirebase will not inspect your Library until you start the check."
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Raw status"
+msgstr "Raw status"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
@@ -4833,7 +4930,7 @@ msgid "Read PDF"
 msgstr "Read PDF"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 msgid "read-only freeze"
 msgstr "read-only freeze"
 
@@ -4870,10 +4967,14 @@ msgid "Reason:"
 msgstr "Reason:"
 
 #. js-lingui-explicit-id
-#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
-#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 msgid "Reassign owner"
 msgstr "Reassign owner"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+msgid "Reassign owner for {workspace}"
+msgstr "Reassign owner for {workspace}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
@@ -4889,11 +4990,6 @@ msgstr "recent additions"
 #: src/lib/features/admin/AdminOverview.svelte
 msgid "Recent audit events"
 msgstr "Recent audit events"
-
-#. js-lingui-explicit-id
-#: src/lib/features/admin/AdminMaintenance.svelte
-msgid "Recent operations"
-msgstr "Recent operations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -4944,10 +5040,20 @@ msgid "Refine current results"
 msgstr "Refine current results"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminUsers.svelte
+#: src/lib/features/admin/AdminWorkflows.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Refresh"
 msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Refresh details"
+msgstr "Refresh details"
 
 #. js-lingui-explicit-id
 #: src/lib/app/AppShell.svelte
@@ -5216,6 +5322,11 @@ msgid "Restore workspace"
 msgstr "Restore workspace"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Result"
+msgstr "Result"
+
+#. js-lingui-explicit-id
 #: src/lib/design/QueryError.svelte
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -5230,7 +5341,6 @@ msgstr "Restore workspace"
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 #: src/routes/(app)/+page.svelte
-#: src/routes/(app)/admin/workspaces/+page.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "Retry"
 msgstr "Retry"
@@ -5349,7 +5459,7 @@ msgstr "Revoke token"
 #. API Token or session state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
-#: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
 msgid "Revoked"
 msgstr "Revoked"
 
@@ -5513,6 +5623,7 @@ msgstr "Scope: Workspace"
 #: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Search"
 msgstr "Search"
 
@@ -5759,6 +5870,11 @@ msgid "Showing up to 20 active users. Type to narrow the search."
 msgstr "Showing up to 20 active users. Type to narrow the search."
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Showing up to 20 workspaces. Type to narrow the search."
+msgstr "Showing up to 20 workspaces. Type to narrow the search."
+
+#. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
 msgid "Sign in"
 msgstr "Sign in"
@@ -5815,6 +5931,7 @@ msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/discovery/Discovery.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Sort"
@@ -5822,6 +5939,7 @@ msgstr "Sort"
 
 #. js-lingui-explicit-id
 #: src/lib/design/Pagination.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Sort By"
 msgstr "Sort By"
@@ -5852,6 +5970,7 @@ msgid "Sort by title"
 msgstr "Sort by title"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Sort order: {current}. Switch to {next}."
 msgstr "Sort order: {current}. Switch to {next}."
@@ -5860,6 +5979,11 @@ msgstr "Sort order: {current}. Switch to {next}."
 #: src/lib/features/item/metadata-labels.ts
 msgid "Sound"
 msgstr "Sound"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Source"
+msgstr "Source"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -5893,6 +6017,9 @@ msgstr "Starting…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+#: src/lib/features/admin/AdminWorkflows.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "State"
 msgstr "State"
@@ -5903,7 +6030,9 @@ msgid "Stats reviewer"
 msgstr "Stats reviewer"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminInvitations.svelte
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Status"
 msgstr "Status"
@@ -6081,11 +6210,22 @@ msgid "Tags merged"
 msgstr "Tags merged"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Target ID"
+msgstr "Target ID"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Target IDs"
+msgstr "Target IDs"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Target Tag"
 msgstr "Target Tag"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Target type"
 msgstr "Target type"
@@ -6277,11 +6417,6 @@ msgstr "This workspace is unavailable. Choose another workspace."
 #: src/routes/+error.svelte
 msgid "This workspace route does not exist."
 msgstr "This workspace route does not exist."
-
-#. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "This Workspace stays visible while its owner reassignment form is open."
-msgstr "This Workspace stays visible while its owner reassignment form is open."
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -6611,6 +6746,11 @@ msgid "Unable to load this Item preview."
 msgstr "Unable to load this Item preview."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Unable to load workflow details."
+msgstr "Unable to load workflow details."
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Unable to load workspace invitations."
 msgstr "Unable to load workspace invitations."
@@ -6624,6 +6764,7 @@ msgstr "Unable to load workspace."
 #. js-lingui-explicit-id
 #: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/features/account/ExportPreferences.svelte
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
 #: src/routes/(app)/+page.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
@@ -6694,7 +6835,7 @@ msgid "Underline"
 msgstr "Underline"
 
 #. js-lingui-explicit-id
-#: src/routes/(app)/admin/workspaces/+page.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 msgid "Unfreeze writes"
 msgstr "Unfreeze writes"
 
@@ -6738,6 +6879,7 @@ msgid "Update the name members see across this workspace."
 msgstr "Update the name members see across this workspace."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflows.svelte
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Updated"
 msgstr "Updated"
@@ -6862,6 +7004,7 @@ msgstr "User sessions revoked"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminInvitations.svelte
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/admin/AdminUsers.svelte
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/auth/Login.svelte
@@ -7022,6 +7165,11 @@ msgstr "Volume"
 msgid "Volume / Issue"
 msgstr "Volume / Issue"
 
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Waiting for a connection."
+msgstr "Waiting for a connection."
+
 #. Import diagnostic severity.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -7090,6 +7238,16 @@ msgid "Workflow history is unavailable. Check the current result."
 msgstr "Workflow history is unavailable. Check the current result."
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminWorkflowDetail.svelte
+msgid "Workflow ID"
+msgstr "Workflow ID"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+msgid "Workflow name (exact)"
+msgstr "Workflow name (exact)"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 #: src/routes/(app)/admin/workflows/+page.svelte
 msgid "Workflows"
@@ -7097,6 +7255,7 @@ msgstr "Workflows"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/library/Library.svelte
 msgid "Workspace"
 msgstr "Workspace"
@@ -7135,6 +7294,17 @@ msgstr "Workspace for citation style"
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Workspace governance"
 msgstr "Workspace governance"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/WorkspaceOwnerReassign.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Workspace governance action failed"
+msgstr "Workspace governance action failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminAudit.svelte
+msgid "Workspace ID"
+msgstr "Workspace ID"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -7209,6 +7379,16 @@ msgstr "Workspace settings · Quirebase"
 msgid "Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace."
 msgstr "Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace."
 
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Workspace writes frozen"
+msgstr "Workspace writes frozen"
+
+#. js-lingui-explicit-id
+#: src/routes/(app)/admin/workspaces/+page.svelte
+msgid "Workspace writes unfrozen"
+msgstr "Workspace writes unfrozen"
+
 #. Project participation policy.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -7219,7 +7399,9 @@ msgstr "Workspace-wide"
 #: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
+#: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Workspaces"
 msgstr "Workspaces"
 
@@ -7232,6 +7414,12 @@ msgstr "Workspaces · Quirebase"
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Write a message"
 msgstr "Write a message"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
+#: src/lib/features/admin/AdminWorkspaces.svelte
+msgid "Write freeze"
+msgstr "Write freeze"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -7322,6 +7510,7 @@ msgid "Your role:"
 msgstr "Your role:"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminShell.svelte
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Z–A"
 msgstr "Z–A"

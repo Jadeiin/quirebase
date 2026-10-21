@@ -32,7 +32,7 @@
 		class?: string;
 	} = $props();
 
-	const triggerClass = buttonClass('icon', 'sm');
+	const triggerClass = `${buttonClass('icon', 'sm')} size-8 shrink-0`;
 	const pageSizes = $derived([...new Set([10, 20, 25, 50, 100, pageSize])].sort((a, b) => a - b));
 	const start = $derived(total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total));
 	const end = $derived(Math.min(page * pageSize, total));
@@ -49,7 +49,7 @@
 		<label class="flex items-center gap-2 whitespace-nowrap">
 			{$t('Page Size')}
 			<select
-				class="select w-auto py-1 text-xs"
+				class="select h-8 w-auto field-xs"
 				value={pageSize}
 				disabled={busy}
 				onchange={(event) => onPageSize(Number(event.currentTarget.value))}
@@ -61,7 +61,7 @@
 			<label class="flex items-center gap-2 whitespace-nowrap">
 				{$t('Sort By')}
 				<select
-					class="select w-auto max-w-52 py-1 text-xs"
+					class="select h-8 w-auto max-w-52 field-xs"
 					value={sort}
 					disabled={busy}
 					onchange={(event) => onSort?.(event.currentTarget.value)}

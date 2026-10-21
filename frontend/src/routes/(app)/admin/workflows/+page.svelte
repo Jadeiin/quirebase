@@ -10,20 +10,26 @@
 	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
 	const workflows = createQuery(() => adminWorkflowsQuery(filters(), true));
 	$effect(() => {
-		if (!workflows.isSuccess || workflows.isFetching) return;
+		if (!workflows.isSuccess || workflows.isFetching || !workflows.data) return;
 		const lastPage = Math.max(1, Math.ceil(workflows.data.total / filters().pageSize));
 		correctPage(lastPage);
 	});
 </script>
 
 <AdminSectionState
+	available={workflows.data != null}
+	error={workflows.error}
 	busy={workflows.isFetching}
 	onRetry={() => void workflows.refetch()}
 	loading={workflows.isPending}
 	failed={workflows.isError}
 	label={msg('Workflows')}
 >
-	<AdminWorkflows workflows={workflows.data!.items} />
+	<AdminWorkflows
+		workflows={workflows.data!.items}
+		onRefresh={() => void workflows.refetch()}
+		busy={workflows.isFetching}
+	/>
 	<Pagination
 		page={filters().page}
 		pageSize={filters().pageSize}

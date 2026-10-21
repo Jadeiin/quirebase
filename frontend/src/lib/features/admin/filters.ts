@@ -6,6 +6,7 @@ export type AdminFilterContext = {
 	setPage: (page: number) => void;
 	correctPage: (lastPage: number) => void;
 	setPageSize: (pageSize: number) => void;
+	setSort: (sort: AdminFilters['sort'], direction: AdminFilters['direction']) => void;
 };
 
 const [getAdminFilters, setAdminFilters] = createContext<AdminFilterContext>();

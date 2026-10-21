@@ -569,8 +569,8 @@ async def test_workspace_read_tolerates_committed_root_deletion(postgres_session
             rows = (await list_workspaces(read_db, owner))[0]
             workspace_ids = {workspace.id for workspace, _member in rows}
         else:
-            rows = await list_workspaces_for_governance(read_db, owner)
-            workspace_ids = {workspace.id for workspace in rows}
+            rows, _total = await list_workspaces_for_governance(read_db, owner)
+            workspace_ids = {workspace.id for workspace, _owner in rows}
         assert workspace_ids == {workspace_id}
         async with postgres_sessions() as delete_db:
             workspace = await delete_db.get(Workspace, workspace_id)

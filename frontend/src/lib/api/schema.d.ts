@@ -590,6 +590,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/admin/workspaces/{workspace_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Admin Workspace */
+		get: operations['admin.admin_workspace'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/admin/workspaces/{workspace_id}/owner': {
 		parameters: {
 			query?: never;
@@ -2402,12 +2419,6 @@ export interface components {
 			 */
 			readonly state: 'pending' | 'expired' | 'revoked' | 'accepted';
 		};
-		/** AdminMaintenanceView */
-		AdminMaintenanceView: {
-			storage: components['schemas']['StorageMetricsView'];
-			/** Workflows */
-			workflows: components['schemas']['WorkflowSummaryView'][];
-		};
 		/** AdminOverviewView */
 		AdminOverviewView: {
 			/** User Count */
@@ -2506,6 +2517,11 @@ export interface components {
 			id: string;
 			/** Name */
 			name: string;
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
 			/**
 			 * Owner Id
 			 * Format: uuid
@@ -4530,6 +4546,20 @@ export interface components {
 		OffsetPagination_AdminInvitationView_: {
 			/** Items */
 			items: components['schemas']['AdminInvitationView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_AdminWorkspaceView_: {
+			/** Items */
+			items: components['schemas']['AdminWorkspaceView'][];
 			/** Limit */
 			limit: number;
 			/** Offset */
@@ -7531,8 +7561,10 @@ export interface operations {
 		parameters: {
 			query?: {
 				search?: string;
-				role?: string;
+				role?: '' | 'administrator' | 'member';
 				active?: boolean | null;
+				sort?: 'username' | 'created';
+				direction?: 'asc' | 'desc';
 				limit?: number;
 				offset?: number;
 			};
@@ -7789,6 +7821,10 @@ export interface operations {
 		parameters: {
 			query?: {
 				state?: '' | 'pending' | 'expired' | 'revoked' | 'accepted';
+				search?: string;
+				role?: '' | 'administrator' | 'member';
+				sort?: 'created' | 'expires' | 'username';
+				direction?: 'asc' | 'desc';
 				limit?: number;
 				offset?: number;
 			};
@@ -7956,6 +7992,7 @@ export interface operations {
 				actor_id?: string | null;
 				action?: string;
 				target_type?: string;
+				direction?: 'asc' | 'desc';
 				limit?: number;
 				offset?: number;
 			};
@@ -7998,6 +8035,8 @@ export interface operations {
 		parameters: {
 			query?: {
 				state?: string;
+				name?: string;
+				direction?: 'asc' | 'desc';
 				limit?: number;
 				offset?: number;
 			};
@@ -8131,7 +8170,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['AdminMaintenanceView'];
+					'application/json': components['schemas']['StorageMetricsView'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -8156,7 +8195,16 @@ export interface operations {
 	};
 	'admin.admin_workspaces': {
 		parameters: {
-			query?: never;
+			query?: {
+				search?: string;
+				state?: '' | 'active' | 'archived';
+				frozen?: boolean | null;
+				owner_active?: boolean | null;
+				sort?: 'name' | 'owner' | 'created';
+				direction?: 'asc' | 'desc';
+				limit?: number;
+				offset?: number;
+			};
 			header?: never;
 			path?: never;
 			cookie?: never;
@@ -8169,7 +8217,47 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['AdminWorkspaceView'][];
+					'application/json': components['schemas']['OffsetPagination_AdminWorkspaceView_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'admin.admin_workspace': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AdminWorkspaceView'];
 				};
 			};
 			/** @description Unprocessable Content */

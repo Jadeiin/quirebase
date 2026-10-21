@@ -60,6 +60,8 @@
 
 <AdminNotices {error} {notice} />
 <AdminSectionState
+	available={settings.data != null}
+	error={settings.error}
 	busy={settings.isFetching}
 	onRetry={() => void settings.refetch()}
 	loading={settings.isPending}

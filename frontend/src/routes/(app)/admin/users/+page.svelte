@@ -35,11 +35,12 @@
 			: 1
 	);
 	$effect(() => {
-		if (!users.isSuccess || users.isFetching) return;
+		if (!users.isSuccess || users.isFetching || !users.data) return;
 		correctPage(pageCount);
 	});
 
 	function mutate(operation: () => Promise<unknown>, success: MessageKey, form?: HTMLFormElement) {
+		if (busy) return;
 		error = '';
 		notice = null;
 		void adminMutation
@@ -122,6 +123,8 @@
 
 <AdminNotices {error} {notice} />
 <AdminSectionState
+	available={users.data != null}
+	error={users.error}
 	busy={users.isFetching}
 	onRetry={() => void users.refetch()}
 	loading={users.isPending}
@@ -131,6 +134,7 @@
 	<AdminUsers
 		users={users.data!}
 		{busy}
+		onRefresh={() => void users.refetch()}
 		onCreateUser={createUser}
 		onUpdateUserRole={updateUserRole}
 		onUpdateUserStatus={updateUserStatus}

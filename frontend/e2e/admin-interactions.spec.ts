@@ -1,17 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { chooseSearchOption, mockSession } from './helpers';
+import { mockSession } from './helpers';
 
-const adminWorkspace = (id: string) => ({
-	id,
-	name: `Research ${id}`,
-	owner_id: `owner-${id}`,
-	owner_username: `owner-${id}`,
-	owner_active: true,
-	can_reassign_owner: true,
-	state: 'active',
-	governance_frozen_at: null,
-	governance_frozen_by: null
-});
 const adminUser = (id: string) => ({
 	id,
 	username: id,
@@ -20,77 +9,211 @@ const adminUser = (id: string) => ({
 	created_at: '2026-01-01T00:00:00Z'
 });
 
-for (const ownerFilter of ['initial-owner-name', 'initial-owner-id']) {
-	test(`owner conflict preserves the reassignment draft filtered by ${ownerFilter}`, async ({
+test('user table preserves collapsed management drafts and delegates sorting to the server', async ({
+	page
+}) => {
+	await mockSession(page, 'administrator');
+	const reads: URLSearchParams[] = [];
+	await page.route('**/api/v1/admin/users?*', (route) => {
+		reads.push(new URL(route.request().url()).searchParams);
+		return route.fulfill({
+			json: { items: [adminUser('curator')], total: 1, limit: 20, offset: 0 }
+		});
+	});
+	const started = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	let submitted: unknown;
+	await page.route('**/api/v1/admin/users/curator/role', async (route) => {
+		submitted = route.request().postDataJSON();
+		started.resolve();
+		await release.promise;
+		await route.fulfill({
+			status: 422,
+			json: { code: 'validation_failed', message: 'Unable to update role' }
+		});
+	});
+	await page.goto('/admin/users');
+	const row = page.getByRole('rowgroup', { name: 'curator', exact: true });
+	const manage = row.getByRole('button', { name: 'Manage user', exact: true });
+	await expect(manage).toHaveAttribute('aria-expanded', 'false');
+	await expect(row.getByLabel('New password for curator')).not.toBeVisible();
+	await manage.click();
+	await expect(manage).toHaveAttribute('aria-expanded', 'true');
+	await row.getByLabel('Role for curator').selectOption('administrator');
+	await row.getByLabel('New password for curator').fill('preserved-password-draft');
+	await manage.click();
+	await expect(row.getByLabel('New password for curator')).not.toBeVisible();
+	await manage.click();
+	await expect(row.getByLabel('Role for curator')).toHaveValue('administrator');
+	await expect(row.getByLabel('New password for curator')).toHaveValue('preserved-password-draft');
+	await row.getByRole('button', { name: 'Save role', exact: true }).click();
+	await started.promise;
+	try {
+		await expect(manage).toBeDisabled();
+		await expect(row.getByRole('button', { name: 'Reset password', exact: true })).toBeDisabled();
+		release.resolve();
+		await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
+		await expect(manage).toBeEnabled();
+		await expect(row.getByLabel('Role for curator')).toHaveValue('administrator');
+		await expect(row.getByLabel('New password for curator')).toHaveValue(
+			'preserved-password-draft'
+		);
+		expect(submitted).toEqual({ role: 'administrator' });
+		await expect.poll(() => reads[0]?.get('sort')).toBe('username');
+		expect(reads[0].get('direction')).toBe('asc');
+		await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('created');
+		await expect.poll(() => reads.at(-1)?.get('sort')).toBe('created');
+		expect(reads.at(-1)?.get('direction')).toBe('desc');
+		await expect(page).toHaveURL(/sort=created/);
+		await page.goBack();
+		await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue(
+			'username'
+		);
+	} finally {
+		release.resolve();
+	}
+});
+
+test('invitation filters, pagination and sort survive URL navigation and reload', async ({
+	page
+}) => {
+	await mockSession(page, 'administrator');
+	const invitations = Array.from({ length: 26 }, (_, index) => ({
+		id: `invitation-${index}`,
+		username: `invitee-${String(index).padStart(2, '0')}`,
+		role: 'member',
+		state: index === 25 ? 'expired' : 'pending',
+		created_at: `2026-01-${String(index + 1).padStart(2, '0')}T00:00:00Z`,
+		expires_at: '2099-01-01T00:00:00Z'
+	}));
+	const reads: URLSearchParams[] = [];
+	await page.route('**/api/v1/admin/invitations?*', (route) => {
+		const params = new URL(route.request().url()).searchParams;
+		reads.push(params);
+		const rows = invitations
+			.filter(
+				(invitation) =>
+					(!params.get('search') || invitation.username.includes(params.get('search')!)) &&
+					(!params.get('state') || invitation.state === params.get('state')) &&
+					(!params.get('role') || invitation.role === params.get('role'))
+			)
+			.sort((a, b) => {
+				const field = params.get('sort') === 'username' ? 'username' : 'created_at';
+				return a[field].localeCompare(b[field]) * (params.get('direction') === 'asc' ? 1 : -1);
+			});
+		const offset = Number(params.get('offset'));
+		const limit = Number(params.get('limit'));
+		return route.fulfill({
+			json: { items: rows.slice(offset, offset + limit), total: rows.length, limit, offset }
+		});
+	});
+	await page.goto(
+		'/admin/invitations?q=invitee&state=pending&role=member&page=2&page_size=10&sort=username&direction=asc'
+	);
+	const pagination = page.getByRole('navigation', { name: 'Invitation pages', exact: true });
+	await expect(page.getByRole('rowgroup', { name: 'invitee-10', exact: true })).toBeVisible();
+	await expect(page.getByLabel('Search', { exact: true })).toHaveValue('invitee');
+	await expect(page.getByRole('combobox', { name: 'Status', exact: true })).toHaveValue('pending');
+	await expect(page.getByRole('combobox', { name: 'Role', exact: true })).toHaveValue('member');
+	await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue(
+		'username'
+	);
+	expect(reads.at(-1)?.get('offset')).toBe('10');
+	expect(reads.at(-1)?.get('search')).toBe('invitee');
+	expect(reads.at(-1)?.get('state')).toBe('pending');
+	expect(reads.at(-1)?.get('role')).toBe('member');
+	await page.getByLabel('Search', { exact: true }).fill('unsubmitted invitation draft');
+	await pagination.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(page.getByRole('rowgroup', { name: 'invitee-20', exact: true })).toBeVisible();
+	await expect(page.getByLabel('Search', { exact: true })).toHaveValue(
+		'unsubmitted invitation draft'
+	);
+	await page.getByRole('combobox', { name: 'Sort By', exact: true }).selectOption('created');
+	await page
+		.getByRole('button', { name: 'Sort order: Newest first. Switch to Oldest first.', exact: true })
+		.click();
+	await expect(pagination.getByText('Page 1 of 3', { exact: true })).toBeVisible();
+	await expect.poll(() => reads.at(-1)?.get('sort')).toBe('created');
+	await expect.poll(() => reads.at(-1)?.get('direction')).toBe('asc');
+	expect(reads.at(-1)?.get('offset')).toBe('0');
+	expect(reads.at(-1)?.get('search')).toBe('invitee');
+	await expect(page.getByLabel('Search', { exact: true })).toHaveValue(
+		'unsubmitted invitation draft'
+	);
+	await page.goBack();
+	await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue('created');
+	await expect(
+		page.getByRole('button', {
+			name: 'Sort order: Newest first. Switch to Oldest first.',
+			exact: true
+		})
+	).toBeVisible();
+	await page.goBack();
+	await expect(pagination.getByText('Page 3 of 3', { exact: true })).toBeVisible();
+	await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue(
+		'username'
+	);
+	await expect(page.getByLabel('Search', { exact: true })).toHaveValue('invitee');
+	await page.reload();
+	await expect(page.getByRole('rowgroup', { name: 'invitee-20', exact: true })).toBeVisible();
+	await expect(page.getByRole('combobox', { name: 'Status', exact: true })).toHaveValue('pending');
+	await expect(page.getByRole('combobox', { name: 'Role', exact: true })).toHaveValue('member');
+	await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('expired');
+	await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+	await expect(pagination.getByText('Page 1 of 1', { exact: true })).toBeVisible();
+	await expect(page.getByRole('rowgroup', { name: 'invitee-25', exact: true })).toBeVisible();
+	await expect(page).toHaveURL(/state=expired/);
+	await page.goBack();
+	await expect(page.getByRole('combobox', { name: 'Status', exact: true })).toHaveValue('pending');
+	await expect(pagination.getByText('Page 3 of 3', { exact: true })).toBeVisible();
+});
+
+for (const section of ['users', 'invitations'] as const) {
+	test(`${section} sort controls separate fields and order and support the keyboard`, async ({
 		page
 	}) => {
 		await mockSession(page, 'administrator');
-		let currentOwner = { id: 'initial-owner-id', username: 'initial-owner-name' };
-		const workspace = () => ({
-			...adminWorkspace('A'),
-			owner_id: currentOwner.id,
-			owner_username: currentOwner.username
+		const reads: URLSearchParams[] = [];
+		await page.route(`**/api/v1/admin/${section}?*`, (route) => {
+			const params = new URL(route.request().url()).searchParams;
+			reads.push(params);
+			return route.fulfill({
+				json: { items: [], total: 30, limit: 10, offset: Number(params.get('offset')) }
+			});
 		});
-		await page.route('**/api/v1/admin/workspaces', (route) =>
-			route.fulfill({ json: [workspace()] })
+		await page.goto(`/admin/${section}?q=kept&page=2&page_size=10`);
+		const group = page.getByRole('group', { name: 'Sort', exact: true });
+		const field = group.getByRole('combobox', { name: 'Sort By', exact: true });
+		const direction = group.getByRole('button');
+		await expect(field.locator('option')).toHaveText(
+			section === 'users' ? ['Username', 'Created'] : ['Created', 'Expires', 'Username']
 		);
-		await page.route('**/api/v1/admin/users?*', (route) =>
-			route.fulfill({ json: { items: [adminUser('successor')], total: 1, offset: 0, limit: 20 } })
+		await expect(direction).toHaveAccessibleName(
+			section === 'users'
+				? 'Sort order: A–Z. Switch to Z–A.'
+				: 'Sort order: Newest first. Switch to Oldest first.'
 		);
-		const submissions: unknown[] = [];
-		await page.route('**/api/v1/admin/workspaces/A/owner', (route) => {
-			submissions.push(route.request().postDataJSON());
-			if (submissions.length === 1) {
-				currentOwner = { id: 'competing-owner-id', username: 'competing-owner-name' };
-				return route.fulfill({
-					status: 409,
-					json: { code: 'version_conflict', message: 'Owner changed' }
-				});
-			}
-			currentOwner = { id: 'successor', username: 'successor' };
-			return route.fulfill({ json: workspace() });
-		});
-		await page.goto('/admin/workspaces');
-		await page.getByLabel('Search', { exact: true }).fill(ownerFilter);
-		await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
-		const row = page
-			.locator('article')
-			.filter({ has: page.getByText('Research A', { exact: true }) });
-		await row.getByRole('button', { name: 'Reassign owner', exact: true }).click();
-		await chooseSearchOption(page, 'New owner', 'successor');
-		const reason = row.getByLabel('Reason (at least 10 characters)');
-		await reason.fill('Preserve this draft through an ownership conflict');
-		await row.getByRole('button', { name: 'Confirm owner reassignment' }).click();
-		await expect(page.getByRole('main').getByRole('alert')).toContainText('Ownership changed.');
-		await expect(row.getByText('Current owner: competing-owner-name')).toBeVisible();
-		await expect(
-			row.getByText('This Workspace stays visible while its owner reassignment form is open.')
-		).toBeVisible();
-		await expect(reason).toHaveValue('Preserve this draft through an ownership conflict');
-		await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
-		await expect(row.getByText('Current owner: competing-owner-name')).toBeVisible();
-		await expect(reason).toHaveValue('Preserve this draft through an ownership conflict');
-		await expect(row.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
-		await page.getByLabel('Search', { exact: true }).fill(ownerFilter);
-		await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
-		await row.getByRole('button', { name: 'Confirm owner reassignment' }).click();
-		await expect(row).toHaveCount(0);
-		await expect(page.getByText('No matching workspaces.', { exact: true })).toBeVisible();
-		await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
-		await expect(row.getByRole('combobox', { name: 'New owner' })).toHaveCount(0);
-		await expect(row.locator('p').first()).toContainText('successor');
-		expect(submissions).toEqual([
-			{
-				new_owner_user_id: 'successor',
-				expected_owner_user_id: 'initial-owner-id',
-				reason: 'Preserve this draft through an ownership conflict'
-			},
-			{
-				new_owner_user_id: 'successor',
-				expected_owner_user_id: 'competing-owner-id',
-				reason: 'Preserve this draft through an ownership conflict'
-			}
-		]);
+		await page.getByLabel('Search', { exact: true }).fill('unsubmitted draft');
+		await field.selectOption(section === 'users' ? 'created' : 'expires');
+		const current = section === 'users' ? 'Newest first' : 'Earliest first';
+		const next = section === 'users' ? 'Oldest first' : 'Latest first';
+		await expect(direction).toHaveAccessibleName(`Sort order: ${current}. Switch to ${next}.`);
+		await expect
+			.poll(() => reads.at(-1)?.get('direction'))
+			.toBe(section === 'users' ? 'desc' : 'asc');
+		await direction.focus();
+		await direction.press('Enter');
+		await expect
+			.poll(() => reads.at(-1)?.get('direction'))
+			.toBe(section === 'users' ? 'asc' : 'desc');
+		await expect(direction).toHaveAccessibleName(`Sort order: ${next}. Switch to ${current}.`);
+		await expect(direction).toBeFocused();
+		expect(reads.at(-1)?.get('search')).toBe('kept');
+		expect(reads.at(-1)?.get('offset')).toBe('0');
+		await expect(page.getByLabel('Search', { exact: true })).toHaveValue('unsubmitted draft');
+		await field.selectOption('username');
+		await expect(direction).toHaveAccessibleName('Sort order: A–Z. Switch to Z–A.');
+		await expect.poll(() => reads.at(-1)?.get('direction')).toBe('asc');
 	});
 }
 
@@ -194,12 +317,8 @@ test('invitation links survive unrelated or failed actions until their own revoc
 	await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
 	const link = page.getByRole('link', { name: /valid-new-link/ });
 	await expect(link).toBeVisible();
-	const oldRow = page
-		.locator('article')
-		.filter({ has: page.getByText(old.username, { exact: true }) });
-	const currentRow = page
-		.locator('article')
-		.filter({ has: page.getByText(current.username, { exact: true }) });
+	const oldRow = page.getByRole('rowgroup', { name: old.username, exact: true });
+	const currentRow = page.getByRole('rowgroup', { name: current.username, exact: true });
 	await oldRow.getByRole('button', { name: 'Revoke invitation', exact: true }).click();
 	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
 	await expect(link).toBeVisible();
@@ -217,49 +336,6 @@ test('invitation links survive unrelated or failed actions until their own revoc
 	await expect(currentRow.getByText('Revoked', { exact: true })).toBeVisible();
 	await expect(link).toHaveCount(0);
 });
-test('reassignment failure remains visible after switching forms', async ({ page }) => {
-	await mockSession(page, 'administrator');
-	await page.route('**/api/v1/admin/workspaces', (route) =>
-		route.fulfill({ json: [adminWorkspace('A'), adminWorkspace('B')] })
-	);
-	await page.route('**/api/v1/admin/users?*', (route) =>
-		route.fulfill({ json: { items: [adminUser('successor')], total: 1, offset: 0, limit: 20 } })
-	);
-	const started = Promise.withResolvers<void>();
-	const release = Promise.withResolvers<void>();
-	await page.route('**/api/v1/admin/workspaces/A/owner', async (route) => {
-		started.resolve();
-		await release.promise;
-		await route.fulfill({
-			status: 422,
-			json: { code: 'validation_failed', message: 'Receiver inactive' }
-		});
-	});
-	await page.goto('/admin/workspaces');
-	const rowA = page.locator('article').filter({ hasText: 'Research A' });
-	const rowB = page.locator('article').filter({ hasText: 'Research B' });
-	await rowA.getByRole('button', { name: 'Reassign owner', exact: true }).click();
-	await chooseSearchOption(page, 'New owner', 'successor');
-	await rowA.getByLabel('Reason (at least 10 characters)').fill('Requested ownership handover');
-	await rowA.getByRole('button', { name: 'Confirm owner reassignment' }).click();
-	await started.promise;
-	try {
-		await rowB.getByRole('button', { name: 'Reassign owner', exact: true }).click();
-		await chooseSearchOption(page, 'New owner', 'successor');
-		await rowB.getByLabel('Reason (at least 10 characters)').fill('Keep this new Workspace draft');
-		const response = page.waitForResponse((res) => res.url().endsWith('/admin/workspaces/A/owner'));
-		release.resolve();
-		await response;
-		await expect(page.getByRole('main').getByRole('alert')).toContainText('Research A');
-		await expect(rowB.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
-		await expect(rowB.getByLabel('Reason (at least 10 characters)')).toHaveValue(
-			'Keep this new Workspace draft'
-		);
-	} finally {
-		release.resolve();
-	}
-});
-
 test('settings lock fields during submission and preserve a failed draft for retry', async ({
 	page
 }) => {
@@ -343,111 +419,12 @@ test('active user removal clamps a now empty last page', async ({ page }) => {
 	await page.getByLabel(/^Status/).selectOption('true');
 	await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
 	await page.getByRole('button', { name: 'Next page', exact: true }).click();
-	const row = page.getByRole('article', { name: 'audit-user-20', exact: true });
+	const row = page.getByRole('rowgroup', { name: 'audit-user-20', exact: true });
 	await expect(row).toBeVisible();
 	await row.getByText('Manage user', { exact: true }).click();
 	await row.getByRole('button', { name: 'Disable user', exact: true }).click();
 	await expect(page.getByText('User disabled', { exact: true })).toBeVisible();
 	await expect(page.getByText('Page 1 of 1', { exact: true })).toBeVisible();
-	await expect(page.getByRole('article', { name: 'audit-user-0', exact: true })).toBeVisible();
+	await expect(page.getByRole('rowgroup', { name: 'audit-user-0', exact: true })).toBeVisible();
 	await expect(page.getByText('No users.', { exact: true })).toHaveCount(0);
-});
-
-test('workspace search filters names, owners and IDs without narrowing the inspection selector', async ({
-	page
-}) => {
-	await mockSession(page, 'administrator');
-	await page.route('**/api/v1/admin/workspaces', (route) =>
-		route.fulfill({
-			json: [{ ...adminWorkspace('Alpha'), id: 'workspace-42' }, adminWorkspace('Beta')]
-		})
-	);
-	await page.goto('/admin/workspaces');
-	await expect(page.locator('article')).toHaveCount(2);
-	const search = page.getByLabel('Search', { exact: true });
-	for (const [query, name] of [
-		['alpha', 'Research Alpha'],
-		['owner-beta', 'Research Beta'],
-		['WORKSPACE-42', 'Research Alpha']
-	]) {
-		await search.fill(query);
-		await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
-		await expect(page.locator('article').getByText(name, { exact: true })).toBeVisible();
-		await expect(page.locator('article')).toHaveCount(1);
-	}
-	await chooseSearchOption(page, 'Target Workspace', 'Research Beta');
-	await expect(page.getByRole('combobox', { name: 'Target Workspace' })).toHaveValue(
-		'Research Beta'
-	);
-	await search.fill('no-such-workspace');
-	await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
-	await expect(page.getByText('No matching workspaces.', { exact: true })).toBeVisible();
-	await expect(page.locator('article')).toHaveCount(0);
-	await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
-	await expect(page.locator('article')).toHaveCount(2);
-});
-
-test('workspace directory errors offer retry instead of reporting an empty directory', async ({
-	page
-}) => {
-	await mockSession(page, 'administrator');
-	let available = false;
-	await page.route('**/api/v1/admin/workspaces', (route) =>
-		available
-			? route.fulfill({ json: [adminWorkspace('Alpha')] })
-			: route.fulfill({ status: 500, json: { code: 'internal_error', message: 'Unavailable' } })
-	);
-	await page.goto('/admin/workspaces');
-	await expect(page.getByRole('main').getByRole('alert')).toContainText(
-		'Unable to load workspaces.'
-	);
-	await expect(page.getByText('No workspaces.', { exact: true })).toHaveCount(0);
-	available = true;
-	await page.getByRole('button', { name: 'Retry', exact: true }).click();
-	await expect(page.locator('article').getByText('Research Alpha', { exact: true })).toBeVisible();
-	await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
-});
-
-test('workspace directory refresh errors and retry preserve an open reassignment draft', async ({
-	page
-}) => {
-	await mockSession(page, 'administrator');
-	let available = true;
-	const workspaceB = { ...adminWorkspace('B'), governance_frozen_at: null as string | null };
-	await page.route('**/api/v1/admin/workspaces', (route) =>
-		available
-			? route.fulfill({ json: [adminWorkspace('A'), workspaceB] })
-			: route.fulfill({ status: 500, json: { code: 'internal_error', message: 'Unavailable' } })
-	);
-	await page.route('**/api/v1/admin/users?*', (route) =>
-		route.fulfill({ json: { items: [adminUser('successor')], total: 1, offset: 0, limit: 20 } })
-	);
-	await page.route('**/api/v1/admin/workspaces/B/freeze', (route) => {
-		workspaceB.governance_frozen_at = '2026-01-01T00:00:00Z';
-		available = false;
-		return route.fulfill({ json: workspaceB });
-	});
-	await page.goto('/admin/workspaces');
-	const rowA = page
-		.locator('article')
-		.filter({ has: page.getByText('Research A', { exact: true }) });
-	const rowB = page
-		.locator('article')
-		.filter({ has: page.getByText('Research B', { exact: true }) });
-	await rowA.getByRole('button', { name: 'Reassign owner', exact: true }).click();
-	await chooseSearchOption(page, 'New owner', 'successor');
-	const reason = rowA.getByLabel('Reason (at least 10 characters)');
-	await reason.fill('Keep this draft across refresh errors');
-	await rowB.getByRole('button', { name: 'Freeze writes', exact: true }).click();
-	await expect(page.getByRole('main').getByRole('alert')).toContainText(
-		'Unable to load workspaces.'
-	);
-	await expect(reason).toHaveValue('Keep this draft across refresh errors');
-	await expect(rowA.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
-	available = true;
-	await page.getByRole('button', { name: 'Retry', exact: true }).click();
-	await expect(rowB.getByRole('button', { name: 'Unfreeze writes', exact: true })).toBeVisible();
-	await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
-	await expect(reason).toHaveValue('Keep this draft across refresh errors');
-	await expect(rowA.getByRole('combobox', { name: 'New owner' })).toHaveValue('successor');
 });

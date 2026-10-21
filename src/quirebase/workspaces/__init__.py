@@ -13,6 +13,7 @@ from quirebase.workspaces.directory import (
 )
 from quirebase.workspaces.governance import (
     freeze_workspace_governance,
+    get_workspace_for_governance,
     list_workspaces_for_governance,
     read_workspace_items_break_glass,
     reassign_workspace_owner,
@@ -56,6 +57,7 @@ __all__ = [
     "delete_workspace",
     "freeze_workspace_governance",
     "get_received_workspace_invitation",
+    "get_workspace_for_governance",
     "get_workspace_invitation_by_token",
     "guard_user_deactivation",
     "invite_workspace_member",

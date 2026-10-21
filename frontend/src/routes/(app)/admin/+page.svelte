@@ -13,6 +13,8 @@
 </script>
 
 <AdminSectionState
+	available={overview.data != null}
+	error={overview.error}
 	busy={overview.isFetching}
 	onRetry={() => void overview.refetch()}
 	loading={overview.isPending}
