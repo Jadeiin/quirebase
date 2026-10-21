@@ -43,11 +43,12 @@ export function fileUploadMutationOptions(
 							'/workspaces/{workspace_id}/items/{item_id}/attachments',
 							options
 						);
+			await invalidateItemFiles(queryClient, workspaceId, itemId);
 			await trackDocument(workflow.id);
 		},
 		// The caller resets the form after success so file pickers clear while
 		// they are enabled; see `upload` in the files route.
-		onSuccess: () => invalidateItemFiles(queryClient, workspaceId, itemId)
+		onSettled: () => invalidateItemFiles(queryClient, workspaceId, itemId)
 	});
 }
 
@@ -84,10 +85,11 @@ export function fileRemoteUploadMutationOptions(
 								}
 							}
 						);
+			await invalidateItemFiles(queryClient, workspaceId, itemId);
 			await trackDocument(workflow.id);
 		},
 		// The caller resets the form after success so URL fields clear there.
-		onSuccess: () => invalidateItemFiles(queryClient, workspaceId, itemId)
+		onSettled: () => invalidateItemFiles(queryClient, workspaceId, itemId)
 	});
 }
 
@@ -115,6 +117,28 @@ export function fileDeleteMutationOptions(
 							params: { path: { item_id: itemId, attachment_id: file.id } }
 						}
 					),
-		onSuccess: () => invalidateItemFiles(queryClient, workspaceId, itemId)
+		onSettled: () => invalidateItemFiles(queryClient, workspaceId, itemId)
+	});
+}
+
+export function fileRetryMutationOptions(
+	workspaceId: string,
+	itemId: string,
+	queryClient: QueryClient,
+	trackDocument: DocumentTracker
+) {
+	const api = createWorkspaceApi(workspaceId);
+	return mutationOptions({
+		mutationKey: workspaceKeys.mutation(workspaceId, 'item-file-retry', itemId),
+		mutationFn: async ({ file }: FileDeleteMutation) => {
+			const workflow = await api.request(
+				'POST',
+				'/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/retry-inspection',
+				{ params: { path: { item_id: itemId, revision_id: file.id } } }
+			);
+			await invalidateItemFiles(queryClient, workspaceId, itemId);
+			await trackDocument(workflow.id);
+		},
+		onSettled: () => invalidateItemFiles(queryClient, workspaceId, itemId)
 	});
 }

@@ -5,23 +5,30 @@ import { translate, type MessageKey } from '#lib/i18n.js';
 import { toaster } from '#lib/toaster.js';
 import type { WorkflowStatus } from './queries';
 
+export type WorkflowTarget = { kind: 'import_batch'; id: string };
+
 export type TrackedJob = {
 	id: string;
 	workspaceId?: string;
+	target?: WorkflowTarget;
 	label: string;
 	successMessage: MessageKey;
 	failureMessage: MessageKey;
 	startedAt: number;
 	outcome?: WorkflowStatus;
+	unavailable?: boolean;
 };
 
 export type TrackedWorkflow = {
 	id: string;
 	workspaceId?: string;
+	target?: WorkflowTarget;
 	label: string;
 	successMessage: string;
 	failureMessage: string;
 	startedAt: number;
+	outcome?: WorkflowStatus;
+	unavailable?: boolean;
 };
 
 export type WorkflowLedger = {
@@ -31,6 +38,7 @@ export type WorkflowLedger = {
 
 export type TrackOptions = {
 	workspaceId?: string;
+	target?: WorkflowTarget;
 	label: string;
 	successMessage: MessageKey;
 	failureMessage: MessageKey;
@@ -73,8 +81,18 @@ export class WorkflowCenter {
 		if (!this.ledger) return;
 		for (const entry of this.ledger.read()) {
 			if (this.dismissed.has(entry.id) || this.jobs.some((job) => job.id === entry.id)) continue;
+			if (entry.target && (entry.outcome || entry.unavailable)) {
+				// Completed destinations survive reload without polling or repeating the toast.
+				this.jobs.push({
+					...entry,
+					successMessage: entry.successMessage as MessageKey,
+					failureMessage: entry.failureMessage as MessageKey
+				});
+				continue;
+			}
 			const tracked = this.track(entry.id, {
 				workspaceId: entry.workspaceId,
+				target: entry.target,
 				label: entry.label,
 				successMessage: entry.successMessage as MessageKey,
 				failureMessage: entry.failureMessage as MessageKey
@@ -83,22 +101,25 @@ export class WorkflowCenter {
 			if (stored) stored.startedAt = entry.startedAt;
 			void tracked.settled.catch(() => undefined);
 		}
+		this.persist();
 	}
 
 	private persist() {
 		if (!this.ledger) return;
-		// Persist every active job: the in-memory cap only ever prunes terminal
-		// jobs, so a fixed persistence cap would silently drop concurrent work.
+		// Keep active work and explicit return destinations; only generic terminal jobs expire.
 		this.ledger.write(
 			this.jobs
-				.filter((job) => !job.outcome)
+				.filter((job) => (!job.outcome && !job.unavailable) || job.target)
 				.map((job) => ({
 					id: job.id,
 					workspaceId: job.workspaceId,
+					target: job.target,
 					label: job.label,
 					successMessage: job.successMessage,
 					failureMessage: job.failureMessage,
-					startedAt: job.startedAt
+					startedAt: job.startedAt,
+					outcome: job.outcome,
+					unavailable: job.unavailable
 				}))
 		);
 	}
@@ -108,6 +129,14 @@ export class WorkflowCenter {
 		options: TrackOptions
 	): { job: TrackedJob; settled: Promise<WorkflowStatus> } {
 		const existing = this.jobs.find((job) => job.id === workflowId);
+		if (existing?.unavailable) {
+			return {
+				job: existing,
+				settled: Promise.reject(
+					new Error(translate('Workflow history is unavailable. Check the current result.'))
+				)
+			};
+		}
 		if (existing?.outcome) {
 			const terminal = Promise.resolve(existing.outcome);
 			return {
@@ -123,6 +152,7 @@ export class WorkflowCenter {
 		const job: TrackedJob = {
 			id: workflowId,
 			workspaceId: options.workspaceId,
+			target: options.target,
 			label: options.label,
 			successMessage: options.successMessage,
 			failureMessage: options.failureMessage,
@@ -131,13 +161,15 @@ export class WorkflowCenter {
 		if (existing) {
 			Object.assign(existing, job);
 		} else {
-			// Active jobs own polling and waiter settlement, so the cap only ever
-			// prunes terminal jobs. The list may transiently exceed MAX_JOBS when
-			// many workflows run concurrently.
-			const active = this.jobs.filter((entry) => !entry.outcome);
-			const terminal = this.jobs.filter((entry) => entry.outcome);
-			const room = Math.max(0, MAX_JOBS - active.length - 1);
-			this.jobs = [...active, ...(room > 0 ? terminal.slice(-room) : []), job];
+			// Active jobs own waiters; saved destinations need explicit dismissal.
+			const retained = this.jobs.filter(
+				(entry) => (!entry.outcome && !entry.unavailable) || entry.target
+			);
+			const terminal = this.jobs.filter(
+				(entry) => (entry.outcome || entry.unavailable) && !entry.target
+			);
+			const room = Math.max(0, MAX_JOBS - retained.length - 1);
+			this.jobs = [...retained, ...(room > 0 ? terminal.slice(-room) : []), job];
 		}
 		const settled = new Promise<WorkflowStatus>((resolve, reject) => {
 			const pending = this.waiters.get(workflowId) ?? [];
@@ -153,7 +185,7 @@ export class WorkflowCenter {
 
 	resolve(workflowId: string, status: WorkflowStatus) {
 		const job = this.jobs.find((entry) => entry.id === workflowId);
-		if (!job || job.outcome) return;
+		if (!job || job.outcome || job.unavailable) return;
 		job.outcome = status;
 		const pending = this.waiters.get(workflowId) ?? [];
 		this.waiters.delete(workflowId);
@@ -190,9 +222,21 @@ export class WorkflowCenter {
 			title: options.title,
 			duration: options.duration,
 			onStatusChange: ({ status }) => {
-				if (status === 'dismissing') this.dismiss(job.id);
+				if (status === 'dismissing' && !job.target) this.dismiss(job.id);
 			}
 		});
+	}
+
+	markUnavailable(workflowId: string) {
+		const job = this.jobs.find((entry) => entry.id === workflowId);
+		if (!job || job.outcome || job.unavailable) return;
+		job.unavailable = true;
+		const message = translate('Workflow history is unavailable. Check the current result.');
+		const pending = this.waiters.get(workflowId) ?? [];
+		this.waiters.delete(workflowId);
+		for (const waiter of pending) waiter.reject(new Error(message));
+		this.notify(job, { type: 'error', title: message, duration: Infinity });
+		this.persist();
 	}
 
 	fail(workflowId: string, message: string) {

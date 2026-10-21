@@ -88,6 +88,8 @@ def _artifact(stored, workspace_id, *, expired=False):
     return ExportArtifact(
         workflow_id=f"export-{uuid4()}",
         workspace_id=workspace_id,
+        actor_id=uuid4(),
+        revision_id=uuid4(),
         expires_at=datetime.now(UTC) + timedelta(hours=-1 if expired else 1),
         file=_file(stored),
     )

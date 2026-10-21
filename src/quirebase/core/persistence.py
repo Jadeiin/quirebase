@@ -12,11 +12,12 @@ from sqlalchemy.dialects.sqlite import Insert as SQLiteInsert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
+    from typing import Any
 
     from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.filters import StatementFilter
-    from sqlalchemy import Select
+    from sqlalchemy import Delete, Select, SQLColumnExpression
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import DeclarativeBase
 
@@ -30,6 +31,34 @@ def conflict_insert(
         "sqlite": sqlite_insert,
     }
     return builders[session.get_bind().dialect.name](model)
+
+
+async def delete_page(
+    db: AsyncSession,
+    statement: Delete,
+    *,
+    order_by: Sequence[SQLColumnExpression[Any]] = (),
+    limit: int = 500,
+) -> int:
+    """Delete a bounded page, retaining the caller's predicate at the write boundary.
+
+    The caller supplies a single-primary-key table and owns the transaction. Returning
+    only the bounded primary keys keeps affected counts portable across both databases.
+    """
+    if limit < 1:
+        raise ValueError("delete page limit must be positive")
+    columns = tuple(statement.table.primary_key)
+    if len(columns) != 1 or statement.whereclause is None:
+        raise ValueError("delete page requires one primary key and a predicate")
+    key = columns[0]
+    candidates = select(key).where(statement.whereclause).order_by(*order_by, key).limit(limit)
+    result = await db.execute(
+        statement
+        .where(key.in_(candidates))
+        .returning(key)
+        .execution_options(synchronize_session=False)
+    )
+    return len(result.all())
 
 
 async def select_page[ModelT: ModelProtocol](

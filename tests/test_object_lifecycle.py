@@ -119,6 +119,8 @@ async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
         ExportArtifact(
             workflow_id="expired-export",
             workspace_id=fixture_workspace_id(user),
+            actor_id=user.id,
+            revision_id=uuid4(),
             expires_at=now - timedelta(seconds=1),
             file=FileObject(
                 backend="documents",
@@ -131,6 +133,8 @@ async def test_cleanup_exports_applies_runtime_ttl_to_annotation_objects(
         ExportArtifact(
             workflow_id="recent-export",
             workspace_id=fixture_workspace_id(user),
+            actor_id=user.id,
+            revision_id=uuid4(),
             expires_at=now + timedelta(hours=1),
             file=FileObject(
                 backend="documents",

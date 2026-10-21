@@ -25,7 +25,8 @@
 		onUpload,
 		onUploadFromUrl,
 		onDownload,
-		onDelete
+		onDelete,
+		onRetry
 	}: {
 		itemId: string;
 		data: FilesView;
@@ -37,6 +38,7 @@
 		onUploadFromUrl: (event: SubmitEvent, kind: 'revision' | 'attachment') => void;
 		onDownload: (file: FileRow) => void;
 		onDelete: (file: FileRow) => void;
+		onRetry: (file: FileRow) => void;
 	} = $props();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
@@ -74,8 +76,14 @@
 							size: $numberFormat.format(kilobytes(file.size))
 						})}{file.processing_state ? ` · ${$t(domainLabel(file.processing_state))}` : ''}</span
 					>
+					{#if file.processing_state === 'failed'}<p class="mb-0 text-sm text-error-700-300">
+							{$t('PDF processing failed. Retry processing or replace this file.')}
+						</p>{/if}
 				</div>
 				<div class="flex flex-wrap items-center gap-2 sm:justify-end">
+					{#if canEdit && file.kind === 'revision' && file.processing_state === 'failed'}
+						<Button disabled={busy} onclick={() => onRetry(file)}>{$t('Retry processing')}</Button>
+					{/if}
 					{#if file.kind === 'revision' && file.processing_state === 'ready'}
 						<Button
 							as="a"

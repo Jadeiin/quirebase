@@ -28,7 +28,7 @@ EXPECTED_TABLES = {
     "items",
     "login_sessions",
     "login_throttles",
-    "object_integrity_scans",
+    "maintenance_snapshot",
     "pdf_annotations",
     "pdf_annotation_replies",
     "project_items",

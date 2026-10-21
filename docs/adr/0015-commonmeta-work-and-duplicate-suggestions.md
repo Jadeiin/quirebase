@@ -15,7 +15,9 @@ Multiple identifiers of one kind and multiple Items with the same identifier are
 Container, contributor and related-resource identifiers never establish Item matches. Duplicate detection runs only when explicitly requested; Discovery and Import never scan
 stored Works for automatic warnings or an inferred “already imported” state. Identifier
 collisions cannot reject creation or instruct an automatic merge.
-Per-Item version checks and ImportBatch confirmation replay remain application invariants.
+Per-Item version checks and confirmation replay while the ImportBatch receipt exists remain
+application invariants. Editors may explicitly delete committed receipts while preserving Items
+and Documents; deleted receipts no longer support replay or receipt-scoped Library reads.
 
 Inquiro owns the external Work contract, generated Python types, reader/writer integration,
 identifier comparison normalization and bounded Provider I/O. Library owns Item requirements,

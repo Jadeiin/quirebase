@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from dbos import DBOS
-from sqlalchemy import select
 
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.documents import delete_unreferenced_objects
-from quirebase.models import AuditEvent, Workspace
+from quirebase.models import Workspace
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -24,15 +23,8 @@ async def cleanup_deleted_workspace_objects_step(
     async with AsyncSessionLocal() as db:
         if await db.get(Workspace, workspace_id) is not None:
             raise ValueError("Workspace deletion has not committed")
-        authorized_deletion = await db.scalar(
-            select(AuditEvent.id).where(
-                AuditEvent.actor_id == actor_id,
-                AuditEvent.workspace_id == workspace_id,
-                AuditEvent.action == "workspace.delete",
-            )
-        )
-        if authorized_deletion is None:
-            raise ValueError("authorized Workspace deletion not found")
+        # Authorization and enqueue commit atomically with root deletion. Audit
+        # history has its own retention period and is never execution authority.
         return list(
             await delete_unreferenced_objects(db, object_keys, ignore_workflow_id=workflow_id)
         )

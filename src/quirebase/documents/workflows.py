@@ -22,7 +22,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.storage import ObjectSuffix, get_object_store, object_key
 from quirebase.core.timezones import annotation_export_timezone
-from quirebase.core.workflows import LIBRARY_QUEUE, ads, enqueue_child_workflow
+from quirebase.core.workflows import LIBRARY_QUEUE, ads, durable_operations
 from quirebase.documents.events import FILE_REVISION_CHANGED_WORKFLOW, OBJECT_CLEANUP_WORKFLOW
 from quirebase.models import (
     Attachment,
@@ -108,23 +108,9 @@ class PdfInspectionData(TypedDict):
     page_geometry: list[list[float]]
 
 
-class PdfInspection(PdfInspectionData):
-    revision_id: UUID
-
-
-class UploadedPdfInspection(PdfInspection):
-    object_key: str
-
-
 class RevisionWorkflowResult(TypedDict):
     revision_id: UUID
     item_id: UUID
-
-
-class ImportedRevisionWorkflowResult(TypedDict):
-    revision_id: UUID
-    actor_id: UUID
-    workspace_id: UUID
 
 
 class ValidatedAttachment(TypedDict):
@@ -243,29 +229,6 @@ async def _inspect_pdf_object(
     }
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
-async def inspect_uploaded_pdf(
-    revision_id: UUID,
-    object_id: UUID,
-    thumbnail_object_id: UUID,
-    receipt: UploadReceipt,
-) -> UploadedPdfInspection:
-    expected_key = object_key(object_id, ObjectSuffix.PDF)
-    if receipt["key"] != expected_key:
-        raise ValueError("upload receipt does not own the expected object")
-    inspected = await _inspect_pdf_object(
-        expected_key,
-        thumbnail_object_id,
-        checksum=receipt["checksum"],
-        expected_size=receipt["size"],
-    )
-    return {
-        "revision_id": revision_id,
-        "object_key": expected_key,
-        **inspected,
-    }
-
-
 def _ready_revision_values(inspected: PdfInspectionData, key: str, filename: str) -> dict:
     return {
         "file": FileObject(
@@ -291,65 +254,145 @@ def _ready_revision_values(inspected: PdfInspectionData, key: str, filename: str
 
 
 @ads.transaction()
-async def commit_uploaded_revision(
+async def reserve_uploaded_revision(
     actor_id: UUID,
     workspace_id: UUID,
     item_id: UUID,
+    revision_id: UUID,
+    object_id: UUID,
     filename: str,
-    inspected: UploadedPdfInspection,
+    receipt: UploadReceipt,
+    workflow_id: str,
 ) -> RevisionWorkflowResult:
     db = ads.sql_session()
-    _actor, _item = await _lock_upload_authority(db, actor_id, workspace_id, item_id)
-    existing = await db.get(FileRevision, inspected["revision_id"])
-    if existing is not None:
-        if existing.workspace_id != workspace_id or existing.item_id != item_id:
-            raise ValueError("uploaded revision does not belong to the requested item")
-        if existing.processing_state == FileRevisionProcessingState.pending:
-            await db.execute(
-                update(FileRevision)
-                .where(
-                    FileRevision.id == existing.id,
-                    FileRevision.processing_state == FileRevisionProcessingState.pending,
-                )
-                .values(**_ready_revision_values(inspected, inspected["object_key"], filename))
+    await _lock_upload_authority(db, actor_id, workspace_id, item_id)
+    existing = await db.get(FileRevision, revision_id)
+    if existing is None:
+        key = object_key(object_id, ObjectSuffix.PDF)
+        if receipt["key"] != key:
+            raise ValueError("upload receipt does not own the expected object")
+        db.add(
+            FileRevision(
+                id=revision_id,
+                workspace_id=workspace_id,
+                item_id=item_id,
+                created_by=actor_id,
+                file=FileObject(
+                    backend="documents",
+                    filename=key,
+                    size=receipt["size"],
+                    checksum=receipt["checksum"],
+                    content_type="application/pdf",
+                    metadata={"original_name": Path(filename).name[:255]},
+                ),
+                processing_workflow_id=workflow_id,
             )
-            await db.refresh(existing)
-            await search_index(db).index_revision(db, existing.id)
-        return {"revision_id": existing.id, "item_id": existing.item_id}
-    revision = FileRevision(
-        id=inspected["revision_id"],
-        workspace_id=workspace_id,
-        item_id=item_id,
-        created_by=actor_id,
-        **_ready_revision_values(inspected, inspected["object_key"], filename),
-    )
-    db.add(revision)
-    await db.flush()
-    await search_index(db).index_revision(db, revision.id)
-    record_event(
-        db,
-        actor_id,
-        "pdf.upload",
-        "file_revision",
-        revision.id,
-        workspace_id=workspace_id,
-        authorization_resource_action=ResourceAction.file_manage.value,
-    )
-    return {"revision_id": revision.id, "item_id": item_id}
+        )
+        await db.flush()
+        record_event(
+            db,
+            actor_id,
+            "pdf.upload",
+            "file_revision",
+            revision_id,
+            workspace_id=workspace_id,
+            authorization_resource_action=ResourceAction.file_manage.value,
+        )
+    elif existing.workspace_id != workspace_id or existing.item_id != item_id:
+        raise ValueError("uploaded revision does not belong to the requested item")
+    return {"revision_id": revision_id, "item_id": item_id}
 
 
-async def _enqueue_file_revision_changed(
-    revision_id: UUID, actor_id: UUID, workspace_id: UUID, item_id: UUID
-) -> str:
-    return await enqueue_child_workflow(
-        FILE_REVISION_CHANGED_WORKFLOW,
-        actor_id,
-        workspace_id,
-        revision_id,
-        item_id,
-        queue_name=LIBRARY_QUEUE,
-        workflow_id=f"file-revision-changed:{revision_id}",
-    )
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def inspect_and_publish_revision(
+    actor_id: UUID,
+    workspace_id: UUID,
+    revision_id: UUID,
+    object_key_value: str,
+    thumbnail_object_id: UUID,
+    workflow_id: str,
+) -> RevisionWorkflowResult:
+    """Extract and publish in one idempotent step; checkpoints contain IDs only."""
+    async with AsyncSessionLocal() as db:
+        revision = await db.get(FileRevision, revision_id)
+        if (
+            revision is None
+            or revision.workspace_id != workspace_id
+            or revision.file.path != object_key_value
+        ):
+            raise ValueError("File Revision no longer exists")
+        item_id = revision.item_id
+        if (
+            revision.processing_workflow_id != workflow_id
+            or revision.processing_state is FileRevisionProcessingState.ready
+        ):
+            return {"revision_id": revision_id, "item_id": item_id}
+        checksum = revision.file.checksum
+        filename = revision.file.metadata["original_name"]
+        if checksum is None:
+            raise ValueError("File Revision has no checksum")
+    inspected = await _inspect_pdf_object(object_key_value, thumbnail_object_id, checksum=checksum)
+    published = False
+    async with AsyncSessionLocal() as db:
+        await _lock_upload_authority(db, actor_id, workspace_id, item_id)
+        revision = await db.scalar(
+            select(FileRevision)
+            .where(FileRevision.id == revision_id, FileRevision.workspace_id == workspace_id)
+            .with_for_update()
+        )
+        if revision is None:
+            raise ValueError("File Revision no longer exists")
+        if (
+            revision.processing_workflow_id == workflow_id
+            and revision.processing_state is FileRevisionProcessingState.pending
+        ):
+            for name, value in _ready_revision_values(
+                inspected, object_key_value, filename
+            ).items():
+                setattr(revision, name, value)
+            await db.flush()
+            await search_index(db).index_revision(db, revision_id)
+            await durable_operations().enqueue_in_transaction(
+                db,
+                FILE_REVISION_CHANGED_WORKFLOW,
+                actor_id,
+                workspace_id,
+                revision_id,
+                item_id,
+                queue_name=LIBRARY_QUEUE,
+                workflow_id=f"file-revision-changed:{revision_id}",
+                attributes={
+                    "capability": "library",
+                    "actor_id": actor_id,
+                    "workspace_id": workspace_id,
+                    "item_id": item_id,
+                },
+            )
+            await db.commit()
+            published = True
+    if not published:
+        from quirebase.documents.objects import delete_unreferenced_objects
+
+        async with AsyncSessionLocal() as db:
+            await delete_unreferenced_objects(
+                db, (inspected["thumbnail_object_key"],), ignore_workflow_id=workflow_id
+            )
+    return {"revision_id": revision_id, "item_id": item_id}
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def fail_revision_processing(revision_id: UUID, workflow_id: str) -> None:
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            update(FileRevision)
+            .where(
+                FileRevision.id == revision_id,
+                FileRevision.processing_state == FileRevisionProcessingState.pending,
+                FileRevision.processing_workflow_id == workflow_id,
+            )
+            .values(processing_state=FileRevisionProcessingState.failed)
+        )
+        await db.commit()
 
 
 @DBOS.workflow(name=REVISION_UPLOAD_WORKFLOW)
@@ -364,25 +407,33 @@ async def upload_revision_workflow(
 ) -> RevisionWorkflowResult:
     key = object_key(object_id, ObjectSuffix.PDF)
     thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
-    receipt = await DBOS.recv_async(
-        "upload-complete", timeout_seconds=get_settings().workflow_upload_timeout_seconds
-    )
-    committed = False
+    workflow_id = f"upload-revision:{revision_id}"
+    reserved = False
     try:
+        receipt = await DBOS.recv_async(
+            "upload-complete", timeout_seconds=get_settings().workflow_upload_timeout_seconds
+        )
         completed_receipt = _require_upload_receipt(receipt, description="PDF")
-        inspected = await inspect_uploaded_pdf(
-            revision_id, object_id, thumbnail_object_id, completed_receipt
+        await reserve_uploaded_revision(
+            actor_id,
+            workspace_id,
+            item_id,
+            revision_id,
+            object_id,
+            filename,
+            completed_receipt,
+            workflow_id,
         )
-        result = await commit_uploaded_revision(
-            actor_id, workspace_id, item_id, filename, inspected
+        reserved = True
+        return await inspect_and_publish_revision(
+            actor_id, workspace_id, revision_id, key, thumbnail_object_id, workflow_id
         )
-        committed = True
-        await _enqueue_file_revision_changed(revision_id, actor_id, workspace_id, item_id)
-        return result
-    except BaseException:
-        if not committed:
+    except Exception:
+        if reserved:
+            await fail_revision_processing(revision_id, workflow_id)
+        else:
             await remove_owned_object(key)
-            await remove_owned_object(thumbnail_key)
+        await remove_owned_object(thumbnail_key)
         raise
 
 
@@ -393,71 +444,16 @@ async def inspect_imported_revision_workflow(
     revision_id: UUID,
     object_key_value: str,
     thumbnail_object_id: UUID,
-) -> ImportedRevisionWorkflowResult:
-    thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
-    committed = False
-    try:
-        inspected = await inspect_imported_pdf(revision_id, object_key_value, thumbnail_object_id)
-        result = await commit_imported_revision(actor_id, workspace_id, inspected)
-        committed = True
-        await _enqueue_file_revision_changed(revision_id, actor_id, workspace_id, result["item_id"])
-        return {
-            "revision_id": revision_id,
-            "actor_id": actor_id,
-            "workspace_id": workspace_id,
-        }
-    except BaseException:
-        if not committed:
-            await remove_owned_object(thumbnail_key)
-        raise
-
-
-@DBOS.step(retries_allowed=True, max_attempts=3)
-async def inspect_imported_pdf(
-    revision_id: UUID, object_key_value: str, thumbnail_object_id: UUID
-) -> PdfInspection:
-    async with AsyncSessionLocal() as db:
-        file = await db.scalar(select(FileRevision.file).where(FileRevision.id == revision_id))
-        if file is None or file.path != object_key_value:
-            raise ValueError("imported revision no longer exists")
-        checksum = file.checksum
-        if checksum is None:
-            raise ValueError("imported revision has no checksum")
-    inspected = await _inspect_pdf_object(object_key_value, thumbnail_object_id, checksum=checksum)
-    return {
-        "revision_id": revision_id,
-        **inspected,
-    }
-
-
-@ads.transaction()
-async def commit_imported_revision(
-    actor_id: UUID, workspace_id: UUID, inspected: PdfInspection
+    workflow_id: str,
 ) -> RevisionWorkflowResult:
-    db = ads.sql_session()
-    revision = await db.get(FileRevision, inspected["revision_id"])
-    if revision is None or revision.workspace_id != workspace_id:
-        raise ValueError("imported revision no longer exists")
-    await _lock_upload_authority(db, actor_id, workspace_id, revision.item_id)
-    revision = await db.get(FileRevision, inspected["revision_id"], populate_existing=True)
-    if revision is None or revision.workspace_id != workspace_id:
-        raise ValueError("imported revision no longer exists")
-    if revision.processing_state == FileRevisionProcessingState.pending:
-        await db.execute(
-            update(FileRevision)
-            .where(
-                FileRevision.id == revision.id,
-                FileRevision.processing_state == FileRevisionProcessingState.pending,
-            )
-            .values(
-                **_ready_revision_values(
-                    inspected, revision.file.path, revision.file.metadata["original_name"]
-                )
-            )
+    try:
+        return await inspect_and_publish_revision(
+            actor_id, workspace_id, revision_id, object_key_value, thumbnail_object_id, workflow_id
         )
-        await db.refresh(revision)
-        await search_index(db).index_revision(db, revision.id)
-    return {"revision_id": revision.id, "item_id": revision.item_id}
+    except Exception:
+        await fail_revision_processing(revision_id, workflow_id)
+        await remove_owned_object(object_key(thumbnail_object_id, ObjectSuffix.PNG))
+        raise
 
 
 def _is_image_header(header: bytes, content_type: str) -> bool:
@@ -787,6 +783,9 @@ async def record_annotation_export_artifact(
         ExportArtifact(
             workflow_id=workflow_id,
             workspace_id=workspace_id,
+            actor_id=actor_id,
+            revision_id=result["revision_id"],
+            project_item_id=result["project_item_id"],
             expires_at=datetime.now(UTC) + timedelta(hours=ttl_hours),
             file=FileObject(
                 backend="documents",

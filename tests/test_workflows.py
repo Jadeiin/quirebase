@@ -27,7 +27,7 @@ from quirebase.models import (
     FileRevision,
     ImportBatch,
     Item,
-    ObjectIntegrityScan,
+    MaintenanceSnapshot,
     Project,
     ProjectItem,
     ProjectParticipation,
@@ -386,7 +386,7 @@ async def test_system_metrics_use_aggregate_workflow_counts(async_db, monkeypatc
 
 @pytest.mark.anyio
 async def test_imported_revision_inspection_enqueues_derived_state_sync(
-    async_db, async_session_factory, monkeypatch
+    async_db, async_session_factory, monkeypatch, fake_durable_operations
 ):
     user = await _provisioned_user(async_db, "import-workflow-owner")
     item = Item(
@@ -415,12 +415,9 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
     async_db.add(revision)
     await async_db.commit()
 
-    enqueued = []
-
-    async def enqueue(revision_id, actor_id, workspace_id, item_id):
-        await asyncio.sleep(0)
-        enqueued.append((revision_id, item_id, actor_id, workspace_id))
-        return f"file-revision-changed:{revision_id}"
+    workflow_id = f"inspect-imported-revision:{revision.id}"
+    revision.processing_workflow_id = workflow_id
+    await async_db.commit()
 
     monkeypatch.setattr(document_workflows, "AsyncSessionLocal", async_session_factory)
     monkeypatch.setattr(document_workflows, "validate_pdf_container", lambda _source: None)
@@ -432,7 +429,6 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
         "create_thumbnail",
         lambda _source, destination: destination.write_bytes(b"thumbnail"),
     )
-    monkeypatch.setattr(document_workflows, "_enqueue_file_revision_changed", enqueue)
 
     workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
     await workflow_body(
@@ -441,50 +437,64 @@ async def test_imported_revision_inspection_enqueues_derived_state_sync(
         revision.id,
         stored.key,
         uuid4(),
+        workflow_id,
     )
 
-    assert enqueued == [(revision.id, item.id, user.id, fixture_workspace_id(user))]
+    assert fake_durable_operations.enqueues[-1]["args"] == (
+        user.id,
+        fixture_workspace_id(user),
+        revision.id,
+        item.id,
+    )
     await async_db.refresh(revision)
     assert revision.file.checksum == f"sha256:{sha256(b'%PDF-imported').hexdigest()}"
     assert revision.thumbnail.checksum == f"sha256:{sha256(b'thumbnail').hexdigest()}"
 
 
 @pytest.mark.anyio
-async def test_imported_revision_keeps_thumbnail_after_database_commit(monkeypatch):
-    removed = []
+async def test_imported_revision_failure_retains_pdf_and_reports_failed(
+    async_db, async_session_factory, monkeypatch, fake_durable_operations
+):
+    from quirebase.documents.revisions import attach_staged_pdf
 
-    async def inspect(*_args):
+    user = await _provisioned_user(async_db, "failed-inspection-owner")
+    item = Item(
+        workspace_id=fixture_workspace_id(user),
+        created_by=user.id,
+        work={"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Failed PDF"},
+    )
+    async_db.add(item)
+    await async_db.flush()
+    stored = await get_object_store().put_object(
+        uuid4(), ObjectSuffix.PDF, b"%PDF-broken", max_bytes=100
+    )
+    revision = await attach_staged_pdf(
+        async_db,
+        user,
+        item,
+        FileObject(
+            backend="documents",
+            filename=stored.key,
+            size=stored.size,
+            checksum=stored.checksum,
+            content_type="application/pdf",
+            metadata={"original_name": "broken.pdf"},
+        ),
+    )
+    await async_db.commit()
+
+    async def fail(*_args, **_kwargs):
         await asyncio.sleep(0)
-        return {"revision_id": "revision-id"}
+        raise ValueError("private parser internals")
 
-    async def commit(_actor_id, _workspace_id, _inspected):
-        await asyncio.sleep(0)
-        return {"revision_id": "revision-id", "item_id": "item-id"}
-
-    async def fail_to_enqueue(*_args):
-        await asyncio.sleep(0)
-        raise RuntimeError("temporary DBOS failure")
-
-    async def remove(key):
-        await asyncio.sleep(0)
-        removed.append(key)
-
-    monkeypatch.setattr(document_workflows, "inspect_imported_pdf", inspect)
-    monkeypatch.setattr(document_workflows, "commit_imported_revision", commit)
-    monkeypatch.setattr(document_workflows, "_enqueue_file_revision_changed", fail_to_enqueue)
-    monkeypatch.setattr(document_workflows, "remove_owned_object", remove)
+    monkeypatch.setattr(document_workflows, "AsyncSessionLocal", async_session_factory)
+    monkeypatch.setattr(document_workflows, "_inspect_pdf_object", fail)
     workflow_body = document_workflows.inspect_imported_revision_workflow.__wrapped__.__wrapped__
-
-    with pytest.raises(RuntimeError, match="temporary DBOS failure"):
-        await workflow_body(
-            "owner-id",
-            "workspace-id",
-            "revision-id",
-            "aa/bb/imported.pdf",
-            uuid4(),
-        )
-
-    assert removed == []
+    with pytest.raises(ValueError, match="private parser internals"):
+        await workflow_body(*fake_durable_operations.enqueues[-1]["args"])
+    await async_db.refresh(revision)
+    assert revision.processing_state.value == "failed"
+    assert await get_object_store().exists(stored.key)
 
 
 @pytest.mark.anyio
@@ -508,11 +518,18 @@ async def test_periodic_maintenance_workflow_uses_dbos_steps(monkeypatch):
     monkeypatch.setattr(operation_workflows, "_run_export_cleanup", cleanup)
     monkeypatch.setattr(operation_workflows, "_run_integrity_scan", scan)
 
+    async def retention():
+        await asyncio.sleep(0)
+        calls.append("retention")
+        return {}
+
+    monkeypatch.setattr(operation_workflows, "cleanup_retained_data_step", retention)
+
     workflow_body = operation_workflows.periodic_maintenance_workflow.__wrapped__.__wrapped__
     result = await workflow_body(datetime.now(UTC), None)
 
     assert result is None
-    assert calls == ["cleanup", "scan"]
+    assert calls == ["retention", "cleanup", "scan"]
 
 
 @pytest.mark.anyio
@@ -821,7 +838,7 @@ async def test_annotation_export_finalizer_rechecks_current_authority(
 
 
 @pytest.mark.anyio
-async def test_integrity_scan_applies_database_backfills_in_datasource_transaction(
+async def test_integrity_scan_publishes_backfills_without_checkpointing_inventory(
     async_db, async_session_factory, monkeypatch
 ):
     user = await _provisioned_user(async_db, "integrity-owner")
@@ -864,22 +881,9 @@ async def test_integrity_scan_applies_database_backfills_in_datasource_transacti
     report = await operation_workflows.scan_objects_step()
 
     await async_db.refresh(revision)
-    assert revision.thumbnail.size is None
-    assert report["thumbnail_sizes"] == {
-        str(revision.id): {"path": thumbnail.key, "size": thumbnail.size}
-    }
-
-    await operation_workflows.record_integrity_scan_step(
-        report["errors"], report["thumbnail_sizes"]
-    )
-    await async_db.refresh(revision)
     assert revision.thumbnail.size == thumbnail.size
-    assert (
-        await async_db.scalar(
-            select(ObjectIntegrityScan).order_by(ObjectIntegrityScan.checked_at.desc()).limit(1)
-        )
-        is not None
-    )
+    assert report == {"error_count": 0, "deleted_orphans": 0, "checked_status": "ok"}
+    assert await async_db.get(MaintenanceSnapshot, 1) is not None
 
 
 @pytest.mark.anyio
@@ -953,7 +957,6 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
     monkeypatch.setattr(workflows.ads, "run_tx_step_async", run)
     await operation_workflows.list_reindex_item_ids_step("actor-id", "workspace-id", None, 100)
     await operation_workflows.list_reindex_revision_ids_step("actor-id", "workspace-id", None, 100)
-    await operation_workflows.record_integrity_scan_step([], {})
     await operation_workflows.get_export_ttl_step()
     await library_workflows.item_tag_recommendation_is_current_step("item-id", 1, "workflow-id")
 
@@ -962,7 +965,7 @@ async def test_read_heavy_datasource_steps_use_read_committed(monkeypatch):
 
 @pytest.mark.anyio
 async def test_revision_upload_carries_stream_checksum_through_finalizer_retry(
-    async_db, fake_durable_operations, monkeypatch
+    async_db, fake_durable_operations, monkeypatch, async_session_factory
 ):
     from quirebase.documents import store_pdf_revision
 
@@ -991,9 +994,6 @@ async def test_revision_upload_carries_stream_checksum_through_finalizer_retry(
         await asyncio.sleep(0)
         return receipt
 
-    async def enqueue_change(*_args):
-        await asyncio.sleep(0)
-
     monkeypatch.setattr(document_workflows, "DBOS", SimpleNamespace(recv_async=receive))
     monkeypatch.setattr(document_workflows, "validate_pdf_container", lambda _source: None)
     monkeypatch.setattr(document_workflows, "inspect_pdf", lambda _source: (1, "text", []))
@@ -1002,7 +1002,7 @@ async def test_revision_upload_carries_stream_checksum_through_finalizer_retry(
         "create_thumbnail",
         lambda _source, destination: destination.write_bytes(b"thumbnail"),
     )
-    monkeypatch.setattr(document_workflows, "_enqueue_file_revision_changed", enqueue_change)
+    monkeypatch.setattr(document_workflows, "AsyncSessionLocal", async_session_factory)
     workflow_body = document_workflows.upload_revision_workflow.__wrapped__.__wrapped__
 
     first = await workflow_body(*enqueue["args"])
@@ -1030,7 +1030,7 @@ def test_upload_receipt_rejects_missing_or_malformed_checksum(checksum):
 
 
 @pytest.mark.anyio
-async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
+async def test_uploaded_revision_is_persisted_pending_before_inspection(async_db):
     user = await _provisioned_user(async_db, "upload-tx-user")
     item = Item(
         workspace_id=fixture_workspace_id(user),
@@ -1039,32 +1039,30 @@ async def test_commit_uploaded_revision_uses_datasource_transaction(async_db):
     )
     async_db.add(item)
     await async_db.commit()
+    revision_id, object_id = uuid4(), uuid4()
+    from quirebase.core.storage import object_key
 
-    rev_id = uuid4()
-    inspected = {
-        "revision_id": rev_id,
-        "object_key": "aa/bb/doc.pdf",
-        "thumbnail_object_key": "aa/bb/thumb.png",
-        "thumbnail_size": 128,
-        "thumbnail_checksum": f"sha256:{sha256(b'thumbnail').hexdigest()}",
-        "size": 1024,
-        "checksum": f"sha256:{sha256(b'uploaded PDF').hexdigest()}",
-        "page_count": 2,
-        "full_text": "Extracted text content",
-        "page_geometry": [],
-    }
-    result = await document_workflows.commit_uploaded_revision(
-        user.id, fixture_workspace_id(user), item.id, "my_doc.pdf", inspected
+    key = object_key(object_id, ObjectSuffix.PDF)
+    result = await document_workflows.reserve_uploaded_revision(
+        user.id,
+        fixture_workspace_id(user),
+        item.id,
+        revision_id,
+        object_id,
+        "my_doc.pdf",
+        {
+            "status": "complete",
+            "key": key,
+            "size": 1024,
+            "checksum": f"sha256:{sha256(b'uploaded PDF').hexdigest()}",
+        },
+        "workflow-id",
     )
-    assert result == {"revision_id": rev_id, "item_id": item.id}
-
-    saved = await async_db.get(FileRevision, rev_id)
-    assert saved is not None
-    assert saved.file.path == "aa/bb/doc.pdf"
-    assert saved.file.checksum == inspected["checksum"]
-    assert saved.thumbnail.checksum == inspected["thumbnail_checksum"]
-    assert saved.page_count == 2
-    assert saved.full_text == "Extracted text content"
+    assert result == {"revision_id": revision_id, "item_id": item.id}
+    saved = await async_db.get(FileRevision, revision_id)
+    assert saved.processing_state.value == "pending"
+    assert saved.processing_workflow_id == "workflow-id"
+    assert saved.full_text is None and saved.thumbnail is None
 
 
 @pytest.mark.anyio
@@ -1552,7 +1550,9 @@ async def test_integrity_backfill_does_not_overwrite_a_replaced_thumbnail(
     async_db.add(revision)
     await async_db.commit()
     monkeypatch.setattr(operation_workflows, "AsyncSessionLocal", async_session_factory)
-    report = await operation_workflows.scan_objects_step()
+    from quirebase.operations.maintenance import scan_objects
+
+    errors, _candidates, thumbnail_sizes = await scan_objects(async_db)
     await async_db.refresh(revision)
     revision.thumbnail = FileObject(
         backend="documents",
@@ -1561,9 +1561,10 @@ async def test_integrity_backfill_does_not_overwrite_a_replaced_thumbnail(
         metadata={"generation": "new"},
     )
     await async_db.commit()
-    await operation_workflows.record_integrity_scan_step(
-        report["errors"], report["thumbnail_sizes"]
+    await operation_workflows.record_integrity_scan(
+        async_db, datetime.now(UTC), errors, thumbnail_sizes
     )
+    await async_db.commit()
     await async_db.refresh(revision)
     assert revision.thumbnail.path == new_thumbnail.key
     assert revision.thumbnail.size is None

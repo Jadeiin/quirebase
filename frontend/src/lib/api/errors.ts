@@ -1,6 +1,9 @@
 import { ApiError } from '#lib/api/client.js';
 import { msg, translate, type MessageKey } from '#lib/i18n.js';
 
+const notFoundMessage = msg('The requested resource was not found.');
+const requestFailedMessage = msg('The request could not be completed.');
+
 const messages: Record<string, MessageKey> = {
 	invalid_credentials: msg('Invalid username or password.'),
 	authentication_required: msg('Please sign in again.'),
@@ -16,9 +19,10 @@ const messages: Record<string, MessageKey> = {
 	project_lifecycle_error: msg('This Project is read only in its current state.'),
 	document_not_ready: msg('This Document is not ready yet.'),
 	import_batch_conflict: msg('This Import Batch cannot be changed in its current state.'),
+	import_batch_unavailable: notFoundMessage,
 	unsupported_media_type: msg('This file type is not supported.'),
 	upstream_service_error: msg('The external service is temporarily unavailable.'),
-	not_found: msg('The requested resource was not found.'),
+	not_found: notFoundMessage,
 	permission_denied: msg('You do not have permission to perform this action.'),
 	validation_failed: msg('Please check the submitted values.'),
 	content_too_large: msg('The uploaded content is too large.'),
@@ -27,9 +31,9 @@ const messages: Record<string, MessageKey> = {
 	rate_limited: msg('Too many requests. Try again later.'),
 	method_not_allowed: msg('This action is not available.'),
 	conflict: msg('The request conflicts with the current state.'),
-	invalid_request: msg('The request could not be completed.'),
-	domain_error: msg('The request could not be completed.'),
-	request_failed: msg('The request could not be completed.'),
+	invalid_request: requestFailedMessage,
+	domain_error: requestFailedMessage,
+	request_failed: requestFailedMessage,
 	internal_error: msg('Something went wrong. Try again.')
 };
 

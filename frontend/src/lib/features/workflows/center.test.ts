@@ -51,6 +51,29 @@ function memoryLedger() {
 }
 
 describe('WorkflowCenter', () => {
+	it('marks purged history unavailable without inventing an operation failure', async () => {
+		const { ledger, entries } = memoryLedger();
+		const center = new WorkflowCenter(ledger);
+		const { job, settled } = center.track('expired-workflow', {
+			...trackOptions(),
+			workspaceId: 'workspace',
+			target: { kind: 'import_batch', id: 'batch' }
+		});
+		center.markUnavailable(job.id);
+		await expect(settled).rejects.toThrow('Workflow history is unavailable');
+		expect(job.unavailable).toBe(true);
+		expect(job.outcome).toBeUndefined();
+		expect(entries()[0].unavailable).toBe(true);
+		const restored = new WorkflowCenter(ledger);
+		restored.restore();
+		expect(restored.jobs[0].unavailable).toBe(true);
+		await expect(restored.track(job.id, trackOptions()).settled).rejects.toThrow(
+			'Workflow history is unavailable'
+		);
+		center.resolve(job.id, status({ id: job.id }));
+		expect(job.outcome).toBeUndefined();
+	});
+
 	it('resolves waiters and shows a success toast with the job duration', async () => {
 		const center = new WorkflowCenter();
 		const { job, settled } = center.track('workflow-1', trackOptions());
@@ -183,6 +206,36 @@ describe('WorkflowCenter', () => {
 		});
 	});
 
+	it.each(['succeeded', 'failed', 'cancelled', 'unavailable'] as const)(
+		'keeps the %s import destination after an active job across consecutive reloads',
+		(state) => {
+			const { ledger, entries } = memoryLedger();
+			const saved: TrackedWorkflow[] = [
+				{ id: 'active-workflow', ...trackOptions(), startedAt: 100 },
+				{
+					id: 'import-workflow',
+					...trackOptions(),
+					workspaceId: 'workspace-1',
+					target: { kind: 'import_batch', id: 'batch-1' },
+					startedAt: 200,
+					...(state === 'unavailable'
+						? { unavailable: true }
+						: { outcome: status({ id: 'import-workflow', state }) })
+				}
+			];
+			ledger.write(saved);
+			const toastCount = createToast.mock.calls.length;
+
+			for (let reload = 0; reload < 2; reload++) {
+				const restored = new WorkflowCenter(ledger);
+				restored.restore();
+				expect(restored.jobs).toEqual(saved);
+				expect(entries()).toEqual(saved);
+			}
+			expect(createToast).toHaveBeenCalledTimes(toastCount);
+		}
+	);
+
 	it('drops settled jobs from the ledger', () => {
 		const { ledger, entries } = memoryLedger();
 		const center = new WorkflowCenter(ledger);
@@ -191,6 +244,42 @@ describe('WorkflowCenter', () => {
 		center.resolve('workflow-1', status());
 		expect(entries()).toEqual([]);
 	});
+
+	it.each(['succeeded', 'failed', 'cancelled'] as const)(
+		'retains an import destination after %s and reload, until explicit dismissal',
+		async (state) => {
+			const { ledger, entries } = memoryLedger();
+			const center = new WorkflowCenter(ledger);
+			const options = {
+				...trackOptions(),
+				workspaceId: 'workspace-1',
+				target: { kind: 'import_batch' as const, id: 'batch-1' }
+			};
+			const { settled } = center.track('workflow-1', options);
+			const observed = settled.catch(() => undefined);
+			center.resolve('workflow-1', status({ state }));
+			await observed;
+			lastToast().onStatusChange?.({ status: 'dismissing' });
+			expect(center.jobs).toHaveLength(1);
+			expect(entries()[0]).toMatchObject({ target: options.target, outcome: { state } });
+			const toastCount = createToast.mock.calls.length;
+			const restored = new WorkflowCenter(ledger);
+			restored.restore();
+			restored.restore();
+			expect(restored.jobs).toHaveLength(1);
+			expect(restored.jobs[0]).toMatchObject({
+				workspaceId: 'workspace-1',
+				target: options.target,
+				outcome: { state }
+			});
+			expect(createToast).toHaveBeenCalledTimes(toastCount);
+			const replayed = restored.track('workflow-1', options).settled;
+			if (state === 'succeeded') await expect(replayed).resolves.toMatchObject({ state });
+			else await expect(replayed).rejects.toThrow('Document processing failed');
+			restored.dismiss('workflow-1');
+			expect(entries()).toEqual([]);
+		}
+	);
 
 	it('keeps dismissed jobs out of the restored tray', async () => {
 		vi.stubGlobal(
@@ -274,5 +363,19 @@ describe('WorkflowCenter', () => {
 		for (let index = 10; index < 30; index++) {
 			expect(ids).toContain(`workflow-${index}`);
 		}
+	});
+
+	it('does not evict a completed import destination when new workflows fill the tray', () => {
+		const { ledger } = memoryLedger();
+		const center = new WorkflowCenter(ledger);
+		center.track('workflow-1', {
+			...trackOptions(),
+			workspaceId: 'workspace-1',
+			target: { kind: 'import_batch', id: 'batch-1' }
+		});
+		center.resolve('workflow-1', status());
+		for (let index = 2; index < 30; index++) center.track(`workflow-${index}`, trackOptions());
+		expect(center.jobs.find((job) => job.id === 'workflow-1')?.target?.id).toBe('batch-1');
+		expect(ledger.read().find((job) => job.id === 'workflow-1')?.outcome?.state).toBe('succeeded');
 	});
 });

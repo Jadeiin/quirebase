@@ -24,9 +24,15 @@ msgid "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
 msgstr "{count, plural, other {# 条批注已加载}}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/import/ImportBatchList.svelte
 msgid "{count, plural, one {# diagnostic} other {# diagnostics}}"
-msgstr "{count, plural, other {# 条诊断}}"
+msgstr "{count} 条诊断"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# error} other {# errors}}"
+msgstr "{count, plural, other {# 个错误}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -37,8 +43,13 @@ msgstr "{count, plural, other {# 条文献}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# record ready to import} other {# records ready to import}}"
+msgstr "{count, plural, other {# 条记录可供导入}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
 msgid "{count, plural, one {# record} other {# records}}"
-msgstr "{count, plural, other {# 条记录}}"
+msgstr "{count} 条记录"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -54,6 +65,11 @@ msgstr "{count, plural, other {# 条结果}}"
 #: src/lib/features/tools/Tools.svelte
 msgid "{count, plural, one {# Tag} other {# Tags}}"
 msgstr "{count, plural, other {# 个标签}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# warning} other {# warnings}}"
+msgstr "{count, plural, other {# 条警告}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -717,6 +733,11 @@ msgid "Automatic"
 msgstr "自动"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Automatic cleanup"
+msgstr "自动清理"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Automatic: Table on wide screens, List on narrow screens"
 msgstr "自动：宽屏使用表格，窄屏使用列表"
@@ -750,6 +771,11 @@ msgstr "资助项目名称"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Award URI"
 msgstr "资助项目 URI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Back to import history"
+msgstr "返回导入历史"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workflows/WorkflowTray.svelte
@@ -973,6 +999,11 @@ msgstr "更改仅应用于当前预览的条目。"
 #: src/lib/features/tools/Tools.svelte
 msgid "Check for duplicates"
 msgstr "检查重复项"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Check import status"
+msgstr "检查导入状态"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
@@ -1252,11 +1283,6 @@ msgid "Comfortable"
 msgstr "舒适"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Commit"
-msgstr "提交"
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Commit or discard the current Import Batch before starting another import."
 msgstr "请先提交或丢弃当前导入批次，再开始新的导入。"
@@ -1306,6 +1332,11 @@ msgstr "请至少填写一个身份描述字段。"
 #: src/lib/features/item/schema-editor/schema.ts
 msgid "Complete the required fields."
 msgstr "请填写必填字段。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Completed imports"
+msgstr "已完成的导入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -1632,6 +1663,11 @@ msgid "Database"
 msgstr "数据库"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Database allocation"
+msgstr "数据库分配空间"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Database: {url}"
 msgstr "数据库：{url}"
@@ -1705,6 +1741,12 @@ msgstr "删除"
 #: src/lib/features/library/LibrarySavedViews.svelte
 msgid "Delete {name}"
 msgstr "删除 {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Delete import record"
+msgstr "删除导入记录"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1786,6 +1828,7 @@ msgid "Disabling a user immediately blocks account access and ends sign-in sessi
 msgstr "停用用户会立即阻止账号访问并结束登录会话。工作空间归属仍然保留，可在工作空间治理中单独重新指派。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Discard"
 msgstr "丢弃"
@@ -2216,6 +2259,7 @@ msgstr "设施"
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminMaintenance.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Failed"
 msgstr "已失败"
@@ -2491,9 +2535,31 @@ msgid "Import"
 msgstr "导入"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import {count, plural, one {# record} other {# records}}"
+msgstr "导入 {count, plural, other {# 条记录}}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import a bibliography"
 msgstr "导入书目"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Import Batch"
+msgstr "导入批次"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import completed. Deleting this import record keeps the imported Items and files."
+msgstr "导入已完成。删除此导入记录会保留已导入的条目和文件。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportHistory.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import history"
+msgstr "导入历史"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2511,6 +2577,11 @@ msgid "Import more"
 msgstr "继续导入"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Import pages"
+msgstr "导入列表分页"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Import preview"
 msgstr "导入预览"
@@ -2520,6 +2591,11 @@ msgstr "导入预览"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import preview failed"
 msgstr "导入预览失败"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import preview is ready"
+msgstr "导入预览已就绪"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -2533,11 +2609,6 @@ msgstr "导入处理中"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Import processing completed"
-msgstr "导入处理已完成"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import processing failed"
 msgstr "导入处理失败"
 
@@ -2545,6 +2616,22 @@ msgstr "导入处理失败"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import published PDFs"
 msgstr "导入已发表的 PDF"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import succeeded. Use View imported Items to open the result."
+msgstr "导入成功。点击“查看已导入文献”打开结果。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Imported"
+msgstr "已导入"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Imported {count, plural, one {# record} other {# records}}"
+msgstr "已导入 {count, plural, other {# 条记录}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2606,6 +2693,11 @@ msgstr "安装引文样式"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Instrument"
 msgstr "仪器"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Integrity error samples"
+msgstr "完整性错误示例"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -3170,6 +3262,16 @@ msgid "Loading filter values…"
 msgstr "正在加载筛选值…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Loading Import preview…"
+msgstr "正在加载导入预览…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Loading imports…"
+msgstr "正在加载导入记录…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Loading invitations…"
@@ -3586,6 +3688,12 @@ msgid "NCBI API key"
 msgstr "NCBI API 密钥"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportHistory.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "New import"
+msgstr "新建导入"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "新条目元数据"
@@ -3700,6 +3808,11 @@ msgstr "没有可用项目。"
 #: src/lib/features/tools/Tools.svelte
 msgid "No Citation Styles match this search."
 msgstr "没有与此搜索匹配的引文样式。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "No completed imports"
+msgstr "没有已完成的导入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3826,6 +3939,11 @@ msgid "No PDF revisions available."
 msgstr "没有可用的 PDF 版本。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "No pending imports"
+msgstr "没有待处理的导入"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "No pending invitations."
 msgstr "没有待接受的邀请。"
@@ -3910,6 +4028,11 @@ msgid "NOT"
 msgstr "非"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Not checked"
+msgstr "尚未检查"
+
+#. js-lingui-explicit-id
 #: src/routes/+error.svelte
 msgid "Not found"
 msgstr "未找到"
@@ -3919,11 +4042,21 @@ msgstr "未找到"
 msgid "Not generated"
 msgstr "未生成"
 
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Not run yet"
+msgstr "尚未运行"
+
 #. PDF annotation kind: a text comment attached to a region.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Note"
 msgstr "注释"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Object integrity"
+msgstr "对象完整性"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
@@ -3971,6 +4104,11 @@ msgstr "打开副本"
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Open full details"
 msgstr "打开完整详情"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Open import"
+msgstr "打开导入记录"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4201,6 +4339,11 @@ msgid "PDF files"
 msgstr "PDF 文件"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "PDF processing failed. Retry processing or replace this file."
+msgstr "PDF 处理失败，请重试处理或替换此文件。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "PDF Reader"
 msgstr "PDF 阅读器"
@@ -4242,6 +4385,11 @@ msgstr "同行评审"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "待处理"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Pending imports"
+msgstr "待处理的导入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminOverview.svelte
@@ -4959,6 +5107,11 @@ msgid "Remove this Item from {project}?"
 msgstr "将此条目移出“{project}”？"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Removed {count} records"
+msgstr "已清理 {count} 条记录"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4980,6 +5133,11 @@ msgstr "重命名 {name}"
 #: src/lib/features/tools/Tools.svelte
 msgid "Rename Tag"
 msgstr "重命名标签"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportHistory.svelte
+msgid "Reopen recent imports. Old previews and import records are cleaned up automatically; imported Items and files are kept."
+msgstr "查看近期导入。旧预览和导入记录会自动清理，已导入的文献和文件会保留。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5061,7 +5219,6 @@ msgstr "恢复工作区"
 #: src/lib/design/QueryError.svelte
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
-#: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
@@ -5079,9 +5236,19 @@ msgid "Retry"
 msgstr "重试"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Retry processing"
+msgstr "重试处理"
+
+#. js-lingui-explicit-id
 #: src/routes/+error.svelte
 msgid "Return to Quirebase"
 msgstr "返回 Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Reusable database space"
+msgstr "可复用的数据库空间"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5122,6 +5289,11 @@ msgstr "审阅预览"
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Review this action to continue."
 msgstr "查看此操作以继续。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Review this import, then select Items to add Tags or Projects."
+msgstr "查看本次导入的文献，选择后即可添加标签或归入项目。"
 
 #. Workspace role.
 #. js-lingui-explicit-id
@@ -5220,6 +5392,7 @@ msgstr "准备好后再开始检查"
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminMaintenance.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Running"
 msgstr "执行中"
@@ -6016,11 +6189,6 @@ msgid "This Import Batch cannot be changed in its current state."
 msgstr "当前状态下无法更改此导入批次。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "This Import Batch has already been committed."
-msgstr "此导入批次已提交。"
-
-#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "This invitation can no longer be used."
 msgstr "此邀请已无法使用。"
@@ -6062,8 +6230,8 @@ msgstr "这会永久删除所选条目在此项目中的批注和回复。条目
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
-msgid "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
-msgstr "归档保留期结束后，此操作会永久删除工作区及其内容，且无法撤销。"
+msgid "This permanently removes the archived workspace and its content. This cannot be undone."
+msgstr "这会永久删除已归档的工作区及其内容，且无法撤销。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -6155,6 +6323,11 @@ msgstr "登录尝试次数过多。请稍后重试。"
 #: src/lib/features/tools/Tools.svelte
 msgid "Tools"
 msgstr "工具"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Transaction checkpoints"
+msgstr "事务检查点"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
@@ -6276,6 +6449,13 @@ msgid "Unable to delete Citation Style"
 msgstr "无法删除引文样式"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to delete import record"
+msgstr "无法删除导入记录"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to discard Import"
 msgstr "无法丢弃导入"
@@ -6341,6 +6521,11 @@ msgstr "无法加载导入选项"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import preview"
 msgstr "无法加载导入预览"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Unable to load imports"
+msgstr "无法加载导入记录"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -6461,11 +6646,6 @@ msgstr "无法打开此条目分区。"
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Unable to open this PDF."
 msgstr "无法打开此 PDF。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Unable to refresh Import preview"
-msgstr "无法刷新导入预览"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
@@ -6744,6 +6924,16 @@ msgid "View deleted"
 msgstr "已删除视图"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workflows/WorkflowJobRow.svelte
+msgid "View import"
+msgstr "查看导入"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "View imported Items"
+msgstr "查看已导入文献"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "View Items"
 msgstr "查看条目"
@@ -6839,6 +7029,11 @@ msgid "Warning"
 msgstr "警告"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "We could not confirm whether the import completed. Check its status before trying again."
+msgstr "暂时无法确认导入是否完成，请先检查状态后再试。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Web page"
 msgstr "网页"
@@ -6873,10 +7068,26 @@ msgid "Workflow"
 msgstr "工作流"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Workflow checkpoints"
+msgstr "工作流检查点"
+
+#. js-lingui-explicit-id
 #: src/lib/api/workflows.ts
 #: src/lib/features/workflows/center.svelte.ts
 msgid "Workflow failed"
 msgstr "工作流失败"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Workflow history"
+msgstr "工作流历史"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workflows/center.svelte.ts
+#: src/lib/features/workflows/WorkflowJobRow.svelte
+msgid "Workflow history is unavailable. Check the current result."
+msgstr "工作流历史不可用，请查看当前结果。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -7059,6 +7270,11 @@ msgstr "你已是该工作区的成员。如需恢复访问，请联系工作区
 #: src/lib/features/auth/Invitation.svelte
 msgid "You are signed in as {current}. Switch to {invited} to accept this invitation."
 msgstr "你当前以 {current} 登录。请切换到 {invited} 以接受此邀请。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "You can import the ready records. Review the diagnostics for sources that need attention."
+msgstr "可以导入已就绪的记录，请查看诊断信息以处理其余来源。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceLeave.svelte

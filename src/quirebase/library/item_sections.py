@@ -23,6 +23,7 @@ from quirebase.documents import (
     DocumentInfo,
     count_item_annotations,
     count_item_attachments,
+    count_item_revisions,
     list_item_annotation_views,
     list_item_attachments,
     list_item_revisions,
@@ -140,7 +141,8 @@ async def _assigned_tags(db: AsyncSession, item: Item) -> tuple[Tag, ...]:
 async def _open_overview(
     db: AsyncSession, context: WorkspaceContext, item: Item
 ) -> ItemOverviewData:
-    revisions = await list_item_revisions(db, item.workspace_id, item.id, all_revisions=True)
+    revisions = await list_item_revisions(db, item.workspace_id, item.id)
+    revision_count = await count_item_revisions(db, item.workspace_id, item.id)
     annotation_count = await count_item_annotations(db, context, item.id)
     message_count = (
         await db.scalar(
@@ -157,7 +159,7 @@ async def _open_overview(
     return ItemOverviewData(
         item=item,
         revisions=revisions[:1],
-        revision_count=len(revisions),
+        revision_count=revision_count,
         attachment_count=attachment_count,
         annotation_count=annotation_count,
         message_count=message_count,

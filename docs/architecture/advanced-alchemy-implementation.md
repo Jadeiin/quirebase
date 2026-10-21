@@ -129,7 +129,8 @@ cutoff. Authentication owns credential checks, Audit Events and Login Session cr
 
 Documents' Annotation and Reply commands directly execute scoped version CAS for editing, soft
 deletion, restoration and Annotation moderation. Author restoration requires a deleted Annotation
-with `deleted_by_moderation=False`. Commands own payload validation, authorization, root locking,
+inside the configured Undo window, rechecked by the final CAS. Moderator deletion physically
+removes the root and its Replies and returns no authored content. Commands own payload validation, authorization, root locking,
 version-conflict translation, Audit and transaction completion.
 
 Library's Item metadata commands directly insert roots and replace them through scoped version CAS.

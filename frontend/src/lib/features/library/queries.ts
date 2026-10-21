@@ -19,6 +19,7 @@ function libraryFilterParameters(filters: LibraryFilters) {
 		query: filters.query || undefined,
 		tag: filters.tag || undefined,
 		project: filters.project || undefined,
+		import_batch: filters.import_batch || undefined,
 		year: filters.year || undefined,
 		keyword: filters.keyword || undefined,
 		author: filters.author || undefined,
@@ -32,12 +33,20 @@ function libraryFilterParameters(filters: LibraryFilters) {
 }
 
 export function libraryProjectScope(workspaceId: string, projectId: string) {
+	return libraryFilterScope(workspaceId, 'project', projectId);
+}
+
+export function libraryImportScope(workspaceId: string, batchId: string) {
+	return libraryFilterScope(workspaceId, 'import_batch', batchId);
+}
+
+function libraryFilterScope(workspaceId: string, key: 'project' | 'import_batch', id: string) {
 	const prefix = libraryKeys.all(workspaceId);
 	return {
 		queryKey: prefix,
 		predicate: ({ queryKey }: Query) =>
 			(queryKey[prefix.length] === 'list' || queryKey[prefix.length] === 'facets') &&
-			(queryKey[prefix.length + 1] as LibraryFilters | undefined)?.project === projectId
+			(queryKey[prefix.length + 1] as LibraryFilters | undefined)?.[key] === id
 	};
 }
 
@@ -48,10 +57,21 @@ async function reconcileReadFailure(
 	filters: LibraryFilters,
 	queryKey: QueryKey
 ) {
-	if (!(reason instanceof ApiError) || ![401, 403, 404].includes(reason.status)) return;
+	if (!(reason instanceof ApiError)) return;
+	const denied = [401, 403, 404].includes(reason.status);
+	const batchConflict = reason.status === 409 && reason.code === 'import_batch_conflict';
+	if (!denied && !batchConflict) return;
+	const batchUnavailable = reason.code === 'import_batch_unavailable' || batchConflict;
 	// Null remains unavailable if a later refetch pauses or fails; it is never an empty result.
-	if (filters.project) {
-		const scope = libraryProjectScope(workspaceId, filters.project);
+	// A combined filter does not make both resources unavailable. The typed batch
+	// failure takes precedence; other denials concern the selected Project.
+	const scope =
+		filters.import_batch && (batchUnavailable || !filters.project)
+			? libraryImportScope(workspaceId, filters.import_batch)
+			: denied && filters.project
+				? libraryProjectScope(workspaceId, filters.project)
+				: null;
+	if (scope) {
 		// Cancel related reads before purging so late responses cannot restore denied associations.
 		await client.cancelQueries(
 			{
@@ -60,10 +80,8 @@ async function reconcileReadFailure(
 			},
 			{ revert: false }
 		);
-		client.setQueriesData(scope, null, { updatedAt: 0 });
-	} else {
-		client.setQueriesData({ queryKey, exact: true }, null, { updatedAt: 0 });
 	}
+	client.setQueriesData(scope ?? { queryKey, exact: true }, null, { updatedAt: 0 });
 }
 
 export function libraryListQuery(

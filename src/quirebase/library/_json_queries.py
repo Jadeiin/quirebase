@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Integer, Text, case, column, func, or_, select
+from sqlalchemy import JSON, Integer, Text, Uuid, case, cast, column, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 
 from quirebase.models import Item
@@ -21,6 +21,15 @@ def array_elements(db: AsyncSession, array: Any, *, objects: bool = False) -> Fr
         function = func.jsonb_array_elements if objects else func.jsonb_array_elements_text
         return function(array).table_valued(column("value", JSONB if objects else Text)).lateral()
     return func.json_each(array).table_valued(column("value", JSON if objects else Text))
+
+
+def uuid_array_contains(db: AsyncSession, array: Any, value: Any) -> ColumnElement[bool]:
+    """Match stored UUIDs without rebinding every JSON element as a SQL parameter."""
+    elements = array_elements(db, array)
+    if db.get_bind().dialect.name == "postgresql":
+        return value.in_(select(cast(elements.c.value, Uuid)))
+    # SQLite stores GUIDs as bytes; JSON receipts retain canonical hyphenated strings.
+    return func.lower(func.hex(value)).in_(select(func.replace(elements.c.value, "-", "")))
 
 
 def contributor_name_parts(value: Any) -> tuple[Any, Any]:

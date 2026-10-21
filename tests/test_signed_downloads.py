@@ -138,6 +138,8 @@ async def test_export_signs_persisted_artifact_and_enforces_expiry(
     artifact = ExportArtifact(
         workspace_id=item.workspace_id,
         workflow_id="signed-export",
+        actor_id=user.id,
+        revision_id=revision.id,
         file=FileObject(backend="documents", filename=stored.key, size=stored.size),
         expires_at=datetime.now(UTC) + timedelta(seconds=31),
     )

@@ -24,9 +24,15 @@ msgid "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
 msgstr "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/import/ImportBatchList.svelte
 msgid "{count, plural, one {# diagnostic} other {# diagnostics}}"
 msgstr "{count, plural, one {# diagnostic} other {# diagnostics}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# error} other {# errors}}"
+msgstr "{count, plural, one {# error} other {# errors}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -37,6 +43,11 @@ msgstr "{count, plural, one {# Item} other {# Items}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# record ready to import} other {# records ready to import}}"
+msgstr "{count, plural, one {# record ready to import} other {# records ready to import}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
 msgid "{count, plural, one {# record} other {# records}}"
 msgstr "{count, plural, one {# record} other {# records}}"
 
@@ -54,6 +65,11 @@ msgstr "{count, plural, one {# result} other {# results}}"
 #: src/lib/features/tools/Tools.svelte
 msgid "{count, plural, one {# Tag} other {# Tags}}"
 msgstr "{count, plural, one {# Tag} other {# Tags}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# warning} other {# warnings}}"
+msgstr "{count, plural, one {# warning} other {# warnings}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -717,6 +733,11 @@ msgid "Automatic"
 msgstr "Automatic"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Automatic cleanup"
+msgstr "Automatic cleanup"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Automatic: Table on wide screens, List on narrow screens"
 msgstr "Automatic: Table on wide screens, List on narrow screens"
@@ -750,6 +771,11 @@ msgstr "Award title"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Award URI"
 msgstr "Award URI"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Back to import history"
+msgstr "Back to import history"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workflows/WorkflowTray.svelte
@@ -973,6 +999,11 @@ msgstr "Changes apply only to the Item in this preview."
 #: src/lib/features/tools/Tools.svelte
 msgid "Check for duplicates"
 msgstr "Check for duplicates"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Check import status"
+msgstr "Check import status"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
@@ -1252,11 +1283,6 @@ msgid "Comfortable"
 msgstr "Comfortable"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Commit"
-msgstr "Commit"
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Commit or discard the current Import Batch before starting another import."
 msgstr "Commit or discard the current Import Batch before starting another import."
@@ -1306,6 +1332,11 @@ msgstr "Complete at least one of the identifying fields."
 #: src/lib/features/item/schema-editor/schema.ts
 msgid "Complete the required fields."
 msgstr "Complete the required fields."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Completed imports"
+msgstr "Completed imports"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -1632,6 +1663,11 @@ msgid "Database"
 msgstr "Database"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Database allocation"
+msgstr "Database allocation"
+
+#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminSettings.svelte
 msgid "Database: {url}"
 msgstr "Database: {url}"
@@ -1705,6 +1741,12 @@ msgstr "Delete"
 #: src/lib/features/library/LibrarySavedViews.svelte
 msgid "Delete {name}"
 msgstr "Delete {name}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Delete import record"
+msgstr "Delete import record"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -1786,6 +1828,7 @@ msgid "Disabling a user immediately blocks account access and ends sign-in sessi
 msgstr "Disabling a user immediately blocks account access and ends sign-in sessions. Workspace ownership is retained; reassign it separately in Workspace governance."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Discard"
 msgstr "Discard"
@@ -2216,6 +2259,7 @@ msgstr "Facility"
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminMaintenance.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Failed"
 msgstr "Failed"
@@ -2491,9 +2535,31 @@ msgid "Import"
 msgstr "Import"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import {count, plural, one {# record} other {# records}}"
+msgstr "Import {count, plural, one {# record} other {# records}}"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import a bibliography"
 msgstr "Import a bibliography"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Import Batch"
+msgstr "Import Batch"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import completed. Deleting this import record keeps the imported Items and files."
+msgstr "Import completed. Deleting this import record keeps the imported Items and files."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportHistory.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import history"
+msgstr "Import history"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2511,6 +2577,11 @@ msgid "Import more"
 msgstr "Import more"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Import pages"
+msgstr "Import pages"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Import preview"
 msgstr "Import preview"
@@ -2520,6 +2591,11 @@ msgstr "Import preview"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import preview failed"
 msgstr "Import preview failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import preview is ready"
+msgstr "Import preview is ready"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -2533,11 +2609,6 @@ msgstr "Import processing"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Import processing completed"
-msgstr "Import processing completed"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import processing failed"
 msgstr "Import processing failed"
 
@@ -2545,6 +2616,22 @@ msgstr "Import processing failed"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import published PDFs"
 msgstr "Import published PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import succeeded. Use View imported Items to open the result."
+msgstr "Import succeeded. Use View imported Items to open the result."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Imported"
+msgstr "Imported"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Imported {count, plural, one {# record} other {# records}}"
+msgstr "Imported {count, plural, one {# record} other {# records}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2606,6 +2693,11 @@ msgstr "Install Citation Style"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Instrument"
 msgstr "Instrument"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Integrity error samples"
+msgstr "Integrity error samples"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -3170,6 +3262,16 @@ msgid "Loading filter values…"
 msgstr "Loading filter values…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Loading Import preview…"
+msgstr "Loading Import preview…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Loading imports…"
+msgstr "Loading imports…"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "Loading invitations…"
@@ -3586,6 +3688,12 @@ msgid "NCBI API key"
 msgstr "NCBI API key"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportHistory.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "New import"
+msgstr "New import"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "New Item metadata"
 msgstr "New Item metadata"
@@ -3700,6 +3808,11 @@ msgstr "No available projects."
 #: src/lib/features/tools/Tools.svelte
 msgid "No Citation Styles match this search."
 msgstr "No Citation Styles match this search."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "No completed imports"
+msgstr "No completed imports"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -3826,6 +3939,11 @@ msgid "No PDF revisions available."
 msgstr "No PDF revisions available."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "No pending imports"
+msgstr "No pending imports"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
 msgid "No pending invitations."
 msgstr "No pending invitations."
@@ -3910,6 +4028,11 @@ msgid "NOT"
 msgstr "NOT"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Not checked"
+msgstr "Not checked"
+
+#. js-lingui-explicit-id
 #: src/routes/+error.svelte
 msgid "Not found"
 msgstr "Not found"
@@ -3919,11 +4042,21 @@ msgstr "Not found"
 msgid "Not generated"
 msgstr "Not generated"
 
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Not run yet"
+msgstr "Not run yet"
+
 #. PDF annotation kind: a text comment attached to a region.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
 msgid "Note"
 msgstr "Note"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Object integrity"
+msgstr "Object integrity"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
@@ -3971,6 +4104,11 @@ msgstr "Open copy"
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Open full details"
 msgstr "Open full details"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Open import"
+msgstr "Open import"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4201,6 +4339,11 @@ msgid "PDF files"
 msgstr "PDF files"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "PDF processing failed. Retry processing or replace this file."
+msgstr "PDF processing failed. Retry processing or replace this file."
+
+#. js-lingui-explicit-id
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "PDF Reader"
 msgstr "PDF Reader"
@@ -4242,6 +4385,11 @@ msgstr "Peer review"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "Pending"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Pending imports"
+msgstr "Pending imports"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminOverview.svelte
@@ -4959,6 +5107,11 @@ msgid "Remove this Item from {project}?"
 msgstr "Remove this Item from {project}?"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Removed {count} records"
+msgstr "Removed {count} records"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4980,6 +5133,11 @@ msgstr "Rename {name}"
 #: src/lib/features/tools/Tools.svelte
 msgid "Rename Tag"
 msgstr "Rename Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportHistory.svelte
+msgid "Reopen recent imports. Old previews and import records are cleaned up automatically; imported Items and files are kept."
+msgstr "Reopen recent imports. Old previews and import records are cleaned up automatically; imported Items and files are kept."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5061,7 +5219,6 @@ msgstr "Restore workspace"
 #: src/lib/design/QueryError.svelte
 #: src/lib/features/auth/Invitation.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
-#: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/lib/features/item/ItemMetadataForm.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
@@ -5079,9 +5236,19 @@ msgid "Retry"
 msgstr "Retry"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/files/ItemFilesSection.svelte
+msgid "Retry processing"
+msgstr "Retry processing"
+
+#. js-lingui-explicit-id
 #: src/routes/+error.svelte
 msgid "Return to Quirebase"
 msgstr "Return to Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Reusable database space"
+msgstr "Reusable database space"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5122,6 +5289,11 @@ msgstr "Review the preview"
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Review this action to continue."
 msgstr "Review this action to continue."
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Review this import, then select Items to add Tags or Projects."
+msgstr "Review this import, then select Items to add Tags or Projects."
 
 #. Workspace role.
 #. js-lingui-explicit-id
@@ -5220,6 +5392,7 @@ msgstr "Run a check when you are ready"
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
+#: src/lib/features/admin/AdminMaintenance.svelte
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Running"
 msgstr "Running"
@@ -6016,11 +6189,6 @@ msgid "This Import Batch cannot be changed in its current state."
 msgstr "This Import Batch cannot be changed in its current state."
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "This Import Batch has already been committed."
-msgstr "This Import Batch has already been committed."
-
-#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "This invitation can no longer be used."
 msgstr "This invitation can no longer be used."
@@ -6062,8 +6230,8 @@ msgstr "This permanently deletes their Annotations and Replies in this Project. 
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
-msgid "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
-msgstr "This permanently removes the workspace and its content after the archive retention period. This cannot be undone."
+msgid "This permanently removes the archived workspace and its content. This cannot be undone."
+msgstr "This permanently removes the archived workspace and its content. This cannot be undone."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -6155,6 +6323,11 @@ msgstr "Too many sign-in attempts. Try again later."
 #: src/lib/features/tools/Tools.svelte
 msgid "Tools"
 msgstr "Tools"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Transaction checkpoints"
+msgstr "Transaction checkpoints"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
@@ -6276,6 +6449,13 @@ msgid "Unable to delete Citation Style"
 msgstr "Unable to delete Citation Style"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Unable to delete import record"
+msgstr "Unable to delete import record"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to discard Import"
 msgstr "Unable to discard Import"
@@ -6341,6 +6521,11 @@ msgstr "Unable to load Import options"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to load Import preview"
 msgstr "Unable to load Import preview"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Unable to load imports"
+msgstr "Unable to load imports"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -6461,11 +6646,6 @@ msgstr "Unable to open this Item section."
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Unable to open this PDF."
 msgstr "Unable to open this PDF."
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Unable to refresh Import preview"
-msgstr "Unable to refresh Import preview"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryResults.svelte
@@ -6744,6 +6924,16 @@ msgid "View deleted"
 msgstr "View deleted"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workflows/WorkflowJobRow.svelte
+msgid "View import"
+msgstr "View import"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "View imported Items"
+msgstr "View imported Items"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "View Items"
 msgstr "View Items"
@@ -6839,6 +7029,11 @@ msgid "Warning"
 msgstr "Warning"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "We could not confirm whether the import completed. Check its status before trying again."
+msgstr "We could not confirm whether the import completed. Check its status before trying again."
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Web page"
 msgstr "Web page"
@@ -6873,10 +7068,26 @@ msgid "Workflow"
 msgstr "Workflow"
 
 #. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Workflow checkpoints"
+msgstr "Workflow checkpoints"
+
+#. js-lingui-explicit-id
 #: src/lib/api/workflows.ts
 #: src/lib/features/workflows/center.svelte.ts
 msgid "Workflow failed"
 msgstr "Workflow failed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/admin/AdminMaintenance.svelte
+msgid "Workflow history"
+msgstr "Workflow history"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workflows/center.svelte.ts
+#: src/lib/features/workflows/WorkflowJobRow.svelte
+msgid "Workflow history is unavailable. Check the current result."
+msgstr "Workflow history is unavailable. Check the current result."
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
@@ -7059,6 +7270,11 @@ msgstr "You already have a membership. Contact a workspace administrator to rest
 #: src/lib/features/auth/Invitation.svelte
 msgid "You are signed in as {current}. Switch to {invited} to accept this invitation."
 msgstr "You are signed in as {current}. Switch to {invited} to accept this invitation."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "You can import the ready records. Review the diagnostics for sources that need attention."
+msgstr "You can import the ready records. Review the diagnostics for sources that need attention."
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceLeave.svelte

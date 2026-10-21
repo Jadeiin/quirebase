@@ -39,7 +39,6 @@ from quirebase.access.annotations import (
     editable_annotation_ids,
     editable_annotation_reply_ids,
 )
-from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     PermissionDenied,
     ProjectLifecycleError,
@@ -905,7 +904,7 @@ async def test_admins_only_workspace_creation_requires_explicit_owner_username(a
 
 
 @pytest.mark.anyio
-async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
+async def test_workspace_delete_after_archive_purges_owned_data_without_a_wait(
     async_db, async_session_factory, fake_durable_operations, monkeypatch
 ):
     owner = await _user(async_db, "purge-owner")
@@ -995,6 +994,8 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
         ExportArtifact(
             workflow_id=f"export:{uuid4()}",
             workspace_id=workspace_id,
+            actor_id=owner.id,
+            revision_id=revision.id,
             expires_at=datetime.now(UTC) + timedelta(days=1),
             file=FileObject(
                 backend="documents",
@@ -1013,16 +1014,6 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
     with pytest.raises(PermissionDenied):
         await delete_workspace(async_db, owner, workspace_id)
     await archive_workspace(async_db, owner, workspace_id)
-    with pytest.raises(WorkspaceLifecycleError, match="retention"):
-        await delete_workspace(async_db, owner, workspace_id)
-    assert await async_db.get(Item, item_id) is not None
-    await async_db.rollback()
-    workspace = await async_db.get(Workspace, workspace_id)
-    assert workspace is not None
-    workspace.archived_at = datetime.now(UTC) - timedelta(
-        days=get_settings().workspace_delete_retention_days + 1
-    )
-    await async_db.commit()
     monkeypatch.setattr("quirebase.workspaces.workflows.AsyncSessionLocal", async_session_factory)
     await delete_workspace(async_db, owner, workspace_id)
     async with async_session_factory() as check_db:
@@ -1047,6 +1038,12 @@ async def test_workspace_delete_waits_for_retention_and_purges_owned_data(
         staged_object.key,
         export_object.key,
     }
+    # Audit retirement must not strand a delayed or recovered physical cleanup.
+    from quirebase.audit import purge_audit_events
+
+    async with async_session_factory() as retire_db:
+        assert await purge_audit_events(retire_db, before=datetime.now(UTC)) > 0
+        await retire_db.commit()
     deleted = await cleanup_deleted_workspace_objects_step(
         cleanup["workflow_id"], owner.id, workspace_id, cleanup["attributes"]["object_keys"]
     )
@@ -2912,9 +2909,11 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
         AnnotationModerationAction.hide,
         1,
     )
-    assert moderated["body"] == "Authored body"
-    assert moderated["moderated_by"] == owner.id
-    assert moderated["hidden_at"] is not None
+    assert moderated is None
+    await async_db.refresh(annotation)
+    assert annotation.body == "Authored body"
+    assert annotation.moderated_by == owner.id
+    assert annotation.hidden_at is not None
     assert (
         list(
             (
@@ -2991,7 +2990,6 @@ async def test_annotation_moderation_preserves_authored_content_and_hides_shared
         (AnnotationModerationAction.restore, (True, True, True), (False, False, True, False)),
         (AnnotationModerationAction.lock, (False, False, False), (False, False, True, False)),
         (AnnotationModerationAction.unlock, (True, True, True), (True, True, False, False)),
-        (AnnotationModerationAction.delete, (True, True, True), (True, True, True, True)),
     ],
 )
 async def test_annotation_moderation_changes_only_requested_state(
@@ -3023,7 +3021,9 @@ async def test_annotation_moderation_changes_only_requested_state(
         async_db, moderator, workspace_id, item.id, annotation.id, action, 1
     )
 
-    assert result["version"] == 2
+    assert result is None
+    await async_db.refresh(annotation)
+    assert annotation.version == 2
     assert (
         tuple(
             getattr(annotation, field) is not None
@@ -3031,7 +3031,6 @@ async def test_annotation_moderation_changes_only_requested_state(
         )
         == expected_state
     )
-    assert annotation.deleted_by_moderation is (action is AnnotationModerationAction.delete)
     assert annotation.body == "Shared note"
     assert annotation.payload == authored_payload
     assert annotation.author_id == author.id
@@ -3152,23 +3151,15 @@ async def test_annotation_moderation_rejects_authors_and_audits_versioned_deleti
         AnnotationModerationAction.delete,
         1,
     )
-    assert deleted["version"] == 2
-    assert deleted["authorization"]["allowed"] == []
+    assert deleted is None
     stored = await async_db.get(PdfAnnotation, annotation.id, populate_existing=True)
-    assert stored is not None
-    assert stored.deleted_at is not None
-    assert stored.deleted_by_moderation is True
-    with pytest.raises(ResourceUnavailable, match="Annotation not found"):
-        await restore_document_annotation(
-            async_db, administrator, workspace_id, item.id, annotation.id, deleted["version"]
-        )
-    with pytest.raises(ResourceUnavailable, match="Annotation not found"):
-        await restore_document_annotation(
-            async_db, author, workspace_id, item.id, annotation.id, deleted["version"]
-        )
-    await async_db.refresh(stored)
-    assert stored.deleted_at is not None
-    assert stored.version == deleted["version"]
+    assert stored is None
+    assert await async_db.get(PdfAnnotationReply, reply.id, populate_existing=True) is None
+    for actor in (administrator, author):
+        with pytest.raises(ResourceUnavailable, match="Annotation not found"):
+            await restore_document_annotation(
+                async_db, actor, workspace_id, item.id, annotation.id, 2
+            )
     assert (
         list(
             (
@@ -3252,7 +3243,6 @@ async def test_author_can_restore_self_deleted_annotation_and_replies(
     )
     await async_db.refresh(annotation)
     assert annotation.deleted_at is not None
-    assert annotation.deleted_by_moderation is False
     assert (
         list(
             (
@@ -3274,7 +3264,6 @@ async def test_author_can_restore_self_deleted_annotation_and_replies(
     assert restored["body"] == annotation.body
     assert [entry["id"] for entry in restored["replies"]] == [reply.id]
     assert annotation.deleted_at is None
-    assert annotation.deleted_by_moderation is False
     assert annotation.moderated_by == (moderator.id if prior_moderation else None)
 
 
@@ -3660,12 +3649,15 @@ async def test_export_download_uses_the_persisted_descriptor_and_enforces_expiry
         workspace_id=workspace_id, item_id=item.id, created_by=requester.id, file=file
     )
     async_db.add(revision)
+    await async_db.flush()
     workflow_id = f"annotation-export:{uuid4()}"
     if artifact_state != "removed":
         async_db.add(
             ExportArtifact(
                 workflow_id=workflow_id,
                 workspace_id=workspace_id,
+                actor_id=requester.id,
+                revision_id=revision.id,
                 file=file,
                 expires_at=datetime.now(UTC)
                 + timedelta(hours=1 if artifact_state == "available" else -1),
@@ -3685,6 +3677,10 @@ async def test_export_download_uses_the_persisted_descriptor_and_enforces_expiry
         attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
     )
     if artifact_state == "available":
+        fake_durable_operations.workflows.pop(workflow_id)
+        assert (await get_export_status(async_db, requester, workspace_id, workflow_id))[
+            "state"
+        ] == "succeeded"
         response = await get_export_file(async_db, requester, workspace_id, workflow_id)
         assert (await collect_body(response.body)).getvalue() == content
     else:
@@ -3754,6 +3750,23 @@ async def test_project_annotation_export_file_rejects_replaced_assignment(
         },
         attributes=json_payload({"actor_id": requester.id, "workspace_id": workspace_id}),
     )
+    async_db.add(
+        ExportArtifact(
+            workflow_id=workflow_id,
+            workspace_id=workspace_id,
+            actor_id=requester.id,
+            revision_id=revision.id,
+            project_item_id=original_assignment_id,
+            file=FileObject(
+                backend="documents",
+                filename=stored.key,
+                size=stored.size,
+                content_type="application/pdf",
+            ),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+    )
+    await async_db.commit()
     with pytest.raises(ResourceUnavailable, match="project item not found"):
         await get_export_file(async_db, requester, workspace_id, workflow_id)
 

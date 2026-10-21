@@ -38,6 +38,13 @@
 			result.push({ label: value ? `${label}: ${value}` : label, keys, href });
 		}
 		if (filters.query) add($t('Search'), filters.query, ['query']);
+		if (filters.import_batch)
+			add(
+				$t('Import Batch'),
+				undefined,
+				['import_batch'],
+				workspaceHref(workspaceId, `import?${new URLSearchParams({ batch: filters.import_batch })}`)
+			);
 		if (filters.project) {
 			const selected = project?.id === filters.project ? project : null;
 			add(

@@ -18,6 +18,7 @@ from quirebase.core.persistence import select_page
 from quirebase.models import (
     Attachment,
     FileRevision,
+    ImportBatch,
     Item,
     ItemRead,
     ItemTag,
@@ -28,7 +29,13 @@ from quirebase.models import (
 from quirebase.projects import list_workspace_projects
 from quirebase.search import search_index
 
-from ._json_queries import author_condition, first_contributor_sort_name, keyword_condition
+from ._json_queries import (
+    author_condition,
+    first_contributor_sort_name,
+    keyword_condition,
+    uuid_array_contains,
+)
+from .imports import BatchConflict, ImportBatchUnavailable
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -50,6 +57,7 @@ class LibraryFilter:
     author_last_name: str | None = None
     author_first_name: str | None = None
     publication_title: str | None = None
+    import_batch: UUID | None = None
 
 
 async def _library_query(
@@ -61,6 +69,26 @@ async def _library_query(
     """Resolve visibility once for search, suggestions and metadata facets."""
     context = await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     item_query = workspace_items_query(context)
+    if filters.import_batch is not None:
+        batch_status = await db.scalar(
+            select(ImportBatch.status)
+            .where(ImportBatch.id == filters.import_batch, ImportBatch.workspace_id == workspace_id)
+            .with_for_update(read=True)
+        )
+        if batch_status is None:
+            raise ImportBatchUnavailable("import batch not found")
+        if batch_status != "committed":
+            raise BatchConflict("the import batch has not been committed")
+        receipt = (
+            select(ImportBatch.committed_item_ids)
+            .where(
+                ImportBatch.id == filters.import_batch,
+                ImportBatch.workspace_id == workspace_id,
+                ImportBatch.status == "committed",
+            )
+            .scalar_subquery()
+        )
+        item_query = item_query.where(uuid_array_contains(db, receipt, Item.id))
     matching_ids = (
         await search_index(db).matching_item_ids(db, filters.q) if filters.q.strip() else None
     )
@@ -142,6 +170,7 @@ async def search_library(
     author_first_name: str | None = None,
     publication_title: str | None = None,
     direction: Literal["asc", "desc"] | None = None,
+    import_batch: UUID | None = None,
 ) -> tuple[list[Item], int]:
     item_query = await _library_query(
         db,
@@ -160,6 +189,7 @@ async def search_library(
             author_last_name=author_last_name,
             author_first_name=author_first_name,
             publication_title=publication_title,
+            import_batch=import_batch,
         ),
     )
     # Binary collation keeps ordering consistent across databases.

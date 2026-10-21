@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves preview values
 from typing import TYPE_CHECKING, Literal
@@ -13,7 +14,8 @@ from inquiro.bibliography import (
     parse_bibliography_records,
 )
 from inquiro.identifiers import canonical_doi
-from sqlalchemy import select, update
+from sqlalchemy import case, func, select, update
+from sqlalchemy.orm import load_only
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.audit import record_event
@@ -50,8 +52,15 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
+logger = logging.getLogger(__name__)
+
+
 class BatchConflict(DomainError):
     pass
+
+
+class ImportBatchUnavailable(ResourceUnavailable):
+    """The requested Import Batch is missing from the authorized Workspace."""
 
 
 @dataclass(frozen=True)
@@ -85,6 +94,79 @@ class ImportBatchPreview:
     records: tuple[ImportCandidatePreview, ...]
     errors: tuple[ImportDiagnostic, ...]
     created_at: datetime
+    committed_item_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True)
+class ImportBatchSummary:
+    id: UUID
+    file_format: str
+    status: ImportBatchStatus
+    created_at: datetime
+    record_count: int
+    diagnostic_count: int
+
+
+async def list_import_batches(
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    *,
+    view: Literal["pending", "completed"] = "pending",
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[ImportBatchSummary], int]:
+    """List retained previews and receipts without materializing candidate payloads."""
+    await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
+    if view not in {"pending", "completed"} or not 1 <= limit <= 100 or offset < 0:
+        raise ValidationFailure("invalid import pagination")
+    predicate = (
+        ImportBatch.status == ImportBatchStatus.committed
+        if view == "completed"
+        else ImportBatch.status != ImportBatchStatus.committed
+    )
+    scope = (ImportBatch.workspace_id == workspace_id, predicate)
+    total = await db.scalar(select(func.count()).select_from(ImportBatch).where(*scope)) or 0
+    length = (
+        func.jsonb_array_length
+        if db.get_bind().dialect.name == "postgresql"
+        else func.json_array_length
+    )
+    rows = await db.execute(
+        select(
+            ImportBatch.id,
+            ImportBatch.file_format,
+            ImportBatch.status,
+            ImportBatch.created_at,
+            case(
+                (
+                    ImportBatch.status == ImportBatchStatus.committed,
+                    length(ImportBatch.committed_item_ids),
+                ),
+                else_=length(ImportBatch.records),
+            ),
+            length(ImportBatch.errors),
+        )
+        .where(*scope)
+        .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return [ImportBatchSummary(*row) for row in rows], total
+
+
+def _committed_item_ids(batch: ImportBatch) -> list[UUID]:
+    if batch.status != "committed":
+        return []
+    committed_ids = batch.committed_item_ids or []
+    if not isinstance(committed_ids, list) or not all(
+        isinstance(item_id, str) for item_id in committed_ids
+    ):
+        raise BatchConflict("the committed batch has invalid results")
+    try:
+        return [UUID(item_id) for item_id in committed_ids]
+    except ValueError as error:
+        raise BatchConflict("the committed batch has invalid results") from error
 
 
 def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPreview:
@@ -111,6 +193,7 @@ def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPrev
         records=tuple(previews),
         errors=tuple(ImportDiagnostic(**error) for error in batch.errors),
         created_at=batch.created_at,
+        committed_item_ids=tuple(_committed_item_ids(batch)),
     )
 
 
@@ -559,7 +642,7 @@ async def get_import_batch_preview(
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.workspace_id != workspace_id:
-        raise ResourceUnavailable("import batch not found")
+        raise ImportBatchUnavailable("import batch not found")
     observed_workflow_id = observed.workflow_id
     workflow = None
     if observed.status == "pending" and observed.file_format == "pdf":
@@ -573,7 +656,7 @@ async def get_import_batch_preview(
         .with_for_update(key_share=True)
     )
     if batch is None or batch.workspace_id != workspace_id:
-        raise ResourceUnavailable("import batch not found")
+        raise ImportBatchUnavailable("import batch not found")
     if batch.workflow_id == observed_workflow_id and await _converge_pdf_import_batch_status(
         db, batch, workflow
     ):
@@ -592,7 +675,7 @@ async def _converge_pdf_import_batch_status(
         workflow = (
             await durable_operations().get(observed_workflow_id) if observed_workflow_id else None
         )
-    if workflow is not None and workflow.state in {"pending", "running"}:
+    if workflow is not None and not workflow.is_terminal:
         return False
     result = await db.execute(
         update(ImportBatch)
@@ -616,7 +699,7 @@ async def retry_pdf_import_batch(
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.workspace_id != workspace_id:
-        raise ResourceUnavailable("import batch not found")
+        raise ImportBatchUnavailable("import batch not found")
     observed_workflow_id = observed.workflow_id
     workflow = None
     if observed.file_format == "pdf" and observed.status == "pending":
@@ -633,7 +716,7 @@ async def retry_pdf_import_batch(
         .with_for_update()
     )
     if batch is None or batch.workspace_id != workspace_id:
-        raise ResourceUnavailable("import batch not found")
+        raise ImportBatchUnavailable("import batch not found")
     if batch.workflow_id == observed_workflow_id:
         await _converge_pdf_import_batch_status(db, batch, workflow)
     if batch.file_format != "pdf" or batch.status != "failed":
@@ -686,7 +769,7 @@ async def retry_pdf_import_batch(
 
 async def commit_import_batch(
     db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
-) -> list[UUID]:
+) -> ImportBatchPreview:
     # Lock the confirmer before Workspace authorization. Account deactivation
     # uses the same User-before-Workspace order, so it cannot deadlock a
     # confirmation while the Import Batch root is being committed.
@@ -701,19 +784,11 @@ async def commit_import_batch(
     # can observe ``ready`` and create duplicate Items.
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
     if batch is None or batch.workspace_id != workspace_id:
-        raise ResourceUnavailable("import batch not found")
+        raise ImportBatchUnavailable("import batch not found")
     if batch.status == "committed":
-        committed_ids = batch.committed_item_ids or []
-        if not isinstance(committed_ids, list) or not all(
-            isinstance(item_id, str) for item_id in committed_ids
-        ):
-            raise BatchConflict("the committed batch has invalid results")
-        try:
-            result_ids = [UUID(item_id) for item_id in committed_ids]
-        except ValueError as error:
-            raise BatchConflict("the committed batch has invalid results") from error
+        receipt = _import_batch_preview(batch, actor.id)
         await db.commit()
-        return result_ids
+        return receipt
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
     records = batch.records
@@ -757,25 +832,26 @@ async def commit_import_batch(
     # Transfer file ownership to File Revisions in the same confirmation transaction.
     batch.staged_files = []
     batch.records = []
+    batch.errors = []
+    batch.workflow_id = None
     batch.status = ImportBatchStatus.committed
+    receipt = _import_batch_preview(batch, actor.id)
     await db.commit()
-    return committed_item_ids
+    return receipt
 
 
-async def discard_import_batch(
+async def delete_import_batch(
     db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
 ) -> None:
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
     if batch is None or batch.workspace_id != workspace_id:
-        raise ResourceUnavailable("import batch not found")
-    if batch.status == "committed":
-        raise BatchConflict("a committed import batch cannot be discarded")
+        raise ImportBatchUnavailable("import batch not found")
     object_keys = {file.path for file in batch.staged_files}
     record_event(
         db,
         user.id,
-        "import.batch.discard",
+        "import.batch.delete",
         "import_batch",
         batch.id,
         workspace_id=workspace_id,
@@ -787,10 +863,84 @@ async def discard_import_batch(
         object_keys,
         actor_id=user.id,
         workspace_id=workspace_id,
-        operation="import_batch_discard",
+        operation="import_batch_delete",
         target_id=batch.id,
     )
     await db.commit()
+
+
+async def purge_expired_import_batches(
+    db: AsyncSession,
+    *,
+    before: datetime,
+    limit: int = 500,
+    after: UUID | None = None,
+) -> tuple[int, UUID | None]:
+    """Retire one bounded page, preserving active or indeterminate preparation.
+
+    The scan cursor advances past protected batches so they cannot starve later
+    pages. The caller owns the transaction and starts a fresh scan each cycle.
+    Root locks serialize retirement with confirmation, retry and PDF publication.
+    """
+    query = (
+        select(ImportBatch)
+        .options(
+            load_only(
+                ImportBatch.id,
+                ImportBatch.actor_id,
+                ImportBatch.workspace_id,
+                ImportBatch.file_format,
+                ImportBatch.status,
+                ImportBatch.workflow_id,
+                ImportBatch.staged_files,
+                ImportBatch.updated_at,
+                raiseload=True,
+            )
+        )
+        .where(ImportBatch.updated_at <= before)
+    )
+    if after is not None:
+        query = query.where(ImportBatch.id > after)
+    batches = list(
+        await db.scalars(
+            query
+            .order_by(ImportBatch.id)
+            .limit(limit)
+            .execution_options(populate_existing=True)
+            .with_for_update(skip_locked=True)
+        )
+    )
+    removed = 0
+    for batch in batches:
+        if (
+            batch.file_format == "pdf"
+            and batch.status == ImportBatchStatus.pending
+            and batch.workflow_id
+        ):
+            try:
+                workflow = await durable_operations().get(batch.workflow_id)
+            except Exception:
+                logger.warning(
+                    "Cannot determine Import Batch preparation status: %s",
+                    batch.workflow_id,
+                    exc_info=True,
+                )
+                continue
+            if workflow is not None and not workflow.is_terminal:
+                continue
+        object_keys = {file.path for file in batch.staged_files}
+        await db.delete(batch)
+        await enqueue_object_cleanup(
+            db,
+            object_keys,
+            actor_id=batch.actor_id,
+            workspace_id=batch.workspace_id,
+            operation="import_batch_expire",
+            target_id=batch.id,
+        )
+        removed += 1
+    await db.flush()
+    return removed, batches[-1].id if batches else None
 
 
 async def import_staging_object_keys(

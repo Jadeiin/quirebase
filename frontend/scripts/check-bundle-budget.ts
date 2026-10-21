@@ -182,84 +182,94 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // Global TanStack hotkeys and navigation add about 47 kB raw / 17 kB gzip to the shell;
 // Library shares its existing hotkey runtime. Dialog results stay lazy (about 10 kB / 4 kB).
 // Only exceeded dimensions move to the next 1 kB raw / 500 B gzip boundary.
+// Recoverable import destinations and both catalogs add shared code; batch UI stays route-owned.
+// Raise only exceeded dimensions to the same 1 kB raw / 500 B gzip boundaries.
+// Retention diagnostics and Import history add ~3.5 KiB raw / 0.7 KiB gzip to shared
+// catalogs/tracking; Import and Maintenance keep their extra controls in route-owned code.
+// The separate history route and explicit action labels add ~1 KiB raw / 0.4 KiB gzip
+// to shared catalogs/route registration. Only exceeded dimensions move to the same boundaries.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
-	raw: 779000,
-	gzip: 220500
+	raw: 788000,
+	gzip: 223000
 });
 enforce('Quick navigation when open', bundleSize(graphFiles(quickNavigation)), {
-	raw: 789000,
-	gzip: 225000
+	raw: 799000,
+	gzip: 227500
 });
 enforce('Library route', bundleSize(graphFiles(library)), {
-	raw: 1113000,
+	raw: 1123000,
 	// Includes destructive-detachment warnings, scoped selection cleanup and last-page recovery.
-	gzip: 322500
+	gzip: 325000
 });
 enforce('Library refinements when open', bundleSize(graphFiles(libraryRefinements)), {
-	raw: 1117000,
-	gzip: 324000
+	raw: 1127000,
+	gzip: 327000
 });
 enforce(
 	'Library preview when open',
 	bundleSize(graphFiles(libraryPreview)),
 	// Bibliographic preview and scoped navigation add about 14 kB raw / 5.5 kB gzip on demand.
-	{ raw: 1128000, gzip: 328000 }
+	{ raw: 1138000, gzip: 331000 }
 );
 enforce(
 	'Library organization when open',
 	bundleSize(graphFiles(mergeGraphs(libraryPreview, dependencyGraph([libraryOrganizeKey], false)))),
-	{ raw: 1140000, gzip: 333000 }
+	{ raw: 1150000, gzip: 336000 }
 );
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.
-	raw: 913000,
-	gzip: 261000
+	raw: 922000,
+	gzip: 263500
 });
 enforce('Account route', routeBundle('/(app)/account'), {
-	raw: 894000,
-	gzip: 255000
+	raw: 903000,
+	gzip: 257500
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 	// Includes shared pagination styles, account-management translations and recovery controls.
-	raw: 912000,
-	gzip: 264500
+	raw: 922000,
+	gzip: 267000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
-	raw: 899000,
-	gzip: 262000
+	raw: 923000,
+	gzip: 269500
+});
+enforce('Import history route', routeBundle('/(app)/workspace/[workspaceId]/import/history'), {
+	raw: 841000,
+	gzip: 242500
 });
 enforce(
 	'Item overview route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)'),
 	{
-		raw: 906000,
-		gzip: 262500
+		raw: 915000,
+		gzip: 265500
 	}
 );
 enforce(
 	'Item metadata route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata'),
 	{
-		raw: 903000,
-		gzip: 262000
+		raw: 911000,
+		gzip: 264500
 	}
 );
 enforce(
 	'Item files route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files'),
 	{
-		raw: 953000,
-		gzip: 278000
+		raw: 963000,
+		gzip: 281000
 	}
 );
 enforce(
 	'Item organize route',
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/organize'),
 	{
-		raw: 910000,
+		raw: 919000,
 		// Organize now includes the destructive-detachment confirmation dialog.
-		gzip: 265000
+		gzip: 267500
 	}
 );
 enforce(
@@ -267,8 +277,8 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/annotations'),
 	{
 		// Includes shared pagination styles and account-management translations.
-		raw: 915000,
-		gzip: 266500
+		raw: 925000,
+		gzip: 269000
 	}
 );
 enforce(
@@ -276,69 +286,69 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion'),
 	{
 		// Includes shared pagination styles and account-management translations.
-		raw: 903000,
-		gzip: 263000
+		raw: 912000,
+		gzip: 265500
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
 	// Includes Skeleton pagination and the separate Invitation navigation entry.
-	raw: 807000,
-	gzip: 231000
+	raw: 816000,
+	gzip: 233500
 });
 enforce('Admin users route', routeBundle('/(app)/admin/users'), {
 	// Includes account containment guidance and expandable role and sign-in controls.
-	raw: 818000,
-	gzip: 235000
+	raw: 827000,
+	gzip: 237500
 });
 enforce('Admin invitations route', routeBundle('/(app)/admin/invitations'), {
 	// Owns invitation creation, history, status filtering and one pagination control.
-	raw: 817000,
-	gzip: 234500
+	raw: 826000,
+	gzip: 237000
 });
 enforce('Admin workspaces route', routeBundle('/(app)/admin/workspaces'), {
 	// Includes owner reassignment, bounded User search, conflict recovery and scoped completion.
-	raw: 861000,
-	gzip: 247500
+	raw: 870000,
+	gzip: 250000
 });
 enforce('Admin audit route', routeBundle('/(app)/admin/audit'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 807000,
-	gzip: 230500
+	raw: 816000,
+	gzip: 233000
 });
 enforce('Admin workflows route', routeBundle('/(app)/admin/workflows'), {
 	// Includes Skeleton pagination and the separate Invitation navigation entry.
-	raw: 806000,
-	gzip: 230000
+	raw: 815000,
+	gzip: 232500
 });
 enforce('Admin settings route', routeBundle('/(app)/admin/settings'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 796000,
-	gzip: 227500
+	raw: 805000,
+	gzip: 230000
 });
 enforce('Admin maintenance route', routeBundle('/(app)/admin/maintenance'), {
 	// Includes the separate Invitation navigation entry and shared translations.
-	raw: 796000,
-	gzip: 228000
+	raw: 808000,
+	gzip: 231500
 });
 // Includes the conditional received-invitation section; no standalone inbox route.
-enforce('Workspace directory', routeBundle('/(app)/workspace'), { raw: 826000, gzip: 236000 });
+enforce('Workspace directory', routeBundle('/(app)/workspace'), { raw: 835000, gzip: 239000 });
 enforce('Workspace general settings', routeBundle('/(app)/workspace/[workspaceId]/settings'), {
-	raw: 809000,
-	gzip: 233000
+	raw: 818000,
+	gzip: 235500
 });
 enforce('Workspace members', routeBundle('/(app)/workspace/[workspaceId]/settings/members'), {
-	raw: 829000,
-	gzip: 239000
+	raw: 838000,
+	gzip: 242000
 });
 enforce(
 	'Workspace invitations',
 	routeBundle('/(app)/workspace/[workspaceId]/settings/invitations'),
-	{ raw: 808000, gzip: 232000 }
+	{ raw: 817000, gzip: 235000 }
 );
 enforce(
 	'Workspace advanced settings',
 	routeBundle('/(app)/workspace/[workspaceId]/settings/advanced'),
-	{ raw: 812000, gzip: 234000 }
+	{ raw: 822000, gzip: 236500 }
 );
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
 	raw: 8000000,
@@ -352,6 +362,6 @@ const openedEditor = mergeGraphs(
 );
 enforce('Metadata editor when open', bundleSize(graphFiles(openedEditor)), {
 	// Includes shared pagination styles and account-management translations.
-	raw: 1145000,
-	gzip: 332000
+	raw: 1154000,
+	gzip: 334500
 });

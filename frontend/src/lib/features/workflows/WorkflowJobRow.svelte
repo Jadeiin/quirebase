@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { Progress } from '@skeletonlabs/skeleton-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Icon from '#lib/design/Icon.svelte';
 	import { getWorkflowCenter, type TrackedJob } from '#lib/features/workflows/center.svelte.js';
 	import {
@@ -11,16 +11,22 @@
 	} from '#lib/features/workflows/queries.js';
 	import { t } from '#lib/i18n.js';
 	import Button from '#lib/design/Button.svelte';
+	import { workspaceHref } from '#lib/workspaces/href.js';
 
-	let { job, visible = true }: { job: TrackedJob; visible?: boolean } = $props();
+	let {
+		job,
+		visible = true,
+		onNavigate
+	}: { job: TrackedJob; visible?: boolean; onNavigate?: () => void } = $props();
 	const center = getWorkflowCenter();
-	const status = createQuery(() =>
-		workflowStatusQuery(job.workspaceId, job.id, () => !job.outcome)
-	);
+	const status = createQuery(() => ({
+		...workflowStatusQuery(job.workspaceId, job.id, () => !job.outcome && !job.unavailable),
+		enabled: !job.outcome && !job.unavailable
+	}));
 	const state = $derived(job.outcome?.state ?? status.data?.state);
 
 	$effect(() => {
-		if (job.outcome) return;
+		if (job.outcome || job.unavailable) return;
 		const current = status.data;
 		// Settle outside the reaction update: writing center state from inside this
 		// effect corrupts Svelte's dependency bookkeeping when the flush was entered
@@ -30,12 +36,9 @@
 			const id = job.id;
 			queueMicrotask(() => center.resolve(id, terminal));
 		} else if (status.isError && status.error && !isRecoverableWorkflowStatusError(status.error)) {
-			// A failed status request is terminal for this client-side tracker
-			// when the API reports a permanent error. Transport, timeout, rate
-			// limit, and server errors stay active so refetchInterval can recover.
-			const message = apiErrorMessage(status.error, job.failureMessage);
+			// A missing or inaccessible status record cannot establish the business outcome.
 			const id = job.id;
-			queueMicrotask(() => center.fail(id, message));
+			queueMicrotask(() => center.markUnavailable(id));
 		}
 	});
 </script>
@@ -47,18 +50,24 @@
 				'size-2.5 shrink-0 rounded-full',
 				state === 'succeeded' && 'bg-success-500',
 				(state === 'failed' || state === 'cancelled') && 'bg-error-500',
-				!state || !isTerminalWorkflowState(state) ? 'bg-primary-500' : ''
+				job.unavailable
+					? 'bg-surface-500'
+					: !state || !isTerminalWorkflowState(state)
+						? 'bg-primary-500'
+						: ''
 			]}
 			aria-hidden="true"
 		></span>
 		<div class="grid min-w-0 flex-1 grid-cols-1 gap-0.5">
 			<strong class="truncate text-sm">{job.label}</strong>
 			<span class="text-xs text-surface-600-400">
-				{#if job.outcome}{job.outcome.state}{#if job.outcome.error}: {job.outcome
+				{#if job.unavailable}{$t(
+						'Workflow history is unavailable. Check the current result.'
+					)}{:else if job.outcome}{job.outcome.state}{#if job.outcome.error}: {job.outcome
 							.error}{/if}{:else if status.data}{status.data.state}{#if status.data.error}:
 						{status.data.error}{/if}{:else}{$t('Starting…')}{/if}
 			</span>
-			{#if !state || !isTerminalWorkflowState(state)}
+			{#if !job.unavailable && (!state || !isTerminalWorkflowState(state))}
 				<Progress value={null} aria-label={job.label}>
 					<Progress.Track class="h-1"
 						><Progress.Range
@@ -66,6 +75,21 @@
 						/></Progress.Track
 					>
 				</Progress>
+			{/if}
+			{#if job.workspaceId && job.target?.kind === 'import_batch'}
+				<a
+					class="w-fit anchor text-xs"
+					href={resolve(
+						workspaceHref(
+							job.workspaceId,
+							`import?${new URLSearchParams({ batch: job.target.id })}`
+						)
+					)}
+					onclick={(event) => {
+						if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey)
+							onNavigate?.();
+					}}>{$t('View import')}</a
+				>
 			{/if}
 		</div>
 		<Button

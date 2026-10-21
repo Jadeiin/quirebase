@@ -15,8 +15,9 @@ Workspace commands are implemented by `creation` (including provisioning), `dire
 `workspaces.__init__` exports their owned operations directly. The private `_locking` module
 owns exclusive Workspace-root acquisition and fresh target-member loading; callers recheck
 authority and state while retaining that root lock. Invitation invalidation stays owned by
-`invitations`; `workflows` verifies committed deletion intent before calling Documents for physical
-cleanup. `membership.guard_user_deactivation` locks current membership Workspace roots in stable
+`invitations`; `workflows` requires an absent Workspace before calling Documents for
+reference-aware physical cleanup. Authorization, root deletion and cleanup enqueue are atomic;
+cleanup does not depend on retained Audit Events. `membership.guard_user_deactivation` locks current membership Workspace roots in stable
 UUID order after Accounts has locked the target User. It allows inactive ownership while retaining
 those locks without committing. Accounts retains account
 status, session revocation, Audit and commit. These are implementation files within one Business Module, rather than additional service or repository layers.
@@ -442,7 +443,7 @@ and dynamic registration remain private; the description does not create a plugi
 Quirebase owns the business behaviour around Inquiro results. For lookup and Search, Library
 constructs and closes the runtime within each operation, explicitly maps Candidate Records to its
 write/read models, translates package failures to typed domain errors and owns Discovery auditing.
-Import staging and preview operations return an immutable `ImportBatchPreview`, reusing the shared
+Import staging, preview and confirmation return an immutable `ImportBatchPreview`, reusing the shared
 bibliographic metadata values. Library joins staged source descriptors to candidates and returns
 typed source summaries and diagnostics; storage keys and source association IDs stay internal.
 Only the batch's current actor receives its workflow identity. Web serializes that result directly.
@@ -489,8 +490,12 @@ Every logical upload owns one
 preallocated UUID object, so rollback and terminal workflow cleanup can delete that key without a
 local lock. Pending Import Batches and active workflow attributes are durable object reservations.
 The workflow-first upload interface creates a DBOS execution, streams
-the object, and sends a durable completion message; retryable Documents steps validate and derive
-content before a short idempotent database commit. Documents owns the durable
+the object, and sends a durable completion message; a short datasource transaction stores a pending Revision from the completed upload receipt.
+Ordinary and imported PDFs then share a retryable inspection step: object I/O, full text and page
+geometry stay outside durable outputs and open database transactions. The final short transaction
+checks the Revision and current attempt, publishes ready/Search state and enqueues
+`FileRevisionChanged` atomically. Ready retries return IDs; missing Revisions are never recreated.
+Failed or interrupted processing retains the source for a `file.manage` retry with a new attempt. Documents owns the durable
 `FileRevisionChanged` event contract, and the Library workflow that handles it updates derived
 Library state without creating a reverse dependency. Operations
 reconciliation lists the Object Store once and only deletes old managed UUID objects after
@@ -501,8 +506,9 @@ queue. Revision work is partitioned by File Revision and bounded independently f
 Item/Revision Search projection updates and Recommendation inference. Core queries active workflow reservations
 directly instead of scanning terminal history. Storage metrics aggregate recorded sizes from business
 tables without issuing Object Store HEAD requests; an Operations-owned scheduled integrity workflow
-performs Object Store I/O in retryable steps and commits thumbnail size backfills plus its result in
-a datasource transaction. Successful annotation exports persist lightweight Annotation Export Artifact
+performs scan, deletion, rechecks and thumbnail size backfills inside one ordinary retryable
+step. Only small counters enter its checkpoint. A singleton latest scan stores exact error totals
+and at most 100 samples; start and completion timestamps distinguish failed or interrupted checks. Successful annotation exports persist lightweight Annotation Export Artifact
 records; scheduled maintenance retires still-expired matching descriptors in bounded
 expiration-ordered datasource transactions. Their returned keys are checkpointed with retirement
 before a retryable Documents deletion step, which still protects other references and reservations.
@@ -512,13 +518,37 @@ Item/Revision batch; Workspace renaming remains an independent `workspace.update
 Global Search rebuilds and bulk Tag Recommendation requests use bounded keyset Item batches
 rather than one large datasource output. Unknown keys and doctor probes are never managed.
 
-Workspace teardown holds the exclusive Workspace root through authorization, retention, snapshots,
+Workspace teardown holds the exclusive Workspace root through authorization, archive checks, snapshots,
 root deletion, Audit, durable enqueue and commit. Search's `remove_workspace` removes both derived
 projections before the cascade, including SQLite FTS rows. Documents supplies its descriptor
 snapshot; database foreign keys cascade to Annotations and Replies. Library
 supplies retained Import Staging keys. These owner operations use the caller's Session without
 committing or rolling it back. Workspaces enqueues bounded cleanup batches in the deletion
 transaction; cleanup intent does not reserve those keys.
+
+### Retained metadata and workflow history
+
+Hourly Operations maintenance runs owner-provided, bounded purge operations in short independent
+transactions. Expired sessions and throttle windows retire next cycle; terminal Invitations,
+Workspace Invitations, invalid API Tokens and terminated membership generations retire after 30
+days; Audit Events after 90 days; ordinary deleted Annotations/Replies after their 24-hour Undo
+window. Restore authorization and final updates recheck that window. Moderator deletion physically
+removes the root and Replies immediately. Import Batches retire seven days after their last state
+change; reads do not renew them, and active or unconfirmed durable preparations remain protected.
+Library owns the expiration predicate and batch deletion, including transactional staging cleanup;
+Operations advances a bounded keyset cursor so protected old preparations cannot starve later records.
+These positive deployment settings are not runtime application policy. ItemRead history is retained in full.
+The fixed-primary-key `MaintenanceSnapshot` stores only the latest integrity and cleanup results,
+with separate start timestamps protecting each against stale concurrent writes.
+
+Core's `workflow_storage` is the only SDK-table retention adapter. Completed terminal DBOS history
+retires after seven days, parent before child; native parent and operation-output child references
+protect children while any parent exists. Workflow status, its cascading system checkpoints and
+datasource outputs retire in one transaction. Every cycle separately sweeps orphan datasource
+outputs, even with no expired workflows, so an independently committed late SDK error converges on
+a later run. Retired IDs cannot be resumed or reused; cancellation alone is not proof of quiescence.
+Ordinary enqueue and datasource execution continue through the SDK unchanged. Domain content and
+Artifact download authority never depend on terminal workflow outputs or retained Audit evidence.
 
 ### Object lifecycle interface contracts
 
@@ -579,7 +609,7 @@ directions are:
 | `library` | `access`, `audit`, `core`, `documents`, `models`, `operations`, `projects`, `search` | Authorization, persistence and auditing; selected-Item document assembly; Project-gated bulk assignment; runtime Provider/import settings; Library-owned workflows and search-index synchronization |
 | `projects` | `access`, `audit`, `core`, `documents`, `models` | Authorization, Project persistence and audit recording; Documents-owned Annotation cleanup when detaching a ProjectItem |
 | `documents` | `access`, `audit`, `core`, `library`, `models`, `operations`, `search` | Authorization, owned-object persistence, auditing, Library-owned staging reference facts, Operations runtime settings, Documents workflows and revision-owned Search projection |
-| `operations` | `access`, `audit`, `core`, `documents`, `library`, `models`, `search` | Infrastructure access, operational persistence, Documents-owned protection/deletion and export retirement, Workspace-authorized maintenance workflows, global integrity coordination and audit recording |
+| `operations` | `access`, `accounts`, `audit`, `core`, `documents`, `library`, `models`, `search`, `workspaces` | Infrastructure access, operational persistence, owner-provided retention operations, Documents-owned protection/deletion and export retirement, Workspace-authorized maintenance workflows, global integrity coordination and audit recording |
 | `search` | `models` | Build and query the derived search representation |
 | `workspaces` | `access`, `audit`, `core`, `documents`, `library`, `models`, `operations`, `search` | Workspace authorization, membership/invitation persistence, Audit, runtime creation policy, Documents-owned teardown/cleanup, Library staging facts and Search-owned projection removal |
 | `web` | Business Modules, `access`, `accounts`, `audit`, `core`, `documents`, `library`, `mcp`, `models`, `operations`, `projects`, `search` | Invoke use cases, own capability-local HTTP DTOs and projections, expose `/api/v1` through explicit Bearer or Login Session authentication, enforce cookie-request Origins, format responses, serve the static application and compose the MCP HTTP mount |
@@ -589,7 +619,10 @@ directions are:
 The reverse Documents → Library edge imports only `import_staging_object_keys` through the Library
 facade, at execution time to avoid facade initialization cycles. Workspaces consumes the same fact.
 Architecture tests restrict those callers to this symbol. Operations → Documents imports only the
-owned object protection, deletion, expiration listing and retirement operations. Documents →
+owned object protection, deletion, expiration listing, export retirement and expired Annotation/Reply
+purge operations. Operations → Library consumes its owned Import Batch expiration operation.
+Operations → Accounts/Workspaces likewise consumes only their narrow retention
+facades; the owner supplies predicates and Operations supplies cutoffs, batching and commits. Documents →
 Operations remains runtime settings only; the `operations-implementation` Import Linter contract
 protects all other Operations implementation modules from business callers. These bounded surfaces
 do not permit cleanup scheduling or business rules to migrate between owners.

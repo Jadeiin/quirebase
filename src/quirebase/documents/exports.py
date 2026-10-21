@@ -100,6 +100,16 @@ async def get_export_status(
     db: AsyncSession, user: User, workspace_id: UUID, workflow_id: str
 ) -> dict[str, Any]:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
+    artifact = await db.scalar(
+        select(ExportArtifact).where(
+            ExportArtifact.workflow_id == workflow_id,
+            ExportArtifact.workspace_id == workspace_id,
+            ExportArtifact.actor_id == user.id,
+            ExportArtifact.expires_at > datetime.now(UTC),
+        )
+    )
+    if artifact is not None:
+        return {"id": workflow_id, "state": "succeeded", "error": None}
     workflow = await _workspace_export(user, workspace_id, workflow_id)
     return {"id": workflow.id, "state": workflow.state, "error": workflow.error}
 
@@ -108,42 +118,31 @@ async def get_export_file(
     db: AsyncSession, user: User, workspace_id: UUID, workflow_id: str
 ) -> ObjectResponse | SignedDownload:
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_export)
-    workflow = await _workspace_export(user, workspace_id, workflow_id)
-    if workflow.state != "succeeded" or not isinstance(workflow.output, dict):
-        raise ResourceNotFound("export workflow not found or not ready")
-    revision_id = workflow.output.get("revision_id")
-    if not isinstance(revision_id, UUID):
-        raise ResourceNotFound("export revision not found")
-    revision = await require_revision(db, user, workspace_id, revision_id)
-    project_id = workflow.output.get("project_id")
-    if project_id:
-        if not isinstance(project_id, UUID):
-            raise ResourceNotFound("export project not found")
-        await require_project_context(
-            db, user, workspace_id, project_id, ResourceAction.workspace_export
-        )
-        project_item_id = workflow.output.get("project_item_id")
-        if (
-            not isinstance(project_item_id, UUID)
-            or await db.scalar(
-                select(ProjectItem.id).where(
-                    ProjectItem.id == project_item_id,
-                    ProjectItem.workspace_id == workspace_id,
-                    ProjectItem.project_id == project_id,
-                    ProjectItem.item_id == revision.item_id,
-                )
-            )
-            is None
-        ):
-            raise ResourceUnavailable("project item not found")
     artifact = await db.scalar(
         select(ExportArtifact).where(
             ExportArtifact.workflow_id == workflow_id,
             ExportArtifact.workspace_id == workspace_id,
+            ExportArtifact.actor_id == user.id,
             ExportArtifact.expires_at > datetime.now(UTC),
         )
     )
-    if artifact is None or not await get_object_store().exists(artifact.file.path):
+    if artifact is None:
+        raise ResourceNotFound("export artifact expired or deleted")
+    revision = await require_revision(db, user, workspace_id, artifact.revision_id)
+    if artifact.project_item_id is not None:
+        assignment = await db.scalar(
+            select(ProjectItem).where(
+                ProjectItem.id == artifact.project_item_id,
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.item_id == revision.item_id,
+            )
+        )
+        if assignment is None:
+            raise ResourceUnavailable("project item not found")
+        await require_project_context(
+            db, user, workspace_id, assignment.project_id, ResourceAction.workspace_export
+        )
+    if not await get_object_store().exists(artifact.file.path):
         raise ResourceNotFound("export artifact expired or deleted")
     try:
         signed = await get_object_store().sign_download(

@@ -13,7 +13,7 @@ from quirebase.access import (
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceNotFound
 from quirebase.documents import delete_item_documents, enqueue_object_cleanup
-from quirebase.models import Attachment, FileRevision, Item, ObjectIntegrityScan, User
+from quirebase.models import Attachment, FileRevision, Item, User
 from quirebase.search import search_index
 
 if TYPE_CHECKING:
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 
 async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
+    from quirebase.operations import get_maintenance_storage_metrics
+
     await require_system_action(db, admin, SystemAction.storage_metrics_read)
     total_items = await db.scalar(select(func.count(Item.id))) or 0
     revisions_count, revisions_bytes = (
@@ -49,10 +51,6 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
             )
         )
     ).one()
-    latest_scan = await db.scalar(
-        select(ObjectIntegrityScan).order_by(ObjectIntegrityScan.checked_at.desc()).limit(1)
-    )
-
     total_disk_bytes = revisions_bytes + attachments_bytes + thumbnails_bytes
 
     return {
@@ -64,9 +62,7 @@ async def get_storage_metrics(db: AsyncSession, admin: User) -> dict[str, Any]:
         "attachments_bytes": attachments_bytes,
         "thumbnails_bytes": thumbnails_bytes,
         "total_disk_bytes": total_disk_bytes,
-        "missing_files_count": latest_scan.missing_count if latest_scan else 0,
-        "integrity_status": latest_scan.status if latest_scan else "not_checked",
-        "integrity_checked_at": latest_scan.checked_at if latest_scan else None,
+        **await get_maintenance_storage_metrics(db),
     }
 
 

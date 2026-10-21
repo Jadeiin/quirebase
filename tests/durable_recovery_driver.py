@@ -112,9 +112,11 @@ async def change_descriptor(state):
 async def confirm(directory, state, *, crash):
     async with AsyncSessionLocal() as db:
         actor = await db.get(User, UUID(state["actor_id"]))
-        ids = await commit_import_batch(
-            db, actor, UUID(state["workspace_id"]), UUID(state["batch_id"])
-        )
+        ids = (
+            await commit_import_batch(
+                db, actor, UUID(state["workspace_id"]), UUID(state["batch_id"])
+            )
+        ).committed_item_ids
         if crash:
             (directory / "confirmation-committed").touch()
             await asyncio.Event().wait()
@@ -158,9 +160,13 @@ async def inspect_contract(directory, state, *, committed):
             if committed
             else len(records) == 1 and records[0].metadata.title == "Recovery retained paper"
         )
-        assert len(diagnostics) == 1
-        assert diagnostics[0].filename == "uploaded-rejected.pdf"
-        assert diagnostics[0].code == "metadata_not_found"
+        if committed:
+            assert diagnostics == ()
+            assert batch.workflow_id is None
+        else:
+            assert len(diagnostics) == 1
+            assert diagnostics[0].filename == "uploaded-rejected.pdf"
+            assert diagnostics[0].code == "metadata_not_found"
         events = list(await db.scalars(select(AuditEvent)))
         assert sum(event.action == "pdf.import.preview.request" for event in events) == 1
         assert sum(event.action == "pdf.import.preview" for event in events) == 1

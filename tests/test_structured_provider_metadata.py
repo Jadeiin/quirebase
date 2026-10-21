@@ -67,7 +67,7 @@ async def test_import_preserves_complete_work_in_preview_and_confirmation(
     preview = await stage_identifiers_import_batch(db, actor, workspace_id, ["W123"], "openalex")
     assert preview.records[0].metadata.model_dump(mode="json") == work
     assert (await db.get(ImportBatch, preview.id)).records[0]["work"] == work
-    ids = await commit_import_batch(db, actor, workspace_id, preview.id)
+    ids = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
     db.expunge_all()
     assert (await db.get(Item, ids[0])).work == work
 
@@ -87,7 +87,7 @@ async def test_pubmed_suffixes_are_retained_in_standard_person_names(persistence
     preview = await stage_identifiers_import_batch(db, actor, workspace_id, ["42"], "pubmed")
     people = [credit.person for credit in preview.records[0].metadata.contributors]
     assert [person.name for person in people] == ["John Smith Jr", "John Smith Sr"]
-    ids = await commit_import_batch(db, actor, workspace_id, preview.id)
+    ids = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
     item = await db.get(Item, ids[0])
     assert [credit["person"]["name"] for credit in item.work["contributors"]] == [
         "John Smith Jr",

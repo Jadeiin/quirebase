@@ -49,7 +49,7 @@ ORM_MODEL_OWNERS = {
     "FileRevision": "documents",
     "ExportArtifact": "documents",
     "ImportBatch": "library",
-    "ObjectIntegrityScan": "operations",
+    "MaintenanceSnapshot": "operations",
     "Invitation": "accounts",
     "Item": "library",
     "ItemRead": "library",
@@ -182,16 +182,19 @@ def test_invariant_ownership_and_narrow_reverse_interfaces():
                     "protected_object_keys",
                     "list_expired_export_artifacts",
                     "retire_expired_export_artifacts",
+                    "purge_deleted_annotations",
+                    "purge_deleted_replies",
                 }, path
 
 
 LIBRARY_FACADE_OPERATIONS = {
     "BatchConflict",
+    "ImportBatchUnavailable",
     "UpstreamServiceError",
     "commit_import_batch",
     "create_custom_citation_style",
     "delete_custom_citation_style",
-    "discard_import_batch",
+    "delete_import_batch",
     "export_item_bibliography",
     "export_selected_bibliography",
     "export_workspace_bibliography",
@@ -513,9 +516,9 @@ def test_async_runtime_does_not_use_blocking_adapters_directly():
     )
 
 
-def test_documents_workflows_enqueue_children_through_the_core_seam():
+def test_documents_workflows_enqueue_ready_event_through_the_core_transaction_seam():
     source = (SRC_ROOT / "documents" / "workflows.py").read_text(encoding="utf-8")
-    assert "enqueue_child_workflow" in source
+    assert "durable_operations().enqueue_in_transaction(" in source
 
 
 def test_documents_own_the_file_revision_changed_event_contract():

@@ -63,6 +63,21 @@ it('keeps native direct Item links and adds context after existing PDF annotatio
 	);
 });
 
+it('keeps the import scope when returning from an Item or PDF', () => {
+	const context = libraryReturnTo(
+		'workspace-1',
+		'/workspace/workspace-1/library?import_batch=batch-1&sort=title&page=2',
+		'item-1'
+	);
+	const item = new URL(
+		libraryItemHref('workspace-1', 'item-1', 'pdf/revision-1', context),
+		'https://app.example/'
+	);
+	expect(libraryReturnHref('workspace-1', item.searchParams)).toBe(
+		'workspace/workspace-1/library?import_batch=batch-1&sort=title&page=2#library-item-item-1'
+	);
+});
+
 it('removes only the deleted Item preview and anchor while keeping the Library query', () => {
 	const parameters = new URLSearchParams({
 		return_to:

@@ -1,6 +1,13 @@
 from quirebase.core.config import Settings
 
 
+def test_import_batch_retention_defaults_to_one_week_and_accepts_deployment_override(monkeypatch):
+    monkeypatch.delenv("QUIREBASE_IMPORT_BATCH_RETENTION_DAYS", raising=False)
+    assert Settings(_env_file=None).import_batch_retention_days == 7
+    monkeypatch.setenv("QUIREBASE_IMPORT_BATCH_RETENTION_DAYS", "14")
+    assert Settings(_env_file=None).import_batch_retention_days == 14
+
+
 def test_inquiro_environment_configures_embedded_provider_runtime(monkeypatch):
     monkeypatch.setenv("INQUIRO_TIMEOUT_SECONDS", "12")
     monkeypatch.setenv("INQUIRO_MAX_RESPONSE_BYTES", "4096")

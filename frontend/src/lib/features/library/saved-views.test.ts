@@ -71,6 +71,7 @@ describe('Library saved views', () => {
 		const filters = {
 			query: '  研究 & ML  ',
 			project: 'project-1',
+			import_batch: 'batch-1',
 			tag: 'tag-1',
 			author_last_name: 'Smith',
 			author_first_name: '',
@@ -90,6 +91,7 @@ describe('Library saved views', () => {
 			pageSize: 50,
 			filters: {
 				query: '研究 & ML',
+				import_batch: 'batch-1',
 				author_first_name: '',
 				publication_title: ' Journal & 特刊 ',
 				has_files: false,

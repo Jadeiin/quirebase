@@ -12,19 +12,47 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from quirebase.core.config import get_settings
 from quirebase.core.database import is_sqlite_database_url
 from quirebase.core.storage import get_object_store, is_managed_object_key
+from quirebase.core.workflow_storage import workflow_storage_counts
 from quirebase.documents import (
     delete_unreferenced_objects,
     protected_object_keys,
 )
-from quirebase.models import Attachment, FileRevision
+from quirebase.models import Attachment, FileRevision, MaintenanceSnapshot
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def get_maintenance_storage_metrics(db: AsyncSession) -> dict[str, Any]:
+    """Sample database metadata and the latest maintenance projection without object I/O."""
+    counts = await workflow_storage_counts(db)
+    if db.get_bind().dialect.name == "sqlite":
+        page_size = await db.scalar(text("PRAGMA page_size"))
+        allocated = (await db.scalar(text("PRAGMA page_count"))) * page_size
+        reusable = (await db.scalar(text("PRAGMA freelist_count"))) * page_size
+    else:
+        allocated = await db.scalar(text("SELECT pg_database_size(current_database())"))
+        reusable = None
+    latest = await db.get(MaintenanceSnapshot, 1)
+    return {
+        **counts,
+        "database_allocated_bytes": allocated,
+        "database_reusable_bytes": reusable,
+        "missing_files_count": latest.missing_count if latest else 0,
+        "integrity_status": latest.status if latest else "not_checked",
+        "integrity_checked_at": latest.checked_at if latest else None,
+        "integrity_error_count": latest.error_count if latest else 0,
+        "integrity_errors": latest.errors if latest else [],
+        "cleanup_started_at": latest.cleanup_started_at if latest else None,
+        "cleanup_checked_at": latest.cleanup_checked_at if latest else None,
+        "cleanup_counts": latest.cleanup_counts if latest else None,
+        "cleanup_error": latest.cleanup_error if latest else None,
+    }
 
 
 def sha256_file(path: Path) -> str:

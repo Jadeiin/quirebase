@@ -28,6 +28,7 @@ from quirebase.documents import (
     head_revision_file,
     head_revision_thumbnail,
     resolve_item_thumbnail,
+    retry_revision_inspection,
     store_pdf_revision,
 )
 from quirebase.library import (
@@ -397,6 +398,23 @@ async def upload_remote_item_pdf(
             db, user, workspace_id, item_id, document.content, document.filename, max_bytes
         )
     return WriteResult(id=workflow.workflow_id)
+
+
+@router.post(
+    "/items/{item_id}/revisions/{revision_id}/retry-inspection",
+    response_model=WriteResult,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_inspection(
+    workspace_id: UUID,
+    item_id: UUID,
+    revision_id: UUID,
+    user: ApiUser,
+    db: Database,
+) -> WriteResult:
+    return WriteResult(
+        id=await retry_revision_inspection(db, user, workspace_id, item_id, revision_id)
+    )
 
 
 @router.delete("/items/{item_id}/revisions/{revision_id}", response_model=OkView)

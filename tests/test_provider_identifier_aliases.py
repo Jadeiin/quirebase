@@ -65,7 +65,7 @@ async def test_ads_provider_dates_remain_usable_for_import_and_sync(
         db, actor, workspace_id, [bibcode], provider="nasa_ads", settings=settings
     )
     assert batch.records[0].metadata.date_published == expected
-    imported = await commit_import_batch(db, actor, workspace_id, batch.id)
+    imported = (await commit_import_batch(db, actor, workspace_id, batch.id)).committed_item_ids
     assert (await db.get(Item, imported[0])).work["date_published"] == expected
     local = await create_item(
         db,

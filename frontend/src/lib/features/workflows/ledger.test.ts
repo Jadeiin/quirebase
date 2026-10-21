@@ -48,4 +48,40 @@ describe('localStorageWorkflowLedger', () => {
 
 		expect(ledger.read()).toEqual([entry]);
 	});
+
+	it('restores import destinations and terminal status within the account ledger', () => {
+		const ledger = localStorageWorkflowLedger('user-a');
+		const completed = {
+			...entry,
+			workspaceId: 'workspace-1',
+			target: { kind: 'import_batch' as const, id: 'batch-1' },
+			outcome: { id: entry.id, state: 'succeeded' as const, error: null }
+		};
+		ledger.write([completed]);
+		expect(ledger.read()).toEqual([completed]);
+		expect(localStorageWorkflowLedger('user-b').read()).toEqual([]);
+	});
+
+	it.each([
+		{ workspaceId: 'workspace-1', target: { kind: 'url', id: 'javascript:alert(1)' } },
+		{ workspaceId: 'workspace-1', target: { kind: 'import_batch', id: '' } },
+		{ target: { kind: 'import_batch', id: 'batch-1' } },
+		{ workspaceId: 42 },
+		{
+			workspaceId: 'workspace-1',
+			target: { kind: 'import_batch', id: 'batch-1' },
+			outcome: { id: 'other-workflow', state: 'succeeded' }
+		},
+		{
+			workspaceId: 'workspace-1',
+			target: { kind: 'import_batch', id: 'batch-1' },
+			outcome: { id: entry.id, state: 'pending' }
+		}
+	])('rejects malformed destinations and outcomes: %j', (invalid) => {
+		localStorage.setItem(
+			'quirebase:tracked-workflows:user-a',
+			JSON.stringify([{ ...entry, ...invalid }])
+		);
+		expect(localStorageWorkflowLedger('user-a').read()).toEqual([]);
+	});
 });

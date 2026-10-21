@@ -56,6 +56,34 @@ identity; to run several workers, add one worker service per replica in a Compos
 set a distinct `QUIREBASE_WORKFLOW_EXECUTOR_ID` for each. A workflow whose executor ID is gone
 for good is listed and resumed manually with `quirebase recover-workflows <executor-id> --apply`.
 
+## Retained data
+
+Hourly worker maintenance prunes expired sessions/throttle windows and terminal metadata in bounded
+transactions. These positive deployment settings control the remaining windows:
+
+| Environment variable | Default |
+| --- | --- |
+| `QUIREBASE_ANNOTATION_UNDO_HOURS` | 24 |
+| `QUIREBASE_WORKFLOW_HISTORY_RETENTION_DAYS` | 7 |
+| `QUIREBASE_TERMINAL_METADATA_RETENTION_DAYS` | 30 |
+| `QUIREBASE_AUDIT_RETENTION_DAYS` | 90 |
+| `QUIREBASE_IMPORT_BATCH_RETENTION_DAYS` | 7 |
+
+Terminal metadata includes accepted/revoked/expired Invitations and Workspace Invitations,
+revoked/expired API Tokens and terminated membership generations. Workflow retention begins at
+completion and preserves dependencies of retained parents. After retirement the workflow ID cannot
+be resumed or reused. The administrator Maintenance page shows latest cleanup timestamps/counts,
+workflow/checkpoint row counts, database allocation and reusable SQLite space. Integrity diagnostics
+retain only the latest scan with exact error counts and up to 100 samples.
+
+Import history is a secondary paginated page. Import Batches expire after their last state change;
+reads do not extend retention, and active or unconfirmed durable preparations remain protected.
+Editors may delete records early. Expiring or deleting a committed receipt keeps its Items and files
+but ends confirmation replay and the corresponding Library filter; expiring staging also releases
+its temporary files through durable cleanup. Complete ItemRead history remains.
+Moderator Annotation deletion is immediate; ordinary Annotation/Reply deletion allows Undo only
+inside its configured window. No content, account or backup expiry policy is introduced.
+
 ## Object storage
 
 `QUIREBASE_OBJECT_STORE=local` keeps immutable objects below
@@ -118,6 +146,13 @@ Web and every worker must use the same backend, bucket, and prefix.
 
 `quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. This backup/restore path currently requires the local object backend; protect an S3 bucket with its own versioning and backup policy, and snapshot or mirror the bundled Garage volume as described under Object storage. Verify a local backup with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
 
+Deleting retained records makes database pages reusable; it does not necessarily shrink files.
+For SQLite, stop every web and worker process, then run `quirebase compact-sqlite` against the same
+`QUIREBASE_DATABASE_URL`. It requires an existing SQLite file, obtains an exclusive lock, checkpoints
+the WAL and runs `VACUUM`; it fails on lock contention and never runs automatically. Leave free disk
+space for SQLite's temporary rebuild. For PostgreSQL, ordinary autovacuum reuses deleted space;
+returning it to the filesystem requires a separately scheduled database-maintenance operation.
+
 `quirebase doctor` checks the schema, writable directories, PyMuPDF, the configured Recommendation
 Engine and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The
 administrator page can retry failed jobs and rebuild all Item Tag Recommendations after an engine
@@ -137,9 +172,14 @@ remains a content-hashed, same-origin Vite asset.
 
 ## Upgrades
 
+For this alpha retention cutover the initial migration is regenerated and Search follows it.
+Stop the old web and worker processes and rebuild the database from the new chain; an existing
+stamp cannot be upgraded in place. Preserve backups and any content needed for explicit reimport.
+Old durable inputs/checkpoints are not replayed across the inspection change.
+
 Back up first, install the new wheel, run `quirebase init-db` to apply Alembic migrations, rebuild
 assets only for source checkouts
 (`bun install --cwd frontend && bun run --cwd frontend build`), restart web and worker processes,
 then run `quirebase doctor`.
 
-**Alpha migration chain:** Quirebase is alpha software and a release may replace the migration chain instead of extending it. A database stamped by a revision that no longer exists cannot be upgraded in place: `quirebase init-db` and the Compose `migrate` service abort with `Can't locate revision`. Back up the installation so the old data is preserved, recreate the database (for Compose: `make docker-down DOWN_ARGS=--volumes`, then start the stack again), and reimport content through the application; cross-chain data migration is not provided.
+**Alpha migration chain:** This explicitly approved alpha cutover replaces the initial revision and folds incremental schema changes into it. A database stamped by a revision that no longer exists cannot be upgraded in place: `quirebase init-db` and the Compose `migrate` service abort with `Can't locate revision`. Back up the installation so the old data is preserved, recreate the database (for Compose: `make docker-down DOWN_ARGS=--volumes`, then start the stack again), and reimport content through the application; cross-chain data migration is not provided.

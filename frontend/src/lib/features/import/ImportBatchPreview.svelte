@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import Badge from '#lib/design/Badge.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import EmptyState from '#lib/design/EmptyState.svelte';
@@ -13,7 +14,9 @@
 	import type { components } from '#lib/api/schema.js';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { t } from '#lib/i18n.js';
-	import { text, objects, contributorName } from '../item/metadata-draft.js';
+	import type { WorkspacePath } from '#lib/workspaces/href.js';
+	import { metadataValueLabel } from '../item/metadata-labels.js';
+	import { text, object, objects, contributorName } from '../item/metadata-draft.js';
 
 	type ImportBatch = components['schemas']['ImportBatchPreview'];
 	type ImportDiagnostic = components['schemas']['ImportDiagnostic'];
@@ -23,7 +26,9 @@
 		page,
 		busy,
 		canCommit,
+		resultHref,
 		onDiscard,
+		onDeleteReceipt,
 		onRetry,
 		onCommit,
 		onPage
@@ -32,7 +37,9 @@
 		page: number;
 		busy: boolean;
 		canCommit: boolean;
+		resultHref: WorkspacePath;
 		onDiscard: () => void;
+		onDeleteReceipt: () => void;
 		onRetry: () => void;
 		onCommit: () => void;
 		onPage: (page: number) => void;
@@ -48,6 +55,8 @@
 		committed: 'success'
 	} as const satisfies Record<ImportBatch['status'], 'warning' | 'success' | 'error'>;
 	const statusVariant = $derived(statusVariants[batch.status]);
+	const warningCount = $derived(batch.errors.filter((row) => row.severity === 'warning').length);
+	const errorCount = $derived(batch.errors.length - warningCount);
 	const diagnosticsVariant = $derived(
 		batch.errors.some((diagnostic) => diagnostic.severity !== 'warning') ? 'error' : 'warning'
 	);
@@ -65,23 +74,35 @@
 </script>
 
 <Panel class="mt-6">
-	<SectionHeader>
+	<SectionHeader class="flex-col items-stretch sm:flex-row sm:items-center">
 		<div>
 			<h2 class="flex flex-wrap items-center gap-2">
 				{$t('Import preview')}
-				<Badge variant={statusVariant}>{$t(domainLabel(batch.status))}</Badge>
+				<Badge variant={statusVariant}
+					>{batch.status === 'committed' ? $t('Imported') : $t(domainLabel(batch.status))}</Badge
+				>
 			</h2>
 			<p class="mb-0 text-surface-600-400">
-				{$t('{count, plural, one {# record} other {# records}}', {
-					count: batch.records.length
-				})}
-				· {$t('{count, plural, one {# diagnostic} other {# diagnostics}}', {
-					count: batch.errors.length
-				})}
+				{#if batch.status === 'committed'}
+					{$t('Imported {count, plural, one {# record} other {# records}}', {
+						count: batch.committed_item_ids.length
+					})}
+				{:else if batch.status === 'ready'}
+					{$t('{count, plural, one {# record ready to import} other {# records ready to import}}', {
+						count: batch.records.length
+					})}
+				{/if}
 			</p>
 		</div>
 		{#snippet actions()}
-			{#if canCommit && batch.status !== 'committed'}<div class="flex flex-wrap gap-2">
+			{#if batch.status === 'committed'}
+				{#if canCommit}<Button onclick={onDeleteReceipt} disabled={busy}
+						>{$t('Delete import record')}</Button
+					>{/if}
+				<Button as="a" variant="filled" href={resolve(resultHref)}
+					>{$t('View imported Items')}</Button
+				>
+			{:else if canCommit}<div class="flex flex-wrap gap-2">
 					<Button onclick={onDiscard} disabled={busy}>{$t('Discard')}</Button>
 					{#if batch.status === 'failed'}
 						<Button variant="primary" onclick={onRetry} disabled={busy}>{$t('Retry')}</Button>
@@ -90,7 +111,9 @@
 						variant="filled"
 						onclick={onCommit}
 						disabled={busy || batch.status !== 'ready' || batch.records.length === 0}
-						>{$t('Commit')}</Button
+						>{$t('Import {count, plural, one {# record} other {# records}}', {
+							count: batch.records.length
+						})}</Button
 					>
 				</div>{/if}
 		{/snippet}
@@ -98,7 +121,17 @@
 	{#if batch.status === 'pending'}
 		<LoadingState label={$t('Preparing uploaded PDFs…')} />
 	{:else if batch.status === 'committed'}
-		<Notice variant="success">{$t('This Import Batch has already been committed.')}</Notice>
+		<Notice variant="success"
+			>{$t(
+				'Import completed. Deleting this import record keeps the imported Items and files.'
+			)}</Notice
+		>
+	{:else if batch.status === 'ready' && batch.records.length > 0 && batch.errors.length > 0}
+		<Notice
+			>{$t(
+				'You can import the ready records. Review the diagnostics for sources that need attention.'
+			)}</Notice
+		>
 	{:else if batch.records.length === 0}
 		<EmptyState
 			icon="import"
@@ -115,6 +148,13 @@
 					.map(contributorName)
 					.join('; ') || text(record.metadata.id)}</span
 			>
+			<p class="mb-0 flex flex-wrap gap-x-3 gap-y-1 text-sm text-surface-600-400">
+				{#if text(object(record.metadata.container).title)}
+					<span><RichText html={text(object(record.metadata.container).title)} /></span>
+				{/if}
+				{#if record.metadata.date_published}<span>{record.metadata.date_published}</span>{/if}
+				<span>{metadataValueLabel(record.metadata.type)}</span>
+			</p>
 			{#if record.source}<span
 					class="flex min-w-0 items-center gap-1.5 text-sm text-surface-600-400"
 					><Icon name="file" size={14} /><span class="truncate" title={record.source.original_name}
@@ -123,24 +163,34 @@
 				>{/if}
 		</ItemRow>
 	{/each}
-	<Pagination
-		{page}
-		{pageCount}
-		{pageSize}
-		total={batch.records.length}
-		onPageSize={(size) => {
-			pageSize = size;
-			onPage(1);
-		}}
-		{busy}
-		label={$t('Import preview pages')}
-		{onPage}
-	/>
+	{#if batch.records.length > 0}<Pagination
+			{page}
+			{pageCount}
+			{pageSize}
+			total={batch.records.length}
+			onPageSize={(size) => {
+				pageSize = size;
+				onPage(1);
+			}}
+			{busy}
+			label={$t('Import preview pages')}
+			{onPage}
+		/>{/if}
 	{#if batch.errors.length}
 		<section class="mt-4 grid grid-cols-1 gap-3">
 			<div class="flex items-center gap-2">
 				<h3 class="mb-0">{$t('Diagnostics')}</h3>
 				<Badge variant={diagnosticsVariant}>{batch.errors.length}</Badge>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				{#if errorCount}<Badge variant="error"
+						>{$t('{count, plural, one {# error} other {# errors}}', { count: errorCount })}</Badge
+					>{/if}
+				{#if warningCount}<Badge variant="warning"
+						>{$t('{count, plural, one {# warning} other {# warnings}}', {
+							count: warningCount
+						})}</Badge
+					>{/if}
 			</div>
 			<ul class="m-0 grid list-none grid-cols-1 gap-2 p-0">
 				{#each batch.errors as diagnostic (diagnostic)}

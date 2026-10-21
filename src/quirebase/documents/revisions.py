@@ -28,6 +28,7 @@ from quirebase.core.errors import (
     DomainError,
     ResourceNotFound,
     ValidationFailure,
+    VersionConflict,
 )
 from quirebase.core.storage import (
     ObjectMetadata,
@@ -61,6 +62,7 @@ from quirebase.models import (
     Attachment,
     AttachmentRole,
     FileRevision,
+    FileRevisionProcessingState,
     Item,
     Project,
     ProjectItem,
@@ -214,6 +216,8 @@ async def attach_staged_pdf(
     await db.flush()
     thumbnail_object_id = uuid4()
     thumbnail_key = object_key(thumbnail_object_id, ObjectSuffix.PNG)
+    workflow_id = f"inspect-imported-revision:{revision.id}"
+    revision.processing_workflow_id = workflow_id
     await durable_operations().enqueue_in_transaction(
         db,
         IMPORTED_REVISION_INSPECTION_WORKFLOW,
@@ -222,8 +226,9 @@ async def attach_staged_pdf(
         revision.id,
         key,
         thumbnail_object_id,
+        workflow_id,
         queue_name=DOCUMENTS_QUEUE,
-        workflow_id=f"inspect-imported-revision:{revision.id}",
+        workflow_id=workflow_id,
         partition_key=str(revision.id),
         attributes={
             "capability": "documents",
@@ -246,6 +251,95 @@ async def attach_staged_pdf(
         authorization_resource_action=ResourceAction.file_manage.value,
     )
     return revision
+
+
+async def retry_revision_inspection(
+    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID, revision_id: UUID
+) -> str:
+    await require_item_action(db, user, workspace_id, item_id, ResourceAction.file_manage)
+    observed = await db.scalar(
+        select(FileRevision).where(
+            FileRevision.id == revision_id,
+            FileRevision.workspace_id == workspace_id,
+            FileRevision.item_id == item_id,
+        )
+    )
+    if observed is None:
+        raise ResourceNotFound("File Revision not found")
+    observed_workflow_id = observed.processing_workflow_id
+    workflow = (
+        await durable_operations().get(observed_workflow_id) if observed_workflow_id else None
+    )
+    await db.execute(
+        select(Item.id)
+        .where(Item.id == item_id, Item.workspace_id == workspace_id)
+        .with_for_update(read=True, key_share=True)
+    )
+    revision = await db.scalar(
+        select(FileRevision)
+        .where(
+            FileRevision.id == revision_id,
+            FileRevision.workspace_id == workspace_id,
+            FileRevision.item_id == item_id,
+        )
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if revision is None:
+        raise ResourceNotFound("File Revision not found")
+    if revision.processing_state is FileRevisionProcessingState.ready:
+        raise VersionConflict(message="File Revision is already ready")
+    if revision.processing_workflow_id != observed_workflow_id:
+        if revision.processing_workflow_id:
+            return revision.processing_workflow_id
+        raise VersionConflict(message="File Revision processing changed")
+    if (
+        revision.processing_state is FileRevisionProcessingState.pending
+        and observed_workflow_id is not None
+        and workflow is not None
+        and workflow.state in {"pending", "running"}
+    ):
+        return observed_workflow_id
+    workflow_id = f"inspect-imported-revision:{revision.id}:{uuid4()}"
+    thumbnail_object_id = uuid4()
+    revision.processing_state = FileRevisionProcessingState.pending
+    revision.processing_workflow_id = workflow_id
+    await durable_operations().enqueue_in_transaction(
+        db,
+        IMPORTED_REVISION_INSPECTION_WORKFLOW,
+        user.id,
+        workspace_id,
+        revision_id,
+        revision.file.path,
+        thumbnail_object_id,
+        workflow_id,
+        queue_name=DOCUMENTS_QUEUE,
+        workflow_id=workflow_id,
+        partition_key=str(revision_id),
+        attributes={
+            "capability": "documents",
+            "operation": "inspect_imported_revision",
+            "actor_id": user.id,
+            "workspace_id": workspace_id,
+            "item_id": item_id,
+            "revision_id": revision_id,
+            **object_reservation_attributes([
+                revision.file.path,
+                object_key(thumbnail_object_id, ObjectSuffix.PNG),
+            ]),
+        },
+    )
+    record_event(
+        db,
+        user.id,
+        "pdf.processing.retry",
+        "file_revision",
+        revision_id,
+        workspace_id=workspace_id,
+        authorization_resource_action=ResourceAction.file_manage.value,
+    )
+    await db.commit()
+    return workflow_id
 
 
 async def enqueue_object_cleanup(

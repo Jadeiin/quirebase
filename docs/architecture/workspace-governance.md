@@ -162,8 +162,10 @@ Instance registration and Workspace admission are separate operations:
   `POST /workspace-invitations/{token}/accept` admits an existing User. Workspace admission still
   accepts only the invited existing User; the UI
   keeps the invitation open while switching away from a different signed-in account.
-- A valid membership has state `active` or `suspended`. Removal terminates the membership and is
-  retained as an audit/history record, not as an ACL-satisfying `removed` state.
+- A valid membership has state `active` or `suspended`. Removal terminates the membership; its
+  generation remains short-lived history, not an ACL-satisfying `removed` state. Periodic maintenance
+  retires terminated generations after 30 days by default. Old membership IDs cannot act on a new
+  generation, including after their historical rows have been removed.
 - Workspace owner/admin manages ordinary membership. An instance administrator may perform only
   explicit lifecycle governance, including reason-bound owner reassignment, without implicit content access.
 - An active non-owner member may leave an active, unfrozen Workspace through
@@ -326,7 +328,10 @@ Annotations have exactly two scopes:
   corresponding resource-action decision allow it.
 
 Workspace owner/admin may moderate another author's Project Annotation through operations such as
-hide, archive, lock, restore or delete. Moderation must not rewrite authored content or attribution.
+hide, archive, lock, restore or delete. Moderation restore clears hidden/archived state; moderation
+delete physically removes the Annotation and its Replies and cannot be undone. An author's ordinary
+Annotation or Reply deletion has a 24-hour undo window by default, after which maintenance removes
+the retained row. Moderation must not rewrite authored content or attribution.
 
 The reader's displayed and creation Annotation sources are a cached selector over Project lineage.
 Project create, rename, deletion, lifecycle or participation changes and ProjectItem changes
@@ -342,10 +347,12 @@ boundary.
 
 An archived Workspace remains readable and exportable, including existing file downloads, but
 rejects Item, file, Tag, Project, membership and shared Discussion mutations. Owner/admin may
-restore it. Permanent Workspace deletion is owner-only and requires archive plus a retention
-period (30 days by default). The deletion transaction removes the Workspace root and cascades
+restore it. Permanent Workspace deletion is owner-only and requires the archived, unfrozen state;
+there is no additional waiting period. The deletion transaction removes the Workspace root and cascades
 its owned rows; a durable, reference-aware cleanup removes its stored objects. Audit Events keep
-the deleted Workspace and Project IDs as historical metadata, without live-resource foreign keys.
+the deleted Workspace and Project IDs as historical metadata within their retention window,
+without live-resource foreign keys. Cleanup authority comes from its enqueue committing atomically
+with authorized deletion, so later Audit retirement cannot prevent physical cleanup.
 
 Explicit administrator owner reassignment is permitted on an unfrozen archived Workspace without
 restoring it. Ordinary archived membership mutations retain their restrictions.
@@ -359,7 +366,7 @@ not a tenancy shutdown or a WorkspaceMember suspension. Active members retain co
 downloads and exports, while all Workspace mutations, ownership transfers, member and invitation
 governance reads, restore and permanent deletion are blocked. Memberships and Project participation
 are preserved. Only an instance administrator may unfreeze the Workspace by clearing the overlay;
-unfreezing preserves its underlying active/archived state and archive retention timestamp. An
+unfreezing preserves its underlying active/archived state and archive timestamp. An
 administrator gains no implicit content access by freezing or unfreezing a Workspace.
 
 Archive is member-controlled preservation with owner/admin governance reads and restoration;
@@ -379,7 +386,14 @@ records the Audit Event and deletes the Project root; cascading foreign keys rem
 ProjectItem associations, Project Discussions and Project Annotations with their Replies. Canonical
 Workspace Items, their files, private Annotations and other Projects remain. Root deletion fences
 in-flight stale mutations, and Audit Events retain the deleted Project ID without a live-resource
-foreign key. Workspace permanent deletion retains its stronger archive and retention requirements.
+foreign key. Workspace permanent deletion retains its archive prerequisite and owner-only authority.
+
+Periodic metadata maintenance retires accepted/revoked invitations and expired invitations after
+30 days by default, for both instance and Workspace admission. During that window, a recipient can
+still reconcile an accepted Workspace invitation after a lost response; a retired ID becomes
+unavailable and never recreates membership. Retiring a receipt does not remove a User or current
+membership. This maintenance also applies to historical rows in archived or frozen Workspaces,
+without changing their current authority or content.
 
 Removing an Item from a Project physically deletes its ProjectItem association and permanently
 cascades to that association's Project Annotations and Replies across all File Revisions,
@@ -416,6 +430,10 @@ bibliographic metadata cache and workflow infrastructure. Audit Events are insta
 but Workspace resource events carry `workspace_id` and optional `project_id` context. Audit metadata
 records action, target IDs, the canonical authorizing resource-action key, source and time; it does
 not copy full Item or Annotation content.
+
+Audit Events remain immutable while retained and retire after 90 days by default, independently of
+resource lifetimes and durable object cleanup. `terminal_metadata_retention_days` and
+`audit_retention_days` configure these windows; pagination is presentation, not a retention policy.
 
 Inbound adapters bind Audit provenance for the invocation. HTTP includes both Login Session and
 Bearer requests; MCP preserves its protocol and operation through the HTTP adapter. Domain services

@@ -44,10 +44,12 @@ from quirebase.documents.objects import (
 from quirebase.documents.read_models import (
     DocumentInfo,
     count_item_attachments,
+    count_item_revisions,
     list_item_attachments,
     list_item_revisions,
 )
 from quirebase.documents.remote import acquire_remote_attachment
+from quirebase.documents.retention import purge_deleted_annotations, purge_deleted_replies
 from quirebase.documents.revisions import (
     ItemThumbnail,
     ItemThumbnailSource,
@@ -67,6 +69,7 @@ from quirebase.documents.revisions import (
     head_revision_file,
     head_revision_thumbnail,
     resolve_item_thumbnail,
+    retry_revision_inspection,
     store_pdf_revision,
 )
 from quirebase.documents.schemas import (
@@ -107,6 +110,7 @@ __all__ = [
     "assemble_document_bundle",
     "count_item_annotations",
     "count_item_attachments",
+    "count_item_revisions",
     "create_annotation_reply",
     "create_attachment",
     "create_document_annotation",
@@ -141,10 +145,13 @@ __all__ = [
     "moderate_document_annotation",
     "prepare_item_document_copy",
     "protected_object_keys",
+    "purge_deleted_annotations",
+    "purge_deleted_replies",
     "resolve_item_thumbnail",
     "restore_annotation_reply",
     "restore_document_annotation",
     "retire_expired_export_artifacts",
+    "retry_revision_inspection",
     "snapshot_workspace_documents",
     "store_pdf_revision",
     "update_annotation_reply",

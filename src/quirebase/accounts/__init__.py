@@ -43,6 +43,7 @@ from quirebase.accounts.registration import (
     ensure_registration_allowed,
     register_user,
 )
+from quirebase.accounts.retention import purge_expired_account_records
 from quirebase.accounts.sessions import (
     create_login_session,
     get_login_session_by_token,
@@ -88,6 +89,7 @@ __all__ = [
     "list_users",
     "list_users_paginated",
     "logout",
+    "purge_expired_account_records",
     "record_login_failure",
     "register_user",
     "reissue_invitation",

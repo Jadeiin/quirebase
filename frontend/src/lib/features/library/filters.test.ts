@@ -31,6 +31,7 @@ it('refines submitted results and replaces conflicting author criteria', () => {
 		query: 'committed',
 		tag: 'tag-1',
 		project: 'project-1',
+		import_batch: 'batch-1',
 		has_files: false,
 		year: '2025',
 		publication_title: 'Old journal',
@@ -81,6 +82,26 @@ it('round-trips precise filters, empty given names, Unicode and URL punctuation'
 		'workspace/workspace%20%2F%E4%B8%80/library?'
 	);
 	expect(libraryParameters({ author_last_name: 'Smith' }).has('author_first_name')).toBe(false);
+});
+
+it('preserves an import scope through refinements, search submissions and pagination', () => {
+	const scoped = readLibraryFilters(new URLSearchParams({ import_batch: 'batch-1' }));
+	const refined = refineLibraryFilters(scoped, { year: '2026' });
+	const submitted = submitLibraryFilters(refined, { query: 'graph', tag: 'tag-1' });
+	const href = new URL(
+		libraryHref('workspace-1', { ...submitted, sort: 'title', direction: 'asc' }, 2, 50, 'item-1'),
+		'https://app.example/'
+	);
+	expect(Object.fromEntries(href.searchParams)).toEqual({
+		q: 'graph',
+		tag: 'tag-1',
+		import_batch: 'batch-1',
+		year: '2026',
+		sort: 'title',
+		page: '2',
+		page_size: '50',
+		preview: 'item-1'
+	});
 });
 
 it('replaces a broad keyword with an exact refinement while preserving the result scope', () => {

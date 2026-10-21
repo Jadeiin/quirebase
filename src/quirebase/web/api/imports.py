@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, UploadFile, status
+from advanced_alchemy.service import OffsetPagination
+from fastapi import APIRouter, File, Form, Query, UploadFile, status
 
 from quirebase.library import (
     ImportBatchPreview,
+    ImportBatchSummary,
     commit_import_batch,
-    discard_import_batch,
+    delete_import_batch,
     get_import_batch_preview,
+    list_import_batches,
     retry_pdf_import_batch,
     stage_identifiers_import_batch,
     stage_import_batch,
@@ -22,6 +25,21 @@ from quirebase.web.api.import_schemas import IdentifiersImportRequest
 from quirebase.web.uploads import upload_chunks
 
 router = APIRouter(tags=["Imports"])
+
+
+@router.get("/imports", response_model=OffsetPagination[ImportBatchSummary])
+async def import_batches(
+    workspace_id: UUID,
+    user: ApiUser,
+    db: Database,
+    view: Literal["pending", "completed"] = "pending",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    items, total = await list_import_batches(
+        db, user, workspace_id, view=view, limit=limit, offset=offset
+    )
+    return OffsetPagination(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.post(
@@ -88,17 +106,14 @@ async def retry_import_batch(workspace_id: UUID, batch_id: UUID, user: ApiUser, 
     return await retry_pdf_import_batch(db, user, workspace_id, batch_id)
 
 
-@router.post("/imports/{batch_id}/commit", response_model=OkView)
+@router.post("/imports/{batch_id}/commit", response_model=ImportBatchPreview)
 async def commit_staged_import(
     workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database
-) -> OkView:
-    await commit_import_batch(db, user, workspace_id, batch_id)
-    return OkView()
+) -> ImportBatchPreview:
+    return await commit_import_batch(db, user, workspace_id, batch_id)
 
 
 @router.delete("/imports/{batch_id}", response_model=OkView)
-async def discard_staged_import(
-    workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database
-) -> OkView:
-    await discard_import_batch(db, user, workspace_id, batch_id)
+async def delete_import(workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database) -> OkView:
+    await delete_import_batch(db, user, workspace_id, batch_id)
     return OkView()

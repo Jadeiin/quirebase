@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { bibliographyFormats } from '#lib/export-preferences.js';
 	import { resolve } from '$app/paths';
-	import { goto, replaceState } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { Tabs } from '@skeletonlabs/skeleton-svelte';
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
@@ -15,56 +16,133 @@
 	import Badge from '#lib/design/Badge.svelte';
 	import FilePicker from '#lib/design/FilePicker.svelte';
 	import Icon from '#lib/design/Icon.svelte';
+	import LoadingState from '#lib/design/LoadingState.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import ImportBatchPreview from '#lib/features/import/ImportBatchPreview.svelte';
 	import ImportSourceForm from '#lib/features/import/ImportSourceForm.svelte';
 	import { discoveryProvidersQuery } from '#lib/features/discovery/queries.js';
 	import ItemMetadataForm from '#lib/features/item/ItemMetadataForm.svelte';
+	import { libraryHref } from '#lib/features/library/filters.js';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import { invalidateLibrary } from '#lib/query/invalidation.js';
 	import { msg, t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
+	import { confirmImportBatch } from './confirmation.js';
+	import { deleteImportBatch } from './mutations.js';
+	import { importReturnHref } from './list-state.js';
+	import {
+		importBatchQuery,
+		importBatchResponseWriter,
+		importKeys,
+		readImportBatch,
+		type ImportBatch
+	} from './queries.js';
 
-	type ImportBatch = components['schemas']['ImportBatchPreview'];
 	const identifierExamples = [
 		'10.1073/pnas.92.6.2288',
 		'https://pubmed.ncbi.nlm.nih.gov/11607519/',
 		'arXiv:2304.08030',
 		'ISBN:0674016394'
 	].join('\n');
-
 	let identifiers = $state('');
 	let sourceTab = $state('identifiers');
-	// Skeleton's Tabs.Content keeps inactive panels mounted, so gate the metadata
-	// editor behind first activation: mounting it starts the schema request and
-	// loads the lazily imported editor even when the user never opens the tab.
-	// Keep it mounted afterwards so in-progress drafts survive tab switches.
+	// Keep the metadata editor lazy, then retain its draft across source tab switches.
 	let manualMounted = $state(false);
 	let bibliographyText = $state('');
 	let bibliographyFile = $state<File | null>(null);
 	let bibliographyFormat = $state('auto');
 	let provider = $state('auto');
-	let batch = $state<ImportBatch | null>(null);
-	const hasStagedBatch = $derived(batch !== null && batch.status !== 'committed');
 	let error = $state('');
-	let refreshFailedBatchId = $state<string | null>(null);
-	let busy = $state(false);
+	let navigationFailed = $state(false);
 	let previewPage = $state(1);
 	let metadataErrors = $state<components['schemas']['ErrorField'][]>([]);
 	let pdfFiles = $state<File[]>([]);
-	let pdfPicker = $state<{ clearFiles: () => void } | null>(null);
-	let pollingAbort: AbortController | null = null;
+	const pendingCommands = new SvelteSet<string>();
+	const uncertainConfirmations = new SvelteSet<string>();
+	const trackedWorkflows = new SvelteSet<string>();
 	const queryClient = useQueryClient();
 	const workspace = getWorkspaceContext();
 	const { workspaceId } = workspace;
-	const providers = createQuery(() => discoveryProvidersQuery(workspaceId));
-	const currentStep = $derived(batch === null ? 1 : batch.status === 'committed' ? 3 : 2);
+	const workflows = getWorkflowCenter();
+	const batchId = $derived(page.url.searchParams.get('batch') ?? '');
+	const providers = createQuery(() => ({
+		...discoveryProvidersQuery(workspaceId),
+		enabled: !batchId && workspace.can('item.create')
+	}));
+	const preview = createQuery(() => importBatchQuery(workspaceId, batchId));
+	const batch = $derived(preview.data?.id === batchId ? preview.data : null);
+	const hasStagedBatch = $derived(Boolean(batchId) && batch?.status !== 'committed');
+	const busy = $derived(pendingCommands.has('source') || pendingCommands.has(`batch:${batchId}`));
+	const confirmationUnknown = $derived(uncertainConfirmations.has(batchId));
+	const previewUnavailable = $derived(
+		preview.isError || preview.fetchStatus === 'paused' || preview.data === null
+	);
+	const currentStep = $derived(!batchId ? 1 : batch?.status === 'committed' ? 3 : 2);
 	const identifierEntries = $derived(
 		identifiers
 			.split(/\r\n?|\n/)
 			.map((value) => value.trim())
 			.filter(Boolean)
 	);
+	const emptyMetadata: components['schemas']['ItemDetailView']['metadata'] = {
+		id: `urn:uuid:${crypto.randomUUID()}`,
+		type: 'Document',
+		title: ''
+	};
+	let mounted = true;
+	let navigationVersion = 0;
+	let previousBatchId: string | undefined;
+	let shownBatchId = '';
+	beforeNavigate(() => navigationVersion++);
+	onDestroy(() => {
+		mounted = false;
+	});
+
+	function origin() {
+		return { url: page.url, version: navigationVersion };
+	}
+	function isCurrent(started: ReturnType<typeof origin>) {
+		return mounted && page.url === started.url && navigationVersion === started.version;
+	}
+	$effect(() => {
+		if (batchId === previousBatchId) return;
+		previousBatchId = batchId;
+		shownBatchId = '';
+		error = '';
+		navigationFailed = false;
+		previewPage = 1;
+		if (batchId) {
+			// Entering a preview destroys the source pickers, so retire their file state too.
+			bibliographyFile = null;
+			pdfFiles = [];
+		}
+	});
+	$effect(() => {
+		const next = batch;
+		if (!next) return;
+		untrack(() => {
+			if (shownBatchId !== next.id) {
+				shownBatchId = next.id;
+				sourceTab =
+					next.file_format === 'pdf'
+						? 'pdfs'
+						: next.file_format === 'metadata'
+							? 'identifiers'
+							: 'bibliography';
+			}
+			if (next.status === 'committed') uncertainConfirmations.delete(next.id);
+			trackBatch(next);
+		});
+	});
+	$effect(() => {
+		if (
+			providers.data &&
+			provider !== 'auto' &&
+			!providers.data.lookup.some((option) => option.id === provider)
+		)
+			provider = 'auto';
+	});
 
 	function stepChipClass(index: number): string {
 		const base =
@@ -74,173 +152,59 @@
 		if (index + 1 < currentStep) return `${base} bg-primary-50-950 text-primary-800-200`;
 		return `${base} bg-surface-200-800 text-surface-600-400`;
 	}
-	$effect(() => {
-		if (
-			providers.data &&
-			provider !== 'auto' &&
-			!providers.data.lookup.some((option) => option.id === provider)
-		) {
-			provider = 'auto';
-		}
-	});
-	const workflows = getWorkflowCenter();
-	const emptyMetadata: components['schemas']['ItemDetailView']['metadata'] = {
-		id: `urn:uuid:${crypto.randomUUID()}`,
-		type: 'Document',
-		title: ''
-	};
-
-	function stopPolling() {
-		pollingAbort?.abort();
-		pollingAbort = null;
+	function trackBatch(next: ImportBatch) {
+		if (next.status !== 'pending' || !next.workflow_id || trackedWorkflows.has(next.workflow_id))
+			return;
+		trackedWorkflows.add(next.workflow_id);
+		const refresh = () => queryClient.invalidateQueries({ queryKey: importKeys.all(workspaceId) });
+		void workflows
+			.track(next.workflow_id, {
+				workspaceId,
+				target: { kind: 'import_batch', id: next.id },
+				label: $t('Import processing'),
+				successMessage: msg('Import preview is ready'),
+				failureMessage: msg('Import processing failed')
+			})
+			.settled.then(refresh, refresh);
 	}
-
-	function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
-		return new Promise((resolveDelay, reject) => {
-			if (signal.aborted) return reject(new DOMException('Import polling aborted', 'AbortError'));
-			const completed = () => {
-				signal.removeEventListener('abort', aborted);
-				resolveDelay();
-			};
-			const aborted = () => {
-				window.clearTimeout(timer);
-				reject(new DOMException('Import polling aborted', 'AbortError'));
-			};
-			const timer = window.setTimeout(completed, milliseconds);
-			signal.addEventListener('abort', aborted, { once: true });
-		});
-	}
-
-	function acceptBatch(next: ImportBatch) {
-		stopPolling();
-		refreshFailedBatchId = null;
-		if (batch?.id !== next.id) {
-			sourceTab =
-				next.file_format === 'pdf'
-					? 'pdfs'
-					: next.file_format === 'metadata'
-						? 'identifiers'
-						: 'bibliography';
-		}
-		batch = next;
-		previewPage = 1;
+	async function acceptBatch(
+		next: ImportBatch,
+		started: ReturnType<typeof origin>,
+		cacheBatch?: (batch: ImportBatch) => boolean
+	) {
+		const writeBatch = cacheBatch ?? (await importBatchResponseWriter(queryClient, workspaceId));
+		if (!writeBatch(next)) return;
+		void queryClient.invalidateQueries({ queryKey: importKeys.lists(workspaceId) });
+		trackBatch(next);
+		if (!isCurrent(started)) return;
 		const url = new URL(page.url.href);
 		url.searchParams.set('batch', next.id);
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- page.url is already a resolved pathname
-		const navigation = replaceState(url, page.state);
-		if (next.status === 'pending') {
-			if (next.workflow_id) void followWorkflow(next.id, next.workflow_id);
-			else void followBatch(next.id);
-		}
-		return navigation;
+		await goto(url, { replace: true, reset: false, state: page.state });
 	}
-
-	async function followBatch(batchId: string) {
-		const controller = new AbortController();
-		pollingAbort = controller;
-		let interval = 500;
-		try {
-			for (;;) {
-				await delay(interval, controller.signal);
-				const refreshed = await workspace.api.request(
-					'GET',
-					'/workspaces/{workspace_id}/imports/{batch_id}',
-					{
-						params: { path: { batch_id: batchId } },
-						signal: controller.signal
-					}
-				);
-				if (controller.signal.aborted || batch?.id !== batchId) return;
-				if (refreshed.status !== 'pending' || refreshed.workflow_id) {
-					await acceptBatch(refreshed);
-					error = '';
-					return;
-				}
-				batch = refreshed;
-				interval = Math.min(interval * 2, 4000);
-			}
-		} catch (reason) {
-			if (controller.signal.aborted || batch?.id !== batchId) return;
-			refreshFailedBatchId = batchId;
-			error = apiErrorMessage(reason, $t('Unable to refresh Import preview'));
-		}
-	}
-
-	async function loadBatch(batchId: string) {
-		stopPolling();
-		refreshFailedBatchId = null;
-		busy = true;
-		error = '';
-		try {
-			await acceptBatch(
-				await workspace.api.request('GET', '/workspaces/{workspace_id}/imports/{batch_id}', {
-					params: { path: { batch_id: batchId } }
-				})
-			);
-		} catch (reason) {
-			refreshFailedBatchId = batchId;
-			error = apiErrorMessage(reason, $t('Unable to load Import preview'));
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function followWorkflow(batchId: string, workflowId: string) {
-		const controller = new AbortController();
-		pollingAbort = controller;
-		try {
-			await workflows.track(workflowId, {
-				workspaceId,
-				label: $t('Import processing'),
-				successMessage: msg('Import processing completed'),
-				failureMessage: msg('Import processing failed')
-			}).settled;
-		} catch (reason) {
-			if (controller.signal.aborted) return;
-			// The refreshed Import Batch owns the user-facing terminal diagnostic.
-			void reason;
-		}
-		if (controller.signal.aborted || batch?.id !== batchId) return;
-		try {
-			const refreshed = await workspace.api.request(
-				'GET',
-				'/workspaces/{workspace_id}/imports/{batch_id}',
-				{
-					params: { path: { batch_id: batchId } },
-					signal: controller.signal
-				}
-			);
-			if (controller.signal.aborted || batch?.id !== batchId) return;
-			await acceptBatch(refreshed);
-			error = '';
-		} catch (reason) {
-			if (controller.signal.aborted || batch?.id !== batchId) return;
-			refreshFailedBatchId = batchId;
-			error = apiErrorMessage(reason, $t('Unable to refresh Import preview'));
-		}
-	}
-
 	async function importIdentifiers() {
 		if (!workspace.can('item.create') || !providers.data || busy || hasStagedBatch) return;
-		busy = true;
+		const started = origin();
+		pendingCommands.add('source');
 		error = '';
 		try {
 			await acceptBatch(
 				await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/identifiers', {
 					body: { identifiers: identifierEntries, provider }
-				})
+				}),
+				started
 			);
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Import preview failed'));
+			if (isCurrent(started)) error = apiErrorMessage(reason, $t('Import preview failed'));
 		} finally {
-			busy = false;
+			pendingCommands.delete('source');
 		}
 	}
-
 	async function upload(event: Event, kind: 'bibliography' | 'pdfs') {
 		if (!workspace.can('item.create') || busy || hasStagedBatch) return;
+		const started = origin();
 		const form = event.currentTarget as HTMLFormElement;
-		busy = true;
+		pendingCommands.add('source');
 		error = '';
 		try {
 			const body = new FormData(form);
@@ -263,106 +227,153 @@
 					: await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/bibliography', {
 							body
 						});
-			if (kind === 'pdfs') pdfPicker?.clearFiles();
-			await acceptBatch(uploaded);
+			await acceptBatch(uploaded, started);
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Upload failed'));
+			if (isCurrent(started)) error = apiErrorMessage(reason, $t('Upload failed'));
 		} finally {
-			busy = false;
+			pendingCommands.delete('source');
 		}
 	}
-
 	function setBibliographyFiles(files: File[]) {
 		bibliographyFile = files[0] ?? null;
 	}
-
 	async function retry() {
-		if (!batch || !workspace.can('item.create')) return;
-		busy = true;
-		error = '';
-		try {
-			const result = await workspace.api.request(
-				'POST',
-				'/workspaces/{workspace_id}/imports/{batch_id}/retry',
-				{
-					params: { path: { batch_id: batch.id } }
-				}
-			);
-			await acceptBatch(result);
-		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to retry Import'));
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function commit() {
-		if (!batch || batch.status !== 'ready' || busy || !workspace.can('item.create')) return;
-		busy = true;
-		error = '';
-		try {
-			await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/{batch_id}/commit', {
-				params: { path: { batch_id: batch.id } }
-			});
-			stopPolling();
-			await invalidateLibrary(queryClient, workspaceId);
-			await goto(resolve(workspaceHref(workspaceId, 'library')));
-		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to commit Import'));
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function discard() {
 		if (!batch || busy || !workspace.can('item.create')) return;
-		busy = true;
+		const snapshot = batch;
+		const started = origin();
+		const key = `batch:${snapshot.id}`;
+		pendingCommands.add(key);
 		error = '';
 		try {
-			await workspace.api.request('DELETE', '/workspaces/{workspace_id}/imports/{batch_id}', {
-				params: { path: { batch_id: batch.id } }
-			});
-			stopPolling();
-			batch = null;
-			refreshFailedBatchId = null;
-			const url = new URL(page.url.href);
-			url.searchParams.delete('batch');
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- page.url is already a resolved pathname
-			await replaceState(url, page.state);
+			const cacheBatch = await importBatchResponseWriter(queryClient, workspaceId, snapshot.id);
+			await acceptBatch(
+				await workspace.api.request('POST', '/workspaces/{workspace_id}/imports/{batch_id}/retry', {
+					params: { path: { batch_id: snapshot.id } }
+				}),
+				started,
+				cacheBatch
+			);
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to discard Import'));
+			if (isCurrent(started)) error = apiErrorMessage(reason, $t('Unable to retry Import'));
 		} finally {
-			busy = false;
+			pendingCommands.delete(key);
 		}
 	}
-
+	async function completed(next: ImportBatch, started: ReturnType<typeof origin>) {
+		uncertainConfirmations.delete(next.id);
+		// Cache refresh and navigation cannot change an authoritative successful confirmation.
+		void invalidateLibrary(queryClient, workspaceId);
+		void queryClient.invalidateQueries({ queryKey: importKeys.lists(workspaceId) });
+		if (!isCurrent(started)) return;
+		error = '';
+		try {
+			await goto(resolve(libraryHref(workspaceId, { import_batch: next.id })));
+		} catch {
+			if (mounted && page.url === started.url) navigationFailed = true;
+		}
+	}
+	async function commit() {
+		if (
+			!batch ||
+			batch.status !== 'ready' ||
+			busy ||
+			confirmationUnknown ||
+			previewUnavailable ||
+			!workspace.can('item.create')
+		)
+			return;
+		const snapshot = batch;
+		const started = origin();
+		const key = `batch:${snapshot.id}`;
+		pendingCommands.add(key);
+		error = '';
+		try {
+			const result = await confirmImportBatch(queryClient, workspaceId, snapshot.id);
+			if (result.status === 'committed') await completed(result.batch, started);
+			else if (result.status === 'unknown') uncertainConfirmations.add(snapshot.id);
+			else if (isCurrent(started))
+				error = apiErrorMessage(result.error, $t('Unable to commit Import'));
+		} finally {
+			pendingCommands.delete(key);
+		}
+	}
+	async function checkStatus() {
+		if (!batchId || busy) return;
+		const id = batchId;
+		const started = origin();
+		const key = `batch:${id}`;
+		pendingCommands.add(key);
+		try {
+			const latest = await readImportBatch(queryClient, workspaceId, id);
+			uncertainConfirmations.delete(id);
+			if (latest.status === 'committed') await completed(latest, started);
+		} catch {
+			uncertainConfirmations.add(id);
+		} finally {
+			pendingCommands.delete(key);
+		}
+	}
+	async function returnFromPreview() {
+		const href =
+			!workspace.can('item.create') && page.url.searchParams.get('from') !== 'history'
+				? workspaceHref(workspaceId, 'import/history')
+				: importReturnHref(workspaceId, page.url.searchParams);
+		await goto(resolve(href), {
+			reset: false,
+			state: page.state
+		});
+	}
+	async function discard() {
+		if (!batch || busy || confirmationUnknown || !workspace.can('item.create')) return;
+		const snapshot = batch;
+		const started = origin();
+		const key = `batch:${snapshot.id}`;
+		pendingCommands.add(key);
+		error = '';
+		try {
+			await deleteImportBatch(queryClient, workspaceId, snapshot.id);
+			if (!isCurrent(started)) return;
+			await goto(resolve(importReturnHref(workspaceId, started.url.searchParams)), {
+				replace: true,
+				reset: false,
+				state: page.state
+			});
+		} catch (reason) {
+			if (isCurrent(started))
+				error = apiErrorMessage(
+					reason,
+					snapshot.status === 'committed'
+						? $t('Unable to delete import record')
+						: $t('Unable to discard Import')
+				);
+		} finally {
+			pendingCommands.delete(key);
+		}
+	}
 	async function createItem(
 		metadata: components['schemas']['ItemDetailView']['metadata'],
 		citationKey: string
 	) {
 		if (!workspace.can('item.create') || busy || hasStagedBatch) return;
-		busy = true;
+		const started = origin();
+		pendingCommands.add('source');
 		error = '';
 		metadataErrors = [];
 		try {
 			const item = await workspace.api.request('POST', '/workspaces/{workspace_id}/items', {
 				body: { metadata, citation_key: citationKey || null }
 			});
-			await invalidateLibrary(queryClient, workspaceId);
-			await goto(resolve(workspaceHref(workspaceId, `item/${item.id}`)));
+			void invalidateLibrary(queryClient, workspaceId);
+			if (isCurrent(started)) await goto(resolve(workspaceHref(workspaceId, `item/${item.id}`)));
 		} catch (reason) {
-			metadataErrors = reason instanceof ApiError ? reason.fields : [];
-			error = apiErrorMessage(reason, $t('Unable to create Item'));
+			if (isCurrent(started)) {
+				metadataErrors = reason instanceof ApiError ? reason.fields : [];
+				error = apiErrorMessage(reason, $t('Unable to create Item'));
+			}
 		} finally {
-			busy = false;
+			pendingCommands.delete('source');
 		}
 	}
-
-	onMount(() => {
-		const batchId = page.url.searchParams.get('batch');
-		if (batchId) void loadBatch(batchId);
-	});
-	onDestroy(stopPolling);
 </script>
 
 <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
@@ -375,6 +386,19 @@
 			{$t('Add records using identifiers, bibliography files, PDFs, or the metadata editor.')}
 		</p>
 	</div>
+	{#if batchId}
+		<Button onclick={returnFromPreview}
+			>{page.url.searchParams.get('from') === 'history'
+				? $t('Back to import history')
+				: workspace.can('item.create')
+					? $t('New import')
+					: $t('Import history')}</Button
+		>
+	{:else}
+		<Button as="a" href={resolve(workspaceHref(workspaceId, 'import/history'))}
+			>{$t('Import history')}</Button
+		>
+	{/if}
 </div>
 <ol class="mb-6 flex list-none flex-wrap items-center p-0">
 	{#each [{ number: '1', title: $t('Choose a source') }, { number: '2', title: $t('Review the preview') }, { number: '3', title: $t('Commit to Library') }] as step, index (step.number)}
@@ -394,19 +418,29 @@
 		</li>
 	{/each}
 </ol>
-{#if error}<Notice variant="error" as="div">
-		{error}
-		{#if refreshFailedBatchId}
-			<Button
-				class="ml-3"
-				disabled={busy}
-				onclick={() => {
-					if (refreshFailedBatchId) void loadBatch(refreshFailedBatchId);
-				}}>{$t('Retry')}</Button
-			>
-		{/if}
-	</Notice>{/if}
-{#if workspace.can('item.create')}
+{#if error}<Notice variant="error">{error}</Notice>{/if}
+{#if confirmationUnknown}
+	<Notice variant="warning" as="div" class="flex flex-wrap items-center justify-between gap-3">
+		<span
+			>{$t(
+				'We could not confirm whether the import completed. Check its status before trying again.'
+			)}</span
+		>
+		<Button disabled={busy} onclick={checkStatus}>{$t('Check import status')}</Button>
+	</Notice>
+{:else if batchId && previewUnavailable}
+	<QueryError
+		message={apiErrorMessage(preview.error, $t('Unable to load Import preview'))}
+		busy={preview.isFetching}
+		onRetry={() => void preview.refetch()}
+	/>
+{/if}
+{#if navigationFailed}
+	<Notice variant="warning"
+		>{$t('Import succeeded. Use View imported Items to open the result.')}</Notice
+	>
+{/if}
+{#if !batchId && workspace.can('item.create')}
 	<Tabs
 		value={sourceTab}
 		onValueChange={(details) => {
@@ -506,7 +540,7 @@
 						label={$t('Bibliography file')}
 						actionLabel={$t('Choose file')}
 						accept={['.bib', '.bibtex', '.ris', '.json', 'application/json', 'text/plain']}
-						disabled={hasStagedBatch}
+						disabled={busy || hasStagedBatch}
 						onFilesChange={setBibliographyFiles}
 					/>
 					{#if bibliographyFile}
@@ -559,7 +593,6 @@
 			>
 				<div class="grid min-w-0 grid-cols-1 gap-3">
 					<FilePicker
-						bind:this={pdfPicker}
 						name="pdfs"
 						label={$t('PDF files')}
 						hint={$t('Drop PDFs here or choose them; choosing more later adds to the same batch.')}
@@ -568,7 +601,7 @@
 						multiple
 						maxFiles={50}
 						required={pdfFiles.length === 0}
-						disabled={hasStagedBatch}
+						disabled={busy || hasStagedBatch}
 						onFilesChange={(files) => (pdfFiles = files)}
 					/>
 				</div>
@@ -601,15 +634,21 @@
 		</Tabs.Content>
 	</Tabs>
 {/if}
-{#if batch}
-	<ImportBatchPreview
-		{batch}
-		canCommit={workspace.can('item.create')}
-		page={previewPage}
-		{busy}
-		onDiscard={discard}
-		onRetry={retry}
-		onCommit={commit}
-		onPage={(next) => (previewPage = next)}
-	/>
+{#if batchId && preview.isPending && preview.fetchStatus !== 'paused'}
+	<LoadingState label={$t('Loading Import preview…')} />
+{:else if batch}
+	{#key batch.id}
+		<ImportBatchPreview
+			{batch}
+			canCommit={workspace.can('item.create')}
+			page={previewPage}
+			busy={busy || confirmationUnknown || previewUnavailable}
+			resultHref={libraryHref(workspaceId, { import_batch: batch.id })}
+			onDiscard={discard}
+			onDeleteReceipt={discard}
+			onRetry={retry}
+			onCommit={commit}
+			onPage={(next) => (previewPage = next)}
+		/>
+	{/key}
 {/if}

@@ -8,7 +8,8 @@
 	import {
 		fileDeleteMutationOptions,
 		fileRemoteUploadMutationOptions,
-		fileUploadMutationOptions
+		fileUploadMutationOptions,
+		fileRetryMutationOptions
 	} from '#lib/features/item/files/mutations.js';
 	import ItemFilesSection from '#lib/features/item/files/ItemFilesSection.svelte';
 	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
@@ -47,6 +48,10 @@
 	);
 	const fileDelete = createMutation(() =>
 		fileDeleteMutationOptions(params.workspaceId, params.itemId, queryClient)
+	);
+
+	const fileRetry = createMutation(() =>
+		fileRetryMutationOptions(params.workspaceId, params.itemId, queryClient, trackDocument)
 	);
 
 	function track(promise: Promise<unknown>): Promise<boolean> {
@@ -131,10 +136,14 @@
 		metadata={overview.data!.metadata}
 		canEdit={can(overview.data?.authorization, 'file.manage')}
 		canDelete={can(overview.data?.authorization, 'file.delete')}
-		busy={fileUpload.isPending || fileRemoteUpload.isPending || fileDelete.isPending}
+		busy={fileUpload.isPending ||
+			fileRemoteUpload.isPending ||
+			fileDelete.isPending ||
+			fileRetry.isPending}
 		onUpload={upload}
 		onUploadFromUrl={uploadFromUrl}
 		onDownload={downloadFile}
 		onDelete={deleteFile}
+		onRetry={(file) => void track(fileRetry.mutateAsync({ file }))}
 	/>
 </ItemSectionState>

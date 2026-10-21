@@ -139,7 +139,9 @@ _Avoid_: Item
 
 **File Revision**:
 An immutable primary PDF version associated with an Item. It is pending while awaiting
-inspection and ready after its text and page geometry have been successfully extracted.
+inspection, ready after its text and page geometry have been successfully extracted, or failed
+when inspection cannot complete. A failed Revision retains its uploaded PDF and can be retried
+under a new processing workflow identity; stale attempts cannot publish over that generation.
 _Avoid_: Attachment, Item version
 
 **Attachment**:
@@ -167,12 +169,16 @@ _Avoid_: Comment
 
 **Annotation Reply**:
 A user-authored conversational response attached to one Annotation. It inherits that Annotation's
-visibility and has no independent PDF geometry or scope.
+visibility and has no independent PDF geometry or scope. Ordinary Annotation and Reply deletions
+can be undone for 24 hours by default; maintenance physically removes them after that window.
+Moderator deletion immediately removes the Annotation and its Replies and cannot be undone.
 _Avoid_: Annotation, Discussion Message
 
 **Annotation Export Artifact**:
 A temporary PDF derived from a File Revision and its visible Annotations for download. It remains
-available until its recorded expiration time and is then eligible for physical cleanup.
+available until its recorded expiration time and is then eligible for physical cleanup. Its own
+descriptor records the requesting User, source Revision and original ProjectItem identity for
+current-access checks; download does not depend on retained workflow history.
 
 **Discussion Message**:
 A conversational message attached to an Item and visible through Workspace Item access. A
@@ -207,9 +213,14 @@ a failed batch preserves its staged PDFs and assigns a new durable workflow. A p
 whose associated workflow is terminal or missing converges to failed before retry. An Import Batch owns its staged PDFs as file descriptors with stable source UUIDs; Candidate Records
 refer to those sources without embedding storage paths. A PDF Candidate Record retains
 its independently owned UUID object until confirmation creates the Item and associated File
-Revision, or until the Import Batch is discarded. After successful confirmation, the batch becomes
+Revision, or until the Import Batch is deleted or expires. After successful confirmation, the batch becomes
 committed, retains only the recorded committed Item IDs for idempotent confirmation responses, and no
-longer retains staged PDF object references.
+longer retains staged PDF object references, Candidate Records, diagnostics or its workflow link.
+Hourly maintenance retires batches after the configured period since their latest state change
+(seven days by default), preserving active or unconfirmed durable preparations. Reading a batch does
+not extend its retention. Workspace readers can list pending and committed batches in Import history;
+editors may delete a batch early, discarding staging or deleting its committed receipt. Deleting a receipt keeps
+its imported Items and Documents, but ends confirmation replay and the corresponding Library filter.
 _Avoid_: Staged Import, Import Queue
 
 **Import**:
@@ -272,7 +283,9 @@ _Avoid_: Invite Code, Signup Token
 A single-use, time-limited admission mechanism for adding an existing User to a Workspace.
 Accepting it creates a new Workspace Member; it does not provision instance identity or
 reactivate a suspended membership. Rejoining after termination creates a new membership
-generation without restoring old Project participation. Recipients may view their own invitations
+generation without restoring old Project participation. Terminal invitations and terminated
+membership generations are retained for 30 days by default, after which their receipts are unavailable.
+Recipients may view their own invitations
 without prior Workspace membership; an accepted invitation never grants access after membership
 suspension or termination.
 
@@ -285,7 +298,8 @@ current authority.
 _Avoid_: Login Session, OAuth Access Token, API Key
 
 **Audit Event**:
-An immutable record of a security-sensitive or data-changing action.
+An immutable record of a security-sensitive or data-changing action, retained for 90 days by default.
+Audit history is evidence within that window, never a prerequisite for completing durable cleanup.
 
 ## API mutation verbs
 

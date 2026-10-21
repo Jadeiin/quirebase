@@ -4,6 +4,7 @@ export type LibraryFilters = {
 	query?: string;
 	tag?: string;
 	project?: string;
+	import_batch?: string;
 	year?: string;
 	keyword?: string;
 	author?: string;
@@ -85,6 +86,7 @@ export function readLibraryFilters(
 		query: parameters.get('q')?.trim() ?? '',
 		tag: parameters.get('tag') ?? '',
 		project: parameters.get('project') ?? '',
+		import_batch: parameters.get('import_batch') || undefined,
 		year: parameters.get('year')?.trim() ?? '',
 		keyword: parameters.get('keyword')?.trim() ?? '',
 		author: parameters.get('author')?.trim() ?? '',
@@ -111,7 +113,16 @@ export function libraryParameters(
 	pageSize = 25
 ): URLSearchParams {
 	const result = new URLSearchParams();
-	for (const key of ['query', 'tag', 'project', 'year', 'keyword', 'author', 'sort'] as const) {
+	for (const key of [
+		'query',
+		'tag',
+		'project',
+		'import_batch',
+		'year',
+		'keyword',
+		'author',
+		'sort'
+	] as const) {
 		const value = filters[key];
 		if (value && !(key === 'sort' && value === 'updated')) {
 			result.set(key === 'query' ? 'q' : key, value);

@@ -60,7 +60,7 @@ async def list_user_sessions(db: AsyncSession, user: User) -> list[LoginSession]
         (
             await db.scalars(
                 select(LoginSession)
-                .where(LoginSession.user_id == user.id)
+                .where(LoginSession.user_id == user.id, LoginSession.expires_at > datetime.now(UTC))
                 .order_by(LoginSession.created_at.desc())
             )
         ).all()

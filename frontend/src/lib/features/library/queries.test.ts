@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { CancelledError, QueryClient } from '@tanstack/svelte-query';
 import { expect, it, vi } from 'vitest';
-import { invalidateItemOrganize, invalidateUnavailableProject } from '#lib/query/invalidation.js';
+import {
+	invalidateItemOrganize,
+	invalidateUnavailableImportReceipt,
+	invalidateUnavailableProject
+} from '#lib/query/invalidation.js';
 import {
 	libraryFacetsQuery,
 	libraryListQuery,
@@ -49,6 +53,7 @@ it('sends explicit empty exact name parts while omitting blank broad filters', a
 					publication_title: ' Journal & 特刊 ',
 					keyword_exact: 'Graph; theory',
 					query: '',
+					import_batch: 'batch-1',
 					tag: '',
 					has_files: false
 				},
@@ -62,6 +67,7 @@ it('sends explicit empty exact name parts while omitting blank broad filters', a
 		expect(parameters.get('keyword_exact')).toBe('Graph; theory');
 		expect(parameters.get('has_files')).toBe('false');
 		expect(parameters.get('offset')).toBe('25');
+		expect(parameters.get('import_batch')).toBe('batch-1');
 		expect(parameters.has('query')).toBe(false);
 		expect(parameters.has('tag')).toBe(false);
 	} finally {
@@ -116,6 +122,7 @@ it('shares facet caches across sorting while preserving exact filters and limit 
 		query: '',
 		tag: '',
 		project: 'project-1',
+		import_batch: 'batch-1',
 		year: '2025',
 		keyword: 'graph',
 		author: '',
@@ -138,6 +145,7 @@ it('shares facet caches across sorting while preserving exact filters and limit 
 		expect(received[0].pathname).toBe('/api/v1/workspaces/workspace-1/items/facets');
 		expect(Object.fromEntries(received[0].searchParams)).toEqual({
 			project: 'project-1',
+			import_batch: 'batch-1',
 			year: '2025',
 			keyword: 'graph',
 			reference_type: 'Dataset',
@@ -240,6 +248,67 @@ it.each(
 	}
 );
 
+it.each(
+	[403, 404, 409].flatMap((status) =>
+		(['list', 'facets'] as const).map((source) => ({ status, source }))
+	)
+)(
+	'purges only the unavailable import batch across cached pages and facets on $source HTTP $status',
+	async ({ status, source }) => {
+		vi.stubGlobal(
+			'fetch',
+			async () =>
+				new Response(
+					JSON.stringify({
+						code: status === 409 ? 'import_batch_conflict' : 'not_found',
+						message: 'Batch unavailable'
+					}),
+					{ status }
+				)
+		);
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const current = libraryListQuery('workspace-1', { import_batch: 'batch-1' }, 1);
+		const facets = libraryFacetsQuery('workspace-1', { import_batch: 'batch-1' });
+		const related = [
+			{ key: current.queryKey, data: snapshot },
+			{
+				key: libraryListQuery('workspace-1', { import_batch: 'batch-1', sort: 'title' }, 2, 50)
+					.queryKey,
+				data: snapshot
+			},
+			{ key: facets.queryKey, data: facetSnapshot },
+			{
+				key: libraryFacetsQuery('workspace-1', { import_batch: 'batch-1', year: '2026' }, 8)
+					.queryKey,
+				data: facetSnapshot
+			}
+		];
+		const unrelated = [
+			{
+				key: libraryListQuery('workspace-1', { import_batch: 'batch-2' }, 1).queryKey,
+				data: snapshot
+			},
+			{ key: libraryFacetsQuery('workspace-1', {}).queryKey, data: facetSnapshot },
+			{
+				key: libraryFacetsQuery('workspace-2', { import_batch: 'batch-1' }).queryKey,
+				data: facetSnapshot
+			}
+		];
+		try {
+			for (const { key, data } of [...related, ...unrelated])
+				client.setQueryData<LibrarySearch | LibraryFacets>(key, data);
+			await expect(
+				source === 'list' ? client.fetchQuery(current) : client.fetchQuery(facets)
+			).rejects.toMatchObject({ status });
+			for (const { key } of related) expect(client.getQueryData(key)).toBeNull();
+			for (const { key, data } of unrelated) expect(client.getQueryData(key)).toEqual(data);
+		} finally {
+			client.clear();
+			vi.unstubAllGlobals();
+		}
+	}
+);
+
 it.each([0, 429, 500])('keeps the last snapshot after transient failure %i', async (status) => {
 	vi.stubGlobal('fetch', async () => {
 		if (!status) throw new TypeError('Network unavailable');
@@ -248,8 +317,15 @@ it.each([0, 429, 500])('keeps the last snapshot after transient failure %i', asy
 		});
 	});
 	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	const options = libraryListQuery('workspace-1', { project: 'project-1' }, 1);
-	const facets = libraryFacetsQuery('workspace-1', { project: 'project-1' });
+	const options = libraryListQuery(
+		'workspace-1',
+		{ project: 'project-1', import_batch: 'batch-1' },
+		1
+	);
+	const facets = libraryFacetsQuery('workspace-1', {
+		project: 'project-1',
+		import_batch: 'batch-1'
+	});
 	try {
 		client.setQueryData(options.queryKey, snapshot);
 		client.setQueryData(facets.queryKey, facetSnapshot);
@@ -263,44 +339,174 @@ it.each([0, 429, 500])('keeps the last snapshot after transient failure %i', asy
 	}
 });
 
-it('cancels an older Project page before its late response can restore denied associations', async () => {
-	let olderRequest: Request | undefined;
-	let arrived = () => {};
-	let release = () => {};
-	const requested = new Promise<void>((resolve) => {
-		arrived = resolve;
-	});
-	vi.stubGlobal('fetch', async (request: Request) => {
-		if (new URL(request.url).searchParams.get('offset') === '25') {
-			olderRequest = request;
-			arrived();
-			return new Promise<Response>((resolve) => {
-				release = () => resolve(new Response(JSON.stringify(snapshot)));
-			});
+it.each(
+	[
+		{ status: 404, code: 'import_batch_unavailable', unavailable: 'import_batch' },
+		{ status: 409, code: 'import_batch_conflict', unavailable: 'import_batch' },
+		{ status: 403, code: 'permission_denied', unavailable: 'project' },
+		{ status: 404, code: 'not_found', unavailable: 'project' }
+	].flatMap((failure) => (['list', 'facets'] as const).map((source) => ({ ...failure, source })))
+)(
+	'purges only the failed $unavailable from combined filters after $source receives $code',
+	async ({ status, code, unavailable, source }) => {
+		vi.stubGlobal(
+			'fetch',
+			async () => new Response(JSON.stringify({ code, message: 'Unavailable' }), { status })
+		);
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const filters = { project: 'project-1', import_batch: 'batch-1' };
+		const list = libraryListQuery('workspace-1', filters, 1);
+		const facets = libraryFacetsQuery('workspace-1', filters);
+		const caches = [
+			{ workspaceId: 'workspace-1', filters },
+			{ workspaceId: 'workspace-1', filters: { ...filters, sort: 'title' as const } },
+			{ workspaceId: 'workspace-1', filters: { project: 'project-1' } },
+			{ workspaceId: 'workspace-1', filters: { import_batch: 'batch-1' } },
+			{
+				workspaceId: 'workspace-1',
+				filters: { project: 'project-1', import_batch: 'batch-2' }
+			},
+			{
+				workspaceId: 'workspace-1',
+				filters: { project: 'project-2', import_batch: 'batch-1' }
+			},
+			{ workspaceId: 'workspace-2', filters }
+		].flatMap(({ workspaceId, filters }) =>
+			[
+				{ key: libraryListQuery(workspaceId, filters, 2, 10).queryKey, data: snapshot },
+				{ key: libraryFacetsQuery(workspaceId, filters, 8).queryKey, data: facetSnapshot }
+			].map((cache) => ({
+				...cache,
+				denied:
+					workspaceId === 'workspace-1' &&
+					(unavailable === 'project'
+						? filters.project === 'project-1'
+						: filters.import_batch === 'batch-1')
+			}))
+		);
+		try {
+			client.setQueryData(list.queryKey, snapshot);
+			client.setQueryData(facets.queryKey, facetSnapshot);
+			for (const { key, data } of caches)
+				client.setQueryData<LibrarySearch | LibraryFacets>(key, data);
+			await expect(
+				source === 'list' ? client.fetchQuery(list) : client.fetchQuery(facets)
+			).rejects.toMatchObject({ status, code });
+			expect(client.getQueryData(list.queryKey)).toBeNull();
+			expect(client.getQueryData(facets.queryKey)).toBeNull();
+			for (const { key, data, denied } of caches)
+				expect(client.getQueryData(key)).toEqual(denied ? null : data);
+		} finally {
+			client.clear();
+			vi.unstubAllGlobals();
 		}
-		return new Response(JSON.stringify({ code: 'not_found', message: 'Not found' }), {
-			status: 404
-		});
-	});
-	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	const current = libraryListQuery('workspace-1', { project: 'project-1' }, 1);
-	const older = libraryListQuery('workspace-1', { project: 'project-1' }, 2);
-	try {
-		client.setQueryData(current.queryKey, snapshot);
-		client.setQueryData(older.queryKey, snapshot);
-		const obsolete = client.fetchQuery(older).catch((reason: unknown) => reason);
-		await requested;
-		await expect(client.fetchQuery(current)).rejects.toMatchObject({ status: 404 });
-		expect(olderRequest?.signal.aborted).toBe(true);
-		release();
-		expect(await obsolete).toBeInstanceOf(CancelledError);
-		expect(client.getQueryData(older.queryKey)).toBeNull();
-	} finally {
-		release();
-		client.clear();
-		vi.unstubAllGlobals();
 	}
-});
+);
+
+it.each([{ project: 'project-1' }, { import_batch: 'batch-1' }])(
+	'cancels an older scoped page before its late response can restore unavailable data: %j',
+	async (filters) => {
+		let olderRequest: Request | undefined;
+		let arrived = () => {};
+		let release = () => {};
+		const requested = new Promise<void>((resolve) => {
+			arrived = resolve;
+		});
+		vi.stubGlobal('fetch', async (request: Request) => {
+			if (new URL(request.url).searchParams.get('offset') === '25') {
+				olderRequest = request;
+				arrived();
+				return new Promise<Response>((resolve) => {
+					release = () => resolve(new Response(JSON.stringify(snapshot)));
+				});
+			}
+			return new Response(JSON.stringify({ code: 'not_found', message: 'Not found' }), {
+				status: 404
+			});
+		});
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const current = libraryListQuery('workspace-1', filters, 1);
+		const older = libraryListQuery('workspace-1', filters, 2);
+		try {
+			client.setQueryData(current.queryKey, snapshot);
+			client.setQueryData(older.queryKey, snapshot);
+			const obsolete = client.fetchQuery(older).catch((reason: unknown) => reason);
+			await requested;
+			await expect(client.fetchQuery(current)).rejects.toMatchObject({ status: 404 });
+			expect(olderRequest?.signal.aborted).toBe(true);
+			release();
+			expect(await obsolete).toBeInstanceOf(CancelledError);
+			expect(client.getQueryData(older.queryKey)).toBeNull();
+		} finally {
+			release();
+			client.clear();
+			vi.unstubAllGlobals();
+		}
+	}
+);
+
+it.each([
+	{
+		code: 'import_batch_unavailable',
+		related: { import_batch: 'batch-1' },
+		valid: { project: 'project-1' }
+	},
+	{ code: 'not_found', related: { project: 'project-1' }, valid: { import_batch: 'batch-1' } }
+])(
+	'cancels only the failed scope from combined filters on $code',
+	async ({ code, related, valid }) => {
+		const requests: Request[] = [];
+		const releases: Array<() => void> = [];
+		vi.stubGlobal('fetch', async (request: Request) => {
+			const url = new URL(request.url);
+			if (url.searchParams.has('project') && url.searchParams.has('import_batch'))
+				return new Response(JSON.stringify({ code, message: 'Unavailable' }), { status: 404 });
+			requests.push(request);
+			return new Promise<Response>((resolve) => {
+				releases.push(() =>
+					resolve(
+						new Response(
+							JSON.stringify(url.pathname.endsWith('/facets') ? facetSnapshot : snapshot)
+						)
+					)
+				);
+			});
+		});
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const current = libraryListQuery(
+			'workspace-1',
+			{ project: 'project-1', import_batch: 'batch-1' },
+			1
+		);
+		const relatedList = libraryListQuery('workspace-1', related, 2);
+		const relatedFacets = libraryFacetsQuery('workspace-1', related);
+		const validList = libraryListQuery('workspace-1', valid, 2);
+		const validFacets = libraryFacetsQuery('workspace-1', valid);
+		const pending = [
+			client.fetchQuery(relatedList).catch((reason: unknown) => reason),
+			client.fetchQuery(relatedFacets).catch((reason: unknown) => reason),
+			client.fetchQuery(validList),
+			client.fetchQuery(validFacets)
+		];
+		try {
+			await vi.waitFor(() => expect(requests).toHaveLength(4));
+			await expect(client.fetchQuery(current)).rejects.toMatchObject({ code });
+			expect(requests.map((request) => request.signal.aborted)).toEqual([true, true, false, false]);
+			for (const release of releases) release();
+			const results = await Promise.all(pending);
+			expect(results[0]).toBeInstanceOf(CancelledError);
+			expect(results[1]).toBeInstanceOf(CancelledError);
+			expect(client.getQueryData(relatedList.queryKey)).toBeNull();
+			expect(client.getQueryData(relatedFacets.queryKey)).toBeNull();
+			expect(client.getQueryData(validList.queryKey)).toEqual(snapshot);
+			expect(client.getQueryData(validFacets.queryKey)).toEqual(facetSnapshot);
+		} finally {
+			for (const release of releases) release();
+			client.clear();
+			vi.unstubAllGlobals();
+		}
+	}
+);
 
 it.each(['list', 'facets'] as const)(
 	'cancels related in-flight reads when a Project %s request is denied',
@@ -382,5 +588,84 @@ it('purges unavailable Project facets independently of list pages and other Proj
 			expect(client.getQueryData(options.queryKey)).toEqual(facetSnapshot);
 	} finally {
 		client.clear();
+	}
+});
+
+it('retires deleted receipt projections across pages and facets without allowing late reads to restore them', async () => {
+	const requests: Request[] = [];
+	const releases: Array<() => void> = [];
+	vi.stubGlobal('fetch', async (request: Request) => {
+		requests.push(request);
+		return new Promise<Response>((resolve) => {
+			releases.push(() =>
+				resolve(
+					new Response(
+						JSON.stringify(
+							new URL(request.url).pathname.endsWith('/facets') ? facetSnapshot : snapshot
+						)
+					)
+				)
+			);
+		});
+	});
+	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+	const current = libraryListQuery('workspace-1', { import_batch: 'batch-1' }, 1);
+	const facets = libraryFacetsQuery('workspace-1', { import_batch: 'batch-1' });
+	const related = [
+		{ key: current.queryKey, data: snapshot },
+		{ key: facets.queryKey, data: facetSnapshot },
+		{
+			key: libraryListQuery('workspace-1', { import_batch: 'batch-1' }, 2).queryKey,
+			data: snapshot
+		},
+		{
+			key: libraryListQuery('workspace-1', { import_batch: 'batch-1', sort: 'title' }, 1, 10)
+				.queryKey,
+			data: snapshot
+		},
+		{
+			key: libraryFacetsQuery('workspace-1', { import_batch: 'batch-1', year: '2025' }).queryKey,
+			data: facetSnapshot
+		}
+	];
+	const unrelated = [
+		{
+			key: libraryListQuery('workspace-1', { import_batch: 'batch-2' }, 1).queryKey,
+			data: snapshot
+		},
+		{
+			key: libraryFacetsQuery('workspace-1', { import_batch: 'batch-2' }).queryKey,
+			data: facetSnapshot
+		},
+		{
+			key: libraryListQuery('workspace-2', { import_batch: 'batch-1' }, 1).queryKey,
+			data: snapshot
+		},
+		{
+			key: libraryFacetsQuery('workspace-2', { import_batch: 'batch-1' }).queryKey,
+			data: facetSnapshot
+		},
+		{ key: libraryListQuery('workspace-1', {}, 1).queryKey, data: snapshot }
+	];
+	try {
+		for (const { key, data } of [...related, ...unrelated])
+			client.setQueryData<LibrarySearch | LibraryFacets>(key, data);
+		const pendingList = client.fetchQuery(current).catch((reason: unknown) => reason);
+		const pendingFacets = client.fetchQuery(facets).catch((reason: unknown) => reason);
+		await vi.waitFor(() => expect(requests).toHaveLength(2));
+		await invalidateUnavailableImportReceipt(client, 'workspace-1', 'batch-1');
+		for (const request of requests) expect(request.signal.aborted).toBe(true);
+		for (const release of releases) release();
+		expect(await pendingList).toBeInstanceOf(CancelledError);
+		expect(await pendingFacets).toBeInstanceOf(CancelledError);
+		for (const { key } of related) {
+			expect(client.getQueryData(key)).toBeNull();
+			expect(client.getQueryState(key)?.dataUpdatedAt).toBe(0);
+		}
+		for (const { key, data } of unrelated) expect(client.getQueryData(key)).toEqual(data);
+	} finally {
+		for (const release of releases) release();
+		client.clear();
+		vi.unstubAllGlobals();
 	}
 });

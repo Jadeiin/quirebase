@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from advanced_alchemy.types import FileObject
 from dbos import DBOS
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 
 from quirebase.access import (
     ResourceAction,
@@ -17,13 +18,18 @@ from quirebase.audit import record_event
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal
 from quirebase.core.errors import ResourceUnavailable, ValidationFailure
+from quirebase.core.persistence import conflict_insert
+from quirebase.core.workflow_storage import (
+    purge_orphan_datasource_outputs,
+    purge_workflow_history,
+)
 from quirebase.core.workflows import OPERATIONS_QUEUE, ads, durable_operations
 from quirebase.documents import (
     delete_unreferenced_objects,
     list_expired_export_artifacts,
     retire_expired_export_artifacts,
 )
-from quirebase.models import FileRevision, Item, ObjectIntegrityScan, User
+from quirebase.models import FileRevision, Item, MaintenanceSnapshot, User
 from quirebase.search import search_index
 
 from .maintenance import (
@@ -46,6 +52,9 @@ _MAINTENANCE_WORKFLOWS = {
 
 _REINDEX_BATCH_SIZE = 100
 _EXPORT_CLEANUP_BATCH_SIZE = 100
+_RETENTION_BATCH_SIZE = 500
+_RETENTION_MAX_BATCHES = 100
+_INTEGRITY_ERROR_SAMPLE_SIZE = 100
 
 
 async def dispatch_maintenance_workflow(db, admin: User, operation: str) -> str:
@@ -236,25 +245,53 @@ async def reindex_workspace_workflow(
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
 async def scan_objects_step() -> dict[str, Any]:
-    async with AsyncSessionLocal() as db:
-        errors, candidates, thumbnail_sizes = await scan_objects(db)
+    started_at = datetime.now(UTC)
+    try:
+        async with AsyncSessionLocal() as db:
+            errors, candidates, thumbnail_sizes = await scan_objects(db)
+            deleted = await delete_orphan_candidates(db, candidates)
+            await db.rollback()
+            async with db.begin():
+                await record_integrity_scan(db, started_at, errors, thumbnail_sizes)
         return {
-            "errors": errors,
-            "orphan_candidates": list(candidates),
-            "thumbnail_sizes": thumbnail_sizes,
+            "error_count": len(errors),
+            "deleted_orphans": len(deleted),
+            "checked_status": "ok" if not errors else "inconsistencies_found",
         }
+    except Exception as exc:
+        async with AsyncSessionLocal() as db, db.begin():
+            await _save_integrity_snapshot(
+                db,
+                started_at,
+                status="failed",
+                checked_at=None,
+                errors=[type(exc).__name__],
+                error_count=1,
+                missing_count=0,
+                mismatch_count=0,
+            )
+        raise
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3)
-async def delete_orphan_candidates_step(candidates: list[str]) -> list[str]:
-    async with AsyncSessionLocal() as db:
-        deleted = await delete_orphan_candidates(db, tuple(candidates))
-        return list(deleted)
+async def _save_integrity_snapshot(db, started_at: datetime, **values: Any) -> None:
+    statement = conflict_insert(db, MaintenanceSnapshot).values(
+        id=1, started_at=started_at, **values
+    )
+    await db.execute(
+        statement.on_conflict_do_update(
+            index_elements=[MaintenanceSnapshot.id],
+            set_={"started_at": started_at, **values},
+            where=or_(
+                MaintenanceSnapshot.started_at.is_(None),
+                MaintenanceSnapshot.started_at <= started_at,
+            ),
+        )
+    )
 
 
-@ads.transaction(isolation_level="READ COMMITTED")
-async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[str, dict]) -> None:
-    db = ads.sql_session()
+async def record_integrity_scan(
+    db, started_at: datetime, errors: list[str], thumbnail_sizes: dict[str, dict]
+) -> None:
     for revision_id, repair in thumbnail_sizes.items():
         revision = await db.scalar(
             select(FileRevision).where(FileRevision.id == UUID(revision_id)).with_for_update()
@@ -274,27 +311,20 @@ async def record_integrity_scan_step(errors: list[str], thumbnail_sizes: dict[st
             )
     missing_count = sum("missing " in error for error in errors)
     mismatch_count = sum("mismatch" in error for error in errors)
-    db.add(
-        ObjectIntegrityScan(
-            status="ok" if not errors else "inconsistencies_found",
-            missing_count=missing_count,
-            mismatch_count=mismatch_count,
-            errors=errors,
-        )
+    await _save_integrity_snapshot(
+        db,
+        started_at,
+        status="ok" if not errors else "inconsistencies_found",
+        missing_count=missing_count,
+        mismatch_count=mismatch_count,
+        error_count=len(errors),
+        errors=errors[:_INTEGRITY_ERROR_SAMPLE_SIZE],
+        checked_at=datetime.now(UTC),
     )
-    await db.flush()
 
 
 async def _run_integrity_scan() -> dict[str, Any]:
-    report = await scan_objects_step()
-    errors = report["errors"]
-    deleted = await delete_orphan_candidates_step(report["orphan_candidates"])
-    await record_integrity_scan_step(errors, report["thumbnail_sizes"])
-    return {
-        "errors": errors,
-        "deleted_orphans": deleted,
-        "checked_status": "ok" if not errors else "inconsistencies_found",
-    }
+    return await scan_objects_step()
 
 
 @DBOS.workflow(name=CHECK_OBJECTS_WORKFLOW)
@@ -349,8 +379,131 @@ async def _run_export_cleanup() -> int:
     return removed
 
 
+async def _purge_retention_batches(
+    purge, *, key: str | None = None, **parameters
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for _ in range(_RETENTION_MAX_BATCHES):
+        async with AsyncSessionLocal() as db, db.begin():
+            batch = await purge(db, limit=_RETENTION_BATCH_SIZE, **parameters)
+        if isinstance(batch, int):
+            assert key is not None
+            batch = {key: batch}
+        for name, count in batch.items():
+            counts[name] = counts.get(name, 0) + count
+        # Retiring a parent makes its children newly eligible, even if the parent
+        # batch was smaller than the page limit. Continue until an empty batch.
+        if not any(batch.values()):
+            break
+    return counts
+
+
+async def _purge_import_batches(before: datetime) -> int:
+    from quirebase.library import purge_expired_import_batches
+
+    removed = 0
+    after = None
+    for _ in range(_RETENTION_MAX_BATCHES):
+        async with AsyncSessionLocal() as db, db.begin():
+            count, after = await purge_expired_import_batches(
+                db, before=before, limit=_RETENTION_BATCH_SIZE, after=after
+            )
+        removed += count
+        if after is None:
+            break
+    return removed
+
+
+async def _save_cleanup_snapshot(
+    started_at: datetime, *, counts: dict[str, int] | None = None, error: str | None = None
+) -> None:
+    values = {
+        "cleanup_started_at": started_at,
+        "cleanup_checked_at": datetime.now(UTC) if counts is not None else None,
+        "cleanup_counts": counts,
+        "cleanup_error": error,
+    }
+    async with AsyncSessionLocal() as db, db.begin():
+        statement = conflict_insert(db, MaintenanceSnapshot).values(id=1, **values)
+        await db.execute(
+            statement.on_conflict_do_update(
+                index_elements=[MaintenanceSnapshot.id],
+                set_=values,
+                where=or_(
+                    MaintenanceSnapshot.cleanup_started_at.is_(None),
+                    MaintenanceSnapshot.cleanup_started_at <= started_at,
+                ),
+            )
+        )
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3)
+async def cleanup_retained_data_step() -> dict[str, int]:
+    # Import the owned maintenance operations at execution time: Accounts and
+    # Workspaces also consume Operations runtime settings during facade bootstrap.
+    from quirebase.accounts import purge_expired_account_records
+    from quirebase.audit import purge_audit_events
+    from quirebase.documents import purge_deleted_annotations, purge_deleted_replies
+    from quirebase.workspaces import purge_workspace_history
+
+    settings = get_settings()
+    started_at = datetime.now(UTC)
+    terminal_before = started_at - timedelta(days=settings.terminal_metadata_retention_days)
+    annotation_before = started_at - timedelta(hours=settings.annotation_undo_hours)
+    await _save_cleanup_snapshot(started_at)
+    try:
+        counts = await _purge_retention_batches(
+            purge_expired_account_records, now=started_at, terminal_before=terminal_before
+        )
+        counts.update(
+            await _purge_retention_batches(purge_workspace_history, before=terminal_before)
+        )
+        counts.update(
+            await _purge_retention_batches(
+                purge_audit_events,
+                key="audit_events",
+                before=started_at - timedelta(days=settings.audit_retention_days),
+            )
+        )
+        counts.update(
+            await _purge_retention_batches(
+                purge_deleted_replies, key="annotation_replies", before=annotation_before
+            )
+        )
+        counts.update(
+            await _purge_retention_batches(
+                purge_deleted_annotations, key="annotations", before=annotation_before
+            )
+        )
+        counts["import_batches"] = await _purge_import_batches(
+            started_at - timedelta(days=settings.import_batch_retention_days)
+        )
+        counts.update(
+            await _purge_retention_batches(
+                purge_workflow_history,
+                before=started_at - timedelta(days=settings.workflow_history_retention_days),
+            )
+        )
+        # Always sweep, even when no workflow expired this round. Late SDK result
+        # and independent error receipts can arrive after an earlier retirement.
+        counts["orphan_datasource_checkpoints"] = (
+            await _purge_retention_batches(
+                purge_orphan_datasource_outputs,
+                key="orphan_datasource_checkpoints",
+                before=started_at,
+            )
+        )["orphan_datasource_checkpoints"]
+    except Exception as exc:
+        await _save_cleanup_snapshot(started_at, error=type(exc).__name__)
+        raise
+    await _save_cleanup_snapshot(started_at, counts=counts)
+    return counts
+
+
 @DBOS.workflow(name=PERIODIC_MAINTENANCE_WORKFLOW)
 async def periodic_maintenance_workflow(_scheduled_time: Any, _context: Any) -> None:
+    # Database retention remains available when Object Store maintenance fails.
+    await cleanup_retained_data_step()
     await _run_export_cleanup()
     await _run_integrity_scan()
 

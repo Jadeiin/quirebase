@@ -1,6 +1,34 @@
-import type { TrackedWorkflow, WorkflowLedger } from './center.svelte';
+import type { TrackedWorkflow, WorkflowLedger, WorkflowTarget } from './center.svelte';
+import type { WorkflowStatus } from './queries';
 
 const STORAGE_PREFIX = 'quirebase:tracked-workflows';
+
+function isWorkflowTarget(target: unknown): target is WorkflowTarget {
+	return (
+		target !== null &&
+		typeof target === 'object' &&
+		'kind' in target &&
+		target.kind === 'import_batch' &&
+		'id' in target &&
+		typeof target.id === 'string' &&
+		target.id.length > 0 &&
+		target.id.length <= 256
+	);
+}
+
+function isTerminalOutcome(outcome: unknown, id: string): outcome is WorkflowStatus {
+	return (
+		outcome !== null &&
+		typeof outcome === 'object' &&
+		'id' in outcome &&
+		outcome.id === id &&
+		'state' in outcome &&
+		(outcome.state === 'succeeded' ||
+			outcome.state === 'failed' ||
+			outcome.state === 'cancelled') &&
+		(!('error' in outcome) || outcome.error === null || typeof outcome.error === 'string')
+	);
+}
 
 function isTrackedWorkflow(entry: unknown): entry is TrackedWorkflow {
 	return (
@@ -15,7 +43,23 @@ function isTrackedWorkflow(entry: unknown): entry is TrackedWorkflow {
 		'failureMessage' in entry &&
 		typeof entry.failureMessage === 'string' &&
 		'startedAt' in entry &&
-		typeof entry.startedAt === 'number'
+		typeof entry.startedAt === 'number' &&
+		Number.isFinite(entry.startedAt) &&
+		(!('workspaceId' in entry) ||
+			entry.workspaceId === undefined ||
+			typeof entry.workspaceId === 'string') &&
+		(!('target' in entry) ||
+			entry.target === undefined ||
+			('workspaceId' in entry &&
+				typeof entry.workspaceId === 'string' &&
+				Boolean(entry.workspaceId) &&
+				isWorkflowTarget(entry.target))) &&
+		(!('unavailable' in entry) ||
+			entry.unavailable === undefined ||
+			typeof entry.unavailable === 'boolean') &&
+		(!('outcome' in entry) ||
+			entry.outcome === undefined ||
+			('target' in entry && Boolean(entry.target) && isTerminalOutcome(entry.outcome, entry.id)))
 	);
 }
 

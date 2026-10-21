@@ -300,8 +300,8 @@ The generator selects only Work-reachable definitions from the installed officia
 records no handwritten field schema. Commit generated Python/OpenAPI TypeScript output together
 with dependency locks. Repeated generation must produce no content change.
 
-The initial revision remains `cde8b41cfa2d`; the search revision still follows it as
-`bd688512265a`. The initial schema creates `items.work` and no identifier table. Both migrations
-apply to fresh SQLite/PostgreSQL and can roundtrip. A database initialized from the old version
-of the initial revision must be rebuilt; applying the same revision IDs does not upgrade its
-physical schema. No old durable checkpoints or flat metadata are accepted on this breaking branch.
+The alpha initial revision is regenerated from current metadata, with the dialect-specific search
+revision following it. The initial schema creates `items.work` and no identifier table. Both
+migrations apply to fresh SQLite/PostgreSQL and can roundtrip. Databases stamped by the earlier
+alpha chain must be rebuilt; no compatibility data conversion, old durable checkpoints or flat
+metadata readers are provided.

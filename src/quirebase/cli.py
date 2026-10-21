@@ -29,7 +29,13 @@ from .core.workflows import (
 )
 from .library.tag_recommendations import validate_engine_configuration
 from .models import SystemRole, User
-from .operations import check_objects, create_backup, restore_backup, verify_backup
+from .operations import (
+    check_objects,
+    compact_sqlite_database,
+    create_backup,
+    restore_backup,
+    verify_backup,
+)
 from .operations.workflows import maintenance_schedules
 from .projects import check_project_integrity
 from .search import reindex_all
@@ -270,6 +276,22 @@ def reindex():
 def backup(destination: Path = typer.Argument(...)):
     path = asyncio.run(create_backup(destination.resolve()))
     typer.echo(f"Backup created: {path}")
+
+
+@app.command("compact-sqlite")
+def compact_sqlite():
+    """Reclaim SQLite file space offline. Stop every serve and worker process first."""
+    try:
+        result = compact_sqlite_database()
+    except (ValueError, FileNotFoundError) as error:
+        raise typer.BadParameter(str(error)) from error
+    except RuntimeError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from error
+    typer.echo(
+        f"SQLite compacted: {result.database} "
+        f"({result.bytes_before} -> {result.bytes_after} bytes, database and WAL)."
+    )
 
 
 @app.command("verify-backup")

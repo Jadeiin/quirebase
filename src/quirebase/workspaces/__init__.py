@@ -44,6 +44,7 @@ from quirebase.workspaces.membership import (
     terminate_workspace_member,
     transfer_workspace_ownership,
 )
+from quirebase.workspaces.retention import purge_workspace_history
 
 __all__ = [
     "accept_workspace_invitation",
@@ -66,6 +67,7 @@ __all__ = [
     "list_workspaces",
     "list_workspaces_for_governance",
     "provision_initial_workspace",
+    "purge_workspace_history",
     "reactivate_workspace_member",
     "read_workspace_items_break_glass",
     "reassign_workspace_owner",

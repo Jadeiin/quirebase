@@ -129,6 +129,7 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "query",
         "tag",
         "project",
+        "import_batch",
         "year",
         "keyword",
         "author",

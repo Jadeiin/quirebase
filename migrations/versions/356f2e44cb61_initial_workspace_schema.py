@@ -1,8 +1,8 @@
 """initial workspace schema
 
-Revision ID: cde8b41cfa2d
+Revision ID: 356f2e44cb61
 Revises:
-Create Date: 2026-10-11 20:44:29.431967
+Create Date: 2026-10-21 13:28:33.972727
 
 """
 
@@ -42,7 +42,7 @@ sa.TOTPSecret = TOTPSecret
 sa.OneTimeCode = OneTimeCode
 
 # revision identifiers, used by Alembic.
-revision = 'cde8b41cfa2d'
+revision = '356f2e44cb61'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -71,21 +71,25 @@ def schema_upgrades() -> None:
     sa.Column('window_started_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('identity_hash', name=op.f('pk_login_throttles'))
     )
-    op.create_table('object_integrity_scans',
-    sa.Column('id', sa.GUID(length=16), nullable=False),
+    with op.batch_alter_table('login_throttles', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_login_throttles_window_started_at'), ['window_started_at'], unique=False)
+
+    op.create_table('maintenance_snapshot',
+    sa.Column('id', sa.Integer(), autoincrement=False, nullable=False),
     sa.Column('status', sa.String(length=32), nullable=False),
     sa.Column('missing_count', sa.Integer(), nullable=False),
     sa.Column('mismatch_count', sa.Integer(), nullable=False),
+    sa.Column('error_count', sa.Integer(), nullable=False),
     sa.Column('errors', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
-    sa.Column('checked_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
-    sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_object_integrity_scans'))
+    sa.Column('started_at', sa.DateTimeUTC(timezone=True), nullable=True),
+    sa.Column('checked_at', sa.DateTimeUTC(timezone=True), nullable=True),
+    sa.Column('cleanup_checked_at', sa.DateTimeUTC(timezone=True), nullable=True),
+    sa.Column('cleanup_started_at', sa.DateTimeUTC(timezone=True), nullable=True),
+    sa.Column('cleanup_counts', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
+    sa.Column('cleanup_error', sa.String(length=120), nullable=True),
+    sa.CheckConstraint('id = 1', name=op.f('ck_maintenance_snapshot_singleton_maintenance_snapshot')),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_maintenance_snapshot'))
     )
-    with op.batch_alter_table('object_integrity_scans', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_object_integrity_scans_checked_at'), ['checked_at'], unique=False)
-
     op.create_table('users',
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('username', sa.String(length=120), nullable=False),
@@ -115,6 +119,7 @@ def schema_upgrades() -> None:
     )
     with op.batch_alter_table('api_tokens', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_api_tokens_expires_at'), ['expires_at'], unique=False)
+        batch_op.create_index(batch_op.f('ix_api_tokens_revoked_at'), ['revoked_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_api_tokens_token_hash'), ['token_hash'], unique=True)
         batch_op.create_index(batch_op.f('ix_api_tokens_user_id'), ['user_id'], unique=False)
 
@@ -139,6 +144,7 @@ def schema_upgrades() -> None:
     )
     with op.batch_alter_table('audit_events', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_audit_events_action'), ['action'], unique=False)
+        batch_op.create_index('ix_audit_events_created_at_id', ['created_at', 'id'], unique=False)
         batch_op.create_index(batch_op.f('ix_audit_events_project_id'), ['project_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_audit_events_workspace_id'), ['workspace_id'], unique=False)
 
@@ -150,16 +156,19 @@ def schema_upgrades() -> None:
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
     sa.Column('expires_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('accepted_at', sa.DateTimeUTC(timezone=True), nullable=True),
+    sa.Column('revoked_at', sa.DateTimeUTC(timezone=True), nullable=True),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], name=op.f('fk_invitations_created_by_users'), ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_invitations')),
-    sa.UniqueConstraint('username', name=op.f('uq_invitations_username'))
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_invitations'))
     )
     with op.batch_alter_table('invitations', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_invitations_accepted_at'), ['accepted_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_invitations_expires_at'), ['expires_at'], unique=False)
+        batch_op.create_index(batch_op.f('ix_invitations_revoked_at'), ['revoked_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_invitations_token_hash'), ['token_hash'], unique=True)
+        batch_op.create_index('uq_invitations_pending_username', ['username'], unique=True, sqlite_where=sa.text('accepted_at IS NULL AND revoked_at IS NULL'), postgresql_where=sa.text('accepted_at IS NULL AND revoked_at IS NULL'))
 
     op.create_table('login_sessions',
     sa.Column('id', sa.GUID(length=16), nullable=False),
@@ -220,6 +229,9 @@ def schema_upgrades() -> None:
     op.create_table('export_artifacts',
     sa.Column('workflow_id', sa.String(length=255), nullable=False),
     sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
+    sa.Column('actor_id', sa.GUID(length=16), nullable=False),
+    sa.Column('revision_id', sa.GUID(length=16), nullable=False),
+    sa.Column('project_item_id', sa.GUID(length=16), nullable=True),
     sa.Column('file', sa.StoredObject(backend='documents'), nullable=False),
     sa.Column('expires_at', sa.DateTimeUTC(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], name=op.f('fk_export_artifacts_workspace_id_workspaces'), ondelete='CASCADE'),
@@ -255,7 +267,7 @@ def schema_upgrades() -> None:
     op.create_table('items',
     sa.Column('id', sa.GUID(length=16), nullable=False),
     sa.Column('workspace_id', sa.GUID(length=16), nullable=False),
-    sa.Column('work', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
+    sa.Column('work', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
     sa.Column('citation_key', sa.String(length=128), nullable=True),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
     sa.Column('updated_by', sa.GUID(length=16), nullable=True),
@@ -331,7 +343,9 @@ def schema_upgrades() -> None:
     sa.PrimaryKeyConstraint('id', name=op.f('pk_workspace_invitations'))
     )
     with op.batch_alter_table('workspace_invitations', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_workspace_invitations_accepted_at'), ['accepted_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_workspace_invitations_expires_at'), ['expires_at'], unique=False)
+        batch_op.create_index(batch_op.f('ix_workspace_invitations_revoked_at'), ['revoked_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_workspace_invitations_token_hash'), ['token_hash'], unique=True)
         batch_op.create_index(batch_op.f('ix_workspace_invitations_user_id'), ['user_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_workspace_invitations_workspace_id'), ['workspace_id'], unique=False)
@@ -356,6 +370,7 @@ def schema_upgrades() -> None:
     sa.UniqueConstraint('workspace_id', 'id', 'user_id', name='uq_workspace_members_identity')
     )
     with op.batch_alter_table('workspace_members', schema=None) as batch_op:
+        batch_op.create_index('ix_workspace_members_terminated_at', ['terminated_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_workspace_members_user_id'), ['user_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_workspace_members_workspace_id'), ['workspace_id'], unique=False)
         batch_op.create_index('uq_workspace_members_current', ['workspace_id', 'user_id'], unique=True, sqlite_where=sa.text('terminated_at IS NULL'), postgresql_where=sa.text('terminated_at IS NULL'))
@@ -411,7 +426,8 @@ def schema_upgrades() -> None:
     sa.Column('page_count', sa.Integer(), nullable=True),
     sa.Column('page_geometry', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=True),
     sa.Column('full_text', sa.Text(), nullable=True),
-    sa.Column('processing_state', sa.Enum('pending', 'ready', name='file_revision_processing_state', native_enum=False, create_constraint=True), nullable=False),
+    sa.Column('processing_state', sa.Enum('pending', 'ready', 'failed', name='file_revision_processing_state', native_enum=False, create_constraint=True), nullable=False),
+    sa.Column('processing_workflow_id', sa.String(length=255), nullable=True),
     sa.Column('created_by', sa.GUID(length=16), nullable=False),
     sa.Column('sa_orm_sentinel', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTimeUTC(timezone=True), nullable=False),
@@ -528,7 +544,6 @@ def schema_upgrades() -> None:
     sa.Column('payload', sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), 'cockroachdb').with_variant(sa.ORA_JSONB(), 'oracle').with_variant(postgresql.JSONB(astext_type=Text()), 'postgresql'), nullable=False),
     sa.Column('version', sa.Integer(), nullable=False),
     sa.Column('deleted_at', sa.DateTimeUTC(timezone=True), nullable=True),
-    sa.Column('deleted_by_moderation', sa.Boolean(), server_default=sa.text('(false)'), nullable=False),
     sa.Column('hidden_at', sa.DateTimeUTC(timezone=True), nullable=True),
     sa.Column('archived_at', sa.DateTimeUTC(timezone=True), nullable=True),
     sa.Column('locked_at', sa.DateTimeUTC(timezone=True), nullable=True),
@@ -546,6 +561,7 @@ def schema_upgrades() -> None:
     )
     with op.batch_alter_table('pdf_annotations', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_pdf_annotations_author_id'), ['author_id'], unique=False)
+        batch_op.create_index(batch_op.f('ix_pdf_annotations_deleted_at'), ['deleted_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_pdf_annotations_file_revision_id'), ['file_revision_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_pdf_annotations_item_id'), ['item_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_pdf_annotations_project_item_id'), ['project_item_id'], unique=False)
@@ -569,6 +585,7 @@ def schema_upgrades() -> None:
     with op.batch_alter_table('pdf_annotation_replies', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_pdf_annotation_replies_annotation_id'), ['annotation_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_pdf_annotation_replies_author_id'), ['author_id'], unique=False)
+        batch_op.create_index(batch_op.f('ix_pdf_annotation_replies_deleted_at'), ['deleted_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_pdf_annotation_replies_workspace_id'), ['workspace_id'], unique=False)
 
     # ### end Alembic commands ###
@@ -578,6 +595,7 @@ def schema_downgrades() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     with op.batch_alter_table('pdf_annotation_replies', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_pdf_annotation_replies_workspace_id'))
+        batch_op.drop_index(batch_op.f('ix_pdf_annotation_replies_deleted_at'))
         batch_op.drop_index(batch_op.f('ix_pdf_annotation_replies_author_id'))
         batch_op.drop_index(batch_op.f('ix_pdf_annotation_replies_annotation_id'))
 
@@ -587,6 +605,7 @@ def schema_downgrades() -> None:
         batch_op.drop_index(batch_op.f('ix_pdf_annotations_project_item_id'))
         batch_op.drop_index(batch_op.f('ix_pdf_annotations_item_id'))
         batch_op.drop_index(batch_op.f('ix_pdf_annotations_file_revision_id'))
+        batch_op.drop_index(batch_op.f('ix_pdf_annotations_deleted_at'))
         batch_op.drop_index(batch_op.f('ix_pdf_annotations_author_id'))
 
     op.drop_table('pdf_annotations')
@@ -640,13 +659,16 @@ def schema_downgrades() -> None:
         batch_op.drop_index('uq_workspace_members_current', sqlite_where=sa.text('terminated_at IS NULL'), postgresql_where=sa.text('terminated_at IS NULL'))
         batch_op.drop_index(batch_op.f('ix_workspace_members_workspace_id'))
         batch_op.drop_index(batch_op.f('ix_workspace_members_user_id'))
+        batch_op.drop_index('ix_workspace_members_terminated_at')
 
     op.drop_table('workspace_members')
     with op.batch_alter_table('workspace_invitations', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_workspace_invitations_workspace_id'))
         batch_op.drop_index(batch_op.f('ix_workspace_invitations_user_id'))
         batch_op.drop_index(batch_op.f('ix_workspace_invitations_token_hash'))
+        batch_op.drop_index(batch_op.f('ix_workspace_invitations_revoked_at'))
         batch_op.drop_index(batch_op.f('ix_workspace_invitations_expires_at'))
+        batch_op.drop_index(batch_op.f('ix_workspace_invitations_accepted_at'))
 
     op.drop_table('workspace_invitations')
     with op.batch_alter_table('tags', schema=None) as batch_op:
@@ -688,19 +710,24 @@ def schema_downgrades() -> None:
 
     op.drop_table('login_sessions')
     with op.batch_alter_table('invitations', schema=None) as batch_op:
+        batch_op.drop_index('uq_invitations_pending_username', sqlite_where=sa.text('accepted_at IS NULL AND revoked_at IS NULL'), postgresql_where=sa.text('accepted_at IS NULL AND revoked_at IS NULL'))
         batch_op.drop_index(batch_op.f('ix_invitations_token_hash'))
+        batch_op.drop_index(batch_op.f('ix_invitations_revoked_at'))
         batch_op.drop_index(batch_op.f('ix_invitations_expires_at'))
+        batch_op.drop_index(batch_op.f('ix_invitations_accepted_at'))
 
     op.drop_table('invitations')
     with op.batch_alter_table('audit_events', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_audit_events_workspace_id'))
         batch_op.drop_index(batch_op.f('ix_audit_events_project_id'))
+        batch_op.drop_index('ix_audit_events_created_at_id')
         batch_op.drop_index(batch_op.f('ix_audit_events_action'))
 
     op.drop_table('audit_events')
     with op.batch_alter_table('api_tokens', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_api_tokens_user_id'))
         batch_op.drop_index(batch_op.f('ix_api_tokens_token_hash'))
+        batch_op.drop_index(batch_op.f('ix_api_tokens_revoked_at'))
         batch_op.drop_index(batch_op.f('ix_api_tokens_expires_at'))
 
     op.drop_table('api_tokens')
@@ -708,10 +735,10 @@ def schema_downgrades() -> None:
         batch_op.drop_index(batch_op.f('ix_users_username'))
 
     op.drop_table('users')
-    with op.batch_alter_table('object_integrity_scans', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_object_integrity_scans_checked_at'))
+    op.drop_table('maintenance_snapshot')
+    with op.batch_alter_table('login_throttles', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_login_throttles_window_started_at'))
 
-    op.drop_table('object_integrity_scans')
     op.drop_table('login_throttles')
     # ### end Alembic commands ###
 

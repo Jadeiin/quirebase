@@ -196,7 +196,7 @@ id = "module-accounts"
 name = "Accounts has only documented direct callers"
 type = "protected"
 protected_modules = ["quirebase.accounts"]
-allowed_importers = ["quirebase.cli", "quirebase.mcp", "quirebase.web"]
+allowed_importers = ["quirebase.cli", "quirebase.mcp", "quirebase.operations", "quirebase.web"]
 
 [[tool.importlinter.contracts]]
 id = "module-audit"
@@ -323,7 +323,7 @@ id = "module-workspaces"
 name = "Workspaces has only documented direct callers"
 type = "protected"
 protected_modules = ["quirebase.workspaces"]
-allowed_importers = ["quirebase.accounts", "quirebase.cli", "quirebase.web"]
+allowed_importers = ["quirebase.accounts", "quirebase.cli", "quirebase.operations", "quirebase.web"]
 
 [[tool.importlinter.contracts]]
 id = "module-models"

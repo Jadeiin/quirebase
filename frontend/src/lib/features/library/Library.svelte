@@ -440,7 +440,11 @@
 		</p>
 		<h1 class="mb-2">{$t('Library')}</h1>
 		<p class="m-0 max-w-2xl text-surface-700-300">
-			{$t('Search, select, organize, and export your scholarly Items.')}
+			{#if submitted.import_batch}
+				{$t('Review this import, then select Items to add Tags or Projects.')}
+			{:else}
+				{$t('Search, select, organize, and export your scholarly Items.')}
+			{/if}
 		</p>
 	</div>
 	<div class="flex shrink-0 items-center gap-2">

@@ -28,7 +28,12 @@ from quirebase.core.errors import (
 )
 from quirebase.documents.annotations import DocumentNotReady
 from quirebase.documents.revisions import UnsupportedMediaType
-from quirebase.library import BatchConflict, TagConflict, UpstreamServiceError
+from quirebase.library import (
+    BatchConflict,
+    ImportBatchUnavailable,
+    TagConflict,
+    UpstreamServiceError,
+)
 from quirebase.projects.participation import ProjectParticipationConflict
 from quirebase.web.api.common import ApiErrorView, ErrorField
 
@@ -99,6 +104,8 @@ def _domain_error(exc: DomainError) -> tuple[int, str, str, dict[str, Any] | Non
         return 415, "unsupported_media_type", str(exc) or "unsupported media type", None
     if isinstance(exc, UpstreamServiceError):
         return 502, "upstream_service_error", str(exc) or "upstream service error", None
+    if isinstance(exc, ImportBatchUnavailable):
+        return 404, "import_batch_unavailable", "Import Batch not found", None
     if isinstance(exc, ResourceUnavailable):
         return 404, "not_found", "not found", None
     if isinstance(exc, WorkspaceContextRequired):

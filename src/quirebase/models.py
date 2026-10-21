@@ -115,6 +115,7 @@ class AnnotationScope(StrEnum):
 class FileRevisionProcessingState(StrEnum):
     pending = "pending"
     ready = "ready"
+    failed = "failed"
 
 
 class AttachmentRole(StrEnum):
@@ -159,6 +160,7 @@ class Workspace(EntityBase):
 class WorkspaceMember(EntityBase):
     __tablename__ = "workspace_members"
     __table_args__ = (
+        Index("ix_workspace_members_terminated_at", "terminated_at"),
         UniqueConstraint("workspace_id", "id", "user_id", name="uq_workspace_members_identity"),
         CheckConstraint(
             "role <> 'owner' OR (state = 'active' AND terminated_at IS NULL)",
@@ -211,8 +213,8 @@ class WorkspaceInvitation(EntityBase):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     invited_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
-    accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), index=True)
 
 
 class LoginSession(EntityBase):
@@ -229,7 +231,7 @@ class ApiToken(EntityBase):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), index=True)
     user: Mapped[User] = relationship()
 
 
@@ -237,7 +239,9 @@ class LoginThrottle(Base):
     __tablename__ = "login_throttles"
     identity_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     failures: Mapped[int] = mapped_column(Integer, default=0)
-    window_started_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), default=now)
+    window_started_at: Mapped[datetime] = mapped_column(
+        DateTimeUTC(timezone=True), default=now, index=True
+    )
 
 
 class Invitation(EntityBase):
@@ -258,8 +262,8 @@ class Invitation(EntityBase):
     )
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
-    accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), index=True)
 
 
 class Item(EntityBase):
@@ -490,6 +494,7 @@ class FileRevision(EntityBase):
         enum_type(FileRevisionProcessingState, "file_revision_processing_state"),
         default=FileRevisionProcessingState.pending,
     )
+    processing_workflow_id: Mapped[str | None] = mapped_column(String(MAX_RESOURCE_ID_LENGTH))
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     item: Mapped[Item] = relationship(
         back_populates="revisions",
@@ -554,10 +559,7 @@ class PdfAnnotation(EntityBase):
     selected_text: Mapped[str | None] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JsonB)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
-    deleted_by_moderation: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default=text("false")
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), index=True)
     hidden_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
     archived_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
     locked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
@@ -581,7 +583,7 @@ class PdfAnnotationReply(EntityBase):
     author_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True), index=True)
 
 
 class ExportArtifact(Base):
@@ -590,6 +592,9 @@ class ExportArtifact(Base):
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
+    actor_id: Mapped[UUID] = mapped_column(GUID())
+    revision_id: Mapped[UUID] = mapped_column(GUID())
+    project_item_id: Mapped[UUID | None] = mapped_column(GUID())
     file: Mapped[FileObject] = mapped_column(StoredObject(backend="documents"))
     expires_at: Mapped[datetime] = mapped_column(DateTimeUTC(timezone=True), index=True)
 
@@ -637,6 +642,7 @@ class CitationStyle(EntityBase):
 
 class AuditEvent(IdentityBase):
     __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_events_created_at_id", "created_at", "id"),)
     actor_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     workspace_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     project_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
@@ -664,12 +670,18 @@ class SystemSetting(Base):
     )
 
 
-class ObjectIntegrityScan(EntityBase):
-    __tablename__ = "object_integrity_scans"
-    status: Mapped[str] = mapped_column(String(32))
+class MaintenanceSnapshot(Base):
+    __tablename__ = "maintenance_snapshot"
+    __table_args__ = (CheckConstraint("id = 1", name="singleton_maintenance_snapshot"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1, autoincrement=False)
+    status: Mapped[str] = mapped_column(String(32), default="not_checked")
     missing_count: Mapped[int] = mapped_column(Integer, default=0)
     mismatch_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
     errors: Mapped[list[str]] = mapped_column(JsonB, default=list)
-    checked_at: Mapped[datetime] = mapped_column(
-        DateTimeUTC(timezone=True), default=now, index=True
-    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    checked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    cleanup_checked_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    cleanup_started_at: Mapped[datetime | None] = mapped_column(DateTimeUTC(timezone=True))
+    cleanup_counts: Mapped[dict[str, int] | None] = mapped_column(JsonB)
+    cleanup_error: Mapped[str | None] = mapped_column(String(120))

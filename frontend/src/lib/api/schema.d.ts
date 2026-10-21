@@ -1208,6 +1208,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workspaces/{workspace_id}/imports': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Import Batches */
+		get: operations['imports.import_batches'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workspaces/{workspace_id}/imports/bibliography': {
 		parameters: {
 			query?: never;
@@ -1270,8 +1287,8 @@ export interface paths {
 		get: operations['imports.import_batch'];
 		put?: never;
 		post?: never;
-		/** Discard Staged Import */
-		delete: operations['imports.discard_staged_import'];
+		/** Delete Import */
+		delete: operations['imports.delete_import'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1849,6 +1866,23 @@ export interface paths {
 		put?: never;
 		/** Upload Remote Item Pdf */
 		post: operations['documents.upload_remote_item_pdf'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workspaces/{workspace_id}/items/{item_id}/revisions/{revision_id}/retry-inspection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Retry Inspection */
+		post: operations['documents.retry_inspection'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -4041,12 +4075,34 @@ export interface components {
 			 * Format: date-time
 			 */
 			created_at: string;
+			/** Committed Item Ids */
+			committed_item_ids: string[];
 		};
 		/**
 		 * ImportBatchStatus
 		 * @enum {string}
 		 */
 		ImportBatchStatus: 'pending' | 'ready' | 'failed' | 'committed';
+		/** ImportBatchSummary */
+		ImportBatchSummary: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
+			/** File Format */
+			file_format: string;
+			status: components['schemas']['ImportBatchStatus'];
+			/**
+			 * Created At
+			 * Format: date-time
+			 */
+			created_at: string;
+			/** Record Count */
+			record_count: number;
+			/** Diagnostic Count */
+			diagnostic_count: number;
+		};
 		/** ImportCandidatePreview */
 		ImportCandidatePreview: {
 			metadata: components['schemas']['Work'];
@@ -4474,6 +4530,20 @@ export interface components {
 		OffsetPagination_AdminInvitationView_: {
 			/** Items */
 			items: components['schemas']['AdminInvitationView'][];
+			/** Limit */
+			limit: number;
+			/** Offset */
+			offset: number;
+			/** Total */
+			total: number;
+		};
+		/**
+		 * OffsetPagination
+		 * @description Container for data returned using limit/offset pagination.
+		 */
+		OffsetPagination_ImportBatchSummary_: {
+			/** Items */
+			items: components['schemas']['ImportBatchSummary'][];
 			/** Limit */
 			limit: number;
 			/** Offset */
@@ -5717,6 +5787,33 @@ export interface components {
 			integrity_status: string;
 			/** Integrity Checked At */
 			integrity_checked_at?: string | null;
+			/**
+			 * Integrity Error Count
+			 * @default 0
+			 */
+			integrity_error_count: number;
+			/** Integrity Errors */
+			integrity_errors?: string[];
+			/** Database Allocated Bytes */
+			database_allocated_bytes: number;
+			/** Database Reusable Bytes */
+			database_reusable_bytes?: number | null;
+			/** Workflow History Count */
+			workflow_history_count?: number | null;
+			/** Workflow Checkpoint Count */
+			workflow_checkpoint_count?: number | null;
+			/** Datasource Checkpoint Count */
+			datasource_checkpoint_count?: number | null;
+			/** Cleanup Started At */
+			cleanup_started_at?: string | null;
+			/** Cleanup Checked At */
+			cleanup_checked_at?: string | null;
+			/** Cleanup Counts */
+			cleanup_counts?: {
+				[key: string]: number;
+			} | null;
+			/** Cleanup Error */
+			cleanup_error?: string | null;
 		};
 		/** Subject */
 		Subject: {
@@ -9037,6 +9134,7 @@ export interface operations {
 				author_last_name?: string | null;
 				author_first_name?: string | null;
 				publication_title?: string | null;
+				import_batch?: string | null;
 			};
 			header?: never;
 			path: {
@@ -9135,6 +9233,7 @@ export interface operations {
 				author_last_name?: string | null;
 				author_first_name?: string | null;
 				publication_title?: string | null;
+				import_batch?: string | null;
 			};
 			header?: never;
 			path: {
@@ -9930,6 +10029,50 @@ export interface operations {
 			};
 		};
 	};
+	'imports.import_batches': {
+		parameters: {
+			query?: {
+				view?: 'pending' | 'completed';
+				limit?: number;
+				offset?: number;
+			};
+			header?: never;
+			path: {
+				workspace_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OffsetPagination_ImportBatchSummary_'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
 	'imports.stage_bibliography_import': {
 		parameters: {
 			query?: never;
@@ -10103,7 +10246,7 @@ export interface operations {
 			};
 		};
 	};
-	'imports.discard_staged_import': {
+	'imports.delete_import': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -10203,7 +10346,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['OkView'];
+					'application/json': components['schemas']['ImportBatchPreview'];
 				};
 			};
 			/** @description Unprocessable Content */
@@ -11198,13 +11341,11 @@ export interface operations {
 		};
 		responses: {
 			/** @description Successful Response */
-			200: {
+			204: {
 				headers: {
 					[name: string]: unknown;
 				};
-				content: {
-					'application/json': components['schemas']['AnnotationView'];
-				};
+				content?: never;
 			};
 			/** @description Unprocessable Content */
 			422: {
@@ -11912,6 +12053,48 @@ export interface operations {
 				'application/json': components['schemas']['RemoteRevisionRequest'];
 			};
 		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WriteResult'];
+				};
+			};
+			/** @description Unprocessable Content */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+			/** @description Default Response */
+			default: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiErrorView'];
+				};
+			};
+		};
+	};
+	'documents.retry_inspection': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				workspace_id: string;
+				item_id: string;
+				revision_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
 		responses: {
 			/** @description Successful Response */
 			202: {

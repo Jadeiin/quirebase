@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import load_only
 
-from quirebase.models import Attachment, FileRevision
+from quirebase.core.workflows import durable_operations
+from quirebase.models import Attachment, FileRevision, FileRevisionProcessingState
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -15,7 +17,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from quirebase.models import AttachmentRole, FileRevisionProcessingState
+    from quirebase.models import AttachmentRole
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,12 +56,37 @@ async def list_item_revisions(
     """Read summaries for an authorized Item in the caller's transaction."""
     query = (
         select(FileRevision)
+        .options(
+            load_only(
+                FileRevision.id,
+                FileRevision.file,
+                FileRevision.created_at,
+                FileRevision.page_count,
+                FileRevision.processing_state,
+                FileRevision.processing_workflow_id,
+            )
+        )
         .where(FileRevision.workspace_id == workspace_id, FileRevision.item_id == item_id)
         .order_by(FileRevision.created_at.desc(), FileRevision.id)
     )
     if not all_revisions:
         query = query.limit(1)
-    return tuple(document_info(revision) for revision in await db.scalars(query))
+    summaries = []
+    for revision in await db.scalars(query):
+        summary = document_info(revision)
+        if revision.processing_state is FileRevisionProcessingState.pending:
+            workflow = (
+                await durable_operations().get(revision.processing_workflow_id)
+                if revision.processing_workflow_id
+                else None
+            )
+            if workflow is None or workflow.state not in {"pending", "running"}:
+                summary = replace(
+                    summary,
+                    processing_state=FileRevisionProcessingState.failed,
+                )
+        summaries.append(summary)
+    return tuple(summaries)
 
 
 async def list_item_attachments(
@@ -79,6 +106,17 @@ async def count_item_attachments(db: AsyncSession, workspace_id: UUID, item_id: 
         await db.scalar(
             select(func.count(Attachment.id)).where(
                 Attachment.workspace_id == workspace_id, Attachment.item_id == item_id
+            )
+        )
+        or 0
+    )
+
+
+async def count_item_revisions(db: AsyncSession, workspace_id: UUID, item_id: UUID) -> int:
+    return (
+        await db.scalar(
+            select(func.count(FileRevision.id)).where(
+                FileRevision.workspace_id == workspace_id, FileRevision.item_id == item_id
             )
         )
         or 0

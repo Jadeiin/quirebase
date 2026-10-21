@@ -2473,9 +2473,9 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
 
     async def confirm(name):
         async with postgres_race.session(name) as db:
-            return await commit_import_batch(
-                db, await db.get(User, owner_id), workspace_id, batch_id
-            )
+            return (
+                await commit_import_batch(db, await db.get(User, owner_id), workspace_id, batch_id)
+            ).committed_item_ids
 
     async with postgres_race.session("blocker") as db:
         await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
@@ -2489,7 +2489,9 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
     assert len(first_ids) == 2 and first_ids == second_ids
     async with postgres_race.session("replay") as db:
         owner = await db.get(User, owner_id)
-        assert await commit_import_batch(db, owner, workspace_id, batch_id) == first_ids
+        assert (
+            await commit_import_batch(db, owner, workspace_id, batch_id)
+        ).committed_item_ids == first_ids
         items, total, *_ = await search_library(db, owner, workspace_id)
         assert total == 2 and {item.id for item in items} == set(first_ids)
         events, total = await query_events(db, owner, action="bibliography.import")

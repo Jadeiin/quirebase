@@ -26,7 +26,10 @@ them to EmbedPDF reply objects only while rendering the comment sidebar.
 Annotation and Reply IDs are unique within their own entity types; the two tables may contain
 the same UUID. Physical deletion cascades from File Revision or ProjectItem through Annotation
 to Reply. No separate Annotation Object identity registry is required. Ordinary soft deletion
-retains the records and their versions for restore.
+retains the records and their versions for a deployment-configured Undo window (24 hours by
+default). Restore rechecks the deadline at authorization and final update; maintenance physically
+deletes expired records. Moderator deletion immediately removes the root and its Replies, returns
+204 without authored content and cannot be restored.
 
 The Web adapter imports canonical objects with type-qualified viewer IDs and maps events back
 to canonical UUIDs. Newly authored objects retain EmbedPDF's own IDs for the viewer session,

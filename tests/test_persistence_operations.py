@@ -537,7 +537,9 @@ async def test_import_batch_embeds_record_local_contributors_and_preserves_repla
     errors = batch.errors
     assert len(records) == size and all(error.severity == "warning" for error in errors)
     batch_id = batch.id
-    item_ids = await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
+    item_ids = (
+        await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
+    ).committed_item_ids
     items = [await persistence_db.get(Item, item_id) for item_id in item_ids]
     assert [item.work.get("title") for item in items] == [
         f"Batch item {index}" for index in range(size)
@@ -554,8 +556,7 @@ async def test_import_batch_embeds_record_local_contributors_and_preserves_repla
     assert all(len(item.work["contributors"]) == 3 for item in items)
     assert (
         await commit_import_batch(persistence_db, persistence_actor, workspace_id, batch_id)
-        == item_ids
-    )
+    ).committed_item_ids == item_ids
     assert (
         await persistence_db.scalar(
             select(func.count())

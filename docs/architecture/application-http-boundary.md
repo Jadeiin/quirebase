@@ -78,12 +78,37 @@ it inside the initiating component, a shell-level tray polls the typed workflow 
 keeps the job visible across client-side navigation, and terminal failures surface through the
 global toast pattern. Callers that need post-completion refreshes await the center's settled
 promise, which resolves from the same polled status; dismissing a job hands remaining waiters
-back to direct polling so local busy states always settle. The tray limit only ever prunes
-terminal jobs: active jobs are retained regardless of the cap, so a tracked workflow with
-outstanding waiters can never be evicted from the polling set. Status polling whose retries are
-exhausted fails the job through the same settled path, so a missing workflow or persistent
-server error rejects waiters and surfaces a failure toast instead of leaving the initiating
-mutation busy indefinitely.
+back to direct polling so local busy states always settle. Import jobs carry a typed batch target;
+their return link and terminal outcome remain in the account ledger until explicit dismissal,
+without re-polling or repeating completion toasts on reload. The tray limit only ever prunes
+generic terminal jobs: active jobs and return destinations are retained, so a tracked workflow with
+outstanding waiters can never be evicted from the polling set. A missing or inaccessible workflow status makes client tracking unavailable and rejects waiters,
+without claiming the business operation failed. The return destination remains usable to read
+current Import state; pruned history never starts replacement work automatically. Transient errors
+continue polling so recovery can settle the initiating operation.
+
+Import confirmation returns the authoritative committed batch preview, including its replayable
+Item IDs. The client caches that response without reproducing the batch's state transition.
+A lost response is reconciled by reading the captured batch independently of the current
+route; an uncertain outcome retains a status-recovery action. Successful confirmation opens Library
+with `import_batch`, intersecting its original Item IDs with current Workspace visibility and other
+filters. Sorting, facets, saved views and Item return links preserve this scope. Organization uses
+Library's existing bulk actions; deleting Items does not alter the batch's original commit receipt.
+The Import page focuses on new imports and does not request history. Its secondary `/import/history`
+page lists paginated pending and completed summaries without loading candidate payloads, with direct
+delete actions for editors.
+Its `view`, `page` and `page_size` live in the URL and survive opening a batch, returning and
+refreshing. View and Page Size changes reset the page; user pagination pushes history, while a
+settled successful read may replace an out-of-range page.
+Readers can reopen them; editors may delete any batch through `DELETE /imports/{batch_id}`, discarding
+staging or deleting a completed receipt according to its current state. The latter keeps
+Items and files, and ends replay and `import_batch` filtering with an unavailable response. Imports
+expire after their last state change (seven days by default), except active or unconfirmed durable
+preparations. Reads do not extend retention. Committing releases candidate payloads, diagnostics and workflow linkage.
+Missing or foreign batches use the same `404 import_batch_unavailable` response after Workspace
+authorization. Authoritative Import preview failures also cancel and discard that batch's cached
+Library pages, sort orders and facets. Library distinguishes batch unavailability/conflict from
+Project access failure and discards only the affected filter scope, preserving unrelated caches.
 
 Jinja, templates, HTML form routes, CSRF synchronizer tokens, `web/views`, `web/json` and the
 legacy asset tree are removed. Application deep links are handled by the static SPA fallback.
@@ -283,7 +308,7 @@ failures. Invitation read failures do not remove a newly created one-time link. 
 revocation of that exact invitation retires its displayed link. Confirmation dialogs identify the
 affected Workspace or member, retain failures for retry and block dismissal while a submission is
 pending. Permanent Workspace deletion requires the current Workspace name in the confirmation
-dialog; the API still enforces archive and retention conditions. ESLint rejects native browser
+dialog; the API still requires an archived, unfrozen Workspace and owner authorization. ESLint rejects native browser
 dialogs in both TypeScript and Svelte product code.
 
 Workspace UI changes describe the user task, account/Workspace/instance scope, entry and URL,

@@ -9,7 +9,9 @@
 
 	const center = getWorkflowCenter();
 	let panelOpen = $state(false);
-	const activeCount = $derived(center.jobs.filter((job) => !job.outcome).length);
+	const activeCount = $derived(
+		center.jobs.filter((job) => !job.outcome && !job.unavailable).length
+	);
 	const badgeCount = $derived(activeCount > 0 ? activeCount : center.jobs.length);
 </script>
 
@@ -45,7 +47,7 @@
 						</header>
 						<div class="max-h-80 divide-y divide-surface-300-700 overflow-auto">
 							{#each center.jobs as job (job.id)}
-								<WorkflowJobRow {job} visible={true} />
+								<WorkflowJobRow {job} visible={true} onNavigate={() => (panelOpen = false)} />
 							{/each}
 						</div>
 					</Popover.Content>

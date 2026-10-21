@@ -34,7 +34,7 @@ from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
     _pdf_import_inputs,
     check_pdf_import_eligibility,
-    discard_import_batch,
+    delete_import_batch,
     extract_pdf_import_doi,
     finalize_pdf_import_batch,
     lookup_pdf_import_candidate,
@@ -653,7 +653,7 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
             await importing
     staged_keys = set(get_settings().object_dir.rglob("*.pdf")) - objects_before
     assert len(staged_keys) == 1
-    await discard_import_batch(db, user, fixture_workspace_id(user), batch.id)
+    await delete_import_batch(db, user, fixture_workspace_id(user), batch.id)
     fake_durable_operations.workflows.pop(batch.workflow_id)
     await delete_unreferenced_objects(db, [pending["_pdf"]["object_key"]])
     assert set(get_settings().object_dir.rglob("*.pdf")) == objects_before

@@ -95,6 +95,11 @@ class WorkflowSummary:
     attributes: dict[str, Any] | None = None
     authenticated_user: str | None = None
 
+    @property
+    def is_terminal(self) -> bool:
+        """Recognize terminal SDK states without treating unknown states as failure."""
+        return _VISIBLE_STATE.get(self.raw_status) in {"succeeded", "failed", "cancelled"}
+
 
 class DurableOperations(Protocol):
     async def enqueue(
@@ -264,7 +269,11 @@ async def enqueue_child_workflow(
     partition_key: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> str:
-    """Enqueue a child from durable workflow context through the Core seam."""
+    """Enqueue a child whose workflow ID belongs to this unique producing parent.
+
+    Retention relies on the SDK's native parent identity, published atomically with
+    initial child creation. Do not reuse child IDs across unrelated parent workflows.
+    """
     handle: Any = await DBOS.enqueue_workflow_with_options_async(
         _options(workflow_name, queue_name, workflow_id, partition_key, attributes),
         *args,

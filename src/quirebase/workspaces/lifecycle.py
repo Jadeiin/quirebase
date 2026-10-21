@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -10,7 +10,6 @@ from quirebase.access import (
     require_workspace_membership,
 )
 from quirebase.audit import record_event
-from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     ValidationFailure,
     WorkspaceLifecycleError,
@@ -108,12 +107,6 @@ async def delete_workspace(db: AsyncSession, actor: User, workspace_id: UUID) ->
     require_action(context, ResourceAction.workspace_delete)
     if workspace.state is not WorkspaceState.archived:
         raise ValidationFailure("Workspace must be archived before permanent deletion")
-    now = datetime.now(UTC)
-    archived_at = workspace.archived_at or None
-    retention = timedelta(days=get_settings().workspace_delete_retention_days)
-    if archived_at is None or archived_at > now - retention:
-        raise WorkspaceLifecycleError("Workspace archive retention period has not elapsed")
-
     from quirebase.library import import_staging_object_keys
 
     documents = await snapshot_workspace_documents(db, workspace_id)

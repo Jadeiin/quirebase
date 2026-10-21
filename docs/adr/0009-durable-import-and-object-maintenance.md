@@ -38,8 +38,9 @@ Document-destination reads so finalization and confirmation transfers remain pro
 
 Storage metrics use SQL counts and recorded byte sizes. PDF Thumbnail size is recorded with its File
 Revision. A persisted integrity-scan result supplies availability diagnostics; opening an admin page
-never scans or issues per-object HEAD requests. Integrity I/O steps return proposed PDF Thumbnail
-size backfills, which are committed together with the scan result in a datasource transaction.
+never scans or issues per-object HEAD requests. The retryable integrity step scans, deletes, rechecks and commits PDF Thumbnail size
+backfills without checkpointing the inventory. A singleton retains only the latest scan, exact
+error counts and at most 100 error samples; its durable output contains small counters only.
 
 DBOS Schedule runs Operations maintenance hourly on the serialized Operations queue. Workflow and
 step checkpoints replace the worker-owned sleep loop. Active object reservations are queried by
@@ -63,3 +64,14 @@ business state transitions retain `SERIALIZABLE` isolation or explicit row locki
   fresh as the latest integrity scan and expose its timestamp.
 - This decision supersedes ADR 0007's statement that a database-backed staged-object reservation is
   future work.
+
+The alpha retention cutover keeps extracted PDF text and geometry only in FileRevision. Uploads
+first persist a pending Revision; one shared, retryable inspection step publishes ready state,
+Search and a transactionally enqueued event. A failed attempt preserves the source for explicit
+retry. Annotation Export Artifact descriptors retain source/actor identities for download
+reauthorization independently of workflow outputs. Hourly maintenance retires completed DBOS
+history after seven days through Core's SDK-table adapter, preserving parent/child recovery
+relationships and sweeping orphan datasource receipts every cycle. Library retires Import Batches
+after their last state change, seven days by default, protecting active or unconfirmed durable
+preparations. Editors can delete any batch early through one operation. Retirement discards staging
+through transactional object cleanup or deletes only a committed receipt, preserving imported data.

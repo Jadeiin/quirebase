@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from quirebase.operations.compaction import compact_sqlite_database
 from quirebase.operations.health import (
     check_health,
     get_system_metrics,
@@ -7,6 +8,7 @@ from quirebase.operations.health import (
 from quirebase.operations.maintenance import (
     check_objects,
     create_backup,
+    get_maintenance_storage_metrics,
     reconcile_objects,
     restore_backup,
     verify_backup,
@@ -23,9 +25,11 @@ from quirebase.operations.workflows import (
 __all__ = [
     "check_health",
     "check_objects",
+    "compact_sqlite_database",
     "create_backup",
     "dispatch_maintenance_workflow",
     "dispatch_workspace_reindex",
+    "get_maintenance_storage_metrics",
     "get_runtime_settings",
     "get_system_metrics",
     "reconcile_objects",

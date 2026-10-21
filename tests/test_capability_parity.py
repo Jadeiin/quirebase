@@ -28,8 +28,8 @@ from quirebase.core.errors import PermissionDenied, WorkspaceLifecycleError
 from quirebase.documents import create_attachment, store_pdf_revision
 from quirebase.documents.workflows import (
     commit_uploaded_attachment,
-    commit_uploaded_revision,
-    inspect_uploaded_pdf,
+    inspect_and_publish_revision,
+    reserve_uploaded_revision,
 )
 from quirebase.models import (
     Attachment,
@@ -337,19 +337,27 @@ async def test_child_mutations_and_upload_finalizers_do_not_require_metadata_edi
         upload = await store_pdf_revision(
             async_db, actor, workspace_id, item_id, pdf, "independent.pdf"
         )
-        inspected = await inspect_uploaded_pdf(
+        from quirebase.documents import workflows as document_workflows
+
+        monkeypatch.setattr(document_workflows, "AsyncSessionLocal", async_session_factory)
+        revision_id = uuid4()
+        await reserve_uploaded_revision(
+            actor_id,
+            workspace_id,
+            item_id,
+            revision_id,
             upload.object_id,
-            upload.object_id,
-            uuid4(),
+            "independent.pdf",
             {
                 "status": "complete",
                 "key": upload.object_key,
                 "size": len(pdf),
                 "checksum": f"sha256:{sha256(pdf).hexdigest()}",
             },
+            upload.workflow_id,
         )
-        result = await commit_uploaded_revision(
-            actor_id, workspace_id, item_id, "independent.pdf", inspected
+        result = await inspect_and_publish_revision(
+            actor_id, workspace_id, revision_id, upload.object_key, uuid4(), upload.workflow_id
         )
         assert await async_db.get(FileRevision, result["revision_id"]) is not None
         actor = await async_db.get(User, actor_id)

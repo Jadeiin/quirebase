@@ -118,7 +118,7 @@
 			<h3 class="text-lg font-semibold">{$t('Permanent deletion')}</h3>
 			<p class="text-sm text-surface-700-300">
 				{$t(
-					'This permanently removes the workspace and its content after the archive retention period. This cannot be undone.'
+					'This permanently removes the archived workspace and its content. This cannot be undone.'
 				)}
 			</p>
 			<Button

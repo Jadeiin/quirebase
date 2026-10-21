@@ -576,9 +576,11 @@ async def test_malformed_identifier_urls_do_not_block_creation_or_import_confirm
         db, actor, workspace_id, json.dumps(value).encode(), "commonmeta"
     )
     assert len(preview.records) == 1 and not preview.errors
-    imported = await commit_import_batch(db, actor, workspace_id, preview.id)
+    imported = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
     assert len(imported) == 1
-    assert await commit_import_batch(db, actor, workspace_id, preview.id) == imported
+    assert (
+        await commit_import_batch(db, actor, workspace_id, preview.id)
+    ).committed_item_ids == imported
     groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
     assert [{item.id for item in group} for group in groups] == [{created.item_id, imported[0]}]
     assert (await db.get(Item, created.item_id)).work == value
@@ -600,7 +602,7 @@ async def test_csl_reimport_preserves_identifier_forms_without_implicit_normaliz
     content = export_bibliography_records(values[:1], "csl-json", citation_keys=["unicode"])
     preview = await stage_import_batch(db, actor, workspace_id, content.encode(), "csl-json")
     assert len(preview.records) == 1, preview.errors
-    imported = await commit_import_batch(db, actor, workspace_id, preview.id)
+    imported = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
     groups = (await find_duplicates(db, actor, workspace_id, "identifier")).groups
     # CSL conversion writes a resolver URI into Work.id. The raw additional DOI
     # is preserved on the source Item and is not compared across those fields.
@@ -706,9 +708,9 @@ async def test_import_duplicates_keep_both_records_and_confirmation_is_idempoten
     assert all(
         error.code == "format_limitations" and error.severity == "warning" for error in batch.errors
     )
-    ids = await commit_import_batch(db, actor, workspace_id, batch.id)
+    ids = (await commit_import_batch(db, actor, workspace_id, batch.id)).committed_item_ids
     assert len(set(ids)) == 2
-    assert await commit_import_batch(db, actor, workspace_id, batch.id) == ids
+    assert (await commit_import_batch(db, actor, workspace_id, batch.id)).committed_item_ids == ids
     stored = await db.get(ImportBatch, batch.id)
     assert stored.status == "committed" and stored.records == []
 
@@ -1123,8 +1125,10 @@ async def test_bibtex_export_reimport_preserves_protected_names_title_and_key_on
     preview = await stage_import_batch(db, actor, workspace_id, content.encode(), "bibtex")
     assert len(preview.records) == 1, preview.errors
     assert all(error.severity == "warning" for error in preview.errors)
-    ids = await commit_import_batch(db, actor, workspace_id, preview.id)
-    assert await commit_import_batch(db, actor, workspace_id, preview.id) == ids
+    ids = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
+    assert (
+        await commit_import_batch(db, actor, workspace_id, preview.id)
+    ).committed_item_ids == ids
     item = await db.get(Item, ids[0])
     assert item.citation_key == "smith2024"
     assert item.work["type"] == "JournalArticle"
@@ -1149,10 +1153,12 @@ async def test_import_commits_valid_duplicate_alongside_invalid_item(persistence
     assert len(preview.records) == 1
     assert any(error.row == 2 and error.code == "invalid_item" for error in preview.errors)
     assert len(preview.errors) == 1
-    ids = await commit_import_batch(db, actor, workspace_id, preview.id)
+    ids = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
     assert len(ids) == 1
     assert (await db.get(Item, ids[0])).work["title"] == "Valid duplicate"
-    assert await commit_import_batch(db, actor, workspace_id, preview.id) == ids
+    assert (
+        await commit_import_batch(db, actor, workspace_id, preview.id)
+    ).committed_item_ids == ids
 
 
 async def test_typed_work_is_revalidated_before_persistence(persistence_db):
@@ -1184,10 +1190,12 @@ async def test_malformed_csl_import_keeps_valid_siblings_and_commit_replay(persi
     assert [(error.row, error.code) for error in preview.errors if error.severity == "error"] == [
         (1, "invalid_record")
     ]
-    ids = await commit_import_batch(db, actor, workspace_id, preview.id)
+    ids = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
     assert len(ids) == 1
     assert (await db.get(Item, ids[0])).work["title"] == "Valid"
-    assert await commit_import_batch(db, actor, workspace_id, preview.id) == ids
+    assert (
+        await commit_import_batch(db, actor, workspace_id, preview.id)
+    ).committed_item_ids == ids
 
 
 async def test_ris_conversion_losses_are_diagnosed_before_staging(persistence_db):
@@ -1198,7 +1206,7 @@ async def test_ris_conversion_losses_are_diagnosed_before_staging(persistence_db
     assert len(preview.records) == 1
     assert preview.records[0].metadata.title == "Valid alias title"
     assert any(error.row == 1 and error.code == "invalid_record" for error in preview.errors)
-    ids = await commit_import_batch(db, actor, workspace_id, preview.id)
+    ids = (await commit_import_batch(db, actor, workspace_id, preview.id)).committed_item_ids
     assert len(ids) == 1
     assert (await db.get(Item, ids[0])).work["title"] == "Valid alias title"
 

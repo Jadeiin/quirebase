@@ -274,7 +274,7 @@ async def test_generated_citation_key_preserves_year_and_title_with_long_names(
         )
         db.add(batch)
         await db.commit()
-        item_ids = await commit_import_batch(db, actor, workspace_id, batch.id)
+        item_ids = (await commit_import_batch(db, actor, workspace_id, batch.id)).committed_item_ids
         item = await db.get(Item, item_ids[0])
     assert item.citation_key == "L" + "l" * 63 + "2026" + "T" + "t" * 59
 

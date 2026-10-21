@@ -247,9 +247,9 @@ def test_schema_matches_metadata(migration_database):
     _assert_schema_matches_metadata(inspect(engine), engine)
 
 
-def test_invitation_upgrade_preserves_records_and_releases_historical_usernames(migration_database):
+def test_invitation_schema_allows_only_one_pending_invitation_per_username(migration_database):
     database_url, engine = migration_database
-    _migrate_database(database_url, "bd688512265a")
+    _migrate_database(database_url)
     with Session(engine) as db:
         admin = User(
             username="invitation-migration-admin", password_hash="unused", role="administrator"
@@ -269,7 +269,6 @@ def test_invitation_upgrade_preserves_records_and_releases_historical_usernames(
             )
         )
         db.commit()
-    _migrate_database(database_url)
     with Session(engine) as db:
         invitation = db.get(Invitation, invitation_id)
         assert invitation.token_hash == "original-link" and invitation.revoked_at is None
@@ -291,9 +290,6 @@ def test_invitation_upgrade_preserves_records_and_releases_historical_usernames(
         db.commit()
         assert db.get(Invitation, invitation_id).revoked_at is not None
         assert duplicate.id != invitation_id
-    with pytest.raises(subprocess.CalledProcessError) as failure:
-        _migrate_database(database_url, "bd688512265a", downgrade=True)
-    assert "Cannot downgrade while invitation history shares usernames" in failure.value.stderr
 
 
 def test_migrated_enum_rejects_invalid_raw_sql_values(migration_database):

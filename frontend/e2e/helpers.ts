@@ -103,6 +103,9 @@ export async function mockWorkspaces(page: Page, creationAllowed = false) {
 }
 
 export async function mockSession(page: Page, role: 'member' | 'administrator' = 'member') {
+	await page.route('**/api/v1/workspaces/*/imports?*', (route) =>
+		route.fulfill({ json: directoryPage([], route) })
+	);
 	await page.route('**/api/v1/workspaces/*/items/facets?*', (route) =>
 		route.fulfill({ json: { authors: [], keywords: [], reference_types: [] } })
 	);

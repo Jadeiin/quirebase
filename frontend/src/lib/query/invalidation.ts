@@ -2,7 +2,11 @@ import { matchQuery, type Query, type QueryClient, type QueryKey } from '@tansta
 import { exportPreferenceKeys } from '#lib/features/account/queries.js';
 import { dashboardKeys } from '#lib/features/dashboard/queries.js';
 import { itemKeys } from '#lib/features/item/queries.js';
-import { libraryKeys, libraryProjectScope } from '#lib/features/library/queries.js';
+import {
+	libraryImportScope,
+	libraryKeys,
+	libraryProjectScope
+} from '#lib/features/library/queries.js';
 import { pdfReaderKeys } from '#lib/features/pdf-reader/queries.js';
 import { projectKeys } from '#lib/features/projects/queries.js';
 import { tagKeys } from '#lib/features/tags/queries.js';
@@ -80,6 +84,20 @@ export function invalidateCitationStyles(queryClient: QueryClient, workspaceId: 
 export function invalidateLibrary(queryClient: QueryClient, workspaceId: string) {
 	return invalidate(queryClient, [libraryKeys.all(workspaceId), dashboardKeys.all(workspaceId)]);
 }
+
+export async function invalidateUnavailableImportReceipt(
+	queryClient: QueryClient,
+	workspaceId: string,
+	batchId: string
+) {
+	const scope = libraryImportScope(workspaceId, batchId);
+	// A deleted receipt cannot leave its cached results available offline or let
+	// an earlier read restore them after the deletion is acknowledged.
+	await queryClient.cancelQueries(scope, { revert: false });
+	queryClient.setQueriesData(scope, null, { updatedAt: 0 });
+	void invalidateLibrary(queryClient, workspaceId);
+}
+
 export function invalidateProject(queryClient: QueryClient, workspaceId: string) {
 	// The reader annotation sources project each linked Project's name and
 	// editability, so Project changes refresh every cached reader configuration.

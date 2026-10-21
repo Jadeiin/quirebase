@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +15,7 @@ from quirebase.access.context import (
 from quirebase.access.items import require_readable_item
 from quirebase.access.project_scope import discoverable_project_ids_query, require_project_context
 from quirebase.access.workspace_policy import ResourceAction, action_allowed
+from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     PermissionDenied,
     ProjectLifecycleError,
@@ -484,7 +486,9 @@ async def require_restorable_annotation(
     annotation_id: UUID,
 ) -> PdfAnnotation:
     record = await _visible_annotation(db, user, workspace_id, item_id, annotation_id, deleted=True)
-    if record.deleted_by_moderation:
+    if record.deleted_at is None or record.deleted_at <= datetime.now(UTC) - timedelta(
+        hours=get_settings().annotation_undo_hours
+    ):
         raise ResourceUnavailable("Annotation not found")
     await _require_annotation_action(db, user, workspace_id, record, "restore")
     return record

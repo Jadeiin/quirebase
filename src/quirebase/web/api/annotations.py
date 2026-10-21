@@ -156,7 +156,7 @@ async def restore_annotation(
 
 @router.post(
     "/items/{item_id}/annotations/{annotation_id}/moderation",
-    response_model=AnnotationView,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 async def moderate_annotation(
     workspace_id: UUID,
@@ -165,17 +165,15 @@ async def moderate_annotation(
     data: AnnotationModerationRequest,
     user: ApiUser,
     db: Database,
-) -> AnnotationView:
-    return AnnotationView.model_validate(
-        await moderate_document_annotation(
-            db,
-            user,
-            workspace_id,
-            item_id,
-            annotation_id,
-            data.action,
-            data.version,
-        )
+) -> None:
+    await moderate_document_annotation(
+        db,
+        user,
+        workspace_id,
+        item_id,
+        annotation_id,
+        data.action,
+        data.version,
     )
 
 

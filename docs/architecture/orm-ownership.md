@@ -30,7 +30,7 @@ The architecture suite keeps this list complete when mappings are added or remov
 | Projects | `Project`, `ProjectParticipant`, `ProjectItem` |
 | Documents | `FileRevision`, `Attachment`, `PdfAnnotation`, `PdfAnnotationReply`, `ExportArtifact` |
 | Audit | `AuditEvent` |
-| Operations | `SystemSetting`, `ObjectIntegrityScan` |
+| Operations | `SystemSetting`, `MaintenanceSnapshot` |
 
 ## Migration interface
 

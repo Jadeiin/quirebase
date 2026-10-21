@@ -116,9 +116,7 @@ async def test_workspace_read_tolerates_deletion_before_owner_lookup(
     workspace_id, owner_id = (item.workspace_id, item.created_by)
     workspace = await async_db.get(Workspace, workspace_id)
     workspace.state = WorkspaceState.archived
-    workspace.archived_at = datetime.now(UTC) - timedelta(
-        days=get_settings().workspace_delete_retention_days + 1
-    )
+    workspace.archived_at = datetime.now(UTC)
     retained = Workspace(name="Retained Workspace", created_by=owner_id)
     async_db.add(retained)
     await async_db.flush()

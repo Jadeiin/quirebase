@@ -122,6 +122,17 @@ class StorageMetricsView(BaseModel):
     missing_files_count: int
     integrity_status: str
     integrity_checked_at: datetime | None = None
+    integrity_error_count: int = 0
+    integrity_errors: list[str] = Field(default_factory=list)
+    database_allocated_bytes: int
+    database_reusable_bytes: int | None = None
+    workflow_history_count: int | None = None
+    workflow_checkpoint_count: int | None = None
+    datasource_checkpoint_count: int | None = None
+    cleanup_started_at: datetime | None = None
+    cleanup_checked_at: datetime | None = None
+    cleanup_counts: dict[str, int] | None = None
+    cleanup_error: str | None = None
 
 
 class AdminAuditEventView(BaseModel):

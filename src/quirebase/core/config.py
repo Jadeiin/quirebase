@@ -32,7 +32,11 @@ class Settings(BaseSettings):
     max_attachment_bytes: int = 250 * 1024 * 1024
     export_ttl_hours: int = 24
     object_orphan_retention_hours: int = Field(default=24, ge=1, le=8760)
-    workspace_delete_retention_days: int = Field(default=30, ge=1, le=3650)
+    workflow_history_retention_days: int = Field(default=7, ge=1)
+    import_batch_retention_days: int = Field(default=7, ge=1)
+    audit_retention_days: int = Field(default=90, ge=1)
+    terminal_metadata_retention_days: int = Field(default=30, ge=1)
+    annotation_undo_hours: int = Field(default=24, ge=1)
     workflow_upload_timeout_seconds: int = Field(default=600, ge=1, le=3600)
     workflow_executor_id: str = "quirebase-worker"
     log_level: str = "INFO"

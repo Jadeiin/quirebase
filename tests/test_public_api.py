@@ -821,10 +821,15 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
                 headers=headers,
                 json=json_payload({"action": action, "version": 1}),
             )
-            assert moderated.status_code == 200
-            assert moderated.json()["body"] is None
-            assert moderated.json()["version"] == 2
-            assert moderated.json()["moderated_by"] == str(administrator.id)
+            assert moderated.status_code == 204
+            assert moderated.content == b""
+            await db.refresh(annotation)
+            assert annotation.body is None
+            assert annotation.version == 2
+            assert annotation.moderated_by == administrator.id
+            assert (
+                annotation.hidden_at if action == "hide" else annotation.archived_at
+            ) is not None
 
         deleted = await client.post(
             f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations/"
@@ -832,9 +837,9 @@ async def test_workspace_admin_moderates_other_users_project_annotations_via_htt
             headers=headers,
             json=json_payload({"action": "delete", "version": 2}),
         )
-        assert deleted.status_code == 200
-        assert deleted.json()["version"] == 3
-        assert deleted.json()["authorization"]["allowed"] == []
+        assert deleted.status_code == 204
+        assert deleted.content == b""
+        assert await db.get(PdfAnnotation, annotations[0].id, populate_existing=True) is None
         remaining = await client.get(
             f"/api/v1/workspaces/{workspace_id}/items/{item.id}/annotations",
             headers=headers,

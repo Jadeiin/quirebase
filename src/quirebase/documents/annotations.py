@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from quirebase.access import (
@@ -30,6 +30,7 @@ from quirebase.access.annotations import (
 from quirebase.access.documents import require_revision
 from quirebase.access.items import require_readable_item
 from quirebase.audit import record_event
+from quirebase.core.config import get_settings
 from quirebase.core.errors import (
     DomainError,
     PermissionDenied,
@@ -823,7 +824,6 @@ async def delete_document_annotation(
         )
         .values(
             deleted_at=deleted_at,
-            deleted_by_moderation=False,
             version=PdfAnnotation.version + 1,
             updated_at=deleted_at,
         )
@@ -869,7 +869,8 @@ async def restore_document_annotation(
             PdfAnnotation.id == annotation_id,
             PdfAnnotation.version == version,
             PdfAnnotation.deleted_at.is_not(None),
-            PdfAnnotation.deleted_by_moderation.is_(False),
+            PdfAnnotation.deleted_at
+            > restored_at - timedelta(hours=get_settings().annotation_undo_hours),
         )
         .values(deleted_at=None, version=PdfAnnotation.version + 1, updated_at=restored_at)
         .returning(PdfAnnotation.version)
@@ -907,7 +908,7 @@ async def moderate_document_annotation(
     annotation_id: UUID,
     action: AnnotationModerationAction,
     version: int,
-) -> dict[str, Any]:
+) -> None:
     """Change moderation state without rewriting authored content or attribution."""
     workspace = await require_workspace_action(
         db, user, workspace_id, ResourceAction.workspace_read
@@ -982,21 +983,24 @@ async def moderate_document_annotation(
         case AnnotationModerationAction.unlock:
             values["locked_at"] = None
         case AnnotationModerationAction.delete:
-            values["deleted_at"] = changed_at
-            values["deleted_by_moderation"] = True
+            pass
         case _:
             assert_never(action)
 
+    command = (
+        delete(PdfAnnotation)
+        if action is AnnotationModerationAction.delete
+        else update(PdfAnnotation).values(
+            **values, version=PdfAnnotation.version + 1, updated_at=changed_at
+        )
+    )
     new_version = await db.scalar(
-        update(PdfAnnotation)
-        .where(
+        command.where(
             PdfAnnotation.workspace_id == workspace_id,
             PdfAnnotation.id == annotation_id,
             PdfAnnotation.version == version,
             PdfAnnotation.deleted_at.is_(None),
-        )
-        .values(**values, version=PdfAnnotation.version + 1, updated_at=changed_at)
-        .returning(PdfAnnotation.version)
+        ).returning(PdfAnnotation.version)
     )
     if new_version is None:
         current_version = await db.scalar(
@@ -1005,7 +1009,6 @@ async def moderate_document_annotation(
             )
         )
         raise VersionConflict(current_version)
-    await db.refresh(record)
     record_event(
         db,
         user.id,
@@ -1021,7 +1024,6 @@ async def moderate_document_annotation(
         authorization_resource_action=moderation_action.value,
     )
     await db.commit()
-    return (await _annotation_views(db, user, workspace_id, [record]))[0]
 
 
 async def create_annotation_reply(
@@ -1225,7 +1227,8 @@ async def restore_annotation_reply(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.annotation_id == annotation_id,
             PdfAnnotationReply.workspace_id == workspace_id,
-            PdfAnnotationReply.deleted_at.is_not(None),
+            PdfAnnotationReply.deleted_at
+            > datetime.now(UTC) - timedelta(hours=get_settings().annotation_undo_hours),
         )
         .with_for_update()
     )
@@ -1251,6 +1254,8 @@ async def restore_annotation_reply(
             PdfAnnotationReply.id == reply_id,
             PdfAnnotationReply.version == version,
             PdfAnnotationReply.deleted_at.is_not(None),
+            PdfAnnotationReply.deleted_at
+            > restored_at - timedelta(hours=get_settings().annotation_undo_hours),
         )
         .values(deleted_at=None, version=PdfAnnotationReply.version + 1, updated_at=restored_at)
         .returning(PdfAnnotationReply.version)
