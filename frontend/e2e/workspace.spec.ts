@@ -280,7 +280,7 @@ test('a user with no Workspace is sent to the chooser without a repair request',
 
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/workspace$/);
-	await expect(page.getByText('No workspaces are available for this account yet.')).toBeVisible();
+	await expect(page.getByText('No Workspaces yet.')).toBeVisible();
 	expect(repairRequested).toBe(false);
 });
 
@@ -425,7 +425,7 @@ test('availability recovery releases its guard for a later membership revocation
 	await page.getByRole('link', { name: 'Library' }).first().click();
 
 	await expect(page).toHaveURL(/\/workspace$/);
-	await expect(page.getByText('No workspaces are available for this account yet.')).toBeVisible();
+	await expect(page.getByText('No Workspaces yet.')).toBeVisible();
 });
 
 test('membership revoked while a page is open returns the user to the Workspace chooser', async ({
@@ -473,7 +473,7 @@ test('membership revoked while a page is open returns the user to the Workspace 
 	await page.goto('/workspace/workspace-1/library');
 
 	await expect(page).toHaveURL(/\/workspace$/);
-	await expect(page.getByText('No workspaces are available for this account yet.')).toBeVisible();
+	await expect(page.getByText('No Workspaces yet.')).toBeVisible();
 });
 
 test('a user who is not yet a Workspace member can sign in and accept the global invitation route', async ({

@@ -140,7 +140,7 @@
 				}}><Icon name="rotate" size={16} /></Button
 			>
 			<p class="col-span-2 text-sm text-surface-700-300">
-				{$t('Accept an invitation to join a workspace. You choose when to open it.')}
+				{$t('Accept an invitation to join a Workspace.')}
 			</p>
 		</header>
 		{#if target}

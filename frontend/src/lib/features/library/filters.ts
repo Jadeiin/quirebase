@@ -11,6 +11,8 @@ export type LibraryFilters = {
 	sort?: LibrarySort;
 	direction?: LibrarySortDirection;
 	has_files?: boolean;
+	has_tags?: boolean;
+	has_projects?: boolean;
 	reference_type?: string;
 	publication_title?: string;
 	keyword_exact?: string;
@@ -32,7 +34,23 @@ export function refineLibraryFilters(
 	// An exact credit replaces both free-text and exact author criteria.
 	if ('author_last_name' in filter) return { ...applied, author: undefined, ...filter };
 	if ('keyword_exact' in filter) return { ...applied, keyword: undefined, ...filter };
+	if ('tag' in filter && filter.tag) {
+		return { ...applied, has_tags: undefined, ...filter };
+	}
 	return { ...applied, ...filter };
+}
+
+export const libraryAssociationChoices = { any: ':any', none: ':none' } as const;
+
+export function libraryAssociationValue(id: string | undefined, presence: boolean | undefined) {
+	return (
+		id ||
+		(presence === undefined
+			? ''
+			: presence
+				? libraryAssociationChoices.any
+				: libraryAssociationChoices.none)
+	);
 }
 
 export function submitLibraryFilters(
@@ -49,7 +67,26 @@ export function submitLibraryFilters(
 		delete next.author_first_name;
 	}
 	if (draft.keyword) delete next.keyword_exact;
+	for (const [key, presence] of [
+		['tag', 'has_tags'],
+		['project', 'has_projects']
+	] as const) {
+		if (draft[key] === undefined) continue;
+		const value = draft[key];
+		if (value === libraryAssociationChoices.any || value === libraryAssociationChoices.none) {
+			delete next[key];
+			next[presence] = value === libraryAssociationChoices.any;
+		} else {
+			delete next[presence];
+		}
+	}
 	return next;
+}
+
+const organizationFilterKeys = ['has_files', 'has_tags', 'has_projects'] as const;
+
+function optionalBoolean(value: string | null): boolean | undefined {
+	return value === 'true' ? true : value === 'false' ? false : undefined;
 }
 
 const exactKeys = [
@@ -92,7 +129,9 @@ export function readLibraryFilters(
 		author: parameters.get('author')?.trim() ?? '',
 		sort,
 		direction: direction === 'asc' || direction === 'desc' ? direction : defaultSortDirection(sort),
-		has_files: parameters.has('has_files') ? parameters.get('has_files') === 'true' : undefined,
+		...Object.fromEntries(
+			organizationFilterKeys.map((key) => [key, optionalBoolean(parameters.get(key))])
+		),
 		...Object.fromEntries(exactKeys.map((key) => [key, parameters.get(key) ?? undefined]))
 	};
 }
@@ -131,7 +170,9 @@ export function libraryParameters(
 	if (filters.direction && filters.direction !== defaultSortDirection(filters.sort ?? 'updated')) {
 		result.set('direction', filters.direction);
 	}
-	if (filters.has_files !== undefined) result.set('has_files', String(filters.has_files));
+	for (const key of organizationFilterKeys) {
+		if (filters[key] !== undefined) result.set(key, String(filters[key]));
+	}
 	for (const key of exactKeys) {
 		// Empty given names select single-field and organization names exactly.
 		if (filters[key] !== undefined) result.set(key, filters[key]);

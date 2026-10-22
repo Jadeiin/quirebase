@@ -59,7 +59,7 @@
 <section aria-label={$t('Refine current results')} class="border-t border-surface-300-700 pt-4">
 	<h2 class="text-sm font-semibold">{$t('Refine current results')}</h2>
 	<p class="mt-1 text-xs text-surface-600-400">
-		{$t('Authors, keywords and types on this page. Counts refer to Items on this page.')}
+		{$t('Authors, keywords, types and matching Items on this page.')}
 	</p>
 	{#if facets.isError || facets.fetchStatus === 'paused' || facets.data === null}
 		<QueryError

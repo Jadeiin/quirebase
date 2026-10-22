@@ -384,7 +384,7 @@
 		</p>
 		<h1 class="mb-2">{$t('Import')}</h1>
 		<p class="mb-0 max-w-2xl text-surface-600-400">
-			{$t('Add records using identifiers, bibliography files, PDFs, or the metadata editor.')}
+			{$t('Import from identifiers, bibliography files or PDFs, or create an Item manually.')}
 		</p>
 	</div>
 	{#if batchId}
@@ -404,7 +404,7 @@
 	{/if}
 </div>
 <ol class="mb-6 flex list-none flex-wrap items-center p-0">
-	{#each [{ number: '1', title: $t('Choose a source') }, { number: '2', title: $t('Review the preview') }, { number: '3', title: $t('Commit to Library') }] as step, index (step.number)}
+	{#each [{ number: '1', title: $t('Choose a source') }, { number: '2', title: $t('Preview records') }, { number: '3', title: $t('Import to Library') }] as step, index (step.number)}
 		<li class="flex items-center" aria-current={index + 1 === currentStep ? 'step' : undefined}>
 			<span class={stepChipClass(index)}
 				>{#if index + 1 < currentStep}<Icon name="check" size={13} />{:else}{step.number}{/if}</span
@@ -471,9 +471,7 @@
 			<ImportSourceForm
 				icon="search"
 				title={$t('Look up identifiers')}
-				description={$t(
-					'Paste up to 50 identifiers, one per line. Each record is looked up separately.'
-				)}
+				description={$t('Paste up to 50 identifiers, one per line.')}
 				busy={busy || hasStagedBatch || providers.isPending || providers.isError}
 				submitLabel={$t('Preview metadata')}
 				submitDisabled={identifierEntries.length === 0 || identifierEntries.length > 50}
@@ -528,7 +526,7 @@
 			<ImportSourceForm
 				icon="library"
 				title={$t('Import a bibliography')}
-				description={$t('Upload a reference manager export or paste structured bibliography data.')}
+				description={$t('Upload a bibliography file or paste bibliography data.')}
 				busy={busy || hasStagedBatch}
 				submitLabel={$t('Preview bibliography')}
 				submitDisabled={!bibliographyFile && !bibliographyText.trim()}
@@ -585,9 +583,9 @@
 			<ImportSourceForm
 				icon="import"
 				title={$t('Import published PDFs')}
-				description={$t('Extract metadata and keep the papers together in one Import Batch.')}
+				description={$t('Extract metadata from PDFs and import them together.')}
 				busy={busy || hasStagedBatch}
-				submitLabel={$t('Stage PDFs')}
+				submitLabel={$t('Preview import')}
 				submitDisabled={pdfFiles.length === 0}
 				onsubmit={(event) => {
 					event.preventDefault();
@@ -598,7 +596,7 @@
 					<FilePicker
 						name="pdfs"
 						label={$t('PDF files')}
-						hint={$t('Drop PDFs here or choose them; choosing more later adds to the same batch.')}
+						hint={$t('Drop PDFs here or choose files. You can add more.')}
 						actionLabel={$t('Choose files')}
 						accept={['application/pdf', '.pdf']}
 						multiple
@@ -619,9 +617,9 @@
 							><Icon name="plus" size={20} /></span
 						>
 						<div class="min-w-0">
-							<h2 class="mb-1">{$t('New Item metadata')}</h2>
+							<h2 class="mb-1">{$t('New Item')}</h2>
 							<p class="mb-0 text-sm text-surface-600-400">
-								{$t('Enter metadata by hand when no import source applies.')}
+								{$t('Enter Item metadata manually.')}
 							</p>
 						</div>
 					</div>

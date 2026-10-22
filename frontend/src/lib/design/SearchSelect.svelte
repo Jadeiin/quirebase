@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { Combobox, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
 	import Icon from '#lib/design/Icon.svelte';
 	import { activeLocale, t } from '#lib/i18n.js';
 
-	type Option = { value: string; label: string };
+	type Option = { value: string; label: string; group?: string; kind?: string };
 	let {
 		value = $bindable(''),
 		search = $bindable<string | null>(null),
@@ -13,9 +14,11 @@
 		label,
 		hideLabel = false,
 		selectedLabel,
+		selectedKind,
 		options,
 		placeholder = '',
 		emptyLabel,
+		emptyOption,
 		disabled = false,
 		filterOptions = true,
 		loading = false,
@@ -32,9 +35,11 @@
 		label: string;
 		hideLabel?: boolean;
 		selectedLabel?: string;
+		selectedKind?: string;
 		options: Option[];
 		placeholder?: string;
 		emptyLabel?: string;
+		emptyOption?: Pick<Option, 'group' | 'kind'>;
 		disabled?: boolean;
 		filterOptions?: boolean;
 		loading?: boolean;
@@ -49,14 +54,21 @@
 	let input = $state<HTMLInputElement>();
 	let footerElement = $state<HTMLDivElement>();
 	let portalTarget = $state<HTMLElement>();
+	const selectionKindId = $props.id();
 	onMount(() => {
 		// Keep popups inside a modal's accessibility and focus boundary.
 		portalTarget = input?.closest<HTMLElement>('[role="dialog"]') ?? undefined;
 	});
 	const selected = $derived(options.find((option: Option) => option.value === value));
+	const selectedText = $derived(
+		selectedLabel ?? selected?.label ?? (allowCustomValue ? value : '')
+	);
+	const selectionKind = $derived(
+		value && selectedText && search === null ? (selectedKind ?? selected?.kind) : undefined
+	);
 	const items = $derived(
 		emptyLabel && (filterOptions || !search)
-			? [{ value: '', label: emptyLabel }, ...options]
+			? [{ value: '', label: emptyLabel, ...emptyOption }, ...options]
 			: options
 	);
 	const query = $derived(search?.toLocaleLowerCase($activeLocale) ?? '');
@@ -74,6 +86,15 @@
 			itemToString: (option) => option.label
 		})
 	);
+	const groups = $derived.by(() => {
+		const result = new SvelteMap<string | undefined, Option[]>();
+		for (const option of matching) {
+			const group = result.get(option.group);
+			if (group) group.push(option);
+			else result.set(option.group, [option]);
+		}
+		return [...result];
+	});
 </script>
 
 <Combobox
@@ -83,7 +104,7 @@
 	{allowCustomValue}
 	{required}
 	{open}
-	inputValue={search ?? selectedLabel ?? selected?.label ?? (allowCustomValue ? value : '')}
+	inputValue={search ?? selectedText}
 	value={value ? [value] : []}
 	positioning={{ strategy: 'fixed' }}
 	openOnClick
@@ -106,11 +127,30 @@
 		if (!details.open || details.reason === 'trigger-click') search = null;
 	}}
 >
-	<Combobox.Label class={hideLabel ? 'sr-only' : ''}>{label}</Combobox.Label>
+	{#if selectedKind || emptyOption?.kind || selected?.kind}
+		<div class="flex min-w-0 items-center justify-between gap-2">
+			<Combobox.Label class={hideLabel ? 'sr-only' : ''}>{label}</Combobox.Label>
+			{#if selectionKind}
+				<span
+					id={selectionKindId}
+					class="shrink-0 rounded-full bg-surface-100-900 px-2 text-xs leading-4 text-surface-600-400"
+					>{selectionKind}</span
+				>
+			{/if}
+		</div>
+	{:else}
+		<Combobox.Label class={hideLabel ? 'sr-only' : ''}>{label}</Combobox.Label>
+	{/if}
 	<Combobox.Control>
 		<Combobox.Input placeholder={placeholder || emptyLabel} class="pr-10">
 			{#snippet element(attributes)}<input
 					{...attributes}
+					aria-describedby={[
+						attributes['aria-describedby'],
+						selectionKind ? selectionKindId : undefined
+					]
+						.filter(Boolean)
+						.join(' ') || undefined}
 					name={inputName}
 					type={inputType}
 					{required}
@@ -122,18 +162,26 @@
 		>
 	</Combobox.Control>
 	<Portal target={portalTarget}>
-		<Combobox.Positioner class="min-w-[var(--reference-width)]">
+		<Combobox.Positioner class="max-w-[calc(100vw-2rem)] min-w-[var(--reference-width)]">
 			<!-- Zag derives the positioner's stacking layer from its first child. -->
 			<div
 				hidden={!open}
 				class="z-100 overflow-hidden rounded-container border border-surface-200-800 bg-surface-50-950 shadow-xl"
 			>
 				<Combobox.Content class="max-h-72 overflow-y-auto rounded-none border-0">
-					{#each matching as option (option.value)}
-						<Combobox.Item item={option}>
-							<Combobox.ItemText>{option.label}</Combobox.ItemText>
-							<Combobox.ItemIndicator aria-hidden="true">✓</Combobox.ItemIndicator>
-						</Combobox.Item>
+					{#each groups as [group, options] (group)}
+						{#if group}
+							<Combobox.ItemGroup class="border-t border-surface-200-800 first:border-0">
+								<Combobox.ItemGroupLabel
+									class="px-3 pt-3 pb-1 text-xs font-semibold text-surface-600-400"
+								>
+									{group}
+								</Combobox.ItemGroupLabel>
+								{#each options as option (option.value)}{@render choice(option)}{/each}
+							</Combobox.ItemGroup>
+						{:else}
+							{#each options as option (option.value)}{@render choice(option)}{/each}
+						{/if}
 					{:else}
 						{#if !loading}<p class="px-2 py-1 text-sm text-surface-600-400">
 								{$t('No matching options.')}
@@ -145,3 +193,13 @@
 		</Combobox.Positioner>
 	</Portal>
 </Combobox>
+
+{#snippet choice(option: Option)}
+	<Combobox.Item item={option}>
+		<span class="flex min-w-0 flex-1 items-center justify-between gap-4">
+			<Combobox.ItemText class="min-w-0 break-words">{option.label}</Combobox.ItemText>
+			{#if option.kind}<span class="shrink-0 text-xs text-surface-600-400">{option.kind}</span>{/if}
+		</span>
+		<Combobox.ItemIndicator aria-hidden="true">✓</Combobox.ItemIndicator>
+	</Combobox.Item>
+{/snippet}

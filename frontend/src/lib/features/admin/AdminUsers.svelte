@@ -176,7 +176,7 @@
 								</form>
 								<p class="text-sm text-surface-600-400">
 									{$t(
-										'Disabling a user immediately blocks account access and ends sign-in sessions. Workspace ownership is retained; reassign it separately in Workspace governance.'
+										'Disabling a user ends all sessions and blocks access. Workspace ownership stays assigned; reassign it in Workspace management.'
 									)}
 								</p>
 								<div class="flex flex-wrap gap-2 border-t border-surface-300-700 pt-3">

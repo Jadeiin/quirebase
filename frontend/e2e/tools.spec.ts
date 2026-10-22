@@ -122,7 +122,9 @@ test('an in-flight duplicate scan stays with its submitted criteria', async ({ p
 	await identifier.focus();
 	await identifier.press('ArrowRight');
 	await expect(title).toBeChecked();
-	await expect(page.getByText('The match criteria changed.')).toBeVisible();
+	await expect(
+		page.getByText('Match criteria changed. Run the check again.', { exact: true })
+	).toBeVisible();
 	await title.press('ArrowLeft');
 	await expect(identifier).toBeChecked();
 	release.resolve();
@@ -162,7 +164,9 @@ test('leaving an unfinished duplicate scan restores an idle explicit check', asy
 	await page.goBack();
 	const check = page.getByRole('button', { name: 'Check for duplicates', exact: true });
 	await expect(check).toBeEnabled();
-	await expect(page.getByText('Run a check when you are ready', { exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Start a duplicate check', exact: true })
+	).toBeVisible();
 	expect(scans).toBe(1);
 	release.resolve();
 	await check.click();
@@ -656,7 +660,9 @@ test('Tools exposes Tag maintenance and Citation Style installation', async ({ p
 	await page.getByRole('radio', { name: 'Shared identifier' }).press('ArrowRight');
 	await expect(page.getByRole('radio', { name: 'Same title' })).toBeChecked();
 	await expect.poll(() => duplicateReads).toBe(1);
-	await expect(page.getByText('The match criteria changed.')).toBeVisible();
+	await expect(
+		page.getByText('Match criteria changed. Run the check again.', { exact: true })
+	).toBeVisible();
 	await page.getByRole('button', { name: 'Check for duplicates' }).click();
 	await expect.poll(() => duplicateReads).toBe(2);
 	await page.getByRole('tab', { name: 'Manage Tags' }).click();

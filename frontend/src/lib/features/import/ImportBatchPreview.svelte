@@ -122,21 +122,15 @@
 		<LoadingState label={$t('Preparing uploaded PDFs…')} />
 	{:else if batch.status === 'committed'}
 		<Notice variant="success"
-			>{$t(
-				'Import completed. Deleting this import record keeps the imported Items and files.'
-			)}</Notice
+			>{$t('Import completed. Deleting this record keeps the Items and files.')}</Notice
 		>
 	{:else if batch.status === 'ready' && batch.records.length > 0 && batch.errors.length > 0}
-		<Notice
-			>{$t(
-				'You can import the ready records. Review the diagnostics for sources that need attention.'
-			)}</Notice
-		>
+		<Notice>{$t('Ready records can be imported. See the issues below.')}</Notice>
 	{:else if batch.records.length === 0}
 		<EmptyState
 			icon="import"
 			title={$t('No records in this batch')}
-			detail={$t('Review the diagnostics below for details.')}
+			detail={$t('See the import issues below.')}
 		/>
 	{/if}
 	{#each records as record (record)}
@@ -179,7 +173,7 @@
 	{#if batch.errors.length}
 		<section class="mt-4 grid grid-cols-1 gap-3">
 			<div class="flex items-center gap-2">
-				<h3 class="mb-0">{$t('Diagnostics')}</h3>
+				<h3 class="mb-0">{$t('Import issues')}</h3>
 				<Badge variant={diagnosticsVariant}>{batch.errors.length}</Badge>
 			</div>
 			<div class="flex flex-wrap gap-2">

@@ -9277,6 +9277,8 @@ export interface operations {
 				keyword?: string;
 				author?: string;
 				has_files?: boolean | null;
+				has_tags?: boolean | null;
+				has_projects?: boolean | null;
 				reference_type?: string | null;
 				keyword_exact?: string | null;
 				author_last_name?: string | null;
@@ -9379,6 +9381,8 @@ export interface operations {
 				keyword?: string;
 				author?: string;
 				has_files?: boolean | null;
+				has_tags?: boolean | null;
+				has_projects?: boolean | null;
 				reference_type?: string | null;
 				keyword_exact?: string | null;
 				author_last_name?: string | null;

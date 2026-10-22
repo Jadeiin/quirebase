@@ -8,6 +8,7 @@ from sqlalchemy import Select, func, or_, select
 
 from quirebase.access import (
     ResourceAction,
+    discoverable_project_ids_query,
     require_project_context,
     require_workspace_action,
     workspace_items_query,
@@ -52,6 +53,8 @@ class LibraryFilter:
     keyword: str = ""
     author: str = ""
     has_files: bool | None = None
+    has_tags: bool | None = None
+    has_projects: bool | None = None
     reference_type: str | None = None
     keyword_exact: str | None = None
     author_last_name: str | None = None
@@ -147,6 +150,26 @@ async def _library_query(
         ]
         file_condition = or_(*file_conditions)
         item_query = item_query.where(file_condition if filters.has_files else ~file_condition)
+    if filters.has_tags is not None:
+        tag_condition = (
+            select(ItemTag.item_id)
+            .where(ItemTag.item_id == Item.id, ItemTag.workspace_id == workspace_id)
+            .exists()
+        )
+        item_query = item_query.where(tag_condition if filters.has_tags else ~tag_condition)
+    if filters.has_projects is not None:
+        project_condition = (
+            select(ProjectItem.item_id)
+            .where(
+                ProjectItem.item_id == Item.id,
+                ProjectItem.workspace_id == workspace_id,
+                ProjectItem.project_id.in_(discoverable_project_ids_query(context)),
+            )
+            .exists()
+        )
+        item_query = item_query.where(
+            project_condition if filters.has_projects else ~project_condition
+        )
     return item_query
 
 
@@ -194,6 +217,8 @@ async def search_library(
     offset: int = 0,
     sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated",
     has_files: bool | None = None,
+    has_tags: bool | None = None,
+    has_projects: bool | None = None,
     reference_type: str | None = None,
     keyword_exact: str | None = None,
     author_last_name: str | None = None,
@@ -214,6 +239,8 @@ async def search_library(
             keyword=keyword,
             author=author,
             has_files=has_files,
+            has_tags=has_tags,
+            has_projects=has_projects,
             reference_type=reference_type,
             keyword_exact=keyword_exact,
             author_last_name=author_last_name,

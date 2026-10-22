@@ -397,7 +397,9 @@ test('disabling an owner refreshes cached Workspace governance independently of 
 	await expect(page.locator('tbody[aria-label]').getByText(/curator/)).toBeVisible();
 	await page.getByRole('link', { name: 'Users', exact: true }).click();
 	await page.getByText('Manage user', { exact: true }).click();
-	await expect(page.getByText(/Disabling a user immediately blocks account access/)).toBeVisible();
+	await expect(
+		page.getByText(/Disabling a user ends all sessions and blocks access/)
+	).toBeVisible();
 	await page.getByRole('button', { name: 'Disable user', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Enable user', exact: true })).toBeVisible();
 	await page.getByRole('link', { name: 'Workspaces', exact: true }).click();

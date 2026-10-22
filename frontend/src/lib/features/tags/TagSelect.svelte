@@ -4,7 +4,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { apiErrorMessage } from '#lib/api/errors.js';
-	import { t } from '#lib/i18n.js';
+	import { activeLocale, t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { tagOptionsQuery, tagsQuery } from './queries.js';
 
@@ -17,6 +17,7 @@
 		manageOnly = false,
 		valueBy = 'id',
 		allowCustomValue = false,
+		presetOptions = [],
 		class: className = ''
 	}: {
 		value?: string;
@@ -27,6 +28,7 @@
 		manageOnly?: boolean;
 		valueBy?: 'id' | 'name';
 		allowCustomValue?: boolean;
+		presetOptions?: { value: string; label: string }[];
 		class?: string;
 	} = $props();
 
@@ -34,6 +36,16 @@
 	let open = $state(false);
 	let search = $state<string | null>(null);
 	let submittedSearch = $state('');
+	const selectedPreset = $derived(presetOptions.find((option) => option.value === value));
+	const matchingPresets = $derived(
+		presetOptions
+			.filter((option) =>
+				option.label
+					.toLocaleLowerCase($activeLocale)
+					.includes((search?.trim() ?? '').toLocaleLowerCase($activeLocale))
+			)
+			.map((option) => ({ ...option, group: $t('Filter conditions'), kind: $t('Condition') }))
+	);
 	$effect(() => {
 		const query = search?.trim() ?? '';
 		if (query === submittedSearch) return;
@@ -46,18 +58,25 @@
 	}));
 	const selection = createQuery(() => ({
 		...tagsQuery(workspaceId, '', 0, 1, value),
-		enabled: valueBy === 'id' && Boolean(value)
+		enabled: valueBy === 'id' && Boolean(value) && !selectedPreset
 	}));
 	const selectedLabel = $derived(
-		valueBy === 'name'
-			? value
-			: (selection.data?.items[0]?.name ?? tags.data?.find((tag) => tag.id === value)?.name)
+		selectedPreset?.label ??
+			(valueBy === 'name'
+				? value
+				: (selection.data?.items[0]?.name ?? tags.data?.find((tag) => tag.id === value)?.name))
 	);
-	const options = $derived(
-		((search?.trim() ?? '') === submittedSearch ? (tags.data ?? []) : [])
+	const options = $derived([
+		...matchingPresets,
+		...((search?.trim() ?? '') === submittedSearch ? (tags.data ?? []) : [])
 			.filter((tag) => !manageOnly || can(tag.authorization, 'tag.manage'))
-			.map((tag) => ({ value: valueBy === 'name' ? tag.name : tag.id, label: tag.name }))
-	);
+			.map((tag) => ({
+				value: valueBy === 'name' ? tag.name : tag.id,
+				label: tag.name,
+				...(presetOptions.length ? { group: $t('Tags'), kind: $t('Tag') } : {})
+			}))
+			.filter((option) => !presetOptions.some((preset) => preset.value === option.value))
+	]);
 </script>
 
 <SearchSelect
@@ -68,7 +87,11 @@
 	{hideLabel}
 	class={className}
 	{selectedLabel}
+	selectedKind={presetOptions.length ? (selectedPreset ? $t('Condition') : $t('Tag')) : undefined}
 	{emptyLabel}
+	emptyOption={presetOptions.length
+		? { group: $t('Filter conditions'), kind: $t('Condition') }
+		: undefined}
 	{disabled}
 	{allowCustomValue}
 	{options}

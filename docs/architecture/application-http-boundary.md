@@ -154,6 +154,14 @@ Library uses a native table on desktop and a compact list on narrow screens. Tan
 Table owns column visibility, constrained resizing and row-selection mechanics; Query and the URL
 retain server filtering, sorting and pagination. Only the loaded page is selectable. A changed list
 query clears selection, and successful refreshes remove selected IDs that are no longer displayed.
+Organization filters intersect the current search, including an Import receipt, and remain usable
+in saved views and Item return links. File presence counts any File Revision or Attachment; Tag
+presence counts Workspace Item–Tag links. Project presence counts only discoverable Projects,
+including archived ones, so hidden managed associations never affect these results. SQL existence
+filters run before paging and current-page facets. Presence choices live in the existing Tag,
+Project and Files controls and apply with Search; selecting a specific association replaces its
+presence choice. History restores submitted criteria. Existing bulk actions remove organized Items
+from the corresponding absence results.
 Authoritative access/not-found failures discard cached lists for that Project and clear selection;
 transient refresh failures may retain the last loaded rows.
 Titles remain ordinary Item links. The independent `preview` URL parameter opens a nonmodal Item

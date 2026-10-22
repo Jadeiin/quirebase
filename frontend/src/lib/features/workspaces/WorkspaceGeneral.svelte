@@ -37,7 +37,7 @@
 		<div>
 			<h2 class="text-xl font-semibold">{$t('General')}</h2>
 			<p class="mt-1 text-sm text-surface-700-300">
-				{$t('Update the name members see across this workspace.')}
+				{$t('Change the Workspace name.')}
 			</p>
 		</div>
 		{#if workspace.can('workspace.update')}

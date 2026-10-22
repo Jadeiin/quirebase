@@ -14,7 +14,7 @@
 		<h1 class="mb-2">{$t('Import history')}</h1>
 		<p class="mb-0 max-w-2xl text-surface-600-400">
 			{$t(
-				'Reopen recent imports. Old previews and import records are cleaned up automatically; imported Items and files are kept.'
+				'View recent imports. Old previews and records are removed automatically; Items and files are kept.'
 			)}
 		</p>
 	</div>

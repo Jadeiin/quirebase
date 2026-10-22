@@ -44,13 +44,17 @@ test('a Project filter outside the first directory page resolves directly and su
 		'Project 26'
 	);
 	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
-	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
+	await expect(page.getByRole('option', { name: 'Project 26 Project', exact: true })).toHaveCount(
+		1
+	);
 	await expect(page.getByRole('button', { name: 'Load more Projects', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Load more Projects', exact: true }).click();
 	await expect
 		.poll(() => projectLists.some((url) => url.searchParams.get('offset') === '25'))
 		.toBe(true);
-	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(1);
+	await expect(page.getByRole('option', { name: 'Project 26 Project', exact: true })).toHaveCount(
+		1
+	);
 	await page.getByRole('button', { name: 'Show options for Project', exact: true }).click();
 	await expect(page.getByRole('listbox', { name: 'Project', exact: true })).toHaveCount(0);
 	await page.getByPlaceholder('Search title, author, Tag, or full text').fill('retained filter');
@@ -674,7 +678,7 @@ test('Library year calendar keeps numeric year filters and searchable selectors 
 	await expect(year).toBeFocused();
 	const tag = page.getByRole('combobox', { name: 'Tag', exact: true });
 	await tag.fill('Meth');
-	await expect(page.getByRole('option', { name: 'Methods', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Methods Tag', exact: true })).toBeVisible();
 	await tag.press('ArrowDown');
 	await tag.press('Enter');
 	await expect(tag).toHaveValue('Methods');
@@ -715,18 +719,18 @@ test('Library loads Tag options on demand, searches server pages and resolves a 
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
 	expect(reads).toEqual([]);
 	await page.getByRole('button', { name: 'Show options for Tag', exact: true }).click();
-	await expect(page.getByRole('option', { name: 'Tag 25', exact: true })).toBeVisible();
-	await expect(page.getByRole('option', { name: 'Tag 26', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('option', { name: 'Tag 25 Tag', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Tag 26 Tag', exact: true })).toHaveCount(0);
 	expect(reads).toEqual([{ offset: 0, limit: 25, search: null, tag: null }]);
 	await page.getByRole('button', { name: 'Load more Tags', exact: true }).click();
-	await expect(page.getByRole('option', { name: 'Tag 50', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Tag 50 Tag', exact: true })).toBeVisible();
 	expect(reads[1].offset).toBe(25);
 	const loadMore = page.getByRole('button', { name: 'Load more Tags', exact: true });
 	await loadMore.focus();
 	await loadMore.press('Enter');
-	await expect(page.getByRole('option', { name: 'Tag 60', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Tag 60 Tag', exact: true })).toBeVisible();
 	expect(reads[2].offset).toBe(50);
-	await chooseSearchOption(page, 'Tag', 'Tag 60');
+	await chooseSearchOption(page, 'Tag', 'Tag 60', 'Tag 60 Tag');
 	await expect
 		.poll(() => reads.some((read) => read.search === 'Tag 60' && read.offset === 0))
 		.toBe(true);
@@ -786,18 +790,20 @@ test('Library loads Project options only inside the picker, searches server page
 		0
 	);
 	await page.getByRole('button', { name: 'Show options for Project', exact: true }).click();
-	await expect(page.getByRole('option', { name: 'Project 25', exact: true })).toBeVisible();
-	await expect(page.getByRole('option', { name: 'Project 26', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('option', { name: 'Project 25 Project', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Project 26 Project', exact: true })).toHaveCount(
+		0
+	);
 	expect(reads).toEqual([{ offset: 0, limit: 25, search: '', view: 'all' }]);
 	const loadMore = page.getByRole('button', { name: 'Load more Projects', exact: true });
 	await loadMore.click();
-	await expect(page.getByRole('option', { name: 'Project 50', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Project 50 Project', exact: true })).toBeVisible();
 	expect(reads[1].offset).toBe(25);
 	await loadMore.focus();
 	await loadMore.press('Enter');
-	await expect(page.getByRole('option', { name: 'Project 60', exact: true })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'Project 60 Project', exact: true })).toBeVisible();
 	expect(reads[2].offset).toBe(50);
-	await chooseSearchOption(page, 'Project', 'Project 60');
+	await chooseSearchOption(page, 'Project', 'Project 60', 'Project 60 Project');
 	await expect
 		.poll(() => reads.some((read) => read.search === 'Project 60' && read.offset === 0))
 		.toBe(true);

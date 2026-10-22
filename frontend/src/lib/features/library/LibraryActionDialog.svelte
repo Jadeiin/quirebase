@@ -111,11 +111,11 @@
 			: frozenInput
 				? ''
 				: active.action === 'add_project' && selectedProject?.id !== projectId
-					? $t('Choose a Project to continue.')
+					? $t('Choose a Project.')
 					: active.action === 'add_tag' && !tagName.trim()
-						? $t('Choose or enter a Tag to continue.')
+						? $t('Choose or enter a Tag.')
 						: active.action === 'remove_tag' && !tagId
-							? $t('Choose a Tag to continue.')
+							? $t('Choose a Tag.')
 							: active.action === 'remove_project' && !active.project?.id
 								? $t('Select a Project filter to remove Items from it.')
 								: ''
@@ -395,7 +395,7 @@
 							<p class="m-0 text-sm text-surface-600-400">{$t('This cannot be undone.')}</p>
 						{:else if bibliography}
 							<p class="m-0 text-sm text-surface-600-400">
-								{$t('Uses the defaults saved in your Account export preferences.')}
+								{$t('Uses your Account export settings.')}
 							</p>
 							<label class="grid grid-cols-1 gap-1"
 								>{$t('Format')}<select class="select" bind:value={format} disabled={locked}>
@@ -409,7 +409,7 @@
 								</p>{/if}
 						{:else if active?.action === 'documents'}
 							<p class="m-0 text-sm text-surface-600-400">
-								{$t('Uses the defaults saved in your Account export preferences.')}
+								{$t('Uses your Account export settings.')}
 							</p>
 							<label class="flex items-center gap-2"
 								><input

@@ -36,6 +36,47 @@ const facetSnapshot: LibraryFacets = {
 	reference_types: [{ value: 'Dataset', item_count: 1 }]
 };
 
+it.each(['list', 'facets'] as const)(
+	'forwards combined organization filters to the %s endpoint without losing false values',
+	async (source) => {
+		const received: URL[] = [];
+		vi.stubGlobal('fetch', async (request: Request) => {
+			received.push(new URL(request.url));
+			return new Response(JSON.stringify(source === 'list' ? snapshot : facetSnapshot));
+		});
+		const client = new QueryClient();
+		try {
+			const filters = {
+				import_batch: 'batch-1',
+				has_files: false,
+				has_tags: false,
+				has_projects: false,
+				sort: 'created' as const,
+				direction: 'asc' as const
+			};
+			if (source === 'list') {
+				await client.fetchQuery(libraryListQuery('workspace-1', filters, 3, 50));
+			} else {
+				await client.fetchQuery(libraryFacetsQuery('workspace-1', filters, 3, 50));
+			}
+			expect(received).toHaveLength(1);
+			expect(Object.fromEntries(received[0].searchParams)).toEqual({
+				import_batch: 'batch-1',
+				has_files: 'false',
+				has_tags: 'false',
+				has_projects: 'false',
+				limit: '50',
+				offset: '100',
+				sort: 'created',
+				direction: 'asc'
+			});
+		} finally {
+			client.clear();
+			vi.unstubAllGlobals();
+		}
+	}
+);
+
 it('sends explicit empty exact name parts while omitting blank broad filters', async () => {
 	let received: Request | undefined;
 	vi.stubGlobal('fetch', async (request: Request) => {

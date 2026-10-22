@@ -117,7 +117,7 @@
 				<div>
 					<h2 class="m-0">{$t('Tag matrix')}</h2>
 					<p class="m-0 text-sm text-surface-600-400">
-						{$t('Browse the complete accessible taxonomy.')}
+						{$t('Browse all Tags.')}
 					</p>
 				</div>
 				<input
@@ -188,10 +188,7 @@
 	</div>
 	<div class="grid grid-cols-1 gap-4">
 		<Panel>
-			<h2 class="m-0">{$t('Item Tags')}</h2>
-			<p class="mt-1 mb-3 text-sm text-surface-600-400">
-				{$t('Tags currently assigned to this Item.')}
-			</p>
+			<h2 class="m-0 mb-3">{$t('Item Tags')}</h2>
 			<div class="flex flex-wrap gap-1.5">
 				{#each assignedTags as tag (tag.id)}
 					<Badge

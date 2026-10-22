@@ -274,7 +274,7 @@ test('viewer can search Discovery but cannot stage Import or use write shortcuts
 	await expect(page.getByRole('link', { name: /Import Items/ })).toHaveCount(0);
 	await expect(page.getByRole('link', { name: /New Project/ })).toHaveCount(0);
 	await page.goto('/workspace/workspace-1/import');
-	await expect(page.getByRole('button', { name: 'Stage PDFs' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Preview import' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Open metadata editor' })).toHaveCount(0);
 	await page.goto('/workspace/workspace-1/discovery');
 	await page.getByPlaceholder('Title, author, DOI, or topic').fill('paper');
@@ -290,7 +290,14 @@ test('governance freeze is visible and hides Workspace mutations', async ({ page
 		route.fulfill({ json: { new_items: [], recent_items: [], projects: [], session_count: 0 } })
 	);
 	await page.goto('/workspace/workspace-1');
-	await expect(page.getByText(/Workspace writes are frozen/)).toBeVisible();
+	await expect(
+		page.getByText(
+			'This Workspace is frozen and read only. An instance administrator can unfreeze it.',
+			{
+				exact: true
+			}
+		)
+	).toBeVisible();
 	await expect(page.getByRole('link', { name: /Import Items/ })).toHaveCount(0);
 	await page.goto('/workspace/workspace-1/settings');
 	await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(0);
@@ -445,7 +452,9 @@ test('a lifecycle conflict refreshes the Workspace action projection', async ({ 
 	await page.goto('/workspace/workspace-1/settings');
 	await page.getByLabel('Name', { exact: true }).fill('Attempted rename');
 	await page.getByRole('button', { name: 'Save name' }).click();
-	await expect(page.getByText(/Archived workspace/)).toBeVisible();
+	await expect(
+		page.getByText('Archived Workspace · read-only content.', { exact: true })
+	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Save name' })).toHaveCount(0);
 	await page
 		.getByRole('navigation', { name: 'Workspace settings', exact: true })

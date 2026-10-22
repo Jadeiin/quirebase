@@ -207,7 +207,7 @@
 		{#snippet actions()}<Button onclick={reset}>{$t('Reset to defaults')}</Button>{/snippet}
 	</SectionHeader>
 	<p class="text-surface-600-400">
-		{$t('Configure defaults used by Library and Item export actions on this browser.')}
+		{$t('Default export settings for this browser.')}
 	</p>
 	<div class="flex flex-wrap items-end gap-4">
 		<label class="grid min-w-56 grid-cols-1 gap-1"
@@ -230,7 +230,7 @@
 		>
 	</div>
 	{#if preferences.citation.format === 'commonmeta'}<p class="text-surface-600-400">
-			{$t('Commonmeta exports retain the complete Work, including its abstract and identifiers.')}
+			{$t('Commonmeta exports include all metadata, including abstracts and identifiers.')}
 		</p>{/if}
 	<Tabs
 		value={section}
@@ -266,7 +266,7 @@
 					label={$t('Workspace for citation style')}
 					bind:value={workspaceId}
 					loading={workspaces.isPending}
-					emptyLabel={$t('Choose a Workspace explicitly')}
+					emptyLabel={$t('Choose a Workspace')}
 					options={(workspaces.data ?? []).map((workspace) => ({
 						value: workspace.id,
 						label: workspace.name
@@ -376,7 +376,7 @@
 		>
 	</Tabs>
 	<p class="mb-0 text-sm text-surface-600-400">
-		{$t('Preferences are automatically saved to your browser.')}{#if saved}<span
+		{$t('Settings are saved automatically in this browser.')}{#if saved}<span
 				class="text-success-700-300">{$t('Saved')}</span
 			>{/if}
 	</p>

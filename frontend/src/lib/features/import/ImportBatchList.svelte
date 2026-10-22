@@ -157,7 +157,7 @@
 											count: batch.record_count
 										})}
 										{#if batch.diagnostic_count}
-											· {$t('{count, plural, one {# diagnostic} other {# diagnostics}}', {
+											· {$t('{count, plural, one {# issue} other {# issues}}', {
 												count: batch.diagnostic_count
 											})}{/if}
 									</span>

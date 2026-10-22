@@ -162,12 +162,12 @@ test('bulk toolbar explains requirements, keeps failed targets and restores focu
 	await expect(dialog.getByRole('button', { name: 'Add to Project', exact: true })).toBeDisabled();
 	await expect(
 		dialog.getByRole('button', { name: 'Add to Project', exact: true })
-	).toHaveAccessibleDescription('Choose a Project to continue.');
+	).toHaveAccessibleDescription('Choose a Project.');
 	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await openLibraryAction(page, 'add_tag');
 	dialog = page.getByRole('dialog', { name: 'Add Tag', exact: true });
 	const apply = dialog.getByRole('button', { name: 'Add Tag', exact: true });
-	await expect(apply).toHaveAccessibleDescription('Choose or enter a Tag to continue.');
+	await expect(apply).toHaveAccessibleDescription('Choose or enter a Tag.');
 	await dialog.getByRole('combobox', { name: 'Select Tag', exact: true }).fill('Methods');
 	await dialog.getByText('Add Tag', { exact: true }).first().click();
 	await expect(apply).toBeEnabled();
@@ -861,7 +861,7 @@ for (const view of ['table', 'list'] as const) {
 		expect(reads.at(-1)?.searchParams.get('offset')).toBe('0');
 		expect(reads.at(-1)?.searchParams.get('query')).toBe('committed');
 		await expect(
-			page.getByRole('button', { name: 'Remove filter Author: Smith, Jane', exact: true })
+			page.getByRole('button', { name: 'Remove filter Author: Jane Smith', exact: true })
 		).toBeVisible();
 
 		await row().getByRole('link', { name: 'View Items by Council; & 一', exact: true }).click();

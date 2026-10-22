@@ -24,15 +24,15 @@ msgid "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
 msgstr "{count, plural, other {# 条批注已加载}}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "{count, plural, one {# diagnostic} other {# diagnostics}}"
-msgstr "{count} 条诊断"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "{count, plural, one {# error} other {# errors}}"
 msgstr "{count, plural, other {# 个错误}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "{count, plural, one {# issue} other {# issues}}"
+msgstr "{count, plural, other {# 个问题}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -137,11 +137,6 @@ msgid "90 days"
 msgstr "90 天"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
-msgid "A copy creates a new canonical Item. Only Workspaces where you can create Items are offered."
-msgstr "复制会在目标工作区创建新的规范条目。这里只列出你有权创建条目的工作区。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "A managed Project starts with no participants; Workspace owners/admins can add them."
 msgstr "管理制项目初始没有参与者；工作区所有者/管理员可以添加成员。"
@@ -167,8 +162,8 @@ msgstr "摘要"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
-msgid "Accept an invitation to join a workspace. You choose when to open it."
-msgstr "接受邀请即可加入工作区，之后可自行选择何时打开。"
+msgid "Accept an invitation to join a Workspace."
+msgstr "接受邀请，加入工作区。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -338,11 +333,6 @@ msgid "Add PDF revision"
 msgstr "添加 PDF 修订"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Add records using identifiers, bibliography files, PDFs, or the metadata editor."
-msgstr "通过标识符、书目文件、PDF 或元数据编辑器添加条目。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 msgid "Add tag"
@@ -353,11 +343,6 @@ msgstr "添加标签"
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Add Tag"
 msgstr "添加标签"
-
-#. js-lingui-explicit-id
-#: src/lib/features/dashboard/Dashboard.svelte
-msgid "Add Tags as you read, group related Items in Projects, and review duplicates only when needed."
-msgstr "阅读时添加标签，将相关条目归入项目，并仅在需要时检查重复项。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
@@ -643,11 +628,6 @@ msgstr "存档位置"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
-msgid "Archive pauses normal changes while preserving readable content. You can restore it later."
-msgstr "工作区归档后，常规内容变更将暂停，但仍可读取。之后可以恢复。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceAdvanced.svelte
 msgid "Archive workspace"
 msgstr "归档工作区"
 
@@ -660,9 +640,14 @@ msgid "Archived"
 msgstr "已归档"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceAdvanced.svelte
+msgid "Archived content is read only. You can restore the Workspace later."
+msgstr "归档后内容只读，可随时恢复。"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
-msgid "Archived workspace · read-only content. Workspace governance actions remain available according to policy."
-msgstr "已归档工作区 · 内容只读。工作区治理操作仍按授权策略可用。"
+msgid "Archived Workspace · read-only content."
+msgstr "工作区已归档，内容只读。"
 
 #. PDF shape annotation kind.
 #. js-lingui-explicit-id
@@ -755,8 +740,8 @@ msgstr "作者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryRefinements.svelte
-msgid "Authors, keywords and types on this page. Counts refer to Items on this page."
-msgstr "本页条目中的作者、关键词和类型，数量仅统计本页条目。"
+msgid "Authors, keywords, types and matching Items on this page."
+msgstr "本页条目中的作者、关键词和类型及对应条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -788,11 +773,6 @@ msgstr "自动更新"
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Available"
 msgstr "可用日期"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/LibraryShortcuts.svelte
-msgid "Available in the Library when you are not typing in a field."
-msgstr "在文献库中且未在输入框内输入时可用。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -952,18 +932,13 @@ msgstr "紧急授权审查被拒绝"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
-msgid "Browse the complete accessible taxonomy."
-msgstr "浏览所有可访问的标签分类。"
+msgid "Browse all Tags."
+msgstr "浏览全部标签。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Bucket"
 msgstr "存储桶"
-
-#. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
-msgid "Build a precise query, then review candidates before Import."
-msgstr "构建精确查询，然后在导入前审核候选记录。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -1048,9 +1023,9 @@ msgid "Change password"
 msgstr "修改密码"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryPreview.svelte
-msgid "Changes apply only to the Item in this preview."
-msgstr "更改仅应用于当前预览的条目。"
+#: src/lib/features/workspaces/WorkspaceGeneral.svelte
+msgid "Change the Workspace name."
+msgstr "修改工作区名称。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -1106,8 +1081,8 @@ msgstr "为该标签输入一个新名称。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
-msgid "Choose a Project to continue."
-msgstr "请选择项目以继续。"
+msgid "Choose a Project."
+msgstr "请选择项目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
@@ -1126,19 +1101,15 @@ msgstr "请选择标准支持的值。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
-msgid "Choose a Tag to continue."
-msgstr "请选择标签后继续。"
+msgid "Choose a Tag."
+msgstr "请选择标签。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/item/ItemActions.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Choose a Workspace"
 msgstr "选择工作区"
-
-#. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Choose a Workspace explicitly"
-msgstr "明确选择一个工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
@@ -1167,19 +1138,14 @@ msgid "Choose files"
 msgstr "选择文件"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/Account.svelte
-msgid "Choose how Quirebase looks and speaks to you."
-msgstr "选择 Quirebase 的显示与语言方式。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
-msgid "Choose or enter a Tag to continue."
-msgstr "请选择或输入标签以继续。"
+msgid "Choose or enter a Tag."
+msgstr "请选择或输入标签。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
-msgid "Choose PDF revisions to package with saved download preferences."
-msgstr "选择要按已保存的下载偏好打包的 PDF 版本。"
+msgid "Choose PDF revisions to download."
+msgstr "选择要下载的 PDF 版本。"
 
 #. js-lingui-explicit-id
 #: src/lib/app/WorkspaceMenu.svelte
@@ -1202,7 +1168,7 @@ msgstr "被引次数"
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Citation key"
-msgstr "引用键 (Citation key)"
+msgstr "引用键"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -1345,11 +1311,6 @@ msgstr "舒适"
 msgid "Commit or discard the current Import Batch before starting another import."
 msgstr "请先提交或丢弃当前导入批次，再开始新的导入。"
 
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Commit to Library"
-msgstr "提交到文献库"
-
 #. Import Batch state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -1363,8 +1324,8 @@ msgstr "Commonmeta"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
-msgid "Commonmeta exports retain the complete Work, including its abstract and identifiers."
-msgstr "Commonmeta 导出保留完整 Work，包括摘要和标识符。"
+msgid "Commonmeta exports include all metadata, including abstracts and identifiers."
+msgstr "Commonmeta 导出包含完整元数据，包括摘要和标识符。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
@@ -1384,7 +1345,7 @@ msgstr "比较可能重复的条目，再决定保留哪些。"
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/schema.ts
 msgid "Complete at least one of the identifying fields."
-msgstr "请至少填写一个身份描述字段。"
+msgstr "请至少填写一项标识信息。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/schema.ts
@@ -1412,9 +1373,10 @@ msgid "Conceptualization"
 msgstr "构思"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Configure defaults used by Library and Item export actions on this browser."
-msgstr "配置此浏览器上文献库与条目导出操作使用的默认值。"
+#: src/lib/features/projects/ProjectSelect.svelte
+#: src/lib/features/tags/TagSelect.svelte
+msgid "Condition"
+msgstr "条件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
@@ -1634,6 +1596,11 @@ msgid "Created"
 msgstr "创建于"
 
 #. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+msgid "Creates an Item copy in the target Workspace."
+msgstr "在目标工作区创建条目副本。"
+
+#. js-lingui-explicit-id
 #: src/lib/export-preferences.ts
 msgid "CSL citation"
 msgstr "CSL 引文"
@@ -1798,6 +1765,11 @@ msgstr "默认 CSL 样式"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
+msgid "Default export settings for this browser."
+msgstr "设置此浏览器的默认导出选项。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
 msgid "Defaults"
 msgstr "默认值"
 
@@ -1887,11 +1859,6 @@ msgid "Details"
 msgstr "详情"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Diagnostics"
-msgstr "诊断信息"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
 msgid "Disable user"
 msgstr "停用用户"
@@ -1904,8 +1871,8 @@ msgstr "已停用"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminUsers.svelte
-msgid "Disabling a user immediately blocks account access and ends sign-in sessions. Workspace ownership is retained; reassign it separately in Workspace governance."
-msgstr "停用用户会立即阻止账号访问并结束登录会话。工作空间归属仍然保留，可在工作空间治理中单独重新指派。"
+msgid "Disabling a user ends all sessions and blocks access. Workspace ownership stays assigned; reassign it in Workspace management."
+msgstr "停用后账号立即无法访问，所有登录会话结束。工作区所有权保留，可在工作区管理中转移。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchList.svelte
@@ -1949,7 +1916,7 @@ msgstr "讨论消息已删除"
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Discussion message moderated"
-msgstr "已治理讨论消息"
+msgstr "讨论消息已移除"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -2099,8 +2066,8 @@ msgstr "拖动以调整列宽，也可使用左右方向键调整，按 Home 重
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Drop PDFs here or choose them; choosing more later adds to the same batch."
-msgstr "将 PDF 拖拽到此处或选择文件；之后继续选择会加入同一批次。"
+msgid "Drop PDFs here or choose files. You can add more."
+msgstr "拖入或选择 PDF，可继续添加。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -2115,7 +2082,7 @@ msgstr "重复条目检查"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
 msgid "Durable workflows"
-msgstr "持久工作流"
+msgstr "工作流"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
@@ -2198,8 +2165,8 @@ msgstr "请输入条目标题。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Enter metadata by hand when no import source applies."
-msgstr "没有可用的导入来源时，可手动录入元数据。"
+msgid "Enter Item metadata manually."
+msgstr "手动填写元数据。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2353,8 +2320,8 @@ msgstr "外部来源 {number}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Extract metadata and keep the papers together in one Import Batch."
-msgstr "提取元数据，并将这些论文保存在同一个导入批次中。"
+msgid "Extract metadata from PDFs and import them together."
+msgstr "提取 PDF 元数据并批量导入。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2405,6 +2372,12 @@ msgid "Files"
 msgstr "文件"
 
 #. js-lingui-explicit-id
+#: src/lib/features/projects/ProjectSelect.svelte
+#: src/lib/features/tags/TagSelect.svelte
+msgid "Filter conditions"
+msgstr "筛选条件"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Filter Tags"
@@ -2416,14 +2389,14 @@ msgid "Filters"
 msgstr "筛选"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
+msgid "Find members and view their roles."
+msgstr "查找成员及其角色。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Find saved research"
 msgstr "查找已保存的研究"
-
-#. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceMembers.svelte
-msgid "Find the people in this workspace and view their roles."
-msgstr "查找此工作区中的成员并查看其角色。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/shortcuts.ts
@@ -2439,7 +2412,7 @@ msgstr "第一页"
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Focus an Item checkbox to browse and select. Selection stays on the current page. Enter on a title opens the Item."
-msgstr "聚焦条目的复选框即可浏览和选择，选择范围限于当前页。在标题上按 Enter 打开条目。"
+msgstr "聚焦条目复选框以浏览和选择本页条目；在标题上按 Enter 打开条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryShortcuts.svelte
@@ -2449,7 +2422,7 @@ msgstr "聚焦文献库搜索"
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Focus the preview to browse the current results, including the next or previous page."
-msgstr "聚焦预览后可连续浏览当前结果，包括上一页或下一页。"
+msgstr "在预览中浏览结果，可跨页切换。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -2461,11 +2434,6 @@ msgstr "正式分析"
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Format"
 msgstr "格式"
-
-#. js-lingui-explicit-id
-#: src/lib/features/account/Account.svelte
-msgid "Free more horizontal space for reading and metadata work."
-msgstr "为阅读和元数据工作释放更多横向空间。"
 
 #. PDF annotation kind: a text box placed directly on the page.
 #. js-lingui-explicit-id
@@ -2671,8 +2639,13 @@ msgstr "导入批次"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Import completed. Deleting this import record keeps the imported Items and files."
-msgstr "导入已完成。删除此导入记录会保留已导入的条目和文件。"
+msgid "Import completed. Deleting this record keeps the Items and files."
+msgstr "导入完成。删除记录不会删除条目和文件。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import from identifiers, bibliography files or PDFs, or create an Item manually."
+msgstr "通过标识符、书目文件或 PDF 导入，也可手动创建条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchList.svelte
@@ -2680,6 +2653,11 @@ msgstr "导入已完成。删除此导入记录会保留已导入的条目和文
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import history"
 msgstr "导入历史"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import issues"
+msgstr "导入问题"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
@@ -2741,6 +2719,11 @@ msgstr "导入已发表的 PDF"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import succeeded. Use View imported Items to open the result."
 msgstr "导入成功。点击“查看已导入文献”打开结果。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import to Library"
+msgstr "导入文献库"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchList.svelte
@@ -2832,7 +2815,7 @@ msgstr "受访者"
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Invalid Citation Key formula"
-msgstr "Citation Key 公式无效"
+msgstr "引用键公式无效"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
@@ -3177,6 +3160,11 @@ msgid "Language"
 msgstr "语言"
 
 #. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "Language and navigation preferences."
+msgstr "语言与导航设置。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/shortcuts.ts
 msgid "Last Item on this page"
 msgstr "本页最后一个条目"
@@ -3279,6 +3267,11 @@ msgid "Library Search"
 msgstr "文献库搜索"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryShortcuts.svelte
+msgid "Library shortcuts are inactive while typing."
+msgstr "输入时不触发文献库快捷键。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Library tools"
 msgstr "文献库工具"
@@ -3328,7 +3321,7 @@ msgstr "加载更多成员"
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectSelect.svelte
 msgid "Load more Projects"
-msgstr "加载更多 Project"
+msgstr "加载更多项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tags/TagSelect.svelte
@@ -3339,7 +3332,7 @@ msgstr "加载更多标签"
 #: src/lib/app/WorkspaceMenu.svelte
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Load more workspaces"
-msgstr "加载更多 Workspace"
+msgstr "加载更多工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemSectionState.svelte
@@ -3540,11 +3533,6 @@ msgid "Maintenance"
 msgstr "维护"
 
 #. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceAdvanced.svelte
-msgid "Maintenance and lifecycle actions for this workspace."
-msgstr "维护此工作区，或管理其归档、恢复与删除。"
-
-#. js-lingui-explicit-id
 #: src/routes/(app)/admin/maintenance/+page.svelte
 msgid "Maintenance operation completed"
 msgstr "维护操作已完成"
@@ -3581,8 +3569,8 @@ msgstr "管理用户"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
-msgid "Manage Workspace owners and freezes. Reassigning ownership grants access to the selected user; freezing writes preserves active members’ read and export access."
-msgstr "管理工作空间所有者与写入冻结。重新指派会向所选用户授予所有者权限；冻结写入仍允许活跃成员读取和导出。"
+msgid "Manage Workspace owners and write freezes. Freezing keeps active members’ read and export access."
+msgstr "管理工作区所有者及写入冻结。冻结后活跃成员仍可读取和导出。"
 
 #. Project participation policy.
 #. js-lingui-explicit-id
@@ -3620,6 +3608,11 @@ msgstr "地图"
 #: src/lib/features/tools/Tools.svelte
 msgid "Match criteria"
 msgstr "匹配条件"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Match criteria changed. Run the check again."
+msgstr "匹配条件已更改，请重新查重。"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/settings/+page.svelte
@@ -3738,19 +3731,19 @@ msgstr "模型"
 #: src/lib/features/item/discussion/ItemDiscussionSection.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Moderate"
-msgstr "治理"
+msgstr "移除"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 msgid "Moderate Discussion message"
-msgstr "治理讨论消息"
+msgstr "移除讨论消息"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/discussion/+page.svelte
 msgid "Moderation reason"
-msgstr "治理原因"
+msgstr "移除原因"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
@@ -3770,6 +3763,11 @@ msgid "More actions"
 msgstr "更多操作"
 
 #. js-lingui-explicit-id
+#: src/lib/features/account/Account.svelte
+msgid "More space for reading."
+msgstr "留出更多阅读空间。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Move down"
 msgstr "下移"
@@ -3777,7 +3775,7 @@ msgstr "下移"
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "Move every assignment from the source Tag into the target Tag."
-msgstr "将源标签的全部关联转移到目标标签。"
+msgstr "将源标签下的条目归入目标标签。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -3821,8 +3819,8 @@ msgstr "新建导入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "New Item metadata"
-msgstr "新条目元数据"
+msgid "New Item"
+msgstr "新建条目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibrarySavedViews.svelte
@@ -4128,15 +4126,15 @@ msgid "No workflows."
 msgstr "暂无工作流。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceDirectory.svelte
-msgid "No workspaces are available for this account yet."
-msgstr "此账号当前没有可用的工作区。"
-
-#. js-lingui-explicit-id
 #: src/lib/app/QuickNavigationDialog.svelte
 #: src/lib/app/WorkspaceMenu.svelte
 msgid "No workspaces available"
 msgstr "暂无可用工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceDirectory.svelte
+msgid "No Workspaces yet."
+msgstr "暂无工作区。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -4203,11 +4201,6 @@ msgstr "省略"
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Omit when a DOI exists"
 msgstr "存在 DOI 时省略"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Only Workspace owners and admins can create managed Projects and curate participation."
-msgstr "只有工作区所有者和管理员可以创建管理制项目并维护参与者。"
 
 #. Project participation policy.
 #. js-lingui-explicit-id
@@ -4323,6 +4316,21 @@ msgstr "整理"
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Organize a collection"
 msgstr "整理研究集合"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/Library.svelte
+msgid "Organize imported Items with Tags and Projects."
+msgstr "为导入的文献添加标签或归入项目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Organize Items and collaborate in Projects."
+msgstr "用项目整理文献、开展协作。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/dashboard/Dashboard.svelte
+msgid "Organize Items with Tags and Projects, and check for duplicates."
+msgstr "用标签和项目整理条目，检查重复条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryPreview.svelte
@@ -4453,8 +4461,8 @@ msgstr "密码已更改"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Paste up to 50 identifiers, one per line. Each record is looked up separately."
-msgstr "最多粘贴 50 个标识符，每行一个，分别查询各条记录。"
+msgid "Paste up to 50 identifiers, one per line."
+msgstr "每行一个标识符，最多 50 个。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -4668,11 +4676,6 @@ msgid "Preferences"
 msgstr "偏好设置"
 
 #. js-lingui-explicit-id
-#: src/lib/features/account/ExportPreferences.svelte
-msgid "Preferences are automatically saved to your browser."
-msgstr "偏好设置已自动保存至浏览器。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Preparing uploaded PDFs…"
 msgstr "正在处理上传的 PDF…"
@@ -4708,6 +4711,11 @@ msgid "Preview current Item"
 msgstr "预览当前条目"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Preview import"
+msgstr "预览导入"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Preview Item"
 msgstr "预览文献"
@@ -4726,6 +4734,11 @@ msgstr "预览元数据"
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Preview navigation"
 msgstr "预览导航"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Preview records"
+msgstr "预览记录"
 
 #. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
@@ -4784,6 +4797,7 @@ msgstr "制作者"
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 msgid "Project"
 msgstr "项目"
 
@@ -4796,6 +4810,11 @@ msgstr "项目操作失败"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Project administration"
 msgstr "项目管理"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Project assignment"
+msgstr "项目归属"
 
 #. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -4854,14 +4873,10 @@ msgstr "项目设置已保存"
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
 #: src/lib/features/projects/Projects.svelte
+#: src/lib/features/projects/ProjectSelect.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Projects"
 msgstr "项目"
-
-#. js-lingui-explicit-id
-#: src/lib/features/projects/Projects.svelte
-msgid "Projects are research working contexts inside this Workspace."
-msgstr "项目是此工作区中的研究工作上下文。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -4950,11 +4965,6 @@ msgid "Quick navigation"
 msgstr "快速导航"
 
 #. js-lingui-explicit-id
-#: src/lib/features/tools/Tools.svelte
-msgid "Quirebase will not inspect your Library until you start the check."
-msgstr "在你主动开始检查前，Quirebase 不会扫描文献库。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflowDetail.svelte
 msgid "Raw status"
 msgstr "原始状态"
@@ -5005,6 +5015,11 @@ msgstr "已就绪"
 #: src/lib/features/tools/Tools.svelte
 msgid "Ready PDFs only; older files may be skipped."
 msgstr "仅比较就绪的 PDF，旧文件可能不参与。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Ready records can be imported. See the issues below."
+msgstr "可导入已就绪的记录，其余问题见下方。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
@@ -5115,16 +5130,6 @@ msgstr "刷新页面"
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "Refresh preview"
 msgstr "刷新预览"
-
-#. js-lingui-explicit-id
-#: src/lib/api/errors.ts
-msgid "Refresh the page to restore Workspace context."
-msgstr "请刷新页面以恢复工作区上下文。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
-msgid "Refresh this record from an upstream identifier."
-msgstr "通过上游标识符刷新此记录。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
@@ -5292,11 +5297,6 @@ msgid "Rename Tag"
 msgstr "重命名标签"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportHistory.svelte
-msgid "Reopen recent imports. Old previews and import records are cleaned up automatically; imported Items and files are kept."
-msgstr "查看近期导入。旧预览和导入记录会自动清理，已导入的文献和文件会保留。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Report"
 msgstr "报告"
@@ -5440,24 +5440,9 @@ msgid "Review selected"
 msgstr "预览所选记录"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Review the diagnostics below for details."
-msgstr "查看下方诊断以了解详情。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Review the preview"
-msgstr "审阅预览"
-
-#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "Review this action to continue."
 msgstr "查看此操作以继续。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/library/Library.svelte
-msgid "Review this import, then select Items to add Tags or Projects."
-msgstr "查看本次导入的文献，选择后即可添加标签或归入项目。"
 
 #. Workspace role.
 #. js-lingui-explicit-id
@@ -5553,11 +5538,6 @@ msgstr "{username} 的角色"
 msgid "Row {row}"
 msgstr "第 {row} 行"
 
-#. js-lingui-explicit-id
-#: src/lib/features/tools/Tools.svelte
-msgid "Run a check when you are ready"
-msgstr "准备好后再开始检查"
-
 #. Workflow or record state.
 #. js-lingui-explicit-id
 #: src/lib/domain-labels.ts
@@ -5625,8 +5605,8 @@ msgstr "已保存"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibrarySavedViews.svelte
-msgid "Saved only in this browser for this account and workspace."
-msgstr "仅保存在当前浏览器中，按账号和工作区独立存储。"
+msgid "Saved in this browser for this account and Workspace."
+msgstr "视图保存在此浏览器，按账号和工作区区分。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibrarySavedViews.svelte
@@ -5641,7 +5621,7 @@ msgstr "已重置保存的视图"
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibrarySavedViews.svelte
 msgid "Saves the current filters, sort order, and page size."
-msgstr "保存当前已应用的筛选、排序及每页条目数。"
+msgstr "保存当前筛选、排序和每页条目数。"
 
 #. js-lingui-explicit-id
 #: src/lib/pdf/EmbeddedPdfViewer.svelte
@@ -5711,6 +5691,11 @@ msgstr "检索条件"
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Search Discovery"
 msgstr "搜索发现"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search external sources and preview records before importing."
+msgstr "从外部来源检索文献，预览后导入。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -5786,13 +5771,18 @@ msgstr "搜索工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/Library.svelte
-msgid "Search, select, organize, and export your scholarly Items."
-msgstr "搜索、选择、整理和导出你的学术条目。"
+msgid "Search, organize, and export Items."
+msgstr "搜索、整理和导出文献。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Searching…"
 msgstr "正在搜索…"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "See the import issues below."
+msgstr "查看下方导入问题。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/DiscoveryResults.svelte
@@ -5896,6 +5886,11 @@ msgid "Settings"
 msgstr "设置"
 
 #. js-lingui-explicit-id
+#: src/lib/features/account/ExportPreferences.svelte
+msgid "Settings are saved automatically in this browser."
+msgstr "设置自动保存到此浏览器。"
+
+#. js-lingui-explicit-id
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Settings saved"
 msgstr "设置已保存"
@@ -5964,12 +5959,12 @@ msgstr "显示第 {start}–{end} 条，共 {total} 条"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 msgid "Showing up to 20 active users. Type to narrow the search."
-msgstr "最多显示 20 位活跃用户，可输入用户名缩小搜索范围。"
+msgstr "输入用户名查找，最多显示 20 位活跃用户。"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Showing up to 20 workspaces. Type to narrow the search."
-msgstr "最多显示 20 个工作区，可输入内容缩小搜索范围。"
+msgstr "输入名称查找，最多显示 20 个工作区。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Login.svelte
@@ -6105,14 +6100,14 @@ msgid "Sponsor"
 msgstr "赞助者"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Stage PDFs"
-msgstr "暂存 PDF"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Standard"
 msgstr "标准"
+
+#. js-lingui-explicit-id
+#: src/lib/features/tools/Tools.svelte
+msgid "Start a duplicate check"
+msgstr "开始查重"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -6189,7 +6184,7 @@ msgstr "已成功"
 #. js-lingui-explicit-id
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 msgid "Suggestions derived from metadata and the latest ready PDF."
-msgstr "根据元数据和最新就绪 PDF 生成的建议。"
+msgstr "根据元数据和最新处理完成的 PDF 推荐标签。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -6260,6 +6255,7 @@ msgstr "表格"
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 #: src/lib/features/library/LibraryFilters.svelte
+#: src/lib/features/tags/TagSelect.svelte
 msgid "Tag"
 msgstr "标签"
 
@@ -6309,16 +6305,23 @@ msgid "Tag renamed"
 msgstr "标签已重命名"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Tag status"
+msgstr "标签状态"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Tagged"
+msgstr "已加标签"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/library/LibraryPreviewOrganize.svelte
+#: src/lib/features/tags/TagSelect.svelte
 msgid "Tags"
 msgstr "标签"
-
-#. js-lingui-explicit-id
-#: src/lib/features/item/organize/ItemOrganizeSection.svelte
-msgid "Tags currently assigned to this Item."
-msgstr "当前分配给此条目的标签。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -6368,11 +6371,6 @@ msgid "The external service is temporarily unavailable."
 msgstr "外部服务暂时不可用。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/tools/Tools.svelte
-msgid "The match criteria changed. Start a new check to refresh these results."
-msgstr "匹配条件已更改，请重新开始检查以刷新结果。"
-
-#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "The request conflicts with the current state."
 msgstr "请求与当前状态冲突。"
@@ -6395,7 +6393,7 @@ msgstr "未找到请求的资源。"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 msgid "The selected user gains Workspace owner access. The previous owner becomes a Workspace admin. This does not disable the previous account."
-msgstr "所选用户将获得工作空间所有者权限，原所有者将改为工作空间管理员。此操作不会停用原所有者的账号。"
+msgstr "新所有者获得所有者权限，原所有者改为管理员，账号状态不变。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -6485,6 +6483,11 @@ msgid "This Item has changed. Your draft is preserved. Review the latest metadat
 msgstr "此条目已发生变化。草稿已保留，请检查最新元数据后再重试。"
 
 #. js-lingui-explicit-id
+#: src/routes/+error.svelte
+msgid "This page does not exist."
+msgstr "页面不存在。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved."
 msgstr "这会永久删除所选条目在此项目中的批注和回复。条目、文件、私有批注及其他项目会保留。"
@@ -6496,8 +6499,8 @@ msgstr "这会永久删除已归档的工作区及其内容，且无法撤销。
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
-msgid "This Project is read only in its current state."
-msgstr "此项目在当前状态下为只读。"
+msgid "This Project is read only."
+msgstr "此项目为只读。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -6520,9 +6523,14 @@ msgid "This Tag conflicts with an existing Tag."
 msgstr "此标签与现有标签冲突。"
 
 #. js-lingui-explicit-id
+#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
+msgid "This Workspace is frozen and read only. An instance administrator can unfreeze it."
+msgstr "工作区已冻结为只读，实例管理员可解除冻结。"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
-msgid "This Workspace is read only in its current state."
-msgstr "此工作区在当前状态下为只读。"
+msgid "This Workspace is read only."
+msgstr "此工作区为只读。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
@@ -6533,11 +6541,6 @@ msgstr "此工作区当前为只读，恢复成员变更后即可接受邀请。
 #: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
 msgid "This workspace is unavailable. Choose another workspace."
 msgstr "此工作区不可用。请选择其他工作区。"
-
-#. js-lingui-explicit-id
-#: src/routes/+error.svelte
-msgid "This workspace route does not exist."
-msgstr "此工作区路由不存在。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
@@ -6593,12 +6596,12 @@ msgstr "转移所有权"
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "Transfer workspace ownership to {username}? You will become an admin and lose owner-only governance actions."
-msgstr "将工作区所有权转移给 {username}？你将成为管理员，并失去仅限所有者的治理权限。"
+msgstr "将工作区所有权转移给 {username}？转移后你将成为管理员，失去所有者专属权限。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceLeave.svelte
 msgid "Transfer workspace ownership to another member before leaving."
-msgstr "请先将工作区所有权转移给其他成员，再离开工作区。"
+msgstr "离开前，请先将所有权转移给其他成员。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -6661,8 +6664,8 @@ msgstr "无法检查重复条目。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
-msgid "Unable to check whether you can create a workspace. Refresh and try again."
-msgstr "无法检查你是否可以创建工作区。请刷新后重试。"
+msgid "Unable to check Workspace creation permissions. Refresh and try again."
+msgstr "无法检查工作区创建权限，请刷新重试。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -6882,6 +6885,12 @@ msgid "Unable to load workflow details."
 msgstr "无法加载工作流详情。"
 
 #. js-lingui-explicit-id
+#: src/lib/api/errors.ts
+#: src/lib/app/AppShell.svelte
+msgid "Unable to load Workspace information. Refresh and try again."
+msgstr "无法加载工作区信息，请刷新重试。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/workspaces/ReceivedInvitations.svelte
 msgid "Unable to load workspace invitations."
 msgstr "无法加载工作区邀请。"
@@ -7010,14 +7019,20 @@ msgid "Unlock"
 msgstr "解锁"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Untagged"
+msgstr "未加标签"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Untitled"
 msgstr "无标题"
 
 #. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceGeneral.svelte
-msgid "Update the name members see across this workspace."
-msgstr "更新成员在此工作区看到的名称。"
+#: src/lib/features/item/ItemActions.svelte
+msgid "Update metadata using an identifier."
+msgstr "通过标识符更新元数据。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminWorkflows.svelte
@@ -7034,8 +7049,8 @@ msgstr "更新日期"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
-msgid "Upload a reference manager export or paste structured bibliography data."
-msgstr "上传文献管理软件导出的文件，或粘贴结构化书目数据。"
+msgid "Upload a bibliography file or paste bibliography data."
+msgstr "上传书目文件或粘贴书目数据。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
@@ -7086,13 +7101,13 @@ msgstr "仅使用 ASCII 字符"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/Account.svelte
-msgid "Use at least 12 characters for a strong password."
-msgstr "请使用至少 12 个字符的高强度密码。"
+msgid "Use at least 12 characters."
+msgstr "密码至少 12 个字符。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 msgid "Use comma-separated native field names. Field exclusions apply only to BibTeX and CSL-JSON; identity and type fields are required."
-msgstr "用逗号分隔格式原生字段名。字段排除仅适用于 BibTeX 和 CSL-JSON；标识和类型字段必须保留。"
+msgstr "用逗号分隔字段名，适用于 BibTeX 和 CSL-JSON。标识和类型字段不可排除。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -7166,18 +7181,18 @@ msgstr "用户"
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Users, storage, audit, settings, and durable operations."
-msgstr "管理用户、存储、审计、设置和持久操作。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
-#: src/lib/features/library/LibraryActionDialog.svelte
-msgid "Uses the defaults saved in your Account export preferences."
-msgstr "使用账号导出偏好中保存的默认值。"
+msgstr "管理用户、存储、审计、设置和后台任务。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/pdf-reader/PdfWorkspace.svelte
 msgid "Uses the displayed annotation sources."
 msgstr "使用当前显示的批注来源。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/ItemActions.svelte
+#: src/lib/features/library/LibraryActionDialog.svelte
+msgid "Uses your Account export settings."
+msgstr "使用账号的导出设置。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -7268,6 +7283,11 @@ msgid "View name"
 msgstr "视图名称"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportHistory.svelte
+msgid "View recent imports. Old previews and records are removed automatically; Items and files are kept."
+msgstr "查看近期导入。旧预览和记录会自动清理，条目和文件会保留。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibrarySavedViews.svelte
 msgid "View renamed"
 msgstr "已重命名视图"
@@ -7336,6 +7356,12 @@ msgid "With files"
 msgstr "有文件"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "With Projects"
+msgstr "已归入项目"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Withdrawn"
@@ -7346,6 +7372,12 @@ msgstr "撤回日期"
 #: src/lib/features/library/LibraryFilters.svelte
 msgid "Without files"
 msgstr "无文件"
+
+#. js-lingui-explicit-id
+#: src/lib/features/library/LibraryActiveFilters.svelte
+#: src/lib/features/library/LibraryFilters.svelte
+msgid "Without Projects"
+msgstr "未归入项目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -7409,14 +7441,9 @@ msgid "Workspace archived"
 msgstr "工作区已归档"
 
 #. js-lingui-explicit-id
-#: src/lib/app/AppShell.svelte
-msgid "Workspace context could not be restored. Refresh the page to recover."
-msgstr "无法恢复工作区上下文。请刷新页面以恢复。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
 msgid "Workspace created. Its owner can open it; you have no content access unless you are also a member."
-msgstr "工作区已创建。其所有者现在可以访问；除非你另行成为成员，否则无法访问其内容。"
+msgstr "工作区已创建，所有者可访问。你需成为成员后才能访问内容。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceDirectory.svelte
@@ -7436,13 +7463,13 @@ msgstr "引用样式所属工作区"
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Workspace governance"
-msgstr "工作区治理"
+msgstr "工作区管理"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Workspace governance action failed"
-msgstr "工作区治理操作失败"
+msgstr "工作区操作失败"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminAudit.svelte
@@ -7461,6 +7488,11 @@ msgid "Workspace maintenance"
 msgstr "工作区维护"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceAdvanced.svelte
+msgid "Workspace maintenance, archiving and deletion."
+msgstr "工作区维护、归档与删除。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Workspace member"
 msgstr "工作区成员"
@@ -7474,6 +7506,11 @@ msgstr "工作区名称"
 #: src/lib/features/workspaces/WorkspaceGeneral.svelte
 msgid "Workspace name updated"
 msgstr "工作区名称已更新"
+
+#. js-lingui-explicit-id
+#: src/lib/features/projects/Projects.svelte
+msgid "Workspace owners and admins create managed Projects and manage participants."
+msgstr "管理制项目由工作区所有者和管理员创建并管理参与者。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
@@ -7511,11 +7548,6 @@ msgstr "工作区设置"
 #: src/lib/features/workspaces/WorkspaceSettings.svelte
 msgid "Workspace settings · Quirebase"
 msgstr "工作区设置 · Quirebase"
-
-#. js-lingui-explicit-id
-#: src/routes/(app)/workspace/[workspaceId]/+layout.svelte
-msgid "Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace."
-msgstr "工作空间写入已冻结，内容仅可读取，直至实例管理员解除冻结。"
 
 #. js-lingui-explicit-id
 #: src/routes/(app)/admin/workspaces/+page.svelte
@@ -7598,11 +7630,6 @@ msgid "You are signed in as {current}. Switch to {invited} to accept this invita
 msgstr "你当前以 {current} 登录。请切换到 {invited} 以接受此邀请。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "You can import the ready records. Review the diagnostics for sources that need attention."
-msgstr "可以导入已就绪的记录，请查看诊断信息以处理其余来源。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceLeave.svelte
 msgid "You cannot leave while this workspace is read only."
 msgstr "工作区处于只读状态时，暂时无法离开。"
@@ -7623,14 +7650,14 @@ msgid "You no longer have access to this Workspace."
 msgstr "你已无法访问此工作区。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
-msgid "You will become its owner and can invite other members later."
-msgstr "你将成为此工作区的所有者，之后可以邀请其他成员。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/Projects.svelte
 msgid "You will join automatically when you create an open Project."
 msgstr "创建开放项目时，你会自动加入。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
+msgid "You will own this Workspace and can invite members."
+msgstr "你将成为所有者，也可以邀请其他成员。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte

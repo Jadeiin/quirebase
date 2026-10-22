@@ -140,7 +140,7 @@
 		<h2 class="text-2xl font-bold">{$t('Workspace governance')}</h2>
 		<p class="text-sm text-surface-600-400">
 			{$t(
-				'Manage Workspace owners and freezes. Reassigning ownership grants access to the selected user; freezing writes preserves active members’ read and export access.'
+				'Manage Workspace owners and write freezes. Freezing keeps active members’ read and export access.'
 			)}
 		</p>
 	</header>

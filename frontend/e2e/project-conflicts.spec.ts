@@ -196,11 +196,11 @@ for (const assigned of [false, true]) {
 		if (assigned) {
 			const dialog = page.getByRole('dialog', { name: 'Remove Item from Project?' });
 			await dialog.getByRole('button', { name: 'Remove from Project' }).click();
-			await expect(dialog).toContainText('This Project is read only in its current state.');
+			await expect(dialog).toContainText('This Project is read only.');
 			await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 		}
 		await expect(page.getByRole('main').getByRole('alert')).toHaveText(
-			'This Project is read only in its current state.'
+			'This Project is read only.'
 		);
 		await expect(page.getByText('No available projects.')).toBeVisible();
 		await expect(action).toHaveCount(0);
@@ -297,7 +297,7 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 		.getByRole('dialog')
 		.getByRole('button', { name: 'Add to Project', exact: true })
 		.click();
-	await expect(page.getByText('This Project is read only in its current state.')).toBeVisible();
+	await expect(page.getByText('This Project is read only.')).toBeVisible();
 	await page
 		.getByRole('dialog')
 		.getByRole('button', { name: 'Change options', exact: true })
@@ -321,7 +321,9 @@ test('Library refreshes Project targets on a lifecycle conflict and keeps select
 	await expect(page.getByText('Bulk action completed')).toBeVisible();
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
 	await page.getByRole('combobox', { name: 'Project', exact: true }).click();
-	await expect(page.getByRole('option', { name: 'Reading Project', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('option', { name: 'Reading Project Project', exact: true })
+	).toBeVisible();
 	await page.getByRole('combobox', { name: 'Project', exact: true }).press('Escape');
 	expect(submissions.map(({ project_id, item_ids }) => ({ project_id, item_ids }))).toEqual([
 		{ project_id: 'project-1', item_ids: ['item-1'] },
@@ -435,7 +437,7 @@ for (const action of ['Delete', 'Moderate']) {
 			await page.getByRole('textbox', { name: 'Moderation reason' }).fill('Policy violation');
 			await page.getByRole('button', { name: 'Remove message', exact: true }).click();
 		}
-		await expect(page.getByText('This Project is read only in its current state.')).toBeVisible();
+		await expect(page.getByText('This Project is read only.')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Moderate', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Post', exact: true })).toHaveCount(0);

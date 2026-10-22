@@ -54,6 +54,39 @@ beforeEach(() => {
 });
 
 describe('Library saved views', () => {
+	it('saves and restores a combined cleanup view within an import receipt', async () => {
+		const storage = memoryStorage();
+		const filters = {
+			import_batch: 'batch-1',
+			has_files: false,
+			has_tags: false,
+			has_projects: false,
+			author_last_name: 'Research Council',
+			author_first_name: '',
+			sort: 'created' as const,
+			direction: 'asc' as const
+		};
+		await saveLibraryView(() => storage, key, 'Imported items to organize', filters, 50, 'view-1');
+		const [restored] = readLibrarySavedViews(storage, key);
+		expect(restored.filters).toMatchObject(filters);
+		const destination = new URL(
+			savedLibraryViewHref('workspace-1', restored),
+			'https://app.example/'
+		);
+		expect(destination.pathname).toBe('/workspace/workspace-1/library');
+		expect(Object.fromEntries(destination.searchParams)).toEqual({
+			import_batch: 'batch-1',
+			sort: 'created',
+			direction: 'asc',
+			has_files: 'false',
+			has_tags: 'false',
+			has_projects: 'false',
+			author_last_name: 'Research Council',
+			author_first_name: '',
+			page_size: '50'
+		});
+	});
+
 	it('isolates accounts and Workspaces, including separator characters', async () => {
 		const storage = memoryStorage();
 		await saveLibraryView(() => storage, key, 'Reading', { project: 'project-1' }, 25, 'view-1');

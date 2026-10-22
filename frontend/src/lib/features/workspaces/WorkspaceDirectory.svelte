@@ -72,7 +72,7 @@
 	<ReceivedInvitations />
 	{#if notice}<Notice variant="success">{notice}</Notice>{/if}
 	{#if creation.isError}<Notice variant="error"
-			>{$t('Unable to check whether you can create a workspace. Refresh and try again.')}
+			>{$t('Unable to check Workspace creation permissions. Refresh and try again.')}
 			<Button onclick={() => void creation.refetch()} disabled={creation.isFetching}
 				>{$t('Retry')}</Button
 			></Notice
@@ -124,7 +124,7 @@
 			<Button onclick={() => navigate('')}>{$t('Clear search')}</Button></Notice
 		>
 	{:else}
-		<Notice>{$t('No workspaces are available for this account yet.')}</Notice>
+		<Notice>{$t('No Workspaces yet.')}</Notice>
 		{#if creation.data && !creation.data.allowed}<p class="text-sm text-surface-700-300">
 				{$t(
 					'Workspace creation is restricted by the instance policy. Ask an administrator for access.'

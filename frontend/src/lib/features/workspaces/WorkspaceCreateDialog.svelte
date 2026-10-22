@@ -85,7 +85,7 @@
 				<p class="mt-2 text-sm text-surface-700-300">
 					{#if availability.owner_username_required}{$t(
 							'Choose an active user to own this workspace. Instance administrators do not automatically get content access.'
-						)}{:else}{$t('You will become its owner and can invite other members later.')}{/if}
+						)}{:else}{$t('You will own this Workspace and can invite members.')}{/if}
 				</p>
 				{#if error}<Notice variant="error" class="mt-3">{error}</Notice>{/if}
 				<form

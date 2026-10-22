@@ -10,7 +10,7 @@
 <button
 	type="button"
 	class={`cursor-pointer rounded-lg border-0 bg-white/7 text-white hover:bg-white/12 ${compact ? 'mx-auto grid size-8 shrink-0 grid-cols-1 place-items-center' : 'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm'}`}
-	aria-label={$t('Quick navigation')}
+	aria-label={compact ? $t('Quick navigation') : undefined}
 	aria-keyshortcuts={detectPlatform() === 'mac' ? 'Meta+K' : 'Control+K'}
 	title={`${$t('Quick navigation')} (${shortcut})`}
 	onclick={onOpen}

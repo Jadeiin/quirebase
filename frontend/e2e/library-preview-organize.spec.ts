@@ -205,7 +205,6 @@ test('preview shows bibliographic context, copies DOI and opens organization onl
 		preview.getByRole('combobox', { name: 'Add a Tag to this Item', exact: true })
 	).toBeVisible();
 	expect(state.organizeReads()).toBe(1);
-	await expect(preview).toContainText('Changes apply only to the Item in this preview.');
 });
 
 test('preview edits only its Item while keeping bulk selection and local failed Project confirmation', async ({

@@ -24,6 +24,7 @@
 		libraryParameters,
 		refineLibraryFilters,
 		submitLibraryFilters,
+		libraryAssociationValue,
 		type LibraryFilters as AppliedLibraryFilters
 	} from './filters.js';
 	import LibraryActiveFilters from './LibraryActiveFilters.svelte';
@@ -47,6 +48,8 @@
 	const pageSize = $derived(libraryPageSize(page.url.searchParams));
 	const previewItemId = $derived(page.url.searchParams.get('preview') ?? '');
 	const listingIdentity = $derived(libraryParameters(submitted, pageNumber, pageSize).toString());
+	let publishedPath: string | undefined;
+	let previousFilters = untrack(() => filterIdentity(submitted));
 	let previewTrigger: HTMLElement | null = null;
 	let previewFocusOrigin: Element | null = null;
 	let previewReturnItemId = '';
@@ -63,7 +66,14 @@
 		previewBusy = false;
 		previewError = '';
 	});
-	afterNavigate(() => {
+	afterNavigate(({ type, to }) => {
+		const current = readLibraryFilters(page.url.searchParams);
+		const identity = filterIdentity(current);
+		const path = to ? `${to.url.pathname}${to.url.search}${to.url.hash}` : undefined;
+		if (type === 'popstate' || (path !== publishedPath && identity !== previousFilters))
+			restoreDraft();
+		previousFilters = identity;
+		publishedPath = undefined;
 		const id = libraryReturnItemId(page.url.hash);
 		returnFocus = id ? { id, href: page.url.href, version: focusVersion } : null;
 	});
@@ -87,12 +97,14 @@
 		wasPreviewOpen = isPreviewOpen;
 	});
 	let query = $state(page.url.searchParams.get('q') ?? '');
-	let tag = $state(page.url.searchParams.get('tag') ?? '');
-	let project = $state(page.url.searchParams.get('project') ?? '');
+	let tag = $state(untrack(() => libraryAssociationValue(submitted.tag, submitted.has_tags)));
+	let project = $state(
+		untrack(() => libraryAssociationValue(submitted.project, submitted.has_projects))
+	);
 	let year = $state(page.url.searchParams.get('year') ?? '');
 	let keyword = $state(page.url.searchParams.get('keyword') ?? '');
 	let author = $state(page.url.searchParams.get('author') ?? '');
-	let fileFilter = $state(page.url.searchParams.get('has_files') ?? '');
+	let fileFilter = $state(readLibraryFilters(page.url.searchParams).has_files?.toString() ?? '');
 	let filtersOpen = $state(false);
 	let shortcutsEnabled = $state(true);
 	let searchInput = $state<HTMLInputElement>();
@@ -114,23 +126,19 @@
 		previousSearch = search;
 		clearSelection();
 	});
-	let previousFilters = '';
-	$effect(() => {
-		const search = libraryParameters({
-			...submitted,
-			sort: undefined,
-			direction: undefined
-		}).toString();
-		if (search === previousFilters) return;
-		previousFilters = search;
+	function filterIdentity(filters: AppliedLibraryFilters) {
+		return libraryParameters({ ...filters, sort: undefined, direction: undefined }).toString();
+	}
+	function restoreDraft() {
 		query = page.url.searchParams.get('q') ?? '';
-		tag = page.url.searchParams.get('tag') ?? '';
-		project = page.url.searchParams.get('project') ?? '';
+		const filters = readLibraryFilters(page.url.searchParams);
+		tag = libraryAssociationValue(filters.tag, filters.has_tags);
+		project = libraryAssociationValue(filters.project, filters.has_projects);
 		year = page.url.searchParams.get('year') ?? '';
 		keyword = page.url.searchParams.get('keyword') ?? '';
 		author = page.url.searchParams.get('author') ?? '';
-		fileFilter = page.url.searchParams.get('has_files') ?? '';
-	});
+		fileFilter = readLibraryFilters(page.url.searchParams).has_files?.toString() ?? '';
+	}
 
 	const library = createQuery(() => libraryListQuery(workspaceId, submitted, pageNumber, pageSize));
 	const selectedProject = createQuery(() => ({
@@ -253,9 +261,9 @@
 
 	function navigate(filters: AppliedLibraryFilters, nextPage = 1, nextPageSize = pageSize) {
 		clearSelection();
-		void goto(resolve(libraryHref(workspaceId, filters, nextPage, nextPageSize, previewItemId)), {
-			reset: false
-		});
+		const href = resolve(libraryHref(workspaceId, filters, nextPage, nextPageSize, previewItemId));
+		publishedPath = href;
+		void goto(href, { reset: false });
 	}
 
 	function preview(id: string, trigger?: HTMLElement) {
@@ -348,6 +356,15 @@
 	function removeFilters(keys: (keyof AppliedLibraryFilters)[]) {
 		const next = { ...submitted };
 		for (const key of keys) delete next[key];
+		if (keys.includes('query')) query = '';
+		if (keys.includes('tag') || keys.includes('has_tags'))
+			tag = libraryAssociationValue(next.tag, next.has_tags);
+		if (keys.includes('project') || keys.includes('has_projects'))
+			project = libraryAssociationValue(next.project, next.has_projects);
+		if (keys.includes('year')) year = '';
+		if (keys.includes('keyword')) keyword = '';
+		if (keys.includes('author')) author = '';
+		if (keys.includes('has_files')) fileFilter = '';
 		navigate(next);
 	}
 
@@ -441,9 +458,9 @@
 		<h1 class="mb-2">{$t('Library')}</h1>
 		<p class="m-0 max-w-2xl text-surface-700-300">
 			{#if submitted.import_batch}
-				{$t('Review this import, then select Items to add Tags or Projects.')}
+				{$t('Organize imported Items with Tags and Projects.')}
 			{:else}
-				{$t('Search, select, organize, and export your scholarly Items.')}
+				{$t('Search, organize, and export Items.')}
 			{/if}
 		</p>
 	</div>

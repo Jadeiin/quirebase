@@ -387,15 +387,12 @@
 				{#if !scannedMode || (duplicates.isPending && !duplicates.isFetching)}
 					<div class="grid min-h-40 grid-cols-1 place-items-center text-center">
 						<div class="max-w-md">
-							<h3>{$t('Run a check when you are ready')}</h3>
-							<p class="mb-0 text-surface-600-400">
-								{$t('Quirebase will not inspect your Library until you start the check.')}
-							</p>
+							<h3>{$t('Start a duplicate check')}</h3>
 						</div>
 					</div>
 				{:else if scannedMode !== mode}
 					<Notice variant="success">
-						{$t('The match criteria changed. Start a new check to refresh these results.')}
+						{$t('Match criteria changed. Run the check again.')}
 					</Notice>
 				{:else if duplicates.isFetching}
 					<LoadingState label={$t('Scanning…')} />

@@ -78,6 +78,14 @@
 		if (filters.keyword) add($t('Keyword'), filters.keyword, ['keyword']);
 		if (filters.has_files !== undefined)
 			add($t('Files'), filters.has_files ? $t('With files') : $t('Without files'), ['has_files']);
+		if (filters.has_tags !== undefined)
+			add($t('Tag status'), filters.has_tags ? $t('Tagged') : $t('Untagged'), ['has_tags']);
+		if (filters.has_projects !== undefined)
+			add(
+				$t('Project assignment'),
+				filters.has_projects ? $t('With Projects') : $t('Without Projects'),
+				['has_projects']
+			);
 		return result;
 	});
 </script>

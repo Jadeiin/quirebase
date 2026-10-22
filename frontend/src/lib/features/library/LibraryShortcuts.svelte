@@ -103,7 +103,7 @@
 					{#snippet actions()}<DialogCloseButton />{/snippet}
 				</SectionHeader>
 				<Dialog.Description class="mt-3 text-sm text-surface-600-400">
-					{$t('Available in the Library when you are not typing in a field.')}
+					{$t('Library shortcuts are inactive while typing.')}
 				</Dialog.Description>
 				<dl class="my-5 grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 text-sm">
 					<dt>{$t('Focus Library Search')}</dt>

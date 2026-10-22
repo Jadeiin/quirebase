@@ -245,9 +245,7 @@
 			<section class="rounded-xl border border-surface-300-700 bg-primary-50-950 p-5">
 				<h2 class="mb-2 text-lg">{$t('Keep your Library useful')}</h2>
 				<p class="mb-3 text-sm text-surface-700-300">
-					{$t(
-						'Add Tags as you read, group related Items in Projects, and review duplicates only when needed.'
-					)}
+					{$t('Organize Items with Tags and Projects, and check for duplicates.')}
 				</p>
 				<a
 					class="text-sm font-semibold text-primary-800-200 no-underline"

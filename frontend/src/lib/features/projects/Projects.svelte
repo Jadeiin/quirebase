@@ -165,7 +165,7 @@
 		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('Collaboration')}</p>
 		<h1>{$t('Projects')}</h1>
 		<p class="text-surface-600-400">
-			{$t('Projects are research working contexts inside this Workspace.')}
+			{$t('Organize Items and collaborate in Projects.')}
 		</p>
 	</div>
 	{#snippet actions()}
@@ -232,7 +232,7 @@
 										{$t('You will join automatically when you create an open Project.')}
 									{:else}
 										{$t(
-											'Only Workspace owners and admins can create managed Projects and curate participation.'
+											'Workspace owners and admins create managed Projects and manage participants.'
 										)}
 										{$t(
 											'Managed Projects are visible only to their participants and Workspace owners/admins.'

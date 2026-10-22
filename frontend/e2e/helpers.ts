@@ -270,7 +270,12 @@ export function tagPage<T extends { id: string; name: string }>(items: T[], rout
 	);
 }
 
-export async function chooseSearchOption(page: Page, label: string, optionLabel: string) {
+export async function chooseSearchOption(
+	page: Page,
+	label: string,
+	optionLabel: string,
+	accessibleName = optionLabel
+) {
 	const input = page.getByRole('combobox', { name: label, exact: true });
 	// Zag restores focus/caret on an animation frame when the popup opens or closes.
 	// Let that finish before filling or moving on to another control.
@@ -286,7 +291,7 @@ export async function chooseSearchOption(page: Page, label: string, optionLabel:
 	await input.fill(optionLabel);
 	await page
 		.getByRole('listbox', { name: label, exact: true })
-		.getByRole('option', { name: optionLabel, exact: true })
+		.getByRole('option', { name: accessibleName, exact: true })
 		.click();
 	await settleFocus();
 }

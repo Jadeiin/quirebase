@@ -253,7 +253,7 @@
 					<DialogCloseButton />
 				</header>
 				<Dialog.Description class="mt-2 text-sm text-surface-600-400">
-					{$t('Saved only in this browser for this account and workspace.')}
+					{$t('Saved in this browser for this account and Workspace.')}
 				</Dialog.Description>
 				<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={save}>
 					<label class="min-w-0 flex-1">

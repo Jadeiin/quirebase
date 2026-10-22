@@ -7,10 +7,156 @@ import {
 	libraryParameters,
 	refineLibraryFilters,
 	submitLibraryFilters,
-	readLibraryFilters
+	readLibraryFilters,
+	libraryAssociationChoices,
+	libraryAssociationValue
 } from './filters.js';
 import { metadataFilterLinks } from '../item/metadata-links.js';
 import type { Metadata } from '../item/metadata-draft.js';
+
+it.each(['has_files', 'has_tags', 'has_projects'] as const)(
+	'round-trips both values of %s without activating malformed absence filters',
+	(key) => {
+		for (const value of [true, false]) {
+			const parameters = libraryParameters({ [key]: value });
+			expect(parameters.get(key)).toBe(String(value));
+			expect(readLibraryFilters(parameters)[key]).toBe(value);
+		}
+		for (const value of [null, '', '0', '1', 'FALSE', 'no', 'undefined']) {
+			const parameters = new URLSearchParams(value === null ? {} : { [key]: value });
+			expect(readLibraryFilters(parameters)[key]).toBeUndefined();
+			expect(libraryParameters(readLibraryFilters(parameters)).has(key)).toBe(false);
+		}
+	}
+);
+
+it('combines organization filters while preserving import scope, exact criteria and sorting', () => {
+	const applied = {
+		query: 'committed',
+		import_batch: 'batch-1',
+		tag: 'tag-1',
+		project: 'project-1',
+		author_last_name: ' Council & Co. ',
+		author_first_name: '',
+		publication_title: ' Journal & 特刊 ',
+		sort: 'author' as const,
+		direction: 'desc' as const
+	};
+	const unorganized = submitLibraryFilters(applied, {
+		tag: libraryAssociationChoices.none,
+		project: libraryAssociationChoices.none,
+		has_files: false
+	});
+	expect(unorganized).toEqual({
+		...applied,
+		tag: undefined,
+		project: undefined,
+		has_files: false,
+		has_tags: false,
+		has_projects: false
+	});
+	expect(readLibraryFilters(libraryParameters(unorganized))).toMatchObject({
+		query: applied.query,
+		import_batch: applied.import_batch,
+		author_last_name: applied.author_last_name,
+		author_first_name: '',
+		publication_title: applied.publication_title,
+		sort: 'author',
+		direction: 'desc',
+		has_files: false,
+		has_tags: false,
+		has_projects: false
+	});
+	const refined = refineLibraryFilters(unorganized, { year: '2026' });
+	const destination = new URL(
+		libraryHref('workspace-1', refined, 2, 50, 'item-1'),
+		'https://app.example/'
+	);
+	expect(readLibraryFilters(destination.searchParams)).toMatchObject({
+		import_batch: 'batch-1',
+		year: '2026',
+		has_files: false,
+		has_tags: false,
+		has_projects: false
+	});
+	expect(destination.searchParams.get('preview')).toBe('item-1');
+	expect(libraryPage(destination.searchParams)).toBe(2);
+	expect(libraryPageSize(destination.searchParams)).toBe(50);
+	expect(applied).not.toHaveProperty('has_files');
+});
+
+it('association choices clear previous presence criteria without leaking preset values', () => {
+	const applied = {
+		import_batch: 'batch-1',
+		has_files: false,
+		has_tags: false,
+		has_projects: false
+	};
+	expect(submitLibraryFilters(applied, { query: 'new search', tag: '', project: '' })).toEqual({
+		import_batch: 'batch-1',
+		has_files: false,
+		query: 'new search',
+		tag: '',
+		project: ''
+	});
+	expect(submitLibraryFilters(applied, { tag: 'tag-1' })).toEqual({
+		import_batch: 'batch-1',
+		has_files: false,
+		has_projects: false,
+		tag: 'tag-1'
+	});
+	expect(submitLibraryFilters(applied, { project: 'project-1' })).toEqual({
+		import_batch: 'batch-1',
+		has_files: false,
+		has_tags: false,
+		project: 'project-1'
+	});
+	expect(refineLibraryFilters(applied, { tag: 'tag-1' })).toEqual({
+		...applied,
+		has_tags: undefined,
+		tag: 'tag-1'
+	});
+	expect(submitLibraryFilters({ has_tags: true, has_projects: true }, { tag: 'tag-1' })).toEqual({
+		has_projects: true,
+		tag: 'tag-1'
+	});
+	const present = submitLibraryFilters(
+		{ tag: 'tag-1', project: 'project-1' },
+		{
+			tag: libraryAssociationChoices.any,
+			project: libraryAssociationChoices.any
+		}
+	);
+	expect(Object.fromEntries(libraryParameters(present))).toEqual({
+		has_tags: 'true',
+		has_projects: 'true'
+	});
+});
+
+it('restores association selectors from specific and presence filters', () => {
+	expect(libraryAssociationValue(undefined, undefined)).toBe('');
+	expect(libraryAssociationValue(undefined, false)).toBe(libraryAssociationChoices.none);
+	expect(libraryAssociationValue(undefined, true)).toBe(libraryAssociationChoices.any);
+	expect(libraryAssociationValue('tag-1', false)).toBe('tag-1');
+	expect(libraryAssociationValue('project-1', undefined)).toBe('project-1');
+});
+
+it.each([true, false])(
+	'a Tag refinement replaces has_tags=%s while retaining its scope',
+	(has_tags) => {
+		const refined = refineLibraryFilters(
+			{ has_tags, import_batch: 'batch-1', has_projects: false, has_files: false, sort: 'title' },
+			{ tag: 'tag-1' }
+		);
+		expect(Object.fromEntries(libraryParameters(refined))).toEqual({
+			import_batch: 'batch-1',
+			tag: 'tag-1',
+			sort: 'title',
+			has_files: 'false',
+			has_projects: 'false'
+		});
+	}
+);
 
 it.each(['updated', 'created', 'published', 'title', 'publication', 'author'] as const)(
 	'round-trips both directions for %s and omits its default direction',

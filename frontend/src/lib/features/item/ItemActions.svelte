@@ -471,7 +471,7 @@
 									<div>
 										<h2>{$t('Export bibliography')}</h2>
 										<p class="text-surface-600-400">
-											{$t('Uses the defaults saved in your Account export preferences.')}
+											{$t('Uses your Account export settings.')}
 										</p>
 									</div>
 									<label
@@ -515,9 +515,7 @@
 								<div class="grid max-w-xl grid-cols-1 gap-3">
 									<h2>{$t('Copy to another Workspace')}</h2>
 									<p class="text-surface-600-400">
-										{$t(
-											'A copy creates a new canonical Item. Only Workspaces where you can create Items are offered.'
-										)}
+										{$t('Creates an Item copy in the target Workspace.')}
 									</p>
 									<SearchSelect
 										label={$t('Target Workspace')}
@@ -549,7 +547,7 @@
 									<div>
 										<h2>{$t('Download documents')}</h2>
 										<p class="text-surface-600-400">
-											{$t('Choose PDF revisions to package with saved download preferences.')}
+											{$t('Choose PDF revisions to download.')}
 										</p>
 									</div>
 									{#each revisions as revision (revision.id)}<label
@@ -609,7 +607,7 @@
 									<div>
 										<h2>{$t('Metadata sources')}</h2>
 										<p class="text-surface-600-400">
-											{$t('Refresh this record from an upstream identifier.')}
+											{$t('Update metadata using an identifier.')}
 										</p>
 									</div>
 									{#if sources.isPending}

@@ -119,7 +119,7 @@
 	<div>
 		<h2 id="workspace-members-heading" class="text-xl font-semibold">{$t('Members')}</h2>
 		<p class="mt-1 text-sm text-surface-700-300">
-			{$t('Find the people in this workspace and view their roles.')}
+			{$t('Find members and view their roles.')}
 		</p>
 	</div>
 	<Panel>

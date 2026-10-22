@@ -175,7 +175,7 @@ test('Import methods use separate keyboard accessible tabs and preserve drafts',
 		.getByRole('textbox', { name: 'Or paste bibliography data' })
 		.fill('@article{x,title={Draft}}');
 	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Stage PDFs' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Preview import' })).toBeVisible();
 	await page.getByRole('tab', { name: 'Identifiers', exact: true }).click();
 	await expect(page.getByRole('textbox', { name: 'Identifiers', exact: true })).toHaveValue(
 		'10.1000/first\nISBN:0674016394'
@@ -297,7 +297,7 @@ for (const source of ['bibliography', 'pdfs'] as const) {
 		await mockSession(page);
 		const bibliography = source === 'bibliography';
 		const sourceName = bibliography ? 'Bibliography' : 'PDFs';
-		const submitName = bibliography ? 'Preview bibliography' : 'Stage PDFs';
+		const submitName = bibliography ? 'Preview bibliography' : 'Preview import';
 		const filename = bibliography ? 'previous.bib' : 'previous.pdf';
 		const draft = '@article{draft,title={Unsaved bibliography draft}}';
 		const newContent = '@article{new,title={New pasted bibliography}}';
@@ -430,7 +430,7 @@ test('pending PDF imports refresh until they can be committed', async ({ page })
 		mimeType: 'application/pdf',
 		buffer: Buffer.from('%PDF-1.4\n')
 	});
-	await page.getByRole('button', { name: 'Stage PDFs' }).click();
+	await page.getByRole('button', { name: 'Preview import' }).click();
 
 	await expect.poll(() => previewRequests, { timeout: 5_000 }).toBeGreaterThan(1);
 	await expect(page.getByRole('button', { name: importButtonName })).toBeEnabled();
@@ -564,7 +564,7 @@ test('PDF import accumulates and deduplicates repeated file selections', async (
 	});
 	await expect(page.getByText('first.pdf', { exact: true })).toBeVisible();
 	await expect(page.getByText('second.pdf', { exact: true })).toBeVisible();
-	await page.getByRole('button', { name: 'Stage PDFs' }).click();
+	await page.getByRole('button', { name: 'Preview import' }).click();
 	await expect.poll(() => uploadBody).toContain('first.pdf');
 	await expect.poll(() => uploadBody).toContain('second.pdf');
 });
@@ -1286,7 +1286,7 @@ test('pending PDF processing survives leaving and reload with a Workflow link to
 		mimeType: 'application/pdf',
 		buffer: Buffer.from('%PDF-1.4\n')
 	});
-	await page.getByRole('button', { name: 'Stage PDFs', exact: true }).click();
+	await page.getByRole('button', { name: 'Preview import', exact: true }).click();
 	await expect(
 		page.getByRole('button', { name: 'Background tasks (1)', exact: true })
 	).toBeVisible();

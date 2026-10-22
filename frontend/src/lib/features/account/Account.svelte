@@ -187,7 +187,7 @@
 				<div>
 					<h2>{$t('Preferences')}</h2>
 					<p class="mb-0 text-sm text-surface-600-400">
-						{$t('Choose how Quirebase looks and speaks to you.')}
+						{$t('Language and navigation preferences.')}
 					</p>
 				</div>
 				<label
@@ -205,8 +205,7 @@
 					<input type="checkbox" bind:checked={sidebarCollapsed} onchange={saveSidebarPreference} />
 					<span
 						><strong>{$t('Collapse navigation sidebar by default')}</strong><small
-							class="block text-surface-600-400"
-							>{$t('Free more horizontal space for reading and metadata work.')}</small
+							class="block text-surface-600-400">{$t('More space for reading.')}</small
 						></span
 					>
 				</label>
@@ -215,7 +214,7 @@
 				<div>
 					<h2>{$t('Password')}</h2>
 					<p class="mb-0 text-sm text-surface-600-400">
-						{$t('Use at least 12 characters for a strong password.')}
+						{$t('Use at least 12 characters.')}
 					</p>
 				</div>
 				<form class="grid grid-cols-1 gap-3" onsubmit={changePassword}>

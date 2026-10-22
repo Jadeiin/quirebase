@@ -6,7 +6,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
-	import { t } from '#lib/i18n.js';
+	import { activeLocale, t } from '#lib/i18n.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { projectDetailQuery, projectOptionsQuery, type ProjectSummary } from './queries.js';
 
@@ -18,6 +18,7 @@
 		emptyLabel,
 		disabled = false,
 		manageOnly = false,
+		presetOptions = [],
 		class: className = ''
 	}: {
 		value?: string;
@@ -27,6 +28,7 @@
 		emptyLabel: string;
 		disabled?: boolean;
 		manageOnly?: boolean;
+		presetOptions?: { value: string; label: string }[];
 		class?: string;
 	} = $props();
 
@@ -34,6 +36,16 @@
 	let open = $state(false);
 	let search = $state<string | null>(null);
 	let submittedSearch = $state('');
+	const selectedPreset = $derived(presetOptions.find((option) => option.value === value));
+	const matchingPresets = $derived(
+		presetOptions
+			.filter((option) =>
+				option.label
+					.toLocaleLowerCase($activeLocale)
+					.includes((search?.trim() ?? '').toLocaleLowerCase($activeLocale))
+			)
+			.map((option) => ({ ...option, group: $t('Filter conditions'), kind: $t('Condition') }))
+	);
 	$effect(() => {
 		const query = search?.trim() ?? '';
 		if (query === submittedSearch) return;
@@ -46,17 +58,20 @@
 	}));
 	const selection = createQuery(() => ({
 		...projectDetailQuery(workspaceId, value),
-		enabled: Boolean(value)
+		enabled: Boolean(value) && !selectedPreset
 	}));
 	function isUnavailable(reason: unknown) {
 		return reason instanceof ApiError && [401, 403, 404].includes(reason.status);
 	}
-	const selectedDetail = $derived(selection.data?.id === value ? selection.data : undefined);
-	const selectionFailed = $derived(selection.isError);
+	const selectedDetail = $derived(
+		!selectedPreset && selection.data?.id === value ? selection.data : undefined
+	);
+	const selectionFailed = $derived(!selectedPreset && selection.isError);
 	const deniedOptions = $derived(projects.isError && isUnavailable(projects.error));
 	$effect(() => {
 		// A retained snapshot cannot authorize a target while its refresh is pending or failed.
 		selectedProject =
+			!selectedPreset &&
 			selection.isSuccess &&
 			selection.fetchStatus === 'idle' &&
 			selectedDetail &&
@@ -65,13 +80,14 @@
 				: null;
 	});
 	const selectedLabel = $derived(
-		selectionFailed
-			? undefined
-			: ((selectedProject?.id === value ? selectedProject.name : selectedDetail?.name) ??
-					projects.data?.find((project) => project.id === value)?.name)
+		selectedPreset?.label ??
+			(selectionFailed
+				? undefined
+				: ((selectedProject?.id === value ? selectedProject.name : selectedDetail?.name) ??
+					projects.data?.find((project) => project.id === value)?.name))
 	);
 	const options = $derived.by(() => {
-		if ((search?.trim() ?? '') !== submittedSearch || deniedOptions) return [];
+		if ((search?.trim() ?? '') !== submittedSearch || deniedOptions) return matchingPresets;
 		const available = new Map((projects.data ?? []).map((project) => [project.id, project]));
 		// Keep an existing selection visible even when it lies beyond the loaded pages.
 		const choices =
@@ -81,25 +97,35 @@
 						...[...available].filter(([id]) => id !== selectedDetail.id)
 					])
 				: available;
-		return [...choices.values()]
-			.filter(
-				(project) =>
-					(!manageOnly || can(project.authorization, 'project_item.manage')) &&
-					!(project.id === value && selectionFailed)
-			)
-			.map((project) => ({ value: project.id, label: project.name }));
+		return [
+			...matchingPresets,
+			...[...choices.values()]
+				.filter(
+					(project) =>
+						(!manageOnly || can(project.authorization, 'project_item.manage')) &&
+						!(project.id === value && selectionFailed)
+				)
+				.map((project) => ({
+					value: project.id,
+					label: project.name,
+					...(presetOptions.length ? { group: $t('Projects'), kind: $t('Project') } : {})
+				}))
+				.filter((option) => !presetOptions.some((preset) => preset.value === option.value))
+		];
 	});
 	const selectionError = $derived(
-		value && selection.isError
-			? apiErrorMessage(selection.error, $t('Unable to load Project.'))
-			: value && selection.fetchStatus === 'paused'
-				? $t('Unable to load Project.')
-				: value &&
-					  manageOnly &&
-					  selectedDetail &&
-					  !can(selectedDetail.authorization, 'project_item.manage')
-					? $t('This action is no longer available.')
-					: ''
+		selectedPreset
+			? ''
+			: value && selection.isError
+				? apiErrorMessage(selection.error, $t('Unable to load Project.'))
+				: value && selection.fetchStatus === 'paused'
+					? $t('Unable to load Project.')
+					: value &&
+						  manageOnly &&
+						  selectedDetail &&
+						  !can(selectedDetail.authorization, 'project_item.manage')
+						? $t('This action is no longer available.')
+						: ''
 	);
 </script>
 
@@ -111,7 +137,15 @@
 		{label}
 		{hideLabel}
 		{selectedLabel}
+		selectedKind={presetOptions.length
+			? selectedPreset
+				? $t('Condition')
+				: $t('Project')
+			: undefined}
 		{emptyLabel}
+		emptyOption={presetOptions.length
+			? { group: $t('Filter conditions'), kind: $t('Condition') }
+			: undefined}
 		{disabled}
 		{options}
 		filterOptions={false}

@@ -171,7 +171,7 @@ for (const theme of ['light', 'dark']) {
 		await expect(page.getByRole('button', { name: 'Load more Tags', exact: true })).toBeVisible();
 		await expectNoHighImpactViolations(page);
 		await page.getByRole('combobox', { name: 'Tag', exact: true }).fill('Meth');
-		await expect(page.getByRole('option', { name: 'Methods', exact: true })).toBeVisible();
+		await expect(page.getByRole('option', { name: 'Methods Tag', exact: true })).toBeVisible();
 		await expectNoHighImpactViolations(page);
 	});
 }

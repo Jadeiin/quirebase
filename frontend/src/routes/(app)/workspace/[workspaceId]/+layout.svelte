@@ -105,15 +105,11 @@
 	{#if workspace.data?.governance_frozen}
 		<Notice variant="warning"
 			>{$t(
-				'Workspace writes are frozen. Content is read only until an instance administrator unfreezes this Workspace.'
+				'This Workspace is frozen and read only. An instance administrator can unfreeze it.'
 			)}</Notice
 		>
 	{:else if workspace.data?.state === 'archived'}
-		<Notice
-			>{$t(
-				'Archived workspace · read-only content. Workspace governance actions remain available according to policy.'
-			)}</Notice
-		>
+		<Notice>{$t('Archived Workspace · read-only content.')}</Notice>
 	{/if}
 
 	{#key workspaceId}

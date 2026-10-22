@@ -253,7 +253,7 @@
 		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('External metadata')}</p>
 		<h1>{$t('Discovery')}</h1>
 		<p class="text-surface-600-400">
-			{$t('Build a precise query, then review candidates before Import.')}
+			{$t('Search external sources and preview records before importing.')}
 		</p>
 	</div>
 </SectionHeader>

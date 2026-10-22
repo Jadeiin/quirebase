@@ -76,7 +76,7 @@
 	<div>
 		<h2 id="workspace-advanced-heading" class="text-xl font-semibold">{$t('Advanced')}</h2>
 		<p class="mt-1 text-sm text-surface-700-300">
-			{$t('Maintenance and lifecycle actions for this workspace.')}
+			{$t('Workspace maintenance, archiving and deletion.')}
 		</p>
 	</div>
 	{#if workspace.can('workspace_maintenance.run')}
@@ -91,9 +91,7 @@
 		<Panel class="grid grid-cols-1 justify-items-start gap-3">
 			<h3 class="text-lg font-semibold">{$t('Lifecycle')}</h3>
 			<p class="text-sm text-surface-700-300">
-				{$t(
-					'Archive pauses normal changes while preserving readable content. You can restore it later.'
-				)}
+				{$t('Archived content is read only. You can restore the Workspace later.')}
 			</p>
 			{#if workspace.can('workspace.archive') && workspace.view?.state === 'active'}
 				<Button

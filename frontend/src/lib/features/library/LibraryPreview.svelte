@@ -340,9 +340,6 @@
 					{/if}
 					<div id="preview-organize-content" hidden={!organizeOpen}>
 						{#if organizeModule}
-							<p class="text-xs text-surface-600-400">
-								{$t('Changes apply only to the Item in this preview.')}
-							</p>
 							{#await organizeModule}<p role="status" class="mt-3 text-sm text-surface-600-400">
 									{$t('Loading organization options…')}
 								</p>

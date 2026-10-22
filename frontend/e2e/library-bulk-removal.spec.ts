@@ -128,7 +128,7 @@ test('Tag removal requires an existing Tag ID and keeps adding and removing targ
 	dialog = page.getByRole('dialog', { name: 'Remove Tag', exact: true });
 	const submit = dialog.getByRole('button', { name: 'Remove Tag', exact: true });
 	await expect(submit).toBeDisabled();
-	await expect(submit).toHaveAccessibleDescription('Choose a Tag to continue.');
+	await expect(submit).toHaveAccessibleDescription('Choose a Tag.');
 	const tag = dialog.getByRole('combobox', { name: 'Select Tag', exact: true });
 	await tag.fill('New taxonomy');
 	await expect(page.getByText('No matching options.', { exact: true })).toBeVisible();
@@ -214,7 +214,7 @@ test('Project-removal retry retains the original Project and Items after browser
 	});
 	await page.goto('/workspace/workspace-1/library?project=project-2');
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
-	await chooseSearchOption(page, 'Project', 'Reading Project 1');
+	await chooseSearchOption(page, 'Project', 'Reading Project 1', 'Reading Project 1 Project');
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
 	await expect(page).toHaveURL(/project=project-1/);
 	await page.getByRole('button', { name: 'Next page', exact: true }).click();

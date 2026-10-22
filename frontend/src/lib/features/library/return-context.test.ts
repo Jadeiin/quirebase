@@ -78,6 +78,35 @@ it('keeps the import scope when returning from an Item or PDF', () => {
 	);
 });
 
+it('retains cleanup filters and the import receipt while opening an Item and returning', () => {
+	const context = libraryReturnTo(
+		'workspace-1',
+		'/workspace/workspace-1/library?import_batch=batch-1&has_files=false&has_tags=false&has_projects=false&sort=created&direction=asc&page=2&page_size=50&preview=item-2',
+		'item-1'
+	);
+	const item = new URL(
+		libraryItemHref('workspace-1', 'item-1', 'organize', context),
+		'https://app.example/'
+	);
+	const destination = new URL(
+		libraryReturnHref('workspace-1', item.searchParams),
+		'https://app.example/'
+	);
+	expect(destination.pathname).toBe('/workspace/workspace-1/library');
+	expect(Object.fromEntries(destination.searchParams)).toEqual({
+		import_batch: 'batch-1',
+		sort: 'created',
+		direction: 'asc',
+		has_files: 'false',
+		has_tags: 'false',
+		has_projects: 'false',
+		page: '2',
+		page_size: '50',
+		preview: 'item-2'
+	});
+	expect(destination.hash).toBe('#library-item-item-1');
+});
+
 it('removes only the deleted Item preview and anchor while keeping the Library query', () => {
 	const parameters = new URLSearchParams({
 		return_to:

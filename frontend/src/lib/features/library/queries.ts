@@ -28,7 +28,9 @@ function libraryFilterParameters(filters: LibraryFilters) {
 		keyword_exact: filters.keyword_exact,
 		author_last_name: filters.author_last_name,
 		author_first_name: filters.author_first_name,
-		has_files: filters.has_files
+		has_files: filters.has_files,
+		has_tags: filters.has_tags,
+		has_projects: filters.has_projects
 	};
 }
 

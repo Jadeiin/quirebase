@@ -157,7 +157,7 @@
 				: 'mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]'}
 		>
 			{#if contextError}<Notice variant="error"
-					>{$t('Workspace context could not be restored. Refresh the page to recover.')}
+					>{$t('Unable to load Workspace information. Refresh and try again.')}
 					<Button onclick={() => location.reload()}>{$t('Refresh page')}</Button></Notice
 				>{/if}
 			{#if actionError}<Notice variant="error">{actionError}</Notice>{/if}
