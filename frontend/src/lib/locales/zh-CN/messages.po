@@ -107,6 +107,11 @@ msgid "{kind} · {size} KB"
 msgstr "{kind} · {size} KB"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "{names} et al."
+msgstr "{names} 等"
+
+#. js-lingui-explicit-id
 #: src/lib/design/FilePicker.svelte
 msgid "{size} KB"
 msgstr "{size} KB"
@@ -5912,6 +5917,11 @@ msgid "Show abstract"
 msgstr "展开摘要"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryAuthors.svelte
+msgid "Show all authors"
+msgstr "查看全部作者"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "显示全部字段"
@@ -6997,8 +7007,8 @@ msgstr "Unicode 文本"
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
-#: src/lib/features/library/LibraryTable.svelte
 msgid "Unknown authors"
 msgstr "未知作者"
 
@@ -7241,8 +7251,8 @@ msgstr "查看条目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
-#: src/lib/features/library/LibraryTable.svelte
 msgid "View Items by {name}"
 msgstr "查看 {name} 创作的条目"
 

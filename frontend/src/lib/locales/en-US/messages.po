@@ -107,6 +107,11 @@ msgid "{kind} · {size} KB"
 msgstr "{kind} · {size} KB"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryTable.svelte
+msgid "{names} et al."
+msgstr "{names} et al."
+
+#. js-lingui-explicit-id
 #: src/lib/design/FilePicker.svelte
 msgid "{size} KB"
 msgstr "{size} KB"
@@ -5912,6 +5917,11 @@ msgid "Show abstract"
 msgstr "Show abstract"
 
 #. js-lingui-explicit-id
+#: src/lib/features/library/LibraryAuthors.svelte
+msgid "Show all authors"
+msgstr "Show all authors"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "Show all fields"
@@ -6997,8 +7007,8 @@ msgstr "Unicode text"
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
-#: src/lib/features/library/LibraryTable.svelte
 msgid "Unknown authors"
 msgstr "Unknown authors"
 
@@ -7241,8 +7251,8 @@ msgstr "View Items"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
-#: src/lib/features/library/LibraryTable.svelte
 msgid "View Items by {name}"
 msgstr "View Items by {name}"
 

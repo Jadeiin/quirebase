@@ -24,6 +24,7 @@
 	import type { LibrarySearch } from './queries';
 	import { libraryRowCommands, runLibraryShortcut, type LibraryRowCommand } from './shortcuts.js';
 	import LibraryActionMenu from './LibraryActionMenu.svelte';
+	import LibraryAuthors from './LibraryAuthors.svelte';
 	import type { LibraryBulkAction } from './mutations.js';
 	import {
 		defaultSortDirection,
@@ -320,22 +321,26 @@
 			[id]: size
 		}));
 	}
+
+	function selectionLabel(authors: LibrarySearch['items'][number]['authors']) {
+		if (!authors.length) return $t('Select');
+		const names = authors
+			.slice(0, 3)
+			.map((author) => author.full_name)
+			.join('; ');
+		return $t('Select {name}', {
+			name: authors.length > 3 ? $t('{names} et al.', { names }) : names
+		});
+	}
 </script>
 
-{#snippet authorLinks(authors: LibrarySearch['items'][number]['authors'])}
-	{#each authors as author, index (index)}
-		{index > 0 ? '; ' : ''}<a
-			class="text-surface-700-300 no-underline underline-offset-4 hover:text-primary-700-300 hover:underline focus-visible:underline"
-			href={resolve(
-				filterHref({
-					author_last_name: author.last_name,
-					author_first_name: author.first_name ?? ''
-				})
-			)}
-			title={$t('View Items by {name}', { name: author.full_name })}
-			aria-label={$t('View Items by {name}', { name: author.full_name })}>{author.full_name}</a
-		>
-	{:else}{$t('Unknown authors')}{/each}
+{#snippet authorLinks(item: LibrarySearch['items'][number])}
+	<LibraryAuthors
+		authors={item.authors}
+		{filterHref}
+		previewOpen={previewItemId === item.id}
+		onShowAll={(trigger) => onPreview(item.id, trigger)}
+	/>
 {/snippet}
 
 {#snippet publicationLink(publication: string | null)}
@@ -580,11 +585,7 @@
 										checked={row.getIsSelected()}
 										onclick={(event) => selectWithPointer(row.id, event)}
 										title={$t('Shift-click an Item checkbox to select a range on this page.')}
-										aria-label={row.original.authors.length
-											? $t('Select {name}', {
-													name: row.original.authors.map((author) => author.full_name).join('; ')
-												})
-											: $t('Select')}
+										aria-label={selectionLabel(row.original.authors)}
 									/>
 								{:else if cell.column.id === 'title_html'}<a
 										id={`library-item-title-${row.id}`}
@@ -597,9 +598,9 @@
 										></a
 									>
 								{:else if cell.column.id === 'authors'}
-									<span class="block break-words text-surface-600-400"
-										>{@render authorLinks(row.original.authors)}</span
-									>
+									<div class="min-w-0 text-surface-600-400">
+										{@render authorLinks(row.original)}
+									</div>
 								{:else if cell.column.id === 'publication_title'}
 									<span class="block break-words text-surface-600-400"
 										>{@render publicationLink(row.original.publication_title)}</span
@@ -666,11 +667,7 @@
 					checked={row.getIsSelected()}
 					onclick={(event) => selectWithPointer(row.id, event)}
 					title={$t('Shift-click an Item checkbox to select a range on this page.')}
-					aria-label={row.original.authors.length
-						? $t('Select {name}', {
-								name: row.original.authors.map((author) => author.full_name).join('; ')
-							})
-						: $t('Select')}
+					aria-label={selectionLabel(row.original.authors)}
 				/>
 				<div class="grid min-w-0 grid-cols-1 gap-1">
 					<a
@@ -682,9 +679,9 @@
 							><RichText html={row.original.title_html} /></strong
 						>
 					</a>
-					<span class="text-sm break-words text-surface-600-400"
-						>{@render authorLinks(row.original.authors)}</span
-					>
+					<div class="min-w-0 text-sm text-surface-600-400">
+						{@render authorLinks(row.original)}
+					</div>
 					<span class="text-xs break-words text-surface-600-400"
 						>{@render publicationLink(row.original.publication_title)} · {@render dateLink(
 							row.original.publication_date

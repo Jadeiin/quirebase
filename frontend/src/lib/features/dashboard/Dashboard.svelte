@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
+	import type { components } from '#lib/api/schema.js';
 	import type { AuthorizationAction } from '#lib/authorization/can.js';
 	import Icon from '#lib/design/Icon.svelte';
 	import Panel from '#lib/design/Panel.svelte';
@@ -52,6 +53,12 @@
 		action: AuthorizationAction;
 	}[];
 </script>
+
+{#snippet authorSummary(authors: components['schemas']['ItemSearchView']['authors'])}
+	{@const names = authors.map((author) => author.full_name).join('; ')}
+	{@const label = names || $t('Unknown authors')}
+	<span class="min-w-0 truncate" title={label}>{label}</span>
+{/snippet}
 
 <div class="mb-8">
 	<div>
@@ -145,11 +152,12 @@
 								><RichText html={recent.item.title_html} /></strong
 							>
 							<span
-								class="flex flex-wrap items-center justify-between gap-2 text-xs text-surface-600-400"
-								><span
-									>{recent.item.authors.map((author) => author.full_name).join('; ') ||
-										$t('Unknown authors')}</span
-								><span>{$dateFormat.format(new Date(recent.last_read_at))}</span></span
+								class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs text-surface-600-400"
+							>
+								{@render authorSummary(recent.item.authors)}
+								<span class="text-right whitespace-nowrap"
+									>{$dateFormat.format(new Date(recent.last_read_at))}</span
+								></span
 							>
 						</a>
 					{:else}
@@ -183,11 +191,13 @@
 							<strong class="line-clamp-2 text-sm leading-snug group-hover:text-primary-800-200"
 								><RichText html={item.title_html} /></strong
 							>
-							<span class="flex flex-wrap justify-between gap-2 text-xs text-surface-600-400"
-								><span
-									>{item.authors.map((author) => author.full_name).join('; ') ||
-										$t('Unknown authors')}</span
-								><span>{item.publication_date || $t('Date unknown')}</span></span
+							<span
+								class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs text-surface-600-400"
+							>
+								{@render authorSummary(item.authors)}
+								<span class="text-right whitespace-nowrap"
+									>{item.publication_date || $t('Date unknown')}</span
+								></span
 							>
 						</a>
 					{:else}

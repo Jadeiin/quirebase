@@ -135,6 +135,125 @@ for (const view of ['table', 'list'] as const) {
 	});
 }
 
+for (const view of ['table', 'list'] as const) {
+	test(`${view} authors collapse to available width and open all names in the existing preview`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: view === 'table' ? 1280 : 390, height: 900 });
+		const names = [
+			['A', 'B', 'C', 'D'],
+			['Morgan Anderson', 'Taylor Johnson', 'Jordan Williams', 'Avery Thompson'],
+			Array.from({ length: 60 }, (_, index) => `Contributor ${String(index + 1).padStart(2, '0')}`),
+			['محمد الخوارزمي', 'أحمد زويل', 'אברהם לוי', 'שרה כהן']
+		];
+		const rows = items.slice(0, 4).map((item, index) => ({
+			...item,
+			authors: names[index].map((name) => ({
+				full_name: name,
+				last_name: name,
+				first_name: null
+			}))
+		}));
+		await mockLibrary(page, rows);
+		await page.route('**/api/v1/workspaces/*/items/item-3/overview', (route) => {
+			const details = overview('item-3');
+			return route.fulfill({
+				json: {
+					...details,
+					metadata: {
+						...details.metadata,
+						contributors: names[2].map((name) => ({
+							type: 'Person',
+							roles: ['Author'],
+							person: { family_name: name }
+						}))
+					}
+				}
+			});
+		});
+		await page.goto('/workspace/workspace-1/library?q=research&sort=title&direction=desc');
+		await page
+			.getByRole('radio', { name: view === 'table' ? 'Table' : 'List', exact: true })
+			.press('Space');
+		const row = (id: string) =>
+			view === 'table'
+				? page.locator(`tr[data-library-item="${id}"]`)
+				: page.locator(`article[data-library-item="${id}"]`);
+		const short = row('item-1');
+		const medium = row('item-2');
+		const crowded = row('item-3');
+		const ellipsis = (id: string) =>
+			row(id).getByRole('button', { name: 'Show all authors', exact: true });
+
+		// Four short names fit; the available width, rather than an author count, controls folding.
+		await expect(short.getByRole('link', { name: /^View Items by / })).toHaveCount(4);
+		await expect(ellipsis('item-1')).toHaveCount(0);
+		await expect(ellipsis('item-2')).toBeVisible();
+		await expect(ellipsis('item-3')).toHaveText('…');
+
+		// RTL names keep the author order, with visible names still available as filter links.
+		const rtlAuthors = row('item-4').locator('a[aria-label^="View Items by "]');
+		await expect(rtlAuthors.first()).not.toHaveAttribute('inert', '');
+		await expect(ellipsis('item-4')).toBeVisible();
+		const authorPositions = await rtlAuthors.evaluateAll((links) =>
+			links.map((link) => link.getBoundingClientRect().left)
+		);
+		expect(authorPositions).toEqual([...authorPositions].sort((a, b) => a - b));
+
+		if (view === 'table') {
+			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
+			await resize.focus();
+			for (let index = 0; index < 20; index++) await resize.press('ArrowRight');
+		} else {
+			await ellipsis('item-2').focus();
+			await page.setViewportSize({ width: 1600, height: 900 });
+			await expect(
+				medium.getByRole('link', { name: 'View Items by Morgan Anderson', exact: true })
+			).toBeFocused();
+		}
+		await expect(medium.locator('a[aria-label^="View Items by "]:not([inert])')).toHaveCount(4);
+		await expect(ellipsis('item-2')).toHaveCount(0);
+		if (view === 'table')
+			await page.getByRole('button', { name: 'Resize Authors column', exact: true }).press('Home');
+		else {
+			await medium.getByRole('link', { name: 'View Items by Avery Thompson', exact: true }).focus();
+			await page.setViewportSize({ width: 390, height: 900 });
+			await expect(
+				medium.getByRole('link', { name: 'View Items by Morgan Anderson', exact: true })
+			).toBeFocused();
+		}
+		await expect(ellipsis('item-2')).toBeVisible();
+
+		const lastAuthor = crowded.locator('a[aria-label="View Items by Contributor 60"]');
+		await expect(lastAuthor).toHaveAttribute('inert', '');
+		const visibleAuthors = crowded.locator('a[aria-label^="View Items by "]:not([inert])');
+		expect(await visibleAuthors.count()).toBeGreaterThan(0);
+		expect(await visibleAuthors.count()).toBeLessThan(60);
+		await visibleAuthors.last().focus();
+		await page.keyboard.press('Tab');
+		await expect(ellipsis('item-3')).toBeFocused();
+		await page.keyboard.press('Enter');
+		const preview = page.getByRole('complementary', { name: 'Item preview' });
+		await expect(preview.getByRole('link', { name: /^Contributor / })).toHaveCount(60);
+		await expect(preview.getByRole('link', { name: 'Contributor 60', exact: true })).toBeVisible();
+		let parameters = new URL(page.url()).searchParams;
+		expect(parameters.get('preview')).toBe('item-3');
+		expect(parameters.get('q')).toBe('research');
+		expect(parameters.get('sort')).toBe('title');
+		expect(parameters.get('direction')).toBe('desc');
+		await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
+		await expect(preview).toHaveCount(0);
+		await expect(ellipsis('item-3')).toBeFocused();
+		await short.getByRole('link', { name: 'View Items by D', exact: true }).click();
+		await expect.poll(() => new URL(page.url()).searchParams.get('author_last_name')).toBe('D');
+		parameters = new URL(page.url()).searchParams;
+		expect(parameters.get('author_first_name')).toBe('');
+		expect(parameters.get('q')).toBe('research');
+		expect(parameters.get('sort')).toBe('title');
+		expect(parameters.get('direction')).toBe('desc');
+	});
+}
+
 test('bulk toolbar explains requirements, keeps failed targets and restores focus after retry', async ({
 	page
 }) => {
