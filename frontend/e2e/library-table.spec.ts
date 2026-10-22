@@ -136,17 +136,21 @@ for (const view of ['table', 'list'] as const) {
 }
 
 for (const view of ['table', 'list'] as const) {
-	test(`${view} authors collapse to available width and open all names in the existing preview`, async ({
+	test(`${view} folds whole author names, keeps the last credit when it fits and opens the existing preview`, async ({
 		page
 	}) => {
 		await page.setViewportSize({ width: view === 'table' ? 1280 : 390, height: 900 });
 		const names = [
 			['A', 'B', 'C', 'D'],
-			['Morgan Anderson', 'Taylor Johnson', 'Jordan Williams', 'Avery Thompson'],
+			['Morgan Anderson', 'Taylor Johnson', 'Jordan Williams', 'Kimon P. Valavanis'],
 			Array.from({ length: 60 }, (_, index) => `Contributor ${String(index + 1).padStart(2, '0')}`),
-			['محمد الخوارزمي', 'أحمد زويل', 'אברהם לוי', 'שרה כהן']
+			['محمد الخوارزمي', 'أحمد زويل', 'אברהם לוי', 'שרה כהן'],
+			['Only Author'],
+			['E', 'F'],
+			['First Author', 'Last Author with a very long credited name '.repeat(2)],
+			['Single Author with a long but readable credited name']
 		];
-		const rows = items.slice(0, 4).map((item, index) => ({
+		const rows = items.slice(0, names.length).map((item, index) => ({
 			...item,
 			authors: names[index].map((name) => ({
 				full_name: name,
@@ -182,56 +186,127 @@ for (const view of ['table', 'list'] as const) {
 		const short = row('item-1');
 		const medium = row('item-2');
 		const crowded = row('item-3');
+		const firstMediumAuthor = medium.getByRole('link', {
+			name: 'View Items by Morgan Anderson',
+			exact: true
+		});
+		const lastMediumAuthor = medium.getByRole('link', {
+			name: 'View Items by Kimon P. Valavanis',
+			exact: true
+		});
 		const ellipsis = (id: string) =>
 			row(id).getByRole('button', { name: 'Show all authors', exact: true });
+		const assertWholeVisibleNames = async () => {
+			for (const [index, authorNames] of names.entries()) {
+				const line = row(`item-${index + 1}`).getByTitle(authorNames.join('; '), { exact: true });
+				await expect
+					.poll(() =>
+						line.evaluate((element, expectedNames) => {
+							const bounds = element.getBoundingClientRect();
+							const credits = Array.from(
+								element.querySelectorAll<HTMLElement>('[data-author-index]')
+							);
+							if (credits.some((credit) => !credit.hidden) && credits[0].hidden) return false;
+							return credits.every((credit) => {
+								if (credit.hidden) return credit.getClientRects().length === 0;
+								const link = credit.querySelector('a')!;
+								const box = credit.getBoundingClientRect();
+								return (
+									link.textContent === expectedNames[Number(credit.dataset.authorIndex)] &&
+									box.left >= bounds.left - 1 &&
+									box.right <= bounds.right + 1 &&
+									box.height <= bounds.height + 1
+								);
+							});
+						}, authorNames)
+					)
+					.toBe(true);
+			}
+		};
 
 		// Four short names fit; the available width, rather than an author count, controls folding.
 		await expect(short.getByRole('link', { name: /^View Items by / })).toHaveCount(4);
 		await expect(ellipsis('item-1')).toHaveCount(0);
 		await expect(ellipsis('item-2')).toBeVisible();
+		await expect(firstMediumAuthor).toBeVisible();
+		await expect(lastMediumAuthor).toBeHidden();
 		await expect(ellipsis('item-3')).toHaveText('…');
+		await expect(
+			crowded.getByRole('link', {
+				name: 'View Items by Contributor 01',
+				exact: true
+			})
+		).toBeVisible();
+		await expect(row('item-5').getByRole('link', { name: /^View Items by / })).toHaveCount(1);
+		await expect(ellipsis('item-5')).toHaveCount(0);
+		await expect(row('item-6').getByRole('link', { name: /^View Items by / })).toHaveCount(2);
+		await expect(ellipsis('item-6')).toHaveCount(0);
+		await expect(row('item-7').locator('[data-author-index="1"]')).toBeHidden();
+		await expect(row('item-7').getByRole('link', { name: /^View Items by / })).toHaveCount(1);
+		await expect(ellipsis('item-7')).toBeVisible();
+		await expect(row('item-8').getByRole('link', { name: /^View Items by / })).toHaveCount(0);
+		await expect(row('item-8').locator('[data-author-index="0"]')).toBeHidden();
+		await expect(ellipsis('item-8')).toBeVisible();
+		await assertWholeVisibleNames();
 
 		// RTL names keep the author order, with visible names still available as filter links.
-		const rtlAuthors = row('item-4').locator('a[aria-label^="View Items by "]');
-		await expect(rtlAuthors.first()).not.toHaveAttribute('inert', '');
+		const rtlAuthors = row('item-4').getByRole('link', { name: /^View Items by / });
+		await expect(rtlAuthors.first()).toBeVisible();
 		await expect(ellipsis('item-4')).toBeVisible();
 		const authorPositions = await rtlAuthors.evaluateAll((links) =>
 			links.map((link) => link.getBoundingClientRect().left)
 		);
 		expect(authorPositions).toEqual([...authorPositions].sort((a, b) => a - b));
 
+		// Keep the existing focus while changing the available author width.
+		await ellipsis('item-2').focus();
 		if (view === 'table') {
 			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
-			await resize.focus();
-			for (let index = 0; index < 20; index++) await resize.press('ArrowRight');
-		} else {
-			await ellipsis('item-2').focus();
-			await page.setViewportSize({ width: 1600, height: 900 });
-			await expect(
-				medium.getByRole('link', { name: 'View Items by Morgan Anderson', exact: true })
-			).toBeFocused();
-		}
-		await expect(medium.locator('a[aria-label^="View Items by "]:not([inert])')).toHaveCount(4);
+			for (let index = 0; index < 20; index++)
+				await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
+		} else await page.setViewportSize({ width: 1600, height: 900 });
+		await expect(medium.getByRole('link', { name: /^View Items by / })).toHaveCount(4);
 		await expect(ellipsis('item-2')).toHaveCount(0);
+		await expect(firstMediumAuthor).toBeFocused();
+		await expect(row('item-8').getByRole('link', { name: /^View Items by / })).toHaveCount(1);
+		await expect(ellipsis('item-8')).toHaveCount(0);
+		await assertWholeVisibleNames();
+		await lastMediumAuthor.focus();
 		if (view === 'table')
-			await page.getByRole('button', { name: 'Resize Authors column', exact: true }).press('Home');
-		else {
-			await medium.getByRole('link', { name: 'View Items by Avery Thompson', exact: true }).focus();
-			await page.setViewportSize({ width: 390, height: 900 });
-			await expect(
-				medium.getByRole('link', { name: 'View Items by Morgan Anderson', exact: true })
-			).toBeFocused();
-		}
+			await page
+				.getByRole('button', { name: 'Resize Authors column', exact: true })
+				.dispatchEvent('keydown', { key: 'Home' });
+		else await page.setViewportSize({ width: 390, height: 900 });
 		await expect(ellipsis('item-2')).toBeVisible();
+		await expect(firstMediumAuthor).toBeVisible();
+		await expect(lastMediumAuthor).toBeHidden();
+		await expect(ellipsis('item-2')).toBeFocused();
+		await assertWholeVisibleNames();
 
-		const lastAuthor = crowded.locator('a[aria-label="View Items by Contributor 60"]');
-		await expect(lastAuthor).toHaveAttribute('inert', '');
-		const visibleAuthors = crowded.locator('a[aria-label^="View Items by "]:not([inert])');
+		if (view === 'table') {
+			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
+			for (let index = 0; index < 5; index++)
+				await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
+		}
+		const lastAuthor = crowded.getByRole('link', {
+			name: 'View Items by Contributor 60',
+			exact: true
+		});
+		await expect(lastAuthor).toBeVisible();
+		const visibleAuthors = crowded.getByRole('link', { name: /^View Items by / });
 		expect(await visibleAuthors.count()).toBeGreaterThan(0);
 		expect(await visibleAuthors.count()).toBeLessThan(60);
-		await visibleAuthors.last().focus();
-		await page.keyboard.press('Tab');
+		if ((await visibleAuthors.count()) > 1) {
+			await visibleAuthors.nth((await visibleAuthors.count()) - 2).focus();
+			await page.keyboard.press('Tab');
+		} else {
+			await lastAuthor.focus();
+			await page.keyboard.press('Shift+Tab');
+		}
 		await expect(ellipsis('item-3')).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(lastAuthor).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
 		await page.keyboard.press('Enter');
 		const preview = page.getByRole('complementary', { name: 'Item preview' });
 		await expect(preview.getByRole('link', { name: /^Contributor / })).toHaveCount(60);
@@ -244,6 +319,17 @@ for (const view of ['table', 'list'] as const) {
 		await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
 		await expect(preview).toHaveCount(0);
 		await expect(ellipsis('item-3')).toBeFocused();
+		// Widening the results can remove the preview's original overflow trigger.
+		await ellipsis('item-2').click();
+		await expect(preview).toBeVisible();
+		if (view === 'table') {
+			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
+			for (let index = 0; index < 20; index++)
+				await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
+		} else await page.setViewportSize({ width: 1600, height: 900 });
+		await expect(ellipsis('item-2')).toHaveCount(0);
+		await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
+		await expect(page.locator('#library-results')).toBeFocused();
 		await short.getByRole('link', { name: 'View Items by D', exact: true }).click();
 		await expect.poll(() => new URL(page.url()).searchParams.get('author_last_name')).toBe('D');
 		parameters = new URL(page.url()).searchParams;
@@ -787,7 +873,9 @@ test('Library hotkeys release their bindings on navigation and work again on ret
 		.getByRole('navigation', { name: 'Main navigation', exact: true })
 		.getByRole('link', { name: 'Projects', exact: true })
 		.click();
-	await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Projects', level: 1, exact: true })
+	).toBeVisible();
 	for (const key of ['/', '?', 'Escape', 'j', 'x', 'ArrowDown']) {
 		const untouched = await page.locator('body').evaluate((element, key) => {
 			const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
@@ -949,6 +1037,11 @@ for (const view of ['table', 'list'] as const) {
 		});
 		await page.goto(`/workspace/workspace-1/library?${initial}`);
 		await expect(page.getByRole('complementary', { name: 'Item preview' })).toBeVisible();
+		if (view === 'table') {
+			// Both complete names must fit before exercising their filter links.
+			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
+			for (let index = 0; index < 4; index++) await resize.press('ArrowRight');
+		}
 		const row = () =>
 			view === 'table'
 				? page.getByRole('table', { name: 'Library Items' }).locator('tbody tr').first()

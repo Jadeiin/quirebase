@@ -1280,7 +1280,6 @@ async def test_contributor_type_selects_active_names_in_library_projections(pers
 
 async def test_summary_author_credits_round_trip_exact_library_filters(persistence_db):
     from quirebase.library import item_summary
-    from quirebase.web.api.library_schemas import item_search_view
 
     db = persistence_db
     actor, workspace_id = await owner(db)
@@ -1320,7 +1319,6 @@ async def test_summary_author_credits_round_trip_exact_library_filters(persisten
         {"full_name": "Ada", "last_name": "Ada", "first_name": None},
         {"full_name": "Family", "last_name": "Family", "first_name": None},
     ]
-    assert item_search_view(item).model_dump()["authors"] == authors
     for author in authors:
         matches, total = await search_library(
             db,

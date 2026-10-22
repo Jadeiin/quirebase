@@ -214,12 +214,12 @@ enforce('Quick navigation when open', bundleSize(graphFiles(quickNavigation)), {
 });
 enforce('Library route', bundleSize(graphFiles(library)), {
 	raw: 1138000,
-	// Includes destructive-detachment warnings, scoped selection cleanup and last-page recovery.
-	gzip: 329000
+	// Includes whole-name author folding, scoped selection cleanup and last-page recovery.
+	gzip: 329500
 });
 enforce('Library refinements when open', bundleSize(graphFiles(libraryRefinements)), {
 	raw: 1141000,
-	gzip: 331000
+	gzip: 331500
 });
 enforce(
 	'Library preview when open',

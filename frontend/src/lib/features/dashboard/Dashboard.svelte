@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AuthorLine from '#lib/design/AuthorLine.svelte';
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
 	import type { components } from '#lib/api/schema.js';
@@ -55,9 +56,11 @@
 </script>
 
 {#snippet authorSummary(authors: components['schemas']['ItemSearchView']['authors'])}
-	{@const names = authors.map((author) => author.full_name).join('; ')}
-	{@const label = names || $t('Unknown authors')}
-	<span class="min-w-0 truncate" title={label}>{label}</span>
+	{#if authors.length}
+		<AuthorLine names={authors.map((author) => author.full_name)} />
+	{:else}
+		<span class="min-w-0 truncate">{$t('Unknown authors')}</span>
+	{/if}
 {/snippet}
 
 <div class="mb-8">

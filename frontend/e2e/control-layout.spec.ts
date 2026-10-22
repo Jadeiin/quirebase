@@ -99,7 +99,7 @@ for (const width of [1440, 390]) {
 			const apply = page.getByRole('button', { name: 'Apply filters', exact: true });
 			const form = page.locator('form').filter({ has: apply });
 			const controls = form.locator('input, select, button');
-			await expect(controls).toHaveCount(5);
+			await expect(controls).toHaveCount(7);
 			for (const control of await controls.all()) await expect(control).toBeVisible();
 			await page.evaluate(async (mode) => {
 				document.documentElement.dataset.mode = mode;
@@ -117,7 +117,7 @@ for (const width of [1440, 390]) {
 				const details = JSON.stringify(boxes);
 				expect(Math.max(...heights) - Math.min(...heights), details).toBeLessThanOrEqual(1);
 				for (const box of boxes) {
-					expect(Math.abs(box.height - 32), details).toBeLessThanOrEqual(1);
+					expect(Math.abs(box.height - 36), details).toBeLessThanOrEqual(1);
 					expect(box.x, details).toBeGreaterThanOrEqual(0);
 					expect(box.x + box.width, details).toBeLessThanOrEqual(width + 1);
 				}

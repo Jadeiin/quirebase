@@ -1363,7 +1363,7 @@ test('Chinese Import preview fits a 375px dark screen and keeps its primary acti
 		true
 	);
 	await page.screenshot({
-		path: '/private/tmp/quirebase-import-preview-375-zh-dark.png',
+		path: test.info().outputPath('import-preview-375-zh-dark.png'),
 		fullPage: true
 	});
 	await apply.click();
@@ -1948,7 +1948,7 @@ test('Chinese read-only Import history opens records without offering creation o
 		true
 	);
 	await page.screenshot({
-		path: '/private/tmp/quirebase-import-history-375-zh-dark.png',
+		path: test.info().outputPath('import-history-375-zh-dark.png'),
 		fullPage: true
 	});
 });

@@ -5917,7 +5917,7 @@ msgid "Show abstract"
 msgstr "Show abstract"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryAuthors.svelte
+#: src/lib/design/AuthorLine.svelte
 msgid "Show all authors"
 msgstr "Show all authors"
 

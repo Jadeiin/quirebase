@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 import pymupdf
 import pytest
+from advanced_alchemy.types import FileObject
 
 from quirebase.core.config import Settings
 from quirebase.core.storage import (
@@ -111,7 +112,12 @@ async def test_upload_checksums_one_shot_stream_without_readback_or_temporary_fi
         def __aiter__(self):
             assert self.iterations == 0, "the upload source must only be consumed once"
             self.iterations += 1
-            return chunks(content, 19)
+            return self.iter_chunks()
+
+        async def iter_chunks(self):
+            yield b""
+            async for chunk in chunks(content, 19):
+                yield chunk
 
     def unexpected_materialization(*args, **kwargs):
         pytest.fail("upload checksum must not materialize or reread the object")
@@ -146,12 +152,55 @@ async def test_upload_checksum_is_independent_of_source_and_chunk_boundaries(
 
 
 @pytest.mark.anyio
-async def test_empty_upload_has_standard_sha256_checksum(object_store):
-    stored = await object_store.put_object(uuid4(), ObjectSuffix.BINARY, chunks(b""), max_bytes=0)
+@pytest.mark.parametrize("source_kind", ["bytes", "path", "stream", "empty_chunks"])
+async def test_empty_upload_has_standard_sha256_checksum(object_store, tmp_path, source_kind):
+    async def empty_chunks():
+        await asyncio.sleep(0)
+        yield b""
+        yield b""
+
+    path = tmp_path / "empty.bin"
+    path.write_bytes(b"")
+    source = {
+        "bytes": b"",
+        "path": path,
+        "stream": chunks(b""),
+        "empty_chunks": empty_chunks(),
+    }[source_kind]
+    stored = await object_store.put_object(uuid4(), ObjectSuffix.BINARY, source, max_bytes=0)
     assert stored.size == 0
     assert stored.checksum == (
         "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("source_kind", ["stream", "path"])
+async def test_upload_closes_prefetched_source_when_backend_rejects_before_consumption(
+    object_store, monkeypatch, tmp_path, source_kind
+):
+    closed = asyncio.Event()
+
+    async def source_chunks():
+        try:
+            await asyncio.sleep(0)
+            yield b"prefetched content"
+        finally:
+            closed.set()
+
+    async def reject(*args, **kwargs):
+        await asyncio.sleep(0)
+        raise RuntimeError("backend rejected upload")
+
+    monkeypatch.setattr(FileObject, "save_async", reject)
+    if source_kind == "path":
+        source = tmp_path / "source.bin"
+        monkeypatch.setattr("quirebase.core.storage._path_chunks", lambda path: source_chunks())
+    else:
+        source = source_chunks()
+    with pytest.raises(RuntimeError, match="backend rejected upload"):
+        await object_store.put_object(uuid4(), ObjectSuffix.BINARY, source, max_bytes=100)
+    assert closed.is_set()
 
 
 @pytest.mark.anyio

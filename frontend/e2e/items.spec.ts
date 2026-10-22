@@ -1566,9 +1566,12 @@ test('Item file uploads settle with an error toast when status polling fails', a
 		buffer: minimalPdf()
 	});
 	await page.getByRole('button', { name: 'Upload PDF' }).click();
-	await expect(page.getByText('The requested resource was not found.').first()).toBeVisible({
-		timeout: 20000
-	});
+	await expect(
+		page.getByRole('status', {
+			name: 'Workflow history is unavailable. Check the current result.',
+			exact: true
+		})
+	).toBeVisible({ timeout: 20000 });
 	await expect(page.getByRole('button', { name: 'Upload PDF' })).toBeEnabled();
 });
 
@@ -2095,6 +2098,7 @@ test('Item actions export citations and synchronize upstream metadata', async ({
 	await page.getByRole('button', { name: 'Download file' }).click();
 	await expect.poll(() => exportQuery).toContain('file_format=bibtex');
 	for (const format of ['csl-json', 'commonmeta']) {
+		await page.getByRole('button', { name: 'Change options', exact: true }).click();
 		await page.getByLabel('Format').selectOption(format);
 		await page.getByRole('button', { name: 'Download file' }).click();
 		await expect.poll(() => exportQuery).toContain(`file_format=${format}`);
@@ -2236,6 +2240,107 @@ test('Overview and Files share Work without detail requests and localize publica
 	});
 	await expect(page.getByText('期刊论文', { exact: true })).toBeVisible();
 	await expect(page.getByText('期刊', { exact: true })).toBeVisible();
+});
+
+test('Dashboard folds whole author names and keeps dates aligned at narrow and wide widths', async ({
+	page
+}) => {
+	await mockSession(page);
+	const names = [
+		...Array.from({ length: 60 }, (_, index) => `Contributor ${index + 1}`),
+		'末位作者'
+	];
+	const item = {
+		id: 'item-1',
+		title_html: 'Many authors',
+		authors: names.map((name) => ({ full_name: name, last_name: name, first_name: null })),
+		publication_date: '2026-10-19',
+		publication_title: null,
+		doi: null,
+		version: 1
+	};
+	const overlongName = 'A single author whose complete credited name is unusually long '.repeat(12);
+	const overlongItem = {
+		...item,
+		id: 'item-2',
+		title_html: 'Overlong author',
+		authors: [{ full_name: overlongName, last_name: overlongName, first_name: null }]
+	};
+	await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+		route.fulfill({
+			json: {
+				new_items: [item, overlongItem],
+				recent_items: [{ item, last_read_at: '2026-10-20T00:00:00Z' }],
+				projects: [],
+				project_count: 0,
+				session_count: 0
+			}
+		})
+	);
+	await page.goto('/workspace/workspace-1');
+	for (const width of [320, 390, 1440]) {
+		await page.setViewportSize({ width, height: 900 });
+		const summaries = page.getByTitle(names.join('; '), { exact: true });
+		await expect(summaries).toHaveCount(2);
+		for (const summary of await summaries.all()) {
+			await expect(summary.locator('[data-author-index="0"] [dir="auto"]')).toBeVisible();
+			const last = summary.locator(`[data-author-index="${names.length - 1}"] [dir="auto"]`);
+			if (width === 1440) await expect(last).toBeVisible();
+			const metrics = await summary.evaluate((element, expectedNames) => {
+				const last = element.querySelector<HTMLElement>(
+					`[data-author-index="${expectedNames.length - 1}"]`
+				)!;
+				const date = element.nextElementSibling!;
+				const line = element.parentElement!;
+				const bounds = element.getBoundingClientRect();
+				return {
+					lastWidth: last.clientWidth,
+					lastContentWidth: last.scrollWidth,
+					authorRight: bounds.right,
+					dateLeft: date.getBoundingClientRect().left,
+					dateRight: date.getBoundingClientRect().right,
+					lineRight: line.getBoundingClientRect().right,
+					authorHeight: element.getBoundingClientRect().height,
+					lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+					wholeNames: Array.from(
+						element.querySelectorAll<HTMLElement>('[data-author-index]')
+					).every((credit) => {
+						if (credit.hidden) return credit.getClientRects().length === 0;
+						const name = credit.querySelector('[dir="auto"]')!;
+						const box = credit.getBoundingClientRect();
+						return (
+							name.textContent === expectedNames[Number(credit.dataset.authorIndex)] &&
+							box.left >= bounds.left - 1 &&
+							box.right <= bounds.right + 1
+						);
+					})
+				};
+			}, names);
+			expect(metrics.lastContentWidth).toBeLessThanOrEqual(metrics.lastWidth + 1);
+			expect(metrics.wholeNames).toBe(true);
+			expect(metrics.authorRight).toBeLessThan(metrics.dateLeft);
+			expect(Math.abs(metrics.dateRight - metrics.lineRight)).toBeLessThanOrEqual(1);
+			expect(metrics.authorHeight).toBeLessThanOrEqual(metrics.lineHeight + 1);
+		}
+		const overlongSummary = page.getByTitle(overlongName, { exact: true });
+		await expect(overlongSummary.locator('[data-author-index="0"]')).toBeHidden();
+		await expect(overlongSummary.getByText('…', { exact: true })).toBeVisible();
+		const overlongMetrics = await overlongSummary.evaluate((element) => {
+			const date = element.nextElementSibling!;
+			const line = element.parentElement!;
+			return {
+				authorRight: element.getBoundingClientRect().right,
+				dateLeft: date.getBoundingClientRect().left,
+				dateRight: date.getBoundingClientRect().right,
+				lineRight: line.getBoundingClientRect().right,
+				authorHeight: element.getBoundingClientRect().height,
+				lineHeight: parseFloat(getComputedStyle(element).lineHeight)
+			};
+		});
+		expect(overlongMetrics.authorRight).toBeLessThan(overlongMetrics.dateLeft);
+		expect(Math.abs(overlongMetrics.dateRight - overlongMetrics.lineRight)).toBeLessThanOrEqual(1);
+		expect(overlongMetrics.authorHeight).toBeLessThanOrEqual(overlongMetrics.lineHeight + 1);
+	}
 });
 
 test('Dashboard read history refreshes after opening an Item', async ({ page }) => {

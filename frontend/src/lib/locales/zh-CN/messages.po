@@ -5917,7 +5917,7 @@ msgid "Show abstract"
 msgstr "展开摘要"
 
 #. js-lingui-explicit-id
-#: src/lib/features/library/LibraryAuthors.svelte
+#: src/lib/design/AuthorLine.svelte
 msgid "Show all authors"
 msgstr "查看全部作者"
 
