@@ -29,7 +29,15 @@ from quirebase.library import (
     imports,
     stage_pdf_import_batch,
 )
-from quirebase.models import AuditEvent, FileRevision, ImportBatch, Item, User
+from quirebase.models import (
+    AuditEvent,
+    FileRevision,
+    FileRevisionProcessingState,
+    ImportBatch,
+    Item,
+    ItemTagRecommendation,
+    User,
+)
 from quirebase.search import search_index
 
 
@@ -123,16 +131,35 @@ async def confirm(directory, state, *, crash):
         write_json(directory / "confirmed.json", [str(item_id) for item_id in ids])
 
 
-async def finish_cleanup(directory, state):
+async def finish_import(directory, state):
+    async with AsyncSessionLocal() as db:
+        revision = (await db.scalars(select(FileRevision))).one()
+        assert revision.processing_workflow_id is not None
+        item_id = revision.item_id
+        followups = (
+            f"prepare-pdf-import-cleanup:{state['workflow_id']}",
+            revision.processing_workflow_id,
+            f"file-revision-changed:{revision.id}",
+        )
     worker = asyncio.create_task(launch_worker())
     try:
         async with asyncio.timeout(30):
             while True:
-                status = await durable_operations().get(
-                    f"prepare-pdf-import-cleanup:{state['workflow_id']}"
-                )
-                if status is not None and status.state == "succeeded":
-                    break
+                statuses = [await durable_operations().get(identity) for identity in followups]
+                if all(status is not None and status.state == "succeeded" for status in statuses):
+                    async with AsyncSessionLocal() as db:
+                        recommendation_id = await db.scalar(
+                            select(ItemTagRecommendation.workflow_id).where(
+                                ItemTagRecommendation.item_id == item_id
+                            )
+                        )
+                    recommendation = (
+                        await durable_operations().get(recommendation_id)
+                        if recommendation_id
+                        else None
+                    )
+                    if recommendation is not None and recommendation.state == "succeeded":
+                        break
                 if worker.done():
                     await worker
                 await asyncio.sleep(0.05)
@@ -181,6 +208,7 @@ async def inspect_contract(directory, state, *, committed):
         assert [str(item.id) for item in items] == expected_ids == batch.committed_item_ids
         assert not batch.staged_files and len(revisions) == 1
         assert revisions[0].item_id == items[0].id
+        assert revisions[0].processing_state is FileRevisionProcessingState.ready
         assert revisions[0].file.path == state["files"][0]["filename"]
         assert sum(event.action == "pdf.import" for event in events) == 1
         hits = await search_index(db).search(db, "Recovery")
@@ -189,7 +217,11 @@ async def inspect_contract(directory, state, *, committed):
         names = [row.name for row in workflows]
         assert names.count("library.prepare_pdf_import") == 1
         assert names.count("documents.cleanup_objects") == 1
-        assert names.count("library.recommend_tags") == 1
+        # Metadata import and the ready PDF each request one recommendation generation.
+        assert {row.id for row in workflows if row.name == "library.recommend_tags"} == {
+            f"item-recommend-tags:{items[0].id}:1",
+            f"item-recommend-tags:{items[0].id}:2",
+        }
         assert names.count("documents.inspect_imported_revision") == 1
     store = get_object_store()
     assert await store.exists(state["files"][0]["filename"])
@@ -217,7 +249,7 @@ async def main(mode, directory):
     elif mode in {"confirm-crash", "confirm-replay"}:
         await confirm(directory, state, crash=mode == "confirm-crash")
     elif mode == "finish":
-        await finish_cleanup(directory, state)
+        await finish_import(directory, state)
     else:
         raise ValueError(mode)
 
