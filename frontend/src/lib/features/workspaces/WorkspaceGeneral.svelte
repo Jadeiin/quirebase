@@ -27,7 +27,7 @@
 			draft = null;
 			notice = $t('Workspace name updated');
 		} catch (reason) {
-			error = apiErrorMessage(reason, 'Workspace action failed');
+			error = apiErrorMessage(reason, $t('Workspace action failed'));
 		}
 	}
 </script>

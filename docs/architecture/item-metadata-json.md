@@ -3,7 +3,7 @@
 `Item.work` stores a Commonmeta v1.0 Work JSON object. `commonmeta-schema==1.0.1` is the schema
 source; `commonmeta-py==0.309` is the conversion implementation. The Work is validated as the
 schema's Work definition, rather than its broader entity root. Python models are generated with
-`datamodel-code-generator==0.83.0`; strict fields, enums, nested variants, extra-property rejection
+`datamodel-code-generator==0.86.0`; strict fields, enums, nested variants, extra-property rejection
 and the official validator preserve constraints that code generation cannot express alone.
 Absent fields serialize by omission. The standard's nonempty arrays cannot be cleared using `[]`;
 a complete manual replacement clears a field by omitting it.
@@ -20,7 +20,7 @@ HTTP create accepts `{metadata: Work, citation_key?: string}`; update additional
 Detail and overview return the Work and Citation Key. Overview and Files reuse the overview's
 Work rather than fetching a second detail snapshot. `GET /workspaces/{workspace_id}/metadata/schema`
 returns the locked official schema after Workspace authorization. The Web UI lazily loads
-`@sjsf/form` 3.9.0 with its Skeleton 5 theme to edit a deep copy of the complete Work. Changing
+`@sjsf/form` 3.9.1 with its Skeleton 5 theme to edit a deep copy of the complete Work. Changing
 `type` does not clear contributors, identifiers, funding, relations or other hidden fields.
 Advanced JSON edits must pass original-schema validation and be applied before saving. Work is
 also copied deeply between Workspaces.
@@ -282,6 +282,8 @@ Compensation sites use `UPSTREAM(commonmeta-py 0.309)` comments describing the p
 These markers also cover existing role, name, license and source-input repairs. They distinguish
 dependency workarounds from Library business rules and normal boundary validation; upgrading
 commonmeta requires checking the marked regressions before removing their corresponding repairs.
+The 0.311 release still fails the standalone conversion regressions and drops distinct DataCite
+contributor roles sharing one ORCID, so conversion remains pinned to 0.309.
 [Independent upstream reproducers and a proposed patch](../upstream/commonmeta-py-0.309/README.md)
 cover the identified RIS/CSL defects without importing either application package. The patch
 is a review artifact and is not applied to the installed dependency. Each guard can be removed

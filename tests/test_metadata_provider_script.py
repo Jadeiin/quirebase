@@ -21,6 +21,12 @@ def test_metadata_diagnostic_script_reports_lookup_inputs_and_structured_authors
         "givenName": "Juan",
     })
     requests = []
+    providers = {
+        "crossref": ("crossref", "doi"),
+        "datacite": ("datacite", "doi"),
+        "pmid": ("pubmed", "pmid"),
+        "arxiv": ("arxiv", "arxiv"),
+    }
 
     class Runtime:
         async def __aenter__(self):
@@ -31,16 +37,16 @@ def test_metadata_diagnostic_script_reports_lookup_inputs_and_structured_authors
 
         async def lookup(self, value, *, provider):
             requests.append((provider, value))
-            source = {"doi": "crossref", "pmid": "pubmed", "arxiv": "arxiv"}[provider]
+            source, namespace = providers[provider]
             return CandidateRecord(
                 provider=source,
-                lookup_identifier=Identifier(provider, value),
+                lookup_identifier=Identifier(namespace, value),
                 work=compact({
                     "id": f"urn:uuid:{uuid4()}",
                     "type": "Document",
                     "title": "Structured metadata",
                     "contributors": (contributor,),
-                    "identifiers": [work_identifier(provider, value)],
+                    "identifiers": [work_identifier(namespace, value)],
                 }),
             )
 
@@ -49,8 +55,13 @@ def test_metadata_diagnostic_script_reports_lookup_inputs_and_structured_authors
     runpy.run_path(str(script), run_name="__main__")
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert len(records) == len(requests) == 4
-    assert records[0]["provider"] == "crossref"
-    for record, (namespace, value) in zip(records, requests, strict=True):
+    assert requests[:2] == [
+        ("crossref", "10.1038/s41586-020-2649-2"),
+        ("datacite", "10.14454/qdd3-ps68"),
+    ]
+    for record, (provider, value) in zip(records, requests, strict=True):
+        source, namespace = providers[provider]
+        assert record["provider"] == source
         assert record["lookup_identifier"] == {"provider": namespace, "value": value}
         assert record["work"]["identifiers"] == [work_identifier(namespace, value)]
         author = record["work"]["contributors"][0]["person"]

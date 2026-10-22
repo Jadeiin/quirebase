@@ -81,9 +81,8 @@
 		} catch (reason) {
 			if (reason instanceof ApiError && reason.status === 409) {
 				await invalidateItemAnnotations(queryClient, workspaceId, itemId);
-				moderationError =
-					'This Annotation changed since it was loaded. Latest state refreshed; review it and explicitly retry if the action is still appropriate.';
-			} else moderationError = apiErrorMessage(reason, 'Unable to moderate Annotation');
+				moderationError = $t('This Annotation changed. Review the latest version and try again.');
+			} else moderationError = apiErrorMessage(reason, $t('Unable to moderate Annotation'));
 		} finally {
 			moderating = '';
 		}

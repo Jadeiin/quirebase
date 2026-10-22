@@ -4,19 +4,18 @@ Quirebase is distributed under AGPL-3.0-only. Binary and source distributions mu
 
 Core PDF components:
 
-- `@embedpdf/svelte-pdf-viewer` 2.15.0 — MIT, the pinned Svelte viewer used for browser PDF rendering, search, zoom and annotation interaction.
-- `@embedpdf/snippet` 2.15.0 — MIT, the viewer's runtime dependency that provides EmbedPDF initialization and API exports.
-- PDFium WebAssembly from `@embedpdf/pdfium` 2.15.0 — EmbedPDF's wrapper is MIT; the bundled PDFium binary carries the PDFium BSD-style license and the additional third-party notices distributed in that package.
+- `@embedpdf/svelte-pdf-viewer` 2.15.1 — MIT, the pinned Svelte viewer used for browser PDF rendering, search, zoom and annotation interaction.
+- `@embedpdf/snippet` 2.15.1 — MIT, the viewer's runtime dependency that provides EmbedPDF initialization and API exports.
+- PDFium WebAssembly from `@embedpdf/pdfium` 2.15.1 — EmbedPDF's wrapper is MIT; the bundled PDFium binary carries the PDFium BSD-style license and the additional third-party notices distributed in that package.
 - PyMuPDF — AGPL-3.0-only or commercial license. Quirebase uses it under AGPL-3.0-only.
-- bibtexparser 2.x beta — MIT, used for BibTeX/BibLaTeX parsing, native
-  serialization, `@string` macros and structured name splitting. The lockfile
-  records the resolved beta while Inquiro fixes the middleware stacks explicitly.
-- pylatexenc 2.11 — MIT, used directly by Inquiro's rich-text layer for
+- Commonmeta — MIT, used for local scholarly metadata and bibliography format conversion.
+- bibtexparser — BSD-3-Clause or LGPL-3.0, used for BibTeX/BibLaTeX parsing, native serialization,
+  `@string` macros and structured name splitting alongside Commonmeta conversion.
+- pylatexenc — MIT, used directly by Inquiro's rich-text layer for
   Unicode/LaTeX text conversion. Quirebase preserves Unicode code points such as
   CJK characters when no LaTeX mapping exists.
-- Temml 0.13.5 — MIT, bundled by the frontend to render bounded inline LaTeX
+- Temml 0.14.0 — MIT, bundled by the frontend to render bounded inline LaTeX
   formulae as MathML before Quirebase rebuilds them through a strict allowlist.
-- RISpy — MIT, used for RIS parsing and serialization.
 - YAKE 0.7.x — used as the default local keyword extractor. Its package metadata says LGPL-3.0,
   while the upstream distribution's actual LICENSE is AGPL-3.0-or-later; Quirebase records and
   distributes it under the latter, more restrictive license.
@@ -26,9 +25,6 @@ Core PDF components:
   independently and may configure `QUIREBASE_KEYBERT_MODEL_SHA256` for verification.
 - citeproc-py — BSD-2-Clause-Views, the CSL 1.0.1 processor for formatted citations.
 - citeproc-py-styles — MIT, optional (`citation` extra) CSL style repository used for built-in styles.
-- Alpine.js CSP build 3.15.12 — MIT, bundled from the pinned `@alpinejs/csp` package for local UI interactions without enabling `unsafe-eval`.
-- `@zxcvbn-ts/core` 4.2.0, `@zxcvbn-ts/language-common` 4.1.3, and
-  `@zxcvbn-ts/language-en` 4.1.1 — MIT, bundled into the local password-strength estimator.
 - httpx2 — BSD-3-Clause, HTTP transport client for outbound discovery metadata lookup and online search.
 - FastMCP 4.x — Apache-2.0, used to derive the curated MCP tool adapter from Quirebase's OpenAPI
   contract. Its official MCP SDK dependency is MIT.
@@ -40,5 +36,10 @@ Core PDF components:
 The lockfiles are the authoritative version inventory. Produce a release SBOM from `uv.lock` and
 `frontend/bun.lock`, and include dependency license files from installed wheels and packages in
 every release artifact.
+
+Known dependency constraints: Commonmeta currently requires WeasyPrint 69.x, blocking its 70.x
+security fixes. Inquiro uses Commonmeta's local metadata conversion with `no_network=True` and does
+not invoke PDF rendering. The development-only glob dependency `braces` 3.0.3 also has an unresolved
+advisory. Recheck these upstream constraints and advisories before publishing.
 
 `python-poppler`, `pypdfium2`, and `pypdf` are deliberately not dependencies.

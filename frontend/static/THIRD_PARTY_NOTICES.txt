@@ -2,7 +2,7 @@ Schema editor third-party notices
 
 These notices cover the schema editor dependencies bundled into this application.
 
-@sjsf/form 3.9.0
+@sjsf/form 3.9.1
 https://github.com/x0k/svelte-jsonschema-form
 
 Copyright (c) 2024 Roman Krasilnikov
@@ -219,7 +219,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 
-@sjsf/basic-theme 3.9.0
+@sjsf/basic-theme 3.9.1
 https://github.com/x0k/svelte-jsonschema-form
 
 Copyright (c) 2024 Roman Krasilnikov
@@ -231,7 +231,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-@sjsf/skeleton5-theme 3.9.0
+@sjsf/skeleton5-theme 3.9.1
 https://github.com/x0k/svelte-jsonschema-form
 
 Copyright (c) 2024 Roman Krasilnikov
@@ -243,7 +243,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-@sjsf/cfworker-validator 3.9.0
+@sjsf/cfworker-validator 3.9.1
 https://github.com/x0k/svelte-jsonschema-form
 
 Copyright (c) 2024 Roman Krasilnikov

@@ -284,8 +284,8 @@ test('PDF Redo cannot resurrect a creation deleted by another session after a so
 	await historyAction(page, 'undo');
 	await historyAction(page, 'redo');
 	await expect.poll(() => state.writes.filter((body) => body.id === 'created-here').length).toBe(2);
-	await expect(page.getByText('3 annotations loaded')).toBeAttached();
-	expect(await readerIds(page)).not.toContain('created-here');
+	await expect(page.getByRole('alert')).toContainText('The request could not be completed.');
+	await expect.poll(() => readerIds(page)).not.toContain('created-here');
 });
 
 test('PDF clears unavailable linked sources before its initial annotation request', async ({

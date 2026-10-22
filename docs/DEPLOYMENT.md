@@ -7,8 +7,9 @@ Python 3.12+ wheels are the common installation path on Windows, macOS and Linux
 Quirebase, `inquiro` and `rubrica` are versioned together and published to the same Python package
 index. A release publishes the two standalone workspace packages before the matching Quirebase
 artifact; Quirebase pins both dependencies to its own version so a standard wheel installation
-cannot silently combine incompatible workspace releases. The release workflow verifies the full
-wheel set in an isolated environment before publishing.
+cannot silently combine incompatible workspace releases. Build all three together with
+`uv build --all-packages --no-sources` after building the frontend, and verify the full wheel set in
+an isolated environment before distribution.
 
 SQLite is intended for a single-host installation with one worker. The application uses SQLAlchemy's
 `asyncio` and `aiosqlite` optional groups and derives `sqlite+aiosqlite` from the familiar
@@ -144,7 +145,16 @@ Web and every worker must use the same backend, bucket, and prefix.
 
 ## Backups
 
-`quirebase backup backup.zip` creates a consistent SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds immutable objects, and writes a checksum manifest. This backup/restore path currently requires the local object backend; protect an S3 bucket with its own versioning and backup policy, and snapshot or mirror the bundled Garage volume as described under Object storage. Verify a local backup with `quirebase verify-backup backup.zip`. Test restoration periodically on a separate installation. `quirebase restore backup.zip --force` replaces the configured database and overlays backed-up objects; stop all web and worker processes first.
+Stop every web and worker process before creating or restoring a backup. The database and object
+files are copied separately; running writes or cleanup could make the archive incomplete.
+`quirebase backup backup.zip` creates a SQLite snapshot or invokes `pg_dump` for PostgreSQL, adds
+immutable objects, and writes a database checksum manifest. Store the archive outside the data
+directory and any volumes you may recreate. This path requires local object storage; protect S3
+with its own versioning and backup policy, and snapshot or mirror the bundled Garage volume as
+described under Object storage. `quirebase verify-backup backup.zip` verifies the database checksum
+and archive paths, not individual object checksums. Test restoration periodically on a separate
+installation. `quirebase restore backup.zip --force` replaces the configured database and overlays
+backed-up objects.
 
 Deleting retained records makes database pages reusable; it does not necessarily shrink files.
 For SQLite, stop every web and worker process, then run `quirebase compact-sqlite` against the same
@@ -153,9 +163,10 @@ the WAL and runs `VACUUM`; it fails on lock contention and never runs automatica
 space for SQLite's temporary rebuild. For PostgreSQL, ordinary autovacuum reuses deleted space;
 returning it to the filesystem requires a separately scheduled database-maintenance operation.
 
-`quirebase doctor` checks the schema, writable directories, PyMuPDF, the configured Recommendation
-Engine and every stored object's SHA-256. `quirebase reindex` rebuilds the Library Search index. The
-administrator page can retry failed jobs and rebuild all Item Tag Recommendations after an engine
+`quirebase doctor` checks database connectivity, initialized tables, durable workflow storage,
+writable directories, PyMuPDF, the configured Recommendation Engine, object existence and sizes,
+and Workspace/Project integrity. It does not hash stored objects. `quirebase reindex` rebuilds the
+Library Search index. The administrator page can retry failed jobs and rebuild all Item Tag Recommendations after an engine
 or model change; `/metrics` exposes authenticated job and content counts. The worker installs an
 hourly DBOS Schedule for export cleanup, Object Store integrity scanning and orphan reconciliation;
 the schedule is persisted and does not depend on a process-local timer loop. File Revision work is
@@ -172,14 +183,15 @@ remains a content-hashed, same-origin Vite asset.
 
 ## Upgrades
 
-For this alpha retention cutover the initial migration is regenerated and Search follows it.
-Stop the old web and worker processes and rebuild the database from the new chain; an existing
-stamp cannot be upgraded in place. Preserve backups and any content needed for explicit reimport.
-Old durable inputs/checkpoints are not replayed across the inspection change.
+This alpha cutover replaces the initial migration and folds the schema changes into it. A database
+stamped by a retired revision cannot be upgraded in place: `quirebase init-db` and the Compose
+`migrate` service fail with `Can't locate revision`. Stop the old web and workers, keep an offline
+backup outside the installation's volumes, recreate the database, and reimport content through the
+application. Cross-chain data migration and replay of old durable inputs/checkpoints are not
+provided. `make docker-down DOWN_ARGS=--volumes` removes both database and object volumes; use it
+only after preserving the data you need elsewhere.
 
-Back up first, install the new wheel, run `quirebase init-db` to apply Alembic migrations, rebuild
-assets only for source checkouts
-(`bun install --cwd frontend && bun run --cwd frontend build`), restart web and worker processes,
-then run `quirebase doctor`.
-
-**Alpha migration chain:** This explicitly approved alpha cutover replaces the initial revision and folds incremental schema changes into it. A database stamped by a revision that no longer exists cannot be upgraded in place: `quirebase init-db` and the Compose `migrate` service abort with `Can't locate revision`. Back up the installation so the old data is preserved, recreate the database (for Compose: `make docker-down DOWN_ARGS=--volumes`, then start the stack again), and reimport content through the application; cross-chain data migration is not provided.
+For subsequent upgrades on the current migration chain, stop web and workers, back up, install the
+new wheel, and run `quirebase init-db`. Source checkouts also need
+`bun install --cwd frontend` and `bun run --cwd frontend build`. Run `quirebase doctor` before
+restarting web and workers. Install coordinated Quirebase, Inquiro and Rubrica versions together.

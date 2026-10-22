@@ -121,8 +121,12 @@ jobs:
           docker compose --env-file .env.docker exec --no-TTY web quirebase doctor
       - name: Back up and verify the PostgreSQL deployment
         run: |
-          docker compose --env-file .env.docker exec --no-TTY web quirebase backup /tmp/smoke.zip
-          docker compose --env-file .env.docker exec --no-TTY web quirebase verify-backup /tmp/smoke.zip
+          docker compose --env-file .env.docker stop web worker
+          docker compose --env-file .env.docker run --rm --no-deps web sh -c '
+            set -e
+            quirebase backup /tmp/smoke.zip
+            quirebase verify-backup /tmp/smoke.zip
+          '
       - name: Stop the compose stack
         if: always()
         run: docker compose --env-file .env.docker down --volumes || true

@@ -18,10 +18,10 @@ jobs:
           node-version: "22"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.3"
-      - uses: astral-sh/setup-uv@v10.1.0
+          bun-version: "1.4.4"
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.1"
+          version: "0.13.5"
           python-version: "3.12"
       - run: bun install --frozen-lockfile
       - run: bun run api:check
@@ -61,13 +61,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.1.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.1"
+          version: "0.13.5"
           python-version: ${{ matrix.python-version }}
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
       - run: uv sync
       - run: bun install --cwd frontend --frozen-lockfile
       - run: bun run --cwd frontend build
@@ -105,9 +105,9 @@ jobs:
       QUIREBASE_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/quirebase_test
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.1.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.1"
+          version: "0.13.5"
           python-version: "3.12"
       - run: uv sync --extra postgres
       - name: PostgreSQL contracts and controlled concurrency
@@ -148,13 +148,13 @@ jobs:
       QUIREBASE_TEST_S3_REGION: us-east-1
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.1.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.1"
+          version: "0.13.5"
           python-version: "3.12"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
       - run: uv sync
       - run: bun install --cwd frontend --frozen-lockfile
       - run: bun run --cwd frontend build
@@ -188,13 +188,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.1.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.1"
+          version: "0.13.5"
           python-version: "3.12"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
       - uses: actions/cache@v6
         with:
           path: .cache/oa-pdfs

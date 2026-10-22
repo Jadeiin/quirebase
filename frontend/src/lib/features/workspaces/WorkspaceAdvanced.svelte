@@ -48,7 +48,7 @@
 			}
 			notice = action === 'archive' ? $t('Workspace archived') : $t('Workspace restored');
 		} catch (reason) {
-			error = apiErrorMessage(reason, 'Workspace action failed');
+			error = apiErrorMessage(reason, $t('Workspace action failed'));
 		}
 	}
 	async function reindex() {
@@ -67,7 +67,7 @@
 				.settled.catch(() => undefined);
 			maintenanceNotice = $t('Workspace reindex started');
 		} catch (reason) {
-			maintenanceError = apiErrorMessage(reason, 'Workspace action failed');
+			maintenanceError = apiErrorMessage(reason, $t('Workspace action failed'));
 		}
 	}
 </script>

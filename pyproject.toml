@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 dependencies = [
-  "advanced-alchemy[argon2,cli,obstore,uuid]==1.11.0",
+  "advanced-alchemy[argon2,cli,obstore,uuid]>=1.12.0,<2",
   "casbin>=1.43,<2",
   "fastapi>=0.141.1,<1",
   "httpx2>=2.12,<3",
@@ -49,12 +49,13 @@ dev = [
   "citeproc-py-styles>=0.1.6,<0.2",
   "mypy>=1.17,<2",
   "prek>=0.3,<1",
-  "pytest>=8.4,<9",
+  "pytest>=9.0.3,<10",
   "pytest-cov>=6.2,<7",
   "pytest-xdist>=3.8,<4",
   "ruff>=0.16,<1",
   "import-linter[ui]>=2.15,<3.0",
-  "datamodel-code-generator==0.83.0",
+  # CI compares generated Work models byte for byte.
+  "datamodel-code-generator==0.86.0",
 ]
 
 [project.scripts]
@@ -68,7 +69,6 @@ path = "scripts/hatch_build.py"
 
 [tool.hatch.build.targets.wheel.force-include]
 "migrations" = "quirebase/migrations"
-"docs" = "quirebase/docs"
 "THIRD_PARTY.md" = "quirebase/THIRD_PARTY.md"
 
 [tool.hatch.build.targets.sdist]

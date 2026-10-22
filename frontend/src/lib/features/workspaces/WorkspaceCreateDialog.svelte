@@ -61,7 +61,7 @@
 				);
 			}
 		} catch (reason) {
-			error = apiErrorMessage(reason, 'Unable to create workspace');
+			error = apiErrorMessage(reason, $t('Unable to create workspace'));
 		}
 	}
 </script>

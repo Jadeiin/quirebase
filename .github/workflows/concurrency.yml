@@ -29,9 +29,9 @@ jobs:
       QUIREBASE_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/quirebase_test
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.1.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.1"
+          version: "0.13.5"
           python-version: "3.12"
       - run: uv sync --extra postgres --frozen
       - name: Replay the invariant matrix on an isolated database

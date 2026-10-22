@@ -67,13 +67,13 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 	let loadGeneration = 0;
 	let writeGeneration = 0;
 
-	async function load(sources: AnnotationSources): Promise<void> {
+	async function load(sources: AnnotationSources, reportStatus = true): Promise<void> {
 		const api = annotationApi;
 		if (!api) return;
 		currentSources = sources;
 		const generation = ++loadGeneration;
 		const writesAtStart = writeGeneration;
-		options.onStatus({ state: 'loading' });
+		if (reportStatus) options.onStatus({ state: 'loading' });
 		const rows: CanonicalAnnotation[] = [];
 		if (sources.includePrivate || sources.projectIds.length) {
 			let cursor: string | undefined;
@@ -103,7 +103,7 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 		if (generation !== loadGeneration) return;
 		// A local write can finish while pages are in flight. Read again before
 		// invalidating cache entries using a collection predating that write.
-		if (writesAtStart !== writeGeneration) return load(currentSources);
+		if (writesAtStart !== writeGeneration) return load(currentSources, reportStatus);
 		const refreshedIds = new SvelteSet(rows.map((record) => record.id));
 		// Missing records in a fully refreshed source are no longer canonical.
 		// Other sources remain cached so history can still address hidden overlays.
@@ -127,7 +127,7 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 				}))
 			])
 		);
-		options.onStatus({ state: 'loaded', count: rows.length });
+		if (reportStatus) options.onStatus({ state: 'loaded', count: rows.length });
 	}
 
 	function inSources(record: CanonicalAnnotation, sources: AnnotationSources) {
@@ -309,7 +309,9 @@ export function createAnnotationSync(options: AnnotationSyncOptions) {
 		} catch (reason) {
 			if (event.type === 'create') scope.purgeAnnotation(event.pageIndex, objectId);
 			options.onStatus({ state: 'sync-failed', reason });
-			await load(currentSources).catch(() => undefined);
+			// Reconcile optimistic changes without replacing the write failure with
+			// loading or successful-read feedback, even when recovery also fails.
+			await load(currentSources, false).catch(() => undefined);
 		}
 	}
 

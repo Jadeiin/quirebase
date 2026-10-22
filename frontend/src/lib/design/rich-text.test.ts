@@ -16,6 +16,13 @@ describe('Web rich-text projection', () => {
 		expect(rendered).not.toContain('$E_');
 	});
 
+	it('preserves contextual dots as an identifier to avoid operator spacing', async () => {
+		const rendered = await projectRichTextAsync(String.raw`$a+\dots+b$`);
+
+		expect(rendered).toContain('<mi>⋯</mi>');
+		expect(rendered).not.toContain('<mo>⋯</mo>');
+	});
+
 	it('drops elements and attributes outside the rich-text and MathML allowlists', async () => {
 		const rendered = await projectRichTextAsync(
 			String.raw`<script>alert(1)</script>$\href{javascript:alert(1)}{x}$`

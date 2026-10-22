@@ -8,6 +8,7 @@
 	import { t } from '#lib/i18n.js';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import Button from '#lib/design/Button.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import { sessionQuery } from '#lib/session.js';
 	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
 	let { token }: { token: string } = $props();
@@ -78,9 +79,13 @@
 		<h1>{$t('Join Quirebase')}</h1>
 		{#if invitation.isPending}<p class="text-surface-600-400">
 				{$t('Checking invitation…')}
-			</p>{:else if invitation.isError}<p class="text-error-700-300">
-				{$t('This invitation is invalid or expired.')}
-			</p>{:else if invitation.data?.kind === 'account'}
+			</p>{:else if invitation.isError}
+			<QueryError
+				message={apiErrorMessage(invitation.error, $t('Unable to load invitation.'))}
+				busy={invitation.isFetching}
+				onRetry={() => void invitation.refetch()}
+			/>
+		{:else if invitation.data?.kind === 'account'}
 			<p>{$t('Create a password for')} <strong>{invitation.data.username}</strong>.</p>
 			<label
 				>{$t('Password')}<input

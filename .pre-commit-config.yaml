@@ -16,7 +16,7 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.13.1
+    rev: 0.13.5
     hooks:
       - id: uv-lock
         files: ^(uv\.lock|pyproject\.toml|uv\.toml|packages/[^/]+/pyproject\.toml)$

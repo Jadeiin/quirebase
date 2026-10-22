@@ -6433,6 +6433,11 @@ msgstr "This action is not available."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "This Annotation changed. Review the latest version and try again."
+msgstr "This Annotation changed. Review the latest version and try again."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "This cannot be undone."
 msgstr "This cannot be undone."
@@ -6461,11 +6466,6 @@ msgstr "This Import Batch cannot be changed in its current state."
 #: src/lib/api/errors.ts
 msgid "This invitation can no longer be used."
 msgstr "This invitation can no longer be used."
-
-#. js-lingui-explicit-id
-#: src/lib/features/auth/Invitation.svelte
-msgid "This invitation is invalid or expired."
-msgstr "This invitation is invalid or expired."
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -6678,6 +6678,7 @@ msgid "Unable to check Workspace creation permissions. Refresh and try again."
 msgstr "Unable to check Workspace creation permissions. Refresh and try again."
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
 #: src/lib/features/auth/Invitation.svelte
 msgid "Unable to check your account."
 msgstr "Unable to check your account."
@@ -6703,6 +6704,11 @@ msgid "Unable to copy the invitation link. Select and copy it manually."
 msgstr "Unable to copy the invitation link. Select and copy it manually."
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+msgid "Unable to create invitation"
+msgstr "Unable to create invitation"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to create Item"
 msgstr "Unable to create Item"
@@ -6716,6 +6722,11 @@ msgstr "Unable to create Project"
 #: src/lib/features/account/Account.svelte
 msgid "Unable to create token"
 msgstr "Unable to create token"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
+msgid "Unable to create workspace"
+msgstr "Unable to create workspace"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -6805,6 +6816,11 @@ msgstr "Unable to load Import preview"
 #: src/lib/features/import/ImportBatchList.svelte
 msgid "Unable to load imports"
 msgstr "Unable to load imports"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to load invitation."
+msgstr "Unable to load invitation."
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -6920,6 +6936,11 @@ msgstr "Unable to load workspace."
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Unable to load workspaces."
 msgstr "Unable to load workspaces."
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Unable to moderate Annotation"
+msgstr "Unable to moderate Annotation"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -7444,6 +7465,14 @@ msgstr "Workflows"
 #: src/lib/features/library/Library.svelte
 msgid "Workspace"
 msgstr "Workspace"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceAdvanced.svelte
+#: src/lib/features/workspaces/WorkspaceGeneral.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
+msgid "Workspace action failed"
+msgstr "Workspace action failed"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte

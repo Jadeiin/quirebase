@@ -18,6 +18,7 @@ from fastapi.openapi.docs import (
 from fastapi.responses import HTMLResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from quirebase import __version__
 from quirebase.access import initialize_authorization
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal, engine
@@ -147,7 +148,7 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
     settings = get_settings()
     frontend_directory = _frontend_directory()
     frontend_csp = _frontend_content_security_policy(frontend_directory)
-    app = FastAPI(title="Quirebase", version="0.1.0", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Quirebase", version=__version__, docs_url=None, redoc_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
 
     @app.middleware("http")

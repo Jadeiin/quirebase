@@ -7,8 +7,8 @@ from dataclasses import asdict
 from inquiro import ProviderRuntime
 
 SAMPLES = (
-    ("doi", "10.1038/s41586-020-2649-2"),
-    ("doi", "10.14454/qdd3-ps68"),
+    ("crossref", "10.1038/s41586-020-2649-2"),
+    ("datacite", "10.14454/qdd3-ps68"),
     ("pmid", "31452104"),
     ("arxiv", "1706.03762"),
 )

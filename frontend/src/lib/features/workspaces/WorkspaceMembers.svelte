@@ -105,7 +105,7 @@
 			confirmOpen = false;
 			notice = $t(messages[command.action]);
 		} catch (reason) {
-			error = apiErrorMessage(reason, 'Workspace action failed');
+			error = apiErrorMessage(reason, $t('Workspace action failed'));
 		}
 	}
 	function ask(member: GovernanceMember, action: 'transfer' | 'terminate') {

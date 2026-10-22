@@ -9,7 +9,9 @@ description = "Academic metadata discovery, multi-provider search, bibliography 
 readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
 dependencies = [
+  # 0.311 drops distinct contributor roles sharing an ORCID; see structured metadata tests.
   "commonmeta-py==0.309",
   "commonmeta-schema==1.0.1",
   "pydantic>=2.12,<3",

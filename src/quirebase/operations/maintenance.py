@@ -72,7 +72,7 @@ def sqlite_path(database_url: str) -> Path:
 
 
 async def create_backup(destination: Path) -> Path:
-    """Create a verified backup without blocking the event loop."""
+    """Create an offline backup; stop every web and worker process first."""
     settings = get_settings()
     if settings.object_store != "local":
         raise RuntimeError("backup and restore currently require local object storage")
@@ -176,8 +176,11 @@ def _verify_backup(archive_path: Path) -> dict[str, Any]:
         database_file = manifest["database_file"]
         if database_file not in names:
             raise ValueError("backup has no database payload")
-        digest = hashlib.sha256(archive.read(database_file)).hexdigest()
-        if digest != manifest["database_sha256"]:
+        digest = hashlib.sha256()
+        with archive.open(database_file) as database:
+            for chunk in iter(lambda: database.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != manifest["database_sha256"]:
             raise ValueError("database checksum mismatch")
         if any(name.startswith("/") or ".." in Path(name).parts for name in names):
             raise ValueError("unsafe backup path")
@@ -242,7 +245,13 @@ def _restore_sqlite_and_objects(
     object_dir: Path,
 ) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(database_file, target)
+    with tempfile.TemporaryDirectory(dir=target.parent) as staging:
+        replacement = Path(staging) / "database.sqlite3"
+        _sqlite_snapshot(database_file, replacement)
+        replacement.replace(target)
+        # Restore is offline; stale journals belong to the replaced database.
+        for suffix in ("-wal", "-shm", "-journal"):
+            target.with_name(f"{target.name}{suffix}").unlink(missing_ok=True)
     _restore_objects(restored_objects, object_dir)
 
 

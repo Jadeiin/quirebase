@@ -4243,7 +4243,7 @@ msgstr "打开导入记录"
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "Open in Library"
-msgstr "在资料库中打开"
+msgstr "在文献库中打开"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/shortcuts.ts
@@ -6433,6 +6433,11 @@ msgstr "此操作不可用。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "This Annotation changed. Review the latest version and try again."
+msgstr "批注已更新。请查看最新内容后重试。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 msgid "This cannot be undone."
 msgstr "此操作无法撤销。"
@@ -6461,11 +6466,6 @@ msgstr "当前状态下无法更改此导入批次。"
 #: src/lib/api/errors.ts
 msgid "This invitation can no longer be used."
 msgstr "此邀请已无法使用。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/auth/Invitation.svelte
-msgid "This invitation is invalid or expired."
-msgstr "此邀请无效或已过期。"
 
 #. js-lingui-explicit-id
 #: src/lib/api/errors.ts
@@ -6678,6 +6678,7 @@ msgid "Unable to check Workspace creation permissions. Refresh and try again."
 msgstr "无法检查工作区创建权限，请刷新重试。"
 
 #. js-lingui-explicit-id
+#: src/lib/app/AppShell.svelte
 #: src/lib/features/auth/Invitation.svelte
 msgid "Unable to check your account."
 msgstr "无法检查你的账号。"
@@ -6703,6 +6704,11 @@ msgid "Unable to copy the invitation link. Select and copy it manually."
 msgstr "无法复制邀请链接，请手动选择并复制。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+msgid "Unable to create invitation"
+msgstr "无法创建邀请"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Unable to create Item"
 msgstr "无法创建条目"
@@ -6716,6 +6722,11 @@ msgstr "无法创建项目"
 #: src/lib/features/account/Account.svelte
 msgid "Unable to create token"
 msgstr "无法创建令牌"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceCreateDialog.svelte
+msgid "Unable to create workspace"
+msgstr "无法创建工作区"
 
 #. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
@@ -6805,6 +6816,11 @@ msgstr "无法加载导入预览"
 #: src/lib/features/import/ImportBatchList.svelte
 msgid "Unable to load imports"
 msgstr "无法加载导入记录"
+
+#. js-lingui-explicit-id
+#: src/lib/features/auth/Invitation.svelte
+msgid "Unable to load invitation."
+msgstr "无法加载邀请。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -6920,6 +6936,11 @@ msgstr "无法加载工作区。"
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Unable to load workspaces."
 msgstr "无法加载工作区列表。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
+msgid "Unable to moderate Annotation"
+msgstr "无法管理批注"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/Discovery.svelte
@@ -7444,6 +7465,14 @@ msgstr "工作流"
 #: src/lib/features/library/Library.svelte
 msgid "Workspace"
 msgstr "工作区"
+
+#. js-lingui-explicit-id
+#: src/lib/features/workspaces/WorkspaceAdvanced.svelte
+#: src/lib/features/workspaces/WorkspaceGeneral.svelte
+#: src/lib/features/workspaces/WorkspaceInvitations.svelte
+#: src/lib/features/workspaces/WorkspaceMembers.svelte
+msgid "Workspace action failed"
+msgstr "工作区操作失败"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte

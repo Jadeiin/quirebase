@@ -69,6 +69,8 @@ def main() -> None:
                 "Work",
                 "--target-python-version",
                 "3.12",
+                "--target-pydantic-version",
+                "2.12",
                 "--use-annotated",
                 "--use-standard-collections",
                 "--use-union-operator",

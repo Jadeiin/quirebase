@@ -274,6 +274,7 @@ def reindex():
 
 @app.command("backup")
 def backup(destination: Path = typer.Argument(...)):
+    """Create an offline backup. Stop every web and worker process first."""
     path = asyncio.run(create_backup(destination.resolve()))
     typer.echo(f"Backup created: {path}")
 

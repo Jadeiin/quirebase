@@ -125,7 +125,7 @@
 			username = '';
 			notice = $t('Invitation created. Copy this token now; it will not be shown again.');
 		} catch (reason) {
-			error = apiErrorMessage(reason, 'Unable to create invitation');
+			error = apiErrorMessage(reason, $t('Unable to create invitation'));
 		}
 	}
 	async function revokeInvitation(id: string) {
@@ -137,7 +137,7 @@
 			if (oneTimeInvitation?.id === id) oneTimeInvitation = null;
 			notice = $t('Invitation revoked');
 		} catch (reason) {
-			error = apiErrorMessage(reason, 'Workspace action failed');
+			error = apiErrorMessage(reason, $t('Workspace action failed'));
 		}
 	}
 	async function copyLink() {

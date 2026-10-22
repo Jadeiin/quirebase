@@ -11,6 +11,9 @@
 	} from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Notice from '#lib/design/Notice.svelte';
+	import AuthPage from '#lib/design/AuthPage.svelte';
+	import Panel from '#lib/design/Panel.svelte';
+	import QueryError from '#lib/design/QueryError.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import Toast from '#lib/design/Toast.svelte';
 	import { t } from '#lib/i18n.js';
@@ -113,6 +116,17 @@
 	<main class="mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]">
 		<LoadingState label={$t('Loading Quirebase…')} />
 	</main>
+{:else if session.isError && !session.data}
+	<AuthPage>
+		<Panel>
+			<h1 class="m-0">Quirebase</h1>
+			<QueryError
+				message={$t('Unable to check your account.')}
+				busy={session.isFetching}
+				onRetry={() => void session.refetch()}
+			/>
+		</Panel>
+	</AuthPage>
 {:else if !session.data?.authenticated}
 	<Login />
 {:else}

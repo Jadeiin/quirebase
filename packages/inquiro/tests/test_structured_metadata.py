@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import httpx2
 import pytest
-from inquiro import Identifier, SearchClause, SearchQuery
+from inquiro import Identifier, SearchClause, SearchQuery, Work
 from inquiro.bibliography import export_bibliography_records, work_to_csl_json
 from inquiro.canonical import normalize_publication_date
 from inquiro.work import read_work, work_doi, work_identifiers
@@ -113,6 +113,56 @@ async def test_datacite_preserves_explicit_names_organizations_and_subject_bound
     assert record.work["subjects"] == [{"subject": "Alpha; beta"}]
     assert record.work["publisher"]["name"] == "Example Publisher"
     assert "container" not in record.work
+
+
+async def test_datacite_preserves_distinct_roles_for_the_same_orcid():
+    orcid = "https://orcid.org/0000-0002-1825-0097"
+    person = {
+        "name": "Smith, Jane",
+        "nameType": "Personal",
+        "givenName": "Jane",
+        "familyName": "Smith",
+        "nameIdentifiers": [{"nameIdentifierScheme": "ORCID", "nameIdentifier": orcid}],
+    }
+    payload = {
+        "data": {
+            "attributes": {
+                "doi": "10.1000/multi-role",
+                "types": {"resourceTypeGeneral": "Dataset"},
+                "titles": [{"title": "Distinct contributor roles"}],
+                "creators": [{"name": "Example Consortium", "nameType": "Organizational"}],
+                "contributors": [
+                    {**person, "contributorType": "Editor"},
+                    {**person, "contributorType": "DataCollector"},
+                ],
+                "publisher": "Example Publisher",
+                "publicationYear": 2024,
+            }
+        }
+    }
+    original = deepcopy(payload)
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, json=payload))
+    ) as runtime:
+        record = await runtime.lookup("10.1000/multi-role", provider="datacite")
+
+    work = Work.model_validate(record.work).model_dump(mode="json", exclude_none=True)
+    assert work["contributors"] == [
+        {
+            "type": "Organization",
+            "organization": {"name": "Example Consortium"},
+            "roles": ["Author"],
+        },
+        *[
+            {
+                "type": "Person",
+                "person": {"id": orcid, "given_name": "Jane", "family_name": "Smith"},
+                "roles": [role],
+            }
+            for role in ("Editor", "DataCollector")
+        ],
+    ]
+    assert payload == original
 
 
 async def test_openalex_preserves_authorship_affiliation_mapping_and_pdf_metadata():

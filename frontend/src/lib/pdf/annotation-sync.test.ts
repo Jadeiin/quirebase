@@ -125,6 +125,59 @@ function harness() {
 }
 
 describe('reader annotation reconciliation', () => {
+	for (const recoverySucceeds of [true, false]) {
+		it.each([
+			['root', 'create'],
+			['root', 'update'],
+			['root', 'delete'],
+			['reply', 'create'],
+			['reply', 'update'],
+			['reply', 'delete']
+		] as const)(
+			`retains a failed %s %s after recovery ${recoverySucceeds ? 'succeeds' : 'fails'}`,
+			async (target, operation) => {
+				const { sync, statuses, event } = harness();
+				const record = annotation('failed-write');
+				const child = reply(record);
+				record.replies = target === 'reply' && operation !== 'create' ? [child] : [];
+				const initial = target === 'root' && operation === 'create' ? [] : [record];
+				request.mockResolvedValueOnce(list(initial));
+				await sync.load(privateSource);
+				const failure = new Error('Write unavailable');
+				request.mockRejectedValueOnce(failure);
+				if (recoverySucceeds) request.mockResolvedValueOnce(list(initial));
+				else request.mockRejectedValueOnce(new Error('Recovery unavailable'));
+				const draft = {
+					...record,
+					body: 'Edited note',
+					replies: target === 'reply' ? [{ ...child, body: 'Edited reply' }] : []
+				};
+				await event(operation, draft, target === 'reply' ? child.id : undefined);
+				expect(request.mock.calls.at(-1)?.[0]).toBe('GET');
+				expect(statuses.slice(-2)).toEqual([
+					{ state: target === 'reply' ? 'saving-reply' : 'saving-annotation' },
+					{ state: 'sync-failed', reason: failure }
+				]);
+			}
+		);
+	}
+
+	it('reports normal reads and a later successful write after failed-write recovery', async () => {
+		const { sync, statuses, event } = harness();
+		const record = annotation('retry-write');
+		request.mockResolvedValueOnce(list([record]));
+		await sync.load(privateSource);
+		expect(statuses).toEqual([{ state: 'loading' }, { state: 'loaded', count: 1 }]);
+		request
+			.mockRejectedValueOnce(new Error('Write unavailable'))
+			.mockResolvedValueOnce(list([record]));
+		await event('update', record);
+		expect(statuses.at(-1)?.state).toBe('sync-failed');
+		request.mockResolvedValueOnce({ ...record, version: 2 });
+		await event('update', record);
+		expect(statuses.slice(-2)).toEqual([{ state: 'saving-annotation' }, { state: 'saved' }]);
+	});
+
 	it('isolates a root and reply sharing a UUID throughout edit, delete, and Undo', async () => {
 		const { sync, objects, event } = harness();
 		const record = annotation('6ca651e8-b815-45e8-8e73-20db3e24d531');

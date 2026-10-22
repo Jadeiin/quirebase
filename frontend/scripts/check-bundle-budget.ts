@@ -203,6 +203,8 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // Only measured overages move to the next 1 kB raw / 500 B gzip boundary.
 // Discovery labels grow shared catalogs; search and validated Import-return parsing stay route-owned.
 // Typed, grouped presence choices reuse selectors; IDs and draft conversion stay route-owned.
+// Session/invitation retry states and localized failures add shared code/catalogs.
+// Measured Library overages use the existing 1 kB raw / 500 B gzip boundaries.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
 	raw: 795000,
@@ -215,17 +217,17 @@ enforce('Quick navigation when open', bundleSize(graphFiles(quickNavigation)), {
 enforce('Library route', bundleSize(graphFiles(library)), {
 	raw: 1138000,
 	// Includes whole-name author folding, scoped selection cleanup and last-page recovery.
-	gzip: 329500
+	gzip: 330000
 });
 enforce('Library refinements when open', bundleSize(graphFiles(libraryRefinements)), {
-	raw: 1141000,
+	raw: 1142000,
 	gzip: 331500
 });
 enforce(
 	'Library preview when open',
 	bundleSize(graphFiles(libraryPreview)),
 	// Bibliographic preview and scoped navigation add about 14 kB raw / 5.5 kB gzip on demand.
-	{ raw: 1151000, gzip: 334500 }
+	{ raw: 1151000, gzip: 335000 }
 );
 enforce(
 	'Library organization when open',

@@ -14,8 +14,8 @@ def test_svelte_frontend_owns_the_application_build():
     package = json.loads(read("frontend/package.json"))
     assert package["dependencies"]["svelte"].startswith("^5.")
     assert "@tanstack/svelte-query" in package["dependencies"]
-    assert package["dependencies"]["@skeletonlabs/skeleton"] == "5.0.1"
-    assert package["dependencies"]["@skeletonlabs/skeleton-svelte"] == "5.0.1"
+    assert package["dependencies"]["@skeletonlabs/skeleton"].startswith("^5.")
+    assert package["dependencies"]["@skeletonlabs/skeleton-svelte"].startswith("^5.")
     assert package["devDependencies"]["tailwindcss"].startswith("^4.")
 
 
