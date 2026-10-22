@@ -9,6 +9,7 @@ from inquiro.canonical import normalize_publication_date
 from inquiro.identifiers import parse_identifier
 from inquiro.models import (
     MAX_SEARCH_CLAUSES,
+    MAX_SEARCH_PAGE_SIZE,
     AcquiredDocument,
     CandidateNotFound,
     CandidatePage,
@@ -83,6 +84,7 @@ def metadata_provider_choices(config: ProviderConfig = ProviderConfig()) -> Meta
             for provider in builtin_providers()
             if provider.lookup_adapter is not None and provider.has_credentials(config, "lookup")
         ),
+        max_search_page_size=MAX_SEARCH_PAGE_SIZE,
     )
 
 
@@ -201,7 +203,9 @@ class ProviderRuntime:
         if query.year_from and query.year_to and query.year_from > query.year_to:
             raise InvalidProviderRequest("starting year must not be after ending year")
         query = replace(
-            query, page=max(1, min(query.page, 100)), per_page=max(1, min(query.per_page, 25))
+            query,
+            page=max(1, query.page),
+            per_page=max(1, min(query.per_page, MAX_SEARCH_PAGE_SIZE)),
         )
         definition.require_credentials(self._config, "search")
         try:

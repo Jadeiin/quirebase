@@ -1,4 +1,8 @@
 import { workspaceHref } from '#lib/workspaces/href.js';
+import {
+	discoverySearchParameters,
+	readDiscoverySearch
+} from '#lib/features/discovery/search-state.js';
 
 export type ImportListState = {
 	view: 'pending' | 'completed';
@@ -30,6 +34,13 @@ export function importReturnHref(
 	workspaceId: string,
 	parameters: Pick<URLSearchParams, 'get' | 'toString'>
 ) {
+	if (parameters.get('from') === 'discovery') {
+		const search = readDiscoverySearch(new URLSearchParams(parameters.toString()));
+		return workspaceHref(
+			workspaceId,
+			`discovery${search ? `?${discoverySearchParameters(search)}` : ''}`
+		);
+	}
 	if (parameters.get('from') !== 'history') return workspaceHref(workspaceId, 'import');
 	const listing = importListParameters(
 		readImportListState(parameters),

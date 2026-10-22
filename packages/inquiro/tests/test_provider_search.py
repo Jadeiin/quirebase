@@ -28,6 +28,8 @@ def test_provider_options_follow_capabilities_and_configured_credentials(configu
             ieee_api_key="configured-key" if configured else None,
         )
     )
+    assert options.max_search_clauses == 5
+    assert options.max_search_page_size == 100
     search = {choice.id: choice for choice in options.search}
     lookup = {choice.id for choice in options.lookup}
     assert ("nasa_ads" in search) is configured
@@ -389,7 +391,7 @@ async def test_openalex_supports_adjacent_or_on_same_field():
     assert seen_filter == "title.search:quantum|photonics"
 
 
-async def test_search_validation_and_pagination_are_bounded():
+async def test_search_validation_and_page_size_are_bounded():
     with pytest.raises(ValueError, match="clause is invalid"):
         await search_metadata("crossref", [SearchClause("any", "and", " ")])
     with pytest.raises(ValueError, match="clause is invalid"):
@@ -415,10 +417,10 @@ async def test_search_validation_and_pagination_are_bounded():
         per_page=999,
         transport=httpx2.MockTransport(handler),
     )
-    assert page.page == 100
-    assert page.per_page == 25
-    assert captured["offset"] == "2475"
-    assert captured["rows"] == "25"
+    assert page.page == 999
+    assert page.per_page == 100
+    assert captured["offset"] == "99800"
+    assert captured["rows"] == "100"
 
 
 async def test_search_404_is_an_empty_page():

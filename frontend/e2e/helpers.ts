@@ -123,7 +123,8 @@ export async function mockSession(page: Page, role: 'member' | 'administrator' =
 			json: {
 				search: [{ id: 'crossref', name: 'Crossref', sorts: ['relevance', 'published', 'cited'] }],
 				lookup: [{ id: 'crossref', name: 'Crossref', identifier_namespaces: ['doi'] }],
-				max_search_clauses: 5
+				max_search_clauses: 5,
+				max_search_page_size: 100
 			}
 		})
 	);

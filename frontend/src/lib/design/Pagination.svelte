@@ -8,6 +8,7 @@
 		page,
 		pageCount,
 		pageSize,
+		pageSizeOptions = [10, 20, 25, 50, 100],
 		total,
 		onPage,
 		onPageSize,
@@ -21,6 +22,7 @@
 		page: number;
 		pageCount: number;
 		pageSize: number;
+		pageSizeOptions?: number[];
 		total: number;
 		onPage: (page: number) => void;
 		onPageSize: (pageSize: number) => void;
@@ -33,7 +35,7 @@
 	} = $props();
 
 	const triggerClass = `${buttonClass('icon', 'sm')} size-8 shrink-0`;
-	const pageSizes = $derived([...new Set([10, 20, 25, 50, 100, pageSize])].sort((a, b) => a - b));
+	const pageSizes = $derived([...new Set([...pageSizeOptions, pageSize])].sort((a, b) => a - b));
 	const start = $derived(total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total));
 	const end = $derived(Math.min(page * pageSize, total));
 </script>
@@ -52,7 +54,12 @@
 				class="select h-8 w-auto field-xs"
 				value={pageSize}
 				disabled={busy}
-				onchange={(event) => onPageSize(Number(event.currentTarget.value))}
+				onchange={(event) => {
+					const next = Number(event.currentTarget.value);
+					// Keep the displayed page's size until its owner applies the new value.
+					event.currentTarget.value = String(pageSize);
+					onPageSize(next);
+				}}
 			>
 				{#each pageSizes as size (size)}<option value={size}>{size}</option>{/each}
 			</select>

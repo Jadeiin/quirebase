@@ -110,6 +110,19 @@ authorization. Authoritative Import preview failures also cancel and discard tha
 Library pages, sort orders and facets. Library distinguishes batch unavailability/conflict from
 Project access failure and discards only the affected filter scope, preserving unrelated caches.
 
+Discovery publishes successful search conditions, Provider, ordering and pagination to the URL.
+Unsubmitted edits survive paging; history and document reload restore submitted conditions. Query
+owns cached external results and failure state, without automatic retries or focus/reconnect
+refreshes. Failed searches retain the previous successful results and URL; Retry uses the captured
+request. A newer submission supersedes a paused request, and completion after leaving never
+navigates the new context. The Provider catalog exposes the application's maximum page size
+(100); page numbers are not silently capped, and upstream pagination failures remain explicit.
+Current-page candidate selection enters one existing identifier Import preview, subject to its
+50-identifier limit and one lookup namespace. Entering Import preserves validated Discovery
+criteria for its return action; candidate summaries are refetched before confirmation and never
+commit directly. Selection resets when the displayed result snapshot changes, while failed preview
+preparation retains selection for retry. Abstracts expand within the results without moving focus.
+
 Jinja, templates, HTML form routes, CSRF synchronizer tokens, `web/views`, `web/json` and the
 legacy asset tree are removed. Application deep links are handled by the static SPA fallback.
 This is an alpha, forward-only cutover and does not retain compatibility routes for deleted page

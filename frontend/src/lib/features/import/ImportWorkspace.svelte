@@ -315,7 +315,8 @@
 	}
 	async function returnFromPreview() {
 		const href =
-			!workspace.can('item.create') && page.url.searchParams.get('from') !== 'history'
+			!workspace.can('item.create') &&
+			!['history', 'discovery'].includes(page.url.searchParams.get('from') ?? '')
 				? workspaceHref(workspaceId, 'import/history')
 				: importReturnHref(workspaceId, page.url.searchParams);
 		await goto(resolve(href), {
@@ -388,11 +389,13 @@
 	</div>
 	{#if batchId}
 		<Button onclick={returnFromPreview}
-			>{page.url.searchParams.get('from') === 'history'
-				? $t('Back to import history')
-				: workspace.can('item.create')
-					? $t('New import')
-					: $t('Import history')}</Button
+			>{page.url.searchParams.get('from') === 'discovery'
+				? $t('Back to Discovery')
+				: page.url.searchParams.get('from') === 'history'
+					? $t('Back to import history')
+					: workspace.can('item.create')
+						? $t('New import')
+						: $t('Import history')}</Button
 		>
 	{:else}
 		<Button as="a" href={resolve(workspaceHref(workspaceId, 'import/history'))}

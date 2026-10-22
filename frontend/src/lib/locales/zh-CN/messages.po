@@ -89,6 +89,7 @@ msgid "{count} pending invitations"
 msgstr "{count} 个待接受的邀请"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/BulkActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryActionMenu.svelte
@@ -810,6 +811,11 @@ msgstr "资助项目 URI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
+msgid "Back to Discovery"
+msgstr "返回文献发现"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Back to import history"
 msgstr "返回导入历史"
 
@@ -1019,6 +1025,11 @@ msgstr "已取消"
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Candidate Records"
 msgstr "候选记录"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Candidate selection"
+msgstr "候选记录选择"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -1256,6 +1267,7 @@ msgid "Clear search"
 msgstr "清除搜索"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/BulkActions.svelte
 msgid "Clear selection"
 msgstr "清除选择"
@@ -2165,6 +2177,11 @@ msgid "End date"
 msgstr "结束日期"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Enter a search term for each condition."
+msgstr "请为每个条件输入检索词。"
+
+#. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
 msgid "Enter a valid {format} date."
 msgstr "请输入有效的 {format} 日期。"
@@ -2582,6 +2599,11 @@ msgstr "医疗机构"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "Hide"
 msgstr "隐藏"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Hide abstract"
+msgstr "收起摘要"
 
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
@@ -3912,6 +3934,11 @@ msgid "No available projects."
 msgstr "没有可用项目。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "No candidates found"
+msgstr "未找到候选记录"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "No Citation Styles match this search."
@@ -4649,11 +4676,6 @@ msgstr "偏好设置已自动保存至浏览器。"
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Preparing uploaded PDFs…"
 msgstr "正在处理上传的 PDF…"
-
-#. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
-msgid "Preparing…"
-msgstr "正在准备…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5398,7 +5420,7 @@ msgid "Review action"
 msgstr "查看操作"
 
 #. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
 msgid "Review and import"
 msgstr "检查并导入"
 
@@ -5411,6 +5433,11 @@ msgstr "评审助理"
 #: src/lib/features/tools/Tools.svelte
 msgid "Review duplicates, maintain Tags, and install Citation Styles."
 msgstr "审核重复条目、维护标签并安装引文样式。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Review selected"
+msgstr "预览所选记录"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -5665,6 +5692,11 @@ msgid "Search active users"
 msgstr "搜索活跃用户"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search an external Provider to find records for your Library."
+msgstr "检索外部数据源，查找可导入文献库的记录。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Search Citation Styles"
@@ -5763,6 +5795,7 @@ msgid "Searching…"
 msgstr "正在搜索…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Select"
 msgstr "选择"
@@ -5781,6 +5814,11 @@ msgstr "请先筛选项目，再从中移除条目。"
 #: src/lib/features/tools/Tools.svelte
 msgid "Select a Tag"
 msgstr "选择标签"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Select candidates with the same identifier type to review them together."
+msgstr "请选择相同标识符类型的候选记录，一起预览导入。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/shortcuts.ts
@@ -5803,10 +5841,16 @@ msgid "Select Tag"
 msgstr "选择标签"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/LibraryTable.svelte
 #: src/lib/features/library/shortcuts.ts
 msgid "Select this page"
 msgstr "选择本页"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Select up to 50 candidates for one import preview."
+msgstr "每次最多选择 50 条候选记录进行导入预览。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5866,6 +5910,11 @@ msgstr "共享标识符"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Shift-click an Item checkbox to select a range on this page."
 msgstr "按住 Shift 点击条目复选框，可选择当前页内的一段条目。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Show abstract"
+msgstr "展开摘要"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
@@ -6349,6 +6398,11 @@ msgid "The selected user gains Workspace owner access. The previous owner become
 msgstr "所选用户将获得工作空间所有者权限，原所有者将改为工作空间管理员。此操作不会停用原所有者的账号。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "The starting year must not be after the ending year."
+msgstr "起始年份不能晚于结束年份。"
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "The uploaded content is too large."
 msgstr "上传的内容过大。"
@@ -6560,6 +6614,11 @@ msgstr "译者"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Try a different Library Search."
 msgstr "请尝试其他文献库搜索条件。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Try different terms, fewer conditions, or another Provider."
+msgstr "试试其他检索词、减少条件，或切换数据源。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -6844,9 +6903,19 @@ msgid "Unable to load workspaces."
 msgstr "无法加载工作区列表。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Unable to open Import preview. Try again."
+msgstr "无法打开导入预览，请重试。"
+
+#. js-lingui-explicit-id
 #: src/routes/+error.svelte
 msgid "Unable to open Quirebase"
 msgstr "无法打开 Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Unable to open the search results. Try again."
+msgstr "无法打开检索结果，请重试。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemSectionState.svelte
@@ -6925,13 +6994,13 @@ msgid "Unknown authors"
 msgstr "未知作者"
 
 #. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Unknown contributors"
 msgstr "未知贡献者"
 
 #. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
 msgid "Unknown publication"
 msgstr "未知出版物"
 

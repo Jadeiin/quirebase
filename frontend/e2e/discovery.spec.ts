@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { components } from '../src/lib/api/schema.js';
 import { mockSession } from './helpers';
 
 test('Discovery follows provider sorts and the server clause limit', async ({ page }) => {
@@ -11,7 +12,8 @@ test('Discovery follows provider sorts and the server clause limit', async ({ pa
 					{ id: 'arxiv', name: 'arXiv', sorts: ['relevance', 'published'] }
 				],
 				lookup: [],
-				max_search_clauses: 2
+				max_search_clauses: 2,
+				max_search_page_size: 100
 			}
 		})
 	);
@@ -48,7 +50,8 @@ test('Discovery paging retains the successful query while a new query is edited 
 					{ id: 'arxiv', name: 'arXiv', sorts: ['relevance', 'published'] }
 				],
 				lookup: [],
-				max_search_clauses: 5
+				max_search_clauses: 5,
+				max_search_page_size: 100
 			}
 		})
 	);
@@ -142,7 +145,8 @@ test('discovery renders the flat results response contract', async ({ page }) =>
 			json: {
 				search: [{ id: 'crossref', name: 'Crossref', sorts: ['relevance', 'published', 'cited'] }],
 				lookup: [{ id: 'crossref', name: 'Crossref' }],
-				max_search_clauses: 5
+				max_search_clauses: 5,
+				max_search_page_size: 100
 			}
 		})
 	);
@@ -183,7 +187,8 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 			json: {
 				search: [{ id: 'openalex', name: 'OpenAlex', sorts: ['relevance', 'published', 'cited'] }],
 				lookup: [{ id: 'openalex', name: 'OpenAlex' }],
-				max_search_clauses: 5
+				max_search_clauses: 5,
+				max_search_page_size: 100
 			}
 		})
 	);
@@ -206,27 +211,29 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 			}
 		});
 	});
+	const batch: components['schemas']['ImportBatchPreview'] = {
+		id: 'batch-discovery',
+		file_format: 'metadata',
+		status: 'ready',
+		workflow_id: null,
+		created_at: '2026-10-22T00:00:00Z',
+		committed_item_ids: [],
+		records: [
+			{
+				metadata: {
+					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
+					type: 'Other',
+					title: 'Candidate'
+				}
+			}
+		],
+		errors: []
+	};
 	await page.route('**/api/v1/workspaces/workspace-1/imports/identifiers', (route) =>
-		route.fulfill({ json: { id: 'batch-discovery', status: 'ready', records: [], errors: [] } })
+		route.fulfill({ json: batch })
 	);
 	await page.route('**/api/v1/workspaces/workspace-1/imports/batch-discovery', (route) =>
-		route.fulfill({
-			json: {
-				id: 'batch-discovery',
-				status: 'ready',
-				workflow_id: null,
-				records: [
-					{
-						metadata: {
-							id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
-							type: 'Other',
-							title: 'Candidate'
-						}
-					}
-				],
-				errors: []
-			}
-		})
+		route.fulfill({ json: batch })
 	);
 
 	await page.goto('/workspace/workspace-1/discovery');
@@ -238,7 +245,12 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 	await expect.poll(() => searchBody).toMatchObject({ year_from: 2020 });
 	await expect.poll(() => (searchBody?.clauses as unknown[])?.length).toBe(2);
 	await page.getByRole('button', { name: 'Review and import' }).click();
-	await expect(page).toHaveURL(/\/workspace\/workspace-1\/import\?batch=batch-discovery$/);
+	await expect(page).toHaveURL(
+		(url) =>
+			url.pathname === '/workspace/workspace-1/import' &&
+			url.searchParams.get('batch') === 'batch-discovery' &&
+			url.searchParams.get('from') === 'discovery'
+	);
 	await expect(page.getByText('Candidate')).toBeVisible();
 });
 
@@ -251,7 +263,8 @@ test('discovery year calendars submit years and allow clearing an open-ended ran
 			json: {
 				search: [{ id: 'openalex', name: 'OpenAlex', sorts: ['relevance', 'published', 'cited'] }],
 				lookup: [{ id: 'openalex', name: 'OpenAlex' }],
-				max_search_clauses: 5
+				max_search_clauses: 5,
+				max_search_page_size: 100
 			}
 		})
 	);

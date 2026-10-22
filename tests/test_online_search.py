@@ -220,6 +220,9 @@ async def test_discovery_search_uses_runtime_provider_settings(
             }),
         )
         assert searched.status_code == 200
+        assert providers.status_code == 200
+        assert providers.json()["max_search_page_size"] == 100
+        assert "max_search_page" not in providers.json()
         assert {provider["id"] for provider in providers.json()["search"]} >= {
             "nasa_ads",
             "openlibrary",

@@ -4485,6 +4485,8 @@ export interface components {
 			search: components['schemas']['ProviderChoice'][];
 			/** Lookup */
 			lookup: components['schemas']['ProviderChoice'][];
+			/** Max Search Page Size */
+			max_search_page_size: number;
 			/**
 			 * Max Search Clauses
 			 * @default 5

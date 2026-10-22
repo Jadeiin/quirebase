@@ -89,6 +89,7 @@ msgid "{count} pending invitations"
 msgstr "{count} pending invitations"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/BulkActions.svelte
 #: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/library/LibraryActionMenu.svelte
@@ -810,6 +811,11 @@ msgstr "Award URI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
+msgid "Back to Discovery"
+msgstr "Back to Discovery"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Back to import history"
 msgstr "Back to import history"
 
@@ -1019,6 +1025,11 @@ msgstr "Cancelled"
 #: src/lib/features/discovery/Discovery.svelte
 msgid "Candidate Records"
 msgstr "Candidate Records"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Candidate selection"
+msgstr "Candidate selection"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -1256,6 +1267,7 @@ msgid "Clear search"
 msgstr "Clear search"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/BulkActions.svelte
 msgid "Clear selection"
 msgstr "Clear selection"
@@ -2165,6 +2177,11 @@ msgid "End date"
 msgstr "End date"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Enter a search term for each condition."
+msgstr "Enter a search term for each condition."
+
+#. js-lingui-explicit-id
 #: src/lib/design/DateField.svelte
 msgid "Enter a valid {format} date."
 msgstr "Enter a valid {format} date."
@@ -2582,6 +2599,11 @@ msgstr "Healthcare"
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "Hide"
 msgstr "Hide"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Hide abstract"
+msgstr "Hide abstract"
 
 #. PDF annotation kind: text markup.
 #. js-lingui-explicit-id
@@ -3912,6 +3934,11 @@ msgid "No available projects."
 msgstr "No available projects."
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "No candidates found"
+msgstr "No candidates found"
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "No Citation Styles match this search."
@@ -4649,11 +4676,6 @@ msgstr "Preferences are automatically saved to your browser."
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Preparing uploaded PDFs…"
 msgstr "Preparing uploaded PDFs…"
-
-#. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
-msgid "Preparing…"
-msgstr "Preparing…"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5398,7 +5420,7 @@ msgid "Review action"
 msgstr "Review action"
 
 #. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
 msgid "Review and import"
 msgstr "Review and import"
 
@@ -5411,6 +5433,11 @@ msgstr "Review assistant"
 #: src/lib/features/tools/Tools.svelte
 msgid "Review duplicates, maintain Tags, and install Citation Styles."
 msgstr "Review duplicates, maintain Tags, and install Citation Styles."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Review selected"
+msgstr "Review selected"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
@@ -5665,6 +5692,11 @@ msgid "Search active users"
 msgstr "Search active users"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Search an external Provider to find records for your Library."
+msgstr "Search an external Provider to find records for your Library."
+
+#. js-lingui-explicit-id
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Search Citation Styles"
@@ -5763,6 +5795,7 @@ msgid "Searching…"
 msgstr "Searching…"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Select"
 msgstr "Select"
@@ -5781,6 +5814,11 @@ msgstr "Select a Project filter to remove Items from it."
 #: src/lib/features/tools/Tools.svelte
 msgid "Select a Tag"
 msgstr "Select a Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Select candidates with the same identifier type to review them together."
+msgstr "Select candidates with the same identifier type to review them together."
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/shortcuts.ts
@@ -5803,10 +5841,16 @@ msgid "Select Tag"
 msgstr "Select Tag"
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/library/LibraryTable.svelte
 #: src/lib/features/library/shortcuts.ts
 msgid "Select this page"
 msgstr "Select this page"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Select up to 50 candidates for one import preview."
+msgstr "Select up to 50 candidates for one import preview."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5866,6 +5910,11 @@ msgstr "Shared identifier"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Shift-click an Item checkbox to select a range on this page."
 msgstr "Shift-click an Item checkbox to select a range on this page."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/DiscoveryResults.svelte
+msgid "Show abstract"
+msgstr "Show abstract"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
@@ -6349,6 +6398,11 @@ msgid "The selected user gains Workspace owner access. The previous owner become
 msgstr "The selected user gains Workspace owner access. The previous owner becomes a Workspace admin. This does not disable the previous account."
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "The starting year must not be after the ending year."
+msgstr "The starting year must not be after the ending year."
+
+#. js-lingui-explicit-id
 #: src/lib/api/errors.ts
 msgid "The uploaded content is too large."
 msgstr "The uploaded content is too large."
@@ -6560,6 +6614,11 @@ msgstr "Translator"
 #: src/lib/features/library/LibraryResults.svelte
 msgid "Try a different Library Search."
 msgstr "Try a different Library Search."
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Try different terms, fewer conditions, or another Provider."
+msgstr "Try different terms, fewer conditions, or another Provider."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
@@ -6844,9 +6903,19 @@ msgid "Unable to load workspaces."
 msgstr "Unable to load workspaces."
 
 #. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Unable to open Import preview. Try again."
+msgstr "Unable to open Import preview. Try again."
+
+#. js-lingui-explicit-id
 #: src/routes/+error.svelte
 msgid "Unable to open Quirebase"
 msgstr "Unable to open Quirebase"
+
+#. js-lingui-explicit-id
+#: src/lib/features/discovery/Discovery.svelte
+msgid "Unable to open the search results. Try again."
+msgstr "Unable to open the search results. Try again."
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/ItemSectionState.svelte
@@ -6925,13 +6994,13 @@ msgid "Unknown authors"
 msgstr "Unknown authors"
 
 #. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Unknown contributors"
 msgstr "Unknown contributors"
 
 #. js-lingui-explicit-id
-#: src/lib/features/discovery/Discovery.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
 msgid "Unknown publication"
 msgstr "Unknown publication"
 

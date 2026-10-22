@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import IO, Literal, Self
 
 MAX_SEARCH_CLAUSES = 5
+MAX_SEARCH_PAGE_SIZE = 100
 type SearchSort = Literal["relevance", "published", "cited", "updated"]
 
 
@@ -20,6 +21,7 @@ class ProviderChoice:
 class MetadataProviderChoices:
     search: tuple[ProviderChoice, ...]
     lookup: tuple[ProviderChoice, ...]
+    max_search_page_size: int
     max_search_clauses: int = MAX_SEARCH_CLAUSES
 
 

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { importListParameters, importReturnHref, readImportListState } from './list-state.js';
+import { discoverySearchParameters, defaultDiscoverySearch } from '../discovery/search-state.js';
 
 it('restores submitted directory state while preserving the batch and unrelated parameters', () => {
 	const current = new URLSearchParams({
@@ -46,4 +47,24 @@ it('returns to the captured history page after opening a batch without accepting
 	expect(
 		importReturnHref('workspace-1', new URLSearchParams('from=https://example.com&batch=receipt-1'))
 	).toBe('workspace/workspace-1/import');
+});
+
+it('returns to the captured Discovery search using only its validated criteria', () => {
+	const search = {
+		...defaultDiscoverySearch(),
+		provider: 'crossref',
+		clauses: [{ field: 'title', operator: 'and', term: '研究 & science' }],
+		page: 3,
+		per_page: 25
+	};
+	const parameters = new URLSearchParams(discoverySearchParameters(search));
+	parameters.set('from', 'discovery');
+	parameters.set('batch', 'batch-1');
+	parameters.set('return_to', 'https://example.com');
+	expect(importReturnHref('workspace-1', parameters)).toBe(
+		`workspace/workspace-1/discovery?${discoverySearchParameters(search)}`
+	);
+	expect(importReturnHref('workspace-1', new URLSearchParams('from=discovery&clause=broken'))).toBe(
+		'workspace/workspace-1/discovery'
+	);
 });

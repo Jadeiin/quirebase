@@ -204,13 +204,12 @@ test('Discovery changes page size on the server and keeps the previous page on f
 	await expect(pagination.getByText('Showing 51–73 of 73')).toBeVisible();
 	fail = true;
 	await size.selectOption('10');
-	await expect(page.getByRole('main').getByRole('alert')).toHaveText(
-		'The external service is temporarily unavailable.'
-	);
+	const failure = page.getByRole('main').getByRole('alert');
+	await expect(failure).toContainText('The external service is temporarily unavailable.');
 	await expect(size).toHaveValue('50');
 	await expect(pagination.getByText('Showing 51–73 of 73')).toBeVisible();
 	fail = false;
-	await size.selectOption('10');
+	await failure.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(pagination.getByText('Showing 1–10 of 73')).toBeVisible();
 	expect(requests.at(-1)).toMatchObject({ page: 1, per_page: 10 });
 });
