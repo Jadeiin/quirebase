@@ -136,7 +136,7 @@ for (const view of ['table', 'list'] as const) {
 }
 
 for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
-	[16, 18].map((fontSize) => ({ view, fontSize }))
+	[16, 18, 20].map((fontSize) => ({ view, fontSize }))
 )) {
 	test(`${view} at ${fontSize}px folds whole author names, keeps the last credit when it fits and opens the existing preview`, async ({
 		page
@@ -199,6 +199,17 @@ for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
 		});
 		const ellipsis = (id: string) =>
 			row(id).getByRole('button', { name: 'Show all authors', exact: true });
+		const sizeAuthors = async (size: 'wide' | 'narrow') => {
+			if (view === 'list') {
+				await page.setViewportSize({ width: size === 'wide' ? 2400 : 390, height: 900 });
+				return;
+			}
+			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
+			if (size === 'narrow') await resize.dispatchEvent('keydown', { key: 'Home' });
+			else
+				for (let index = 0; index < 40; index++)
+					await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
+		};
 		const assertWholeVisibleNames = async () => {
 			for (const [index, authorNames] of names.entries()) {
 				const line = row(`item-${index + 1}`).getByTitle(authorNames.join('; '), { exact: true });
@@ -210,6 +221,15 @@ for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
 								element.querySelectorAll<HTMLElement>('[data-author-index]')
 							);
 							if (credits.some((credit) => !credit.hidden) && credits[0].hidden) return false;
+							let omitted = false;
+							for (const credit of credits.slice(0, -1)) {
+								if (credit.hidden) omitted = true;
+								else if (omitted) return false;
+							}
+							if (
+								Boolean(element.querySelector('button')) !== credits.some((credit) => credit.hidden)
+							)
+								return false;
 							return credits.every((credit) => {
 								if (credit.hidden) return credit.getClientRects().length === 0;
 								const link = credit.querySelector('a')!;
@@ -227,84 +247,60 @@ for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
 			}
 		};
 
-		// Four short names fit; the available width, rather than an author count, controls folding.
+		// A narrow line may show only the omission marker; no particular name has to fit.
+		await expect(ellipsis('item-2')).toBeVisible();
+		await expect(ellipsis('item-3')).toHaveText('…');
+		await assertWholeVisibleNames();
+
+		// Leave ample room before asserting which complete names are displayed.
+		await ellipsis('item-2').focus();
+		await sizeAuthors('wide');
 		await expect(short.getByRole('link', { name: /^View Items by / })).toHaveCount(4);
 		await expect(ellipsis('item-1')).toHaveCount(0);
-		await expect(ellipsis('item-2')).toBeVisible();
-		await expect(lastMediumAuthor).toBeHidden();
-		await expect(ellipsis('item-3')).toHaveText('…');
-		await expect(
-			crowded.getByRole('link', {
-				name: 'View Items by Contributor 01',
-				exact: true
-			})
-		).toBeVisible();
+		await expect(medium.getByRole('link', { name: /^View Items by / })).toHaveCount(4);
+		await expect(ellipsis('item-2')).toHaveCount(0);
+		await expect(firstMediumAuthor).toBeFocused();
 		await expect(row('item-5').getByRole('link', { name: /^View Items by / })).toHaveCount(1);
 		await expect(ellipsis('item-5')).toHaveCount(0);
 		await expect(row('item-6').getByRole('link', { name: /^View Items by / })).toHaveCount(2);
 		await expect(ellipsis('item-6')).toHaveCount(0);
-		await expect(row('item-7').locator('[data-author-index="1"]')).toBeHidden();
-		await expect(row('item-7').getByRole('link', { name: /^View Items by / })).toHaveCount(1);
-		await expect(ellipsis('item-7')).toBeVisible();
-		await expect(row('item-8').getByRole('link', { name: /^View Items by / })).toHaveCount(0);
-		await expect(row('item-8').locator('[data-author-index="0"]')).toBeHidden();
-		await expect(ellipsis('item-8')).toBeVisible();
-		await assertWholeVisibleNames();
+		await expect(row('item-8').getByRole('link', { name: /^View Items by / })).toHaveCount(1);
+		await expect(ellipsis('item-8')).toHaveCount(0);
 
 		// RTL names keep the author order, with visible names still available as filter links.
 		const rtlAuthors = row('item-4').getByRole('link', { name: /^View Items by / });
-		await expect(rtlAuthors.first()).toBeVisible();
-		await expect(ellipsis('item-4')).toBeVisible();
+		await expect(rtlAuthors).toHaveCount(4);
 		const authorPositions = await rtlAuthors.evaluateAll((links) =>
 			links.map((link) => link.getBoundingClientRect().left)
 		);
 		expect(authorPositions).toEqual([...authorPositions].sort((a, b) => a - b));
 
-		// Keep the existing focus while changing the available author width.
-		await ellipsis('item-2').focus();
-		if (view === 'table') {
-			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
-			for (let index = 0; index < 20; index++)
-				await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
-		} else await page.setViewportSize({ width: 1600, height: 900 });
-		await expect(medium.getByRole('link', { name: /^View Items by / })).toHaveCount(4);
-		await expect(ellipsis('item-2')).toHaveCount(0);
-		await expect(firstMediumAuthor).toBeFocused();
-		await expect(row('item-8').getByRole('link', { name: /^View Items by / })).toHaveCount(1);
-		await expect(ellipsis('item-8')).toHaveCount(0);
 		await assertWholeVisibleNames();
+
+		// A focused name that no longer fits transfers focus to the omission marker.
 		await lastMediumAuthor.focus();
-		if (view === 'table')
-			await page
-				.getByRole('button', { name: 'Resize Authors column', exact: true })
-				.dispatchEvent('keydown', { key: 'Home' });
-		else await page.setViewportSize({ width: 390, height: 900 });
+		await sizeAuthors('narrow');
 		await expect(ellipsis('item-2')).toBeVisible();
 		await expect(lastMediumAuthor).toBeHidden();
 		await expect(ellipsis('item-2')).toBeFocused();
 		await assertWholeVisibleNames();
 
 		// Give both complete end credits room before checking their keyboard order.
-		if (view === 'table') {
-			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
-			for (let index = 0; index < 10; index++)
-				await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
-		} else await page.setViewportSize({ width: 600, height: 900 });
+		await sizeAuthors('wide');
+		await expect(
+			crowded.getByRole('link', { name: 'View Items by Contributor 01', exact: true })
+		).toBeVisible();
 		const lastAuthor = crowded.getByRole('link', {
 			name: 'View Items by Contributor 60',
 			exact: true
 		});
 		await expect(lastAuthor).toBeVisible();
+		await assertWholeVisibleNames();
 		const visibleAuthors = crowded.getByRole('link', { name: /^View Items by / });
-		expect(await visibleAuthors.count()).toBeGreaterThan(0);
+		expect(await visibleAuthors.count()).toBeGreaterThan(1);
 		expect(await visibleAuthors.count()).toBeLessThan(60);
-		if ((await visibleAuthors.count()) > 1) {
-			await visibleAuthors.nth((await visibleAuthors.count()) - 2).focus();
-			await page.keyboard.press('Tab');
-		} else {
-			await lastAuthor.focus();
-			await page.keyboard.press('Shift+Tab');
-		}
+		await visibleAuthors.nth((await visibleAuthors.count()) - 2).focus();
+		await page.keyboard.press('Tab');
 		await expect(ellipsis('item-3')).toBeFocused();
 		await page.keyboard.press('Tab');
 		await expect(lastAuthor).toBeFocused();
@@ -322,13 +318,10 @@ for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
 		await expect(preview).toHaveCount(0);
 		await expect(ellipsis('item-3')).toBeFocused();
 		// Widening the results can remove the preview's original overflow trigger.
+		await sizeAuthors('narrow');
 		await ellipsis('item-2').click();
 		await expect(preview).toBeVisible();
-		if (view === 'table') {
-			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
-			for (let index = 0; index < 20; index++)
-				await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
-		} else await page.setViewportSize({ width: 1600, height: 900 });
+		await sizeAuthors('wide');
 		await expect(ellipsis('item-2')).toHaveCount(0);
 		await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
 		await expect(page.locator('#library-results')).toBeFocused();
