@@ -185,20 +185,7 @@ class ObjectStore:
         try:
             file = FileObject(backend=self._backend, filename=key, metadata=metadata)
             async with aclosing(checked_chunks()) as checked:
-                first = await anext(checked, None)
-
-                async def upload_chunks() -> AsyncGenerator[bytes, None]:
-                    assert first is not None
-                    yield first
-                    async for chunk in checked:
-                        yield chunk
-
-                # Empty multipart parts are rejected by some S3-compatible stores.
-                if first is None:
-                    await file.save_async(b"")
-                else:
-                    async with aclosing(upload_chunks()) as upload:
-                        await file.save_async(upload)
+                await file.save_async(checked)
             if required_prefix is not None and bytes(prefix) != required_prefix:
                 raise ValueError("file content does not match the required format")
             checksum = f"sha256:{digest.hexdigest()}"

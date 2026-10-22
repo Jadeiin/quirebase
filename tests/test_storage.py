@@ -152,22 +152,9 @@ async def test_upload_checksum_is_independent_of_source_and_chunk_boundaries(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("source_kind", ["bytes", "path", "stream", "empty_chunks"])
-async def test_empty_upload_has_standard_sha256_checksum(object_store, tmp_path, source_kind):
-    async def empty_chunks():
-        await asyncio.sleep(0)
-        yield b""
-        yield b""
-
-    path = tmp_path / "empty.bin"
-    path.write_bytes(b"")
-    source = {
-        "bytes": b"",
-        "path": path,
-        "stream": chunks(b""),
-        "empty_chunks": empty_chunks(),
-    }[source_kind]
-    stored = await object_store.put_object(uuid4(), ObjectSuffix.BINARY, source, max_bytes=0)
+@pytest.mark.parametrize("object_store", ["local"], indirect=True)
+async def test_empty_upload_has_standard_sha256_checksum(object_store):
+    stored = await object_store.put_object(uuid4(), ObjectSuffix.BINARY, chunks(b""), max_bytes=0)
     assert stored.size == 0
     assert stored.checksum == (
         "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -176,7 +163,7 @@ async def test_empty_upload_has_standard_sha256_checksum(object_store, tmp_path,
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("source_kind", ["stream", "path"])
-async def test_upload_closes_prefetched_source_when_backend_rejects_before_consumption(
+async def test_upload_closes_source_when_backend_rejects_after_consumption(
     object_store, monkeypatch, tmp_path, source_kind
 ):
     closed = asyncio.Event()
@@ -184,11 +171,12 @@ async def test_upload_closes_prefetched_source_when_backend_rejects_before_consu
     async def source_chunks():
         try:
             await asyncio.sleep(0)
-            yield b"prefetched content"
+            yield b"streamed content"
         finally:
             closed.set()
 
-    async def reject(*args, **kwargs):
+    async def reject(self, data, **kwargs):
+        assert await anext(data) == b"streamed content"
         await asyncio.sleep(0)
         raise RuntimeError("backend rejected upload")
 

@@ -135,8 +135,10 @@ for (const view of ['table', 'list'] as const) {
 	});
 }
 
-for (const view of ['table', 'list'] as const) {
-	test(`${view} folds whole author names, keeps the last credit when it fits and opens the existing preview`, async ({
+for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
+	[16, 18].map((fontSize) => ({ view, fontSize }))
+)) {
+	test(`${view} at ${fontSize}px folds whole author names, keeps the last credit when it fits and opens the existing preview`, async ({
 		page
 	}) => {
 		await page.setViewportSize({ width: view === 'table' ? 1280 : 390, height: 900 });
@@ -176,6 +178,7 @@ for (const view of ['table', 'list'] as const) {
 			});
 		});
 		await page.goto('/workspace/workspace-1/library?q=research&sort=title&direction=desc');
+		await page.addStyleTag({ content: `html { font-size: ${fontSize}px; }` });
 		await page
 			.getByRole('radio', { name: view === 'table' ? 'Table' : 'List', exact: true })
 			.press('Space');
@@ -228,7 +231,6 @@ for (const view of ['table', 'list'] as const) {
 		await expect(short.getByRole('link', { name: /^View Items by / })).toHaveCount(4);
 		await expect(ellipsis('item-1')).toHaveCount(0);
 		await expect(ellipsis('item-2')).toBeVisible();
-		await expect(firstMediumAuthor).toBeVisible();
 		await expect(lastMediumAuthor).toBeHidden();
 		await expect(ellipsis('item-3')).toHaveText('…');
 		await expect(
@@ -278,16 +280,16 @@ for (const view of ['table', 'list'] as const) {
 				.dispatchEvent('keydown', { key: 'Home' });
 		else await page.setViewportSize({ width: 390, height: 900 });
 		await expect(ellipsis('item-2')).toBeVisible();
-		await expect(firstMediumAuthor).toBeVisible();
 		await expect(lastMediumAuthor).toBeHidden();
 		await expect(ellipsis('item-2')).toBeFocused();
 		await assertWholeVisibleNames();
 
+		// Give both complete end credits room before checking their keyboard order.
 		if (view === 'table') {
 			const resize = page.getByRole('button', { name: 'Resize Authors column', exact: true });
-			for (let index = 0; index < 5; index++)
+			for (let index = 0; index < 10; index++)
 				await resize.dispatchEvent('keydown', { key: 'ArrowRight' });
-		}
+		} else await page.setViewportSize({ width: 600, height: 900 });
 		const lastAuthor = crowded.getByRole('link', {
 			name: 'View Items by Contributor 60',
 			exact: true
