@@ -311,7 +311,12 @@ test('workspace settings create, rename and restore a workspace through the real
 	await expect(page.getByText('Workspace name updated', { exact: true })).toBeVisible();
 	const sections = page.getByRole('navigation', { name: 'Workspace settings', exact: true });
 	await sections.getByRole('link', { name: 'Members', exact: true }).click();
-	await expect(page.getByRole('cell').filter({ hasText: /^admin/ })).toBeVisible();
+	await expect(
+		page.getByRole('table', { name: 'Members', exact: true }).getByRole('rowheader', {
+			name: 'admin',
+			exact: true
+		})
+	).toBeVisible();
 	await sections.getByRole('link', { name: 'Invitations', exact: true }).click();
 	await expect(page.getByText('No pending invitations.', { exact: true })).toBeVisible();
 	await sections.getByRole('link', { name: 'Advanced', exact: true }).click();
@@ -433,7 +438,8 @@ test('creates, edits, and finds duplicate-capable Commonmeta Items through the r
 		Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true })
 	);
 	await page.getByRole('button', { name: 'Export', exact: true }).click();
-	for (const format of ['csl-json', 'commonmeta']) {
+	for (const [index, format] of ['csl-json', 'commonmeta'].entries()) {
+		if (index > 0) await page.getByRole('button', { name: 'Change options', exact: true }).click();
 		await page.getByRole('combobox', { name: 'Format', exact: true }).selectOption(format);
 		const downloaded = page.waitForEvent('download');
 		await page.getByRole('button', { name: 'Download file', exact: true }).click();
@@ -494,10 +500,11 @@ test('runs a staged PDF Import through the durable worker', async ({ page }) => 
 		mimeType: 'application/pdf',
 		buffer: minimalPdf()
 	});
-	await page.getByRole('button', { name: 'Stage PDFs' }).click();
+	await page.getByRole('button', { name: 'Preview import', exact: true }).click();
 
 	await expect(page.getByRole('heading', { name: 'Import preview' })).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Diagnostics' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Commit' })).toBeDisabled();
+	await expect(page.getByRole('heading', { name: 'Import issues', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Import 0 records', exact: true })).toBeDisabled();
+	await expect(page.getByText('no DOI was found in this PDF', { exact: true })).toBeVisible();
 	await expect(page.getByText('fullstack-smoke.pdf')).toBeVisible();
 });
