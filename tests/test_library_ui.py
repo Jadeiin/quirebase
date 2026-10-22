@@ -106,7 +106,14 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
         )
         assert response.status_code == 200
         assert response.json() == {
-            "authors": [{"last_name": "Smith", "first_name": "John", "item_count": 1}],
+            "authors": [
+                {
+                    "last_name": "Smith",
+                    "first_name": "John",
+                    "full_name": "John Smith",
+                    "item_count": 1,
+                }
+            ],
             "keywords": [
                 {"value": "Alpha; beta", "item_count": 1},
                 {"value": "Robotics", "item_count": 1},
