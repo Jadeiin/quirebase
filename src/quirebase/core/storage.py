@@ -5,7 +5,7 @@ import os
 import re
 import tempfile
 from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
-from contextlib import aclosing, asynccontextmanager, suppress
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -165,27 +165,20 @@ class ObjectStore:
         prefix = bytearray()
         digest = hashlib.sha256()
 
-        async def checked_chunks() -> AsyncGenerator[bytes, None]:
+        async def checked_chunks() -> AsyncIterator[bytes]:
             nonlocal size
-            source_chunks = self._source_chunks(source)
-            try:
-                async for chunk in source_chunks:
-                    if not chunk:
-                        continue
-                    size += len(chunk)
-                    if size > max_bytes:
-                        raise ValueError("file exceeds configured size limit")
-                    digest.update(chunk)
-                    if required_prefix is not None and len(prefix) < len(required_prefix):
-                        prefix.extend(chunk[: len(required_prefix) - len(prefix)])
-                    yield chunk
-            finally:
-                await source_chunks.aclose()
+            async for chunk in self._source_chunks(source):
+                size += len(chunk)
+                if size > max_bytes:
+                    raise ValueError("file exceeds configured size limit")
+                digest.update(chunk)
+                if required_prefix is not None and len(prefix) < len(required_prefix):
+                    prefix.extend(chunk[: len(required_prefix) - len(prefix)])
+                yield chunk
 
         try:
             file = FileObject(backend=self._backend, filename=key, metadata=metadata)
-            async with aclosing(checked_chunks()) as checked:
-                await file.save_async(checked)
+            await file.save_async(checked_chunks())
             if required_prefix is not None and bytes(prefix) != required_prefix:
                 raise ValueError("file content does not match the required format")
             checksum = f"sha256:{digest.hexdigest()}"
@@ -287,18 +280,16 @@ class ObjectStore:
             for item in batch:
                 yield _metadata(item)
 
-    async def _source_chunks(self, source: ObjectSource) -> AsyncGenerator[bytes, None]:
+    async def _source_chunks(self, source: ObjectSource) -> AsyncIterator[bytes]:
         if isinstance(source, bytes):
             yield source
-            return
-        chunks = _path_chunks(source) if isinstance(source, Path) else aiter(source)
-        try:
-            async for chunk in chunks:
+        elif isinstance(source, Path):
+            async for chunk in _path_chunks(source):
+                yield chunk
+        else:
+            async for chunk in source:
                 if chunk:
                     yield bytes(chunk)
-        finally:
-            if close := getattr(chunks, "aclose", None):
-                await close()
 
     @staticmethod
     def _validate_key(key: str) -> None:

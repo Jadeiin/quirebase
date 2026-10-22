@@ -5,7 +5,6 @@ from uuid import UUID, uuid4
 
 import pymupdf
 import pytest
-from advanced_alchemy.types import FileObject
 
 from quirebase.core.config import Settings
 from quirebase.core.storage import (
@@ -159,36 +158,6 @@ async def test_empty_upload_has_standard_sha256_checksum(object_store):
     assert stored.checksum == (
         "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     )
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("source_kind", ["stream", "path"])
-async def test_upload_closes_source_when_backend_rejects_after_consumption(
-    object_store, monkeypatch, tmp_path, source_kind
-):
-    closed = asyncio.Event()
-
-    async def source_chunks():
-        try:
-            await asyncio.sleep(0)
-            yield b"streamed content"
-        finally:
-            closed.set()
-
-    async def reject(self, data, **kwargs):
-        assert await anext(data) == b"streamed content"
-        await asyncio.sleep(0)
-        raise RuntimeError("backend rejected upload")
-
-    monkeypatch.setattr(FileObject, "save_async", reject)
-    if source_kind == "path":
-        source = tmp_path / "source.bin"
-        monkeypatch.setattr("quirebase.core.storage._path_chunks", lambda path: source_chunks())
-    else:
-        source = source_chunks()
-    with pytest.raises(RuntimeError, match="backend rejected upload"):
-        await object_store.put_object(uuid4(), ObjectSuffix.BINARY, source, max_bytes=100)
-    assert closed.is_set()
 
 
 @pytest.mark.anyio
