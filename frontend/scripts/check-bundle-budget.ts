@@ -208,6 +208,8 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // Resizable PDF sidebars add 688 B raw / up to 45 B gzip to shared CSS/catalogs vs 97fc157;
 // interaction code stays in the PDF reader. Only exceeded preview/organization dimensions move
 // to the existing 1 kB raw / 500 B gzip boundaries.
+// Item header styles add 144 B raw to shared CSS vs 6067e89, exceeding Library's raw limit
+// by 55 B. Only that dimension moves to the next 1 kB boundary.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
 	raw: 795000,
@@ -218,7 +220,7 @@ enforce('Quick navigation when open', bundleSize(graphFiles(quickNavigation)), {
 	gzip: 229500
 });
 enforce('Library route', bundleSize(graphFiles(library)), {
-	raw: 1138000,
+	raw: 1139000,
 	// Includes whole-name author folding, scoped selection cleanup and last-page recovery.
 	gzip: 330000
 });
