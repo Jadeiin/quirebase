@@ -1,33 +1,129 @@
 from __future__ import annotations
 
-from copy import deepcopy
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, unquote, urlsplit
+from xml.etree import ElementTree
 
-from inquiro.identifiers import canonical_doi
+from inquiro import Identifier
+from inquiro.identifiers import ARXIV_PATTERN, DOI_PATTERN, canonical_doi, parse_arxiv
 from inquiro.work import normalize_identifier, work_doi, work_identifiers
-from sqlalchemy import select, update
+from sqlalchemy import update
 
 from quirebase.access import ResourceAction, WorkspaceContext, get_item, require_action
 from quirebase.access.items import require_editable_item
 from quirebase.audit import record_event
 from quirebase.core.errors import ResourceUnavailable, VersionConflict
-from quirebase.documents.pdf import first_doi_from_text
+from quirebase.documents.pdf import read_pdf_metadata
 from quirebase.library.providers import get_metadata_provider_choices, lookup_candidate
 from quirebase.library.workflows import request_item_tag_recommendation
-from quirebase.models import FileRevision, Item, User
+from quirebase.models import Item, User
 from quirebase.search import search_index
 
 from ._metadata import candidate_write, generate_citation_key, metadata_write, validate_citation_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
+
+
+_PDF_ARXIV_WATERMARK = re.compile(
+    rf"^arxiv:\s*({ARXIV_PATTERN.pattern})(?=\s|$)",
+    re.IGNORECASE,
+)
+_XMP_DOI_FIELDS = {
+    f"{{http://prismstandard.org/namespaces/basic/{version}/}}doi"
+    for version in ("1.0", "2.0", "3.0")
+} | {
+    "{http://ns.adobe.com/pdfx/1.3/}doi",
+    "{http://ns.adobe.com/pdfx/1.3/}DOI",
+    "{http://purl.org/dc/elements/1.1/}identifier",
+}
+
+
+def _metadata_doi(value: str) -> str | None:
+    """Accept an entire identifier value, never a DOI substring from prose or a list."""
+    normalized = canonical_doi(re.sub(r"^urn:doi:", "", value.strip(), flags=re.IGNORECASE))
+    if DOI_PATTERN.fullmatch(normalized) and len(re.findall(r"10\.\d{4,9}/", normalized)) == 1:
+        return normalized
+    return None
+
+
+def _xmp_dois(xml: str) -> set[str]:
+    if not xml:
+        return set()
+    try:
+        root = ElementTree.fromstring(xml)
+    except ElementTree.ParseError:
+        return set()
+    values: list[str] = []
+    for node in root.iter():
+        if node.tag in _XMP_DOI_FIELDS:
+            values.extend(node.itertext())
+        values.extend(value for key, value in node.attrib.items() if key in _XMP_DOI_FIELDS)
+    return {doi for value in values if (doi := _metadata_doi(value))}
+
+
+def _publisher_link_dois(uri: str) -> set[str]:
+    try:
+        url = urlsplit(uri)
+    except ValueError:
+        return set()
+    if url.scheme not in {"http", "https"} or not url.hostname:
+        return set()
+    query = parse_qs(url.query)
+    path = url.path.rstrip("/")
+    values = []
+    if (
+        url.hostname == "crossmark.crossref.org" and path == "/dialog"
+    ) or path == "/action/showCitFormats":
+        values = query.get("doi", [])
+    elif (
+        url.hostname in {"mdpi.com", "www.mdpi.com"}
+        and path.startswith("/article/")
+        and query.get("type") == ["check_update"]
+    ):
+        values = [unquote(path.removeprefix("/article/"))]
+    return {doi for value in values if (doi := _metadata_doi(value))}
+
+
+def extract_pdf_lookup_identifier(path: Path) -> Identifier | None:
+    """Choose one document-level identifier, rejecting body citations and ambiguous evidence."""
+    metadata = read_pdf_metadata(path)
+    arxiv_ids = set()
+    for line in metadata.first_page_lines:
+        if not (
+            0 <= line.bounds[0] < line.bounds[2] <= min(72, metadata.first_page_width * 0.1)
+            and abs(line.direction[0]) < 0.1
+            and line.direction[1] < -0.9
+        ):
+            continue
+        if match := _PDF_ARXIV_WATERMARK.match(line.text.strip()):
+            arxiv_ids.add(match[1])
+    if arxiv_ids:
+        return parse_arxiv(next(iter(arxiv_ids)), "arxiv") if len(arxiv_ids) == 1 else None
+
+    # XMP is document-level evidence. Publisher update/citation links are weaker; ordinary
+    # doi.org and /lookup/doi links can point at references, so they are deliberately excluded.
+    candidates = _xmp_dois(metadata.xmp)
+    if not candidates:
+        candidates = {doi for uri in metadata.first_page_links for doi in _publisher_link_dois(uri)}
+    if not candidates:
+        candidates = {
+            doi
+            for field in ("title", "subject")
+            if (doi := _metadata_doi(metadata.info.get(field, "")))
+        }
+    if len(candidates) == 1:
+        return Identifier("doi", next(iter(candidates)))
+    return None
 
 
 @dataclass(frozen=True)
@@ -84,68 +180,6 @@ async def get_item_metadata_sources(
         for namespace, value in sorted(identifiers, key=lambda pair: pair != ("doi", primary_doi))
     )
     return ItemMetadataSources(version=item.version, sources=sources)
-
-
-async def rescan_pdf_doi(
-    db: AsyncSession, user: User, workspace_id: UUID, item_id: UUID
-) -> str | None:
-    # Scan the immutable extracted text without holding an Item lock. Re-authorize and lock the
-    # canonical Item only after a DOI candidate is found, immediately before mutating identifiers.
-    await require_editable_item(db, user, workspace_id, item_id)
-    revisions = list(
-        (
-            await db.scalars(
-                select(FileRevision)
-                .where(
-                    FileRevision.workspace_id == workspace_id,
-                    FileRevision.item_id == item_id,
-                )
-                .order_by(FileRevision.created_at.desc())
-            )
-        ).all()
-    )
-    for rev in revisions:
-        if rev.full_text:
-            found_doi = first_doi_from_text(rev.full_text)
-            if found_doi:
-                await require_editable_item(db, user, workspace_id, item_id)
-                # key_share=True without read=True emits FOR NO KEY UPDATE on PostgreSQL:
-                # serialize Work replacements and refresh any snapshot read before the wait.
-                item = await db.scalar(
-                    select(Item)
-                    .where(Item.id == item_id, Item.workspace_id == workspace_id)
-                    .execution_options(populate_existing=True)
-                    .with_for_update(key_share=True)
-                )
-                if item is None:
-                    raise ResourceUnavailable("item not found")
-                # A manually supplied DOI takes precedence over scanner output.
-                if doi := work_doi(item.work):
-                    return doi
-                found_doi = canonical_doi(found_doi)
-                work = deepcopy(item.work)
-                work.setdefault("identifiers", []).append({
-                    "identifier_type": "DOI",
-                    "identifier": found_doi,
-                })
-                item.work = metadata_write(work)["work"]
-                item.updated_by = user.id
-                item.updated_at = datetime.now(UTC)
-                item.version += 1
-                await db.flush()
-                await search_index(db).index_item(db, item_id)
-                record_event(
-                    db,
-                    user.id,
-                    "item.rescan_doi",
-                    "item",
-                    item_id,
-                    workspace_id=item.workspace_id,
-                    authorization_resource_action=ResourceAction.item_update.value,
-                )
-                await db.commit()
-                return found_doi
-    return None
 
 
 async def _merge_metadata_work(

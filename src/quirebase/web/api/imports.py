@@ -21,7 +21,7 @@ from quirebase.library import (
 from quirebase.operations.settings import get_effective_settings_model
 from quirebase.web.api.common import OkView
 from quirebase.web.api.dependencies import ApiUser, Database
-from quirebase.web.api.import_schemas import IdentifiersImportRequest
+from quirebase.web.api.import_schemas import IdentifiersImportRequest, ImportCommitRequest
 from quirebase.web.uploads import upload_chunks
 
 router = APIRouter(tags=["Imports"])
@@ -108,9 +108,15 @@ async def retry_import_batch(workspace_id: UUID, batch_id: UUID, user: ApiUser, 
 
 @router.post("/imports/{batch_id}/commit", response_model=ImportBatchPreview)
 async def commit_staged_import(
-    workspace_id: UUID, batch_id: UUID, user: ApiUser, db: Database
+    workspace_id: UUID,
+    batch_id: UUID,
+    user: ApiUser,
+    db: Database,
+    data: ImportCommitRequest | None = None,
 ) -> ImportBatchPreview:
-    return await commit_import_batch(db, user, workspace_id, batch_id)
+    return await commit_import_batch(
+        db, user, workspace_id, batch_id, basic_source_ids=data.basic_source_ids if data else ()
+    )
 
 
 @router.delete("/imports/{batch_id}", response_model=OkView)

@@ -25,7 +25,6 @@ msgstr "{count, plural, one {# annotation loaded} other {# annotations loaded}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
-#: src/lib/features/import/ImportBatchPreview.svelte
 msgid "{count, plural, one {# error} other {# errors}}"
 msgstr "{count, plural, one {# error} other {# errors}}"
 
@@ -44,8 +43,23 @@ msgstr "{count, plural, one {# Item} other {# Items}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
-msgid "{count, plural, one {# record ready to import} other {# records ready to import}}"
-msgstr "{count, plural, one {# record ready to import} other {# records ready to import}}"
+msgid "{count, plural, one {# needs metadata} other {# need metadata}}"
+msgstr "{count, plural, one {# needs metadata} other {# need metadata}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# PDF will be skipped} other {# PDFs will be skipped}}"
+msgstr "{count, plural, one {# PDF will be skipped} other {# PDFs will be skipped}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# ready to import} other {# ready to import}}"
+msgstr "{count, plural, one {# ready to import} other {# ready to import}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# record selected} other {# records selected}}"
+msgstr "{count, plural, one {# record selected} other {# records selected}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchList.svelte
@@ -66,11 +80,6 @@ msgstr "{count, plural, one {# result} other {# results}}"
 #: src/lib/features/tools/Tools.svelte
 msgid "{count, plural, one {# Tag} other {# Tags}}"
 msgstr "{count, plural, one {# Tag} other {# Tags}}"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "{count, plural, one {# warning} other {# warnings}}"
-msgstr "{count, plural, one {# warning} other {# warnings}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -113,6 +122,7 @@ msgstr "{names} et al."
 
 #. js-lingui-explicit-id
 #: src/lib/design/FilePicker.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
 msgid "{size} KB"
 msgstr "{size} KB"
 
@@ -1239,6 +1249,7 @@ msgstr "Clear search"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/DiscoveryResults.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
 #: src/lib/features/library/BulkActions.svelte
 msgid "Clear selection"
 msgstr "Clear selection"
@@ -1515,6 +1526,11 @@ msgid "Corresponding author"
 msgstr "Corresponding author"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Could not import"
+msgstr "Could not import"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Could not load metadata sources."
 msgstr "Could not load metadata sources."
@@ -1529,6 +1545,11 @@ msgstr "Country"
 #: src/lib/features/account/Account.svelte
 msgid "Create"
 msgstr "Create"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportCandidateRow.svelte
+msgid "Create a basic Item for {filename}"
+msgstr "Create a basic Item for {filename}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -2325,11 +2346,6 @@ msgid "External source {number}"
 msgstr "External source {number}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Extract metadata from PDFs and import them together."
-msgstr "Extract metadata from PDFs and import them together."
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Facility"
 msgstr "Facility"
@@ -2591,6 +2607,11 @@ msgid "Hosting institution"
 msgstr "Hosting institution"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Identified records"
+msgstr "Identified records"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Identifier"
 msgstr "Identifier"
@@ -2639,14 +2660,29 @@ msgid "Import a bibliography"
 msgstr "Import a bibliography"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import actions"
+msgstr "Import actions"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 msgid "Import Batch"
 msgstr "Import Batch"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import completed"
+msgstr "Import completed"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Import completed. Deleting this record keeps the Items and files."
 msgstr "Import completed. Deleting this record keeps the Items and files."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import details"
+msgstr "Import details"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -2686,6 +2722,11 @@ msgid "Import pages"
 msgstr "Import pages"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import PDFs"
+msgstr "Import PDFs"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Import preview"
 msgstr "Import preview"
@@ -2712,14 +2753,10 @@ msgid "Import processing"
 msgstr "Import processing"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import processing failed"
 msgstr "Import processing failed"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Import published PDFs"
-msgstr "Import published PDFs"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3125,6 +3162,11 @@ msgid "Journal volume"
 msgstr "Journal volume"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Keep the PDF now. Add its metadata after import."
+msgstr "Keep the PDF now. Add its metadata after import."
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Keep your Library useful"
 msgstr "Keep your Library useful"
@@ -3518,6 +3560,11 @@ msgstr "Lock"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
+msgid "Look up DOI or arXiv IDs from PDFs and import them together."
+msgstr "Look up DOI or arXiv IDs from PDFs and import them together."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Look up identifiers"
 msgstr "Look up identifiers"
 
@@ -3692,6 +3739,12 @@ msgstr "Metadata"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Metadata contact email"
 msgstr "Metadata contact email"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
+msgid "Metadata not identified"
+msgstr "Metadata not identified"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -3974,6 +4027,11 @@ msgid "No discussion messages."
 msgstr "No discussion messages."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "No DOI or arXiv ID found"
+msgstr "No DOI or arXiv ID found"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "No duplicate groups found."
 msgstr "No duplicate groups found."
@@ -4024,6 +4082,11 @@ msgstr "No matching Items."
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "No matching members."
 msgstr "No matching members."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "No matching metadata found"
+msgstr "No matching metadata found"
 
 #. js-lingui-explicit-id
 #: src/lib/design/SearchSelect.svelte
@@ -4512,11 +4575,6 @@ msgid "PDF revisions"
 msgstr "PDF revisions"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
-msgid "PDF scanned for a DOI"
-msgstr "PDF scanned for a DOI"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "PDF URL"
 msgstr "PDF URL"
@@ -4525,6 +4583,11 @@ msgstr "PDF URL"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "PDFs"
 msgstr "PDFs"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "PDFs without metadata"
+msgstr "PDFs without metadata"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5023,11 +5086,6 @@ msgid "Ready PDFs only; older files may be skipped."
 msgstr "Ready PDFs only; older files may be skipped."
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Ready records can be imported. See the issues below."
-msgstr "Ready records can be imported. See the issues below."
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason (at least 10 characters)"
@@ -5321,11 +5379,6 @@ msgstr "Report series"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Repository"
 msgstr "Repository"
-
-#. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
-msgid "Rescan PDF for DOI"
-msgstr "Rescan PDF for DOI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5815,6 +5868,11 @@ msgstr "Select a Project filter to remove Items from it."
 #: src/lib/features/tools/Tools.svelte
 msgid "Select a Tag"
 msgstr "Select a Tag"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Select all"
+msgstr "Select all"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/DiscoveryResults.svelte
@@ -6427,6 +6485,11 @@ msgid "The value does not match the required format."
 msgstr "The value does not match the required format."
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "These PDFs have no identified metadata."
+msgstr "These PDFs have no identified metadata."
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 msgid "This action is no longer available."
@@ -7033,17 +7096,15 @@ msgstr "Unicode text"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/lib/features/tools/Tools.svelte
 msgid "Unknown authors"
 msgstr "Unknown authors"
-
-#. js-lingui-explicit-id
-#: src/lib/features/discovery/DiscoveryResults.svelte
-#: src/lib/features/tools/Tools.svelte
-msgid "Unknown contributors"
-msgstr "Unknown contributors"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/DiscoveryResults.svelte
@@ -7062,7 +7123,7 @@ msgid "Untagged"
 msgstr "Untagged"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
 msgid "Untitled"
 msgstr "Untitled"
 

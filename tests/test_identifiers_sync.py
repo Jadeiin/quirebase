@@ -5,7 +5,6 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-from advanced_alchemy.types import FileObject
 from inquiro import CandidateRecord, Identifier
 from inquiro.work import contributor_name, work_authors
 from provider_helpers import provider_runtime
@@ -14,8 +13,8 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import VersionConflict
 from quirebase.library import create_item, find_duplicates, revise_item_metadata, search_library
-from quirebase.library.identifiers import rescan_pdf_doi, sync_metadata_from_upstream
-from quirebase.models import AuditEvent, FileRevision, Item, User
+from quirebase.library.identifiers import sync_metadata_from_upstream
+from quirebase.models import AuditEvent, Item, User
 
 pytestmark = pytest.mark.anyio
 
@@ -31,45 +30,6 @@ async def setup(db):
 
 def metadata(title="Local", **fields):
     return {"id": f"urn:uuid:{uuid4()}", "type": "JournalArticle", "title": title, **fields}
-
-
-async def test_pdf_scan_can_share_doi_and_keeps_manual_identifiers(persistence_db):
-    db = persistence_db
-    actor, workspace_id = await setup(db)
-    await create_item(db, actor, workspace_id, metadata(id="https://doi.org/10.1234/scanned"))
-    created = await create_item(
-        db,
-        actor,
-        workspace_id,
-        metadata(identifiers=[{"identifier_type": "PMID", "identifier": "42"}]),
-    )
-    db.add(
-        FileRevision(
-            workspace_id=workspace_id,
-            item_id=created.item_id,
-            full_text="doi: 10.1234/scanned",
-            created_by=actor.id,
-            file=FileObject(
-                backend="documents",
-                filename=str(uuid4()),
-                size=1,
-                content_type="application/pdf",
-                metadata={"original_name": "paper.pdf"},
-            ),
-        )
-    )
-    await db.commit()
-    assert await rescan_pdf_doi(db, actor, workspace_id, created.item_id) == "10.1234/scanned"
-    item = await db.get(Item, created.item_id)
-    assert item.work["identifiers"] == [
-        {"identifier_type": "PMID", "identifier": "42"},
-        {"identifier_type": "DOI", "identifier": "10.1234/scanned"},
-    ]
-    assert item.version == created.version + 1
-    assert (await search_library(db, actor, workspace_id, q="scanned"))[1] == 2
-    before = item.version
-    assert await rescan_pdf_doi(db, actor, workspace_id, item.id) == "10.1234/scanned"
-    assert item.version == before
 
 
 async def test_provider_sync_allows_existing_identifiers_and_preserves_partial_facts(

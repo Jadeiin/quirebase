@@ -205,7 +205,6 @@ test('Metadata sources exposes loading failures and allows an explicit retry', a
 	const dialog = page.getByRole('dialog');
 	await expect(dialog.getByText('Could not load metadata sources.', { exact: true })).toBeVisible();
 	await expect(dialog.getByRole('button', { name: 'Autoupdate' })).toHaveCount(0);
-	await expect(dialog.getByRole('button', { name: 'Rescan PDF for DOI' })).toHaveCount(0);
 	fail = false;
 	await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(dialog.getByText('10.1000/retry', { exact: true })).toBeVisible();

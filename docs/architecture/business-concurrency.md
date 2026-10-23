@@ -14,7 +14,7 @@ Concurrency controls are selected by the invariant they protect:
 1. **Snapshot replacement uses version CAS.**
    Bibliographic metadata and annotation edits carry an expected version. The mutation is one
    conditional `UPDATE ... WHERE version = expected RETURNING version`; a missing row is an
-   explicit `VersionConflict`. Server commands such as PDF DOI rescan and Citation Key regeneration
+   explicit `VersionConflict`. Server commands such as Citation Key regeneration
    increment the Item version when changing its metadata without a client snapshot.
 
 2. **Cross-row invariants use the owning root row.**

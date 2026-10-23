@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import re
+from dataclasses import dataclass
 from datetime import UTC, tzinfo
 from typing import TYPE_CHECKING
 
@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from uuid import UUID
 
     from quirebase.models import PdfAnnotation
-
-PDF_DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 
 
 def _pymupdf_integer_constant(name: str) -> int:
@@ -129,29 +127,47 @@ def inspect_pdf(path: Path) -> tuple[int, str, list[list[float]]]:
         return page_count, "\n\f\n".join(text), geometry
 
 
-def first_doi_from_text(text: str) -> str | None:
-    """Return the first plausible DOI found in free text, if any."""
-    normalized = re.sub(r"\s+", " ", text or "")
-    match = PDF_DOI_PATTERN.search(normalized)
-    return match.group(0).rstrip(".,;)]}") if match else None
+@dataclass(frozen=True)
+class PdfTextLine:
+    text: str
+    bounds: tuple[float, float, float, float]
+    direction: tuple[float, float]
 
 
-def extract_doi(path: Path, maximum_pages: int = 8) -> str | None:
-    """Extract the first plausible DOI from PDF metadata or early-page text."""
+@dataclass(frozen=True)
+class PdfMetadata:
+    info: dict[str, str]
+    xmp: str
+    first_page_width: float
+    first_page_lines: tuple[PdfTextLine, ...]
+    first_page_links: tuple[str, ...]
+
+
+def read_pdf_metadata(path: Path) -> PdfMetadata:
+    """Read embedded metadata and first-page layout without scanning the body for identity."""
     with pymupdf.open(path) as document:
-        candidates = [
-            document.metadata.get("subject", ""),
-            document.metadata.get("keywords", ""),
-        ]
-        candidates.extend(
-            document[index].get_text("text")
-            for index in range(min(document.page_count, maximum_pages))
+        page = document[0]
+        lines = []
+        for block in page.get_text("dict", flags=pymupdf.TEXTFLAGS_TEXT)["blocks"]:
+            if block["type"] != 0:
+                continue
+            for line in block["lines"]:
+                x0, y0, x1, y1 = line["bbox"]
+                dx, dy = line["dir"]
+                lines.append(
+                    PdfTextLine(
+                        "".join(span["text"] for span in line["spans"]),
+                        (x0, y0, x1, y1),
+                        (dx, dy),
+                    )
+                )
+        return PdfMetadata(
+            info={key: value for key, value in document.metadata.items() if isinstance(value, str)},
+            xmp=document.get_xml_metadata(),
+            first_page_width=page.cropbox.width,
+            first_page_lines=tuple(lines),
+            first_page_links=tuple(link["uri"] for link in page.get_links() if link.get("uri")),
         )
-    for candidate in candidates:
-        doi = first_doi_from_text(candidate)
-        if doi:
-            return doi
-    return None
 
 
 def create_thumbnail(path: Path, output: Path) -> None:

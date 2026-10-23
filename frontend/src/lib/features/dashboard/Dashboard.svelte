@@ -1,5 +1,6 @@
 <script lang="ts">
 	import AuthorLine from '#lib/design/AuthorLine.svelte';
+	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
 	import type { components } from '#lib/api/schema.js';
@@ -133,7 +134,9 @@
 	<div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
 		<div class="grid grid-cols-1 content-start gap-5">
 			<Panel padding="none">
-				<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
+				<header
+					class="flex items-center justify-between gap-3 border-b border-surface-300-700 px-4 py-4"
+				>
 					<div>
 						<p class="m-0 text-xs font-bold tracking-wide text-primary-700-300 uppercase">
 							{$t('Reading')}
@@ -148,20 +151,22 @@
 				<div class="divide-y divide-surface-300-700">
 					{#each dashboard.data?.recent_items ?? [] as recent (recent.item.id)}
 						<a
-							class="group grid grid-cols-1 gap-1 px-5 py-4 no-underline transition-colors hover:bg-primary-50-950/60"
+							class="group block min-w-0 px-4 py-3 no-underline transition-colors hover:bg-primary-50-950/60"
 							href={resolve(workspaceHref(workspaceId, `item/${recent.item.id}`))}
 						>
-							<strong class="leading-snug group-hover:text-primary-800-200"
-								><RichText html={recent.item.title_html} /></strong
-							>
-							<span
-								class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs text-surface-600-400"
-							>
-								{@render authorSummary(recent.item.authors)}
-								<span class="text-right whitespace-nowrap"
-									>{$dateFormat.format(new Date(recent.last_read_at))}</span
-								></span
-							>
+							<BibliographicSummary density="compact">
+								{#snippet title()}<span class="group-hover:text-primary-800-200"
+										><RichText html={recent.item.title_html} /></span
+									>{/snippet}
+								{#snippet authors()}
+									<div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+										{@render authorSummary(recent.item.authors)}
+										<span class="text-right whitespace-nowrap"
+											>{$dateFormat.format(new Date(recent.last_read_at))}</span
+										>
+									</div>
+								{/snippet}
+							</BibliographicSummary>
 						</a>
 					{:else}
 						<div
@@ -173,7 +178,9 @@
 				</div>
 			</Panel>
 			<Panel padding="none">
-				<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
+				<header
+					class="flex items-center justify-between gap-3 border-b border-surface-300-700 px-4 py-4"
+				>
 					<div>
 						<p class="m-0 text-xs font-bold tracking-wide text-primary-700-300 uppercase">
 							{$t('Library')}
@@ -188,20 +195,22 @@
 				<div class="divide-y divide-surface-300-700">
 					{#each (dashboard.data?.new_items ?? []).slice(0, 5) as item (item.id)}
 						<a
-							class="group grid grid-cols-1 gap-1 px-5 py-3.5 no-underline hover:bg-primary-50-950/60"
+							class="group block min-w-0 px-4 py-3 no-underline transition-colors hover:bg-primary-50-950/60"
 							href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
 						>
-							<strong class="line-clamp-2 text-sm leading-snug group-hover:text-primary-800-200"
-								><RichText html={item.title_html} /></strong
-							>
-							<span
-								class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs text-surface-600-400"
-							>
-								{@render authorSummary(item.authors)}
-								<span class="text-right whitespace-nowrap"
-									>{item.publication_date || $t('Date unknown')}</span
-								></span
-							>
+							<BibliographicSummary density="compact">
+								{#snippet title()}<span class="group-hover:text-primary-800-200"
+										><RichText html={item.title_html} /></span
+									>{/snippet}
+								{#snippet authors()}
+									<div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+										{@render authorSummary(item.authors)}
+										<span class="text-right whitespace-nowrap"
+											>{item.publication_date || $t('Date unknown')}</span
+										>
+									</div>
+								{/snippet}
+							</BibliographicSummary>
 						</a>
 					{:else}
 						<div class="p-5 text-sm text-surface-600-400">

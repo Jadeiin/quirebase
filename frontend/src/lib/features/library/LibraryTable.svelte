@@ -18,6 +18,7 @@
 	import Icon from '#lib/design/Icon.svelte';
 	import PopoverTriggerButton from '#lib/design/PopoverTriggerButton.svelte';
 	import RichText from '#lib/design/RichText.svelte';
+	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
 	import { getSession } from '#lib/session.js';
 	import { t } from '#lib/i18n.js';
 	import type { WorkspacePath } from '#lib/workspaces/href.js';
@@ -661,6 +662,7 @@
 			>
 				<input
 					type="checkbox"
+					class="mt-1 size-4 shrink-0"
 					id={`library-item-${row.id}`}
 					data-library-item-select={row.id}
 					aria-describedby={`library-item-title-${row.id}`}
@@ -669,25 +671,23 @@
 					title={$t('Shift-click an Item checkbox to select a range on this page.')}
 					aria-label={selectionLabel(row.original.authors)}
 				/>
-				<div class="grid min-w-0 grid-cols-1 gap-1">
-					<a
-						id={`library-item-title-${row.id}`}
-						class="no-underline"
-						href={resolve(itemHref(row.id))}
-					>
-						<strong class="leading-relaxed font-semibold break-words"
-							><RichText html={row.original.title_html} /></strong
+				<BibliographicSummary>
+					{#snippet title()}
+						<a
+							id={`library-item-title-${row.id}`}
+							class="no-underline hover:text-primary-700-300"
+							href={resolve(itemHref(row.id))}
 						>
-					</a>
-					<div class="min-w-0 text-sm text-surface-600-400">
+							<RichText html={row.original.title_html} />
+						</a>
+					{/snippet}
+					{#snippet authors()}
 						{@render authorLinks(row.original)}
-					</div>
-					<span class="text-xs break-words text-surface-600-400"
-						>{@render publicationLink(row.original.publication_title)} · {@render dateLink(
-							row.original.publication_date
-						)}</span
-					>
-				</div>
+					{/snippet}
+					{@render publicationLink(row.original.publication_title)} · {@render dateLink(
+						row.original.publication_date
+					)}
+				</BibliographicSummary>
 				<div class="flex items-center gap-1">
 					<Button
 						variant="icon"

@@ -15,7 +15,7 @@ owned an uncheckpointed infinite maintenance loop.
 
 Library represents PDF Import preparation as a pending Import Batch owned by a DBOS workflow.
 The request validates and stores each upload, then transactionally enqueues preparation. Retryable
-steps separately extract DOI values and retrieve Candidate Records, while a datasource transaction
+steps separately extract lookup identifiers and retrieve Candidate Records, while a datasource transaction
 rechecks the actor and Workspace before Provider I/O. Provider retries reuse completed PDF parsing.
 One datasource transaction publishes the ready preview. A terminal preparation failure transactionally marks the
 batch failed while retaining its staged objects. Cancellation, exhausted workflow recovery and a

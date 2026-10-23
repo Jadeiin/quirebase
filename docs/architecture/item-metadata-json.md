@@ -128,8 +128,7 @@ examined. Container identifiers (including book ISBN or journal ISSN), relations
 funders and contributor identifiers are excluded. Detection runs only for an explicit Library
 duplicate request across the authorized Workspace. Discovery and
 Import do not load stored Works or infer an `imported` state. PDF batches can still report repeated
-DOIs within the bounded batch. PDF scanning preserves an existing manual DOI and
-may add a DOI already used by another Item. Valid imports are never rejected for shared identity.
+lookup identifiers within the bounded batch. Valid imports are never rejected for shared identity.
 
 Exact-title mode groups equal stored Work titles with the same case-sensitive comparison.
 Same-PDF mode groups equal `FileRevision.file.checksum` values across distinct Items, considering

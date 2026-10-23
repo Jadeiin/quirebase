@@ -65,7 +65,6 @@ from quirebase.library.duplicates import DuplicateMode, DuplicateScan, find_dupl
 from quirebase.library.facets import LibraryFacets, get_library_facets
 from quirebase.library.identifiers import (
     get_item_metadata_sources,
-    rescan_pdf_doi,
     sync_metadata_from_upstream,
 )
 from quirebase.library.imports import (
@@ -212,7 +211,6 @@ __all__ = [
     "rename_tag",
     "render_item_citation",
     "request_item_tag_recommendation",
-    "rescan_pdf_doi",
     "resolve_style_xml",
     "retry_pdf_import_batch",
     "revise_item_metadata",

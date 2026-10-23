@@ -17,7 +17,8 @@
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import Icon from '#lib/design/Icon.svelte';
-	import ItemRow from '#lib/design/ItemRow.svelte';
+	import AuthorLine from '#lib/design/AuthorLine.svelte';
+	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
 	import Panel from '#lib/design/Panel.svelte';
@@ -661,52 +662,69 @@
 			{/if}
 		</Panel>
 
-		<Panel>
-			<h2>{$t('Items')}</h2>
-			<input
-				class="input"
-				aria-label={$t('Search Items')}
-				placeholder={$t('Search Items')}
-				value={itemSearch}
-				oninput={(event) => {
-					navigateItems({ search: event.currentTarget.value, page: 1 }, true);
-				}}
-			/>
-			{#if items.isPending || (!items.data && items.isFetching)}<p>{$t('Loading Items…')}</p>
-			{:else if items.isError || !items.data}<QueryError
-					message={$t('Unable to load Items.')}
-					busy={items.isFetching}
-					onRetry={() => void items.refetch()}
+		<Panel padding="none" aria-labelledby="project-items-title">
+			<div class="p-4">
+				<h2 id="project-items-title">{$t('Items')}</h2>
+				<input
+					class="input"
+					aria-label={$t('Search Items')}
+					placeholder={$t('Search Items')}
+					value={itemSearch}
+					oninput={(event) => {
+						navigateItems({ search: event.currentTarget.value, page: 1 }, true);
+					}}
 				/>
+			</div>
+			{#if items.isPending || (!items.data && items.isFetching)}<p class="px-4 pb-4">
+					{$t('Loading Items…')}
+				</p>
+			{:else if items.isError || !items.data}<div class="px-4 pb-4">
+					<QueryError
+						message={$t('Unable to load Items.')}
+						busy={items.isFetching}
+						onRetry={() => void items.refetch()}
+					/>
+				</div>
 			{:else}
-				{#each items.data?.items ?? [] as item (item.id)}<ItemRow
-						class="grid-cols-[minmax(0,1fr)_auto] items-center"
-					>
-						<a
-							class="grid grid-cols-1 gap-1 no-underline"
-							href={resolve(
-								libraryItemHref(
-									workspaceId,
-									item.id,
-									'',
-									libraryReturnTo(workspaceId, libraryDestination, item.id)
-								)
-							)}
-							><strong><RichText html={item.title_html} /></strong><span
-								class="text-surface-600-400"
-								>{item.authors.map((author) => author.full_name).join('; ') || ''}</span
-							></a
-						>{#if can('project_item.manage')}<Button
-								disabled={busy || project.state !== 'active'}
-								onclick={() => {
-									error = '';
-									pendingRemoveItem = { projectId, itemId: item.id };
-									removeItemDialogOpen = true;
-								}}>{$t('Remove')}</Button
-							>{/if}
-					</ItemRow>{:else}<p class="text-surface-600-400">
-						{itemSearch ? $t('No matching Items.') : $t('No Items in this Project.')}
-					</p>{/each}
+				<div class="divide-y divide-surface-300-700">
+					{#each items.data?.items ?? [] as item (item.id)}<article
+							class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-4 py-4"
+						>
+							<a
+								class="min-w-0 no-underline hover:text-primary-700-300"
+								aria-labelledby={`project-item-title-${item.id}`}
+								href={resolve(
+									libraryItemHref(
+										workspaceId,
+										item.id,
+										'',
+										libraryReturnTo(workspaceId, libraryDestination, item.id)
+									)
+								)}
+								><BibliographicSummary>
+									{#snippet title()}<span id={`project-item-title-${item.id}`}
+											><RichText html={item.title_html} /></span
+										>{/snippet}
+									{#snippet authors()}
+										{#if item.authors.length}<AuthorLine
+												names={item.authors.map((author) => author.full_name)}
+											/>{:else}{$t('Unknown authors')}{/if}
+									{/snippet}
+									{item.publication_title || '—'} · {item.publication_date || '—'}
+								</BibliographicSummary></a
+							>{#if can('project_item.manage')}<Button
+									size="sm"
+									disabled={busy || project.state !== 'active'}
+									onclick={() => {
+										error = '';
+										pendingRemoveItem = { projectId, itemId: item.id };
+										removeItemDialogOpen = true;
+									}}>{$t('Remove')}</Button
+								>{/if}
+						</article>{:else}<p class="px-4 pb-4 text-surface-600-400">
+							{itemSearch ? $t('No matching Items.') : $t('No Items in this Project.')}
+						</p>{/each}
+				</div>
 			{/if}
 			<Pagination
 				page={itemPage}

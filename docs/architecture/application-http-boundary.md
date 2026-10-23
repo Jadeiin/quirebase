@@ -141,6 +141,14 @@ Collapsible owns the Library filter disclosure, and Progress owns indeterminate 
 Short fixed choices and native form inputs keep Skeleton's CSS primitives. Native details and
 asynchronous Tag assignment actions retain their current product semantics.
 
+Import previews use compact record rows, with identified records and optional PDFs without metadata
+grouped within the current page. Unidentified PDFs show their filename and a short reason beside
+their checkbox; Select all and Clear selection apply to unidentified sources across the batch.
+The confirmation bar keeps selected and skipped counts beside the primary action and stays above
+the mobile navigation while scrolling. File errors remain visible; additional Provider warnings
+are available in a disclosure. Internal diagnostic codes and generated UUIDs are omitted from
+ordinary record presentation. Read-only previews expose the same results without selection controls.
+
 Library uses a native table on desktop and a compact list on narrow screens. TanStack Svelte
 Table owns column visibility, constrained resizing and row-selection mechanics; Query and the URL
 retain server filtering, sorting and pagination. Only the loaded page is selectable. A changed list

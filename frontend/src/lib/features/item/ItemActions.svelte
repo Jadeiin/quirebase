@@ -309,19 +309,6 @@
 		}, $t('Citation key updated'));
 	}
 
-	function rescanDoi() {
-		void action(async () => {
-			await workspaceContext.api.request(
-				'POST',
-				'/workspaces/{workspace_id}/items/{item_id}/doi/rescan',
-				{
-					params: { path: { item_id: itemId } }
-				}
-			);
-			await onchanged();
-		}, $t('PDF scanned for a DOI'));
-	}
-
 	function deleteItem() {
 		deleteArmed = true;
 	}
@@ -646,10 +633,7 @@
 														>{$t('Autoupdate')}</Button
 													>
 												</div>
-											</div>{:else if overview.latest_revision_id}<Button
-												disabled={busy}
-												onclick={rescanDoi}>{$t('Rescan PDF for DOI')}</Button
-											>{/if}
+											</div>{/if}
 										{#each externalIdentifiers as identifier (JSON.stringify( [identifier.namespace, identifier.value] ))}<div
 												class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
 											>

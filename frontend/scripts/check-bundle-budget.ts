@@ -211,6 +211,8 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // Item header styles add 144 B raw to shared CSS vs 6067e89, exceeding Library's raw limit
 // by 55 B. Only that dimension moves to the next 1 kB boundary.
 // The HTTP UUID fallback adds a shared Library chunk; only measured overages move.
+// Shared bibliographic summaries, author previews and the Import review layout add route-owned
+// code. Only measured overages move to the existing 1 kB raw / 500 B gzip boundaries.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
 	raw: 795000,
@@ -221,24 +223,24 @@ enforce('Quick navigation when open', bundleSize(graphFiles(quickNavigation)), {
 	gzip: 229500
 });
 enforce('Library route', bundleSize(graphFiles(library)), {
-	raw: 1139000,
+	raw: 1142000,
 	// Includes whole-name author folding, scoped selection cleanup and last-page recovery.
-	gzip: 330000
+	gzip: 331000
 });
 enforce('Library refinements when open', bundleSize(graphFiles(libraryRefinements)), {
-	raw: 1143000,
-	gzip: 332000
+	raw: 1146000,
+	gzip: 333000
 });
 enforce(
 	'Library preview when open',
 	bundleSize(graphFiles(libraryPreview)),
 	// Bibliographic preview and scoped navigation add about 14 kB raw / 5.5 kB gzip on demand.
-	{ raw: 1152000, gzip: 335000 }
+	{ raw: 1156000, gzip: 336000 }
 );
 enforce(
 	'Library organization when open',
 	bundleSize(graphFiles(mergeGraphs(libraryPreview, dependencyGraph([libraryOrganizeKey], false)))),
-	{ raw: 1165000, gzip: 340000 }
+	{ raw: 1168000, gzip: 341000 }
 );
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.
@@ -251,12 +253,12 @@ enforce('Account route', routeBundle('/(app)/account'), {
 });
 enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 	// Includes shared pagination styles, account-management translations and recovery controls.
-	raw: 947000,
-	gzip: 274500
+	raw: 951000,
+	gzip: 276000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
-	raw: 934000,
-	gzip: 273500
+	raw: 940000,
+	gzip: 274500
 });
 enforce('Import history route', routeBundle('/(app)/workspace/[workspaceId]/import/history'), {
 	raw: 851000,

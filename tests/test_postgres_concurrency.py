@@ -75,7 +75,6 @@ from quirebase.library import (
     moderate_project_discussion_message,
     open_item_section,
     remove_tag_from_item,
-    rescan_pdf_doi,
     revise_item_metadata,
     search_library,
     stage_import_batch,
@@ -2630,117 +2629,6 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
         assert (await search_library(db, actor, workspace_id, q=loser))[1] == 0
         events, total = await query_events(db, actor, action="item.update")
         assert total == 1 and events[0].target_id == str(item_id)
-
-
-@pytest.mark.concurrency_case("pdf-doi-metadata-edit")
-@pytest.mark.parametrize("first", ["scan", "edit"])
-async def test_pdf_doi_rescan_serializes_with_metadata_replacement(
-    postgres_sessions, postgres_search_tables, postgres_race, monkeypatch, first
-):
-    original = {"id": f"urn:uuid:{uuid4()}", "type": "Document", "title": "Originalrace"}
-    edited = {
-        **original,
-        "title": "Editedrace",
-        "contributors": [contributor("Editedrace", "Author")],
-        "subjects": [{"subject": "Editedsubject"}],
-    }
-    async with postgres_sessions() as db:
-        owner = await _user(db, "pdf-doi-metadata")
-        workspace_id, owner_id = fixture_workspace_id(owner), owner.id
-        item = Item(workspace_id=workspace_id, created_by=owner_id, work=original)
-        db.add(item)
-        await db.flush()
-        item_id = item.id
-        db.add(
-            FileRevision(
-                workspace_id=workspace_id,
-                item_id=item_id,
-                full_text="doi: 10.1234/scanned",
-                created_by=owner_id,
-                file=FileObject(
-                    backend="documents",
-                    filename=str(uuid4()),
-                    size=1,
-                    content_type="application/pdf",
-                    metadata={"original_name": "paper.pdf"},
-                ),
-            )
-        )
-        await db.commit()
-
-    ready, resume = asyncio.Event(), asyncio.Event()
-
-    async def scan():
-        async with postgres_race.session("scan") as db:
-            if first == "scan":
-                scalar = db.scalar
-
-                async def pause_after_locked_snapshot(statement, *args, **kwargs):
-                    result = await scalar(statement, *args, **kwargs)
-                    if (
-                        isinstance(statement, Select)
-                        and statement.column_descriptions[0]["expr"] is Item
-                        and statement.get_execution_options().get("populate_existing")
-                    ):
-                        ready.set()
-                        await asyncio.wait_for(resume.wait(), timeout=5)
-                    return result
-
-                monkeypatch.setattr(db, "scalar", pause_after_locked_snapshot)
-            return await rescan_pdf_doi(db, await db.get(User, owner_id), workspace_id, item_id)
-
-    async def edit():
-        async with postgres_race.session("edit") as db:
-            if first == "edit":
-                commit = db.commit
-
-                async def pause_before_commit():
-                    ready.set()
-                    await asyncio.wait_for(resume.wait(), timeout=5)
-                    await commit()
-
-                monkeypatch.setattr(db, "commit", pause_before_commit)
-            if first == "scan":
-                with pytest.raises(VersionConflict) as conflict:
-                    await revise_item_metadata(
-                        db, await db.get(User, owner_id), workspace_id, item_id, 1, edited
-                    )
-                assert conflict.value.current_version == 2
-            else:
-                result = await revise_item_metadata(
-                    db, await db.get(User, owner_id), workspace_id, item_id, 1, edited
-                )
-                assert result.version == 2
-
-    second = "edit" if first == "scan" else "scan"
-    operations = {"scan": scan, "edit": edit}
-    postgres_race.start(first, operations[first]())
-    await asyncio.wait_for(ready.wait(), timeout=5)
-    postgres_race.start(second, operations[second]())
-    try:
-        await postgres_race.wait_blocked(second, first)
-    finally:
-        resume.set()
-    assert await postgres_race.join("scan") == "10.1234/scanned"
-    await postgres_race.join("edit")
-
-    async with postgres_race.session("verify") as db:
-        item = await db.get(Item, item_id)
-        expected = edited if first == "edit" else original
-        assert item.work == {
-            **expected,
-            "identifiers": [work_identifier("DOI", "10.1234/scanned")],
-        }
-        assert item.version == (3 if first == "edit" else 2)
-        actor = await db.get(User, owner_id)
-        items, total, *_ = await search_library(db, actor, workspace_id, q=expected["title"])
-        assert total == 1 and items[0].id == item_id
-        actions = list(
-            await db.scalars(select(AuditEvent.action).where(AuditEvent.target_id == str(item_id)))
-        )
-        assert sorted(actions) == (
-            ["item.rescan_doi", "item.update"] if first == "edit" else ["item.rescan_doi"]
-        )
 
 
 @pytest.mark.concurrency_case("settings-install")

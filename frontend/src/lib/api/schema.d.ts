@@ -2127,23 +2127,6 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/v1/workspaces/{workspace_id}/items/{item_id}/doi/rescan': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Rescan Item Doi */
-		post: operations['items.rescan_item_doi'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
 	'/api/v1/workspaces/{workspace_id}/items/{item_id}/citation-key/regenerate': {
 		parameters: {
 			query?: never;
@@ -4120,6 +4103,16 @@ export interface components {
 		ImportCandidatePreview: {
 			metadata: components['schemas']['Work'];
 			source?: components['schemas']['ImportSource'] | null;
+			/**
+			 * Is Basic
+			 * @default false
+			 */
+			is_basic: boolean;
+		};
+		/** ImportCommitRequest */
+		ImportCommitRequest: {
+			/** Basic Source Ids */
+			basic_source_ids?: string[];
 		};
 		/** ImportDiagnostic */
 		ImportDiagnostic: {
@@ -4142,6 +4135,11 @@ export interface components {
 		};
 		/** ImportSource */
 		ImportSource: {
+			/**
+			 * Id
+			 * Format: uuid
+			 */
+			id: string;
 			/** Original Name */
 			original_name: string;
 			/** Size */
@@ -10493,7 +10491,11 @@ export interface operations {
 			};
 			cookie?: never;
 		};
-		requestBody?: never;
+		requestBody?: {
+			content: {
+				'application/json': components['schemas']['ImportCommitRequest'] | null;
+			};
+		};
 		responses: {
 			/** @description Successful Response */
 			200: {
@@ -12831,47 +12833,6 @@ export interface operations {
 				'application/json': components['schemas']['MetadataSyncRequest'];
 			};
 		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['OkView'];
-				};
-			};
-			/** @description Unprocessable Content */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-			/** @description Default Response */
-			default: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['ApiErrorView'];
-				};
-			};
-		};
-	};
-	'items.rescan_item_doi': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				workspace_id: string;
-				item_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
 		responses: {
 			/** @description Successful Response */
 			200: {

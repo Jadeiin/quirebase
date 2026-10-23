@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -10,3 +11,7 @@ class IdentifiersImportRequest(BaseModel):
         min_length=1, max_length=50
     )
     provider: str = "auto"
+
+
+class ImportCommitRequest(BaseModel):
+    basic_source_ids: list[UUID] = Field(default_factory=list, max_length=50)

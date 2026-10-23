@@ -46,7 +46,7 @@ def write_json(path, value):
 
 
 def instrument_external_provider(directory, *, pause):
-    extract = imports.extract_pdf_import_doi
+    extract = imports.extract_pdf_import_identifier
 
     async def observed_extract(pending):
         result = await extract(pending)
@@ -72,7 +72,7 @@ def instrument_external_provider(directory, *, pause):
             }),
         )
 
-    imports.extract_pdf_import_doi = observed_extract
+    imports.extract_pdf_import_identifier = observed_extract
     imports.lookup_candidate = lookup
 
 
@@ -81,6 +81,7 @@ async def stage(directory):
     for suffix in ("kept", "rejected"):
         with pymupdf.open() as document:
             document.new_page().insert_text((72, 72), f"https://doi.org/10.1000/recovery-{suffix}")
+            document.set_metadata({"subject": f"doi:10.1000/recovery-{suffix}"})
             uploads.append((document.tobytes(), f"uploaded-{suffix}.pdf"))
     async with AsyncSessionLocal() as db:
         actor = User(username="recovery-owner", password_hash="unused")
@@ -136,8 +137,14 @@ async def finish_import(directory, state):
         revision = (await db.scalars(select(FileRevision))).one()
         assert revision.processing_workflow_id is not None
         item_id = revision.item_id
+        cleanups = [
+            workflow.id
+            for workflow in await durable_operations().list(limit=100)
+            if workflow.name == "documents.cleanup_objects"
+        ]
+        assert len(cleanups) == 1
         followups = (
-            f"prepare-pdf-import-cleanup:{state['workflow_id']}",
+            *cleanups,
             revision.processing_workflow_id,
             f"file-revision-changed:{revision.id}",
         )
@@ -185,7 +192,9 @@ async def inspect_contract(directory, state, *, committed):
         assert (
             records == ()
             if committed
-            else len(records) == 1 and records[0].metadata.title == "Recovery retained paper"
+            else len(records) == 2
+            and records[0].metadata.title == "Recovery retained paper"
+            and records[1].is_basic
         )
         if committed:
             assert diagnostics == ()
@@ -198,7 +207,7 @@ async def inspect_contract(directory, state, *, committed):
         assert sum(event.action == "pdf.import.preview.request" for event in events) == 1
         assert sum(event.action == "pdf.import.preview" for event in events) == 1
         if not committed:
-            assert len(batch.staged_files) == 1
+            assert len(batch.staged_files) == 2
             assert batch.staged_files[0].path == state["files"][0]["filename"]
             assert await db.scalar(select(func.count()).select_from(Item)) == 0
             return

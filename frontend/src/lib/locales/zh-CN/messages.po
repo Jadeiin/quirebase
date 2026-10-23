@@ -25,7 +25,6 @@ msgstr "{count, plural, other {# 条批注已加载}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
-#: src/lib/features/import/ImportBatchPreview.svelte
 msgid "{count, plural, one {# error} other {# errors}}"
 msgstr "{count, plural, other {# 个错误}}"
 
@@ -44,8 +43,23 @@ msgstr "{count, plural, other {# 条文献}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
-msgid "{count, plural, one {# record ready to import} other {# records ready to import}}"
-msgstr "{count, plural, other {# 条记录可供导入}}"
+msgid "{count, plural, one {# needs metadata} other {# need metadata}}"
+msgstr "{count, plural, other {# 份待补全元数据}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# PDF will be skipped} other {# PDFs will be skipped}}"
+msgstr "{count, plural, other {将跳过 # 份 PDF}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# ready to import} other {# ready to import}}"
+msgstr "{count, plural, other {# 条已识别}}"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "{count, plural, one {# record selected} other {# records selected}}"
+msgstr "{count, plural, other {将导入 # 条文献}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchList.svelte
@@ -66,11 +80,6 @@ msgstr "{count, plural, other {# 条结果}}"
 #: src/lib/features/tools/Tools.svelte
 msgid "{count, plural, one {# Tag} other {# Tags}}"
 msgstr "{count, plural, other {# 个标签}}"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "{count, plural, one {# warning} other {# warnings}}"
-msgstr "{count, plural, other {# 条警告}}"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -113,6 +122,7 @@ msgstr "{names} 等"
 
 #. js-lingui-explicit-id
 #: src/lib/design/FilePicker.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
 msgid "{size} KB"
 msgstr "{size} KB"
 
@@ -1239,6 +1249,7 @@ msgstr "清除搜索"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/DiscoveryResults.svelte
+#: src/lib/features/import/ImportBatchPreview.svelte
 #: src/lib/features/library/BulkActions.svelte
 msgid "Clear selection"
 msgstr "清除选择"
@@ -1515,6 +1526,11 @@ msgid "Corresponding author"
 msgstr "通讯作者"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Could not import"
+msgstr "无法导入"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/ItemActions.svelte
 msgid "Could not load metadata sources."
 msgstr "无法加载元数据来源。"
@@ -1529,6 +1545,11 @@ msgstr "国家或地区"
 #: src/lib/features/account/Account.svelte
 msgid "Create"
 msgstr "创建"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportCandidateRow.svelte
+msgid "Create a basic Item for {filename}"
+msgstr "为 {filename} 创建基础条目"
 
 #. js-lingui-explicit-id
 #: src/lib/features/auth/Invitation.svelte
@@ -2325,11 +2346,6 @@ msgid "External source {number}"
 msgstr "外部来源 {number}"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Extract metadata from PDFs and import them together."
-msgstr "提取 PDF 元数据并批量导入。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Facility"
 msgstr "设施"
@@ -2591,6 +2607,11 @@ msgid "Hosting institution"
 msgstr "托管机构"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Identified records"
+msgstr "已识别的文献"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
 msgid "Identifier"
 msgstr "标识符"
@@ -2639,14 +2660,29 @@ msgid "Import a bibliography"
 msgstr "导入书目"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import actions"
+msgstr "导入操作"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActiveFilters.svelte
 msgid "Import Batch"
 msgstr "导入批次"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import completed"
+msgstr "导入已完成"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Import completed. Deleting this record keeps the Items and files."
 msgstr "导入完成。删除记录不会删除条目和文件。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Import details"
+msgstr "导入详情"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -2686,6 +2722,11 @@ msgid "Import pages"
 msgstr "导入列表分页"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
+msgid "Import PDFs"
+msgstr "导入 PDF"
+
+#. js-lingui-explicit-id
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Import preview"
 msgstr "导入预览"
@@ -2712,14 +2753,10 @@ msgid "Import processing"
 msgstr "导入处理中"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Import processing failed"
 msgstr "导入处理失败"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportWorkspace.svelte
-msgid "Import published PDFs"
-msgstr "导入已发表的 PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -3125,6 +3162,11 @@ msgid "Journal volume"
 msgstr "期刊卷"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Keep the PDF now. Add its metadata after import."
+msgstr "先保留 PDF，导入后再补全元数据。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "Keep your Library useful"
 msgstr "让文献库持续好用"
@@ -3518,6 +3560,11 @@ msgstr "锁定"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
+msgid "Look up DOI or arXiv IDs from PDFs and import them together."
+msgstr "通过 PDF 中的 DOI 或 arXiv 编号查询元数据并批量导入。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportWorkspace.svelte
 msgid "Look up identifiers"
 msgstr "查询标识符"
 
@@ -3692,6 +3739,12 @@ msgstr "元数据"
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "Metadata contact email"
 msgstr "元数据联系邮箱"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
+msgid "Metadata not identified"
+msgstr "未识别元数据"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/schema-editor/labels.ts
@@ -3974,6 +4027,11 @@ msgid "No discussion messages."
 msgstr "暂无讨论消息。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "No DOI or arXiv ID found"
+msgstr "未找到 DOI 或 arXiv 编号"
+
+#. js-lingui-explicit-id
 #: src/lib/features/tools/Tools.svelte
 msgid "No duplicate groups found."
 msgstr "未发现重复组。"
@@ -4024,6 +4082,11 @@ msgstr "没有匹配的条目。"
 #: src/lib/features/workspaces/WorkspaceMembers.svelte
 msgid "No matching members."
 msgstr "没有匹配的成员。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "No matching metadata found"
+msgstr "未查到对应元数据"
 
 #. js-lingui-explicit-id
 #: src/lib/design/SearchSelect.svelte
@@ -4512,11 +4575,6 @@ msgid "PDF revisions"
 msgstr "PDF 修订"
 
 #. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
-msgid "PDF scanned for a DOI"
-msgstr "已扫描 PDF 中的 DOI"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "PDF URL"
 msgstr "PDF 地址"
@@ -4525,6 +4583,11 @@ msgstr "PDF 地址"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "PDFs"
 msgstr "PDF 文件"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "PDFs without metadata"
+msgstr "未识别元数据的 PDF"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5023,11 +5086,6 @@ msgid "Ready PDFs only; older files may be skipped."
 msgstr "仅比较就绪的 PDF，旧文件可能不参与。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
-msgid "Ready records can be imported. See the issues below."
-msgstr "可导入已就绪的记录，其余问题见下方。"
-
-#. js-lingui-explicit-id
 #: src/lib/features/admin/WorkspaceOwnerReassign.svelte
 #: src/routes/(app)/admin/workspaces/+page.svelte
 msgid "Reason (at least 10 characters)"
@@ -5321,11 +5379,6 @@ msgstr "报告系列"
 #: src/lib/features/item/metadata-labels.ts
 msgid "Repository"
 msgstr "仓库"
-
-#. js-lingui-explicit-id
-#: src/lib/features/item/ItemActions.svelte
-msgid "Rescan PDF for DOI"
-msgstr "重新扫描 PDF 中的 DOI"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
@@ -5815,6 +5868,11 @@ msgstr "请先筛选项目，再从中移除条目。"
 #: src/lib/features/tools/Tools.svelte
 msgid "Select a Tag"
 msgstr "选择标签"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Select all"
+msgstr "全选"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/DiscoveryResults.svelte
@@ -6427,6 +6485,11 @@ msgid "The value does not match the required format."
 msgstr "此值不符合要求的格式。"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "These PDFs have no identified metadata."
+msgstr "这些 PDF 未能识别元数据。"
+
+#. js-lingui-explicit-id
 #: src/lib/features/library/LibraryActionDialog.svelte
 #: src/lib/features/projects/ProjectSelect.svelte
 msgid "This action is no longer available."
@@ -7033,17 +7096,15 @@ msgstr "Unicode 文本"
 
 #. js-lingui-explicit-id
 #: src/lib/features/dashboard/Dashboard.svelte
+#: src/lib/features/discovery/DiscoveryResults.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
 #: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
+#: src/lib/features/projects/ProjectWorkspace.svelte
+#: src/lib/features/tools/Tools.svelte
 msgid "Unknown authors"
 msgstr "未知作者"
-
-#. js-lingui-explicit-id
-#: src/lib/features/discovery/DiscoveryResults.svelte
-#: src/lib/features/tools/Tools.svelte
-msgid "Unknown contributors"
-msgstr "未知贡献者"
 
 #. js-lingui-explicit-id
 #: src/lib/features/discovery/DiscoveryResults.svelte
@@ -7062,7 +7123,7 @@ msgid "Untagged"
 msgstr "未加标签"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchPreview.svelte
+#: src/lib/features/import/ImportCandidateRow.svelte
 msgid "Untitled"
 msgstr "无标题"
 

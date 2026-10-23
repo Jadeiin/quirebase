@@ -273,7 +273,7 @@
 			if (mounted && page.url === started.url) navigationFailed = true;
 		}
 	}
-	async function commit() {
+	async function commit(basicSourceIds: string[]) {
 		if (
 			!batch ||
 			batch.status !== 'ready' ||
@@ -289,7 +289,12 @@
 		pendingCommands.add(key);
 		error = '';
 		try {
-			const result = await confirmImportBatch(queryClient, workspaceId, snapshot.id);
+			const result = await confirmImportBatch(
+				queryClient,
+				workspaceId,
+				snapshot.id,
+				basicSourceIds
+			);
 			if (result.status === 'committed') await completed(result.batch, started);
 			else if (result.status === 'unknown') uncertainConfirmations.add(snapshot.id);
 			else if (isCurrent(started))
@@ -380,13 +385,15 @@
 
 <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">
-			{$t('Add to Library')}
-		</p>
+		{#if !batchId}<p
+				class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase"
+			>
+				{$t('Add to Library')}
+			</p>{/if}
 		<h1 class="mb-2">{$t('Import')}</h1>
-		<p class="mb-0 max-w-2xl text-surface-600-400">
-			{$t('Import from identifiers, bibliography files or PDFs, or create an Item manually.')}
-		</p>
+		{#if !batchId}<p class="mb-0 max-w-2xl text-surface-600-400">
+				{$t('Import from identifiers, bibliography files or PDFs, or create an Item manually.')}
+			</p>{/if}
 	</div>
 	{#if batchId}
 		<Button onclick={returnFromPreview}
@@ -404,21 +411,22 @@
 		>
 	{/if}
 </div>
-<ol class="mb-6 flex list-none flex-wrap items-center p-0">
+<ol
+	class="mb-5 grid list-none grid-cols-3 gap-3 border-b border-surface-300-700 p-0 pb-4 sm:flex sm:gap-6"
+>
 	{#each [{ number: '1', title: $t('Choose a source') }, { number: '2', title: $t('Preview records') }, { number: '3', title: $t('Import to Library') }] as step, index (step.number)}
-		<li class="flex items-center" aria-current={index + 1 === currentStep ? 'step' : undefined}>
+		<li
+			class="flex min-w-0 items-center gap-2"
+			aria-current={index + 1 === currentStep ? 'step' : undefined}
+		>
 			<span class={stepChipClass(index)}
 				>{#if index + 1 < currentStep}<Icon name="check" size={13} />{:else}{step.number}{/if}</span
 			>
 			<span
-				class="ml-2 text-sm"
+				class="text-xs leading-4 sm:text-sm"
 				class:font-semibold={index + 1 === currentStep}
 				class:text-surface-600-400={index + 1 !== currentStep}>{step.title}</span
 			>
-			{#if index < 2}<span
-					class="mx-3 hidden h-px w-6 bg-surface-300-700 sm:block"
-					aria-hidden="true"
-				></span>{/if}
 		</li>
 	{/each}
 </ol>
@@ -583,8 +591,8 @@
 		<Tabs.Content value="pdfs">
 			<ImportSourceForm
 				icon="import"
-				title={$t('Import published PDFs')}
-				description={$t('Extract metadata from PDFs and import them together.')}
+				title={$t('Import PDFs')}
+				description={$t('Look up DOI or arXiv IDs from PDFs and import them together.')}
 				busy={busy || hasStagedBatch}
 				submitLabel={$t('Preview import')}
 				submitDisabled={pdfFiles.length === 0}

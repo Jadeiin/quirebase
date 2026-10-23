@@ -8,8 +8,9 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from io import BytesIO
 from unittest.mock import AsyncMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+import httpx2
 import pymupdf
 import pytest
 from app_helpers import json_payload
@@ -18,6 +19,7 @@ from commonmeta.base_utils import compact
 from import_helpers import pdf_import_batch_data
 from inquiro import CandidateRecord, Identifier
 from item_helpers import contributor_values, metadata_list_values, work_identifier
+from provider_helpers import provider_runtime
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from storage_helpers import local_object_path
@@ -25,7 +27,7 @@ from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
-from quirebase.core.errors import UpstreamServiceError
+from quirebase.core.errors import ResourceNotFound, UpstreamServiceError
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.core.workflows import durable_operations
 from quirebase.documents import workflows as document_workflows
@@ -35,7 +37,7 @@ from quirebase.library.imports import (
     _pdf_import_inputs,
     check_pdf_import_eligibility,
     delete_import_batch,
-    extract_pdf_import_doi,
+    extract_pdf_import_identifier,
     finalize_pdf_import_batch,
     lookup_pdf_import_candidate,
     retry_pdf_import_batch,
@@ -145,9 +147,11 @@ async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, mon
         async with session_factory() as worker_db:
             return await check_pdf_import_eligibility(worker_db, batch_id, candidate)
 
-    async def lookup(batch_id, candidate, detected_doi):
+    async def lookup(batch_id, candidate, detected_identifier):
         async with session_factory() as worker_db:
-            return await lookup_pdf_import_candidate(worker_db, batch_id, candidate, detected_doi)
+            return await lookup_pdf_import_candidate(
+                worker_db, batch_id, candidate, detected_identifier
+            )
 
     async def finalize(actor_id, workspace_id, batch_id, workflow_id, records, errors):
         async with session_factory() as worker_db:
@@ -166,7 +170,9 @@ async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, mon
             )
         return f"cleanup:{batch.id}"
 
-    monkeypatch.setattr(library_workflows, "extract_pdf_import_doi_step", extract_pdf_import_doi)
+    monkeypatch.setattr(
+        library_workflows, "extract_pdf_import_identifier_step", extract_pdf_import_identifier
+    )
     monkeypatch.setattr(library_workflows, "check_pdf_import_eligibility_step", check)
     monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", lookup)
     monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
@@ -194,6 +200,7 @@ def published_pdf_bytes(doi: str = "10.1000/published") -> bytes:
     document = pymupdf.open()
     page = document.new_page()
     page.insert_text((72, 72), f"https://doi.org/{doi}")
+    document.set_metadata({"subject": f"doi:{doi}"})
     contents = document.tobytes()
     document.close()
     return contents
@@ -327,7 +334,8 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
     assert batch.status == "ready"
     assert batch.staged_files[0].path == keys[0]
     assert await get_object_store().exists(keys[0])
-    assert not await get_object_store().exists(keys[1])
+    assert batch.records[1]["_basic"]
+    assert await get_object_store().exists(keys[1])
 
 
 @pytest.mark.anyio
@@ -355,7 +363,9 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
     )
     async with async_session_factory() as worker_db:
         with pytest.raises(UpstreamServiceError, match="temporarily unavailable"):
-            await lookup_pdf_import_candidate(worker_db, batch.id, pending, "10.1000/retry")
+            await lookup_pdf_import_candidate(
+                worker_db, batch.id, pending, {"provider": "doi", "value": "10.1000/retry"}
+            )
     assert local_object_path(pending["_pdf"]["object_key"]).exists()
 
 
@@ -651,7 +661,9 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
     pending = _pdf_import_inputs(batch.staged_files)[0]
     async with async_session_factory() as worker_db:
         importing = asyncio.create_task(
-            lookup_pdf_import_candidate(worker_db, batch.id, pending, "10.1000/cancelled")
+            lookup_pdf_import_candidate(
+                worker_db, batch.id, pending, {"provider": "doi", "value": "10.1000/cancelled"}
+            )
         )
         await provider_started.wait()
         importing.cancel()
@@ -1028,8 +1040,94 @@ async def test_pdf_import_batch_previews_before_creating_items(
 
 
 @pytest.mark.anyio
-async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
-    async_db, async_session_factory, tmp_path, monkeypatch
+@pytest.mark.parametrize("identifier", ["2304.08030v2", "hep-th/9901001v2"])
+async def test_arxiv_pdf_import_resolves_metadata_warns_on_batch_duplicates_and_preserves_files(
+    async_db, async_session_factory, tmp_path, monkeypatch, identifier
+):
+    db = async_db
+    client, item, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    base = f"/api/v1/workspaces/{item.workspace_id}"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Preprint\nReference DOI:10.1234/citation")
+        page.insert_text((30, 700), f"arXiv:{identifier} [cs.CL] 18 Apr 2023", rotate=90)
+        contents = document.tobytes()
+
+    def response(request):
+        assert request.url.host == "export.arxiv.org"
+        assert request.url.params["id_list"] == identifier
+        return httpx2.Response(
+            200,
+            text=f"""<feed xmlns="http://www.w3.org/2005/Atom">
+                <entry><id>http://arxiv.org/abs/{identifier}</id>
+                <title>Imported preprint</title><summary>Preprint abstract</summary>
+                <published>2023-04-17T00:00:00Z</published>
+                <author><name>Ada Example</name></author></entry></feed>""",
+        )
+
+    monkeypatch.setattr(
+        "quirebase.library.providers.provider_runtime",
+        lambda settings: provider_runtime(
+            settings=settings, transport=httpx2.MockTransport(response)
+        ),
+    )
+    try:
+        staged = await client.post(
+            f"{base}/imports/pdfs",
+            files=[
+                ("pdfs", (name, BytesIO(contents), "application/pdf"))
+                for name in ("preprint.pdf", "another-copy.pdf")
+            ],
+        )
+        assert staged.status_code == 202
+        batch = await db.get(ImportBatch, UUID(staged.json()["id"]))
+        await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+        preview = await client.get(f"{base}/imports/{batch.id}")
+        assert preview.status_code == 200
+        assert preview.json()["status"] == "ready"
+        records = preview.json()["records"]
+        assert len(records) == 2
+        assert all(row["metadata"]["title"] == "Imported preprint" for row in records)
+        assert all(row["metadata"]["type"] == "Preprint" for row in records)
+        assert preview.json()["errors"] == [
+            {
+                "row": 2,
+                "filename": "another-copy.pdf",
+                "severity": "warning",
+                "code": "duplicate_batch_identifier",
+                "message": "another PDF in this batch has the same identifier",
+                "identifier": None,
+            }
+        ]
+        committed = await client.post(f"{base}/imports/{batch.id}/commit", json={})
+        assert committed.status_code == 200
+        imported_ids = committed.json()["committed_item_ids"]
+        assert len(imported_ids) == 2
+        for item_id, filename in zip(
+            imported_ids, ("preprint.pdf", "another-copy.pdf"), strict=True
+        ):
+            imported = await client.get(f"{base}/items/{item_id}")
+            assert imported.status_code == 200
+            metadata = imported.json()["metadata"]
+            assert metadata["title"] == "Imported preprint"
+            assert metadata["id"].startswith("urn:uuid:")
+            assert {"identifier_type": "arXiv", "identifier": identifier} in metadata["identifiers"]
+            assert all(row["identifier_type"] != "DOI" for row in metadata["identifiers"])
+            files = await client.get(f"{base}/items/{item_id}/documents")
+            assert files.status_code == 200
+            assert [file["original_name"] for file in files.json()["files"]] == [filename]
+        replay = await client.post(f"{base}/imports/{batch.id}/commit", json={})
+        assert replay.json() == committed.json()
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("include_basic", [False, True])
+async def test_pdf_import_batch_preserves_unidentified_pdfs_until_explicit_selection(
+    async_db, async_session_factory, fake_durable_operations, tmp_path, monkeypatch, include_basic
 ):
     db = async_db
     client, item, _revision = await authenticated_async_client(
@@ -1063,12 +1161,26 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
         assert "valid.pdf" in preview.text
         assert "missing-doi.pdf" in preview.text
-        assert any(error["code"] == "missing_doi" for error in batch.errors)
-        assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 1
+        assert any(error["code"] == "missing_identifier" for error in batch.errors)
+        assert len(set(get_settings().object_dir.rglob("*.pdf")) - objects_before) == 2
+        candidates = preview.json()["records"]
+        assert [record["is_basic"] for record in candidates] == [False, True]
+        basic = candidates[1]
+        assert basic["metadata"]["title"] == "missing-doi"
+        assert basic["metadata"]["type"] == "Document"
+        assert not basic["metadata"].get("identifiers")
+        assert not basic["metadata"].get("contributors")
+        basic_key = batch.staged_files[1].path
+        async with async_session_factory() as worker_db:
+            assert await delete_unreferenced_objects(worker_db, [basic_key]) == ()
+        assert local_object_path(basic_key).exists()
+        basic_ids = [basic["source"]["id"]] if include_basic else []
         committed = await client.post(
-            f"{workspace_base}/imports/{batch.id}/commit", json=json_payload({})
+            f"{workspace_base}/imports/{batch.id}/commit", json={"basic_source_ids": basic_ids}
         )
         assert committed.status_code == 200
+        imported_ids = committed.json()["committed_item_ids"]
+        assert len(imported_ids) == (2 if include_basic else 1)
         article = await db.scalar(
             select(Item)
             .options(selectinload(Item.revisions))
@@ -1076,9 +1188,158 @@ async def test_pdf_import_batch_keeps_successes_and_reports_failed_files(
         )
         assert article is not None
         assert article.revisions[0].file.metadata["original_name"] == "valid.pdf"
+        cleanup = [
+            entry
+            for entry in fake_durable_operations.enqueues
+            if entry["attributes"].get("operation") == "import_batch_commit_skipped"
+        ]
+        assert len(cleanup) == int(not include_basic)
+        if include_basic:
+            basic_item = await client.get(f"{workspace_base}/items/{imported_ids[1]}")
+            assert basic_item.status_code == 200
+            assert basic_item.json()["metadata"]["title"] == "missing-doi"
+            files = await client.get(f"{workspace_base}/items/{imported_ids[1]}/documents")
+            assert [file["original_name"] for file in files.json()["files"]] == ["missing-doi.pdf"]
+        else:
+            assert cleanup[0]["args"][2] == [basic_key]
+            async with async_session_factory() as worker_db:
+                await delete_unreferenced_objects(worker_db, [basic_key])
+            assert not local_object_path(basic_key).exists()
+        replay = await client.post(
+            f"{workspace_base}/imports/{batch.id}/commit",
+            json={"basic_source_ids": [] if include_basic else [basic["source"]["id"]]},
+        )
+        assert replay.json() == committed.json()
     finally:
         await client.aclose()
         get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_pdf_containing_only_reference_identifiers_remains_an_optional_basic_candidate(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    base = f"/api/v1/workspaces/{item.workspace_id}"
+    with pymupdf.open() as document:
+        document.new_page().insert_text((72, 72), "Related work: arXiv:2304.08030v2")
+        document.new_page().insert_text((72, 72), "References\n[1] DOI:10.1234/citation")
+        contents = document.tobytes()
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidate",
+        AsyncMock(side_effect=AssertionError("reference identifiers must not trigger lookup")),
+    )
+    try:
+        staged = await client.post(
+            f"{base}/imports/pdfs",
+            files=[("pdfs", ("unidentified.pdf", BytesIO(contents), "application/pdf"))],
+        )
+        assert staged.status_code == 202
+        batch = await async_db.get(ImportBatch, UUID(staged.json()["id"]))
+        await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+        preview = (await client.get(f"{base}/imports/{batch.id}")).json()
+        assert preview["status"] == "ready"
+        assert len(preview["records"]) == 1
+        record = preview["records"][0]
+        assert record["is_basic"]
+        assert record["metadata"]["title"] == "unidentified"
+        assert not record["metadata"].get("identifiers")
+        assert record["source"]["original_name"] == "unidentified.pdf"
+        assert [error["code"] for error in preview["errors"]] == ["missing_identifier"]
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_basic_pdf_candidates_require_opt_in_and_support_later_metadata_updates(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    db = async_db
+    client, existing, _revision = await authenticated_async_client(
+        db, async_session_factory, tmp_path, monkeypatch
+    )
+    base = f"/api/v1/workspaces/{existing.workspace_id}"
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidate",
+        AsyncMock(side_effect=ResourceNotFound("metadata not found")),
+    )
+    try:
+        staged = await client.post(
+            f"{base}/imports/pdfs",
+            files=[
+                ("pdfs", ("notes & draft.pdf", BytesIO(pdf_bytes()), "application/pdf")),
+                (
+                    "pdfs",
+                    ("not-found.pdf", BytesIO(published_pdf_bytes()), "application/pdf"),
+                ),
+                ("pdfs", ("broken.pdf", BytesIO(b"broken"), "application/pdf")),
+            ],
+        )
+        assert staged.status_code == 202
+        batch = await db.get(ImportBatch, UUID(staged.json()["id"]))
+        await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
+        preview = (await client.get(f"{base}/imports/{batch.id}")).json()
+        assert len(preview["records"]) == 2
+        assert all(record["is_basic"] for record in preview["records"])
+        assert {error["code"] for error in preview["errors"]} == {
+            "missing_identifier",
+            "metadata_not_found",
+            "invalid_pdf",
+        }
+        assert len(batch.staged_files) == 2
+        assert (await client.post(f"{base}/imports/{batch.id}/commit", json={})).status_code == 409
+        assert (
+            await client.post(
+                f"{base}/imports/{batch.id}/commit", json={"basic_source_ids": [str(uuid4())]}
+            )
+        ).status_code == 422
+        assert len(batch.staged_files) == 2
+        source_id = preview["records"][0]["source"]["id"]
+        assert preview["records"][0]["metadata"]["title"] == "notes &amp; draft"
+        receipt = await client.post(
+            f"{base}/imports/{batch.id}/commit", json={"basic_source_ids": [source_id]}
+        )
+        assert receipt.status_code == 200
+        assert len(receipt.json()["committed_item_ids"]) == 1
+        imported_id = receipt.json()["committed_item_ids"][0]
+        imported = (await client.get(f"{base}/items/{imported_id}")).json()
+        metadata = {
+            **imported["metadata"],
+            "identifiers": [work_identifier("doi", "10.1000/manual")],
+        }
+        saved = await client.put(
+            f"{base}/items/{imported_id}",
+            json={"expected_version": imported["version"], "metadata": metadata},
+        )
+        assert saved.status_code == 200
+        sources = (await client.get(f"{base}/items/{imported_id}/metadata/sources")).json()
+        assert any(
+            source["namespace"] == "doi" and source["value"] == "10.1000/manual"
+            for source in sources["sources"]
+        )
+        monkeypatch.setattr(
+            "quirebase.library.identifiers.lookup_candidate",
+            AsyncMock(
+                return_value=provider_candidate("10.1000/manual", "Manually resolved article")
+            ),
+        )
+        updated = await client.post(
+            f"{base}/items/{imported_id}/metadata/sync",
+            json={
+                "expected_version": sources["version"],
+                "provider": "doi",
+                "uid": "10.1000/manual",
+            },
+        )
+        assert updated.status_code == 200
+        resolved = (await client.get(f"{base}/items/{imported_id}")).json()
+        assert resolved["metadata"]["title"] == "Manually resolved article"
+        files = (await client.get(f"{base}/items/{imported_id}/documents")).json()["files"]
+        assert [file["original_name"] for file in files] == ["notes & draft.pdf"]
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.anyio

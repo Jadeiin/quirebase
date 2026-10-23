@@ -7,22 +7,45 @@ import pytest
 from quirebase.documents.pdf import (
     create_thumbnail,
     export_annotations,
-    extract_doi,
     inspect_pdf,
+    read_pdf_metadata,
     validate_pdf_container,
 )
 from quirebase.models import PdfAnnotation
 
 
-def test_extracts_doi_from_early_pdf_text(tmp_path):
+def test_pdf_metadata_retains_embedded_fields_and_first_page_layout(tmp_path):
     source = tmp_path / "doi.pdf"
     document = pymupdf.open()
     page = document.new_page()
     page.insert_text((72, 72), "Published article https://doi.org/10.1234/example.2026")
+    page.insert_text((30, 700), "arXiv:2304.08030v2 [cs.CL]", rotate=90)
+    page.insert_link({
+        "kind": pymupdf.LINK_URI,
+        "from": pymupdf.Rect(30, 30, 60, 60),
+        "uri": "https://crossmark.crossref.org/dialog/?doi=10.1234/example.2026",
+    })
+    document.set_metadata({"title": "Title", "subject": "Subject", "keywords": "Keywords"})
+    xml = '<x:xmpmeta xmlns:x="adobe:ns:meta/" />'
+    document.set_xml_metadata(xml)
+    document.new_page().insert_text((72, 72), "Later page")
     document.save(source)
     document.close()
 
-    assert extract_doi(source) == "10.1234/example.2026"
+    metadata = read_pdf_metadata(source)
+    assert metadata.info["title"] == "Title"
+    assert metadata.info["subject"] == "Subject"
+    assert metadata.xmp == xml
+    assert metadata.first_page_links == (
+        "https://crossmark.crossref.org/dialog/?doi=10.1234/example.2026",
+    )
+    assert [line.text for line in metadata.first_page_lines] == [
+        "Published article https://doi.org/10.1234/example.2026",
+        "arXiv:2304.08030v2 [cs.CL]",
+    ]
+    watermark = metadata.first_page_lines[1]
+    assert watermark.bounds[2] < metadata.first_page_width * 0.1
+    assert watermark.direction == (0, -1)
 
 
 def sample_pdf(path, *, native_annotation=False):

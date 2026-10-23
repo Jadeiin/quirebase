@@ -3,6 +3,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { components } from '#lib/api/schema.js';
 	import Button from '#lib/design/Button.svelte';
+	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import { t } from '#lib/i18n.js';
@@ -106,14 +107,14 @@
 {#each data.results as candidate, index (candidateKey(candidate))}
 	{@const key = candidateKey(candidate)}
 	<article
-		class="border-b border-surface-300-700 py-5 last:border-0"
+		class="border-b border-surface-300-700 py-4 last:border-0"
 		class:bg-primary-50-950={selected.has(key)}
 	>
 		<div class="flex min-w-0 items-start gap-3">
 			{#if canImport}
 				<input
 					type="checkbox"
-					class="mt-1.5 shrink-0"
+					class="mt-1 size-4 shrink-0"
 					aria-labelledby={`${id}-select ${id}-title-${index}`}
 					checked={selected.has(key)}
 					disabled={disabled || (!selected.has(key) && selected.size >= 50)}
@@ -122,27 +123,25 @@
 			{/if}
 			<div class="min-w-0 flex-1">
 				<div class="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
-					<h3 id={`${id}-title-${index}`} class="mb-1 min-w-0 flex-1 basis-64 text-lg break-words">
-						<RichText html={candidate.title} />
-					</h3>
+					<div class="min-w-0 flex-1 basis-64">
+						<BibliographicSummary density="detailed" headingId={`${id}-title-${index}`}>
+							{#snippet title()}<RichText html={candidate.title} />{/snippet}
+							{#snippet authors()}{candidate.authors ?? $t('Unknown authors')}{/snippet}
+							{candidate.publication_title ?? $t('Unknown publication')}
+							{#if candidate.publication_date}
+								· {candidate.publication_date}{/if}
+						</BibliographicSummary>
+					</div>
 					{#if canImport}
 						<Button size="sm" {disabled} onclick={() => onReview([candidate])}
 							>{$t('Review and import')}</Button
 						>
 					{/if}
 				</div>
-				<p class="mb-1 text-sm break-words text-surface-700-300">
-					{candidate.authors ?? $t('Unknown contributors')}
-				</p>
-				<p class="mb-2 text-sm break-words text-surface-600-400">
-					{candidate.publication_title ?? $t('Unknown publication')}
-					{#if candidate.publication_date}
-						· {candidate.publication_date}{/if}
-				</p>
 				{#if candidate.abstract}
 					<div
 						id={`${id}-abstract-${index}`}
-						class="text-sm break-words text-surface-700-300"
+						class="mt-2 text-sm wrap-anywhere text-surface-700-300"
 						class:line-clamp-3={!expanded.has(key)}
 					>
 						<RichText html={candidate.abstract} />

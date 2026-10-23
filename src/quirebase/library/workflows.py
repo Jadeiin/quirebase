@@ -208,10 +208,10 @@ async def item_ids_for_tag_recommendation(
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3)
-async def extract_pdf_import_doi_step(pending: dict[str, Any]) -> dict[str, Any]:
-    from .imports import extract_pdf_import_doi
+async def extract_pdf_import_identifier_step(pending: dict[str, Any]) -> dict[str, Any]:
+    from .imports import extract_pdf_import_identifier
 
-    return await extract_pdf_import_doi(pending)
+    return await extract_pdf_import_identifier(pending)
 
 
 @ads.transaction(isolation_level="READ COMMITTED")
@@ -228,12 +228,12 @@ async def check_pdf_import_eligibility_step(
 async def lookup_pdf_import_candidate_step(
     batch_id: UUID,
     pending: dict[str, Any],
-    detected_doi: str,
+    detected_identifier: dict[str, str],
 ) -> dict[str, Any]:
     from .imports import lookup_pdf_import_candidate
 
     async with AsyncSessionLocal() as db:
-        return await lookup_pdf_import_candidate(db, batch_id, pending, detected_doi)
+        return await lookup_pdf_import_candidate(db, batch_id, pending, detected_identifier)
 
 
 @ads.transaction()
@@ -274,32 +274,34 @@ async def prepare_pdf_import_workflow(
         records: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
         rejected_keys: list[str] = []
-        seen_dois: set[str] = set()
+        seen_identifiers: set[str] = set()
         all_keys = [pending["_pdf"]["object_key"] for pending in pending_records]
         for pending in pending_records:
-            result = await extract_pdf_import_doi_step(pending)
-            detected_doi = result.get("detected_doi")
-            if isinstance(detected_doi, str):
+            result = await extract_pdf_import_identifier_step(pending)
+            detected_identifier = result.get("detected_identifier")
+            if isinstance(detected_identifier, dict):
                 result = await check_pdf_import_eligibility_step(batch_id, pending)
                 if result.get("eligible"):
-                    result = await lookup_pdf_import_candidate_step(batch_id, pending, detected_doi)
-            normalized_doi = result.get("normalized_doi")
-            if isinstance(normalized_doi, str) and normalized_doi in seen_dois:
+                    result = await lookup_pdf_import_candidate_step(
+                        batch_id, pending, detected_identifier
+                    )
+            normalized_identifier = result.get("normalized_identifier")
+            if isinstance(normalized_identifier, str) and normalized_identifier in seen_identifiers:
                 pdf = pending["_pdf"]
                 errors.append({
                     "row": pending["_row"],
                     "filename": pdf["original_name"],
                     "severity": "warning",
-                    "code": "duplicate_batch_doi",
-                    "message": "another PDF in this batch has the same DOI",
+                    "code": "duplicate_batch_identifier",
+                    "message": "another PDF in this batch has the same identifier",
                 })
+            if isinstance(result.get("error"), dict):
+                errors.append(result["error"])
             if isinstance(result.get("record"), dict):
                 records.append(result["record"])
-                if isinstance(normalized_doi, str):
-                    seen_dois.add(normalized_doi)
+                if isinstance(normalized_identifier, str):
+                    seen_identifiers.add(normalized_identifier)
             else:
-                if isinstance(result.get("error"), dict):
-                    errors.append(result["error"])
                 rejected_keys.append(result["object_key"])
         finalized = await finalize_pdf_import_batch_step(
             actor_id, workspace_id, batch_id, workflow_id, records, errors

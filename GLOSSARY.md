@@ -162,8 +162,10 @@ ready File Revision. It becomes a Tag assignment only when selected.
 _Avoid_: Item Keyword, Tag, automatic Tag.
 
 **Candidate Record**:
-Uncommitted Work metadata retrieved through Discovery or Identifier Lookup, carrying Provider and
-lookup-input context for review before Import.
+Uncommitted Work metadata prepared for review before Import, retrieved through Discovery or
+Identifier Lookup, parsed from a bibliography, or initialized from a PDF. Retrieved candidates
+carry Provider and lookup-input context. A basic PDF candidate has minimal metadata and requires
+explicit selection to create an Item with its PDF.
 _Avoid_: Staged Item, Provisional Work.
 
 **Import Batch**:

@@ -1246,7 +1246,7 @@ for (const surface of ['Library', 'Project'] as const) {
 					: '/workspace/workspace-1/projects/project-1'
 			);
 			const item = page.getByRole('link', {
-				name: surface === 'Library' ? 'Research Item 2' : 'Research Item 2 Author 2',
+				name: 'Research Item 2',
 				exact: true
 			});
 			await expect(item).toBeVisible();
@@ -1257,7 +1257,7 @@ for (const surface of ['Library', 'Project'] as const) {
 			await page.getByRole('button', { name: 'Next page', exact: true }).click();
 			await expect(
 				page.getByRole('link', {
-					name: surface === 'Library' ? 'Research Item 26' : 'Research Item 26 Author 26',
+					name: 'Research Item 26',
 					exact: true
 				})
 			).toBeVisible();
@@ -1266,7 +1266,7 @@ for (const surface of ['Library', 'Project'] as const) {
 			const results =
 				surface === 'Library'
 					? page.locator('#library-results')
-					: page.getByRole('heading', { name: 'Items', exact: true }).locator('..');
+					: page.getByRole('region', { name: 'Items', exact: true });
 			const alert = results.getByRole('alert');
 			const failure =
 				surface === 'Library' ? 'Unable to load the Library.' : 'Unable to load Items.';

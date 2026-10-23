@@ -32,6 +32,7 @@ function importBatch(overrides: Partial<ImportBatch> = {}): ImportBatch {
 			overrides.status === 'committed'
 				? []
 				: importedIds.map((id, index) => ({
+						is_basic: false,
 						metadata: {
 							id: `urn:uuid:${id}`,
 							type: 'JournalArticle',
@@ -328,6 +329,42 @@ test('bibliography Import submits pasted content with automatic format detection
 	expect(body).toContain('name="file_format"\r\n\r\nauto');
 	await expect(page.getByRole('button', { name: importButtonName })).toBeDisabled();
 });
+
+for (const locale of ['en-US', 'zh-CN'] as const) {
+	test(`bibliography diagnostics retain source rows in ${locale}`, async ({ page }) => {
+		await mockSession(page);
+		await page.addInitScript((value) => localStorage.setItem('quirebase:locale', value), locale);
+		const preview = importBatch({
+			file_format: 'bibtex',
+			errors: [
+				{ row: 2, severity: 'error', code: 'invalid_item', message: 'title is required' },
+				{ row: 4, severity: 'error', code: 'invalid_item', message: 'title is required' },
+				{ row: 6, severity: 'warning', message: 'Publication date is incomplete' }
+			]
+		});
+		await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
+			route.fulfill({ json: preview })
+		);
+		await page.goto(`${importPath}?batch=${batchId}`);
+		const issues = page.getByRole('region', {
+			name: locale === 'en-US' ? 'Import issues' : '导入问题'
+		});
+		for (const row of [2, 4]) {
+			const diagnostic = issues.getByRole('listitem').filter({
+				has: page.getByText(locale === 'en-US' ? `Row ${row}` : `第 ${row} 行`, { exact: true })
+			});
+			await expect(diagnostic).toContainText('title is required');
+		}
+		await page
+			.locator('summary')
+			.filter({ hasText: locale === 'en-US' ? 'Import details' : '导入详情' })
+			.click();
+		const warning = page.getByRole('listitem').filter({
+			has: page.getByText(locale === 'en-US' ? 'Row 6' : '第 6 行', { exact: true })
+		});
+		await expect(warning).toContainText('Publication date is incomplete');
+	});
+}
 
 for (const source of ['bibliography', 'pdfs'] as const) {
 	test(`${source} Import retires file selections when returning from a preview`, async ({
@@ -635,6 +672,242 @@ test('Import preview paginates restored batches', async ({ page }) => {
 	await expect(page.getByText('Record 21', { exact: true })).toBeVisible();
 });
 
+test('unidentified PDFs are opt-in and keep per-file choices across preview pages', async ({
+	page
+}) => {
+	await mockSession(page);
+	await mockImportedLibrary(page);
+	const sourceIds = Array.from(
+		{ length: 21 },
+		(_, index) => `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
+	);
+	let batch = importBatch({
+		file_format: 'pdf',
+		records: sourceIds.map((id) => ({
+			metadata: { id: `urn:uuid:${id}`, type: 'Document', title: 'Unidentified PDF' },
+			source: { id, original_name: 'same-name.pdf', size: 100 },
+			is_basic: true
+		})),
+		errors: [{ severity: 'warning', code: 'missing_identifier', message: 'No identifier found' }]
+	});
+	let submitted: unknown;
+	await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
+		route.fulfill({ json: batch })
+	);
+	await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}/commit`, (route) => {
+		submitted = route.request().postDataJSON();
+		batch = importBatch({ status: 'committed', committed_item_ids: importedIds });
+		return route.fulfill({ json: batch });
+	});
+	await page.goto(`${importPath}?batch=${batchId}`);
+	const checkboxes = page.getByRole('checkbox', { name: 'Create a basic Item for same-name.pdf' });
+	await expect(checkboxes).toHaveCount(20);
+	await expect(page.getByText(`urn:uuid:${sourceIds[0]}`, { exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Import 0 records', exact: true })).toBeDisabled();
+	await expect(checkboxes.first()).not.toBeChecked();
+	await expect(page.getByText('21 PDFs will be skipped', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Select all', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Import 21 records', exact: true })).toBeEnabled();
+	await expect(page.getByText('0 PDFs will be skipped', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Import 0 records', exact: true })).toBeDisabled();
+	await checkboxes.first().check();
+	const pagination = page.getByRole('navigation', { name: 'Import preview pages' });
+	await pagination.getByRole('button', { name: 'Next page', exact: true }).click();
+	await expect(checkboxes).toHaveCount(1);
+	await checkboxes.check();
+	await pagination.getByRole('button', { name: 'Previous page', exact: true }).click();
+	await expect(checkboxes.first()).toBeChecked();
+	await expect(page.getByText('19 PDFs will be skipped', { exact: true })).toBeVisible();
+	await pagination.getByRole('button', { name: 'Next page', exact: true }).click();
+	await page.setViewportSize({ width: 375, height: 812 });
+	await page.evaluate(() => window.scrollTo(0, 0));
+	const actionBounds = (await page
+		.getByRole('button', { name: 'Import 2 records', exact: true })
+		.boundingBox())!;
+	expect(actionBounds.y).toBeGreaterThanOrEqual(0);
+	expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(748);
+	await expect
+		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+		.toBe(true);
+	await page.screenshot({
+		path: test.info().outputPath('basic-pdf-preview-mobile.png'),
+		fullPage: true
+	});
+	await page.getByRole('button', { name: 'Import 2 records', exact: true }).click();
+	await expect.poll(() => submitted).toEqual({ basic_source_ids: [sourceIds[0], sourceIds[20]] });
+	await expect(page).toHaveURL(`${libraryPath}?import_batch=${batchId}`);
+});
+
+test('mixed PDF review keeps selection and confirmation clear on desktop and mobile', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.addInitScript(() => localStorage.setItem('quirebase:locale', 'zh-CN'));
+	const filenames = [
+		'Attention Is All You Need.pdf',
+		'实验笔记：多模态检索的消融实验与后续计划（2026 年 10 月修订版）.pdf'
+	];
+	await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
+		route.fulfill({
+			json: importBatch({
+				file_format: 'pdf',
+				records: [
+					...[
+						'Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks',
+						'Learning Transferable Visual Models From Natural Language Supervision'
+					].map((title, index) => ({
+						is_basic: false,
+						metadata: {
+							id: `https://doi.org/10.1000/${index}`,
+							type: 'JournalArticle' as const,
+							title,
+							date_published: '2024',
+							contributors: [
+								{
+									type: 'Person' as const,
+									person: { name: 'Patrick Lewis' },
+									roles: ['Author' as const]
+								}
+							],
+							container: { title: 'Advances in Neural Information Processing Systems' }
+						},
+						source: {
+							id: importedIds[index],
+							original_name: `${index + 1}-research-paper.pdf`,
+							size: 1048576
+						}
+					})),
+					...filenames.map((filename, index) => ({
+						is_basic: true,
+						metadata: { id: `urn:uuid:${index}`, type: 'Document' as const, title: filename },
+						source: {
+							id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+							original_name: filename,
+							size: 524288
+						}
+					}))
+				],
+				errors: filenames.map((filename, index) => ({
+					filename,
+					severity: 'warning' as const,
+					code: index === 0 ? 'missing_identifier' : 'metadata_not_found',
+					message: 'Metadata not found'
+				}))
+			})
+		})
+	);
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.goto(`${importPath}?batch=${batchId}`);
+	await page.getByRole('checkbox').first().check();
+	await expect(page.getByRole('button', { name: /导入.*3.*条/ })).toBeEnabled();
+	await expect(page.getByText('missing_identifier', { exact: true })).toHaveCount(0);
+	await page.screenshot({
+		path: test.info().outputPath('pdf-review-desktop-zh.png'),
+		fullPage: true
+	});
+	await page.evaluate(() => localStorage.setItem('quirebase:theme', 'dark'));
+	await page.setViewportSize({ width: 375, height: 812 });
+	await page.reload();
+	await page.getByRole('checkbox').first().check();
+	await page.evaluate(() => window.scrollTo(0, 0));
+	await expect
+		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+		.toBe(true);
+	const apply = page.getByRole('button', { name: /导入.*3.*条/ });
+	const bounds = (await apply.boundingBox())!;
+	expect(bounds.y).toBeGreaterThanOrEqual(0);
+	expect(bounds.y + bounds.height).toBeLessThanOrEqual(748);
+	await page.screenshot({
+		path: test.info().outputPath('pdf-review-mobile-zh-dark.png'),
+		fullPage: true
+	});
+	await page.getByRole('checkbox').last().scrollIntoViewIfNeeded();
+	await page.getByRole('checkbox').last().check();
+	await expect(page.getByRole('button', { name: /导入.*4.*条/ })).toBeEnabled();
+});
+
+test('identified candidates keep unbroken titles and contributor names readable on narrow screens', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockSession(page);
+	const title = 'UnbrokenResearchTitle'.repeat(8);
+	const author = 'UnbrokenContributorName'.repeat(6);
+	await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
+		route.fulfill({
+			json: importBatch({
+				records: [
+					{
+						is_basic: false,
+						metadata: {
+							id: `urn:uuid:${importedIds[0]}`,
+							type: 'JournalArticle',
+							title,
+							contributors: [{ type: 'Person', person: { name: author }, roles: ['Author'] }]
+						}
+					}
+				]
+			})
+		})
+	);
+	await page.goto(`${importPath}?batch=${batchId}`);
+	const row = page.getByRole('article').filter({ hasText: title });
+	for (const text of [row.locator('strong'), row.getByText(author, { exact: true })]) {
+		await expect(text).toBeVisible();
+		const layout = await text.evaluate((node) => ({
+			width: node.clientWidth,
+			contentWidth: node.scrollWidth,
+			height: node.clientHeight,
+			contentHeight: node.scrollHeight,
+			lineHeight: Number.parseFloat(getComputedStyle(node).lineHeight)
+		}));
+		expect(layout.contentWidth).toBeLessThanOrEqual(layout.width + 1);
+		expect(layout.contentHeight).toBeLessThanOrEqual(layout.height + 1);
+		expect(layout.height).toBeGreaterThan(layout.lineHeight);
+	}
+	await expect(page.getByRole('button', { name: 'Import 1 record', exact: true })).toBeEnabled();
+});
+
+test('read-only basic PDF previews describe missing metadata without offering creation', async ({
+	page
+}) => {
+	await mockSession(page);
+	await page.addInitScript(() => localStorage.setItem('quirebase:locale', 'zh-CN'));
+	await page.route('**/api/v1/workspaces/workspace-1', (route) =>
+		route.fulfill({
+			json: {
+				...workspaceView('workspace-1', 'Research'),
+				current_role: 'viewer',
+				authorization: { allowed: ['workspace.read'] }
+			}
+		})
+	);
+	await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
+		route.fulfill({
+			json: importBatch({
+				file_format: 'pdf',
+				records: [
+					{
+						metadata: {
+							id: `urn:uuid:${importedIds[0]}`,
+							type: 'Document',
+							title: 'Unidentified PDF'
+						},
+						source: { id: importedIds[0], original_name: 'unidentified.pdf', size: 100 },
+						is_basic: true
+					}
+				]
+			})
+		})
+	);
+	await page.goto(`${importPath}?batch=${batchId}`);
+	await expect(page.getByText('这些 PDF 未能识别元数据。', { exact: true })).toBeVisible();
+	await expect(page.getByRole('checkbox')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /^导入 \d/ })).toHaveCount(0);
+	await expect(page.getByText(`urn:uuid:${importedIds[0]}`, { exact: true })).toHaveCount(0);
+});
+
 test('committing an Import opens its Library scope for preview, filtering and bulk organization', async ({
 	page
 }) => {
@@ -834,6 +1107,7 @@ test('a lost commit response reconciles its captured batch after navigation with
 				id: otherId,
 				records: [
 					{
+						is_basic: false,
 						metadata: {
 							id: 'urn:uuid:20000000-0000-4000-8000-000000000004',
 							type: 'Book',
@@ -1209,6 +1483,7 @@ test('same-page Import batch navigation and Back ignore a slow older preview res
 				id: otherId,
 				records: [
 					{
+						is_basic: false,
 						metadata: {
 							id: 'urn:uuid:20000000-0000-4000-8000-000000000004',
 							type: 'Book',
@@ -1264,7 +1539,7 @@ test('failed PDF processing retries its staged batch and commits the ready resul
 			file_format: 'pdf',
 			records: importBatch().records.map((record) => ({
 				...record,
-				source: { original_name: 'staged-paper.pdf', size: 9 }
+				source: { id: importedIds[0], original_name: 'staged-paper.pdf', size: 9 }
 			}))
 		});
 		return route.fulfill({ status: 202, json: pending });
@@ -1280,7 +1555,8 @@ test('failed PDF processing retries its staged batch and commits the ready resul
 	});
 	await page.goto(`${importPath}?batch=${batchId}`);
 	await expect(page.getByText('PDF metadata service temporarily unavailable')).toBeVisible();
-	await expect(page.getByRole('button', { name: importButtonName })).toBeDisabled();
+	await expect(page.getByRole('button', { name: importButtonName })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
 	await page.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(page.getByText('staged-paper.pdf', { exact: true })).toHaveCount(2);
 	await page.getByRole('button', { name: 'Import 2 records', exact: true }).click();
@@ -1552,6 +1828,7 @@ test('a lost receipt deletion response reconciles its inactive batch without red
 				id: otherId,
 				records: [
 					{
+						is_basic: false,
 						metadata: {
 							id: 'urn:uuid:20000000-0000-4000-8000-000000000004',
 							type: 'Book',

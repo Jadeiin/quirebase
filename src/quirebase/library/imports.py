@@ -4,6 +4,8 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime  # ruff: ignore[typing-only-standard-library-import] - Pydantic resolves preview values
+from html import escape
+from pathlib import PurePath
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
@@ -13,7 +15,7 @@ from inquiro.bibliography import (
     detect_bibliography_format,
     parse_bibliography_records,
 )
-from inquiro.identifiers import canonical_doi
+from inquiro.work import normalize_identifier
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import load_only
 
@@ -31,7 +33,6 @@ from quirebase.core.errors import (
 from quirebase.core.storage import ObjectSource, get_object_store
 from quirebase.core.workflows import IMPORT_QUEUE, durable_operations, object_reservation_attributes
 from quirebase.documents import delete_unreferenced_objects, enqueue_object_cleanup
-from quirebase.documents.pdf import extract_doi
 from quirebase.documents.revisions import (
     StagedPdf,
     attach_staged_pdf,
@@ -43,7 +44,7 @@ from quirebase.models import ImportBatch, ImportBatchStatus, User
 from quirebase.search import search_index
 
 from ._metadata import Work, metadata_write, validate_citation_key
-from .identifiers import _create_items_from_candidates
+from .identifiers import _create_items_from_candidates, extract_pdf_lookup_identifier
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -65,6 +66,7 @@ class ImportBatchUnavailable(ResourceUnavailable):
 
 @dataclass(frozen=True)
 class ImportSource:
+    id: UUID
     original_name: str
     size: int | None
 
@@ -73,6 +75,7 @@ class ImportSource:
 class ImportCandidatePreview:
     metadata: Work
     source: ImportSource | None = None
+    is_basic: bool = False
 
 
 @dataclass(frozen=True)
@@ -180,9 +183,14 @@ def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPrev
         previews.append(
             ImportCandidatePreview(
                 metadata=metadata,
-                source=ImportSource(source.metadata["original_name"], source.size)
+                source=ImportSource(
+                    UUID(source.metadata["source_id"]),
+                    source.metadata["original_name"],
+                    source.size,
+                )
                 if source is not None
                 else None,
+                is_basic=record.get("_basic", False),
             )
         )
     return ImportBatchPreview(
@@ -501,23 +509,39 @@ def _pdf_import_candidate_error(pending: dict, code: str, error: DomainError) ->
     }
 
 
-async def extract_pdf_import_doi(pending: dict) -> dict:
-    """Materialize one staged PDF and extract its DOI without database access."""
+def _basic_pdf_import_candidate(pending: dict, code: str, error: DomainError) -> dict:
+    """Retain an unidentified PDF as an optional candidate until explicit confirmation."""
+    result = _pdf_import_candidate_error(pending, code, error)
+    title = PurePath(pending["_pdf"]["original_name"]).stem.strip()[:1000] or "Untitled PDF"
+    result["record"] = {
+        **metadata_write({
+            "id": f"urn:uuid:{pending['_source_id']}",
+            "type": "Document",
+            "title": escape(title),
+        }),
+        "_source_id": pending["_source_id"],
+        "_basic": True,
+    }
+    result["error"]["severity"] = "warning"
+    return result
+
+
+async def extract_pdf_import_identifier(pending: dict) -> dict:
+    """Materialize one staged PDF and extract a lookup identifier without database access."""
     pdf = pending["_pdf"]
     try:
         async with get_object_store().materialize(pdf["object_key"]) as path:
-            detected_doi = await asyncio.to_thread(extract_doi, path)
+            identifier = await asyncio.to_thread(extract_pdf_lookup_identifier, path)
     except DomainError as error:
         return _pdf_import_candidate_error(pending, "invalid_pdf", error)
-    if not detected_doi:
-        return _pdf_import_candidate_error(
+    if identifier is None:
+        return _basic_pdf_import_candidate(
             pending,
-            "missing_doi",
-            ValidationFailure("no DOI was found in this PDF"),
+            "missing_identifier",
+            ValidationFailure("no DOI or arXiv ID was found in this PDF"),
         )
     return {
-        "detected_doi": detected_doi,
-        "normalized_doi": canonical_doi(detected_doi),
+        "detected_identifier": {"provider": identifier.provider, "value": identifier.value},
         "object_key": pdf["object_key"],
     }
 
@@ -543,9 +567,9 @@ async def lookup_pdf_import_candidate(
     db: AsyncSession,
     batch_id: UUID,
     pending: dict,
-    detected_doi: str,
+    detected_identifier: dict[str, str],
 ) -> dict:
-    """Retrieve metadata for one extracted DOI without repeating PDF parsing."""
+    """Retrieve metadata for one extracted identifier without repeating PDF parsing."""
     from quirebase.operations.settings import get_effective_settings_model
 
     pdf = pending["_pdf"]
@@ -558,13 +582,16 @@ async def lookup_pdf_import_candidate(
     effective_settings = await get_effective_settings_model(db)
     await db.rollback()
     try:
-        normalized_doi = canonical_doi(detected_doi)
-        record = await lookup_candidate(detected_doi, "doi", effective_settings)
+        provider, value = detected_identifier["provider"], detected_identifier["value"]
+        normalized = normalize_identifier(provider, value)
+        if normalized is None:
+            raise ValidationFailure("the extracted identifier is invalid")
+        record = await lookup_candidate(value, provider, effective_settings)
         candidate = metadata_write(record.work)
         candidate["_source_id"] = pending["_source_id"]
         return {
             "record": candidate,
-            "normalized_doi": normalized_doi,
+            "normalized_identifier": ":".join(normalized),
             "object_key": pdf["object_key"],
         }
     except UpstreamServiceError:
@@ -572,9 +599,9 @@ async def lookup_pdf_import_candidate(
         # step can retry them instead of publishing a permanent diagnostic.
         raise
     except ValidationFailure as error:
-        return _pdf_import_candidate_error(pending, "invalid_doi", error)
+        return _pdf_import_candidate_error(pending, "invalid_identifier", error)
     except ResourceNotFound as error:
-        return _pdf_import_candidate_error(pending, "metadata_not_found", error)
+        return _basic_pdf_import_candidate(pending, "metadata_not_found", error)
     except DomainError as error:
         return _pdf_import_candidate_error(pending, "invalid_pdf", error)
 
@@ -768,7 +795,12 @@ async def retry_pdf_import_batch(
 
 
 async def commit_import_batch(
-    db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
+    db: AsyncSession,
+    user: User,
+    workspace_id: UUID,
+    batch_id: UUID,
+    *,
+    basic_source_ids: Sequence[UUID] = (),
 ) -> ImportBatchPreview:
     # Lock the confirmer before Workspace authorization. Account deactivation
     # uses the same User-before-Workspace order, so it cannot deadlock a
@@ -791,7 +823,15 @@ async def commit_import_batch(
         return receipt
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
-    records = batch.records
+    selected_basic_ids = {str(source_id) for source_id in basic_source_ids}
+    available_basic_ids = {record["_source_id"] for record in batch.records if record.get("_basic")}
+    if not selected_basic_ids <= available_basic_ids:
+        raise ValidationFailure("selected basic PDF candidates are not in this import batch")
+    records = [
+        record
+        for record in batch.records
+        if not record.get("_basic") or record.get("_source_id") in selected_basic_ids
+    ]
     if not records:
         raise BatchConflict("the import batch has no candidate records")
     source_files = {file.metadata["source_id"]: file for file in batch.staged_files}
@@ -807,7 +847,7 @@ async def commit_import_batch(
         selected_files.append(pdf)
     items = await _create_items_from_candidates(db, workspace_id, actor.id, candidates)
     committed_item_ids: list[UUID] = []
-    for item, pdf in zip(items, selected_files, strict=True):
+    for item, pdf, candidate in zip(items, selected_files, candidates, strict=True):
         await request_item_tag_recommendation(
             db, item.id, workspace_id=workspace_id, actor_id=actor.id
         )
@@ -823,11 +863,15 @@ async def commit_import_batch(
             detail={
                 "format": batch.file_format,
                 "filename": pdf.metadata["original_name"] if pdf else None,
+                **({"basic_metadata": True} if candidate.get("_basic") else {}),
             },
             workspace_id=workspace_id,
             authorization_resource_action=ResourceAction.item_create.value,
         )
         committed_item_ids.append(item.id)
+    skipped_keys = {file.path for file in batch.staged_files} - {
+        file.path for file in selected_files if file is not None
+    }
     batch.committed_item_ids = [str(item_id) for item_id in committed_item_ids]
     # Transfer file ownership to File Revisions in the same confirmation transaction.
     batch.staged_files = []
@@ -835,6 +879,15 @@ async def commit_import_batch(
     batch.errors = []
     batch.workflow_id = None
     batch.status = ImportBatchStatus.committed
+    if skipped_keys:
+        await enqueue_object_cleanup(
+            db,
+            skipped_keys,
+            actor_id=actor.id,
+            workspace_id=workspace_id,
+            operation="import_batch_commit_skipped",
+            target_id=batch.id,
+        )
     receipt = _import_batch_preview(batch, actor.id)
     await db.commit()
     return receipt

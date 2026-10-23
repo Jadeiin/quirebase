@@ -220,6 +220,7 @@ test('discovery query builder stages a selected Candidate Record for Import', as
 		committed_item_ids: [],
 		records: [
 			{
+				is_basic: false,
 				metadata: {
 					id: 'urn:uuid:00000000-0000-4000-8000-000000000001',
 					type: 'Other',

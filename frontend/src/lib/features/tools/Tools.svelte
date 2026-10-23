@@ -33,6 +33,8 @@
 	import Icon from '#lib/design/Icon.svelte';
 	import { numberFormat } from '#lib/format.js';
 	import ItemRow from '#lib/design/ItemRow.svelte';
+	import AuthorLine from '#lib/design/AuthorLine.svelte';
+	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { createUrlDraft } from '#lib/navigation/url-draft.svelte.js';
@@ -412,14 +414,18 @@
 						<article class="mb-4 rounded-lg border border-surface-300-700 p-3 last:mb-0">
 							<h3>{$t('Duplicate group {number}', { number: index + 1 })}</h3>
 							{#each group as item (item.id)}
-								<ItemRow as="a" href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}>
-									<strong><RichText html={item.title_html} /></strong>
-									<span class="text-surface-600-400"
-										>{item.authors.map((author) => author.full_name).join('; ') ||
-											$t('Unknown contributors')}</span
-									>
-									{#if item.doi}<code class="text-xs">{item.doi}</code>{/if}
-								</ItemRow>
+								<a
+									class="block min-w-0 border-b border-surface-300-700 py-4 no-underline last:border-b-0 hover:text-primary-700-300"
+									href={resolve(workspaceHref(workspaceId, `item/${item.id}`))}
+								>
+									<BibliographicSummary>
+										{#snippet title()}<RichText html={item.title_html} />{/snippet}
+										{#snippet authors()}{#if item.authors.length}<AuthorLine
+													names={item.authors.map((author) => author.full_name)}
+												/>{:else}{$t('Unknown authors')}{/if}{/snippet}
+										{#if item.doi}<code>{item.doi}</code>{/if}
+									</BibliographicSummary>
+								</a>
 							{/each}
 						</article>
 					{:else}

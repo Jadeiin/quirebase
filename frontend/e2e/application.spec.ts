@@ -46,6 +46,50 @@ test('authenticated shell loads dashboard and navigates to Library', async ({ pa
 	await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 });
 
+for (const width of [1440, 390]) {
+	test(`dashboard wraps unbroken titles inside both reading lists at ${width}px`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width, height: 1000 });
+		await mockSession(page);
+		const title = 'UnbrokenResearchTitle'.repeat(8);
+		const item = {
+			id: 'item-long',
+			title_html: title,
+			authors: [],
+			publication_date: '2026',
+			publication_title: null,
+			doi: null,
+			version: 1
+		};
+		await page.route('**/api/v1/workspaces/workspace-1/dashboard', (route) =>
+			route.fulfill({
+				json: {
+					new_items: [item],
+					recent_items: [{ item, last_read_at: '2026-10-23T00:00:00Z' }],
+					projects: [],
+					project_count: 0,
+					session_count: 1
+				}
+			})
+		);
+		await page.goto('/workspace/workspace-1');
+		const titles = page.getByRole('main').locator('strong').filter({ hasText: title });
+		await expect(titles).toHaveCount(2);
+		for (const element of await titles.all()) {
+			await expect(element).toBeVisible();
+			const layout = await element.evaluate((node) => ({
+				width: node.clientWidth,
+				contentWidth: node.scrollWidth,
+				height: node.getBoundingClientRect().height,
+				lineHeight: Number.parseFloat(getComputedStyle(node).lineHeight)
+			}));
+			expect(layout.contentWidth).toBeLessThanOrEqual(layout.width + 1);
+			expect(layout.height).toBeGreaterThan(layout.lineHeight);
+		}
+	});
+}
+
 for (const [role, choices] of [
 	['owner', ['managed']],
 	['admin', ['workspace']],

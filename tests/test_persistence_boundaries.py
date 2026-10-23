@@ -20,7 +20,7 @@ from quirebase.core.errors import (
 )
 from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.library import copy_item_to_workspace, revise_item_metadata, stage_pdf_import_batch
-from quirebase.library.imports import extract_pdf_import_doi
+from quirebase.library.imports import extract_pdf_import_identifier
 from quirebase.models import (
     Attachment,
     AuditEvent,
@@ -260,6 +260,7 @@ async def test_pdf_durable_inputs_remain_replayable_after_live_descriptor_metada
 ):
     with pymupdf.open() as document:
         document.new_page().insert_text((72, 72), "https://doi.org/10.1000/snapshot")
+        document.set_metadata({"subject": "doi:10.1000/snapshot"})
         contents = document.tobytes()
     async with persistence_sessions() as db:
         actor, workspace_id = await provision_actor(db, "snapshot-actor")
@@ -302,6 +303,6 @@ async def test_pdf_durable_inputs_remain_replayable_after_live_descriptor_metada
             }
         ]
         assert pending == replayed
-        extracted = await extract_pdf_import_doi(replayed[0])
-        assert extracted["detected_doi"] == "10.1000/snapshot"
+        extracted = await extract_pdf_import_identifier(replayed[0])
+        assert extracted["detected_identifier"] == {"provider": "doi", "value": "10.1000/snapshot"}
         assert extracted["object_key"] == path

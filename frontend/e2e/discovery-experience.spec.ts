@@ -63,6 +63,7 @@ async function mockBatch(page: Page, titles: string[]) {
 		created_at: '2026-10-22T00:00:00Z',
 		committed_item_ids: [],
 		records: titles.map((title, index) => ({
+			is_basic: false,
 			metadata: {
 				id: `urn:uuid:20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
 				type: 'JournalArticle',
@@ -130,7 +131,7 @@ test('Discovery retains selected candidates after preview failure and retries on
 	await failure.getByRole('button', { name: 'Retry', exact: true }).click();
 	await expectPreviewNavigation(page, resultUrl);
 	await expect(page.getByRole('heading', { name: 'Import preview' })).toBeVisible();
-	await expect(page.getByText('2 records ready to import', { exact: true })).toBeVisible();
+	await expect(page.getByText('2 ready to import', { exact: true })).toBeVisible();
 	expect(previews).toEqual([
 		{ identifiers: ['alpha-1-A', 'alpha-1-C'], provider: 'doi' },
 		{ identifiers: ['alpha-1-A', 'alpha-1-C'], provider: 'doi' }
@@ -457,7 +458,7 @@ test('Discovery can show 100 candidates but keeps a bulk preview within one expl
 	const resultUrl = page.url();
 	await page.getByRole('button', { name: 'Review selected', exact: true }).click();
 	await expectPreviewNavigation(page, resultUrl);
-	await expect(page.getByText('50 records ready to import', { exact: true })).toBeVisible();
+	await expect(page.getByText('50 ready to import', { exact: true })).toBeVisible();
 	expect(previews).toEqual([
 		{
 			provider: 'doi',

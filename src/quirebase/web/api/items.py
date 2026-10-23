@@ -24,7 +24,6 @@ from quirebase.library import (
     open_item_section,
     regenerate_citation_key,
     regenerate_item_tag_recommendation,
-    rescan_pdf_doi,
     search_authors_typeahead,
     sync_metadata_from_upstream,
 )
@@ -164,12 +163,6 @@ async def sync_item_metadata(
         uid_value=data.uid,
         settings=await get_effective_settings_model(db),
     )
-    return OkView()
-
-
-@router.post("/items/{item_id}/doi/rescan", response_model=OkView)
-async def rescan_item_doi(workspace_id: UUID, item_id: UUID, user: ApiUser, db: Database) -> OkView:
-    await rescan_pdf_doi(db, user, workspace_id, item_id)
     return OkView()
 
 

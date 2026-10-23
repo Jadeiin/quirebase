@@ -29,15 +29,44 @@ updates accompany their canonical write transaction.
 
 An Import Batch persists staged FileObject descriptors with stable source UUIDs. Candidates refer
 to source UUIDs, while durable preparation receives serializable receipt snapshots. Separate
-steps extract DOI values, recheck actor/Workspace eligibility and retrieve Candidate Records.
+steps extract a lookup identifier, recheck actor/Workspace eligibility and retrieve Candidate Records.
+PDF lookup accepts an arXiv ID only from an `arXiv:` watermark rotated upward in the first page's
+left margin (within the leftmost 10%, capped at 72 points), including legacy IDs and version suffixes.
+That watermark takes precedence over DOI metadata. Otherwise lookup uses explicit XMP DOI fields
+(`prism:doi`, `pdfx:doi`/`DOI`, or `dc:identifier`), then first-page publisher update/citation links
+(Crossmark, MDPI check-update or `action/showCitFormats`), then PDF Info Title/Subject values that
+consist entirely of a DOI, optionally with a DOI resolver or `doi:`/`urn:doi:` prefix.
+Conflicting identifiers at the first available evidence tier leave the PDF unidentified; lower
+tiers cannot resolve that ambiguity. Body text, reference lists, keywords, ordinary DOI resolver
+links and generic `lookup/doi` links are not identity evidence, even on the first page. No later
+pages are scanned for lookup. Without an unambiguous identifier, the PDF follows the ordinary
+basic-candidate path.
+Library selects the identifier and routes through Inquiro; Documents supplies embedded metadata,
+first-page links and text layout without selecting scholarly identifiers.
+Lookup inputs remain query context, and only Provider-returned Work identifiers are persisted.
+Repeated normalized lookup identifiers within one batch produce a warning while retaining both PDFs.
 One final transaction publishes the ready preview for the matching workflow generation.
+
+Valid PDFs with no recognized identifier or no matching Provider metadata remain staged as optional
+basic candidates. Their Work uses a local UUID URN, `Document` type and an escaped filename stem
+as its title, without inferred authors, dates or upstream identifiers. Preview exposes the stable
+source UUID and marks these candidates as basic; no Item exists before confirmation.
+Users explicitly select basic source UUIDs in the confirmation request. Identified candidates are
+included normally, while unselected basic PDFs are skipped. Unknown source UUIDs are rejected, and
+a selection with no candidates cannot be committed. A batch containing only basic candidates is
+ready for review. Unreadable PDFs remain file errors; transient Provider failures retain the ordinary
+durable retry behavior. After Import, ordinary Metadata editing and identifier-based updates can
+complete the Item without an additional Item lifecycle state.
 
 Terminal failure retains staging for retry. A pending batch whose workflow is terminal or missing
 converges to failed when read or retried, provided its workflow identity still matches. Retry
 assigns a new workflow identity. Individual file diagnostics allow valid sibling records to proceed.
 Confirmation locks the batch, creates Items and transfers accepted PDFs to File Revisions atomically,
-then clears staging. Committed receipts retain Item IDs for replay. Identifier and within-batch
-warning rules follow the [Work contract](item-metadata-json.md#identifier-comparison-and-suggestions).
+then clears staging and transactionally enqueues cleanup for skipped PDFs. Discard and expiration
+release both identified and basic staging through the existing cleanup flow. Committed receipts
+retain Item IDs for replay; later confirmations return that receipt regardless of a changed selection.
+Identifier and within-batch warning rules follow the
+[Work contract](item-metadata-json.md#identifier-comparison-and-suggestions).
 
 ## Reference protection
 

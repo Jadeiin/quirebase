@@ -15,7 +15,9 @@ const ready: ImportBatch = {
 	file_format: 'metadata',
 	status: 'ready',
 	workflow_id: null,
-	records: [{ metadata: { id: 'urn:uuid:source-1', type: 'Book', title: 'A record' } }],
+	records: [
+		{ metadata: { id: 'urn:uuid:source-1', type: 'Book', title: 'A record' }, is_basic: false }
+	],
 	errors: [],
 	committed_item_ids: [],
 	created_at: '2026-10-21T00:00:00Z'
@@ -71,6 +73,17 @@ it('keeps the committed receipt when an earlier creation response arrives afterw
 	expect(client.getQueryData(importBatchQuery('workspace-1', ready.id).queryKey)).toEqual(
 		committed
 	);
+});
+
+it('sends the explicitly selected basic PDF sources with confirmation', async () => {
+	let body: unknown;
+	vi.stubGlobal('fetch', async (request: Request) => {
+		body = await request.json();
+		return new Response(JSON.stringify(committed));
+	});
+	const result = await confirmImportBatch(queryClient(), 'workspace-1', ready.id, ['source-2']);
+	expect(body).toEqual({ basic_source_ids: ['source-2'] });
+	expect(result.status).toBe('committed');
 });
 
 it.each([false, true])(
