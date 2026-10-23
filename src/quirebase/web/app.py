@@ -23,6 +23,7 @@ from quirebase.access import initialize_authorization
 from quirebase.core.config import get_settings
 from quirebase.core.database import AsyncSessionLocal, engine
 from quirebase.core.logging import configure_logging, log_context
+from quirebase.core.storage import get_object_store
 from quirebase.mcp import SessionFactory, create_mcp_http_mount
 from quirebase.web.api.common import API_ERROR_RESPONSES
 from quirebase.web.api.routes import router as api_router
@@ -213,6 +214,8 @@ def create_app(*, mcp_session_factory: SessionFactory = AsyncSessionLocal) -> Fa
             json_output=settings.log_format == "json",
         )
         try:
+            # Register file storage before HTTP or MCP can use persisted descriptors.
+            get_object_store()
             async with mcp_http.lifespan():
                 yield
         finally:

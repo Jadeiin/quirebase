@@ -7,13 +7,15 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from advanced_alchemy.types import FileObject
+from advanced_alchemy.types import FileObject, storages
 from import_helpers import pdf_import_batch_data
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.accounts import update_user_status
 from quirebase.core import workflows
+from quirebase.core.database import Base
 from quirebase.core.errors import ResourceUnavailable, WorkspaceMembershipRequired
 from quirebase.core.storage import ObjectResponse, ObjectSuffix, get_object_store
 from quirebase.documents import enqueue_object_cleanup
@@ -214,8 +216,15 @@ def test_periodic_maintenance_uses_managed_dbos_schedule():
 
 
 @pytest.mark.anyio
-async def test_worker_registers_partitioned_revision_and_independent_workload_queues(monkeypatch):
+async def test_worker_registers_storage_before_launch_and_configures_workload_queues(
+    monkeypatch, async_session_factory
+):
     registrations = []
+    database = create_engine("sqlite://")
+    Base.metadata.create_all(database)
+    previous_backend = storages.get_backend("documents")
+    storages.unregister_backend("documents")
+    get_object_store.cache_clear()
 
     class FakeDBOS:
         def __init__(self, **_config):
@@ -223,7 +232,23 @@ async def test_worker_registers_partitioned_revision_and_independent_workload_qu
 
         @staticmethod
         def launch():
-            return None
+            # DBOS can start new and recovered workflows immediately on launch.
+            with Session(database) as db:
+                revision = FileRevision(
+                    workspace_id=uuid4(),
+                    item_id=uuid4(),
+                    created_by=uuid4(),
+                    file=FileObject(
+                        backend="documents",
+                        filename="uploaded.pdf",
+                        size=1024,
+                        content_type="application/pdf",
+                    ),
+                )
+                db.add(revision)
+                db.commit()
+                db.expire_all()
+                assert revision.file.path == "uploaded.pdf"
 
         @staticmethod
         async def register_queue_async(name, **options):
@@ -241,6 +266,9 @@ async def test_worker_registers_partitioned_revision_and_independent_workload_qu
         await workflows._launch_runtime("test-worker")
     finally:
         workflows.ads.set_instance(None)
+        get_object_store.cache_clear()
+        storages.register_backend(previous_backend)
+        database.dispose()
 
     configured = dict(registrations)
     assert configured[workflows.DOCUMENTS_QUEUE] == {

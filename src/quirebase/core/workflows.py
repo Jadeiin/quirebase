@@ -14,6 +14,7 @@ from quirebase import __version__
 from quirebase.core.config import get_settings
 from quirebase.core.database import async_database_url, engine, is_sqlite_database_url
 from quirebase.core.logging import configure_logging
+from quirebase.core.storage import get_object_store
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Sequence
@@ -499,6 +500,8 @@ async def verify_durable_operations() -> None:
 async def _launch_runtime(executor_id: str) -> None:
     settings = get_settings()
     configure_logging(level=settings.log_level, json_output=settings.log_format == "json")
+    # File descriptors need a process-local backend before workflows can run or recover.
+    get_object_store()
     previous_disable = logging.root.manager.disable
     logging.disable(logging.INFO)
     try:
