@@ -8,7 +8,7 @@ from packaging.requirements import Requirement
 
 SRC_ROOT = Path(__file__).parent.parent / "src" / "quirebase"
 REPO_ROOT = Path(__file__).parent.parent
-STANDALONE_WORKSPACE_PACKAGES = ("inquiro", "rubrica")
+STANDALONE_WORKSPACE_PACKAGES = ("inquiro", "excerpo")
 
 PACKAGE_ROLES = {
     "access": "domain-policy",
@@ -438,7 +438,7 @@ def test_release_metadata_pins_workspace_packages_to_the_quirebase_version():
         assert f"{package}=={root_version}" in dependencies
 
     assert optional_dependencies["citation"] == [f"inquiro[citation]=={root_version}"]
-    assert optional_dependencies["keybert"] == [f"rubrica[keybert]=={root_version}"]
+    assert optional_dependencies["keybert"] == [f"excerpo[keybert]=={root_version}"]
 
 
 def test_persistence_dependencies_use_sqlalchemy_async_optional_groups():

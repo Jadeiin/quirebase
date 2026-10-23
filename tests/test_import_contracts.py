@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
-SOURCE_ROOTS = ("src", "packages/inquiro/src", "packages/rubrica/src")
+SOURCE_ROOTS = ("src", "packages/inquiro/src", "packages/excerpo/src")
 
 
 def lint_imports(directory: Path) -> subprocess.CompletedProcess[str]:

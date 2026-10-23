@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "rubrica"
+name = "excerpo"
 version = "0.2.0"
 description = "Keyword extraction, keyphrase ranking and tag recommendation engine"
 readme = "README.md"
@@ -21,4 +21,4 @@ keybert = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/rubrica"]
+packages = ["src/excerpo"]

@@ -4,7 +4,7 @@
 
 Python 3.12+ wheels are the common installation path on Windows, macOS and Linux. Install with `uv tool install` or in a virtual environment, then run `quirebase init-db`, `quirebase create-admin`, `quirebase serve`, and a separate `quirebase worker` process. EmbedPDF/PDFium and UI assets are already included in release wheels.
 
-Quirebase, `inquiro` and `rubrica` are versioned together and published to the same Python package
+Quirebase, `inquiro` and `excerpo` are versioned together and published to the same Python package
 index. A release publishes the two standalone workspace packages before the matching Quirebase
 artifact; Quirebase pins both dependencies to its own version so a standard wheel installation
 cannot silently combine incompatible workspace releases. Build all three together with
@@ -194,4 +194,4 @@ only after preserving the data you need elsewhere.
 For subsequent upgrades on the current migration chain, stop web and workers, back up, install the
 new wheel, and run `quirebase init-db`. Source checkouts also need
 `bun install --cwd frontend` and `bun run --cwd frontend build`. Run `quirebase doctor` before
-restarting web and workers. Install coordinated Quirebase, Inquiro and Rubrica versions together.
+restarting web and workers. Install coordinated Quirebase, Inquiro and Excerpo versions together.

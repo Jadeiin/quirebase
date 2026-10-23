@@ -10,13 +10,13 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
-from inquiro.richtext import convert_rich_text
-from rubrica import (
+from excerpo import (
     RecommendationDocument,
     RecommendationLimits,
     YakeRecommendationEngine,
     load_local_keybert,
 )
+from inquiro.richtext import convert_rich_text
 from sqlalchemy import select
 
 from quirebase.core.config import Settings, get_settings

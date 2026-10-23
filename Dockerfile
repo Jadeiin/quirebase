@@ -21,7 +21,7 @@ WORKDIR /app
 # Dependency layer: manifests only, workspace packages are installed below.
 COPY pyproject.toml uv.lock ./
 COPY packages/inquiro/pyproject.toml packages/inquiro/pyproject.toml
-COPY packages/rubrica/pyproject.toml packages/rubrica/pyproject.toml
+COPY packages/excerpo/pyproject.toml packages/excerpo/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-workspace --extra postgres --extra citation
 

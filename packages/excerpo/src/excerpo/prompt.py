@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rubrica.engine import RecommendationDocument, RecommendationLimits
+    from excerpo.engine import RecommendationDocument, RecommendationLimits
 
 
 @dataclass(frozen=True)

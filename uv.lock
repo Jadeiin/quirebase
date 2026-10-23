@@ -10,9 +10,9 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "excerpo",
     "inquiro",
     "quirebase",
-    "rubrica",
 ]
 
 [[package]]
@@ -1270,6 +1270,28 @@ sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/0e/97c33bf5009bdbac74fd2beace167cab3f978feb69cc36f1ef79360d6c4e/exceptiongroup-1.3.1-py3-none-any.whl", hash = "sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598", size = 16740, upload-time = "2025-11-21T23:01:53.443Z" },
 ]
+
+[[package]]
+name = "excerpo"
+version = "0.2.0"
+source = { editable = "packages/excerpo" }
+dependencies = [
+    { name = "yake" },
+]
+
+[package.optional-dependencies]
+keybert = [
+    { name = "keybert" },
+    { name = "model2vec" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "keybert", marker = "extra == 'keybert'", specifier = ">=0.9,<0.10" },
+    { name = "model2vec", marker = "extra == 'keybert'", specifier = ">=0.6,<1" },
+    { name = "yake", specifier = ">=0.7,<0.8" },
+]
+provides-extras = ["keybert"]
 
 [[package]]
 name = "execnet"
@@ -4007,6 +4029,7 @@ dependencies = [
     { name = "advanced-alchemy", extra = ["argon2", "cli", "obstore", "uuid"] },
     { name = "casbin" },
     { name = "dbos" },
+    { name = "excerpo" },
     { name = "fastapi" },
     { name = "fastmcp" },
     { name = "httpx2" },
@@ -4014,7 +4037,6 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pymupdf" },
     { name = "python-multipart" },
-    { name = "rubrica" },
     { name = "sqlalchemy", extra = ["aiosqlite", "asyncio"] },
     { name = "stream-zip" },
     { name = "typer" },
@@ -4028,7 +4050,7 @@ citation = [
     { name = "inquiro", extra = ["citation"] },
 ]
 keybert = [
-    { name = "rubrica", extra = ["keybert"] },
+    { name = "excerpo", extra = ["keybert"] },
 ]
 postgres = [
     { name = "sqlalchemy", extra = ["postgresql-psycopgbinary"] },
@@ -4053,6 +4075,8 @@ requires-dist = [
     { name = "advanced-alchemy", extras = ["argon2", "cli", "obstore", "uuid"], specifier = ">=1.12.0,<2" },
     { name = "casbin", specifier = ">=1.43,<2" },
     { name = "dbos", specifier = ">=2.31.0,<3" },
+    { name = "excerpo", editable = "packages/excerpo" },
+    { name = "excerpo", extras = ["keybert"], marker = "extra == 'keybert'", editable = "packages/excerpo" },
     { name = "fastapi", specifier = ">=0.141.1,<1" },
     { name = "fastmcp", specifier = ">=4,<5" },
     { name = "httpx2", specifier = ">=2.12,<3" },
@@ -4061,8 +4085,6 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
     { name = "pymupdf", specifier = ">=1.28,<1.29" },
     { name = "python-multipart", specifier = ">=0.0.20,<1" },
-    { name = "rubrica", editable = "packages/rubrica" },
-    { name = "rubrica", extras = ["keybert"], marker = "extra == 'keybert'", editable = "packages/rubrica" },
     { name = "sqlalchemy", extras = ["asyncio", "aiosqlite"], specifier = ">=2.0,<2.1" },
     { name = "sqlalchemy", extras = ["postgresql-psycopgbinary"], marker = "extra == 'postgres'", specifier = ">=2.0,<2.1" },
     { name = "stream-zip", specifier = ">=0.0.84,<0.1" },
@@ -4379,28 +4401,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/80/ef/3a9f8e4279c7920af561deed4cb7ebebed2794a8f608cf404d5eef14a105/rpds_py-2026.9.1-pp312-pypy312_pp80-macosx_10_12_x86_64.whl", hash = "sha256:56c6952a9b15047466d0c2347c446a761d4527f89976156341e68f0ce5cc08b0", size = 357108, upload-time = "2026-10-04T16:32:31.641Z" },
     { url = "https://files.pythonhosted.org/packages/b7/55/4b2fa381a583760aea5c92841e4e928a358e1c6511b129219e9c2826a226/rpds_py-2026.9.1-pp312-pypy312_pp80-macosx_11_0_arm64.whl", hash = "sha256:b242c27c8f836305a4a72df9cdd564386ac57b807bd252a063223331c9316b37", size = 346877, upload-time = "2026-10-04T16:32:34.061Z" },
 ]
-
-[[package]]
-name = "rubrica"
-version = "0.2.0"
-source = { editable = "packages/rubrica" }
-dependencies = [
-    { name = "yake" },
-]
-
-[package.optional-dependencies]
-keybert = [
-    { name = "keybert" },
-    { name = "model2vec" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "keybert", marker = "extra == 'keybert'", specifier = ">=0.9,<0.10" },
-    { name = "model2vec", marker = "extra == 'keybert'", specifier = ">=0.6,<1" },
-    { name = "yake", specifier = ">=0.7,<0.8" },
-]
-provides-extras = ["keybert"]
 
 [[package]]
 name = "ruff"

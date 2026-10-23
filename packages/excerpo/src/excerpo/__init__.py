@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rubrica.engine import (
+from excerpo.engine import (
     KeyBertRecommendationEngine,
     RecommendationDocument,
     RecommendationEngine,
@@ -9,7 +9,7 @@ from rubrica.engine import (
     YakeRecommendationEngine,
     load_local_keybert,
 )
-from rubrica.prompt import RecommendationPrompt, build_recommendation_prompt
+from excerpo.prompt import RecommendationPrompt, build_recommendation_prompt
 
 __all__ = [
     "KeyBertRecommendationEngine",

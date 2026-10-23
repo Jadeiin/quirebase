@@ -21,7 +21,7 @@ The application depends on `sqlalchemy[asyncio,aiosqlite]`, and the `postgres` e
 `sqlalchemy[postgresql-psycopgbinary]`. SQLite is the default single-worker deployment; PostgreSQL
 worker claims use `FOR UPDATE SKIP LOCKED`.
 
-Blocking File storage, FileLock, archive, backup, PyMuPDF and optional Rubrica/KeyBERT inference
+Blocking File storage, FileLock, archive, backup, PyMuPDF and optional Excerpo/KeyBERT inference
 run through `asyncio.to_thread`. PostgreSQL dump/restore uses asynchronous subprocesses. Typer
 commands use synchronous shell entry points backed by `asyncio.run`.
 

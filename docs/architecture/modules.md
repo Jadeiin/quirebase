@@ -91,7 +91,7 @@ Current standalone workspace packages are:
 
 - `inquiro`: metadata Provider Search/Lookup, bibliography interchange and CSL citation
   formatting; it isolates HTTP, bibliography-format, citation-engine and optional style-catalog dependencies.
-- `rubrica`: keyword extraction, keyphrase ranking and Tag Recommendation computation; it
+- `excerpo`: keyword extraction, keyphrase ranking and Tag Recommendation computation; it
   isolates YAKE and optional local-model dependencies.
 
 Each standalone workspace package owns tests of its Interface and internal seams under
@@ -361,7 +361,7 @@ workflow operations. Library owns assembly and cleaning of title, abstract and l
 File Revision text, transient recommendation state and stale-workflow guards. A generation token
 supersedes queued work when source data changes; engine and model provenance are not persisted for
 this disposable, reproducible result.
-Its Implementation calls the reusable `rubrica` Interface for recommendation computation. Model
+Its Implementation calls the reusable `excerpo` Interface for recommendation computation. Model
 files for KeyBERT are local administrator-provided inputs; the Adapter never accepts a remote model
 identifier. Library metadata writes enqueue generation transactionally through Core's DBOS
 Adapter, and the Library-owned workflow invokes the Library operation.
@@ -632,7 +632,7 @@ Dependencies on standalone workspace packages are also explicit:
 | Source | May depend on | Ownership reason |
 | --- | --- | --- |
 | `documents` | `inquiro` | Render canonical scholarly Rich Text as plaintext for archive filenames and manifests |
-| `library` | `inquiro`, `rubrica` | Adapt reusable metadata, bibliography, citation and recommendation computation to Library business operations and typed domain errors |
+| `library` | `inquiro`, `excerpo` | Adapt reusable metadata, bibliography, citation and recommendation computation to Library business operations and typed domain errors |
 | `search` | `inquiro` | Project canonical scholarly Rich Text into the plaintext derived search representation |
 
 The `documents` and `search` edges are restricted to `inquiro.richtext`; they do not permit those
@@ -649,7 +649,7 @@ True external systems receive a port and production/test adapters; local concret
 remain concrete until a second adapter is justified.
 
 Run `uv run lint-imports` or `make lint-architecture` to check imports across Quirebase, Inquiro
-and Rubrica. The same check runs through prek locally and in CI, and `make lint-all` includes it.
+and Excerpo. The same check runs through prek locally and in CI, and `make lint-all` includes it.
 Protected contracts list each Module's allowed direct callers; they preserve the documented
 direct dependency policy even where business Modules have legal indirect dependencies or cycles.
 Type-checking imports are included. Bibliography and Provider internals use exhaustive layer

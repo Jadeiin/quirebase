@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from rubrica import (
+from excerpo import (
     KeyBertRecommendationEngine,
     RecommendationDocument,
     RecommendationLimits,

@@ -12,13 +12,13 @@ license = "AGPL-3.0-only"
 dependencies = [
   "advanced-alchemy[argon2,cli,obstore,uuid]>=1.12.0,<2",
   "casbin>=1.43,<2",
+  "excerpo==0.2.0",
   "fastapi>=0.141.1,<1",
   "httpx2>=2.12,<3",
   "inquiro==0.2.0",
   "pymupdf>=1.28,<1.29",
   "pydantic-settings>=2.10,<3",
   "python-multipart>=0.0.20,<1",
-  "rubrica==0.2.0",
   "sqlalchemy[asyncio,aiosqlite]>=2.0,<2.1",
   "typer>=0.16,<1",
   "uvicorn[standard]>=0.35,<1",
@@ -34,14 +34,14 @@ postgres = [
   "sqlalchemy[postgresql-psycopgbinary]>=2.0,<2.1",
 ]
 citation = ["inquiro[citation]==0.2.0"]
-keybert = ["rubrica[keybert]==0.2.0"]
+keybert = ["excerpo[keybert]==0.2.0"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
 
 [tool.uv.sources]
 inquiro = { workspace = true }
-rubrica = { workspace = true }
+excerpo = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -75,7 +75,7 @@ path = "scripts/hatch_build.py"
 artifacts = ["frontend/build"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/inquiro/tests", "packages/rubrica/tests"]
+testpaths = ["tests", "packages/inquiro/tests", "packages/excerpo/tests"]
 markers = [
   "oa: tests using the separately downloaded open-access PDF corpus",
   "shared_postgres: tests that mutate the configured shared PostgreSQL database",
@@ -164,14 +164,14 @@ major_version_zero = true
 version_files = [
   "pyproject.toml",
   "packages/inquiro/pyproject.toml",
-  "packages/rubrica/pyproject.toml",
+  "packages/excerpo/pyproject.toml",
   "src/quirebase/__init__.py",
 ]
 
 # Import boundaries follow docs/architecture/modules.md. Protected contracts check
 # direct imports; legal indirect business dependencies remain allowed.
 [tool.importlinter]
-root_packages = ["quirebase", "inquiro", "rubrica"]
+root_packages = ["quirebase", "inquiro", "excerpo"]
 include_external_packages = true
 exclude_type_checking_imports = false
 
@@ -383,17 +383,17 @@ protected_modules = ["inquiro"]
 allowed_importers = ["quirebase.documents", "quirebase.library", "quirebase.models", "quirebase.search"]
 
 [[tool.importlinter.contracts]]
-id = "rubrica-callers"
-name = "Only Library adapts Rubrica"
+id = "excerpo-callers"
+name = "Only Library adapts Excerpo"
 type = "protected"
-protected_modules = ["rubrica"]
+protected_modules = ["excerpo"]
 allowed_importers = ["quirebase.library"]
 
 [[tool.importlinter.contracts]]
 id = "standalone-packages"
 name = "Standalone packages do not depend on Quirebase or its ORM"
 type = "forbidden"
-source_modules = ["inquiro", "rubrica"]
+source_modules = ["inquiro", "excerpo"]
 forbidden_modules = ["quirebase", "sqlalchemy"]
 allow_indirect_imports = true
 

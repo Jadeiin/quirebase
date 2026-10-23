@@ -9,7 +9,7 @@ Superseded by [ADR 0006](0006-async-runtime-and-persistence.md).
 Inquiro is an independently installable package in the Quirebase monorepo. It is independent of
 Quirebase business policy and persistence, owns several true external Provider dependencies, and
 offers reusable scholarly lookup and Search behaviour outside the application. Quirebase,
-Inquiro and Rubrica are released to the same package index at one version so the application wheel
+Inquiro and Excerpo are released to the same package index at one version so the application wheel
 can resolve its exact workspace-package dependencies independently.
 
 Inquiro exposed one synchronous `ProviderRuntime` with `lookup`, `search` and
