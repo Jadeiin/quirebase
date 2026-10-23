@@ -15,8 +15,7 @@ This boundary deliberately rejects persistence or exposure of EmbedPDF vendor ob
 adapter maps them to the same canonical schema used by REST and MCP, and maps canonical records
 back with explicit provenance. This costs two explicit transformations, but prevents a viewer
 upgrade from becoming a stored-data or public-interface migration and keeps server-side export
-independent of the browser runtime. The alpha cutover migrates existing records once and provides
-no dual writes, legacy wire shape or runtime compatibility reader.
+independent of the browser runtime.
 
 Collaborative Annotation Replies are stored as separate canonical records beneath a root
 Annotation. Replies inherit the root's visibility, carry their own author, body, version and

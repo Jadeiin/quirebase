@@ -1,24 +1,21 @@
 # Quirebase Research Library
 
-Quirebase stores, organizes, reads and annotates scholarly records and their
-files. The same vocabulary is used by Web routes, background jobs, tests and
-business Modules.
+Quirebase stores, organizes, reads and annotates scholarly records and their files. This glossary
+defines the concepts, relationships and language used across business modules, adapters and tests.
+Detailed behavior lives in [architecture contracts](docs/architecture/modules.md).
 
 ## Language
 
 **Item**:
-A bibliographic record representing a paper, book, preprint, manuscript or
-other research output.
-_Avoid_: Paper, Work, Document when referring to the stored bibliographic record
+A bibliographic record representing a paper, book, preprint, manuscript or other research output.
+_Avoid_: Paper, Work or Document for the stored record.
 
 **Work**:
-The official Commonmeta bibliographic value stored in an Item. Work describes a research output;
-its external identity is independent of the Item UUID, its Workspace and its governance.
+The Commonmeta bibliographic value describing an Item's research output. Its external identity
+is independent of the Item's identity, Workspace and governance.
 
 **Reference Type**:
-The Work's standard Commonmeta `type` classification, including JournalArticle, Book,
-BookChapter, Dataset and Preprint. Type vocabulary and format conversion belong to the external
-standard and its implementation; Quirebase maintains no parallel enum or type mapping.
+The Work's Commonmeta classification, such as JournalArticle, Book, BookChapter, Dataset or Preprint.
 
 **Publication Date**:
 The publication year, year and month, or complete calendar date, stored as `YYYY`, `YYYY-MM` or
@@ -27,279 +24,214 @@ imply January or the first day of a month.
 Date ranges retain only a shared year or month; a range spanning years has no single Publication Date.
 
 **Citation Key**:
-The bibliographic key identifying an Item in citation and bibliography output. Database mappings,
-Library commands and HTTP metadata use `citation_key`; it is not specific to BibTeX.
+A User-editable key used to name an Item in citation and bibliography output.
+_Avoid_: BibTeX Key when discussing the format-independent Item property.
 
 **Item Section**:
-A Web navigation and read-model section for one Item, such as Overview, Metadata, Files,
-Organize, Annotations or Discussion. It is a presentation projection, not a Workspace or a
-separate domain aggregate.
-_Avoid_: Item Workspace
+A navigation and read-model section for one Item: Overview, Metadata, Files, Organize, Annotations
+or Discussion. It is a presentation projection, not a separate domain aggregate.
+_Avoid_: Item Workspace.
 
 **Workspace**:
-A knowledge space and the data-governance and authorization boundary for its Items,
-Documents, Tags, Discussions and Projects. Every Workspace-owned resource has one Workspace
-lineage. Workspaces all use the same domain and authorization rules; there is no personal/shared
-Workspace kind. User provisioning creates an ordinary Workspace for its new User.
-_Avoid_: Tenant when discussing research data
+A knowledge space and the data-governance and authorization boundary for its Items, Documents,
+Tags, Discussions and Projects. Every owned resource has one Workspace lineage. All Workspaces
+use the same domain and authorization rules; there is no personal/shared Workspace kind.
+User provisioning creates an ordinary Workspace for its new User.
+_Avoid_: Tenant when discussing research data.
 
 **Workspace Freeze**:
 An instance-administrator read-only overlay that blocks Workspace mutations while retaining
-active members' content reads, downloads and exports. Unfreezing preserves the underlying
-active or archived state. It neither suspends members nor grants the administrator content access.
+active members' content reads, downloads and exports. Unfreezing preserves the underlying active
+or archived state. It neither suspends members nor grants the administrator content access.
 
 **Workspace Member**:
-A User with an active or suspended membership in a Workspace. An active User and active membership
-are required for Workspace data access; suspension and termination remove effective access without changing
-the provenance of Workspace-owned resources.
-An active non-owner member may leave an active, unfrozen Workspace. Leaving terminates that
-membership generation and its Project participation while preserving Workspace content and
-authorship. Rejoining requires a new invitation and creates a new membership generation.
+A User with an active or suspended membership in a Workspace. Effective data access requires
+both an active User and active membership. Suspension and termination remove effective access
+while preserving Workspace content and authorship. An active non-owner member may leave an
+active, unfrozen Workspace. Leaving terminates that membership generation and its Project
+participation. Rejoining requires a new invitation and creates a new membership generation.
 
 **Workspace Owner**:
-The User assigned to a Workspace's unique current active owner membership. The assignment survives
-User deactivation; effective access still requires an active User. An instance administrator may
-explicitly reassign ownership with a recorded reason, granting the selected active User owner access
-and retaining the previous owner as a Workspace admin.
+The User assigned to a Workspace's unique current active owner membership. The assignment
+survives User deactivation, while effective access requires an active User.
+An instance administrator may explicitly reassign ownership with a recorded reason, granting the
+selected active User owner access and retaining the previous owner as a Workspace admin.
 
 **Workspace Role**:
-The only persistent resource role axis in Quirebase: `owner`, `admin`, `editor`, `reviewer` or
-`viewer`. The Access Module evaluates resource-action decisions for Workspace data and governance
-operations. A role is never inferred from `created_by`.
+The persistent resource role within a Workspace: owner, admin, editor, reviewer or viewer.
+The Access Module evaluates its resource-action grants; authorship is separate provenance.
 
 **Authorization Decision**:
-An Access Module allow/deny result over a subject, resource, action, lifecycle and relation. For
-example, the `editor` subject may perform `update` on an `item` in an active Workspace, while an
-admin may perform `delete` on another author's `item_discussion`. Workspace lineage and active
-membership are established before the decision. A dotted key such as `item.update` is only the
-canonical API/audit serialization of the `resource=item`, `action=update` pair; it is not a separate
-capability namespace. When one resource-action varies by a canonical request fact, such as Project
-participation, API read models expose domain choices such as `allowed_project_participations`
-and `allowed_participation_changes`; Casbin relations stay internal to Access. Domain
-participation rules define ordinary Project discovery; `project_governance.read` grants additional
-managed-Project discoverability to Workspace governors.
+An Access Module allow/deny result over a subject, resource, action, lifecycle and relation.
+Workspace lineage and active membership are established before the decision. For example, an
+editor may update an Item in an active Workspace, while an admin may delete another author's
+Item Discussion.
+A dotted key such as `item.update` represents the resource/action pair in API and Audit values.
 
 **Item Stewardship**:
-The Workspace-governed authority to maintain or permanently delete a canonical Item. It is
-derived from a Workspace resource-action decision, not from the User who created the Item.
-`created_by` remains provenance only.
-_Avoid_: Item Owner when discussing authorization
+Workspace-governed authority to maintain or permanently delete a canonical Item, derived from
+a Workspace resource-action decision. The User who created the Item is recorded as provenance.
+_Avoid_: Item Owner when discussing authorization.
 
 **Contributor**:
-A person or organization credited in one Item's ordered bibliographic metadata as an author
-or editor. Names belong to that record and do not establish a shared researcher identity;
-standard person/organization names, optional family/given names and entity identifiers describe
-that record's credit. Organization credits retain their literal names.
-_Avoid_: Creator, User
+A person or organization credited in one Work, with roles such as Author or Editor. Credits
+are ordered and record-local; matching names do not establish a shared researcher identity.
+_Avoid_: Creator, User.
 
 **Affiliation**:
-An institution credited with a Contributor on a particular bibliographic record. It may include
-a standard institution name and identifier. It belongs to that record's authorship,
-not to an independent Contributor identity. Provider metadata, Import previews and Item Contributor snapshots preserve this mapping.
-Item has no separate affiliation field or institution list.
+An institution credited with a Contributor on a particular Work, optionally with an identifier.
+It belongs to that record's credit rather than to an independent Contributor identity.
 
 **Project**:
-A collaboration context inside one Workspace that organizes a working set of Items and contains
-Project-scoped annotations, discussions and notes. A Project does not grant access to an Item or
-raise a User's Workspace authority. A Project has no owner; `created_by` is provenance only.
-Archiving preserves the Project for restoration. Deleting physically removes its root and
-Project-owned context while preserving canonical Workspace Items and historical Audit Events.
-_Avoid_: Folder, Group
+A collaboration context within one Workspace that organizes Items and contains Project-scoped
+Annotations and Discussions. Workspace policy governs authority; a Project has no owner and grants no
+canonical Item access.
+Archiving preserves the Project for restoration. Deleting removes its root and Project-owned
+context while preserving canonical Workspace Items and historical Audit Events.
+_Avoid_: Folder, Group.
 
 **Project Participant**:
-A User participating in a Project working context, implicitly in `workspace` mode or through an
-explicit selection in `open` and `managed` modes. `ProjectParticipant` rows persist those explicit
-selections without a Project role or Workspace authority; `workspace` mode has no such rows.
-The selection controls discoverability of `managed` Projects and never grants canonical Item access.
-Each selection references one Workspace membership generation; termination clears it, while a later
-rejoin creates a new membership without restoring old selections. Project detail exposes active
-explicit participants as `ProjectParticipantInfo` values in `active_participants`; a suspended
-Workspace membership retains its stored selection but has no
-effective participation until reactivated.
+A User participating in a Project working context, implicitly in workspace mode or through an
+explicit selection in open/managed modes. Explicit selections belong to one Workspace membership
+generation. Suspension retains selections without effective participation; termination removes them.
 
 **Project Participation**:
-The Project `participation` field that expresses discoverability and participation policy, not a Project
-role or Workspace authority: `workspace` means all active Workspace members can discover and
-implicitly participate, with no Project Participant rows; `open` means all active Workspace members can
-discover the Project and may choose to join or leave; `managed` means only Project participants and
-Workspace owners/admins can discover the Project and its Project-scoped content, with participation
-curated by Workspace governance. Managed participation never changes access to canonical Workspace
-Items.
+The Project's discoverability and participation mode:
+
+- **workspace**: all active Workspace members discover and implicitly participate.
+- **open**: all active Workspace members discover the Project and may join or leave.
+- **managed**: participants and Workspace governors discover the Project; governance curates participation.
+
+Participation grants no additional Workspace authority or canonical Item access.
 
 **ProjectItem**:
-An association placing an Item from the same Workspace in a Project working set. ProjectItem
-does not grant Item access or any Workspace authority.
-Removing it permanently deletes the Project Annotations and Replies bound to that association.
+An association placing an Item from the same Workspace into a Project working set. Project
+Annotations and their Replies bind to this association and are permanently deleted with it.
 The canonical Item, its files, private Annotations and other Project associations remain.
 
 **Document**:
-Stored file content associated with an Item, represented by a File Revision or
-Attachment.
-_Avoid_: Item
+Stored file content associated with an Item, represented by a File Revision or Attachment.
+_Avoid_: Item.
 
 **File Revision**:
-An immutable primary PDF version associated with an Item. It is pending while awaiting
-inspection, ready after its text and page geometry have been successfully extracted, or failed
-when inspection cannot complete. A failed Revision retains its uploaded PDF and can be retried
-under a new processing workflow identity; stale attempts cannot publish over that generation.
-_Avoid_: Attachment, Item version
+An immutable primary PDF version associated with an Item. It is pending during inspection,
+ready after successful text/geometry extraction, or failed while retaining its source for retry.
+_Avoid_: Attachment, Item version.
 
 **Attachment**:
-A supplementary file associated with an Item that is not its primary PDF.
-An Attachment may carry a distinguished role such as Graphical Abstract.
-_Avoid_: File Revision
+A supplementary Item file, optionally carrying a distinguished role such as Graphical Abstract.
+_Avoid_: File Revision.
 
 **Graphical Abstract**:
-The single Attachment currently designated as an Item's author- or curator-supplied representative
-image. Replacing the designation does not turn the previous image into a File Revision.
+The single Attachment designated as an Item's author- or curator-supplied representative image.
 
 **PDF Thumbnail**:
-A derived first-page image belonging to exactly one File Revision. It has the same lifetime as that
-File Revision and is not independently curated.
+A derived first-page image belonging to exactly one File Revision and sharing its lifetime.
 
 **Item Thumbnail**:
-The representative image resolved for display. The current Graphical Abstract is authoritative;
-otherwise the newest ready File Revision with an available PDF Thumbnail is used.
+The representative image resolved for display: the current Graphical Abstract, or otherwise the
+newest ready File Revision with an available PDF Thumbnail.
 
 **Annotation**:
-A user-authored text mark, note, free text, ink stroke or geometric shape anchored to one page of
-a File Revision and scoped either privately or to a Project. Its scope and Project binding are fixed
-at creation; editing authored content does not move the Annotation or its Replies to a new audience.
-_Avoid_: Comment
+A user-authored text mark, note, free text, ink stroke or geometric shape anchored to one page
+of a File Revision. Its private or Project audience is fixed at creation.
+_Avoid_: Comment.
 
 **Annotation Reply**:
-A user-authored conversational response attached to one Annotation. It inherits that Annotation's
-visibility and has no independent PDF geometry or scope. Ordinary Annotation and Reply deletions
-can be undone for 24 hours by default; maintenance physically removes them after that window.
-Moderator deletion immediately removes the Annotation and its Replies and cannot be undone.
-_Avoid_: Annotation, Discussion Message
+A conversational response attached to an Annotation, inheriting its visibility without independent
+PDF geometry or scope.
+_Avoid_: Annotation, Discussion Message.
 
 **Annotation Export Artifact**:
-A temporary PDF derived from a File Revision and its visible Annotations for download. It remains
-available until its recorded expiration time and is then eligible for physical cleanup. Its own
-descriptor records the requesting User, source Revision and original ProjectItem identity for
-current-access checks; download does not depend on retained workflow history.
+A temporary PDF derived from a File Revision and its visible Annotations for authorized download.
+It has its own expiration and lifetime.
 
 **Discussion Message**:
-A conversational message attached to an Item and visible through Workspace Item access. A
-Project Discussion/Note is a separate Project-scoped collaboration resource governed by Project
-discoverability and Workspace resource-action decisions.
-_Avoid_: Annotation, Comment
+A conversational message attached to an Item or Project. Item Discussions follow Workspace Item
+access; Project Discussions follow Project discoverability and Workspace policy.
+_Avoid_: Annotation, Comment.
 
 **Tag**:
-A user-defined taxonomy label attached to Items for cross-cutting categorization.
-Item Keywords may be presented as suggested Tag names, but become Tags only after explicit User
-selection.
-_Avoid_: Category, Keyword, Folder
+A Workspace taxonomy label attached to Items for cross-cutting categorization. Work keywords
+become Tags only after explicit User selection.
+_Avoid_: Category, Keyword, Folder.
 
 **Item Tag Recommendation**:
-A transient, ranked set of single-word and compound-phrase candidate Tag names generated from an
-Item's title, abstract and latest ready File Revision. A recommendation is never a Tag until a User
-selects it.
-_Avoid_: Item Keyword, Tag, automatic Tag
+A transient ranked set of candidate Tag names generated from an Item's title, abstract and latest
+ready File Revision. It becomes a Tag assignment only when selected.
+_Avoid_: Item Keyword, Tag, automatic Tag.
 
 **Candidate Record**:
-An uncommitted bibliographic metadata payload retrieved via Discovery or Identifier Lookup, subject
-to preview before Import. Provider Candidate Records carry structured Contributors, their
-Affiliations, individual Keywords and resource links with source-supplied metadata. Candidates carry a standard Work with separate Provider and lookup-input context.
-_Avoid_: Staged Item, Provisional Work
+Uncommitted Work metadata retrieved through Discovery or Identifier Lookup, carrying Provider and
+lookup-input context for review before Import.
+_Avoid_: Staged Item, Provisional Work.
 
 **Import Batch**:
-A staged collection of Candidate Records and diagnostics from a bibliography file, Identifier
-Lookup or uploaded PDFs awaiting confirmation into the Library. A PDF Import Batch is pending
-while its durable preparation workflow extracts identifiers and retrieves Candidate Records, ready
-for confirmation after successful preparation, and failed after a terminal workflow error. Retrying
-a failed batch preserves its staged PDFs and assigns a new durable workflow. A pending PDF Import Batch
-whose associated workflow is terminal or missing converges to failed before retry. An Import Batch owns its staged PDFs as file descriptors with stable source UUIDs; Candidate Records
-refer to those sources without embedding storage paths. A PDF Candidate Record retains
-its independently owned UUID object until confirmation creates the Item and associated File
-Revision, or until the Import Batch is deleted or expires. After successful confirmation, the batch becomes
-committed, retains only the recorded committed Item IDs for idempotent confirmation responses, and no
-longer retains staged PDF object references, Candidate Records, diagnostics or its workflow link.
-Hourly maintenance retires batches after the configured period since their latest state change
-(seven days by default), preserving active or unconfirmed durable preparations. Reading a batch does
-not extend its retention. Workspace readers can list pending and committed batches in Import history;
-editors may delete a batch early, discarding staging or deleting its committed receipt. Deleting a receipt keeps
-its imported Items and Documents, but ends confirmation replay and the corresponding Library filter.
-_Avoid_: Staged Import, Import Queue
+A staged collection of Candidate Records, source files and diagnostics awaiting confirmation.
+PDF batches can be pending, ready or failed during preparation. Confirmation creates Items and
+turns the batch into a committed receipt of their identities. Deleting that receipt preserves
+imported Items and Documents but ends confirmation replay and receipt-scoped Library reads.
+_Avoid_: Staged Import, Import Queue.
 
 **Import**:
-Creation of candidate Item metadata from a known identifier, bibliography file
-or uploaded PDF, followed by explicit confirmation.
-_Avoid_: Discovery
+Adding reference metadata from an identifier, bibliography file or PDF through explicit confirmation.
+_Avoid_: Discovery.
 
 **Discovery**:
-Search of an external Provider using terms and conditions to find candidates
-that may later enter Import.
-_Avoid_: Import, Library Search
+Searching an external Provider by terms and conditions to find candidates for Import.
+_Avoid_: Import, Library Search.
 
 **Library Search**:
-Search over Items and extracted local PDF text already stored in Quirebase.
-_Avoid_: Discovery
+Search over Items and extracted local PDF text stored in Quirebase.
+_Avoid_: Discovery.
 
 **Citation Style**:
-A CSL specification defining how Item bibliographic metadata is formatted into academic citations and bibliographies.
-_Avoid_: Reference Template, CSL Profile
+A CSL specification for formatting bibliographic metadata into academic citations and bibliographies.
+_Avoid_: Reference Template, CSL Profile.
 
 **Provider**:
-A fixed external scholarly metadata source such as OpenAlex, Crossref or
-PubMed.
-_Avoid_: Plugin
+A fixed external scholarly metadata source such as OpenAlex, Crossref or PubMed.
+_Avoid_: Plugin.
 
 **Identifier Namespace**:
-The kind of scholarly identifier, such as DOI, PMID, PMCID, arXiv ID or OpenAlex Work ID.
-It is distinct from the Provider returning metadata: Crossref and DataCite both return DOI
-identifiers. Commonmeta `identifier_type` and, for Other identifiers, `scheme` describe the identifier kind.
-ISSN identifies a journal rather than an Item and belongs to bibliographic metadata.
+A scholarly identifier kind, such as DOI, PMID, PMCID, arXiv ID or OpenAlex Work ID. A namespace is
+distinct from a Provider: Crossref and DataCite both return DOIs. ISSN identifies a journal.
 
 **Upstream Identifier**:
-A bibliographic identifier declared by Work.id or Work.identifiers, including DOI. An Item can
-carry multiple values of the same identifier kind, and Items within or across Workspaces can
-share them. DOI comparison folds ASCII letter case while preserving non-ASCII distinctions.
-Identifier Lookup input is query context; it is never injected as a confirmed identity.
-Container, contributor and related-resource identifiers do not identify the Work itself.
-_Avoid_: Identifier claim, workspace-unique bibliographic identity
+A bibliographic identifier declared by Work.id or Work.identifiers. A Work may carry multiple
+values of one kind, and separate Items may share them. Lookup input is query context rather than
+a confirmed identity. Container, contributor and related-resource identifiers describe those entities.
+_Avoid_: Identifier claim, Workspace-unique bibliographic identity.
 
 **User**:
-A human account with an assigned System Role. Deactivation blocks authentication and effective
-authority while preserving Workspace ownership, memberships and provenance.
-_Avoid_: Account, Profile
+A human account with a System Role. Deactivation removes authentication and effective authority
+while preserving ownership assignments, memberships and provenance.
+_Avoid_: Account, Profile when naming the domain entity.
 
 **System Role**:
-A global authorization tier (`administrator` or `member`) governing instance-wide administration,
-tenancy/lifecycle governance and account operations. It does not grant implicit access to
-Workspace-owned research data.
-_Avoid_: Global Role, User Role
+An instance authorization tier, administrator or member, governing account operations and instance
+governance. It grants no implicit access to Workspace research data.
+_Avoid_: Global Role, User Role.
 
 **Invitation**:
-A single-use, time-limited instance-level mechanism for provisioning or registering a User. A
-Workspace admission uses a separate WorkspaceInvitation and does not follow from instance
-registration alone.
-Revocation invalidates the link while preserving its record. Reissuing an Invitation revokes
-the previous link and creates a new Invitation for the same username and System Role.
-_Avoid_: Invite Code, Signup Token
+A single-use, time-limited instance admission mechanism for provisioning a User. Workspace
+admission is separate. Revocation invalidates the link; reissue replaces it with a new Invitation.
+_Avoid_: Invite Code, Signup Token.
 
 **Workspace Invitation**:
-A single-use, time-limited admission mechanism for adding an existing User to a Workspace.
-Accepting it creates a new Workspace Member; it does not provision instance identity or
-reactivate a suspended membership. Rejoining after termination creates a new membership
-generation without restoring old Project participation. Terminal invitations and terminated
-membership generations are retained for 30 days by default, after which their receipts are unavailable.
-Recipients may view their own invitations
-without prior Workspace membership; an accepted invitation never grants access after membership
-suspension or termination.
+A single-use, time-limited mechanism for admitting an existing User to a Workspace. Acceptance
+creates a new membership generation; it does not reactivate suspended memberships or restore
+previous Project selections.
 
 **Login Session**:
 A revocable authenticated device session belonging to one User.
 
 **API Token**:
-A revocable, time-limited programmatic credential belonging to one User and carrying that User's
-current authority.
-_Avoid_: Login Session, OAuth Access Token, API Key
+A revocable, time-limited programmatic credential carrying its User's current authority.
+_Avoid_: Login Session, OAuth Access Token, API Key.
 
 **Audit Event**:
-An immutable record of a security-sensitive or data-changing action, retained for 90 days by default.
-Audit history is evidence within that window, never a prerequisite for completing durable cleanup.
+An immutable, retention-bound record of a security-sensitive or data-changing action.
 
 ## API mutation verbs
 
@@ -313,17 +245,19 @@ The HTTP API and its generated operation IDs use these verbs deliberately:
   Item–Tag, Project–Item or Project–participant relationship; neither the Item, Tag, Project nor User
   is deleted.
 
-An HTTP DELETE method can therefore generate either a delete_* or remove_* operation ID:
-the method describes the transport, while the verb describes the domain effect. discard is
-reserved for abandoning staged transient work such as an Import Batch, and revoke is reserved
-for invalidating an Invitation, Workspace Invitation, Login Session or API Token without deleting
-its audit/persistence record.
+An HTTP DELETE method can therefore generate either a `delete_*` or `remove_*` operation ID:
+the method describes the transport, while the verb describes the domain effect. **Discard** is
+reserved for abandoning staged transient work such as an unconfirmed Import Batch, and **Revoke**
+is reserved for invalidating an Invitation, Workspace Invitation, Login Session or API Token while
+preserving its record.
 
 ## Relationships
 
 - A User owns zero or more Login Sessions and API Tokens, has one System Role, and may belong to
   zero or more Workspaces through Workspace Members.
-- An Item has zero or more Contributors in an ordered bibliographic role. A Contributor may have a split first/last name or a single-field literal name.
+- An Item stores one Work with zero or more Contributors in ordered bibliographic roles. A
+  Contributor may have split given/family names or a single-field literal name, and zero or more
+  record-local Affiliations.
 - An Invitation provisions or registers one new User with an assigned System Role; successful
   provisioning also creates an ordinary Workspace and owner membership for that User.
 - A Workspace has Workspace Members, a canonical Item Library, shared Tags, Item Discussions and
@@ -335,19 +269,21 @@ its audit/persistence record.
 - An Item has at most one current Item Tag Recommendation generation.
 - An Item may belong to multiple Projects in the same Workspace; ProjectItem is an organizational
   association and never grants Item access.
-- A Project records explicit selections as `ProjectParticipant` rows in `open` or `managed` mode;
+- A Project records explicit Project Participant selections in `open` or `managed` mode;
   these role-less associations record participation. For `managed` Projects they also gate Project
   discoverability, but never grant access to canonical Workspace Items. A `workspace` Project has
-  implicit participation and no Project Participant rows. A Project has no owner or ownership-transfer
-  operation; `created_by` is provenance, while Project lifecycle and participation operations use
-  Workspace resource-action decisions.
+  implicit participation and no explicit Project Participant selections. A Project has no owner or
+  ownership-transfer operation; `created_by` is provenance, while Project lifecycle and participation
+  operations use Workspace resource-action decisions.
 - An Annotation belongs to exactly one File Revision.
-- An Annotation has zero or more Annotation Replies.
+- An Annotation has zero or more Annotation Replies, which inherit its audience.
 - An Annotation Export Artifact is derived from one File Revision and expires independently of it.
-- A Project-scoped Annotation references exactly one Project containing the Item.
+- A Project-scoped Annotation references exactly one ProjectItem for its File Revision's Item.
+  Removing that association permanently deletes its Project Annotations and their Replies.
 - Discovery produces Candidate Records; selecting one refetches metadata into Import.
-- An Import Batch holds parsed Candidate Records until confirmed into Items; a committed batch retains
-  the confirmation result but is no longer an active staging reservation.
+- An Import Batch holds Candidate Records and staged source files until confirmed into Items,
+  deleted or expired. A committed batch retains the confirmation result and releases its staging
+  data; deleting the receipt preserves the imported Items and Documents.
 - Citation Styles format Items during export or citation generation.
 - An Item may have zero or more supported Upstream Identifiers, including multiple DOIs.
   Shared identifiers yield Library duplicate suggestions, independently of Item UUID identity.
@@ -367,14 +303,13 @@ its audit/persistence record.
 >
 > Dev: “Is a Keyword the same as a Tag?”
 >
-> Domain expert: “No. Keywords are author- or provider-supplied metadata on the Item;
-> Tags are user-authored taxonomy labels.”
+> Domain expert: “No. Keywords are author- or provider-supplied metadata on the Work;
+> Tags are user-managed taxonomy labels in the Workspace.”
 
 ## Flagged ambiguities
 
 - The UI may use “论文” conversationally, but Python domain code uses Item.
-- Existing `/documents/...` routes refer to file delivery; Document must not be
-  used as a synonym for Item.
+- “Document” refers to stored file content; “Item” refers to the bibliographic record.
 - “Search” must be qualified as Library Search or Discovery when ambiguity is
   possible.
 - “Keyword” refers to upstream author/provider metadata; “Tag” refers to user-managed taxonomy.

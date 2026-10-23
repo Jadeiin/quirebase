@@ -13,7 +13,7 @@ model across Quirebase and Inquiro.
 ## Decision
 
 Quirebase/Inquiro uses native asynchronous Interfaces throughout its I/O paths. Provider access,
-persistence, Library Search, Web/API, MCP and Pipeline workers participate in that runtime model.
+persistence, Library Search, Web/API, MCP and DBOS workers participate in that runtime model.
 Resources have explicit owners and lifetimes, including completion, cancellation and failure.
 
 Core owns database connectivity and session provisioning. Each request or Job owns its database

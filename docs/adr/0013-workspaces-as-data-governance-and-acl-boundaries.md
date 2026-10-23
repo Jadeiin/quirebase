@@ -42,13 +42,8 @@ and database invariants are defined in the
   Exceptional inspection is explicit, reason-bound, read-only and audited.
 - Database lineage constraints, explicit Workspace context and durable finalizer re-authorization
   add schema and API surface but prevent cross-team references and use of revoked authority.
-- This supersedes Item Owner authorization and the Project ownership, roles and Item-access
-  assumptions in [ADR 0004](0004-research-intelligence-mcp-and-agent.md) and
-  [ADR 0011](0011-unified-business-concurrency.md).
-- The alpha cutover removes previous ownership assumptions and Project-derived Item grants without
-  compatibility aliases. Live sharing, quota and large-scale migration policy remain separate work.
 - Workspace ownership, membership generations, Project participation and ProjectItem lifetimes,
-  together with canonical Annotations and Commonmeta Work, form the stable core model baseline.
-  Subsequent features should extend it through incremental tables, indexes and rebuildable query
-  projections. Changes to core identities, authority or lifetimes require an explicit domain
-  requirement and decision; speculative performance concerns do not reopen this baseline.
+  together with canonical Annotations and Commonmeta Work, form the core model baseline.
+  New features extend it through incremental tables, indexes and rebuildable query projections.
+  Changes to core identities, authority or lifetimes require an explicit domain requirement and
+  decision.

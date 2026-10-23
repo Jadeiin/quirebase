@@ -5,14 +5,13 @@ status: accepted
 # Account deactivation and owner reassignment
 
 This specifies [ADR 0016](../adr/0016-account-deactivation-and-owner-reassignment.md).
-It changes User deactivation and adds instance-level Workspace ownership governance. The existing
-ordinary Workspace ownership-transfer operation remains available to the current owner.
+It covers User deactivation, ordinary owner transfer and explicit instance-governance reassignment.
 
 ## Invariant and motivation
 
 User provisioning creates an ordinary Workspace with an active owner membership. Requiring handover
 before deactivation prevented administrators from immediately containing a new or compromised User.
-Account activity now controls effective access independently of the structural ownership assignment.
+Account activity controls effective access independently of the structural ownership assignment.
 
 The invariant is:
 
@@ -22,13 +21,12 @@ The invariant is:
   current membership, followed by the existing resource-action decision.
 - Creating a Workspace or assigning a new owner requires an active receiving User.
 
-The existing membership CHECK and partial unique indexes remain valid. This requires no new
-Workspace kind, persistent lifecycle state, ownership table or database migration.
+A membership CHECK and partial unique indexes enforce the row-level owner constraints.
 
 ## User deactivation and reactivation
 
-Accounts continues to own User status, current administrator authorization, Login Session revocation,
-Audit and transaction completion. Workspaces continues to own coordination with current membership
+Accounts owns User status, current administrator authorization, Login Session revocation,
+Audit and transaction completion. Workspaces owns coordination with current membership
 Workspace roots. Keep that operation behind the Workspaces interface rather than exposing generic
 lock loaders to Accounts.
 
@@ -62,7 +60,7 @@ Ordinary authentication and active-member filtering continue requiring active Us
 ## Explicit administrator reassignment
 
 Workspaces owns `reassign_workspace_owner` in its governance implementation and exports the use case
-through its facade. Access owns the new System action `workspace_governance.reassign_owner`, granted
+through its facade. Access owns the System action `workspace_governance.reassign_owner`, granted
 to instance administrators through the canonical policy bundle. The caller need not be a Workspace
 member. This is an explicit grant of ownership to the selected receiving User.
 
@@ -120,9 +118,8 @@ transfer keeps its current membership, target and lifecycle checks.
 ## Concurrency and Audit
 
 The lock-based concurrent outcomes in this section apply to PostgreSQL, following
-[ADR 0011](../adr/0011-unified-business-concurrency.md). SQLite remains a single-process development
-profile using ordinary transaction semantics, without a promise of concurrent business results or
-an additional SQLite-only writer gate or process lock.
+[ADR 0011](../adr/0011-unified-business-concurrency.md). SQLite uses the single-host, single-worker
+profile with ordinary transaction semantics.
 
 Lock the acting administrator and receiving User in stable UUID order before acquiring the Workspace
 root. Recheck current administrator authority and receiving User activity while retaining those User
@@ -158,8 +155,7 @@ reassignment action. The form selects an active User and requires a reason. It s
 current owner as the expected owner. On conflict, refresh the current facts and preserve the draft
 for an explicit retry. Keep the open form's Workspace row visible even if a directory filter stops
 matching after refresh; closing the form restores ordinary filtering. Render actions from
-server-provided decisions or choices, following the existing prohibition on principal-role
-comparisons in frontend behavior.
+server-provided decisions or choices.
 
 | Module | Responsibility |
 | --- | --- |
@@ -171,8 +167,7 @@ comparisons in frontend behavior.
 
 Use existing dependency directions. Accounts calls the Workspaces-owned deactivation cooperation
 operation; Workspaces must not import Accounts to read User activity from shared mappings. The Web
-adapter calls owned facade use cases. The new administrator route is not automatically projected
-into the curated MCP toolset.
+adapter calls owned facade use cases. Administrator operations remain outside the curated MCP toolset.
 
 ## Verification
 
@@ -198,4 +193,4 @@ Run the following acceptance cases against SQLite and PostgreSQL where applicabl
   explicit access-grant confirmation, conflict recovery and narrow layouts.
 
 Keep the existing database initialization, doctor, schema parity, import contracts, generated API,
-localization and frontend bundle checks. No schema change is required.
+localization and frontend bundle checks.

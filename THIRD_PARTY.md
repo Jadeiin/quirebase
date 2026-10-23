@@ -21,8 +21,7 @@ Core PDF components:
   distributes it under the latter, more restrictive license.
 - KeyBERT 0.9.x — MIT, optional (`keybert` extra) semantic keyphrase extraction.
 - Model2Vec — MIT, optional (`keybert` extra) static embedding runtime. Administrator-provided
-  model files are separate works: deployments must record each model's source, license and SHA-256
-  independently and may configure `QUIREBASE_KEYBERT_MODEL_SHA256` for verification.
+  model files have their own licenses; retain their source and license information separately.
 - citeproc-py — BSD-2-Clause-Views, the CSL 1.0.1 processor for formatted citations.
 - citeproc-py-styles — MIT, optional (`citation` extra) CSL style repository used for built-in styles.
 - httpx2 — BSD-3-Clause, HTTP transport client for outbound discovery metadata lookup and online search.
@@ -41,5 +40,3 @@ Known dependency constraints: Commonmeta currently requires WeasyPrint 69.x, blo
 security fixes. Inquiro uses Commonmeta's local metadata conversion with `no_network=True` and does
 not invoke PDF rendering. The development-only glob dependency `braces` 3.0.3 also has an unresolved
 advisory. Recheck these upstream constraints and advisories before publishing.
-
-`python-poppler`, `pypdfium2`, and `pypdf` are deliberately not dependencies.

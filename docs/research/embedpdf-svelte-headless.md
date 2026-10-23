@@ -1,16 +1,16 @@
 # EmbedPDF Svelte headless integration notes
 
-Research snapshot: 2026-09-16. These findings target EmbedPDF 2.15.0, the line currently used by
-Quirebase. EmbedPDF moved its v2 implementation and examples to the `v2` maintenance branch in
+Research snapshot: 2026-09-16, targeting EmbedPDF 2.15.0. EmbedPDF moved its v2 implementation and examples to the `v2` maintenance branch in
 July 2026; the pinned source links below use that branch's commit
 [`2c0f23d`](https://github.com/embedpdf/embed-pdf-viewer/tree/2c0f23d90c0bbfd126363db5e913b407a8ae7266).
 
-## Decision
+## Integration outcome
 
-Replace `@embedpdf/snippet` with EmbedPDF's native Svelte 5 headless packages and components. The
-imperative `EmbedPDF.init({ type: "container", target, ... })` adapter and manual DOM removal are not
-needed. The official Svelte guide uses `usePdfiumEngine()`, `<EmbedPDF>`, plugin registrations, and
-Svelte snippets; the first-party full example follows the same pattern with a larger plugin set.
+Quirebase uses `@embedpdf/svelte-pdf-viewer`, with the current choice and its alternatives recorded
+in [ADR 0012](../adr/0012-svelte-application-and-http-boundary.md). The headless APIs below explain
+the underlying plugin, asset and lifecycle behavior; they are upstream examples rather than the
+application's component composition. The official headless guide uses `usePdfiumEngine()`,
+`<EmbedPDF>`, plugin registrations and Svelte snippets.
 ([guide](https://www.embedpdf.com/docs/svelte/headless/getting-started),
 [pinned guide source](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/website/src/content/docs/svelte/headless/getting-started.mdx),
 [first-party viewer](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/examples/svelte-tailwind/src/routes/viewer/%2Bpage.svelte))
@@ -28,7 +28,7 @@ The official minimal scrollable viewer installs:
 @embedpdf/plugin-render
 ```
 
-Quirebase's annotation workspace additionally needs:
+An upstream headless annotation workspace additionally uses:
 
 ```text
 @embedpdf/plugin-interaction-manager
@@ -43,8 +43,7 @@ already supports annotation history and restoration.
 ([minimal install](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/website/src/content/docs/svelte/headless/getting-started.mdx#L11-L17),
 [annotation install and order](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/website/src/content/docs/svelte/headless/plugins/plugin-annotation.mdx#L11-L47))
 
-Add `@embedpdf/models` as a direct dependency when Quirebase imports canonical PDF types and enums.
-Add `@embedpdf/pdfium` directly when importing its WASM export into Vite as described below.
+The models package supplies PDF types/enums; the PDFium package supplies the WASM export for Vite.
 Navigation and reader UI can then add only the packages it actually renders, such as zoom, pan,
 rotate, spread, tiling, search, thumbnail, export, print, and fullscreen. The full example shows
 the exact one-package-per-capability composition; `@embedpdf/snippet` is not part of its headless
@@ -52,13 +51,13 @@ viewer path.
 ([full registration](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/examples/svelte-tailwind/src/routes/viewer/%2Bpage.svelte#L1-L92),
 [annotation package manifest](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/packages/plugin-annotation/package.json))
 
-Keep all EmbedPDF packages on the same exact 2.15.0 release. The published packages expose their
+The researched 2.15.0 packages require matching plugin versions. The published packages expose their
 Svelte adapters through `/svelte`, require Svelte 5, and declare exact-version peer relationships
 between plugins in the 2.15 release.
 ([core manifest](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/packages/core/package.json),
 [engine manifest](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/packages/engines/package.json))
 
-## Svelte 5 component shape
+## Upstream Svelte 5 headless example
 
 The relevant native APIs are:
 
@@ -127,7 +126,7 @@ For an installation that permits the CDN, `usePdfiumEngine()` is sufficient.
 ([engine guide](https://www.embedpdf.com/docs/svelte/headless/engine),
 [hook implementation](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/packages/engines/src/svelte/hooks/use-pdfium-engine.svelte.ts#L1-L65))
 
-Quirebase should remain self-contained and same-origin. The PDFium package explicitly exports
+Quirebase bundles PDFium for same-origin loading. The PDFium package explicitly exports
 `@embedpdf/pdfium/pdfium.wasm`, while Vite supports explicit URL imports using `?url` and emits
 referenced assets into the production asset graph with hashed names. These two first-party
 contracts compose without a post-build copy step:
@@ -142,8 +141,7 @@ const pdfEngine = usePdfiumEngine({
 });
 ```
 
-This exact `?url` expression is the recommended Quirebase composition, not a copied EmbedPDF
-example: EmbedPDF's own package manifest establishes the public WASM subpath, and Vite establishes
+The `?url` asset composition follows two upstream contracts: EmbedPDF's own package manifest establishes the public WASM subpath, and Vite establishes
 the asset-URL behavior. It lets SvelteKit copy the already-built, hashed asset along with the rest
 of `frontend/build`.
 ([PDFium public export](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/packages/pdfium/package.json#L11-L30),
@@ -159,7 +157,7 @@ enabled for the reader; the engine constructs a module worker from a Blob URL, s
 
 ## Lifecycle and teardown
 
-Do not recreate the existing imperative teardown around the Svelte components:
+The native Svelte components own engine and registry teardown:
 
 - `usePdfiumEngine()` uses a Svelte `$effect`; its cleanup closes all documents, then destroys the
   engine and worker resources.
@@ -169,18 +167,6 @@ Do not recreate the existing imperative teardown around the Svelte components:
   Quirebase's responsibility. Return unsubscribe functions from a component `$effect`, or follow
   the first-party annotation example's `onMount`/`onDestroy` pairing.
 
-That means the Svelte component should not call `container.remove()`, and should not manually call
-engine or registry destruction in normal unmount handling.
 ([engine cleanup](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/packages/engines/src/svelte/hooks/use-pdfium-engine.svelte.ts#L24-L62),
 [provider cleanup](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/packages/core/src/svelte/components/EmbedPDF.svelte#L47-L153),
 [subscription cleanup example](https://github.com/embedpdf/embed-pdf-viewer/blob/2c0f23d90c0bbfd126363db5e913b407a8ae7266/examples/svelte-tailwind/src/examples/headless/annotation-example-content.svelte#L1-L58))
-
-## Migration consequence
-
-Keep the SvelteKit output in `frontend/build` and serve it with FastAPI's frontend support. The
-Python build backend can include that directory in a release wheel without a separate install or
-copy script and without writing generated files into `src/quirebase`. Remove the special
-`vendor/pdfium.wasm` directory and `copyFile` operation after the Vite asset import is in place.
-Replace the old asset tests with a frontend build assertion that the generated JavaScript
-references a generated same-origin `.wasm` asset, plus an HTTP assertion that the emitted URL is
-served as `application/wasm` and has the same immutable caching policy as other hashed assets.

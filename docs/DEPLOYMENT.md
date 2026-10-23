@@ -29,7 +29,11 @@ enabling browser-based MCP clients. Quirebase then handles CORS preflights for t
 headers and exposes `MCP-Session-Id`; a `:*` suffix permits any numeric port for a named development
 origin such as `http://localhost:*`.
 
-The JSON HTTP API is served under `/api/v1/` and described by the application's OpenAPI document at `/openapi.json` and interactive `/docs` page. It accepts the same expiring API Tokens as MCP through `Authorization: Bearer`; Login Session cookies, CSRF tokens and query-string tokens are not API credentials. Cross-origin browser access to `/api/v1/` is not enabled by `QUIREBASE_MCP_ALLOWED_ORIGINS`.
+The JSON HTTP API is served under `/api/v1/`, with OpenAPI at `/openapi.json` and interactive
+`/docs`. Programmatic clients use `Authorization: Bearer` with the same expiring API Tokens as MCP.
+The browser application uses Login Session cookies, with Origin checks on unsafe requests.
+An explicit Authorization header selects Bearer authentication. `QUIREBASE_MCP_ALLOWED_ORIGINS`
+configures MCP CORS only; it does not enable cross-origin browser access to `/api/v1/`.
 
 For identifier lookup and Discovery (online scholarly search), set a monitored `INQUIRO_CONTACT_EMAIL`; NCBI and OpenAlex API keys are optional. See `METADATA_LOOKUP.md`. Restrictive egress firewalls should allow only the documented Provider hosts.
 
@@ -113,14 +117,9 @@ Restore by stopping the stack, extracting the archive into the `quirebase_garage
 volume, and starting it again. Production deployments should use an external S3 service
 with versioning, replication or an independent backup policy.
 
-Quirebase currently uses obstore's native S3 authentication. That implementation
-reads the AWS environment configuration supported by obstore; in particular,
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and optional `AWS_SESSION_TOKEN` can
-be supplied to the web and worker processes. This is not a promise that every
-source in botocore/boto3's credential-provider chain is consulted. obstore also
-offers an optional `Boto3CredentialProvider` for applications that install boto3
-and deliberately need botocore-compatible credential resolution, but Quirebase
-does not install or select that provider by default.
+Quirebase uses obstore's native S3 authentication. Supply `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY` and optional `AWS_SESSION_TOKEN` to the web and worker
+processes. Other authentication methods follow obstore's native AWS configuration.
 
 For direct PDF and Annotation Export downloads, set `QUIREBASE_SIGNED_DOWNLOADS=true`.
 The content API reauthorizes each request and responds with a non-cacheable 307 to a native
@@ -183,15 +182,9 @@ remains a content-hashed, same-origin Vite asset.
 
 ## Upgrades
 
-This alpha cutover replaces the initial migration and folds the schema changes into it. A database
-stamped by a retired revision cannot be upgraded in place: `quirebase init-db` and the Compose
-`migrate` service fail with `Can't locate revision`. Stop the old web and workers, keep an offline
-backup outside the installation's volumes, recreate the database, and reimport content through the
-application. Cross-chain data migration and replay of old durable inputs/checkpoints are not
-provided. `make docker-down DOWN_ARGS=--volumes` removes both database and object volumes; use it
-only after preserving the data you need elsewhere.
-
-For subsequent upgrades on the current migration chain, stop web and workers, back up, install the
-new wheel, and run `quirebase init-db`. Source checkouts also need
-`bun install --cwd frontend` and `bun run --cwd frontend build`. Run `quirebase doctor` before
-restarting web and workers. Install coordinated Quirebase, Inquiro and Excerpo versions together.
+Stop web and workers and keep a backup outside the installation's volumes before updating.
+Install matching Quirebase, Inquiro and Excerpo versions. Follow the target release's database
+instructions; an alpha release may require recreating the database and reimporting content.
+`quirebase init-db` applies the installed migration chain and initializes workflow storage.
+Run `quirebase doctor` before restarting web and workers. Source checkouts also require a new
+frontend build as described above.

@@ -1,10 +1,10 @@
 ---
-status: superseded by ADR-0006
+status: accepted
 ---
 
 # ADR 0005: use a deep standalone runtime for scholarly Providers
 
-Superseded by [ADR 0006](0006-async-runtime-and-persistence.md).
+Runtime execution follows [ADR 0006](0006-async-runtime-and-persistence.md).
 
 Inquiro is an independently installable package in the Quirebase monorepo. It is independent of
 Quirebase business policy and persistence, owns several true external Provider dependencies, and
@@ -12,7 +12,7 @@ offers reusable scholarly lookup and Search behaviour outside the application. Q
 Inquiro and Excerpo are released to the same package index at one version so the application wheel
 can resolve its exact workspace-package dependencies independently.
 
-Inquiro exposed one synchronous `ProviderRuntime` with `lookup`, `search` and
+Inquiro exposes one asynchronous `ProviderRuntime` with `lookup`, `search` and
 `acquire_document` operations. The runtime owned the fixed Provider catalog and order, shared
 identifier parsing, document-source classification, capability dispatch, typed credentials,
 validation, error normalization and transport lifecycle. Its normalized Candidate Record and page
@@ -30,8 +30,8 @@ test Mock exchanges are Adapters at the same internal seam. The runtime preserve
 difference between lookup 404 (Candidate not found), Search 404 (empty page) and document 404 (PDF
 not available).
 
-Quirebase Library owns runtime construction and closure for each integrated business operation. It
-maps Inquiro values explicitly to Library write or read models and translates Inquiro errors to
+Quirebase Library owns runtime construction and closure through `async with` for each integrated
+business operation. It maps Inquiro values explicitly to Library write or read models and translates Inquiro errors to
 typed domain errors. Discovery execution and its Audit Event therefore cross the Library
 Interface. Document acquisition remains a standalone package capability until a Library operation
 adopts it; the Web Adapter never imports Inquiro directly.
@@ -53,12 +53,9 @@ adopts it; the Web Adapter never imports Inquiro directly.
 
 ## Consequences
 
-- Existing internal Python signatures and compatibility aliases are replaced rather than shimmed;
-  every Quirebase caller and contract test migrates atomically in the monorepo. The original
-  synchronous lifecycle is retained here only as historical context; it is no longer an API.
 - Adding a Provider changes the private catalog and its contract tests, not ordinary callers.
 - Inquiro retains its bibliography and citation Modules, but callers import those explicit Module
   Interfaces rather than widening the Provider facade.
 - Architecture tests enforce the leaf-Provider rule, the documented runtime operations, the narrow
-  facade, Library-only application dependency and absence of the former lookup/search clients and
+  facade, Library-owned Provider integration and absence of the former lookup/search clients and
   registry.

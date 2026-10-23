@@ -297,7 +297,7 @@ publishing/PDF libraries; this installation cost is accepted for replacing local
 `commonmeta-ts` currently supplies identifier utilities, without a Work editor/conversion API;
 frontend therefore consumes the same backend schema and generated contract.
 
-## Regeneration and alpha cutover
+## Regeneration
 
 ```sh
 uv run python scripts/generate-commonmeta-models.py
@@ -307,9 +307,3 @@ bun run --cwd frontend api:generate
 The generator selects only Work-reachable definitions from the installed official schema and
 records no handwritten field schema. Commit generated Python/OpenAPI TypeScript output together
 with dependency locks. Repeated generation must produce no content change.
-
-The alpha initial revision is regenerated from current metadata, with the dialect-specific search
-revision following it. The initial schema creates `items.work` and no identifier table. Both
-migrations apply to fresh SQLite/PostgreSQL and can roundtrip. Databases stamped by the earlier
-alpha chain must be rebuilt; no compatibility data conversion, old durable checkpoints or flat
-metadata readers are provided.

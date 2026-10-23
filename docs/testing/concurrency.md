@@ -12,30 +12,17 @@ The machine-readable invariant registry is [concurrency_cases.json](../../tests/
 Tests identify their contract with `@pytest.mark.concurrency_case("id")`. The report lists actual
 parameterized node IDs, so a passed selected schedule does not imply all possible orders are covered.
 
-| Invariant IDs | Competing operations | Current schedules and observations |
-| --- | --- | --- |
-| `discussion-root-delete`, `reply-root-delete` | Root deletion / discussion moderation or annotation reply | Workspace or Project root held first; public mutation waits; full cascade finishes; mutation rejects the vanished root |
-| `workspace-read-delete`, `foreign-lock-isolation` | Workspace read or foreign discussion ID / deletion or row lock | List, detail and governance read before deletion commits, then owner lookup; foreign IDs do not lock another Workspace's rows; admin response handling also has a regression in `test_http.py` |
-| `item-reading` | Item Overview / Metadata reads | Both commit orders with independent sessions and an uncommitted reading insert on SQLite and PostgreSQL; PostgreSQL also commits a newer read before an older request's native upsert; one reading record retains the latest timestamp |
-| `login-throttle` | Concurrent failures, successful-login clear / failure upsert, expiry cleanup / window reset | A competing first insertion increments without losing a failure; a clear committed before the upsert lets the failure start a new window; conditional expiry deletion preserves a newly reset window |
-| `workspace-archive-write`, `project-archive-write` | Archive / discussion write | Admitted Workspace write finishes before archive; Workspace or Project archive commits before a waiting writer rechecks lifecycle |
-| `actor-revocation`, `governance-demotion` | User deactivation or admin demotion / authorized mutations | Invitation, import confirmation, ownership transfer/reassignment, governance and password boundaries; import explicitly observes the User → Workspace wait chain |
-| `ownership-transfer`, `membership-identity` | Two ownership transfers or rejoins | One authoritative Workspace owner; one current membership; losing authority is rechecked |
-| `owner-reassignment` | Administrator reassignment / ordinary transfer or competing reassignment | Exclusive root order, expected-owner comparison, single owner and atomic Audit |
-| `participation-recheck`, `relation-idempotency` | Project join/leave, mode switch, member suspension or duplicate association additions/removal | Participation follows current mode/membership; independent guards remain shared; duplicate additions create one relation. Leave committed before a duplicate Join's reread causes a conflict, leaves no selection and adds no Join Audit Event; an explicit fresh Join succeeds. A competing single insert before the batch's native insertion preserves other links and counts only newly added links. Removal after a bulk Tag insert skips a duplicate leaves that link removed, preserves other new links and commits one bulk Audit Event |
-| `upload-finalization` | Upload finalizers for different Items / Workspace archive | Ordinary and Graphical Abstract finalizer guards share the Workspace root; a second Item proceeds while the first transaction remains open. Archive waits for that guard, and finalization rechecks authority after archive commits |
-| `annotation-recheck`, `assignment-item-delete` | Reply/scope change or assignment / moderation, detachment or Item deletion | Waiting mutation rechecks lineage and authority; integrity failures become domain errors |
-| `annotation-version` | Two Annotation or Reply edits with version 1 | First edit held before commit; second edit waits, then receives version 2 conflict; one successful edit and one audit event |
-| `metadata-version` | Two metadata replacements with version 1 | Both winner orders; exactly one version 2 result; loser receives `VersionConflict`; title, ordered Contributor snapshots, keywords, full-text search and audit agree |
-| `import-replay` | Two confirmations / retry after losing a committed response | Both caller startup orders queued at one Batch; same Item IDs on confirmation and fresh-Session replay; one import audit per Item; real full-text search |
-| `settings-install`, `citation-style-install` | Overlapping first-setting batches / duplicate Citation Style installation | Native setting upserts retain the complete validated batch; Citation Style duplicates produce a domain conflict and permit a distinct installation in the same Session |
+The registry covers authentication/revocation, governance and membership generations, Project
+participation, association idempotency, metadata/Annotation versions, Import replay and durable
+finalization. Generated coverage reports map each invariant to the collected parameterized tests;
+use those reports for the current schedules and results.
 
 The root-deletion tests directly hold/delete parent rows to control the database cascade, then invoke
 public business mutations. The metadata and import tests inspect final state through public Library,
 Search and Audit interfaces. They use native PostgreSQL search tables rather than mocking Search.
 
-The report's `evidence_enabled` flag distinguishes scenarios using the shared harness from legacy
-tests with local synchronization. Legacy results are included in the matrix but do not gain SQL/lock
+The report's `evidence_enabled` flag distinguishes scenarios using the shared harness from tests
+with local synchronization. Those results are included in the matrix but do not gain SQL/lock
 evidence automatically. The upload-finalizer guard tests exercise a private authorization helper;
 neither those tests nor the in-memory durable client prove crash recovery through a real DBOS restart.
 
@@ -100,36 +87,22 @@ fails the test. Actor connections also have lock/statement/idle-transaction limi
 verify actual blocking, PID stability after commit, timeout cleanup, pytest failure capture,
 parameter omission and a real deadlock's SQLSTATE `40P01`.
 
-## CI and follow-up coverage
+## CI coverage
 
 The PostgreSQL CI job runs database contracts, JSON query contracts and controlled
 concurrency scenarios on PostgreSQL 18. A separate step checks PostgreSQL migrations and durable
 recovery, followed by fresh initialization and doctor checks. SQLite variants, general business
 tests and HTTP tests run in the SQLite matrix; the PostgreSQL job does not build the frontend.
 It uploads coverage JSON/Markdown, JUnit and any failure snapshots, including when tests fail.
-It remains enabled on every push; a completed check is not a prerequisite for pushing to `main`.
 The separate nightly/manual replay workflow runs five rounds on five isolated databases and retains
 each round's artifacts for 14 days.
-The nightly schedule becomes active when that workflow reaches the default branch. These are repeat
-runs of controlled schedules, not generated random interleavings.
+These repeat controlled schedules; they do not generate random interleavings.
 
 Browser E2E also covers a PDF source refresh completing during a private draft's Save click.
 The ordinary post-switch edit scenario waits for the selected source response and verifies the
 actual PATCH body. CI retains failed browser traces/screenshots and repeats these two PDF scenarios
 five times (30 on manual runs). Inspect the trace's DOM, input events and request body before attributing
 an intermittent missing-text failure to a persistence race.
-
-Expand coverage in this order:
-
-1. Move remaining legacy synchronization to the harness and add inverse commit orders where the
-   invariant differs. Keep the operation pair, order and expected outcome visible in each node ID.
-2. Extend real DBOS process-death coverage beyond PDF preparation checkpoints and post-confirmation
-   response loss to upload finalizers and failures during outbox delivery/object cleanup. Observe
-   through business interfaces and storage.
-3. Add Hypothesis state machines for generated lifecycle/role/version histories, retaining a seed
-   and minimized sequence. Sequential state machines need an explicit scheduler to explore races.
-4. Model a narrowly scoped difficult protocol in TLA+/TLC when its possible states outgrow executable
-   scenarios. Keep its invariants aligned with this registry and the ADRs.
 
 For a new failure, first identify the violated contract, operation pair and observed wait/commit
 order. Minimize it into a deterministic regression. Repair the owning aggregate's lock order, CAS

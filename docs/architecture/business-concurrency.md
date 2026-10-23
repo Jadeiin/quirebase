@@ -3,10 +3,9 @@
 This specification expands the [narrow business concurrency boundaries](../adr/0011-unified-business-concurrency.md).
 [Module policy](modules.md) defines capability ownership and dependency direction.
 
-Workspace authority and Project participation follow the later
-[Workspace governance contract](workspace-governance.md), which supersedes the original
-Project ownership and role assumptions. PostgreSQL supports concurrent multi-worker deployments;
-SQLite remains a single-process development profile.
+Workspace authority and Project participation follow the
+[Workspace governance contract](workspace-governance.md). PostgreSQL supports concurrent
+multi-worker deployments; SQLite uses the single-host, single-worker deployment profile.
 
 ## Concurrency controls
 
@@ -15,14 +14,13 @@ Concurrency controls are selected by the invariant they protect:
 1. **Snapshot replacement uses version CAS.**
    Bibliographic metadata and annotation edits carry an expected version. The mutation is one
    conditional `UPDATE ... WHERE version = expected RETURNING version`; a missing row is an
-   explicit `VersionConflict`. Server commands (DOI rescan, citation-key regeneration and PDF
-   inspection) do not consume a client snapshot, but must increment the version when they change
-   the Item or annotation.
+   explicit `VersionConflict`. Server commands such as PDF DOI rescan and Citation Key regeneration
+   increment the Item version when changing its metadata without a client snapshot.
 
 2. **Cross-row invariants use the owning root row.**
-   A Project row protects participation/state transitions; an Item row protects destructive Item
-   deletion and durable child finalization; an ImportBatch row protects confirmation/discard
-   identity. The command that owns the invariant acquires the root lock internally. Callers never
+   A Workspace row protects governance and membership; a Project row protects participation/state
+   transitions; an Item row protects destructive deletion and durable child finalization; an
+   ImportBatch row protects confirmation/discard identity. The command that owns the invariant acquires the root lock internally. Callers never
    assemble a global `User -> Project -> Tag -> Item -> child` lock graph.
 
 3. **Association mutations use database atomicity.**
@@ -33,16 +31,17 @@ Concurrency controls are selected by the invariant they protect:
 
 4. **Long-running finalizers re-lock and re-authorize canonical resources.**
    External I/O and expensive computation happen outside business transactions. Before committing,
-   a finalizer re-reads the captured User/Project authorization and acquires the canonical Item,
-   File Revision, Attachment or ImportBatch root row with the narrowest required lock. Resource
-   UUIDs are never reused; row existence plus foreign keys is the lifecycle boundary. A missing
-   row is a normal rejected finalization, not a stale lifecycle-token protocol.
+   a finalizer re-reads User activity, Workspace authority and relevant Project facts, then acquires
+   the canonical Item, File Revision, Attachment or ImportBatch root row with the narrowest required
+   lock. Resource UUIDs are never reused; row existence plus foreign keys is the lifecycle boundary. A missing
+   row rejects finalization.
 
-   Short synchronous commands use command-entry authorization: active Project state and the
-   concrete membership/assignment grant are read once before the short mutation begins, but are
-   not held through commit. Durable finalizers differ because external work separates request
-   authorization from canonical commit; they revalidate and freeze the concrete grant path at
-   final commit.
+   Ordinary mutating Workspace actions acquire a shared Workspace root guard and reload authority,
+   keeping that guard through commit. Exclusive governance changes serialize with those admitted writes.
+   Project-scoped commands choose their own Project guard and recheck discoverability after waiting.
+   Durable finalizers establish these conditions again after external work rather than carrying a
+   request-time decision across checkpoints.
+
 
 5. **Lock only the row that owns the invariant.**
    A command may take a row lock only at its linearization point. Authorization and existence
@@ -100,24 +99,16 @@ Library Search is derived state, not a business invariant. It has two synchronou
 
 Metadata writes update `item_search` in the same transaction. Ready/removed File Revisions update
 `revision_search` in their own short transaction. Attachments, Tags and Projects never invalidate
-Search. There is no Item aggregate sequence, SearchProjectionState, projection generation token or
-Search DBOS ordering protocol. A full reindex is an explicit maintenance operation.
+Search. A full reindex is an explicit maintenance operation.
 
 Any independent projection rebuild locks its canonical source row with a shared lock before
 replacing the projection; generation counters are not required when rebuilds serialize with
 canonical writes.
 
-The supported schema-upgrade command is `quirebase init-db`, which runs the forward migration and
-initializes infrastructure before the application is served. The schema cutover migration performs
-its required projection backfill. Running Alembic directly is an advanced maintenance operation;
-after a schema-only upgrade, operators should run the explicit batched Search reindex before
-relying on Search results.
-
 ## Workspace ownership and Project participation
 
-ADR 0013 supersedes the original Project ownership and role design. Workspace ownership is
-represented by its active owner membership; transfer locks the Workspace root and changes the
-old and new owner memberships atomically. A Project has no owner or role-bearing membership.
+Workspace ownership is represented by its active owner membership. Transfer locks the Workspace
+root and changes the old and new owner memberships atomically. A Project has no owner or role-bearing membership.
 `ProjectParticipant` records explicit working-context selections. Participation changes lock the
 Project root and recheck Workspace authority, Project discoverability and participation policy;
 there is no minimum-participant invariant.
@@ -126,11 +117,10 @@ there is no minimum-participant invariant.
 
 The ImportBatch ID is the confirmation identity. A batch is locked before status is read. A ready
 batch creates Items and records their IDs, then transitions directly to `committed` in the same
-transaction. Repeating confirmation with the same Batch ID returns the recorded IDs; a committed
-batch cannot be confirmed with a different payload. There is no `committing` state, commit operation
-ID, per-child operation ID or deterministic child-key derivation.
+transaction. Repeating confirmation returns the recorded Item IDs while that committed receipt
+exists.
 
-## Conflicts and cutover
+## Conflicts
 
 - Concurrent requests may receive an explicit conflict when they target the same version or root
   transition; concurrency safety does not require every request to succeed transparently.
@@ -140,9 +130,3 @@ ID, per-child operation ID or deterministic child-key derivation.
   older one without participating in Search ordering.
 - Durable object cleanup remains a workflow concern, but Attachment metadata never triggers a
   Library Search rebuild.
-- This is an alpha, forward-only cutover. No compatibility shim is provided for removed APIs,
-  stored columns or persisted workflow parameters.
-
-The schema cutover is intentionally delivered as one revision after the current head. The
-revision may rebuild SQLite tables as needed, but must preserve all child rows while doing so; it
-does not retain transitional columns or aliases for older application contracts.

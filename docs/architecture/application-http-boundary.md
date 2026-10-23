@@ -8,15 +8,14 @@ This specification expands the [static application and shared HTTP API](../adr/0
 Quirebase uses a Svelte 5 and TypeScript application built by SvelteKit with the static adapter.
 FastAPI's `app.frontend()` serves `frontend/build` and its immutable assets as low-priority
 routes. The build remains outside the Python source tree and Hatch includes it as wheel data for
-releases; there is no frontend installation/copy script. There is no Node server, SvelteKit server
-endpoint, server action or second domain implementation in production.
+releases. FastAPI serves the complete production application, including deep links through the
+static SPA fallback.
 
 The Svelte application uses TanStack Svelte Query for remote state, Svelte runes for local UI
 state, and URL parameters for shareable state. Skeleton 5 is the sole general-purpose design
 system: its semantic theme tokens and Tailwind CSS 4 utilities own visual styling, while Skeleton
 Svelte components backed by Zag own accessible interactive primitives. Feature views compose those
-primitives with a small set of Quirebase product patterns in `src/lib/design`; they do not define a
-parallel application-wide button, field, card, menu, dialog, tooltip, or status system. SvelteKit's
+primitives with a small set of Quirebase product patterns in `src/lib/design`. SvelteKit's
 filesystem router owns application URL matching and parameter parsing; a persistent authenticated
 route layout owns the Login Session, locale and application shell. Route pages remain thin
 adapters over feature views instead of reimplementing domain behavior or maintaining a catch-all
@@ -32,12 +31,10 @@ patterns (`ConfirmDialog`,
 text-confirmed actions use those dialog patterns; `window.confirm` and `window.prompt` are not
 used. Frontend localization is owned by Lingui. Committed gettext PO catalogs are the
 translation source of truth; a strict Svelte extractor records literal messages and marked dynamic
-labels, and Lingui generates runtime catalogs during checks and builds. Python gettext catalogs
-and template localization helpers are removed. `src/lib/locale.ts` is the single locale inventory.
+labels, and Lingui generates runtime catalogs during checks and builds. `src/lib/locale.ts` is the single locale inventory.
 Language is a browser display preference like theme or sidebar state: the Frontend Adapter detects
 the stored `quirebase:locale` value with Lingui's `@lingui/detect-locale` and falls back to the
-browser language, so `/session` carries no locale and the API owns no locale cookie, no locale
-request body and no `Accept-Language` negotiation. Switching the language persists the preference
+browser language. Locale selection stays in the browser. Switching the language persists the preference
 immediately and synchronizes other tabs through the `storage` event. ICU interpolation values and
 plural forms flow through `i18n._` rather than message-fragment composition.
 
@@ -123,18 +120,12 @@ criteria for its return action; candidate summaries are refetched before confirm
 commit directly. Selection resets when the displayed result snapshot changes, while failed preview
 preparation retains selection for retry. Abstracts expand within the results without moving focus.
 
-Jinja, templates, HTML form routes, CSRF synchronizer tokens, `web/views`, `web/json` and the
-legacy asset tree are removed. Application deep links are handled by the static SPA fallback.
-This is an alpha, forward-only cutover and does not retain compatibility routes for deleted page
-or form URLs.
-
 The PDF reader uses EmbedPDF's bundled Svelte viewer package (`@embedpdf/svelte-pdf-viewer`) and Svelte
-lifecycle, superseding custom headless plugin assembly. PDFium is a declared frontend dependency
-imported as a Vite asset URL; Vite emits a content-hashed, same-origin WASM asset. Quirebase does not
-copy PDFium to a fixed vendor path or manage the EmbedPDF engine lifecycle imperatively. EmbedPDF
+lifecycle. PDFium is a declared frontend dependency imported as a Vite asset URL; Vite emits a
+content-hashed, same-origin WASM asset. EmbedPDF
 remains isolated under `src/lib/pdf`; its domain-specific viewer controls and UI schemas are customized
 to disable unsupported commands (such as callout annotations) and keep search and page navigation
-integrated with the Svelte workspace, but do not become a second general-purpose design system.
+integrated with the Svelte workspace.
 
 Skeleton's Svelte component stylesheet is loaded alongside the core primitives. Navigation owns
 sidebar, mobile and section-link presentation; SvelteKit still owns URL selection and `aria-current`.
@@ -270,7 +261,7 @@ the displayed event page.
 
 `src/lib/design/DateField.svelte` adapts Skeleton DatePicker to ISO strings at year, month or day
 precision. Metadata chooses that precision; Library and Discovery choose only years. Calendar
-anchors never supply missing date components to persisted metadata or search requests. Zag 1.43
+anchors never supply missing date components to persisted metadata or search requests. Zag
 filters typed separators using the locale even with custom format/parse callbacks and repairs an
 invalid blur value using its focused date. The ISO input therefore overrides those input handlers,
 uses DatePicker's focus API for valid drafts, and uses native form validity for invalid drafts;
@@ -290,6 +281,19 @@ and explicit pagination inside the picker. Opening Library, expanding its filter
 Add to Project dialog does not fetch the Project directory. A selected Project is resolved by ID
 independently of option pages; Add to Project waits for a successful detail read with current manage
 permission before submission.
+
+## Collection pagination
+
+Workspace, Project, member, Library Item and administrative User/Audit directories return
+`items`, `total`, `limit` and `offset`, with a maximum limit of 100. Authorization, discovery and
+search predicates apply before counting and slicing. Identity breaks ordering ties, and an
+independent count preserves totals on an empty page. Project Item joins count distinct Item roots.
+
+Choosers load bounded pages. Selected Workspace, Project, Tag and Citation Style identities resolve
+independently of option pages; absence from a page is not an availability result. Workspace
+preferences clear only after `workspace_unavailable`, while transient errors preserve them.
+Project detail supplies `item_count`; its Item section uses Library's authorized Project filter.
+Annotation cursors and external Provider pages retain their purpose-specific protocols.
 
 ## Workspace navigation and settings
 
@@ -361,7 +365,6 @@ membership, lifecycle and cross-Workspace recovery checks.
 
 ## Deployment and frontend constraints
 
-- A single Quirebase service and artifact still contains the complete application.
 - `/api/v1` response and authorization behavior is the shared browser, agent and script
   contract; transport-specific credential selection remains explicit.
 - The application shell's CSP allows the same-origin application, `wasm-unsafe-eval` and
@@ -370,8 +373,6 @@ membership, lifecycle and cross-Workspace recovery checks.
   initialization scripts and exempts the external jsDelivr assets, FastAPI favicon and ReDoc
   Google Fonts those generated pages load. API, OpenAPI and MCP responses receive the general
   security headers without either policy.
-- Web is the source product. PWA, Tauri and Capacitor may package or enhance the same static
-  application later without changing the FastAPI boundary.
 - Deployments must build the frontend before constructing the Python wheel or container.
 - Quirebase owns one named Skeleton theme, including the complete semantic color ramps,
   typography and radii. Product code consumes those tokens instead of raw palette values for

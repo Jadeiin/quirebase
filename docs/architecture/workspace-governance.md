@@ -4,7 +4,7 @@ This specification expands the [Workspace governance boundary](../adr/0013-works
 [Module policy](modules.md) defines capability ownership and dependency direction.
 
 The [generated capability matrix](authorization-matrix.md) records effective policy grants.
-The role presets below describe the initial domain policy.
+This document defines the domain facts and lifecycle rules supplied to that policy.
 
 ## Governance contract
 
@@ -25,8 +25,8 @@ Instance
 │       ├── Project participants (no role)
 │       ├── ProjectItems
 │       ├── Project Annotations
-│       └── Project Discussions and Notes
-└── instance-global configuration, provider cache and workflow infrastructure
+│       └── Project Discussions
+└── instance-global configuration and workflow infrastructure
 ```
 
 Every Workspace-owned aggregate has one `workspace_id` lineage. Active Workspace membership is
@@ -103,37 +103,6 @@ also apply the loaded resource's lifecycle and domain conditions, and concrete c
 requested variant. None is a durable grant or a guarantee that a future payload or expected version
 will be accepted; commands recheck current facts under their own concurrency protection.
 
-The initial role presets are:
-
-| Resource-action family | Owner | Admin | Editor | Reviewer | Viewer |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Read/download Workspace data | yes | yes | yes | yes | yes |
-| Create/copy/update canonical Item metadata | yes | yes | yes | no | no |
-| Upload/manage File Revisions and Attachments | yes | yes | yes | no | no |
-| Create/attach/detach Tags | yes | yes | yes | no | no |
-| Rename/merge/delete shared Tags | yes | yes | no | no | no |
-| Manage shared Citation Styles | yes | yes | yes | no | no |
-| Create Workspace/open Projects | yes | yes | yes | no | no |
-| Create managed Projects | yes | yes | no | no | no |
-| Update/archive existing Projects | yes | yes | yes | no | no |
-| Manage managed-Project participation | yes | yes | no | no | no |
-| Write Item or Project Discussion/Notes | yes | yes | yes | yes | no |
-| Moderate another author's Item or Project Discussion | yes | yes | no | no | no |
-| Create/update own private or Project Annotation | yes | yes | yes | yes | private only |
-| Moderate another author's Annotation | yes | yes | no | no | no |
-| Permanently delete shared Items | yes | yes | no | no | no |
-| Permanently delete Documents | yes | yes | yes | no | no |
-| Manage Workspace members, roles and settings | yes | yes | no | no | no |
-| Rebuild Workspace search projections | yes | yes | no | no | no |
-| Transfer Workspace ownership or manage admins | yes | no | no | no | no |
-| Leave an active, unfrozen Workspace | transfer ownership first | yes | yes | yes | yes |
-| Archive/restore Workspace | yes | yes | no | no | no |
-| Permanently delete Workspace | yes | no | no | no | no |
-
-The exact resource and action constants remain an Access Module concern. A later decision may split
-or add decisions, but it must not introduce another capability namespace, duplicate coarse and
-fine-grained gates, create a second Project role axis or infer authority from `created_by`.
-
 `System Role=administrator` is instance-level tenancy and lifecycle governance. It does not make
 the administrator an implicit Workspace member or grant content access. An administrator may use
 normal membership, or explicit reason-bound, audited, read-only break-glass access, when content
@@ -201,7 +170,6 @@ The creation Audit Event records the actor's authorizing System role. Its detail
 owner, the resulting owner Workspace role and the instance creation policy.
 
 The policy never blocks creation of an ordinary Workspace as part of User provisioning.
-Quota and rate limits are intentionally separate concerns.
 
 A User with no active Workspace membership may still log in and use account-level operations, but
 all Library, Project, Tag and Document operations fail with a typed membership-required error.
@@ -213,7 +181,7 @@ provisioning state.
 ### Project is a working context, not an ACL root
 
 A Project belongs to exactly one Workspace and organizes a working set of Items plus Project-scoped
-Annotations, Discussions and Notes. A Project has no owner field or ownership-transfer operation;
+Annotations and Discussions. A Project has no owner field or ownership-transfer operation;
 `created_by` is provenance only. Project lifecycle, metadata, participation and moderation are
 controlled by Workspace resource-action decisions.
 
@@ -270,11 +238,7 @@ those belonging to suspended Workspace members. The UI confirms this permanent l
 selection before submitting; switching back does not restore it. Switching
 between `open` and `managed` preserves selected participants; transitioning from `workspace` to
 `open` enrolls the actor, while transitioning to `managed` does not. Managed-Project participant
-selection uses the active Workspace member directory and omits existing participants. An empty
-participant list is valid for `open` and `managed`. No Project has an owner, ownership transfer, or
-minimum-member invariant. Workspace membership and resource-action policy remain the authorization boundary for
-canonical Workspace data and Project mutations; ProjectParticipant affects only managed Project
-discoverability.
+selection uses the active Workspace member directory and omits existing participants. An empty participant list is valid for `open` and `managed`.
 
 Item organization shows already assigned Projects, Workspace Projects and joined Projects by
 default. Other open Projects and managed Projects visible through governance are expandable
@@ -289,10 +253,7 @@ even when their association with a managed Project is hidden.
 
 Managing participation for an active managed Project is an owner/admin decision
 (`resource=project_participation`, `action=manage`, `relation=managed`). Open Projects allow
-self-service participation, while Workspace Projects have no ProjectParticipant lifecycle. If
-delegation is needed later, it is represented by a resource-action policy grant rather than a
-Project role.
-
+self-service participation, while Workspace Projects have no ProjectParticipant lifecycle.
 No Project creator or participant must transfer ownership before leaving, suspension, termination
 or account deactivation. Those lifecycle operations remain governed by Workspace membership and
 the independent Workspace-owner invariant; ProjectParticipant associations are removed or become
@@ -303,8 +264,8 @@ rows; later Workspace admission does not restore old open or managed participati
 
 ### Project-scoped content
 
-Item Discussion is Workspace-scoped and is visible through Item access. Project Discussion, Notes
-and Project Annotations are Project-scoped: `workspace` and `open` Projects are visible to all
+Item Discussion is Workspace-scoped and is visible through Item access. Project Discussions and
+Project Annotations are Project-scoped: `workspace` and `open` Projects are visible to all
 active Workspace members, while managed Project content is visible only to ProjectParticipants and
 Workspace owners/admins. Mutations still require the caller's Workspace resource-action decision,
 and participation never grants that authority.
@@ -373,7 +334,7 @@ Archive is member-controlled preservation with owner/admin governance reads and 
 the administrative freeze reserves unfreezing to instance governance. Suspending an individual
 WorkspaceMember instead removes that member's effective content access.
 
-An archived Project is readable but rejects ProjectItem, Annotation, Discussion, Notes and
+An archived Project is readable but rejects ProjectItem, Annotation, Discussion and
 participation mutations. Project archive/restore is controlled by separate `project.archive` and
 `project.restore` decisions and does not archive or remove its Workspace Items. Permanent Item
 deletion is limited to the `item.delete` decision. Instance administrators have no implicit delete
@@ -425,8 +386,8 @@ current source and destination authority before committing. The Web UI caches se
 Item overview, so Workspace directory, lifecycle, membership or governance changes invalidate
 every Workspace-scoped projection instead of leaving an outdated destination list visible.
 
-Instance-global resources may include User/authentication, system/provider configuration, external
-bibliographic metadata cache and workflow infrastructure. Audit Events are instance-global records,
+Instance-global resources include Users/authentication, system/provider configuration and
+workflow infrastructure. Audit Events are instance-global records,
 but Workspace resource events carry `workspace_id` and optional `project_id` context. Audit metadata
 records action, target IDs, the canonical authorizing resource-action key, source and time; it does
 not copy full Item or Annotation content.
@@ -444,8 +405,7 @@ do not select a transport source. Break-glass remains identified by its action a
 
 API Tokens remain User-scoped. Every API, MCP and durable command carries an explicit
 `workspace_id`; a Project operation also validates `project.workspace_id` against that context.
-The backend may store an active Workspace preference in the UI, but authorization never derives
-from implicit session state. Deep links contain enough context to resolve their Workspace
+The frontend stores its preferred Workspace; API authorization uses the explicit request context. Deep links contain enough context to resolve their Workspace
 independently.
 
 Durable workflows persist actor, Workspace ID, Project ID where relevant and target resource IDs.
@@ -461,10 +421,7 @@ it waits for protected Project operations and forces waiting callers to recheck 
 Instance administrators may invoke only the explicit `resource=workspace_break_glass`,
 `action=read` decision. Break-glass access is explicit, reason-bound, read-only and fully audited.
 The current implementation performs one-shot inspections of at most 100 Items, without issuing
-persistent grants, reusable sessions or leases. A future scoped read grant would require an explicit
-expiry and revocation protocol.
-Write/delete break-glass semantics require a later security decision; ordinary
-endpoints never infer this authority.
+persistent grants, reusable sessions or leases.
 
 ### Database invariants
 
@@ -495,10 +452,3 @@ Workspace-local Tag
 uniqueness is enforced by `UNIQUE(workspace_id, normalized_name)`. Projects have no owner invariant.
 The schema must not materialize implicit Workspace-wide participation or require a minimum
 ProjectParticipant count.
-
-## Adoption constraints
-
-- This is an alpha forward-only cutover. Existing instance-global ownership assumptions, Project
-  roles and Project-derived Item grants are removed rather than adapted through compatibility
-  aliases. Existing data is initialized under the current deployment's Workspace policy;
-  quota and large-scale migration policy are separate work.

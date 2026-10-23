@@ -49,5 +49,3 @@ integration and delivery constraints are defined in the
   upgrade costs require bundle-size and accessibility checks.
 - The application, generated API documentation and non-page responses have distinct security-header
   requirements, including the application's same-origin WASM and worker allowances.
-- The alpha cutover removes Jinja pages, form routes and synchronizer tokens. Future PWA or desktop
-  packaging can reuse the static application and FastAPI boundary.

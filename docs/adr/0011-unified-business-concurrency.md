@@ -10,7 +10,7 @@ locks for cross-row invariants, atomic database operations for associations, and
 at durable finalization. This keeps concurrency protection with the Module that owns the invariant
 while database constraints provide the final integrity boundary.
 
-Lock strengths, ordering, Search projections, Import confirmation and cutover requirements are defined
+Lock strengths, ordering, Search projections and Import confirmation are defined
 in the [business concurrency contracts](../architecture/business-concurrency.md).
 
 ## Considered options
@@ -30,9 +30,7 @@ in the [business concurrency contracts](../architecture/business-concurrency.md)
   concurrency does not require every request to succeed transparently.
 - Search projections follow their canonical Item or File Revision transaction, while Recommendation
   output remains disposable and may be replaced by a newer generation.
-- PostgreSQL supports concurrent multi-worker deployments. SQLite remains a single-process
-  development profile without a promise of concurrent business results.
-- [ADR 0013](0013-workspaces-as-data-governance-and-acl-boundaries.md) supersedes the original Project
-  ownership and role assumptions; Workspace authority and Project participation follow that decision.
-- The alpha cutover is forward-only; removed APIs, stored columns and durable workflow parameters
-  have no compatibility shim.
+- PostgreSQL supports concurrent multi-worker deployments. SQLite uses ordinary transaction
+  semantics in the single-host, single-worker deployment.
+- [Workspace governance](../architecture/workspace-governance.md) defines the authority and
+  participation facts protected by these operations.

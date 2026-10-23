@@ -1,21 +1,14 @@
 # ORM mapping ownership decision
 
-Issue #9 compared two layouts after the business Module seams in #5–#8 stabilized:
+Quirebase keeps `quirebase.models` as one centralized persistence mapping. Business modules
+own the concepts and expose use cases, results and domain errors. Centralization keeps SQLAlchemy
+relationship and mapper-order knowledge local to persistence rather than distributing it across
+capability imports.
 
-1. capability-local mapping files imported by an Alembic metadata aggregator;
-2. one centralized persistence mapping with conceptual ownership enforced separately.
-
-The executable prototype is preserved on branch `prototype/issue-9-orm-layouts`. Both layouts
-configured representative cross-capability relationships, created the same scratch SQLite
-tables and avoided importing Web. The capability-local layout required seven mapping imports
-through an aggregator versus two for the centralized layout, while relationships such as
-Item–File Revision, Annotation–Project and the many User foreign keys still crossed owners.
-
-Quirebase therefore keeps `quirebase.models` as one centralized persistence mapping. This is not
-a business Module interface: business callers continue to use operations, commands, results and
-domain errors. Centralization keeps SQLAlchemy relationship and mapper-order knowledge local to
-persistence instead of manufacturing imports between business packages. File length is not a
-reason to reverse this decision.
+Capability-local mappings were evaluated in the issue #9 prototype. They required a metadata
+aggregator while relationships such as Item–File Revision, Annotation–Project and User references
+still crossed owners. The centralized layout preserves those relationships with fewer mapping
+imports; conceptual ownership remains enforced separately.
 
 ## Concept owners
 
@@ -39,14 +32,8 @@ that the complete metadata loads and upgrades through `head` without importing W
 package facades. Cross-capability ORM relationships remain persistence implementation details;
 they are not re-exported as business interfaces.
 
-## Package facades
+## Business interfaces
 
-Package `__init__.py` files expose caller-facing use cases, results and domain errors. They do not
-export concrete adapters, mutable registries, mapper collaborators, migration helpers or
-compatibility-only aliases. Internal code imports those symbols from their owning implementation
-module. Because Quirebase has no published Python plugin ABI, removed facade exports receive no
-long-lived re-export shims.
-
-ADR 0014 places AA repositories and services beside their owning use cases or in internal
-`_persistence` files. They reuse this centralized mapping and the caller's AsyncSession; the
-business facade remains the use-case interface.
+[Module policy](modules.md#business-interfaces) defines facade exports and transaction ownership.
+Persistence operations reuse the centralized mapping and caller's AsyncSession; the business
+interface remains the use case.

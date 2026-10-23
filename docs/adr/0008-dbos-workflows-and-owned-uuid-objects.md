@@ -4,9 +4,6 @@ status: accepted
 
 # ADR 0008: DBOS workflows and owned UUID objects
 
-Supersedes the Job/Pipeline and FileLock decisions in ADR 0002 and ADR 0006,
-and the SHA-addressed object layout and reservation requirement in ADR 0007.
-
 Quirebase uses DBOS 2.x for durable execution. Web is a DBOS Client and a separately invoked
 `quirebase worker` process owns workflow execution. Workflow definitions live with the Documents,
 Library, or Operations capability whose behaviour they implement; Core exposes only the durable
@@ -24,5 +21,5 @@ owner, references, and lifecycle remain in database and workflow metadata rather
 The upload protocol is workflow-first: create the workflow, write its preallocated object, then
 send a durable completion message. External I/O occurs in retryable idempotent steps and database
 changes occur in short transactions. Recovery uses stable executor IDs; terminal orphan cleanup is
-owned by Operations reconciliation. Legacy 64-hex CAS objects are migrated offline and no CAS read
-compatibility path remains after cutover.
+owned by Operations reconciliation. The [object lifecycle contract](../architecture/object-lifecycle.md)
+defines reservation checks, finalization and cleanup.

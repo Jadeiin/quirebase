@@ -16,8 +16,8 @@ owned an uncheckpointed infinite maintenance loop.
 Library represents PDF Import preparation as a pending Import Batch owned by a DBOS workflow.
 The request validates and stores each upload, then transactionally enqueues preparation. Retryable
 steps separately extract DOI values and retrieve Candidate Records, while a datasource transaction
-checks each DOI against accessible Items; Provider retries do not repeat PDF parsing. One datasource
-transaction publishes the ready preview. A terminal preparation failure transactionally marks the
+rechecks the actor and Workspace before Provider I/O. Provider retries reuse completed PDF parsing.
+One datasource transaction publishes the ready preview. A terminal preparation failure transactionally marks the
 batch failed while retaining its staged objects. Cancellation, exhausted workflow recovery and a
 missing workflow record are lazily reconciled to failed when the batch is viewed or retried; retry
 transitions it back to pending under a new workflow identity. Lazy reconciliation updates only a
@@ -51,7 +51,7 @@ maintenance retires still-expired matching descriptors through Documents in boun
 transactions. The returned object keys are checkpointed atomically with retirement before a
 retryable Documents deletion step rechecks all remaining references. Recovery therefore retains
 keys after descriptors disappear, without reading terminal DBOS history.
-See [the object lifecycle interface contracts](../architecture/modules.md#object-lifecycle-interface-contracts).
+See [the object lifecycle interface contracts](../architecture/object-lifecycle.md#object-lifecycle-interface-contracts).
 Read-heavy datasource transactions use `READ COMMITTED` where the database supports it, while
 business state transitions retain `SERIALIZABLE` isolation or explicit row locking.
 
@@ -62,10 +62,8 @@ business state transitions retain `SERIALIZABLE` isolation or explicit row locki
   periodic reconciliation remains the terminal safety net.
 - Metrics describe database-recorded logical storage immediately. Missing-object diagnostics are as
   fresh as the latest integrity scan and expose its timestamp.
-- This decision supersedes ADR 0007's statement that a database-backed staged-object reservation is
-  future work.
 
-The alpha retention cutover keeps extracted PDF text and geometry only in FileRevision. Uploads
+Retention keeps extracted PDF text and geometry only in FileRevision. Uploads
 first persist a pending Revision; one shared, retryable inspection step publishes ready state,
 Search and a transactionally enqueued event. A failed attempt preserves the source for explicit
 retry. Annotation Export Artifact descriptors retain source/actor identities for download

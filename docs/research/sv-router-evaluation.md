@@ -4,17 +4,16 @@ Date: 2026-09-16
 
 ## Recommendation
 
-Do **not** add `sv-router`, Routify, or `svelte-spa-router` to Quirebase. Continue the cutover to
-SvelteKit's filesystem router.
+Retain SvelteKit's filesystem router for the static application.
 
-All three packages are legitimate routers for a plain Svelte/Vite SPA. Quirebase, however, already
-depends on SvelteKit 2.70.3 and `adapter-static`, and has selected SvelteKit routing in
+All three packages are legitimate routers for a plain Svelte/Vite SPA. The research baseline used SvelteKit 2.70.3 and `adapter-static`. Quirebase retains that routing
+architecture in
 [ADR 0012](../adr/0012-svelte-application-and-http-boundary.md). Adding one of them would leave
 SvelteKit responsible for the build and fallback shell while a second runtime owns URL matching,
 navigation, layouts, preloading, and errors. That is duplicate infrastructure rather than a missing
 capability.
 
-The current branch already expresses the useful boundary directly:
+The current application expresses that boundary through:
 
 - `src/routes/(app)/+layout.svelte` is the persistent authenticated application shell;
 - `(public)` and `(app)` are URL-transparent route groups;
@@ -34,7 +33,7 @@ boundaries, and uses route groups without adding URL segments
 [route files, layouts, errors, and generated types](https://svelte.dev/docs/kit/routing)). Dynamic
 segments can be constrained by typed matchers in `src/params`; failed matches continue to another
 route or 404 ([parameter matching](https://svelte.dev/docs/kit/advanced-routing#Matching)). These
-are exactly the mechanisms Quirebase needs for `itemSection` and `adminSection`.
+support the application route structure. Item and Admin sections now use literal child routes.
 
 For client navigation, SvelteKit owns normal anchors, `goto`, `beforeNavigate`, `onNavigate`,
 `afterNavigate`, `preloadCode`, and `preloadData`
@@ -88,7 +87,7 @@ Routify advertises file-based routing, dynamic imports, customizable bundling, p
 preloads/guards, multiple routers, history restoration, SSR and static export on its
 [official site](https://routify.dev/). Those are broad capabilities, but Quirebase does not need
 multiple simultaneous routers or a second routing framework. More concretely, its current npm
-manifest allows Vite only through major 7, while this branch uses Vite 8.3.0; adopting it would
+manifest allows Vite only through major 7, against Vite 8.3.0 at the research baseline; adopting it would
 start with an unsupported peer range
 ([npm manifest](https://registry.npmjs.org/@roxi%2Froutify/latest)).
 

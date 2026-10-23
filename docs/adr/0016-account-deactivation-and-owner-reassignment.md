@@ -4,14 +4,12 @@ status: accepted
 
 # Separate User deactivation from Workspace ownership
 
-User provisioning creates an ordinary Workspace whose owner previously could not be deactivated,
-so an instance administrator could not immediately disable a newly created or compromised User.
-Quirebase retains the unique current owner membership while allowing its User to be inactive,
-and provides an explicit, reason-required instance governance operation to reassign ownership.
+Security containment requires an administrator to disable a User without first finding successors
+for that User's Workspaces. Quirebase retains the unique current owner membership while allowing
+its User to be inactive, and provides an explicit, reason-required instance governance operation to reassign ownership.
 Account activity controls effective authority; ownership records the current governance assignment.
 
-This revises ADR 0013's requirement that every surviving Workspace have an owner with an active
-account. The owner membership remains active and non-terminated, and every effective grant still
+The owner membership remains active and non-terminated, and every effective grant still
 requires an active User. New ownership assignments require an active receiving User.
 
 The operation, authorization, lifecycle rules, concurrency contract and verification are

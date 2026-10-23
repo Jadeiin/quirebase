@@ -3,10 +3,8 @@
 Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
 > [!IMPORTANT]
-> Quirebase is currently alpha software. Development favors a clear current design over
-> compatibility with earlier releases. APIs, database schemas, and persisted durable workflow
-> inputs or checkpoints may change incompatibly; compatibility shims and replay support are added
-> only when a release plan explicitly requires them.
+> Quirebase is alpha software. APIs, database schemas and durable workflow formats may change
+> without backward compatibility.
 
 ## Development
 
@@ -39,19 +37,9 @@ uv run quirebase create-admin
 uv run quirebase serve
 ```
 
-`uv sync` and `uv run` use your local uv index configuration, including mirrors such as TUNA,
-and may update the source URLs in `uv.lock`. When a commit changes the root or workspace Python
-manifests, `uv.toml`, or `uv.lock`, the `uv-lock` hook refreshes the lockfile against official
-PyPI. If the hook changes `uv.lock`, review and stage it, then retry the commit. Subsequent
-Python check hooks use `--frozen` to preserve the lockfile.
-
 Run `uv run quirebase worker` in a second process. Configuration uses `QUIREBASE_` environment variables; the defaults use SQLite and `./quirebase-data`.
 
-The default SQLite setup installs SQLAlchemy's `asyncio` and `aiosqlite` extras, so database
-access never uses a synchronous Session bridge. For PostgreSQL install the `postgres` extra; it selects SQLAlchemy's
-`postgresql-psycopgbinary` group. `QUIREBASE_DATABASE_URL` takes a libpq
-URL that the application opens with psycopg's native async implementation and passes to `pg_dump`
-and `pg_restore` unchanged, for example:
+For PostgreSQL, install the `postgres` extra and set a libpq database URL, for example:
 
 ```sh
 QUIREBASE_DATABASE_URL=postgresql://quirebase:password@localhost/quirebase uv run quirebase serve
@@ -77,7 +65,7 @@ The plaintext token is shown once. It has the User's current Quirebase permissio
 tool scopes. Do not place it in a URL; send `Authorization: Bearer qb_api_...`. Inspect or revoke
 tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
 
-API errors return a stable JSON object with `code` and `message`, plus optional `fields` for request
+API errors return a JSON object with `code` and `message`, plus optional `fields` for request
 validation and `meta` for structured conflict details.
 
 Research data access is governed by Workspace resource-action decisions. Workspace roles are
@@ -89,25 +77,21 @@ grants access to canonical Workspace Items. Permanent Item deletion requires the
 
 - EmbedPDF's Svelte viewer components and bundled PDFium engine render the document, text and annotation layers in the browser.
 - PyMuPDF validates PDFs, extracts text, creates thumbnails, and writes database-backed highlights and notes into temporary export copies.
-- Logical PDF uploads use preallocated owned UUID object keys; historical SHA-256 content-addressed keys remain recognizable. Original PDFs are never modified.
+- Logical PDF uploads use independently owned UUID object keys. Annotation exports leave the original PDF unchanged.
 
-Password-protected PDFs, OCR and flattened annotations are outside the first milestone.
+Password-protected PDFs, OCR and flattened annotation exports are unsupported.
 
 ## Library Search, Discovery, and bibliography interchange
 
 - SQLite uses FTS5 and PostgreSQL uses a `tsvector`/GIN adapter behind the same Library Search interface. Run `uv run quirebase reindex` after restoring a database or changing indexing rules.
 - Discovery (online search) is separate from Import and provides fielded Boolean queries, source-specific sorting, year filters, pagination, and review-before-import across OpenAlex, Crossref, PubMed, arXiv, Open Library, PMC, NASA ADS, and IEEE Xplore (the latter two need API keys).
-- BibTeX and RIS imports are parsed into a persisted preview and only committed as one transaction after confirmation. Exports contain only Items visible to the current user.
+- BibTeX, RIS, CSL-JSON and Commonmeta imports are parsed into a persisted preview and committed after confirmation. Exports contain only Items visible to the current User.
 - Formatted citations use CSL styles via `citeproc-py`. Built-in styles require the optional `citation` extra (`uv sync --extra citation`); custom styles can be added from the Tools page without it.
 
-Quirebase is licensed under AGPL-3.0-only; see `LICENSE`. PyMuPDF is used under its AGPL option.
+## Documentation
 
-## Completed scope
-
-Quirebase includes local accounts and invitations, Workspace resource-action authorization with role-less Project participation, audited login attempts, per-session and all-session logout, durable login throttling, Item metadata/custom fields, DOI/PMID/arXiv/OpenAlex/ISBN lookup with preview, multi-source Discovery (online scholarly search), automatic DOI extraction from published PDFs, tags, dedicated project workspaces, duplicate-review and tag-management tools, discussions, PDF revisions, supplementary attachments, bulk citation/PDF export and confirmed, audited Workspace-authorized Item deletion through `item.delete`, EmbedPDF reading with annotation detail panels, scoped annotations, PyMuPDF exports, dialect-native Library Search, staged BibTeX/RIS Import, audit events, a global background-task tray for resumable jobs, metrics, backup/restore, and integrity checks.
-
-Operational instructions are in `docs/DEPLOYMENT.md`. Deferred integrations and their security gates are recorded in `docs/adr/0001-deferred-integrations.md`.
-
-The real open-access PDF validation suite uses separately downloaded, checksum-pinned PMC
-open-access PDFs. See `docs/TESTING.md`; run
-`uv run python scripts/download-oa-corpus.py` and `uv run pytest -q -m oa`.
+- [Deployment and operations](docs/DEPLOYMENT.md)
+- [Import and Discovery](docs/METADATA_LOOKUP.md)
+- [Testing and development checks](docs/TESTING.md)
+- [Domain glossary](GLOSSARY.md) and [module ownership](docs/architecture/modules.md)
+- [Third-party licenses](THIRD_PARTY.md); PyMuPDF is used under its AGPL option.

@@ -1,6 +1,6 @@
 # Further Advanced Alchemy adoption
 
-Research baseline: Advanced Alchemy **1.11.0**, pinned by `pyproject.toml`, on
+Research baseline: Advanced Alchemy **1.11.0** on
 `prototype/advanced-alchemy-use-cases` at `c2808d5`. Findings combine application inspection,
 installed dependency source and disposable in-memory probes. PostgreSQL compilation was checked;
 live PostgreSQL and S3 behavior were not exercised. The investigation below preceded implementation; the resulting choices are recorded in the accepted
@@ -11,13 +11,11 @@ live PostgreSQL and S3 behavior were not exercised. The investigation below prec
 The follow-up implements the existing-use-case recommendations: bounded Workspace member
 directories, the Library/User/Audit offset contract, Project detail summary with an independently
 paginated Item section, native file-presence and sorting filters, batch-owned staged PDF descriptors,
-optional native S3 signing, nested bibliography loaders and API Token result conversion. It preserves
-one initial migration and adds no previous-schema adapter. ADR 0014 defines the accepted boundaries;
+optional native S3 signing, nested bibliography loaders and API Token result conversion. ADR 0014 defines the accepted boundaries;
 the [implementation record](../architecture/advanced-alchemy-implementation.md) preserves current
 choices. The sections below retain the original investigation and alternatives.
 
-EncryptedText is explicitly excluded by the user. MFA and semantic search require new product
-flows and were deferred after the user selected enhancement of existing use cases only. Direct S3
+EncryptedText was not adopted. MFA and semantic search require separate product flows. Direct S3
 delivery is a deployment opt-in because private object endpoints cannot be reached by browsers.
 Native signature generation is verified offline; it does not establish live S3/CORS compatibility.
 
@@ -32,7 +30,7 @@ frontend build directory. Subsequent [CI at dd9118e](https://github.com/Jadeiin/
 passed live PostgreSQL, controlled concurrency and S3 object-store contracts. Direct browser S3/CORS
 configuration remains a deployment-specific requirement.
 
-## Recommendation
+## Options evaluated at the research baseline
 
 | Priority | Native capability | Complete application use case | Expected benefit |
 | --- | --- | --- | --- |
@@ -44,30 +42,13 @@ configuration remains a deployment-specific requirement.
 | Product-dependent | `TOTPSecret`, `OneTimeCode` | Administrator MFA and recovery challenges | Native encrypted secrets and hashed code values beneath a complete account flow |
 | Product-dependent | `Vector` | Semantic Library Search | A useful storage type after an embedding/search product is chosen |
 
-Implement the first two as separate complete changes. Then close the PDF staging descriptor gap.
-Signed downloads depend on the deployment and reader requirements; MFA and semantic search are
-new product capabilities rather than immediate persistence simplifications. Benefits above are
-qualitative; these probes do not establish latency or throughput gains.
-
 ## Bounded directories and native filters
 
-Workspace and Project directories already use native offset pagination, with a default of 25
-and a maximum of 100. The remaining concrete gaps are:
-
-- [Workspace member APIs](../../src/quirebase/web/api/workspaces.py) return complete lists for
-  both the ordinary directory and governance view. Add username search, stable ordering and
-  bounded pages, loading usernames and decision projections only for page roots. Participant
-  selectors must resolve selected identities independently of their currently loaded page.
-- [Project detail](../../src/quirebase/projects/workspaces.py) loads every assigned Item, and
-  `ProjectWorkspace.svelte` renders that entire collection. Reuse Library Search's already
-  authorized `project` filter for the paginated Item section; Project detail can return summary
-  facts and the total instead of another unbounded Item list. Preserve the existing archived
-  Project and Item lifecycle behavior when sharing the query.
-- [Library Search](../../src/quirebase/library/catalog.py) already delegates slicing/counts to
-  `ItemService` and `LimitOffset`, but its wire result remains `items,total,page,per_page`.
-  Administrative User and Audit directories also use page-based envelopes. A breaking-change
-  cleanup can standardize local directories on `items,total,limit,offset` and one frontend page
-  experience. Envelope renaming alone has little value without consistent controls and limits.
+Local directories now use bounded offset pagination, stable ordering and independent filtered
+counts. Project detail returns a summary with a separately paginated Library Item section;
+selected identities resolve independently of option pages. The
+[application contract](../architecture/application-http-boundary.md#collection-pagination) defines
+the resulting behavior.
 
 AA provides `SearchFilter`, `OrderBy`, `BeforeAfter`, `OnBeforeAfter`, `ComparisonFilter`,
 `CollectionFilter`, `ChoicesFilter`, `BooleanFilter`, `NullFilter`, `ExistsFilter` and
@@ -91,7 +72,7 @@ Acceptance should cover empty pages retaining their total, equal-key ordering, r
 managed Project discovery versus participation, and selecting an entity absent from the current
 page. These are product/query contracts rather than tests of AA's implementation.
 
-## Provider credential encryption and settings interaction
+## Credential encryption option (not adopted)
 
 [SystemSetting.value](../../src/quirebase/models.py) is plain `Text`. Runtime keys include
 `ncbi_api_key`, `openalex_api_key`, `nasa_ads_token` and `ieee_api_key`.
@@ -100,14 +81,14 @@ page. These are product/query contracts rather than tests of AA's implementation
 default values for every field, and the route calls `model_dump()` without `exclude_unset`.
 Changing only the column type would leave the browser disclosure and replacement semantics intact.
 
-Use native `EncryptedText` with an explicit, stable key provider and declare the
+The evaluated option used native `EncryptedText` with an explicit, stable key provider and the
 `advanced-alchemy[cryptography]` extra. Application inspection found no SQL predicates on
 `SystemSetting.value`: values are selected by key and interpreted in Python. Encrypting the
 entire small value column is consequently a simple option, avoiding a second secret table or
 conditional persistence representation. It makes the key necessary to read persisted ordinary
 settings too; document that operational consequence.
 
-The complete use case includes:
+That option would require:
 
 - Core configuration supplies a durable encryption key; initialization, restart, backup/restore
   and missing-key behavior are explicit. AA's deprecated random default key changes on restart.
@@ -130,36 +111,16 @@ rows. Key rotation needs a separately defined procedure; it is not delivered by 
 
 Acceptance should include restart with the same key, wrong/missing-key failure, encrypted raw
 database values, a secret-free administrative response, and partial saves preserving unrelated
-credentials. This follows the current alpha schema policy rather than adding an older-schema
-conversion layer.
+credentials.
 
-## Finish persistent file descriptors in PDF imports
+## Persistent file descriptors in PDF imports
 
-File Revisions, Attachments and Annotation Export Artifacts already use `StoredObject`.
-[PDF imports](../../src/quirebase/library/imports.py) still store
-`_pdf: {object_key,size,original_name}` inside candidate dictionaries.
-`_pdf_object_keys()` in Library and `_import_object_keys()` in
-[maintenance](../../src/quirebase/operations/maintenance.py) independently decode those values.
-Confirmation removes the `_pdf` payload to release the batch's reservation.
-
-Native `StoredObject(backend="documents", multiple=True)` persists multiple `FileObject`
-descriptors and reloads a mutable list; `FileObjectList` is the provided list type alias.
-A plausible follow-up is one batch-owned staged-file field with a stable source reference in
-each candidate. File metadata carries filename/size/content information, while candidate data
-carries bibliographic values and diagnostics. Do not associate them by array position, or keep
-both a canonical file field and a duplicated `_pdf` descriptor.
-
-This is an integration candidate based on source inspection, not a completed schema experiment.
-Verify that batch-level ownership remains sufficient before selecting it. If each uploaded
-source needs independent processing state or lineage, a child record with one `StoredObject`
-is clearer than encoding that lifecycle into file metadata.
-
-The change must cover staging, failed preparation, retry, confirmation, discard, integrity scans
-and reference-aware deletion together. Failed batches retain their reservation; committed batches
-retain idempotent Item results and release staged references in the same transaction. Durable
-inputs remain serializable domain values; ORM `FileObject` instances do not enter checkpoints.
-Crash/replay and cleanup tests matter more than a descriptor round-trip demo. Automatic file
-listeners stay disabled because ownership can transfer without the object being physically deleted.
+The adopted implementation uses batch-owned `StoredObject(backend="documents", multiple=True)`
+with stable source UUIDs. Candidates carry those UUIDs; descriptors carry file facts. The native
+value reloads as a mutable FileObject list. Durable inputs retain serializable receipt snapshots.
+Automatic file listeners remain disabled because ownership can transfer without physical deletion.
+The [object lifecycle contract](../architecture/object-lifecycle.md#pdf-import-staging) defines
+staging, retry, confirmation and cleanup.
 
 ## Native signed downloads for S3
 
@@ -167,9 +128,8 @@ listeners stay disabled because ownership can transfer without the object being 
 It can sign GET downloads and PUT uploads; backend signing also accepts batches. The default
 expiry is one hour, so application use should specify a short lifetime.
 
-Start with authorized PDF or export downloads if S3 traffic warrants it. Documents resolves the
-current resource and authorization, signs the persisted descriptor, and returns a download target
-through a domain/Web projection. For export artifacts, the URL expiry must be bounded by the
+The adopted opt-in serves authorized PDF and export downloads. Documents resolves the current
+resource and Web checks download authority before Core signs the persisted descriptor. For export artifacts, the URL expiry must be bounded by the
 artifact's remaining lifetime. Reader range requests, browser CORS/CSP, content disposition and
 error recovery need end-to-end verification. A previously issued URL remains usable until its
 expiry after authority is revoked; that behavior must suit the selected lifetime.
@@ -180,16 +140,14 @@ stream/range API with it would regress large-file delivery.
 
 Direct browser upload is a separate later use case. It requires preallocated ownership and
 reservation, completion verification, size/PDF validation, durable inspection and cleanup of
-abandoned uploads. A native signer supplies the URL, not this lifecycle. No live S3 probe was run.
+abandoned uploads. A native signer supplies the URL, not this lifecycle. The original signing probe was offline.
 
 ## Smaller opportunities and feature foundations
 
 Repository `load=` supports nested relationship profiles and explicit SQLAlchemy loader options.
-Repeated Item author/identifier loaders in `access/items.py` and Document revision-to-Item
-loading in `access/documents.py` are candidates for an owner-local profile. Use collection
-`selectinload` and deliberate scalar loading; wildcard loading broadens queries unexpectedly.
-This is worthwhile where it deletes repeated aggregate-loading knowledge, not as another shared
-generic repository abstraction.
+Work bibliographic credits are JSON rather than ORM relationships; relationship profiles remain
+useful for actual aggregates such as Revision-to-Item. Collection `selectinload` and deliberate
+scalar loading can localize repeated aggregate knowledge; wildcard loading broadens queries.
 
 `ResultConverter.to_schema` is already integrated for simple administrative DTOs. Extend it
 opportunistically to attribute-only Web projections as those routes change. It supports Pydantic,
@@ -222,7 +180,7 @@ No upstream issues or external messages were submitted as part of this research.
 | `SQLAlchemyAsyncQueryRepository.get_one` | A two-column SELECT returned only the first scalar (`str`). `get_one_or_none` turned a valid scalar zero into `None`. | It is unsuitable for current multi-column read-model and aggregate queries. |
 | QueryRepository counts | For an offset beyond two existing rows, the window path returned total zero and the basic path raised `NoResultFound`; a multi-column window count raised `ValueError`. `get_many` did preserve complete Rows. | Keep explicit SQL for Annotation/revision projections, Tag counts and storage metrics. The ordinary model repository's configured independent count path is a separate implementation. |
 | Native `OnConflictUpsert` | Simple replacement worked on SQLite and compiled to PostgreSQL. Exposed updates are `column=excluded.column`; the helper has no custom conditional/increment update or `DO NOTHING` mode. | Use selectively for simple replacement upserts. Keep login throttle CASE/increment SQL and association insertion whose rowcount determines whether to audit. |
-| `UniqueMixin` | Source performs a SELECT and session-local caching/add, without database-conflict savepoint recovery. | It does not replace concurrent Author/Tag uniqueness handling. |
+| `UniqueMixin` | Source performs a SELECT and session-local caching/add, without database-conflict savepoint recovery. | It does not replace concurrent scoped Tag uniqueness handling. |
 | Repository cache | Native AA writes queue invalidation; retained Core/CAS/association SQL bypasses that mechanism. Authorization and discovery depend on other tables as well. | Do not enable cache for authorization-sensitive roots without a complete dependency/invalidation design. Built-in Citation Style catalog selection is already `lru_cache`-backed in Inquiro. |
 | FastAPI service/extension lifecycle | Can manage session closure, rollback and configurable status-code commits. Existing Core already supplies native configuration and a small shared-session dependency. | Little code is deleted now; preserve caller-owned command/durable transaction boundaries and private services. It is a possible future integration, not a current high-return rewrite. |
 | `SlugKey` / slug repositories | Native slug uniqueness is table-wide; available-slug generation checks before insertion. | A future Workspace-scoped URL design would still need scoped uniqueness and race handling. Introducing it now adds a second identity contract. |

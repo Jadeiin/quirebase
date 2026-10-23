@@ -8,11 +8,8 @@ Before changing Quirebase architecture or business behaviour:
 4. Use the terms defined in `GLOSSARY.md` in code, tests and documentation.
 5. Surface conflicts with accepted ADRs instead of silently overriding them.
 
-Quirebase is currently a single-context repository.
-
-The change is ready when every affected domain term matches `GLOSSARY.md`, every changed Module
-has an explicit owner and allowed dependency direction, and unresolved conflicts have been
-surfaced rather than encoded as accidental implementation choices.
+Quirebase has one bounded context. Keep definitions in `GLOSSARY.md`, architectural choices in
+ADRs, and detailed behavior contracts in `docs/architecture/`.
 
 ## ADR format
 

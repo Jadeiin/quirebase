@@ -2,38 +2,16 @@
 
 Date: 2026-09-16
 
-Implementation note: Quirebase subsequently adopted the Lingui PO direction recommended here.
-Committed PO files now own translations, a project-local Svelte extractor owns source discovery,
-and generated TypeScript catalogs are ignored. Compilation currently permits untranslated target
-entries to fall back to English while professional Simplified Chinese translation is pending.
+## Adoption outcome
 
-## Decision
+Quirebase uses Lingui with committed PO catalogs, a project-local Svelte extractor and generated
+TypeScript runtime messages. Locale is a browser preference managed with `@lingui/detect-locale`.
+[Testing](../TESTING.md#frontend-localization) documents the active workflow.
 
-Do **not** migrate Quirebase from `@lingui/core` to Paraglide JS while the hard requirement is that
-all localizable messages are managed and translated through gettext PO/POT files.
-
-Paraglide JS is an active, capable compiler and its generated per-message functions provide better
-static typing and tree shaking than Quirebase's current hand-written Lingui catalog. That advantage
-does not resolve the deciding issue: Paraglide's official Svelte add-on and recommended storage
-plugin use Inlang Message Format JSON, and the current official Inlang plugin catalog has no
-gettext/PO storage plugin. A Paraglide adoption would therefore require Quirebase to own a PO
-plugin or a bidirectional conversion and extraction pipeline. Either option weakens PO's role as
-the single source of truth and adds more maintenance than finishing Lingui's native PO workflow.
-
-The recommended direction is:
-
-1. retain the Lingui runtime;
-2. replace `frontend/src/lib/messages.ts` with committed PO catalogs;
-3. configure Lingui extraction and compilation in CI;
-4. use `@lingui/format-po` if PO is the required translation container with ICU messages, or
-   `@lingui/format-po-gettext` only if translation tooling specifically requires gettext-native
-   `msgid_plural`/`msgstr[n]` entries;
-5. add an extraction seam for `.svelte` files (or centralize statically extractable message
-   descriptors in TypeScript), because Lingui's built-in extractor does not parse Svelte syntax.
-
-This is not a recommendation to preserve the current manual TypeScript dictionary. That file does
-not yet satisfy the PO requirement. It is a recommendation to complete the PO-native path already
-provided by the selected runtime instead of replacing the runtime and then rebuilding PO support.
+The PO requirement decided against Paraglide: the researched official Svelte add-on and storage
+plugin use Inlang Message Format JSON. Supporting PO would require a maintained storage plugin or
+bidirectional converter. The investigation below compares those costs against Lingui's native PO
+support using the dated upstream sources.
 
 ## 1. What is canonical in Paraglide
 
@@ -182,9 +160,8 @@ The output is generated and ignored. Each message is a typed function. Because m
 ES modules, Vite can tree-shake unused message functions and code-split them with the consuming
 route. This is Paraglide's clearest technical advantage
 ([architecture](https://paraglidejs.com/architecture),
-[compiling messages](https://paraglidejs.com/compiling-messages)). Its current npm package supports
-Vite 5 or later and TypeScript 5.6 or later, so it is compatible with this branch's Vite 8 and
-TypeScript 5.9
+[compiling messages](https://paraglidejs.com/compiling-messages)). The researched npm package supports
+Vite 5 or later and TypeScript 5.6 or later
 ([npm manifest](https://registry.npmjs.org/@inlang%2Fparaglide-js/latest)).
 
 The official Svelte add-on also installs:
@@ -202,9 +179,8 @@ That generated integration cannot be accepted unchanged for Quirebase:
 - Quirebase builds a client-only `adapter-static` fallback with `ssr = false`; FastAPI, not a
   SvelteKit server, serves the document in production. A generated `hooks.server.ts` cannot
   transform the static fallback per request.
-- Locale is currently owned by the FastAPI Login Session and arrives from `/api/v1/session` after
-  the client starts. Paraglide's built-in URL, cookie, local-storage, preferred-language, and
-  base-locale strategies do not read that application response.
+- Locale is a reactive browser preference. The static application updates translated content
+  and document language without a full navigation.
 - The official setup defaults to localized URLs. Adding locale prefixes would change every
   application URL and route contract without a product requirement.
 - Paraglide recommends that normal locale changes perform a full document navigation. Its
@@ -214,63 +190,36 @@ That generated integration cannot be accepted unchanged for Quirebase:
   ([locale strategy](https://paraglidejs.com/strategy),
   [locale switching](https://paraglidejs.com/basics#getting-and-setting-the-locale)).
 
-Using Paraglide without localized URLs would consequently require a Quirebase-specific bridge:
-render the base locale until the session request completes, set the Paraglide locale without a
-reload, invalidate a Svelte-tracked locale signal, and update document language/direction; or mirror
-the account locale into a Paraglide-readable cookie and reload. The first reproduces the reactive
-locale adapter that already exists around Lingui; the second duplicates Login Session state.
-
-Paraglide's experimental per-locale Vite build is not an escape route. Its own documentation states
-that the backend owns Vite's build orchestration and currently does not compose with SvelteKit,
-which owns its Vite application build
-([compiler documentation](https://paraglidejs.com/compiling-messages#experimental-per-locale-builds)).
+A Paraglide integration would need to preserve that reactive behavior and the PO source of truth.
+The [application contract](../architecture/application-http-boundary.md) defines those requirements.
 
 ## 4. Workflow comparison
 
-| Concern                     | Lingui PO target                                                                 | Paraglide default                                                   | Paraglide with PO constraint                                       |
+| Concern                     | Lingui PO                                                                 | Paraglide default                                                   | Paraglide with PO constraint                                       |
 | --------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | Committed translation truth | `.po`; optional generated `.pot`                                                 | `messages/{locale}.json`                                            | `.po`, plus project-owned adapter/converter                        |
 | Official PO read/write      | Yes: `@lingui/format-po`; native plural alternative available                    | No                                                                  | Must implement or depend on an unendorsed conversion layer         |
 | Source extraction           | `lingui extract`; `.pot` via `extract-template`                                  | Messages authored in storage files; Sherlock-assisted extraction    | Separate custom extractor/POT generator required                   |
 | Production compilation      | `lingui compile` or Vite plugin emits compact catalog modules                    | Vite plugin emits typed per-message functions                       | PO conversion/plugin, then Paraglide compile                       |
-| Svelte syntax               | Custom extractor needed; official extractor supports JS/TS but not Svelte syntax | `m.*` calls work directly in Svelte after generation                | Same, plus PO bridge                                               |
-| Locale reactivity           | Existing Quirebase writable store activates Lingui and rerenders                 | Full navigation by default; no-reload requires app-owned reactivity | Custom session-to-runtime bridge needed                            |
+| Svelte syntax               | Project-local Svelte extractor; official extractor covers JS/TS | `m.*` calls work directly in Svelte after generation                | Same, plus PO bridge                                               |
+| Locale reactivity           | Existing Quirebase writable store activates Lingui and rerenders                 | Full navigation by default; no-reload requires app-owned reactivity | Custom reactive locale bridge needed                            |
 | Tree shaking                | Catalog usually loaded per locale; experimental dependency-tree extractor exists | Per-message ES modules are tree-shakable                            | Same runtime benefit after extra pipeline                          |
 | CI drift checks             | Extract/compile/strict are official CLI operations                               | Compiler validates Inlang project                                   | Must also prove PO↔Inlang conversion is deterministic and lossless |
 
-Lingui is not friction-free in Svelte. Its official extraction guide says the built-in extractor
-supports JavaScript and TypeScript, while custom syntax such as Svelte needs a custom extractor
-([message extraction](https://lingui.dev/guides/message-extraction#supported-source-types)). The
-current `$t('literal')` wrapper is also not one of the built-in non-macro patterns; Lingui detects
-`i18n._`/`i18n.t` by name, statically annotated descriptors, and its macros. Quirebase must address
-this regardless of the decision.
-
-The smaller corrective path is to keep Lingui and establish one of these extraction seams:
-
-1. put explicit message descriptors in TypeScript modules and import them into Svelte components;
-   or
-2. implement a narrow Lingui custom extractor for Quirebase's Svelte translation helper, backed by
-   fixture tests for interpolation, context, and plural syntax.
-
-Both options feed Lingui's official PO merge/POT/compile pipeline. They are materially smaller than
-writing a general Inlang PO storage plugin because they only have to recognize Quirebase's source
-convention, not round-trip the entire gettext data model.
+Lingui's built-in extractor supports JavaScript/TypeScript, while Svelte syntax needs a custom
+extractor ([message extraction](https://lingui.dev/guides/message-extraction#supported-source-types)).
+Quirebase implements that seam in
+[`i18n-extractor.ts`](../../frontend/src/lib/i18n-extractor.ts), recognizing literal `$t` calls and
+marked `msg` descriptors. Fixture tests verify extraction and rejected dynamic markers. It feeds
+Lingui's official PO merge/POT/compile pipeline without owning a general gettext storage plugin.
 
 ## 5. Migration cost and risks
 
 ### Immediate application rewrite
 
-The current frontend has roughly a central English/Chinese dictionary and string-key calls through
-`$t(...)`. A Paraglide migration would require:
-
-- assigning stable identifiers and converting every call to generated `m.<id>()` functions (or
-  less ergonomic bracket access);
-- translating interpolation/plural/context semantics into Inlang variants;
-- replacing `i18n.ts`, the Svelte locale store, activation in `AppShell` and `Invitation`, and the
-  locale behavior tests;
-- adding `project.inlang`, generated-output ignores, the Vite generator, and CI checks;
-- designing the session-locale bridge for a static fallback;
-- implementing and testing the PO storage/conversion and POT extraction stages.
+Changing to Paraglide would replace runtime calls and extraction, add Inlang project data,
+provide a PO storage/conversion path and preserve reactive locale switching in the static app.
+The current Lingui implementation already provides those application workflows.
 
 ### Long-term risks
 
@@ -280,8 +229,8 @@ The current frontend has roughly a central English/Chinese dictionary and string
   source references do not form a one-to-one model.
 - **Generated API churn:** message-key changes are source-code API renames in Paraglide, whereas
   Quirebase currently uses English text as IDs.
-- **Locale ownership split:** a Paraglide cookie/URL preference can conflict with the account locale
-  stored by FastAPI.
+- **Locale ownership split:** a Paraglide cookie/URL preference would need to agree with the
+  application's reactive browser locale.
 - **Tooling ownership:** the project, rather than Paraglide or Inlang, becomes responsible for the
   most important requirement—the PO round trip.
 
@@ -293,20 +242,7 @@ parsing, and integrates cleanly with Vite HMR. If Quirebase later permits Inlang
 to become the translation source of truth, Paraglide becomes a strong candidate. Under the current
 PO-only rule, those runtime/DX gains do not outweigh the catalog-pipeline risk.
 
-## Implementation recommendation for the current branch
-
-No dependency change should be made as a result of this research. The next localization change
-should instead be a focused Lingui PO foundation:
-
-1. decide between ICU-in-PO (`@lingui/format-po`) and native gettext plurals
-   (`@lingui/format-po-gettext`);
-2. add `lingui.config.ts`, committed `en-US.po`/`zh-CN.po`, `extract`, `extract-template`, and
-   `compile` scripts;
-3. migrate the existing dictionary once into those catalogs;
-4. generate/compile runtime catalogs during the frontend build and check extraction/compile in CI;
-5. establish a statically extractable message convention for Svelte and test it;
-6. retain FastAPI's session locale as the only locale preference and keep the Svelte reactive
-   activation layer.
+## Reconsideration criteria
 
 Revisit Paraglide only if one of these conditions changes:
 
@@ -317,9 +253,9 @@ Revisit Paraglide only if one of these conditions changes:
 
 ## Primary-source snapshot
 
-- Paraglide JS current package: 2.25.2, MIT, Vite `>=5`, TypeScript `>=5.6`
+- Researched Paraglide JS package: 2.25.2, MIT, Vite `>=5`, TypeScript `>=5.6`
   ([npm](https://registry.npmjs.org/@inlang%2Fparaglide-js/latest)).
-- Lingui current runtime/CLI: 6.7.0, MIT
+- Researched Lingui runtime/CLI: 6.7.0, MIT
   ([core](https://registry.npmjs.org/@lingui%2Fcore/latest),
   [CLI](https://registry.npmjs.org/@lingui%2Fcli/latest)).
 - Svelte CLI's current add-on source selects Inlang JSON storage and generates Vite, reroute,
