@@ -1312,9 +1312,9 @@ test('Annotation moderation refreshes a stale version and requires an explicit r
 	).toHaveCount(0);
 	await page.getByRole('button', { name: 'Hide', exact: true }).click();
 	await expect(page.getByText('Updated by another moderator')).toBeVisible();
-	await expect(
-		page.getByText(/Latest state refreshed; review it and explicitly retry/)
-	).toBeVisible();
+	await expect(page.getByRole('alert')).toHaveText(
+		'This Annotation changed. Review the latest version and try again.'
+	);
 	await expect.poll(() => moderationBodies).toEqual([{ action: 'hide', version: 1 }]);
 
 	await page.getByRole('button', { name: 'Hide', exact: true }).click();
