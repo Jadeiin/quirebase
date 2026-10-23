@@ -434,13 +434,19 @@ test('PDF sidebars preserve document space and retain mobile bottom drawers', as
 			.poll(async () => (await sidebar.boundingBox())?.width ?? 0)
 			.toBeGreaterThanOrEqual(200);
 	}
+	// Stacked mobile drawers can obscure each other's grips. Leave only comments open.
+	await page.getByRole('button', { name: 'Sidebar', exact: true }).click();
+	await expect(navigation).toBeHidden();
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(page.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveCount(0);
 	await expect(comment.locator('.cursor-grab')).toBeVisible();
 	await expect.poll(async () => (await comment.boundingBox())?.height ?? 0).toBeGreaterThan(100);
 	await expect.poll(async () => (await comment.boundingBox())?.width).toBe(390);
 	// Drag the existing mobile grip upwards; its full-height drawer remains functional.
-	const grip = (await comment.locator('.cursor-grab').boundingBox())!;
+	const mobileGrip = comment.locator('.cursor-grab');
+	// Locator actions wait for animation stability and check that the grip receives input.
+	await mobileGrip.hover();
+	const grip = (await mobileGrip.boundingBox())!;
 	const before = (await comment.boundingBox())!.height;
 	await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
 	await page.mouse.down();
@@ -451,6 +457,7 @@ test('PDF sidebars preserve document space and retain mobile bottom drawers', as
 		.toBeGreaterThan(before + 100);
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await expect(comment.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveCount(1);
+	await openPdfSidebar(page, 'sidebar-panel', 'left');
 	await expect(navigation.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveCount(1);
 	await expect.poll(documentWidth).toBeGreaterThanOrEqual(320);
 });
