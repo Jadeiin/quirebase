@@ -2,6 +2,12 @@
 
 Quirebase is an AGPL-3.0-only, self-hosted collaborative research library.
 
+Discover papers, organize your Library, annotate PDFs together, and take your references into writing.
+
+<picture>
+<img alt="Quirebase in action: discover papers, preview a bibliography import, organize references, highlight a PDF, reply to a shared annotation, and export citations." src="https://github.com/user-attachments/assets/7bd512c7-fb0d-48c5-add6-966ca87a7a04" />
+</picture>
+
 > [!IMPORTANT]
 > Quirebase is alpha software. APIs, database schemas and durable workflow formats may change
 > without backward compatibility.
