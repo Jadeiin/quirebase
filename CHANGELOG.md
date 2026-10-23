@@ -1,3 +1,13 @@
+## 0.3.1 (2026-10-24)
+
+### Feat
+
+- **import**: refine PDF identification and bibliographic previews
+
+### Fix
+
+- **ui**: support UUID generation on HTTP origins
+
 ## 0.3.0 (2026-10-23)
 
 ### BREAKING CHANGE
