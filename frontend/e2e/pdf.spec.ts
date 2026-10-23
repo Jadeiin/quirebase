@@ -1,6 +1,6 @@
 import { mockMetadataSources } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
-import type { AnnotationPlugin, PluginRegistry } from '@embedpdf/svelte-pdf-viewer';
+import type { AnnotationPlugin, PluginRegistry, UIPlugin } from '@embedpdf/svelte-pdf-viewer';
 import { minimalPdf, mockSession, annotationList, setAnnotationSource } from './helpers';
 
 test('PDF reader uses the built-in EmbedPDF viewer with Quirebase annotations', async ({
@@ -308,6 +308,152 @@ function commentCard(page: Page, body: string) {
 		.getByText(body, { exact: true })
 		.locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]');
 }
+
+async function openPdfSidebar(page: Page, id: string, side: 'left' | 'right', tab?: string) {
+	await page.locator('embedpdf-container').evaluate(
+		async (element, { id, side, tab }) => {
+			const registry = await (element as HTMLElement & { registry: Promise<PluginRegistry> })
+				.registry;
+			registry
+				.getPlugin<UIPlugin>('ui')!
+				.provides()
+				.forDocument('revision-1')
+				.setActiveSidebar(side, 'main', id, tab);
+		},
+		{ id, side, tab }
+	);
+	return page.locator(`[data-sidebar-id="${id}"]`);
+}
+
+async function dragPdfSidebar(page: Page, id: string, distance: number) {
+	const handle = page
+		.locator(`[data-sidebar-id="${id}"]`)
+		.getByRole('separator', { name: 'Resize PDF sidebar' });
+	await expect(handle).toBeVisible();
+	const box = (await handle.boundingBox())!;
+	const x = box.x + box.width / 2;
+	const y = box.y + box.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x + distance, y, { steps: 10 });
+	await page.mouse.up();
+}
+
+test('PDF comment sidebar resizes, remembers its width and supports keyboard controls', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	const state = await mockScopeReader(page, true);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+	await page.getByRole('button', { name: 'Comment', exact: true }).click();
+	const sidebar = page.locator('[data-sidebar-id="comment-panel"]');
+	const handle = sidebar.getByRole('separator', { name: 'Resize PDF sidebar' });
+	await expect(handle).toHaveAttribute('aria-valuenow', '250');
+	await dragPdfSidebar(page, 'comment-panel', -150);
+	await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(400);
+	await expect(sidebar.getByText('private annotation', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Comment', exact: true }).click();
+	await expect(sidebar).toBeHidden();
+	await page.getByRole('button', { name: 'Comment', exact: true }).click();
+	await expect(handle).toHaveAttribute('aria-valuenow', '400');
+	await page.reload();
+	await expect(page.getByText('1 annotation loaded')).toBeVisible();
+	await page.getByRole('button', { name: 'Comment', exact: true }).click();
+	await expect(handle).toHaveAttribute('aria-valuenow', '400');
+	await handle.focus();
+	await page.keyboard.press('ArrowLeft');
+	await expect(handle).toHaveAttribute('aria-valuenow', '410');
+	await page.keyboard.press('Shift+ArrowRight');
+	await expect(handle).toHaveAttribute('aria-valuenow', '360');
+	await page.keyboard.press('Home');
+	await expect(handle).toHaveAttribute('aria-valuenow', '250');
+	await dragPdfSidebar(page, 'comment-panel', 500);
+	await expect(handle).toHaveAttribute('aria-valuenow', '200');
+	await handle.dblclick();
+	await expect(handle).toHaveAttribute('aria-valuenow', '250');
+	expect(state.mutationRequests).toEqual([]);
+});
+
+test('PDF navigation, annotation style and search sidebars resize independently', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await mockScopeReader(page);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('0 annotations loaded')).toBeVisible();
+	for (const { id, side } of [
+		{ id: 'sidebar-panel', side: 'left' },
+		{ id: 'annotation-panel', side: 'left' },
+		{ id: 'search-panel', side: 'right' }
+	] as const) {
+		const sidebar = await openPdfSidebar(page, id, side);
+		const handle = sidebar.getByRole('separator', { name: 'Resize PDF sidebar' });
+		await expect(handle).toHaveAttribute('aria-valuenow', '250');
+		await dragPdfSidebar(page, id, side === 'left' ? 80 : -80);
+		await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(330);
+		await handle.focus();
+		await page.keyboard.press(side === 'left' ? 'ArrowRight' : 'ArrowLeft');
+		await expect(handle).toHaveAttribute('aria-valuenow', '340');
+	}
+	const navigation = await openPdfSidebar(page, 'sidebar-panel', 'left', 'outline');
+	await expect(navigation.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveAttribute(
+		'aria-valuenow',
+		'340'
+	);
+	await expect(navigation.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveCount(1);
+});
+
+test('PDF sidebars preserve document space and retain mobile bottom drawers', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await mockScopeReader(page);
+	await page.goto('/workspace/workspace-1/item/item-1/pdf/revision-1');
+	await expect(page.getByText('0 annotations loaded')).toBeVisible();
+	const comment = await openPdfSidebar(page, 'comment-panel', 'right');
+	await dragPdfSidebar(page, 'comment-panel', -1000);
+	await expect(comment.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveAttribute(
+		'aria-valuenow',
+		'600'
+	);
+	const navigation = await openPdfSidebar(page, 'sidebar-panel', 'left');
+	await expect(navigation.getByRole('separator', { name: 'Resize PDF sidebar' })).toBeVisible();
+	await dragPdfSidebar(page, 'sidebar-panel', 1000);
+	const documentWidth = () =>
+		page.locator('#document-content').evaluate((element) => {
+			const panels = [...element.querySelectorAll(':scope > [data-sidebar-id]')];
+			return (
+				element.clientWidth -
+				panels.reduce((sum, panel) => sum + panel.getBoundingClientRect().width, 0)
+			);
+		});
+	await expect.poll(documentWidth).toBeGreaterThanOrEqual(320);
+	await page.setViewportSize({ width: 1024, height: 800 });
+	await expect.poll(documentWidth).toBeGreaterThanOrEqual(320);
+	for (const sidebar of [comment, navigation]) {
+		await expect
+			.poll(async () => (await sidebar.boundingBox())?.width ?? 0)
+			.toBeGreaterThanOrEqual(200);
+	}
+	await page.setViewportSize({ width: 390, height: 844 });
+	await expect(page.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveCount(0);
+	await expect(comment.locator('.cursor-grab')).toBeVisible();
+	await expect.poll(async () => (await comment.boundingBox())?.height ?? 0).toBeGreaterThan(100);
+	await expect.poll(async () => (await comment.boundingBox())?.width).toBe(390);
+	// Drag the existing mobile grip upwards; its full-height drawer remains functional.
+	const grip = (await comment.locator('.cursor-grab').boundingBox())!;
+	const before = (await comment.boundingBox())!.height;
+	await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(grip.x + grip.width / 2, grip.y - 300, { steps: 10 });
+	await page.mouse.up();
+	await expect
+		.poll(async () => (await comment.boundingBox())?.height ?? 0)
+		.toBeGreaterThan(before + 100);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await expect(comment.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveCount(1);
+	await expect(navigation.getByRole('separator', { name: 'Resize PDF sidebar' })).toHaveCount(1);
+	await expect.poll(documentWidth).toBeGreaterThanOrEqual(320);
+});
 
 test('PDF comment sidebar is read-only for canonical and native comments in a read-only Workspace', async ({
 	page

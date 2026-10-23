@@ -17,6 +17,7 @@
 	import { i18n } from '@lingui/core';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { t } from '#lib/i18n.js';
+	import { resizePdfSidebars } from '#lib/pdf/sidebar-resize.js';
 	import {
 		createAnnotationSync,
 		type AnnotationSources,
@@ -121,6 +122,8 @@
 	let annotationApi: AnnotationCapability | null = null;
 	let commandsApi: CommandsCapability | null = null;
 	let uiApi: UICapability | null = null;
+	let viewerContainer: HTMLElement | null = null;
+	let disposeSidebarResize: (() => void) | undefined;
 	let documentReady = $state(false);
 	let unsubscribeEvents: (() => void) | null = null;
 	let destroyed = false;
@@ -224,6 +227,12 @@
 			});
 			if (uiApi) {
 				const schema = uiApi.getSchema();
+				if (viewerContainer) {
+					disposeSidebarResize = resizePdfSidebars(viewerContainer, schema.sidebars, {
+						name: $t('Resize PDF sidebar'),
+						instructions: $t('Drag to resize. Use arrow keys to adjust; Home to reset.')
+					});
+				}
 				type SchemaItem = { id?: string; commandId?: string; items?: SchemaItem[] };
 				const filterItems = <T extends SchemaItem>(items: T[]): T[] =>
 					items
@@ -317,6 +326,7 @@
 		destroyed = true;
 		cancelDocumentWait();
 		sync.dispose();
+		disposeSidebarResize?.();
 		unsubscribeEvents?.();
 		void registry?.destroy();
 		registry = null;
@@ -324,5 +334,11 @@
 </script>
 
 <div class="min-h-0 flex-1">
-	<PDFViewer {config} onready={setup} class="h-full w-full" style="width:100%;height:100%" />
+	<PDFViewer
+		{config}
+		oninit={(container) => (viewerContainer = container)}
+		onready={setup}
+		class="h-full w-full"
+		style="width:100%;height:100%"
+	/>
 </div>

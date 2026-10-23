@@ -205,6 +205,9 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // Typed, grouped presence choices reuse selectors; IDs and draft conversion stay route-owned.
 // Session/invitation retry states and localized failures add shared code/catalogs.
 // Measured Library overages use the existing 1 kB raw / 500 B gzip boundaries.
+// Resizable PDF sidebars add 688 B raw / up to 45 B gzip to shared CSS/catalogs vs 97fc157;
+// interaction code stays in the PDF reader. Only exceeded preview/organization dimensions move
+// to the existing 1 kB raw / 500 B gzip boundaries.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
 	raw: 795000,
@@ -227,12 +230,12 @@ enforce(
 	'Library preview when open',
 	bundleSize(graphFiles(libraryPreview)),
 	// Bibliographic preview and scoped navigation add about 14 kB raw / 5.5 kB gzip on demand.
-	{ raw: 1151000, gzip: 335000 }
+	{ raw: 1152000, gzip: 335000 }
 );
 enforce(
 	'Library organization when open',
 	bundleSize(graphFiles(mergeGraphs(libraryPreview, dependencyGraph([libraryOrganizeKey], false)))),
-	{ raw: 1163000, gzip: 339500 }
+	{ raw: 1164000, gzip: 340000 }
 );
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.

@@ -2066,8 +2066,9 @@ msgstr "下载含标注的文件"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Drag to resize. Use arrow keys to adjust; Home to reset."
-msgstr "拖动以调整列宽，也可使用左右方向键调整，按 Home 重置。"
+msgstr "拖动以调整宽度，也可使用左右方向键调整，按 Home 重置。"
 
 #. js-lingui-explicit-id
 #: src/lib/features/import/ImportWorkspace.svelte
@@ -5360,6 +5361,11 @@ msgstr "恢复默认设置"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Resize {name} column"
 msgstr "调整{name}列宽"
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Resize PDF sidebar"
+msgstr "调整 PDF 侧边栏宽度"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts

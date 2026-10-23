@@ -2066,6 +2066,7 @@ msgstr "Download with annotations"
 
 #. js-lingui-explicit-id
 #: src/lib/features/library/LibraryTable.svelte
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
 msgid "Drag to resize. Use arrow keys to adjust; Home to reset."
 msgstr "Drag to resize. Use arrow keys to adjust; Home to reset."
 
@@ -5360,6 +5361,11 @@ msgstr "Reset to defaults"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Resize {name} column"
 msgstr "Resize {name} column"
+
+#. js-lingui-explicit-id
+#: src/lib/pdf/EmbeddedPdfViewer.svelte
+msgid "Resize PDF sidebar"
+msgstr "Resize PDF sidebar"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
