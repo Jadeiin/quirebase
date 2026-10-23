@@ -22,6 +22,115 @@ def test_reference_doi_is_not_the_uploaded_pdfs_identity(tmp_path, page_index):
     assert extract_pdf_lookup_identifier(source) is None
 
 
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        (
+            "Digital Object Identifier 10.1109/LRA.2024.3356168",
+            "10.1109/lra.2024.3356168",
+        ),
+        (
+            "Digital Object Identiﬁer 10.1109/LRA.2024.3356168",
+            "10.1109/lra.2024.3356168",
+        ),
+        ("DOI: 10.1234/Article", "10.1234/article"),
+        (
+            (
+                "Cite this: Yin and Pei, Reinforcement Learning for Trajectory Tracking,\n"
+                "Guid. Navig. Control, 6(2), 189\u2013200 (2026), doi: 10.1142/S2737480726400054"
+            ),
+            "10.1142/s2737480726400054",
+        ),
+    ],
+)
+def test_first_page_publisher_identity_text_identifies_a_pdf(tmp_path, text, expected):
+    source = tmp_path / "article.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "An article mentioning DOI:10.1234/citation")
+        page.insert_htmlbox(pymupdf.Rect(40, 600, 550, 750), text.replace("\n", "<br>"))
+        document.save(source)
+
+    assert extract_pdf_lookup_identifier(source) == Identifier("doi", expected)
+
+
+@pytest.mark.parametrize("page_index", [0, 1])
+@pytest.mark.parametrize(
+    "heading", ["References", "Bibliography", "6 References", "VI. REFERENCES"]
+)
+@pytest.mark.parametrize("separate_block", [False, True])
+def test_reference_section_identity_labels_do_not_identify_a_pdf(
+    tmp_path, page_index, heading, separate_block
+):
+    source = tmp_path / "references.pdf"
+    with pymupdf.open() as document:
+        for _ in range(page_index + 1):
+            document.new_page()
+        page = document[page_index]
+        label = "Digital Object Identifier 10.1234/citation"
+        if separate_block:
+            page.insert_text((72, 72), heading)
+            page.insert_text((72, 200), label)
+        else:
+            page.insert_text((72, 72), f"{heading}\n{label}")
+        document.save(source)
+
+    assert extract_pdf_lookup_identifier(source) is None
+
+
+def test_cite_this_does_not_borrow_a_doi_from_another_text_block(tmp_path):
+    source = tmp_path / "article.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Cite this: An article without a DOI")
+        page.insert_text((72, 200), "A related article: DOI:10.1234/citation")
+        document.save(source)
+
+    assert extract_pdf_lookup_identifier(source) is None
+
+
+def test_later_publisher_identity_text_does_not_identify_a_pdf(tmp_path):
+    source = tmp_path / "article.pdf"
+    with pymupdf.open() as document:
+        document.new_page()
+        document.new_page().insert_text((72, 72), "Digital Object Identifier 10.1234/citation")
+        document.save(source)
+
+    assert extract_pdf_lookup_identifier(source) is None
+
+
+def test_conflicting_printed_doi_labels_leave_a_pdf_unidentified(tmp_path):
+    source = tmp_path / "ambiguous.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Digital Object Identifier 10.1234/one")
+        page.insert_text((72, 200), "DOI: 10.1234/two")
+        document.save(source)
+
+    assert extract_pdf_lookup_identifier(source) is None
+
+
+@pytest.mark.parametrize("evidence", ["xmp", "publisher_link", "info"])
+def test_embedded_doi_evidence_precedes_printed_identity_text(tmp_path, evidence):
+    source = tmp_path / "article.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Digital Object Identifier 10.1234/printed")
+        if evidence == "xmp":
+            document.set_xml_metadata(xmp_packet("<prism:doi>10.1234/embedded</prism:doi>"))
+        elif evidence == "publisher_link":
+            page.insert_link({
+                "kind": pymupdf.LINK_URI,
+                "from": pymupdf.Rect(30, 30, 60, 60),
+                "uri": "https://crossmark.crossref.org/dialog/?doi=10.1234/embedded",
+            })
+        else:
+            document.set_metadata({"subject": "doi:10.1234/embedded"})
+        document.save(source)
+
+    assert extract_pdf_lookup_identifier(source) == Identifier("doi", "10.1234/embedded")
+
+
 @pytest.mark.parametrize("field", ["title", "subject"])
 @pytest.mark.parametrize(
     "value,expected",

@@ -132,6 +132,7 @@ class PdfTextLine:
     text: str
     bounds: tuple[float, float, float, float]
     direction: tuple[float, float]
+    block_index: int
 
 
 @dataclass(frozen=True)
@@ -148,7 +149,9 @@ def read_pdf_metadata(path: Path) -> PdfMetadata:
     with pymupdf.open(path) as document:
         page = document[0]
         lines = []
-        for block in page.get_text("dict", flags=pymupdf.TEXTFLAGS_TEXT)["blocks"]:
+        for block_index, block in enumerate(
+            page.get_text("dict", flags=pymupdf.TEXTFLAGS_TEXT)["blocks"]
+        ):
             if block["type"] != 0:
                 continue
             for line in block["lines"]:
@@ -159,6 +162,7 @@ def read_pdf_metadata(path: Path) -> PdfMetadata:
                         "".join(span["text"] for span in line["spans"]),
                         (x0, y0, x1, y1),
                         (dx, dy),
+                        block_index,
                     )
                 )
         return PdfMetadata(

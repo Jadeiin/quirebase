@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import groupby
 from typing import TYPE_CHECKING
+from unicodedata import normalize
 from urllib.parse import parse_qs, unquote, urlsplit
 from xml.etree import ElementTree
 
@@ -32,6 +34,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from quirebase.core.config import Settings
+    from quirebase.documents.pdf import PdfTextLine
 
 
 _PDF_ARXIV_WATERMARK = re.compile(
@@ -46,6 +49,17 @@ _XMP_DOI_FIELDS = {
     "{http://ns.adobe.com/pdfx/1.3/}DOI",
     "{http://purl.org/dc/elements/1.1/}identifier",
 }
+_PDF_DOI_LABEL = re.compile(
+    r"^\s*(?:digital\s+object\s+identifier\s*:?|doi\s*:)\s*(10\.\d{4,9}/\S+)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_PDF_SELF_CITATION = re.compile(
+    r"^\s*cite\s+this(?:\s+(?:article|paper))?\s*:", re.IGNORECASE | re.MULTILINE
+)
+_PDF_REFERENCES = re.compile(
+    r"^\s*(?:(?:\d+|[ivxlcdm]+)[.)]?\s+)?(?:references|bibliography|literature cited)\s*:?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _metadata_doi(value: str) -> str | None:
@@ -94,6 +108,24 @@ def _publisher_link_dois(uri: str) -> set[str]:
     return {doi for value in values if (doi := _metadata_doi(value))}
 
 
+def _printed_identity_dois(lines: Sequence[PdfTextLine]) -> set[str]:
+    """Read explicit first-page identity labels, keeping self-citations in their text block."""
+    candidates: set[str] = set()
+    for _block_index, block in groupby(lines, key=lambda line: line.block_index):
+        text = "\n".join(
+            normalize("NFKC", line.text)
+            for line in block
+            if line.direction[0] > 0.9 and abs(line.direction[1]) < 0.1
+        )
+        if _PDF_REFERENCES.search(text):
+            break
+        values = [match[1] for match in _PDF_DOI_LABEL.finditer(text)]
+        if citation := _PDF_SELF_CITATION.search(text):
+            values.extend(DOI_PATTERN.findall(text[citation.end() :]))
+        candidates.update(doi for value in values if (doi := _metadata_doi(value.rstrip(".,;"))))
+    return candidates
+
+
 def extract_pdf_lookup_identifier(path: Path) -> Identifier | None:
     """Choose one document-level identifier, rejecting body citations and ambiguous evidence."""
     metadata = read_pdf_metadata(path)
@@ -121,6 +153,8 @@ def extract_pdf_lookup_identifier(path: Path) -> Identifier | None:
             for field in ("title", "subject")
             if (doi := _metadata_doi(metadata.info.get(field, "")))
         }
+    if not candidates:
+        candidates = _printed_identity_dois(metadata.first_page_lines)
     if len(candidates) == 1:
         return Identifier("doi", next(iter(candidates)))
     return None

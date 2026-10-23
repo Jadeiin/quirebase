@@ -490,21 +490,47 @@ test('creates a Project through the real API', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Full-stack smoke Project' })).toBeVisible();
 });
 
-test('runs a staged PDF Import through the durable worker', async ({ page }) => {
+test('imports an unidentified PDF through the durable worker after explicit selection', async ({
+	page
+}) => {
 	const workspaceId = await signIn(page);
 
 	await page.goto(`/workspace/${workspaceId}/import`);
 	await page.getByRole('tab', { name: 'PDFs', exact: true }).click();
+	const sourcePdf = minimalPdf();
 	await page.locator('input[name="pdfs"]').setInputFiles({
 		name: 'fullstack-smoke.pdf',
 		mimeType: 'application/pdf',
-		buffer: minimalPdf()
+		buffer: sourcePdf
 	});
 	await page.getByRole('button', { name: 'Preview import', exact: true }).click();
 
 	await expect(page.getByRole('heading', { name: 'Import preview' })).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Import issues', exact: true })).toBeVisible();
+	const basicPdfs = page.getByRole('region', { name: 'PDFs without metadata', exact: true });
+	await expect(basicPdfs.getByText('No DOI or arXiv ID found', { exact: true })).toBeVisible();
+	await expect(basicPdfs.getByText('fullstack-smoke.pdf', { exact: true })).toBeVisible();
+	const selection = basicPdfs.getByRole('checkbox', {
+		name: 'Create a basic Item for fullstack-smoke.pdf',
+		exact: true
+	});
+	await expect(selection).not.toBeChecked();
 	await expect(page.getByRole('button', { name: 'Import 0 records', exact: true })).toBeDisabled();
-	await expect(page.getByText('no DOI was found in this PDF', { exact: true })).toBeVisible();
-	await expect(page.getByText('fullstack-smoke.pdf')).toBeVisible();
+	await selection.check();
+	await page.getByRole('button', { name: 'Import 1 record', exact: true }).click();
+	await expect(page).toHaveURL(/\/library\?import_batch=[0-9a-f-]+$/);
+	await page.getByRole('link', { name: 'fullstack-smoke', exact: true }).click();
+	await expect(page.getByRole('heading', { name: 'fullstack-smoke', exact: true })).toBeVisible();
+	const itemId = new URL(page.url()).pathname.split('/').at(-1)!;
+	const documents = await page.request.get(
+		`/api/v1/workspaces/${workspaceId}/items/${itemId}/documents`
+	);
+	expect(documents.ok()).toBe(true);
+	const { files }: components['schemas']['DocumentListView'] = await documents.json();
+	expect(files).toHaveLength(1);
+	expect(files[0]).toMatchObject({ kind: 'revision', original_name: 'fullstack-smoke.pdf' });
+	const content = await page.request.get(
+		`/api/v1/workspaces/${workspaceId}/items/${itemId}/revisions/${files[0].id}/content`
+	);
+	expect(content.ok()).toBe(true);
+	expect(await content.body()).toEqual(sourcePdf);
 });

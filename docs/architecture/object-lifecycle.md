@@ -35,7 +35,11 @@ left margin (within the leftmost 10%, capped at 72 points), including legacy IDs
 That watermark takes precedence over DOI metadata. Otherwise lookup uses explicit XMP DOI fields
 (`prism:doi`, `pdfx:doi`/`DOI`, or `dc:identifier`), then first-page publisher update/citation links
 (Crossmark, MDPI check-update or `action/showCitFormats`), then PDF Info Title/Subject values that
-consist entirely of a DOI, optionally with a DOI resolver or `doi:`/`urn:doi:` prefix.
+consist entirely of a DOI, optionally with a DOI resolver or `doi:`/`urn:doi:` prefix. As a final
+fallback, first-page printed `Digital Object Identifier` or `DOI:` labels and `Cite this:`
+self-citations identify the article. Printed labels normalize typographic ligatures; a self-citation
+must contain its DOI in the same text block. Reference sections and everything after them are
+excluded from this fallback.
 Conflicting identifiers at the first available evidence tier leave the PDF unidentified; lower
 tiers cannot resolve that ambiguity. Body text, reference lists, keywords, ordinary DOI resolver
 links and generic `lookup/doi` links are not identity evidence, even on the first page. No later
