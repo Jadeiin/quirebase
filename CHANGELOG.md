@@ -1,3 +1,56 @@
+## 0.3.0 (2026-10-23)
+
+### BREAKING CHANGE
+
+- Workspace invitation and Citation Style catalogs use
+paginated responses; the separate Citation Style options endpoint is
+removed. Facet limit and offset now select the Item page.
+- Admin Workspace lists return paginated responses, and maintenance reads return storage metrics directly.
+- rebuild the initial schema and update import confirmation
+and annotation moderation responses. Previous databases and durable
+checkpoints are not supported.
+
+### Feat
+
+- **pdf**: make reader sidebars resizable
+- **library**: add organization filters and simplify UI copy
+- **discovery**: add recoverable search and batch import previews
+- **app**: unify paginated catalogs and current-page library facets
+- **admin**: unify management tables and governance controls
+- **lifecycle**: add bounded retention and import recovery
+- **app**: add global quick navigation
+- **library**: add refinements and saved views
+- **library**: add SQL duplicate scans and streaming file checksums
+- **library**: unify item actions and simplify mutation contracts
+- **library**: complete preview and organization workflows
+- **library**: improve range selection and bulk action feedback
+- **library**: add scoped keyboard navigation and selection
+- **library**: add table view, previews and metadata sorting
+- **workspaces**: add received invitations and self-service leave
+- **workspaces**: add administrator ownership governance
+- **accounts**: complete invitation lifecycle and admin views
+
+### Fix
+
+- **ci**: account for shared item header styles in bundle budget
+- **ui**: use full content width for item headers
+- **storage**: register file backends before runtime startup
+- simplify streaming uploads and stabilize author tests
+- preserve whole author names and repair CI failures
+- **ui**: improve author overflow and dashboard date alignment
+- **i18n**: format shortcut keys outside translation catalogs
+- **projects**: show unavailable state for purged item lists
+- **library**: preserve unavailable state for purged Project caches
+- **frontend**: improve workspace navigation and editing recovery
+- preserve project drafts and normalize dependency lock hooks
+- **frontend**: preserve drafts and complete recovery flows
+- **admin**: preserve invitation links and reassignment drafts
+
+### Refactor
+
+- rename rubrica package to excerpo
+- **storage**: restore the original streaming upload path
+
 ## 0.2.0 (2026-10-16)
 
 ### BREAKING CHANGE

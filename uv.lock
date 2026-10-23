@@ -1273,7 +1273,7 @@ wheels = [
 
 [[package]]
 name = "excerpo"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "packages/excerpo" }
 dependencies = [
     { name = "yake" },
@@ -1943,7 +1943,7 @@ wheels = [
 
 [[package]]
 name = "inquiro"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "packages/inquiro" }
 dependencies = [
     { name = "citeproc-py" },
@@ -4023,7 +4023,7 @@ wheels = [
 
 [[package]]
 name = "quirebase"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "advanced-alchemy", extra = ["argon2", "cli", "obstore", "uuid"] },
