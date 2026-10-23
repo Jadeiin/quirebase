@@ -144,6 +144,45 @@ test('identifier Import uses configured provider choices', async ({ page }) => {
 	await expect(source).toBeEnabled();
 });
 
+test('Import opens without secure-context UUID support', async ({ page }) => {
+	await mockSession(page);
+	await mockImportedLibrary(page);
+	await page.addInitScript(() => {
+		Object.defineProperty(Crypto.prototype, 'randomUUID', { value: undefined });
+	});
+	const errors: string[] = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	page.on('console', (message) => {
+		if (message.type() === 'error') errors.push(message.text());
+	});
+	let body: unknown;
+	await page.route('**/api/v1/workspaces/workspace-1/items', (route) => {
+		body = route.request().postDataJSON();
+		return route.fulfill({ status: 201, json: { id: importedIds[0] } });
+	});
+	await page.goto(importPath);
+	await page.waitForLoadState('networkidle');
+	expect(errors).toEqual([]);
+	await expect(page.getByRole('combobox', { name: 'Data source' })).toBeEnabled();
+	await page.getByRole('tab', { name: 'Manual creation', exact: true }).click();
+	await page.getByLabel('Title', { exact: true }).fill('HTTP import');
+	await page.getByRole('button', { name: 'Create Item', exact: true }).click();
+	await expect
+		.poll(() => body)
+		.toEqual({
+			metadata: {
+				id: expect.stringMatching(
+					/^urn:uuid:[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/
+				),
+				type: 'Document',
+				title: 'HTTP import'
+			},
+			citation_key: null
+		});
+	await expect(page).toHaveURL(new RegExp(`/item/${importedIds[0]}$`));
+	expect(errors).toEqual([]);
+});
+
 test('Import methods use separate keyboard accessible tabs and preserve drafts', async ({
 	page
 }) => {

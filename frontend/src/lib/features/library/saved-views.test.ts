@@ -54,6 +54,18 @@ beforeEach(() => {
 });
 
 describe('Library saved views', () => {
+	it('creates distinct saved views without crypto.randomUUID', async () => {
+		vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+		const storage = memoryStorage();
+		await saveLibraryView(() => storage, key, 'First', {}, 25);
+		await saveLibraryView(() => storage, key, 'Second', { tag: 'tag-1' }, 25);
+		const views = readLibrarySavedViews(storage, key);
+		expect(views.map(({ name }) => name)).toEqual(['First', 'Second']);
+		expect(new Set(views.map(({ id }) => id)).size).toBe(2);
+		for (const view of views)
+			expect(view.id).toMatch(/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/);
+	});
+
 	it('saves and restores a combined cleanup view within an import receipt', async () => {
 		const storage = memoryStorage();
 		const filters = {

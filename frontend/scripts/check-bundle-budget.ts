@@ -210,6 +210,7 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // to the existing 1 kB raw / 500 B gzip boundaries.
 // Item header styles add 144 B raw to shared CSS vs 6067e89, exceeding Library's raw limit
 // by 55 B. Only that dimension moves to the next 1 kB boundary.
+// The HTTP UUID fallback adds a shared Library chunk; only measured overages move.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
 	raw: 795000,
@@ -225,8 +226,8 @@ enforce('Library route', bundleSize(graphFiles(library)), {
 	gzip: 330000
 });
 enforce('Library refinements when open', bundleSize(graphFiles(libraryRefinements)), {
-	raw: 1142000,
-	gzip: 331500
+	raw: 1143000,
+	gzip: 332000
 });
 enforce(
 	'Library preview when open',
@@ -237,7 +238,7 @@ enforce(
 enforce(
 	'Library organization when open',
 	bundleSize(graphFiles(mergeGraphs(libraryPreview, dependencyGraph([libraryOrganizeKey], false)))),
-	{ raw: 1164000, gzip: 340000 }
+	{ raw: 1165000, gzip: 340000 }
 );
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.

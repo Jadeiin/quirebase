@@ -1,4 +1,5 @@
 /* eslint-disable lingui/no-unlocalized-strings -- Internal storage errors are never rendered; the dialog provides localized feedback. */
+import { randomUUID } from '#lib/uuid.js';
 import {
 	libraryHref,
 	libraryPageSize,
@@ -99,7 +100,7 @@ export async function saveLibraryView(
 	name: string,
 	filters: LibraryFilters,
 	pageSize: number,
-	id: string = crypto.randomUUID()
+	id: string = randomUUID()
 ) {
 	const nextName = viewName(name);
 	const parameters = viewParameters(filters, pageSize);

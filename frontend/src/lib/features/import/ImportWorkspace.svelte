@@ -26,6 +26,7 @@
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import { invalidateLibrary } from '#lib/query/invalidation.js';
 	import { msg, t } from '#lib/i18n.js';
+	import { randomUUID } from '#lib/uuid.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { confirmImportBatch } from './confirmation.js';
@@ -86,7 +87,7 @@
 			.filter(Boolean)
 	);
 	const emptyMetadata: components['schemas']['ItemDetailView']['metadata'] = {
-		id: `urn:uuid:${crypto.randomUUID()}`,
+		id: `urn:uuid:${randomUUID()}`,
 		type: 'Document',
 		title: ''
 	};
