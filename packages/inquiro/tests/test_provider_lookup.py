@@ -5,6 +5,7 @@ import pytest
 from inquiro import (
     CandidateNotFound,
     Identifier,
+    ProviderRateLimited,
     ProviderUnavailable,
     SearchClause,
     SearchQuery,
@@ -261,7 +262,13 @@ def response(request: httpx2.Request) -> httpx2.Response:
     assert request.url.host == "export.arxiv.org"
     return httpx2.Response(
         200,
-        text='<?xml version="1.0"?>\n        <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">\n          <entry><title>arXiv Example</title><summary>Preprint abstract</summary>\n          <published>2023-01-02T00:00:00Z</published><author><name>Ada Example</name></author>\n          <category term="cs.CL"/><arxiv:doi>10.3/arxiv</arxiv:doi></entry>\n        </feed>',
+        text=f"""<?xml version="1.0"?>
+        <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+          <entry><id>https://arxiv.org/abs/{request.url.params["id_list"]}</id>
+          <title>arXiv Example</title><summary>Preprint abstract</summary>
+          <published>2023-01-02T00:00:00Z</published><author><name>Ada Example</name></author>
+          <category term="cs.CL"/><arxiv:doi>10.3/arxiv</arxiv:doi></entry>
+        </feed>""",
     )
 
 
@@ -272,7 +279,15 @@ def response(request: httpx2.Request) -> httpx2.Response:
         ("10.1234/sample", "doi", Identifier("doi", "10.1234/sample")),
         ("10.1234/sample", "crossref", Identifier("crossref", "10.1234/sample")),
         ("PMID: 42", "auto", Identifier("pmid", "42")),
+        ("PMID: 00042", "auto", Identifier("pmid", "42")),
+        (
+            "https://pubmed.ncbi.nlm.nih.gov/\uff10\uff10\uff14\uff12/",
+            "auto",
+            Identifier("pmid", "42"),
+        ),
+        ("٠٤٢", "pubmed", Identifier("pmid", "42")),
         ("arXiv:1706.03762v7", "auto", Identifier("arxiv", "1706.03762v7")),
+        ("arXiv:HEP-TH/9901001V2", "auto", Identifier("arxiv", "hep-th/9901001v2")),
         ("ISBN 978-0-13-110362-7", "auto", Identifier("isbn", "9780131103627")),
         ("https://openalex.org/W1230000000", "auto", Identifier("openalex", "W1230000000")),
         ("2025ApJ...123..456A", "bibcode", Identifier("bibcode", "2025ApJ...123..456A")),
@@ -410,6 +425,65 @@ async def test_lookup_404_is_a_typed_candidate_failure():
             await runtime.lookup("10.1234/missing")
 
 
+@pytest.mark.parametrize(
+    "provider,value,body,error_type",
+    [
+        ("arxiv", "2401.00001", b"<not-a-feed/>", ProviderUnavailable),
+        ("pubmed", "42", b"<not-an-article-set/>", ProviderUnavailable),
+        (
+            "arxiv",
+            "2401.00001",
+            (
+                b'<feed xmlns="http://www.w3.org/2005/Atom"><entry>'
+                b"<id>https://arxiv.org/abs/2401.00002v1</id><title>Another record</title>"
+                b"</entry></feed>"
+            ),
+            CandidateNotFound,
+        ),
+        (
+            "pubmed",
+            "42",
+            (
+                b"<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>43</PMID>"
+                b"<Article><ArticleTitle>Another record</ArticleTitle></Article>"
+                b"</MedlineCitation></PubmedArticle></PubmedArticleSet>"
+            ),
+            CandidateNotFound,
+        ),
+    ],
+)
+async def test_native_lookup_shares_batch_response_and_identity_validation(
+    provider, value, body, error_type
+):
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=body))
+    ) as runtime:
+        with pytest.raises(error_type):
+            await runtime.lookup(value, provider=provider)
+        (outcome,) = await runtime.lookup_many([value], provider=provider)
+    expected_code = "not_found" if error_type is CandidateNotFound else "unavailable"
+    assert outcome.result.code == expected_code
+
+
+@pytest.mark.parametrize("provider,value", [("arxiv", "2401.00001"), ("pubmed", "42")])
+async def test_native_lookup_preserves_single_and_batch_http_failure_contracts(provider, value):
+    async with provider_runtime(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(404))
+    ) as runtime:
+        with pytest.raises(CandidateNotFound):
+            await runtime.lookup(value, provider=provider)
+        (outcome,) = await runtime.lookup_many([value], provider=provider)
+        assert outcome.result.code == "unavailable"
+    async with provider_runtime(
+        transport=httpx2.MockTransport(
+            lambda _: httpx2.Response(429, headers={"Retry-After": "17"})
+        )
+    ) as runtime:
+        with pytest.raises(ProviderRateLimited) as raised:
+            await runtime.lookup(value, provider=provider)
+        assert raised.value.retry_after_seconds == 17
+
+
 async def test_crossref_missing_optional_link_media_type_does_not_crash():
     def returned(request):
         return httpx2.Response(
@@ -491,7 +565,9 @@ async def test_authorless_lookup_records_omit_contributors(provider, value, name
             author = "<author><name> </name></author>" if nameless else ""
             return httpx2.Response(
                 200,
-                text=f'<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Authorless</title>{author}</entry></feed>',
+                text=f'<feed xmlns="http://www.w3.org/2005/Atom"><entry>'
+                f"<id>https://arxiv.org/abs/{value}</id><title>Authorless</title>{author}"
+                "</entry></feed>",
             )
         if provider == "pubmed":
             author = "<Author><LastName> </LastName></Author>" if nameless else ""

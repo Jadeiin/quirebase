@@ -33,11 +33,19 @@ concept to a business owner.
 
 `inquiro` owns scholarly Provider I/O, neutral Commonmeta Work values, bibliography interchange,
 Citation Key generation and CSL rendering. Its asynchronous `ProviderRuntime` exposes `lookup`,
-`search` and `acquire_document`, containing the fixed catalog, credentials, validation, transport
-and resource lifetime. Providers are independent leaves below a private catalog. Shared identifier
-parsing and bounded HTTP exchange belong inside the package. See the
+`lookup_many`, `search` and `acquire_document`, containing the fixed catalog, credentials,
+validation, transport and resource lifetime. Providers are independent leaves below a private
+catalog. Shared identifier parsing and bounded HTTP exchange belong inside the package. See the
 [Inquiro interface](../../packages/inquiro/README.md) and
 [Provider runtime decision](../adr/0005-deep-standalone-provider-runtime.md).
+
+Identifier Import shares one runtime for its batch. Inquiro owns bounded lookup scheduling,
+arXiv/PubMed native request merging and per-input results; Library owns Work write validation,
+Import diagnostics, reauthorization and persistence. OpenAlex/Crossref retain singleton endpoints.
+Durable PDF preparation extracts identifiers per file and calls `lookup_many` for each Provider group.
+Library checkpoints group outcomes, retries only unavailable inputs with a bounded durable wait budget,
+and retains deferred PDFs as optional basic candidates. Ready-preview retries preserve successful
+siblings. Inquiro preserves rate-limit hints in exceptions and batch failure values.
 
 `excerpo` owns keyword extraction and keyphrase ranking through YAKE and optional local KeyBERT.
 Library supplies the source text and owns recommendation generation, stale-workflow guards and

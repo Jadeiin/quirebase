@@ -68,23 +68,39 @@
 	const identifiedCount = $derived(batch.records.length - basicRecords.length);
 	const identifiedRecords = $derived(records.filter((record) => !record.is_basic));
 	const basicPageRecords = $derived(records.filter((record) => record.is_basic));
+	const basicDiagnostics = $derived.by(() => {
+		const sourceIds = new Set(
+			basicRecords.flatMap((record) => (record.source ? [record.source.id] : []))
+		);
+		return new Map(
+			batch.errors.flatMap((diagnostic) =>
+				diagnostic.source_id &&
+				sourceIds.has(diagnostic.source_id) &&
+				(['missing_identifier', 'metadata_not_found'].includes(diagnostic.code ?? '') ||
+					isDeferredMetadata(diagnostic))
+					? [[diagnostic.source_id, diagnostic] as const]
+					: []
+			)
+		);
+	});
 	const errors = $derived(batch.errors.filter((row) => row.severity !== 'warning'));
 	const warnings = $derived(
-		batch.errors.filter((row) => row.severity === 'warning' && !isBasicDiagnostic(row))
+		batch.errors.filter(
+			(row) => row.severity === 'warning' && basicDiagnostics.get(row.source_id ?? '') !== row
+		)
+	);
+	const hasDeferredMetadata = $derived(
+		batch.file_format === 'pdf' && batch.status === 'ready' && batch.errors.some(isDeferredMetadata)
 	);
 
-	function isBasicDiagnostic(diagnostic: ImportDiagnostic): boolean {
-		return (
-			['missing_identifier', 'metadata_not_found'].includes(diagnostic.code ?? '') &&
-			basicRecords.some((record) => record.source?.original_name === diagnostic.filename)
-		);
+	function isDeferredMetadata(diagnostic: ImportDiagnostic): boolean {
+		return ['provider_rate_limited', 'provider_unavailable'].includes(diagnostic.code ?? '');
 	}
 	function basicReason(record: ImportBatch['records'][number]): string {
-		const diagnostics = batch.errors.filter((row) => row.filename === record.source?.original_name);
-		if (diagnostics.length === 1) {
-			if (diagnostics[0].code === 'missing_identifier') return $t('No DOI or arXiv ID found');
-			if (diagnostics[0].code === 'metadata_not_found') return $t('No matching metadata found');
-		}
+		const diagnostic = record.source ? basicDiagnostics.get(record.source.id) : undefined;
+		if (diagnostic?.code === 'missing_identifier') return $t('No DOI or arXiv ID found');
+		if (diagnostic?.code === 'metadata_not_found') return $t('No matching metadata found');
+		if (diagnostic && isDeferredMetadata(diagnostic)) return $t('Metadata temporarily unavailable');
 		return $t('Metadata not identified');
 	}
 	function selectAllBasic(selected: boolean) {
@@ -301,6 +317,9 @@
 					>
 				{:else}
 					<Button onclick={onDiscard} disabled={busy}>{$t('Discard')}</Button>
+					{#if hasDeferredMetadata}<Button onclick={onRetry} disabled={busy}
+							>{$t('Retry metadata')}</Button
+						>{/if}
 					{#if batch.status === 'failed'}<Button
 							variant="filled"
 							class="flex-1 sm:flex-none"

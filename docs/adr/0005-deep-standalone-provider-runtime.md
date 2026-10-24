@@ -12,7 +12,7 @@ offers reusable scholarly lookup and Search behaviour outside the application. Q
 Inquiro and Excerpo are released to the same package index at one version so the application wheel
 can resolve its exact workspace-package dependencies independently.
 
-Inquiro exposes one asynchronous `ProviderRuntime` with `lookup`, `search` and
+Inquiro exposes one asynchronous `ProviderRuntime` with `lookup`, `lookup_many`, `search` and
 `acquire_document` operations. The runtime owned the fixed Provider catalog and order, shared
 identifier parsing, document-source classification, capability dispatch, typed credentials,
 validation, error normalization and transport lifecycle. Its normalized Candidate Record and page
@@ -30,9 +30,27 @@ test Mock exchanges are Adapters at the same internal seam. The runtime preserve
 difference between lookup 404 (Candidate not found), Search 404 (empty page) and document 404 (PDF
 not available).
 
+`lookup` returns one Candidate Record or raises a typed error. `lookup_many` returns an ordered
+outcome for each of up to 50 input positions, retaining duplicates and individual failures.
+The runtime groups native arXiv and PubMed requests, validates each returned record and bounds
+concurrent I/O. Other Providers retain singleton requests: OpenAlex's single-entity endpoint is
+free while filters consume budget, and Crossref's single-DOI requests use a lighter request class.
+Native Providers implement one batch path for fetching, identity matching and parsing, shared by
+single and batch operations. The runtime unwraps a single outcome into the exception contract.
+Native batches split on response-size overflow while preserving the configured byte limit;
+rate-limit and other request failures do not trigger automatic fan-out or retries. Provider-specific
+batch implementations remain private. Single Item updates retain single lookup and its exception
+contract. `ProviderRateLimited` preserves an optional Retry-After delay without retrying inside
+Inquiro. Batch `LookupFailure` values preserve rate-limit classification and Retry-After as well.
+Library adapts PDF lookup failures to checkpointed values and owns durable backoff and
+file-level fallback, as defined in [ADR 0009](0009-durable-import-and-object-maintenance.md).
+
 Quirebase Library owns runtime construction and closure through `async with` for each integrated
-business operation. It maps Inquiro values explicitly to Library write or read models and translates Inquiro errors to
-typed domain errors. Discovery execution and its Audit Event therefore cross the Library
+business operation, sharing one runtime across an identifier Import or a PDF Provider-group attempt.
+PDF preparation checkpoints extraction per file and lookup outcomes per group, then retries only
+unavailable sources. It maps Inquiro values
+explicitly to Library write or read models and translates Inquiro errors to typed domain errors.
+Discovery execution and its Audit Event therefore cross the Library
 Interface. Document acquisition remains a standalone package capability until a Library operation
 adopts it; the Web Adapter never imports Inquiro directly.
 

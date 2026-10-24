@@ -115,10 +115,17 @@ there is no minimum-participant invariant.
 
 ## Import confirmation
 
-The ImportBatch ID is the confirmation identity. A batch is locked before status is read. A ready
-batch creates Items and records their IDs, then transitions directly to `committed` in the same
-transaction. Repeating confirmation returns the recorded Item IDs while that committed receipt
-exists.
+The ImportBatch ID is the confirmation identity. A batch is locked and reloaded before status is
+read. PDF confirmation also carries the reviewed `preview_version` as `expected_preview_version`.
+This opaque token identifies the preparation generation without exposing actor-only workflow
+identities. Each retry changes it. Under the batch lock, a ready PDF batch rejects a missing or
+superseded version with a conflict before creating Items or transferring staged files. This prevents
+an older confirmation from including basic candidates promoted to identified by a later retry.
+
+A ready batch creates Items and records their IDs, then transitions directly to `committed` in
+the same transaction. Repeating confirmation returns the recorded Item IDs while that committed
+receipt exists, regardless of the supplied preview version or selection. Immutable identifier and
+bibliography previews do not require a preview version.
 
 ## Conflicts
 

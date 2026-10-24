@@ -13,6 +13,7 @@ from inquiro.models import (
     CandidatePage,
     CandidateRecord,
     Identifier,
+    LookupFailure,
     ProviderConfig,
     ProviderUnavailable,
     SearchQuery,
@@ -109,17 +110,142 @@ def _authors(document: ElementTree.Element) -> tuple[dict, ...] | None:
     return tuple(authors) or None
 
 
+def _record(record: ElementTree.Element, identifier: Identifier) -> CandidateRecord:
+    if record.tag == "PubmedArticle":
+        document = record.find("MedlineCitation")
+        article = record.find("MedlineCitation/Article")
+        if document is None or article is None:
+            raise CandidateNotFound("PubMed record was not found")
+        title = _xml_rich(article.find("ArticleTitle"))
+        reference_type = "JournalArticle"
+        authors = _authors(article)
+        publication_date = _date(article.find("Journal/JournalIssue/PubDate"))
+        publication_title = _xml_text(article.find("Journal/Title"))
+        journal_abbreviation = _xml_text(article.find("Journal/ISOAbbreviation"))
+        volume = _xml_text(article.find("Journal/JournalIssue/Volume"))
+        issue = _xml_text(article.find("Journal/JournalIssue/Issue"))
+        publisher = None
+        identifier_nodes = record.findall("PubmedData/ArticleIdList/ArticleId")
+    elif record.tag == "PubmedBookArticle":
+        document = record.find("BookDocument")
+        book = record.find("BookDocument/Book")
+        if document is None or book is None:
+            raise CandidateNotFound("PubMed record was not found")
+        article = document
+        chapter_title = _xml_rich(document.find("ArticleTitle"))
+        title = chapter_title or _xml_rich(book.find("BookTitle"))
+        reference_type = "BookChapter" if chapter_title else "Book"
+        authors = _authors(document)
+        if authors is None and reference_type == "Book":
+            authors = _authors(book)
+        publication_date = _date(book.find("PubDate"))
+        publication_title = _xml_text(book.find("BookTitle")) if chapter_title else None
+        journal_abbreviation = None
+        volume = _xml_text(book.find("Volume"))
+        issue = None
+        publisher = _xml_text(book.find("Publisher/PublisherName"))
+        identifier_nodes = document.findall("ArticleIdList/ArticleId") + record.findall(
+            "PubmedBookData/ArticleIdList/ArticleId"
+        )
+    else:
+        raise CandidateNotFound("PubMed record was not found")
+    if not title:
+        raise CandidateNotFound("PubMed record was not found")
+    identifiers = []
+    doi = None
+    for node in identifier_nodes:
+        if identity := _xml_text(node):
+            namespace = {"pubmed": "pmid", "pmc": "pmcid", "doi": "doi"}.get(node.get("IdType", ""))
+            if namespace:
+                identifiers.append(Identifier(namespace, identity))
+                if namespace == "doi":
+                    doi = identity
+    if doi is None:
+        doi = next(
+            (
+                identity
+                for node in article.findall("ELocationID")
+                if node.get("EIdType") == "doi"
+                and node.get("ValidYN", "Y") == "Y"
+                and (identity := _xml_text(node))
+            ),
+            None,
+        )
+        if doi:
+            identifiers.append(Identifier("doi", doi))
+    pmid = _xml_text(document.find("PMID"))
+    if pmid and (not any(identity.provider == "pmid" for identity in identifiers)):
+        identifiers.insert(0, Identifier("pmid", pmid))
+    abstract = []
+    for node in article.findall("Abstract/AbstractText"):
+        if content := _xml_rich(node):
+            label = first_text(node.get("Label"))
+            abstract.append(f"{escape(label)}: {content}" if label else content)
+    links = [source_link(f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", kind="landing_page")]
+    if doi:
+        links.append(source_link(f"https://doi.org/{doi}", kind="landing_page"))
+    if pmcid := next(
+        (identity.value for identity in identifiers if identity.provider == "pmcid"), None
+    ):
+        links.append(
+            source_link(f"https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/", kind="landing_page")
+        )
+    return CandidateRecord(
+        provider="pubmed",
+        lookup_identifier=identifier,
+        work=compact({
+            "id": source_work_id(tuple(dict.fromkeys(identifiers))),
+            "type": reference_type,
+            "title": title,
+            "description": " ".join(abstract) or None,
+            "contributors": authors,
+            "date_published": publication_date,
+            "identifiers": source_identifiers(tuple(dict.fromkeys(identifiers))),
+            "subjects": source_subjects(
+                (
+                    tuple(
+                        dict.fromkeys(
+                            (
+                                keyword
+                                for node in document.findall("KeywordList/Keyword")
+                                if (keyword := _xml_text(node))
+                            )
+                        )
+                    )
+                    if document.find("KeywordList") is not None
+                    else None
+                )
+                or ()
+            ),
+            "publisher": {"name": publisher} if publisher else None,
+            "container": compact({
+                "title": publication_title,
+                "volume": volume,
+                "issue": issue,
+                "additional_titles": [journal_abbreviation] if journal_abbreviation else None,
+                "first_page": _xml_text(article.find("Pagination/MedlinePgn")),
+            }),
+            "url": source_landing_url(tuple(links)),
+            "files": source_files(tuple(links)),
+        }),
+    )
+
+
 class PubMedLookupAdapter:
-    async def lookup(
+    async def lookup_many(
         self,
         client: BoundedTransport,
-        identifier: Identifier,
+        identifiers: tuple[Identifier, ...],
         settings: ProviderConfig,
         *,
         endpoint: str,
-    ) -> CandidateRecord:
-        value = identifier.value
-        params = {"db": "pubmed", "id": value, "retmode": "xml", "tool": "inquiro"}
+    ) -> tuple[CandidateRecord | LookupFailure, ...]:
+        params = {
+            "db": "pubmed",
+            "id": ",".join(dict.fromkeys(identifier.value for identifier in identifiers)),
+            "retmode": "xml",
+            "tool": "inquiro",
+        }
         if settings.contact_email:
             params["email"] = settings.contact_email
         if settings.ncbi_api_key:
@@ -129,127 +255,42 @@ class PubMedLookupAdapter:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
             raise ProviderUnavailable("PubMed returned invalid XML") from error
-        record = root.find("PubmedArticle")
-        if record is not None:
-            document = record.find("MedlineCitation")
-            article = record.find("MedlineCitation/Article")
-            if document is None or article is None:
-                raise CandidateNotFound("PubMed record was not found")
-            title = _xml_rich(article.find("ArticleTitle"))
-            reference_type = "JournalArticle"
-            authors = _authors(article)
-            publication_date = _date(article.find("Journal/JournalIssue/PubDate"))
-            publication_title = _xml_text(article.find("Journal/Title"))
-            journal_abbreviation = _xml_text(article.find("Journal/ISOAbbreviation"))
-            volume = _xml_text(article.find("Journal/JournalIssue/Volume"))
-            issue = _xml_text(article.find("Journal/JournalIssue/Issue"))
-            publisher = None
-            identifier_nodes = record.findall("PubmedData/ArticleIdList/ArticleId")
-        elif (record := root.find("PubmedBookArticle")) is not None:
-            document = record.find("BookDocument")
-            book = record.find("BookDocument/Book")
-            if document is None or book is None:
-                raise CandidateNotFound("PubMed record was not found")
-            article = document
-            chapter_title = _xml_rich(document.find("ArticleTitle"))
-            title = chapter_title or _xml_rich(book.find("BookTitle"))
-            reference_type = "BookChapter" if chapter_title else "Book"
-            authors = _authors(document)
-            if authors is None and reference_type == "Book":
-                authors = _authors(book)
-            publication_date = _date(book.find("PubDate"))
-            publication_title = _xml_text(book.find("BookTitle")) if chapter_title else None
-            journal_abbreviation = None
-            volume = _xml_text(book.find("Volume"))
-            issue = None
-            publisher = _xml_text(book.find("Publisher/PublisherName"))
-            identifier_nodes = document.findall("ArticleIdList/ArticleId") + record.findall(
-                "PubmedBookData/ArticleIdList/ArticleId"
-            )
-        else:
-            raise CandidateNotFound("PubMed record was not found")
-        if not title:
-            raise CandidateNotFound("PubMed record was not found")
-        identifiers = []
-        doi = None
-        for node in identifier_nodes:
-            if identity := _xml_text(node):
-                namespace = {"pubmed": "pmid", "pmc": "pmcid", "doi": "doi"}.get(
-                    node.get("IdType", "")
-                )
-                if namespace:
-                    identifiers.append(Identifier(namespace, identity))
-                    if namespace == "doi":
-                        doi = identity
-        if doi is None:
-            doi = next(
-                (
-                    identity
-                    for node in article.findall("ELocationID")
-                    if node.get("EIdType") == "doi"
-                    and node.get("ValidYN", "Y") == "Y"
-                    and (identity := _xml_text(node))
-                ),
-                None,
-            )
-            if doi:
-                identifiers.append(Identifier("doi", doi))
-        pmid = _xml_text(document.find("PMID"))
-        if pmid and (not any(identity.provider == "pmid" for identity in identifiers)):
-            identifiers.insert(0, Identifier("pmid", pmid))
-        abstract = []
-        for node in article.findall("Abstract/AbstractText"):
-            if content := _xml_rich(node):
-                label = first_text(node.get("Label"))
-                abstract.append(f"{escape(label)}: {content}" if label else content)
-        links = [source_link(f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", kind="landing_page")]
-        if doi:
-            links.append(source_link(f"https://doi.org/{doi}", kind="landing_page"))
-        if pmcid := next(
-            (identity.value for identity in identifiers if identity.provider == "pmcid"), None
-        ):
-            links.append(
-                source_link(f"https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/", kind="landing_page")
-            )
-        return CandidateRecord(
-            provider="pubmed",
-            lookup_identifier=identifier,
-            work=compact({
-                "id": source_work_id(tuple(dict.fromkeys(identifiers))),
-                "type": reference_type,
-                "title": title,
-                "description": " ".join(abstract) or None,
-                "contributors": authors,
-                "date_published": publication_date,
-                "identifiers": source_identifiers(tuple(dict.fromkeys(identifiers))),
-                "subjects": source_subjects(
-                    (
-                        tuple(
-                            dict.fromkeys(
-                                (
-                                    keyword
-                                    for node in document.findall("KeywordList/Keyword")
-                                    if (keyword := _xml_text(node))
-                                )
-                            )
+        if root.tag != "PubmedArticleSet":
+            raise ProviderUnavailable("PubMed returned an invalid article set")
+        records: dict[str, list[ElementTree.Element]] = {}
+        unassociated = False
+        for record in root:
+            if record.tag == "PubmedArticle":
+                value = _xml_text(record.find("MedlineCitation/PMID"))
+            elif record.tag == "PubmedBookArticle":
+                value = _xml_text(record.find("BookDocument/PMID"))
+            else:
+                unassociated = True
+                continue
+            if not value or not value.isdigit():
+                unassociated = True
+                continue
+            records.setdefault(value.lstrip("0") or "0", []).append(record)
+        results: list[CandidateRecord | LookupFailure] = []
+        for identifier in identifiers:
+            matches = records.get(identifier.value.lstrip("0") or "0", [])
+            if len(matches) != 1:
+                if matches or unassociated:
+                    results.append(
+                        LookupFailure(
+                            "unavailable", "PubMed returned ambiguous or incomplete metadata"
                         )
-                        if document.find("KeywordList") is not None
-                        else None
                     )
-                    or ()
-                ),
-                "publisher": {"name": publisher} if publisher else None,
-                "container": compact({
-                    "title": publication_title,
-                    "volume": volume,
-                    "issue": issue,
-                    "additional_titles": [journal_abbreviation] if journal_abbreviation else None,
-                    "first_page": _xml_text(article.find("Pagination/MedlinePgn")),
-                }),
-                "url": source_landing_url(tuple(links)),
-                "files": source_files(tuple(links)),
-            }),
-        )
+                else:
+                    results.append(LookupFailure("not_found", "PubMed record was not found"))
+                continue
+            try:
+                results.append(_record(matches[0], identifier))
+            except CandidateNotFound as error:
+                results.append(LookupFailure("not_found", str(error)))
+            except (TypeError, ValueError, ProviderUnavailable):
+                results.append(LookupFailure("unavailable", "PubMed returned invalid metadata"))
+        return tuple(results)
 
 
 class PubMedSearchAdapter:
@@ -320,6 +361,6 @@ PUBMED_PROVIDER = ProviderDefinition(
     identifier_parser=parse_pmid,
     auto_detect_identifier=True,
     search_adapter=PubMedSearchAdapter(),
-    lookup_adapter=PubMedLookupAdapter(),
+    batch_lookup_adapter=PubMedLookupAdapter(),
     endpoint="https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
 )

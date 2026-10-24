@@ -10,9 +10,10 @@ export type ImportConfirmation =
 export async function confirmImportBatch(
 	client: QueryClient,
 	workspaceId: string,
-	batchId: string,
+	preview: Pick<ImportBatch, 'id' | 'preview_version'>,
 	basicSourceIds: string[] = []
 ): Promise<ImportConfirmation> {
+	const { id: batchId, preview_version: expectedPreviewVersion } = preview;
 	const cacheBatch = await importBatchResponseWriter(client, workspaceId, batchId);
 	let committed: ImportBatch;
 	try {
@@ -21,7 +22,10 @@ export async function confirmImportBatch(
 			'/workspaces/{workspace_id}/imports/{batch_id}/commit',
 			{
 				params: { path: { batch_id: batchId } },
-				body: { basic_source_ids: basicSourceIds }
+				body: {
+					basic_source_ids: basicSourceIds,
+					expected_preview_version: expectedPreviewVersion
+				}
 			}
 		);
 	} catch (error) {

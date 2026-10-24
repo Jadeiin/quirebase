@@ -67,7 +67,7 @@ def parse_pmid(candidate: str, _alias: str) -> Identifier | None:
             value = uri.path.removeprefix("/pubmed/").rstrip("/")
         else:
             return None
-    return Identifier("pmid", value) if PMID_PATTERN.fullmatch(value) else None
+    return Identifier("pmid", str(int(value))) if PMID_PATTERN.fullmatch(value) else None
 
 
 def parse_pmcid(candidate: str, alias: str) -> Identifier | None:
@@ -97,7 +97,7 @@ def parse_arxiv(candidate: str, _alias: str) -> Identifier | None:
         candidate,
         flags=re.IGNORECASE,
     ).removesuffix(".pdf")
-    return Identifier("arxiv", value) if ARXIV_PATTERN.fullmatch(value) else None
+    return Identifier("arxiv", value.casefold()) if ARXIV_PATTERN.fullmatch(value) else None
 
 
 def parse_isbn(candidate: str, _alias: str) -> Identifier | None:

@@ -3762,6 +3762,11 @@ msgid "Metadata synchronized"
 msgstr "元数据已同步"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Metadata temporarily unavailable"
+msgstr "元数据暂时无法获取"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Methodology"
 msgstr "方法设计"
@@ -5457,6 +5462,11 @@ msgstr "结果"
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "Retry"
 msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Retry metadata"
+msgstr "重试元数据"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte

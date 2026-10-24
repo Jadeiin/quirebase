@@ -17,7 +17,7 @@ from app_helpers import json_payload
 from commonmeta.author_utils import get_one_author
 from commonmeta.base_utils import compact
 from import_helpers import pdf_import_batch_data
-from inquiro import CandidateRecord, Identifier
+from inquiro import CandidateRecord, Identifier, LookupFailure, LookupOutcome
 from item_helpers import contributor_values, metadata_list_values, work_identifier
 from provider_helpers import provider_runtime
 from sqlalchemy import func, select
@@ -35,11 +35,10 @@ from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
     _pdf_import_inputs,
-    check_pdf_import_eligibility,
     delete_import_batch,
     extract_pdf_import_identifier,
     finalize_pdf_import_batch,
-    lookup_pdf_import_candidate,
+    lookup_pdf_import_candidates,
     retry_pdf_import_batch,
     stage_pdf_import_batch,
 )
@@ -77,6 +76,24 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
             "identifiers": [work_identifier("doi", identifier)],
         }),
     )
+
+
+def _batch_lookup(lookup):
+    """Build ordered outcomes for tests whose fixtures describe one source at a time."""
+
+    async def many(values, provider, settings):
+        outcomes = []
+        for value in values:
+            try:
+                result = await lookup(value, provider, settings)
+            except ResourceNotFound as error:
+                result = LookupFailure("not_found", str(error))
+            except UpstreamServiceError as error:
+                result = LookupFailure("unavailable", str(error))
+            outcomes.append(LookupOutcome(value, result))
+        return tuple(outcomes)
+
+    return many
 
 
 @pytest.mark.anyio
@@ -141,17 +158,21 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
 
 
 async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, monkeypatch) -> None:
-    pending = _pdf_import_inputs(batch.staged_files)
+    operations = durable_operations()
+    enqueued = next(
+        (
+            entry
+            for entry in reversed(getattr(operations, "enqueues", []))
+            if entry.get("workflow_id") == batch.workflow_id
+            and entry["workflow_name"] == "library.prepare_pdf_import"
+        ),
+        None,
+    )
+    pending = enqueued["args"][-1] if enqueued else _pdf_import_inputs(batch.staged_files)
 
-    async def check(batch_id, candidate):
+    async def lookup(batch_id, candidates):
         async with session_factory() as worker_db:
-            return await check_pdf_import_eligibility(worker_db, batch_id, candidate)
-
-    async def lookup(batch_id, candidate, detected_identifier):
-        async with session_factory() as worker_db:
-            return await lookup_pdf_import_candidate(
-                worker_db, batch_id, candidate, detected_identifier
-            )
+            return await lookup_pdf_import_candidates(worker_db, batch_id, candidates)
 
     async def finalize(actor_id, workspace_id, batch_id, workflow_id, records, errors):
         async with session_factory() as worker_db:
@@ -173,8 +194,7 @@ async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, mon
     monkeypatch.setattr(
         library_workflows, "extract_pdf_import_identifier_step", extract_pdf_import_identifier
     )
-    monkeypatch.setattr(library_workflows, "check_pdf_import_eligibility_step", check)
-    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", lookup)
+    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidates_step", lookup)
     monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
     monkeypatch.setattr(library_workflows, "enqueue_child_workflow", cleanup)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
@@ -227,7 +247,9 @@ async def test_pdf_import_revalidates_user_after_provider_io(
             await administrator_db.commit()
         return provider_candidate(identifier, "Stale authorization candidate")
 
-    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", deactivate_during_lookup)
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidates", _batch_lookup(deactivate_during_lookup)
+    )
     preview = await stage_pdf_import_batch(
         db,
         user,
@@ -299,7 +321,9 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
             await governance_db.commit()
         return provider_candidate(identifier, "Retryable PDF")
 
-    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", revoke_during_lookup)
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidates", _batch_lookup(revoke_during_lookup)
+    )
     preview = await stage_pdf_import_batch(
         async_db,
         importer,
@@ -325,8 +349,10 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
     workspace.governance_frozen_at = None
     await async_db.commit()
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(return_value=provider_candidate("10.1000/retry-authorized", "Retryable PDF")),
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(return_value=provider_candidate("10.1000/retry-authorized", "Retryable PDF"))
+        ),
     )
     await retry_pdf_import_batch(async_db, retrying_editor, workspace_id, batch.id)
     await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
@@ -339,7 +365,7 @@ async def test_pdf_import_authorization_failure_preserves_objects_for_another_ed
 
 
 @pytest.mark.anyio
-async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
+async def test_pdf_import_checkpoints_transient_provider_failure_for_durable_backoff(
     async_db, async_session_factory, monkeypatch
 ):
     db = async_db
@@ -358,14 +384,20 @@ async def test_pdf_import_leaves_transient_provider_failure_for_dbos_retry(
     batch = await db.get(ImportBatch, preview.id)
     pending = _pdf_import_inputs(batch.staged_files)[0]
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(side_effect=UpstreamServiceError("provider temporarily unavailable")),
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(side_effect=UpstreamServiceError("provider temporarily unavailable"))
+        ),
     )
     async with async_session_factory() as worker_db:
-        with pytest.raises(UpstreamServiceError, match="temporarily unavailable"):
-            await lookup_pdf_import_candidate(
-                worker_db, batch.id, pending, {"provider": "doi", "value": "10.1000/retry"}
-            )
+        (result,) = await lookup_pdf_import_candidates(
+            worker_db,
+            batch.id,
+            [{**pending, "_lookup": {"provider": "doi", "value": "10.1000/retry"}}],
+        )
+    assert result["error"]["code"] == "provider_unavailable"
+    assert result["retry"]["retry_after_seconds"] is None
+    assert result["record"]["_basic"]
     assert local_object_path(pending["_pdf"]["object_key"]).exists()
 
 
@@ -478,6 +510,10 @@ async def test_workspace_editor_retry_rebinds_pdf_batch_and_hides_actor_workflow
     assert (
         await import_batch_api(workspace_id, batch.id, editor, async_db)
     ).workflow_id == batch.workflow_id
+    owner_preview = await import_batch_api(workspace_id, batch.id, owner, async_db)
+    editor_preview = await import_batch_api(workspace_id, batch.id, editor, async_db)
+    assert owner_preview.preview_version is not None
+    assert owner_preview.preview_version == editor_preview.preview_version
     assert await finalize_pdf_import_batch(
         async_db, editor.id, workspace_id, batch.id, batch.workflow_id, pending, []
     )
@@ -649,7 +685,9 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
         await release_provider.wait()
         return provider_candidate(identifier, "Cancelled candidate")
 
-    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", delayed_lookup)
+    monkeypatch.setattr(
+        "quirebase.library.imports.lookup_candidates", _batch_lookup(delayed_lookup)
+    )
     preview = await stage_pdf_import_batch(
         db,
         user,
@@ -661,8 +699,10 @@ async def test_cancelled_pdf_import_keeps_staged_objects_owned_by_batch(
     pending = _pdf_import_inputs(batch.staged_files)[0]
     async with async_session_factory() as worker_db:
         importing = asyncio.create_task(
-            lookup_pdf_import_candidate(
-                worker_db, batch.id, pending, {"provider": "doi", "value": "10.1000/cancelled"}
+            lookup_pdf_import_candidates(
+                worker_db,
+                batch.id,
+                [{**pending, "_lookup": {"provider": "doi", "value": "10.1000/cancelled"}}],
             )
         )
         await provider_started.wait()
@@ -955,10 +995,12 @@ async def test_pdf_import_batch_previews_before_creating_items(
     second_pdf = published_pdf_bytes("10.1000/second")
     try:
         monkeypatch.setattr(
-            "quirebase.library.imports.lookup_candidate",
-            AsyncMock(
-                side_effect=lambda identifier, _provider, _settings: provider_candidate(
-                    identifier, f"Article {identifier.rsplit('/', 1)[-1]}", authors="P. Author"
+            "quirebase.library.imports.lookup_candidates",
+            _batch_lookup(
+                AsyncMock(
+                    side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                        identifier, f"Article {identifier.rsplit('/', 1)[-1]}", authors="P. Author"
+                    )
                 )
             ),
         )
@@ -1013,7 +1055,8 @@ async def test_pdf_import_batch_previews_before_creating_items(
         )
         assert "_source_id" not in preview.text and "object_key" not in preview.text
         committed = await client.post(
-            f"{workspace_base}/imports/{batch.id}/commit", json=json_payload({})
+            f"{workspace_base}/imports/{batch.id}/commit",
+            json={"expected_preview_version": preview.json()["preview_version"]},
         )
         assert committed.status_code == 200
         first = await db.scalar(
@@ -1099,9 +1142,13 @@ async def test_arxiv_pdf_import_resolves_metadata_warns_on_batch_duplicates_and_
                 "code": "duplicate_batch_identifier",
                 "message": "another PDF in this batch has the same identifier",
                 "identifier": None,
+                "source_id": records[1]["source"]["id"],
             }
         ]
-        committed = await client.post(f"{base}/imports/{batch.id}/commit", json={})
+        committed = await client.post(
+            f"{base}/imports/{batch.id}/commit",
+            json={"expected_preview_version": preview.json()["preview_version"]},
+        )
         assert committed.status_code == 200
         imported_ids = committed.json()["committed_item_ids"]
         assert len(imported_ids) == 2
@@ -1136,10 +1183,12 @@ async def test_pdf_import_batch_preserves_unidentified_pdfs_until_explicit_selec
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(
-            side_effect=lambda identifier, _provider, _settings: provider_candidate(
-                identifier, "Importable article"
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(
+                side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                    identifier, "Importable article"
+                )
             )
         ),
     )
@@ -1176,7 +1225,11 @@ async def test_pdf_import_batch_preserves_unidentified_pdfs_until_explicit_selec
         assert local_object_path(basic_key).exists()
         basic_ids = [basic["source"]["id"]] if include_basic else []
         committed = await client.post(
-            f"{workspace_base}/imports/{batch.id}/commit", json={"basic_source_ids": basic_ids}
+            f"{workspace_base}/imports/{batch.id}/commit",
+            json={
+                "basic_source_ids": basic_ids,
+                "expected_preview_version": preview.json()["preview_version"],
+            },
         )
         assert committed.status_code == 200
         imported_ids = committed.json()["committed_item_ids"]
@@ -1228,8 +1281,10 @@ async def test_pdf_containing_only_reference_identifiers_remains_an_optional_bas
         document.new_page().insert_text((72, 72), "References\n[1] DOI:10.1234/citation")
         contents = document.tobytes()
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(side_effect=AssertionError("reference identifiers must not trigger lookup")),
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(side_effect=AssertionError("reference identifiers must not trigger lookup"))
+        ),
     )
     try:
         staged = await client.post(
@@ -1262,8 +1317,8 @@ async def test_basic_pdf_candidates_require_opt_in_and_support_later_metadata_up
     )
     base = f"/api/v1/workspaces/{existing.workspace_id}"
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(side_effect=ResourceNotFound("metadata not found")),
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(AsyncMock(side_effect=ResourceNotFound("metadata not found"))),
     )
     try:
         staged = await client.post(
@@ -1289,17 +1344,30 @@ async def test_basic_pdf_candidates_require_opt_in_and_support_later_metadata_up
             "invalid_pdf",
         }
         assert len(batch.staged_files) == 2
-        assert (await client.post(f"{base}/imports/{batch.id}/commit", json={})).status_code == 409
         assert (
             await client.post(
-                f"{base}/imports/{batch.id}/commit", json={"basic_source_ids": [str(uuid4())]}
+                f"{base}/imports/{batch.id}/commit",
+                json={"expected_preview_version": preview["preview_version"]},
+            )
+        ).status_code == 409
+        assert (
+            await client.post(
+                f"{base}/imports/{batch.id}/commit",
+                json={
+                    "basic_source_ids": [str(uuid4())],
+                    "expected_preview_version": preview["preview_version"],
+                },
             )
         ).status_code == 422
         assert len(batch.staged_files) == 2
         source_id = preview["records"][0]["source"]["id"]
         assert preview["records"][0]["metadata"]["title"] == "notes &amp; draft"
         receipt = await client.post(
-            f"{base}/imports/{batch.id}/commit", json={"basic_source_ids": [source_id]}
+            f"{base}/imports/{batch.id}/commit",
+            json={
+                "basic_source_ids": [source_id],
+                "expected_preview_version": preview["preview_version"],
+            },
         )
         assert receipt.status_code == 200
         assert len(receipt.json()["committed_item_ids"]) == 1
@@ -1354,8 +1422,10 @@ async def test_pdf_import_batch_warns_and_accepts_an_accessible_duplicate_doi(
     item.work = {**item.work, "id": "https://doi.org/10.1000/existing"}
     await db.commit()
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(return_value=provider_candidate("10.1000/existing", "Duplicate candidate")),
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(return_value=provider_candidate("10.1000/existing", "Duplicate candidate"))
+        ),
     )
     base = f"/api/v1/workspaces/{workspace_id}"
     try:
@@ -1377,7 +1447,10 @@ async def test_pdf_import_batch_warns_and_accepts_an_accessible_duplicate_doi(
         await finish_pdf_import_preview(db, async_session_factory, batch, monkeypatch)
         assert len(batch.records) == 1
         assert not batch.errors
-        response = await client.post(f"{base}/imports/{batch.id}/commit", json={})
+        response = await client.post(
+            f"{base}/imports/{batch.id}/commit",
+            json={"expected_preview_version": preview.json()["preview_version"]},
+        )
         assert response.status_code == 200
         assert (
             await db.scalar(
@@ -1405,10 +1478,12 @@ async def test_discard_pdf_import_batch_removes_staged_objects(
     workspace_id = item.workspace_id
     objects_before = set(get_settings().object_dir.rglob("*.pdf"))
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(
-            side_effect=lambda identifier, _provider, _settings: provider_candidate(
-                identifier, "Discarded candidate"
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(
+                side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                    identifier, "Discarded candidate"
+                )
             )
         ),
     )
@@ -1457,20 +1532,24 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
     workspace_id = item.workspace_id
     shared_pdf = published_pdf_bytes("10.1000/shared-staged")
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(
-            side_effect=lambda identifier, _provider, _settings: provider_candidate(
-                identifier, "Shared staged PDF"
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(
+                side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                    identifier, "Shared staged PDF"
+                )
             )
         ),
     )
     try:
+        preview_versions = {}
         for filename in ("first-copy.pdf", "second-copy.pdf"):
             preview = await client.post(
                 f"{workspace_base}/imports/pdfs",
                 files=[("pdfs", (filename, BytesIO(shared_pdf), "application/pdf"))],
             )
             assert preview.status_code == 202
+            preview_versions[preview.json()["id"]] = preview.json()["preview_version"]
         batches = list(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
@@ -1495,7 +1574,8 @@ async def test_discard_pdf_import_batch_preserves_object_used_by_another_batch(
         assert not first_path.exists()
         assert second_path.is_file()
         committed = await client.post(
-            f"{workspace_base}/imports/{batches[1].id}/commit", json=json_payload({})
+            f"{workspace_base}/imports/{batches[1].id}/commit",
+            json={"expected_preview_version": preview_versions[str(batches[1].id)]},
         )
         assert committed.status_code == 200
         imported = await db.scalar(
@@ -1600,14 +1680,17 @@ async def test_commit_pdf_import_batch_allows_doi_created_after_preview(
     )
     workspace_base = f"/api/v1/workspaces/{item.workspace_id}"
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
-        AsyncMock(
-            side_effect=lambda identifier, _provider, _settings: provider_candidate(
-                identifier, "Stale DOI candidate"
+        "quirebase.library.imports.lookup_candidates",
+        _batch_lookup(
+            AsyncMock(
+                side_effect=lambda identifier, _provider, _settings: provider_candidate(
+                    identifier, "Stale DOI candidate"
+                )
             )
         ),
     )
     try:
+        preview_versions = {}
         for filename in ("first-preview.pdf", "stale-preview.pdf"):
             preview = await client.post(
                 f"{workspace_base}/imports/pdfs",
@@ -1623,6 +1706,7 @@ async def test_commit_pdf_import_batch_allows_doi_created_after_preview(
                 ],
             )
             assert preview.status_code == 202
+            preview_versions[preview.json()["id"]] = preview.json()["preview_version"]
         batches = list(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
@@ -1633,11 +1717,13 @@ async def test_commit_pdf_import_batch_allows_doi_created_after_preview(
             await db.scalars(select(ImportBatch).where(ImportBatch.file_format == "pdf"))
         )
         first = await client.post(
-            f"{workspace_base}/imports/{batches[0].id}/commit", json=json_payload({})
+            f"{workspace_base}/imports/{batches[0].id}/commit",
+            json={"expected_preview_version": preview_versions[str(batches[0].id)]},
         )
         assert first.status_code == 200
         stale = await client.post(
-            f"{workspace_base}/imports/{batches[1].id}/commit", json=json_payload({})
+            f"{workspace_base}/imports/{batches[1].id}/commit",
+            json={"expected_preview_version": preview_versions[str(batches[1].id)]},
         )
         assert stale.status_code == 200
         assert (

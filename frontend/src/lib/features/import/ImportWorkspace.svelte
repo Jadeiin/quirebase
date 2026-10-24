@@ -289,12 +289,7 @@
 		pendingCommands.add(key);
 		error = '';
 		try {
-			const result = await confirmImportBatch(
-				queryClient,
-				workspaceId,
-				snapshot.id,
-				basicSourceIds
-			);
+			const result = await confirmImportBatch(queryClient, workspaceId, snapshot, basicSourceIds);
 			if (result.status === 'committed') await completed(result.batch, started);
 			else if (result.status === 'unknown') uncertainConfirmations.add(snapshot.id);
 			else if (isCurrent(started))

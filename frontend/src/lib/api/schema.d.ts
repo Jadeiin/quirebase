@@ -4073,6 +4073,8 @@ export interface components {
 			created_at: string;
 			/** Committed Item Ids */
 			committed_item_ids: string[];
+			/** Preview Version */
+			preview_version?: string | null;
 		};
 		/**
 		 * ImportBatchStatus
@@ -4113,6 +4115,11 @@ export interface components {
 		ImportCommitRequest: {
 			/** Basic Source Ids */
 			basic_source_ids?: string[];
+			/**
+			 * Expected Preview Version
+			 * @description Required for ready PDF batches; use the reviewed preview's preview_version.
+			 */
+			expected_preview_version?: string | null;
 		};
 		/** ImportDiagnostic */
 		ImportDiagnostic: {
@@ -4132,6 +4139,8 @@ export interface components {
 			code?: string | null;
 			/** Identifier */
 			identifier?: string | null;
+			/** Source Id */
+			source_id?: string | null;
 		};
 		/** ImportSource */
 		ImportSource: {

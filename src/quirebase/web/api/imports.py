@@ -115,7 +115,12 @@ async def commit_staged_import(
     data: ImportCommitRequest | None = None,
 ) -> ImportBatchPreview:
     return await commit_import_batch(
-        db, user, workspace_id, batch_id, basic_source_ids=data.basic_source_ids if data else ()
+        db,
+        user,
+        workspace_id,
+        batch_id,
+        basic_source_ids=data.basic_source_ids if data else (),
+        expected_preview_version=data.expected_preview_version if data else None,
     )
 
 

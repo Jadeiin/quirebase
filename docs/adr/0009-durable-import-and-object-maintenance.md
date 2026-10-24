@@ -15,9 +15,20 @@ owned an uncheckpointed infinite maintenance loop.
 
 Library represents PDF Import preparation as a pending Import Batch owned by a DBOS workflow.
 The request validates and stores each upload, then transactionally enqueues preparation. Retryable
-steps separately extract lookup identifiers and retrieve Candidate Records, while a datasource transaction
-rechecks the actor and Workspace before Provider I/O. Provider retries reuse completed PDF parsing.
-One datasource transaction publishes the ready preview. A terminal preparation failure transactionally marks the
+steps separately extract each PDF's lookup identifier and retrieve Candidate Records in Provider
+groups through `lookup_many`. Each group lookup step rechecks the actor and Workspace, loads current
+settings and ends its read transaction before Provider I/O; its checkpoint contains outcomes rather
+than settings or credentials. Provider retries reuse completed PDF parsing and submit only
+unavailable inputs from the previous checkpoint, retaining successful siblings and original source order.
+Expected Provider failures are checkpointed values. The workflow attempts each metadata lookup up
+to three times, using durable sleep for `Retry-After` or exponential backoff, with at most 60 seconds
+of waiting per preparation. Exhausted or deferred lookups retain their PDFs as optional basic
+candidates with per-file diagnostics so successful siblings can still be confirmed. Ready previews
+with deferred metadata support retrying only those sources under a new workflow identity, reusing
+their persisted lookup context. Successful candidates remain retained and are merged by source UUID
+during guarded finalization. Single Item lookup errors retain their exception contract. See the
+[PDF staging contract](../architecture/object-lifecycle.md#pdf-import-staging).
+One datasource transaction publishes the ready preview. An unexpected terminal preparation failure transactionally marks the
 batch failed while retaining its staged objects. Cancellation, exhausted workflow recovery and a
 missing workflow record are lazily reconciled to failed when the batch is viewed or retried; retry
 transitions it back to pending under a new workflow identity. Lazy reconciliation updates only a

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from dbos import DBOS
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from quirebase.access import ResourceAction, require_workspace_action
 from quirebase.core.database import AsyncSessionLocal
@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 
 RECOMMEND_TAGS_WORKFLOW = "library.recommend_tags"
 PREPARE_PDF_IMPORT_WORKFLOW = "library.prepare_pdf_import"
+_PDF_LOOKUP_ATTEMPTS = 3
+_PDF_LOOKUP_WAIT_BUDGET_SECONDS = 60.0
 
 
 async def _linked_workflow(record: ItemTagRecommendation):
@@ -214,26 +216,44 @@ async def extract_pdf_import_identifier_step(pending: dict[str, Any]) -> dict[st
     return await extract_pdf_import_identifier(pending)
 
 
-@ads.transaction(isolation_level="READ COMMITTED")
-async def check_pdf_import_eligibility_step(
-    batch_id: UUID,
-    pending: dict[str, Any],
-) -> dict[str, Any]:
-    from .imports import check_pdf_import_eligibility
-
-    return await check_pdf_import_eligibility(ads.sql_session(), batch_id, pending)
-
-
 @DBOS.step(retries_allowed=True, max_attempts=3)
-async def lookup_pdf_import_candidate_step(
+async def lookup_pdf_import_candidates_step(
     batch_id: UUID,
-    pending: dict[str, Any],
-    detected_identifier: dict[str, str],
-) -> dict[str, Any]:
-    from .imports import lookup_pdf_import_candidate
+    pending_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    from .imports import lookup_pdf_import_candidates
 
     async with AsyncSessionLocal() as db:
-        return await lookup_pdf_import_candidate(db, batch_id, pending, detected_identifier)
+        return await lookup_pdf_import_candidates(db, batch_id, pending_records)
+
+
+async def _lookup_pdf_import_with_backoff(
+    batch_id: UUID,
+    pending_records: list[dict[str, Any]],
+    wait_budget: float,
+) -> tuple[list[dict[str, Any]], float]:
+    """Checkpoint each Provider group's outcomes and retry only unavailable sources."""
+    remaining = pending_records
+    results: dict[str, dict[str, Any]] = {}
+    for attempt in range(_PDF_LOOKUP_ATTEMPTS):
+        outcomes = await lookup_pdf_import_candidates_step(batch_id, remaining)
+        failed = []
+        delays = []
+        for pending, result in zip(remaining, outcomes, strict=True):
+            results[pending["_source_id"]] = result
+            if isinstance(failure := result.get("retry"), dict):
+                failed.append(pending)
+                delay = failure["retry_after_seconds"]
+                delays.append(delay if delay is not None else 5.0 * (2**attempt))
+        if not failed:
+            break
+        delay = max(delays)
+        if attempt == _PDF_LOOKUP_ATTEMPTS - 1 or delay > wait_budget:
+            break
+        await DBOS.sleep_async(delay)
+        wait_budget -= delay
+        remaining = failed
+    return [results[pending["_source_id"]] for pending in pending_records], wait_budget
 
 
 @ads.transaction()
@@ -255,11 +275,16 @@ async def finalize_pdf_import_batch_step(
 @ads.transaction()
 async def fail_pdf_import_batch_step(batch_id: UUID, workflow_id: str) -> bool:
     """Publish terminal failure only for the workflow generation that still owns the batch."""
-    batch = await ads.sql_session().get(ImportBatch, batch_id)
-    if batch is None or batch.status != "pending" or batch.workflow_id != workflow_id:
-        return False
-    batch.status = ImportBatchStatus.failed
-    return True
+    result = await ads.sql_session().execute(
+        update(ImportBatch)
+        .where(
+            ImportBatch.id == batch_id,
+            ImportBatch.status == "pending",
+            ImportBatch.workflow_id == workflow_id,
+        )
+        .values(status=ImportBatchStatus.failed)
+    )
+    return getattr(result, "rowcount", 0) == 1
 
 
 @DBOS.workflow(name=PREPARE_PDF_IMPORT_WORKFLOW)
@@ -274,33 +299,32 @@ async def prepare_pdf_import_workflow(
         records: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
         rejected_keys: list[str] = []
-        seen_identifiers: set[str] = set()
+        wait_budget = _PDF_LOOKUP_WAIT_BUDGET_SECONDS
         all_keys = [pending["_pdf"]["object_key"] for pending in pending_records]
+        results: dict[str, dict[str, Any]] = {}
+        groups: dict[str, list[dict[str, Any]]] = {}
         for pending in pending_records:
-            result = await extract_pdf_import_identifier_step(pending)
-            detected_identifier = result.get("detected_identifier")
-            if isinstance(detected_identifier, dict):
-                result = await check_pdf_import_eligibility_step(batch_id, pending)
-                if result.get("eligible"):
-                    result = await lookup_pdf_import_candidate_step(
-                        batch_id, pending, detected_identifier
-                    )
-            normalized_identifier = result.get("normalized_identifier")
-            if isinstance(normalized_identifier, str) and normalized_identifier in seen_identifiers:
-                pdf = pending["_pdf"]
-                errors.append({
-                    "row": pending["_row"],
-                    "filename": pdf["original_name"],
-                    "severity": "warning",
-                    "code": "duplicate_batch_identifier",
-                    "message": "another PDF in this batch has the same identifier",
-                })
+            if "_lookup" not in pending:
+                result = await extract_pdf_import_identifier_step(pending)
+                if "detected_identifier" not in result:
+                    results[pending["_source_id"]] = result
+                    continue
+                pending = {**pending, "_lookup": result["detected_identifier"]}
+            groups.setdefault(pending["_lookup"]["provider"], []).append(pending)
+        for group in groups.values():
+            outcomes, wait_budget = await _lookup_pdf_import_with_backoff(
+                batch_id, group, wait_budget
+            )
+            results.update(
+                (pending["_source_id"], result)
+                for pending, result in zip(group, outcomes, strict=True)
+            )
+        for pending in pending_records:
+            result = results[pending["_source_id"]]
             if isinstance(result.get("error"), dict):
                 errors.append(result["error"])
             if isinstance(result.get("record"), dict):
                 records.append(result["record"])
-                if isinstance(normalized_identifier, str):
-                    seen_identifiers.add(normalized_identifier)
             else:
                 rejected_keys.append(result["object_key"])
         finalized = await finalize_pdf_import_batch_step(

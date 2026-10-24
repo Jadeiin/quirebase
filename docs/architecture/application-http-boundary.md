@@ -86,6 +86,10 @@ continue polling so recovery can settle the initiating operation.
 
 Import confirmation returns the authoritative committed batch preview, including its replayable
 Item IDs. The client caches that response without reproducing the batch's state transition.
+For ready PDF batches, the request supplies `expected_preview_version` from the displayed preview's
+`preview_version`, captured with the confirmation selection. A missing or superseded version returns
+`409 import_batch_conflict`. The client refreshes the preview for review without automatically
+resubmitting confirmation. Committed receipt replay remains valid with an obsolete version.
 A lost response is reconciled by reading the captured batch independently of the current
 route; an uncertain outcome retains a status-recovery action. Successful confirmation opens Library
 with `import_batch`, intersecting its original Item IDs with current Workspace visibility and other
@@ -143,11 +147,18 @@ asynchronous Tag assignment actions retain their current product semantics.
 
 Import previews use compact record rows, with identified records and optional PDFs without metadata
 grouped within the current page. Unidentified PDFs show their filename and a short reason beside
-their checkbox; Select all and Clear selection apply to unidentified sources across the batch.
+their checkbox. Reasons are associated by source UUID so same-named PDFs remain independent;
+Select all and Clear selection apply to unidentified sources across the batch.
 The confirmation bar keeps selected and skipped counts beside the primary action and stays above
 the mobile navigation while scrolling. File errors remain visible; additional Provider warnings
 are available in a disclosure. Internal diagnostic codes and generated UUIDs are omitted from
 ordinary record presentation. Read-only previews expose the same results without selection controls.
+
+PDF previews distinguish temporarily unavailable metadata from missing metadata. Deferred sources
+remain optional basic candidates; ready previews with Provider failure diagnostics offer Retry
+metadata alongside confirmation. The existing retry endpoint prepares only deferred sources while
+retaining successful candidates and uploaded files. Pending retry hides candidate selection until
+guarded finalization publishes the merged preview.
 
 Library uses a native table on desktop and a compact list on narrow screens. TanStack Svelte
 Table owns column visibility, constrained resizing and row-selection mechanics; Query and the URL

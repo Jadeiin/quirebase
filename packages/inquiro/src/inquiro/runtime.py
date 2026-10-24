@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Self
@@ -8,6 +9,7 @@ from urllib.parse import urlsplit
 from inquiro.canonical import normalize_publication_date
 from inquiro.identifiers import parse_identifier
 from inquiro.models import (
+    MAX_LOOKUP_BATCH_SIZE,
     MAX_SEARCH_CLAUSES,
     MAX_SEARCH_PAGE_SIZE,
     AcquiredDocument,
@@ -15,24 +17,48 @@ from inquiro.models import (
     CandidatePage,
     CandidateRecord,
     DocumentRequest,
+    Identifier,
     InquiroError,
     InvalidProviderRequest,
+    LookupFailure,
+    LookupOutcome,
     MetadataProviderChoices,
     PdfNotAvailable,
     ProviderChoice,
     ProviderConfig,
+    ProviderRateLimited,
     ProviderUnavailable,
     SearchQuery,
 )
 from inquiro.providers._catalog import builtin_providers
-from inquiro.transport import BoundedTransport, Exchange, HttpExchange, RemoteNotFound
+from inquiro.transport import (
+    BoundedTransport,
+    Exchange,
+    HttpExchange,
+    MetadataResponseTooLarge,
+    RemoteNotFound,
+)
 from inquiro.work import InvalidWork, validate_work
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from inquiro.providers._contracts import ProviderDefinition
 
 SEARCH_FIELDS = frozenset({"any", "title", "author", "publication", "abstract"})
 SEARCH_OPERATORS = frozenset({"and", "or", "not"})
+
+
+def _lookup_failure(
+    error: InvalidProviderRequest | CandidateNotFound | ProviderUnavailable,
+) -> LookupFailure:
+    if isinstance(error, InvalidProviderRequest):
+        return LookupFailure("invalid_request", str(error))
+    if isinstance(error, CandidateNotFound):
+        return LookupFailure("not_found", str(error))
+    if isinstance(error, ProviderRateLimited):
+        return LookupFailure("unavailable", str(error), True, error.retry_after_seconds)
+    return LookupFailure("unavailable", str(error))
 
 
 def _normalize_candidate(record: CandidateRecord) -> CandidateRecord:
@@ -82,7 +108,8 @@ def metadata_provider_choices(config: ProviderConfig = ProviderConfig()) -> Meta
                 ),
             )
             for provider in builtin_providers()
-            if provider.lookup_adapter is not None and provider.has_credentials(config, "lookup")
+            if (provider.lookup_adapter is not None or provider.batch_lookup_adapter is not None)
+            and provider.has_credentials(config, "lookup")
         ),
         max_search_page_size=MAX_SEARCH_PAGE_SIZE,
     )
@@ -161,18 +188,44 @@ class ProviderRuntime:
 
     async def lookup(self, value: str, *, provider: str = "auto") -> CandidateRecord:
         self._require_open()
+        identifier, definition = self._resolve_lookup(value, provider)
+        return await self._lookup(identifier, definition)
+
+    def _resolve_lookup(self, value: str, provider: str) -> tuple[Identifier, ProviderDefinition]:
         identifier = parse_identifier(value, provider, registrations=self._providers)
         definition = self._identifier_provider(identifier.provider)
-        if definition is None or definition.lookup_adapter is None:
+        if definition is None or (
+            definition.lookup_adapter is None and definition.batch_lookup_adapter is None
+        ):
             raise InvalidProviderRequest(f"unknown identifier provider: {identifier.provider}")
         definition.require_credentials(self._config, "lookup")
+        return identifier, definition
+
+    async def _lookup(
+        self, identifier: Identifier, definition: ProviderDefinition
+    ) -> CandidateRecord:
         try:
-            record = await definition.lookup_adapter.lookup(
-                self._transport,
-                identifier,
-                self._config,
-                endpoint=definition.endpoint,
-            )
+            if definition.batch_lookup_adapter is not None:
+                results = await definition.batch_lookup_adapter.lookup_many(
+                    self._transport, (identifier,), self._config, endpoint=definition.endpoint
+                )
+                if len(results) != 1:
+                    raise ProviderUnavailable("metadata provider returned an incomplete batch")
+                record = results[0]
+                if isinstance(record, LookupFailure):
+                    if record.code == "invalid_request":
+                        raise InvalidProviderRequest(record.message)
+                    if record.code == "not_found":
+                        raise CandidateNotFound(record.message)
+                    if record.rate_limited:
+                        raise ProviderRateLimited(record.message, record.retry_after_seconds)
+                    raise ProviderUnavailable(record.message)
+            elif definition.lookup_adapter is not None:
+                record = await definition.lookup_adapter.lookup(
+                    self._transport, identifier, self._config, endpoint=definition.endpoint
+                )
+            else:
+                raise InvalidProviderRequest(f"unknown identifier provider: {identifier.provider}")
         except RemoteNotFound as error:
             raise CandidateNotFound("metadata record was not found") from error
         except InquiroError:
@@ -180,6 +233,102 @@ class ProviderRuntime:
         except (TypeError, ValueError) as error:
             raise ProviderUnavailable("metadata provider returned invalid metadata") from error
         return _normalize_candidate(record)
+
+    async def lookup_many(
+        self, values: Sequence[str], *, provider: str = "auto"
+    ) -> tuple[LookupOutcome, ...]:
+        """Resolve up to 50 inputs, retaining order and failures with bounded Provider I/O."""
+        self._require_open()
+        if (
+            isinstance(values, (str, bytes))
+            or not 1 <= len(values) <= MAX_LOOKUP_BATCH_SIZE
+            or any(not isinstance(value, str) for value in values)
+        ):
+            raise InvalidProviderRequest(
+                f"lookup requires 1 to {MAX_LOOKUP_BATCH_SIZE} identifier strings"
+            )
+        values = tuple(values)
+        outcomes: dict[int, LookupOutcome] = {}
+        groups: dict[str, list[tuple[int, str, Identifier]]] = {}
+        definitions: dict[str, ProviderDefinition] = {}
+        for index, value in enumerate(values):
+            try:
+                identifier, definition = self._resolve_lookup(value, provider)
+            except (InvalidProviderRequest, CandidateNotFound, ProviderUnavailable) as error:
+                outcomes[index] = LookupOutcome(value, _lookup_failure(error))
+                continue
+            groups.setdefault(definition.name, []).append((index, value, identifier))
+            definitions[definition.name] = definition
+
+        semaphore = asyncio.Semaphore(3)
+
+        async def single(entry: tuple[int, str, Identifier], definition: ProviderDefinition):
+            index, value, identifier = entry
+            async with semaphore:
+                try:
+                    result: CandidateRecord | LookupFailure = await self._lookup(
+                        identifier, definition
+                    )
+                except (InvalidProviderRequest, CandidateNotFound, ProviderUnavailable) as error:
+                    result = _lookup_failure(error)
+            outcomes[index] = LookupOutcome(value, result)
+
+        async def batch(entries: list[tuple[int, str, Identifier]], definition: ProviderDefinition):
+            adapter = definition.batch_lookup_adapter
+            if adapter is None:
+                for entry in entries:
+                    await single(entry, definition)
+                return
+            try:
+                async with semaphore:
+                    results = await adapter.lookup_many(
+                        self._transport,
+                        tuple(entry[2] for entry in entries),
+                        self._config,
+                        endpoint=definition.endpoint,
+                    )
+                if len(results) != len(entries):
+                    raise ProviderUnavailable("metadata provider returned an incomplete batch")
+            except MetadataResponseTooLarge as error:
+                keys = tuple(dict.fromkeys(entry[2] for entry in entries))
+                if len(keys) > 1:
+                    # Keep every position for one key together so each child
+                    # request shrinks after the adapter deduplicates its keys.
+                    first_half = set(keys[: len(keys) // 2])
+                    await batch([entry for entry in entries if entry[2] in first_half], definition)
+                    await batch(
+                        [entry for entry in entries if entry[2] not in first_half], definition
+                    )
+                    return
+                results = (_lookup_failure(error),) * len(entries)
+            except RemoteNotFound:
+                results = (
+                    LookupFailure("unavailable", "metadata batch endpoint was not found"),
+                ) * len(entries)
+            except (InvalidProviderRequest, CandidateNotFound, ProviderUnavailable) as error:
+                results = (_lookup_failure(error),) * len(entries)
+            except (TypeError, ValueError):
+                results = (
+                    LookupFailure("unavailable", "metadata provider returned invalid metadata"),
+                ) * len(entries)
+            for (index, value, _identifier), result in zip(entries, results, strict=True):
+                if isinstance(result, CandidateRecord):
+                    try:
+                        result = _normalize_candidate(result)
+                    except ProviderUnavailable as error:
+                        result = _lookup_failure(error)
+                outcomes[index] = LookupOutcome(value, result)
+
+        # Join all work before the caller can close the shared transport, including on cancellation.
+        async with asyncio.TaskGroup() as tasks:
+            for name, entries in groups.items():
+                definition = definitions[name]
+                if definition.batch_lookup_adapter is not None:
+                    tasks.create_task(batch(entries, definition))
+                else:
+                    for entry in entries:
+                        tasks.create_task(single(entry, definition))
+        return tuple(outcomes[index] for index in range(len(values)))
 
     async def search(self, query: SearchQuery) -> CandidatePage:
         self._require_open()

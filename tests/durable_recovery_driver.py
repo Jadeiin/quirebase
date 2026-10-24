@@ -13,14 +13,13 @@ import pymupdf
 from advanced_alchemy.types import FileObject
 from commonmeta.author_utils import get_one_author
 from commonmeta.base_utils import compact
-from inquiro.models import CandidateRecord, Identifier
+from inquiro.models import CandidateRecord, Identifier, LookupFailure, LookupOutcome
 from item_helpers import work_identifier
 from sqlalchemy import func, select, update
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.cli import _register_workflows
 from quirebase.core.database import AsyncSessionLocal, engine
-from quirebase.core.errors import ResourceNotFound
 from quirebase.core.storage import get_object_store
 from quirebase.core.workflows import durable_operations, launch_worker, recover_workflows
 from quirebase.library import (
@@ -45,7 +44,7 @@ def write_json(path, value):
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
-def instrument_external_provider(directory, *, pause):
+def instrument_external_provider(directory, *, pause, rate_limit=False, exhaust=False):
     extract = imports.extract_pdf_import_identifier
 
     async def observed_extract(pending):
@@ -55,11 +54,22 @@ def instrument_external_provider(directory, *, pause):
         return result
 
     async def lookup(identifier, _identifier_type, _settings):
+        if rate_limit:
+            with (directory / "provider-calls.jsonl").open("a", encoding="utf-8") as output:
+                output.write(json.dumps(identifier) + "\n")
         if identifier.endswith("recovery-rejected"):
-            if pause:
+            if rate_limit:
+                seen = directory / "rate-limit-seen"
+                if exhaust or not seen.exists():
+                    seen.touch()
+                    return LookupFailure(
+                        "unavailable", "provider rate limit was reached", True, 0 if exhaust else 5
+                    )
+            elif pause:
                 (directory / "checkpoint-reached").touch()
                 await asyncio.Event().wait()
-            raise ResourceNotFound("no metadata for this PDF")
+            else:
+                return LookupFailure("not_found", "no metadata for this PDF")
         return CandidateRecord(
             provider="crossref",
             lookup_identifier=Identifier("doi", identifier),
@@ -73,7 +83,15 @@ def instrument_external_provider(directory, *, pause):
         )
 
     imports.extract_pdf_import_identifier = observed_extract
-    imports.lookup_candidate = lookup
+
+    async def lookup_many(values, provider, settings):
+        outcomes = []
+        for value in values:
+            result = await lookup(value, provider, settings)
+            outcomes.append(LookupOutcome(value, result))
+        return tuple(outcomes)
+
+    imports.lookup_candidates = lookup_many
 
 
 async def stage(directory):
@@ -121,9 +139,16 @@ async def change_descriptor(state):
 async def confirm(directory, state, *, crash):
     async with AsyncSessionLocal() as db:
         actor = await db.get(User, UUID(state["actor_id"]))
+        preview = await get_import_batch_preview(
+            db, actor, UUID(state["workspace_id"]), UUID(state["batch_id"])
+        )
         ids = (
             await commit_import_batch(
-                db, actor, UUID(state["workspace_id"]), UUID(state["batch_id"])
+                db,
+                actor,
+                UUID(state["workspace_id"]),
+                UUID(state["batch_id"]),
+                expected_preview_version=preview.preview_version,
             )
         ).committed_item_ids
         if crash:
@@ -244,13 +269,49 @@ async def main(mode, directory):
         await stage(directory)
         return
     state = json.loads((directory / "state.json").read_text(encoding="utf-8"))
-    instrument_external_provider(directory, pause=mode == "worker")
-    if mode == "worker":
+    rate_limit = mode in {"worker-rate", "recover-rate", "preview-rate", "run-rate-exhausted"}
+    instrument_external_provider(
+        directory,
+        pause=mode == "worker",
+        rate_limit=rate_limit,
+        exhaust=mode == "run-rate-exhausted",
+    )
+    if mode == "worker-rate":
+        from dbos import DBOS
+
+        sleep = DBOS.sleep_async
+
+        async def observed_sleep(seconds):
+            (directory / "backoff-started").touch()
+            await sleep(seconds)
+
+        DBOS.sleep_async = staticmethod(observed_sleep)
         await launch_worker()
-    elif mode == "recover":
+    elif mode == "worker":
+        await launch_worker()
+    elif mode in {"recover", "recover-rate"}:
         recovered = await recover_workflows("persistence-recovery-worker", apply=True)
         assert state["workflow_id"] in recovered
         write_json(directory / "recovered.json", list(recovered))
+    elif mode == "run-rate-exhausted":
+        worker = asyncio.create_task(launch_worker())
+        try:
+            async with asyncio.timeout(60):
+                while True:
+                    if worker.done():
+                        worker.result()
+                    status = await durable_operations().get(state["workflow_id"])
+                    if status.is_terminal:
+                        assert status.state == "succeeded", status.error
+                        break
+                    await asyncio.sleep(0.05)
+            await inspect_rate_limit_contract(directory, state, exhausted=True)
+        finally:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+    elif mode == "preview-rate":
+        await inspect_rate_limit_contract(directory, state, exhausted=False)
     elif mode == "change-descriptor":
         await change_descriptor(state)
     elif mode == "preview":
@@ -261,6 +322,33 @@ async def main(mode, directory):
         await finish_import(directory, state)
     else:
         raise ValueError(mode)
+
+
+async def inspect_rate_limit_contract(directory, state, *, exhausted):
+    status = await durable_operations().get(state["workflow_id"])
+    assert status.state == "succeeded"
+    async with AsyncSessionLocal() as db:
+        actor = await db.get(User, UUID(state["actor_id"]))
+        preview = await get_import_batch_preview(
+            db, actor, UUID(state["workspace_id"]), UUID(state["batch_id"])
+        )
+        assert preview.status == "ready" and len(preview.records) == 2
+        assert not preview.records[0].is_basic
+        assert preview.records[1].is_basic is exhausted
+        assert [error.code for error in preview.errors] == (
+            ["provider_rate_limited"] if exhausted else []
+        )
+        batch = await db.get(ImportBatch, preview.id)
+        assert len(batch.staged_files) == 2
+        for file in batch.staged_files:
+            assert await get_object_store().exists(file.path)
+    extractions = (directory / "extractions.jsonl").read_text().splitlines()
+    calls = [
+        json.loads(line) for line in (directory / "provider-calls.jsonl").read_text().splitlines()
+    ]
+    assert len(extractions) == 2
+    assert calls.count("10.1000/recovery-kept") == 1
+    assert calls.count("10.1000/recovery-rejected") == (3 if exhausted else 2)
 
 
 if __name__ == "__main__":

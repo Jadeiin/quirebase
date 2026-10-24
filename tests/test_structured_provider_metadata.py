@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from inquiro import CandidateRecord, Identifier, ProviderConfig, ProviderRuntime
+from inquiro import CandidateRecord, Identifier, LookupOutcome, ProviderConfig, ProviderRuntime
 from inquiro.transport import MockExchange, TransportResponse
 from item_helpers import contributor
 from workspace_helpers import provision_initial_workspace
@@ -62,7 +62,8 @@ async def test_import_preserves_complete_work_in_preview_and_confirmation(
     }
     candidate = CandidateRecord("openalex", Identifier("openalex", "W123"), work)
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate", AsyncMock(return_value=candidate)
+        "quirebase.library.imports.lookup_candidates",
+        AsyncMock(return_value=(LookupOutcome("W123", candidate),)),
     )
     preview = await stage_identifiers_import_batch(db, actor, workspace_id, ["W123"], "openalex")
     assert preview.records[0].metadata.model_dump(mode="json") == work
@@ -77,13 +78,12 @@ async def test_pubmed_suffixes_are_retained_in_standard_person_names(persistence
     actor, workspace_id = await owner(db)
     xml = b"<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>42</PMID><Article><ArticleTitle>Distinct suffixes</ArticleTitle><AuthorList><Author><LastName>Smith</LastName><ForeName>John</ForeName><Suffix>Jr</Suffix></Author><Author><LastName>Smith</LastName><ForeName>John</ForeName><Suffix>Sr</Suffix></Author></AuthorList></Article></MedlineCitation></PubmedArticle></PubmedArticleSet>"
 
-    async def lookup(value, provider, _settings):
-        async with ProviderRuntime.with_exchange(
+    monkeypatch.setattr(
+        "quirebase.library.providers.provider_runtime",
+        lambda _settings: ProviderRuntime.with_exchange(
             ProviderConfig(), MockExchange(lambda _: TransportResponse(200, xml))
-        ) as runtime:
-            return await runtime.lookup(value, provider=provider)
-
-    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", lookup)
+        ),
+    )
     preview = await stage_identifiers_import_batch(db, actor, workspace_id, ["42"], "pubmed")
     people = [credit.person for credit in preview.records[0].metadata.contributors]
     assert [person.name for person in people] == ["John Smith Jr", "John Smith Sr"]

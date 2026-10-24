@@ -15,3 +15,7 @@ class IdentifiersImportRequest(BaseModel):
 
 class ImportCommitRequest(BaseModel):
     basic_source_ids: list[UUID] = Field(default_factory=list, max_length=50)
+    expected_preview_version: UUID | None = Field(
+        default=None,
+        description="Required for ready PDF batches; use the reviewed preview's preview_version.",
+    )

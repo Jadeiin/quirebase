@@ -13,6 +13,7 @@ const importPath = '/workspace/workspace-1/import';
 const importHistoryPath = `${importPath}/history`;
 const libraryPath = '/workspace/workspace-1/library';
 const batchId = '10000000-0000-4000-8000-000000000001';
+const pdfPreviewVersion = '10000000-0000-5000-8000-000000000001';
 const importedIds = [
 	'20000000-0000-4000-8000-000000000001',
 	'20000000-0000-4000-8000-000000000002'
@@ -26,6 +27,7 @@ function importBatch(overrides: Partial<ImportBatch> = {}): ImportBatch {
 		file_format: 'metadata',
 		status: 'ready',
 		workflow_id: null,
+		preview_version: overrides.file_format === 'pdf' ? pdfPreviewVersion : null,
 		created_at: '2026-10-21T00:00:00Z',
 		committed_item_ids: [],
 		records:
@@ -688,7 +690,14 @@ test('unidentified PDFs are opt-in and keep per-file choices across preview page
 			source: { id, original_name: 'same-name.pdf', size: 100 },
 			is_basic: true
 		})),
-		errors: [{ severity: 'warning', code: 'missing_identifier', message: 'No identifier found' }]
+		errors: sourceIds.map((sourceId, index) => ({
+			source_id: sourceId,
+			row: index + 1,
+			filename: 'same-name.pdf',
+			severity: 'warning' as const,
+			code: 'missing_identifier',
+			message: 'No identifier found'
+		}))
 	});
 	let submitted: unknown;
 	await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
@@ -735,8 +744,49 @@ test('unidentified PDFs are opt-in and keep per-file choices across preview page
 		fullPage: true
 	});
 	await page.getByRole('button', { name: 'Import 2 records', exact: true }).click();
-	await expect.poll(() => submitted).toEqual({ basic_source_ids: [sourceIds[0], sourceIds[20]] });
+	await expect
+		.poll(() => submitted)
+		.toEqual({
+			basic_source_ids: [sourceIds[0], sourceIds[20]],
+			expected_preview_version: pdfPreviewVersion
+		});
 	await expect(page).toHaveURL(`${libraryPath}?import_batch=${batchId}`);
+});
+
+test('same-name basic PDFs show independent metadata reasons and offer retry', async ({ page }) => {
+	await mockSession(page);
+	const sourceIds = [
+		'30000000-0000-4000-8000-000000000001',
+		'30000000-0000-4000-8000-000000000002'
+	];
+	const preview = importBatch({
+		file_format: 'pdf',
+		records: sourceIds.map((sourceId) => ({
+			metadata: { id: `urn:uuid:${sourceId}`, type: 'Document', title: 'same-name' },
+			source: { id: sourceId, original_name: 'same-name.pdf', size: 100 },
+			is_basic: true
+		})),
+		errors: sourceIds.map((sourceId, index) => ({
+			source_id: sourceId,
+			row: index + 1,
+			filename: 'same-name.pdf',
+			severity: 'warning' as const,
+			code: index === 0 ? 'missing_identifier' : 'provider_rate_limited',
+			message: index === 0 ? 'No identifier found' : 'Metadata provider rate limit was reached'
+		}))
+	});
+	await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
+		route.fulfill({ json: preview })
+	);
+	await page.goto(`${importPath}?batch=${batchId}`);
+	const rows = page.getByRole('region', { name: 'PDFs without metadata' }).getByRole('article');
+	await expect(rows).toHaveCount(2);
+	await expect(rows.nth(0)).toContainText('No DOI or arXiv ID found');
+	await expect(rows.nth(0)).not.toContainText('Metadata temporarily unavailable');
+	await expect(rows.nth(1)).toContainText('Metadata temporarily unavailable');
+	await expect(rows.nth(1)).not.toContainText('No DOI or arXiv ID found');
+	await expect(page.getByText('Metadata not identified', { exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Retry metadata', exact: true })).toBeEnabled();
 });
 
 test('mixed PDF review keeps selection and confirmation clear on desktop and mobile', async ({
@@ -789,6 +839,7 @@ test('mixed PDF review keeps selection and confirmation clear on desktop and mob
 					}))
 				],
 				errors: filenames.map((filename, index) => ({
+					source_id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
 					filename,
 					severity: 'warning' as const,
 					code: index === 0 ? 'missing_identifier' : 'metadata_not_found',

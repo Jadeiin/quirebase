@@ -312,7 +312,8 @@ def test_publisher_link_conflicts_are_not_resolved_by_info_metadata(tmp_path, ot
 
 
 @pytest.mark.parametrize(
-    "identifier", ["2304.08030v2", "0704.0001v1", "hep-th/9901001v2", "math.GT/0309136"]
+    "identifier",
+    ["2304.08030v2", "0704.0001v1", "hep-th/9901001v2", "HEP-TH/9901001V2", "math.GT/0309136"],
 )
 @pytest.mark.parametrize("rotation", [0, 90])
 def test_first_page_rotated_left_arxiv_watermarks_identify_preprints(
@@ -325,7 +326,7 @@ def test_first_page_rotated_left_arxiv_watermarks_identify_preprints(
         page.set_rotation(rotation)
         document.save(source)
 
-    assert extract_pdf_lookup_identifier(source) == Identifier("arxiv", identifier)
+    assert extract_pdf_lookup_identifier(source) == Identifier("arxiv", identifier.casefold())
 
 
 @pytest.mark.parametrize(

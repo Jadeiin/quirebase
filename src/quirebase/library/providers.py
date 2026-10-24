@@ -11,6 +11,7 @@ from inquiro import (
     DocumentRequest,
     InvalidPdfResponse,
     InvalidProviderRequest,
+    LookupOutcome,
     MetadataProviderChoices,
     PdfAccessDenied,
     PdfNotAvailable,
@@ -21,10 +22,14 @@ from inquiro import (
     metadata_provider_choices,
 )
 
-from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure
+from quirebase.core.errors import (
+    ResourceNotFound,
+    UpstreamServiceError,
+    ValidationFailure,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator
+    from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 
     from quirebase.core.config import Settings
 
@@ -97,6 +102,17 @@ async def lookup_candidate(
         raise ResourceNotFound(str(error)) from error
     except ProviderUnavailable as error:
         raise UpstreamServiceError(str(error)) from error
+
+
+async def lookup_candidates(
+    values: Sequence[str], provider: str, settings: Settings
+) -> tuple[LookupOutcome, ...]:
+    """Share Provider resources for one bounded batch; retain individual lookup failures."""
+    try:
+        async with provider_runtime(settings) as runtime:
+            return await runtime.lookup_many(values, provider=provider)
+    except InvalidProviderRequest as error:
+        raise ValidationFailure(str(error)) from error
 
 
 async def search_candidates(query: SearchQuery, settings: Settings) -> CandidatePage:

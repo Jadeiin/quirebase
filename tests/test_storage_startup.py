@@ -175,7 +175,11 @@ async def test_web_cold_start_can_confirm_pdf_import(async_db, async_session_fac
     workspace_id, batch_id = workspace.id, batch.id
 
     async with _cold_web_client(db, async_session_factory) as client:
-        response = await client.post(f"/api/v1/workspaces/{workspace_id}/imports/{batch_id}/commit")
+        preview = (await client.get(f"/api/v1/workspaces/{workspace_id}/imports/{batch_id}")).json()
+        response = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/imports/{batch_id}/commit",
+            json={"expected_preview_version": preview["preview_version"]},
+        )
         assert response.status_code == 200, response.text
         receipt = response.json()
         assert receipt["status"] == "committed"

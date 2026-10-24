@@ -6,6 +6,7 @@ from typing import IO, Literal, Self
 
 MAX_SEARCH_CLAUSES = 5
 MAX_SEARCH_PAGE_SIZE = 100
+MAX_LOOKUP_BATCH_SIZE = 50
 type SearchSort = Literal["relevance", "published", "cited", "updated"]
 
 
@@ -39,6 +40,14 @@ class CandidateNotFound(InquiroError):
 
 class ProviderUnavailable(InquiroError):
     """An upstream provider could not satisfy a valid request."""
+
+
+class ProviderRateLimited(ProviderUnavailable):
+    """An upstream rate limit, with its optional Retry-After delay."""
+
+    def __init__(self, message: str, retry_after_seconds: float | None = None):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
 
 
 class PdfNotAvailable(InquiroError):
@@ -116,6 +125,24 @@ class CandidateRecord:
     lookup_identifier: Identifier
     work: dict
     diagnostics: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class LookupFailure:
+    """A serializable failure for one input in a batch lookup."""
+
+    code: Literal["invalid_request", "not_found", "unavailable"]
+    message: str
+    rate_limited: bool = False
+    retry_after_seconds: float | None = None
+
+
+@dataclass(frozen=True)
+class LookupOutcome:
+    """One lookup input and its candidate or failure, in input order."""
+
+    value: str
+    result: CandidateRecord | LookupFailure
 
 
 @dataclass(frozen=True)

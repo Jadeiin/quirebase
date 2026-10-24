@@ -1336,11 +1336,11 @@ async def test_summary_author_credits_round_trip_exact_library_filters(persisten
 async def test_import_previews_do_not_read_stored_items(persistence_db, monkeypatch, source):
     from unittest.mock import AsyncMock
 
-    from inquiro import CandidateRecord, Identifier
+    from inquiro import CandidateRecord, Identifier, LookupOutcome
 
     from quirebase.core.config import get_settings
     from quirebase.library.imports import (
-        check_pdf_import_eligibility,
+        lookup_pdf_import_candidates,
         stage_identifiers_import_batch,
     )
 
@@ -1349,12 +1349,17 @@ async def test_import_previews_do_not_read_stored_items(persistence_db, monkeypa
     metadata = work(resource_id="https://doi.org/10.1234/shared")
     await create_item(db, actor, workspace_id, metadata)
     monkeypatch.setattr(
-        "quirebase.library.imports.lookup_candidate",
+        "quirebase.library.imports.lookup_candidates",
         AsyncMock(
-            return_value=CandidateRecord(
-                provider="crossref",
-                lookup_identifier=Identifier("doi", "10.1234/shared"),
-                work=metadata,
+            return_value=(
+                LookupOutcome(
+                    "10.1234/shared",
+                    CandidateRecord(
+                        provider="crossref",
+                        lookup_identifier=Identifier("doi", "10.1234/shared"),
+                        work=metadata,
+                    ),
+                ),
             )
         ),
     )
@@ -1396,9 +1401,19 @@ async def test_import_previews_do_not_read_stored_items(persistence_db, monkeypa
             )
             assert len(preview.records) == 1 and not preview.errors
         else:
-            assert await check_pdf_import_eligibility(
-                db, batch.id, {"_pdf": {"object_key": "candidate.pdf"}}
-            ) == {"eligible": True, "object_key": "candidate.pdf"}
+            (result,) = await lookup_pdf_import_candidates(
+                db,
+                batch.id,
+                [
+                    {
+                        "_source_id": str(uuid4()),
+                        "_row": 1,
+                        "_pdf": {"object_key": "candidate.pdf"},
+                        "_lookup": {"provider": "doi", "value": "10.1234/shared"},
+                    }
+                ],
+            )
+            assert result["record"]["work"]["title"] == metadata["title"]
         assert reads == []
     finally:
         event.remove(db.sync_session, "do_orm_execute", record_query)

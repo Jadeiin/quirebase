@@ -3,9 +3,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
+import math
 import tempfile
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any, Protocol
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -17,6 +20,7 @@ from inquiro.models import (
     PdfAccessDenied,
     PdfNotAvailable,
     ProviderConfig,
+    ProviderRateLimited,
     ProviderUnavailable,
 )
 
@@ -115,6 +119,10 @@ class RemoteNotFound(Exception):
     pass
 
 
+class MetadataResponseTooLarge(ProviderUnavailable):
+    """A metadata batch may be retried in smaller pieces without relaxing its limit."""
+
+
 class _HttpExchangeResponse:
     def __init__(self, manager: AsyncExitStack, response: httpx2.Response) -> None:
         self._manager = manager
@@ -150,7 +158,10 @@ class BoundedTransport:
             if response.status_code == 404:
                 raise RemoteNotFound
             if response.status_code == 429:
-                raise ProviderUnavailable("metadata provider rate limit was reached")
+                raise ProviderRateLimited(
+                    "metadata provider rate limit was reached",
+                    _retry_after_seconds(response.headers),
+                )
             if response.redirect or 300 <= response.status_code < 400:
                 raise ProviderUnavailable("metadata provider returned an unexpected redirect")
             if response.status_code >= 400:
@@ -159,7 +170,7 @@ class BoundedTransport:
             async for chunk in response.aiter_bytes():
                 body.extend(chunk)
                 if len(body) > self._config.max_response_bytes:
-                    raise ProviderUnavailable("metadata response exceeded the size limit")
+                    raise MetadataResponseTooLarge("metadata response exceeded the size limit")
             return bytes(body)
         finally:
             await response.aclose()
@@ -264,3 +275,26 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
         return value
     folded = name.casefold()
     return next((candidate for key, candidate in headers.items() if key.casefold() == folded), None)
+
+
+def _retry_after_seconds(headers: Mapping[str, str]) -> float | None:
+    """Interpret delta-seconds or an HTTP-date while the response is inside an I/O step."""
+    value = (_header(headers, "retry-after") or "").strip()
+    if not value:
+        return None
+    if value.isascii() and value.isdecimal():
+        seconds = float(value)
+        return seconds if math.isfinite(seconds) else None
+    try:
+        deadline = parsedate_to_datetime(value)
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=UTC)
+        try:
+            reference = parsedate_to_datetime(_header(headers, "date") or "")
+            if reference.tzinfo is None:
+                reference = reference.replace(tzinfo=UTC)
+        except (TypeError, ValueError, OverflowError):
+            reference = datetime.now(UTC)
+        return max(0.0, (deadline - reference).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        return None

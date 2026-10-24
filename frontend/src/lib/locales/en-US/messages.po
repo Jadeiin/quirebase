@@ -3762,6 +3762,11 @@ msgid "Metadata synchronized"
 msgstr "Metadata synchronized"
 
 #. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Metadata temporarily unavailable"
+msgstr "Metadata temporarily unavailable"
+
+#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Methodology"
 msgstr "Methodology"
@@ -5457,6 +5462,11 @@ msgstr "Result"
 #: src/routes/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata/+page.svelte
 msgid "Retry"
 msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchPreview.svelte
+msgid "Retry metadata"
+msgstr "Retry metadata"
 
 #. js-lingui-explicit-id
 #: src/lib/features/item/files/ItemFilesSection.svelte

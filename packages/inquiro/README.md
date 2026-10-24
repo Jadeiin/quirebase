@@ -30,7 +30,33 @@ asyncio.run(main())
 ```
 
 The runtime owns the fixed Provider catalog, identifier parsing, credentials and bounded HTTP
-transport. Candidate Records separate the metadata source (`provider`), query context
+transport. Reuse it for the lifetime of one operation so its HTTP client can reuse connections.
+For multiple independent identifiers, `lookup_many(values, provider="auto")` accepts 1–50 strings
+and returns an ordered tuple of `LookupOutcome(value, result)`. Each result is a `CandidateRecord`
+or a `LookupFailure` with `code` (`invalid_request`, `not_found`, `unavailable`) and `message`.
+Failures also carry `rate_limited` and optional `retry_after_seconds`, preserving upstream 429 hints
+for callers that own durable backoff. Inquiro does not retry these failures internally.
+Repeated input positions remain separate outcomes; invalid identifiers and upstream failures do
+not remove successful siblings. Invalid batch shapes raise `InvalidProviderRequest` before I/O.
+Cancellation propagates and joins in-flight requests before the runtime closes.
+
+Batch lookup merges arXiv `id_list` and PubMed EFetch `id` requests, matching returned identities
+to the input positions and preserving explicit arXiv versions. Parsed lookup keys normalize PMIDs
+to ASCII decimal without leading zeros and fold arXiv letter case; `LookupOutcome.value` retains
+the original input. Oversized metadata responses split
+by distinct parsed lookup keys under the original byte limit, keeping all positions for the same
+key together. A single key that still exceeds the limit fails for all its input positions without
+further requests. Other Providers use their existing singleton
+endpoints with at most three simultaneous requests per `lookup_many` call. In particular,
+OpenAlex retains its free single-entity endpoint; Crossref retains its lighter single-DOI endpoint.
+Batch input does not imply switching to a list/filter endpoint. Rate-limit and other upstream
+request failures become outcomes without automatic retries or request fan-out. A shared runtime
+does not coordinate quotas across processes. Single `lookup` retains its candidate/exception contract.
+For a metadata 429, `ProviderRateLimited` (a `ProviderUnavailable` subclass) carries
+`retry_after_seconds` parsed from Retry-After delta-seconds or an HTTP-date. No hint produces `None`.
+The host owns waiting and retry policy; OpenAlex does not try its alternate DOI URL after a 429.
+
+Candidate Records separate the metadata source (`provider`), query context
 (`lookup_identifier`), and the standard Commonmeta `work`. For lookup,
 `lookup_identifier` preserves the parsed input; for Search, it supplies the identifier to use in
 a subsequent lookup. A DOI lookup against OpenAlex keeps the DOI as its lookup input and returns

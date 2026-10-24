@@ -15,6 +15,7 @@ from inquiro.models import (
     InvalidProviderRequest,
     PdfNotAvailable,
     ProviderConfig,
+    ProviderRateLimited,
     ProviderUnavailable,
     SearchQuery,
 )
@@ -51,6 +52,8 @@ class OpenAlexLookupAdapter:
         lookup_target = f"doi:{value}" if DOI_PATTERN.fullmatch(value) else value
         try:
             body = await client.get(f"{endpoint}/works/{quote(lookup_target, safe=':')}", params)
+        except ProviderRateLimited:
+            raise
         except (RemoteNotFound, ProviderUnavailable):
             if lookup_target.startswith("doi:"):
                 body = await client.get(

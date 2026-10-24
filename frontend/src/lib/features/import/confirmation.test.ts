@@ -57,7 +57,7 @@ it('caches the authoritative confirmation receipt without another read', async (
 		errors: [{ message: 'Source warning', severity: 'warning' }]
 	};
 	client.setQueryData(importBatchQuery('workspace-1', ready.id).queryKey, source);
-	const result = await confirmImportBatch(client, 'workspace-1', ready.id);
+	const result = await confirmImportBatch(client, 'workspace-1', ready);
 	expect(result).toEqual({ status: 'committed', batch: receipt });
 	expect(requests.map((request) => request.method)).toEqual(['POST']);
 	expect(client.getQueryData(importBatchQuery('workspace-1', ready.id).queryKey)).toEqual(receipt);
@@ -66,7 +66,7 @@ it('caches the authoritative confirmation receipt without another read', async (
 it('keeps the committed receipt when an earlier creation response arrives afterward', async () => {
 	vi.stubGlobal('fetch', async () => new Response(JSON.stringify(committed)));
 	const client = queryClient();
-	await confirmImportBatch(client, 'workspace-1', ready.id);
+	await confirmImportBatch(client, 'workspace-1', ready);
 	// A source command learns its new batch ID only when its delayed response arrives.
 	const acceptCreated = await importBatchResponseWriter(client, 'workspace-1');
 	expect(acceptCreated(ready)).toBe(false);
@@ -81,9 +81,46 @@ it('sends the explicitly selected basic PDF sources with confirmation', async ()
 		body = await request.json();
 		return new Response(JSON.stringify(committed));
 	});
-	const result = await confirmImportBatch(queryClient(), 'workspace-1', ready.id, ['source-2']);
+	const result = await confirmImportBatch(queryClient(), 'workspace-1', ready, ['source-2']);
 	expect(body).toEqual({ basic_source_ids: ['source-2'] });
 	expect(result.status).toBe('committed');
+});
+
+it('confirms the displayed preview version and refreshes a superseded preview without resubmitting', async () => {
+	const shown: ImportBatch = {
+		...ready,
+		file_format: 'pdf',
+		preview_version: 'c065b8a2-f70d-55a0-aa7a-4678a36e91bc'
+	};
+	const refreshed: ImportBatch = {
+		...shown,
+		preview_version: '96f6bc9f-6631-5982-b6b6-dfca74d6b47e'
+	};
+	const methods: string[] = [];
+	let body: unknown;
+	vi.stubGlobal('fetch', async (request: Request) => {
+		methods.push(request.method);
+		if (request.method === 'POST') {
+			body = await request.json();
+			return new Response(
+				JSON.stringify({ code: 'import_batch_conflict', message: 'Preview changed' }),
+				{
+					status: 409
+				}
+			);
+		}
+		return new Response(JSON.stringify(refreshed));
+	});
+	const client = queryClient();
+	// An unrelated refresh must not substitute the version the User reviewed.
+	client.setQueryData(importBatchQuery('workspace-1', ready.id).queryKey, refreshed);
+	const result = await confirmImportBatch(client, 'workspace-1', shown);
+	expect(body).toEqual({ basic_source_ids: [], expected_preview_version: shown.preview_version });
+	expect(methods).toEqual(['POST', 'GET']);
+	expect(result).toMatchObject({ status: 'uncommitted', batch: refreshed });
+	expect(client.getQueryData(importBatchQuery('workspace-1', ready.id).queryKey)).toEqual(
+		refreshed
+	);
 });
 
 it.each([false, true])(
@@ -106,7 +143,7 @@ it.each([false, true])(
 		const client = queryClient();
 		const preview = importBatchQuery('workspace-1', ready.id);
 		client.setQueryData(preview.queryKey, ready);
-		const confirmation = confirmImportBatch(client, 'workspace-1', ready.id);
+		const confirmation = confirmImportBatch(client, 'workspace-1', ready);
 		await vi.waitFor(() => expect(methods).toEqual(['POST']));
 		await deleteImportBatch(client, 'workspace-1', ready.id);
 		response.resolve(new Response(JSON.stringify(committed)));
@@ -124,7 +161,7 @@ it('does not refill a retired cache lifetime when confirmation arrives late', as
 	const client = queryClient();
 	const preview = importBatchQuery('workspace-1', ready.id);
 	client.setQueryData(preview.queryKey, ready);
-	const confirmation = confirmImportBatch(client, 'workspace-1', ready.id);
+	const confirmation = confirmImportBatch(client, 'workspace-1', ready);
 	client.removeQueries({ queryKey: preview.queryKey, exact: true });
 	// A new route may recreate the key after Workspace or account cache eviction.
 	const refreshed: ImportBatch = { ...ready, status: 'failed' };
@@ -152,7 +189,7 @@ it('preserves a later deletion recovery read when confirmation arrives before it
 	const client = queryClient();
 	const preview = importBatchQuery('workspace-1', ready.id);
 	client.setQueryData(preview.queryKey, ready);
-	const confirmation = confirmImportBatch(client, 'workspace-1', ready.id);
+	const confirmation = confirmImportBatch(client, 'workspace-1', ready);
 	await vi.waitFor(() => expect(submitted).toBe(true));
 	const deletion = deleteImportBatch(client, 'workspace-1', ready.id).catch(
 		(reason: unknown) => reason
@@ -187,7 +224,7 @@ it('keeps the authoritative receipt when an overlapping read returns its older r
 	const client = queryClient();
 	const preview = importBatchQuery('workspace-1', ready.id);
 	client.setQueryData(preview.queryKey, ready);
-	const confirmation = confirmImportBatch(client, 'workspace-1', ready.id);
+	const confirmation = confirmImportBatch(client, 'workspace-1', ready);
 	await vi.waitFor(() => expect(methods).toEqual(['POST']));
 	const reread = readImportBatch(client, 'workspace-1', ready.id);
 	try {
@@ -212,7 +249,7 @@ it('recovers a committed batch after a lost response without resending the confi
 	});
 	const client = queryClient();
 	client.setQueryData(importBatchQuery('workspace-1', ready.id).queryKey, ready);
-	expect(await confirmImportBatch(client, 'workspace-1', ready.id)).toEqual({
+	expect(await confirmImportBatch(client, 'workspace-1', ready)).toEqual({
 		status: 'committed',
 		batch: committed
 	});
@@ -241,7 +278,7 @@ it.each(['commit', 'delete'] as const)(
 		const unsubscribe = observer.subscribe(() => {});
 		const operation =
 			command === 'commit'
-				? confirmImportBatch(client, 'workspace-1', ready.id)
+				? confirmImportBatch(client, 'workspace-1', ready)
 				: deleteImportBatch(client, 'workspace-1', ready.id);
 		const settled = operation.catch((reason: unknown) => reason);
 		const result = () =>
@@ -279,7 +316,7 @@ it('keeps an uncommitted authoritative preview available for an explicit retry',
 		if (request.method === 'POST') throw failure;
 		return new Response(JSON.stringify(ready));
 	});
-	expect(await confirmImportBatch(queryClient(), 'workspace-1', ready.id)).toEqual({
+	expect(await confirmImportBatch(queryClient(), 'workspace-1', ready)).toEqual({
 		status: 'uncommitted',
 		batch: ready,
 		error: failure
@@ -295,7 +332,7 @@ it('keeps an unknown outcome distinct and checks it later using only a fresh rea
 		return new Response(JSON.stringify(committed));
 	});
 	const client = queryClient();
-	const result = await confirmImportBatch(client, 'workspace-1', ready.id);
+	const result = await confirmImportBatch(client, 'workspace-1', ready);
 	expect(result.status).toBe('unknown');
 	online = true;
 	expect(await readImportBatch(client, 'workspace-1', ready.id)).toEqual(committed);

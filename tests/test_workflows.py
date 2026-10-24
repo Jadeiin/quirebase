@@ -1518,13 +1518,8 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
             "object_key": stored.key,
         }
 
-    async def eligible(*_args):
-        await asyncio.sleep(0)
-        return {"eligible": True, "object_key": stored.key}
-
     monkeypatch.setattr(library_workflows, "extract_pdf_import_identifier_step", extracted)
-    monkeypatch.setattr(library_workflows, "check_pdf_import_eligibility_step", eligible)
-    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", exhausted)
+    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidates_step", exhausted)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
 
     with pytest.raises(RuntimeError, match="provider retries exhausted"):
@@ -1549,7 +1544,7 @@ async def test_pdf_import_workflow_marks_batch_failed_and_preserves_pdf(async_db
         {"provider": "arxiv", "value": "2304.08030v2"},
     ],
 )
-async def test_pdf_import_workflow_checkpoints_extract_eligibility_and_provider_lookup(
+async def test_pdf_import_workflow_checkpoints_extraction_and_provider_lookup(
     monkeypatch, identifier
 ):
     calls = []
@@ -1571,27 +1566,24 @@ async def test_pdf_import_workflow_checkpoints_extract_eligibility_and_provider_
             "object_key": candidate["_pdf"]["object_key"],
         }
 
-    async def check(batch_id, candidate):
+    async def lookup(batch_id, candidates):
         await asyncio.sleep(0)
-        calls.append(("check", batch_id, candidate["_row"]))
-        return {"eligible": True, "object_key": candidate["_pdf"]["object_key"]}
-
-    async def lookup(batch_id, candidate, detected_identifier):
-        await asyncio.sleep(0)
+        (candidate,) = candidates
+        detected_identifier = candidate["_lookup"]
         calls.append(("lookup", batch_id, candidate["_row"], detected_identifier))
-        return {
-            "record": {"title": "Checkpointed", "_source_id": candidate["_source_id"]},
-            "normalized_identifier": ":".join(detected_identifier.values()),
-            "object_key": candidate["_pdf"]["object_key"],
-        }
+        return [
+            {
+                "record": {"title": "Checkpointed", "_source_id": candidate["_source_id"]},
+                "object_key": candidate["_pdf"]["object_key"],
+            }
+        ]
 
     async def finalize(*_args):
         await asyncio.sleep(0)
         return True
 
     monkeypatch.setattr(library_workflows, "extract_pdf_import_identifier_step", extract)
-    monkeypatch.setattr(library_workflows, "check_pdf_import_eligibility_step", check)
-    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidate_step", lookup)
+    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidates_step", lookup)
     monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
     workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
 
@@ -1600,7 +1592,6 @@ async def test_pdf_import_workflow_checkpoints_extract_eligibility_and_provider_
     assert result == {"candidates": 1, "diagnostics": 0, "discarded": False}
     assert calls == [
         ("extract", 1),
-        ("check", "batch-id", 1),
         ("lookup", "batch-id", 1, identifier),
     ]
 

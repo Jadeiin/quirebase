@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import TYPE_CHECKING, Literal
 from xml.etree import ElementTree
@@ -14,6 +15,7 @@ from inquiro.models import (
     CandidatePage,
     CandidateRecord,
     Identifier,
+    LookupFailure,
     ProviderConfig,
     ProviderUnavailable,
     SearchQuery,
@@ -135,24 +137,72 @@ def _record(entry: ElementTree.Element, identifier: Identifier) -> CandidateReco
 
 
 class ArxivLookupAdapter:
-    async def lookup(
+    async def lookup_many(
         self,
         client: BoundedTransport,
-        identifier: Identifier,
+        identifiers: tuple[Identifier, ...],
         settings: ProviderConfig,
         *,
         endpoint: str,
-    ) -> CandidateRecord:
-        value = identifier.value
-        body = await client.get(endpoint, {"id_list": value, "max_results": "1"})
+    ) -> tuple[CandidateRecord | LookupFailure, ...]:
+        values = tuple(dict.fromkeys(identifier.value for identifier in identifiers))
+        body = await client.get(
+            endpoint, {"id_list": ",".join(values), "max_results": str(len(values))}
+        )
         try:
             root = ElementTree.fromstring(body)
         except ElementTree.ParseError as error:
             raise ProviderUnavailable("arXiv returned invalid XML") from error
-        entry = root.find("atom:entry", _NAMESPACE)
-        if entry is None or entry.find("atom:title", _NAMESPACE) is None:
-            raise CandidateNotFound("arXiv entry was not found")
-        return _record(entry, identifier)
+        if root.tag != f"{{{_NAMESPACE['atom']}}}feed":
+            raise ProviderUnavailable("arXiv returned an invalid feed")
+        entries = root.findall("atom:entry", _NAMESPACE)
+        total = root.findtext("opensearch:totalResults", namespaces=_NAMESPACE)
+        if total is not None and int(total) > len(entries):
+            raise ProviderUnavailable("arXiv returned an incomplete feed")
+        versions: dict[str, list[ElementTree.Element]] = {}
+        latest: dict[str, tuple[int, str]] = {}
+        unassociated = False
+        for entry in entries:
+            entry_id = entry.findtext("atom:id", default="", namespaces=_NAMESPACE)
+            confirmed = parse_arxiv(entry_id, "arxiv")
+            if confirmed is None:
+                unassociated = True
+                continue
+            key = confirmed.value.casefold()
+            versions.setdefault(key, []).append(entry)
+            base = re.sub(r"v\d+$", "", key)
+            version = int(key[len(base) + 1 :]) if base != key else 0
+            if base not in latest or version > latest[base][0]:
+                latest[base] = (version, key)
+        results: list[CandidateRecord | LookupFailure] = []
+        for identifier in identifiers:
+            key = identifier.value.casefold()
+            if not re.search(r"v\d+$", key) and key in latest:
+                key = latest[key][1]
+            matches = versions.get(key, [])
+            if len(matches) != 1:
+                if matches or unassociated:
+                    results.append(
+                        LookupFailure(
+                            "unavailable", "arXiv returned ambiguous or incomplete metadata"
+                        )
+                    )
+                else:
+                    results.append(LookupFailure("not_found", "arXiv entry was not found"))
+                continue
+            entry = matches[0]
+            if entry.find("atom:title", _NAMESPACE) is None:
+                results.append(
+                    LookupFailure("unavailable", "arXiv returned an entry without a title")
+                )
+                continue
+            try:
+                results.append(_record(entry, identifier))
+            except CandidateNotFound as error:
+                results.append(LookupFailure("not_found", str(error)))
+            except (TypeError, ValueError, ProviderUnavailable):
+                results.append(LookupFailure("unavailable", "arXiv returned invalid metadata"))
+        return tuple(results)
 
 
 class ArxivSearchAdapter:
@@ -222,7 +272,7 @@ ARXIV_PROVIDER = ProviderDefinition(
     identifier_parser=parse_arxiv,
     auto_detect_identifier=True,
     search_adapter=ArxivSearchAdapter(),
-    lookup_adapter=ArxivLookupAdapter(),
+    batch_lookup_adapter=ArxivLookupAdapter(),
     document_adapter=ArxivDocumentAdapter(),
     endpoint="https://export.arxiv.org/api/query",
     document_endpoint="https://arxiv.org/pdf",

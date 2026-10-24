@@ -6,7 +6,7 @@ from uuid import uuid4
 import pymupdf
 import pytest
 from commonmeta.base_utils import compact
-from inquiro import CandidatePage, CandidateRecord, Identifier
+from inquiro import CandidatePage, CandidateRecord, Identifier, LookupOutcome
 from sqlalchemy import func, select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
@@ -98,13 +98,13 @@ async def test_identifier_import_rechecks_create_after_provider_io(
 ):
     member, membership_id, workspace_id = await _member(async_db)
 
-    async def lookup(_identifier, _provider, _settings):
+    async def lookup(identifiers, _provider, _settings):
         async with async_session_factory() as governor_db:
             membership = await governor_db.get(WorkspaceMember, membership_id)
             assert membership is not None
             membership.role = WorkspaceRole.viewer
             await governor_db.commit()
-        return CandidateRecord(
+        candidate = CandidateRecord(
             provider="crossref",
             lookup_identifier=Identifier("doi", "10.1000/revoked"),
             work=compact({
@@ -114,7 +114,9 @@ async def test_identifier_import_rechecks_create_after_provider_io(
             }),
         )
 
-    monkeypatch.setattr("quirebase.library.imports.lookup_candidate", lookup)
+        return (LookupOutcome(identifiers[0], candidate),)
+
+    monkeypatch.setattr("quirebase.library.imports.lookup_candidates", lookup)
     with pytest.raises(PermissionDenied):
         await stage_identifiers_import_batch(async_db, member, workspace_id, ["10.1000/revoked"])
     assert await async_db.scalar(select(func.count()).select_from(ImportBatch)) == 0

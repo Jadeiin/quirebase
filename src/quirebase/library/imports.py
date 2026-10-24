@@ -7,9 +7,10 @@ from datetime import datetime  # ruff: ignore[typing-only-standard-library-impor
 from html import escape
 from pathlib import PurePath
 from typing import TYPE_CHECKING, Literal
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 from advanced_alchemy.types import FileObject
+from inquiro import LookupFailure
 from inquiro.bibliography import (
     SUPPORTED_FORMATS,
     detect_bibliography_format,
@@ -24,10 +25,8 @@ from quirebase.audit import record_event
 from quirebase.core.config import Settings, get_settings
 from quirebase.core.errors import (
     DomainError,
-    ResourceNotFound,
     ResourceUnavailable,
     SizeLimitExceeded,
-    UpstreamServiceError,
     ValidationFailure,
 )
 from quirebase.core.storage import ObjectSource, get_object_store
@@ -38,7 +37,7 @@ from quirebase.documents.revisions import (
     attach_staged_pdf,
     stage_pdf,
 )
-from quirebase.library.providers import lookup_candidate
+from quirebase.library.providers import lookup_candidates
 from quirebase.library.workflows import request_item_tag_recommendation
 from quirebase.models import ImportBatch, ImportBatchStatus, User
 from quirebase.search import search_index
@@ -49,7 +48,6 @@ from .identifiers import _create_items_from_candidates, extract_pdf_lookup_ident
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from inquiro import CandidateRecord
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -86,6 +84,7 @@ class ImportDiagnostic:
     filename: str | None = None
     code: str | None = None
     identifier: str | None = None
+    source_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +97,7 @@ class ImportBatchPreview:
     errors: tuple[ImportDiagnostic, ...]
     created_at: datetime
     committed_item_ids: tuple[UUID, ...]
+    preview_version: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -172,6 +172,11 @@ def _committed_item_ids(batch: ImportBatch) -> list[UUID]:
         raise BatchConflict("the committed batch has invalid results") from error
 
 
+def _import_batch_preview_version(batch: ImportBatch) -> UUID | None:
+    # Share an opaque PDF preparation generation without exposing actor-only job identities.
+    return uuid5(batch.id, batch.workflow_id or "") if batch.file_format == "pdf" else None
+
+
 def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPreview:
     """Keep staging joins and actor-only workflow identities inside Library."""
     sources = {file.metadata["source_id"]: file for file in batch.staged_files}
@@ -199,14 +204,22 @@ def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPrev
         status=ImportBatchStatus(batch.status),
         workflow_id=batch.workflow_id if batch.actor_id == actor_id else None,
         records=tuple(previews),
-        errors=tuple(ImportDiagnostic(**error) for error in batch.errors),
+        errors=tuple(
+            ImportDiagnostic(**{
+                **error,
+                "source_id": UUID(error["source_id"]) if error.get("source_id") else None,
+            })
+            for error in batch.errors
+        ),
         created_at=batch.created_at,
         committed_item_ids=tuple(_committed_item_ids(batch)),
+        preview_version=_import_batch_preview_version(batch),
     )
 
 
 MAX_PDF_IMPORT_FILES = 50
 MAX_IDENTIFIER_IMPORT_ENTRIES = 50
+_RETRYABLE_PDF_DIAGNOSTICS = frozenset({"provider_rate_limited", "provider_unavailable"})
 _WORKFLOW_NOT_LOOKED_UP = object()
 
 
@@ -305,36 +318,24 @@ async def stage_identifiers_import_batch(
     user_id = user.id
     effective_settings = settings or await get_effective_settings_model(db)
     await db.rollback()
-    semaphore = asyncio.Semaphore(3)
-
-    async def lookup(
-        value: str,
-    ) -> CandidateRecord | ValidationFailure | ResourceNotFound | UpstreamServiceError:
-        async with semaphore:
-            try:
-                return await lookup_candidate(value.strip(), provider, effective_settings)
-            except (ValidationFailure, ResourceNotFound, UpstreamServiceError) as error:
-                return error
-
-    # TaskGroup cancels and joins outstanding requests on cancellation or an unexpected
-    # failure. No database session is shared with the concurrent Provider requests.
-    async with asyncio.TaskGroup() as group:
-        tasks = [group.create_task(lookup(value)) for value in identifiers]
+    results = await lookup_candidates(
+        tuple(value.strip() for value in identifiers), provider, effective_settings
+    )
     reloaded_user = await db.get(User, user_id)
     if reloaded_user is None or not reloaded_user.active:
         raise ResourceUnavailable("user not available")
     await require_workspace_action(db, reloaded_user, workspace_id, ResourceAction.item_create)
     records, errors, providers = [], [], []
-    for row, (value, task) in enumerate(zip(identifiers, tasks, strict=True), 1):
-        result = task.result()
+    for row, (value, outcome) in enumerate(zip(identifiers, results, strict=True), 1):
+        result = outcome.result
         context = {"row": row, "identifier": value.strip()}
-        if isinstance(result, (ValidationFailure, ResourceNotFound, UpstreamServiceError)):
+        if isinstance(result, LookupFailure):
             code = {
-                ValidationFailure: "invalid_identifier",
-                ResourceNotFound: "metadata_not_found",
-                UpstreamServiceError: "provider_unavailable",
-            }[type(result)]
-            errors.append({**context, "code": code, "message": str(result)})
+                "invalid_request": "invalid_identifier",
+                "not_found": "metadata_not_found",
+                "unavailable": "provider_unavailable",
+            }[result.code]
+            errors.append({**context, "code": code, "message": result.message})
             continue
         try:
             records.append(metadata_write(result.work))
@@ -496,22 +497,23 @@ async def stage_pdf_import_batch(
         raise
 
 
-def _pdf_import_candidate_error(pending: dict, code: str, error: DomainError) -> dict:
+def _pdf_import_candidate_error(pending: dict, code: str, message: str) -> dict:
     pdf = pending["_pdf"]
     return {
         "error": {
+            "source_id": pending["_source_id"],
             "row": int(pending["_row"]),
             "filename": pdf["original_name"],
             "code": code,
-            "message": str(error),
+            "message": message,
         },
         "object_key": pdf["object_key"],
     }
 
 
-def _basic_pdf_import_candidate(pending: dict, code: str, error: DomainError) -> dict:
+def _basic_pdf_import_candidate(pending: dict, code: str, message: str) -> dict:
     """Retain an unidentified PDF as an optional candidate until explicit confirmation."""
-    result = _pdf_import_candidate_error(pending, code, error)
+    result = _pdf_import_candidate_error(pending, code, message)
     title = PurePath(pending["_pdf"]["original_name"]).stem.strip()[:1000] or "Untitled PDF"
     result["record"] = {
         **metadata_write({
@@ -522,6 +524,8 @@ def _basic_pdf_import_candidate(pending: dict, code: str, error: DomainError) ->
         "_source_id": pending["_source_id"],
         "_basic": True,
     }
+    if "_lookup" in pending:
+        result["record"]["_lookup"] = pending["_lookup"]
     result["error"]["severity"] = "warning"
     return result
 
@@ -533,12 +537,12 @@ async def extract_pdf_import_identifier(pending: dict) -> dict:
         async with get_object_store().materialize(pdf["object_key"]) as path:
             identifier = await asyncio.to_thread(extract_pdf_lookup_identifier, path)
     except DomainError as error:
-        return _pdf_import_candidate_error(pending, "invalid_pdf", error)
+        return _pdf_import_candidate_error(pending, "invalid_pdf", str(error))
     if identifier is None:
         return _basic_pdf_import_candidate(
             pending,
             "missing_identifier",
-            ValidationFailure("no DOI or arXiv ID was found in this PDF"),
+            "no DOI or arXiv ID was found in this PDF",
         )
     return {
         "detected_identifier": {"provider": identifier.provider, "value": identifier.value},
@@ -546,64 +550,67 @@ async def extract_pdf_import_identifier(pending: dict) -> dict:
     }
 
 
-async def check_pdf_import_eligibility(
+async def lookup_pdf_import_candidates(
     db: AsyncSession,
     batch_id: UUID,
-    pending: dict,
-) -> dict:
-    """Recheck the batch actor and Workspace before Provider I/O."""
-    pdf = pending["_pdf"]
-    batch = await db.get(ImportBatch, batch_id)
-    if batch is None or batch.status != "pending":
-        return {"discarded": True, "object_key": pdf["object_key"]}
-    user = await db.get(User, batch.actor_id)
-    if user is None or not user.active:
-        return {"discarded": True, "object_key": pdf["object_key"]}
-    await require_workspace_action(db, user, batch.workspace_id, ResourceAction.item_create)
-    return {"eligible": True, "object_key": pdf["object_key"]}
-
-
-async def lookup_pdf_import_candidate(
-    db: AsyncSession,
-    batch_id: UUID,
-    pending: dict,
-    detected_identifier: dict[str, str],
-) -> dict:
-    """Retrieve metadata for one extracted identifier without repeating PDF parsing."""
+    pending_records: list[dict],
+) -> list[dict]:
+    """Retrieve one Provider group, retaining a checkpointable outcome for each source."""
     from quirebase.operations.settings import get_effective_settings_model
 
-    pdf = pending["_pdf"]
     batch = await db.get(ImportBatch, batch_id)
     if batch is None or batch.status != "pending":
-        return {"discarded": True, "object_key": pdf["object_key"]}
+        return [
+            {"discarded": True, "object_key": pending["_pdf"]["object_key"]}
+            for pending in pending_records
+        ]
     user = await db.get(User, batch.actor_id)
     if user is None or not user.active:
-        return {"discarded": True, "object_key": pdf["object_key"]}
+        return [
+            {"discarded": True, "object_key": pending["_pdf"]["object_key"]}
+            for pending in pending_records
+        ]
+    await require_workspace_action(db, user, batch.workspace_id, ResourceAction.item_create)
     effective_settings = await get_effective_settings_model(db)
     await db.rollback()
-    try:
-        provider, value = detected_identifier["provider"], detected_identifier["value"]
-        normalized = normalize_identifier(provider, value)
-        if normalized is None:
-            raise ValidationFailure("the extracted identifier is invalid")
-        record = await lookup_candidate(value, provider, effective_settings)
-        candidate = metadata_write(record.work)
-        candidate["_source_id"] = pending["_source_id"]
-        return {
-            "record": candidate,
-            "normalized_identifier": ":".join(normalized),
-            "object_key": pdf["object_key"],
-        }
-    except UpstreamServiceError:
-        # Keep transient provider failures exceptional so the enclosing DBOS
-        # step can retry them instead of publishing a permanent diagnostic.
-        raise
-    except ValidationFailure as error:
-        return _pdf_import_candidate_error(pending, "invalid_identifier", error)
-    except ResourceNotFound as error:
-        return _basic_pdf_import_candidate(pending, "metadata_not_found", error)
-    except DomainError as error:
-        return _pdf_import_candidate_error(pending, "invalid_pdf", error)
+    provider = pending_records[0]["_lookup"]["provider"]
+    outcomes = await lookup_candidates(
+        [pending["_lookup"]["value"] for pending in pending_records], provider, effective_settings
+    )
+    results = []
+    for pending, outcome in zip(pending_records, outcomes, strict=True):
+        detected_identifier = pending["_lookup"]
+        result = outcome.result
+        if isinstance(result, LookupFailure):
+            if result.code == "unavailable":
+                deferred = _basic_pdf_import_candidate(
+                    pending,
+                    "provider_rate_limited" if result.rate_limited else "provider_unavailable",
+                    result.message,
+                )
+                deferred["error"]["identifier"] = detected_identifier["value"]
+                deferred["retry"] = {"retry_after_seconds": result.retry_after_seconds}
+                results.append(deferred)
+            elif result.code == "not_found":
+                results.append(
+                    _basic_pdf_import_candidate(pending, "metadata_not_found", result.message)
+                )
+            else:
+                results.append(
+                    _pdf_import_candidate_error(pending, "invalid_identifier", result.message)
+                )
+            continue
+        try:
+            candidate = metadata_write(result.work)
+            candidate["_source_id"] = pending["_source_id"]
+            candidate["_lookup"] = detected_identifier
+            results.append({
+                "record": candidate,
+                "object_key": pending["_pdf"]["object_key"],
+            })
+        except DomainError as error:
+            results.append(_pdf_import_candidate_error(pending, "invalid_pdf", str(error)))
+    return results
 
 
 async def finalize_pdf_import_batch(
@@ -642,13 +649,50 @@ async def finalize_pdf_import_batch(
         ]
         batch.status = ImportBatchStatus.failed
         return False
-    initial_errors = batch.errors
+    diagnostics = [
+        error
+        for error in [*batch.errors, *errors]
+        if error.get("code") != "duplicate_batch_identifier"
+    ]
+    # A partial retry retains successful siblings in the batch while preparing only
+    # the deferred source files. Merge under the same generation/root guard.
+    records_by_source = {
+        record["_source_id"]: record
+        for record in batch.records
+        if "work" in record and "_source_id" in record
+    }
+    records_by_source.update((record["_source_id"], record) for record in records)
+    sources = {file.metadata["source_id"]: file for file in batch.staged_files}
+    records = sorted(
+        records_by_source.values(), key=lambda record: sources[record["_source_id"]].metadata["row"]
+    )
+    # Duplicate warnings belong to the complete batch, including retained siblings
+    # and basic candidates with a detected identifier. Lookup context is not Work identity.
+    seen_identifiers: set[tuple[str, str]] = set()
+    for record in records:
+        lookup = record.get("_lookup")
+        if lookup is None:
+            continue
+        normalized = normalize_identifier(lookup["provider"], lookup["value"])
+        if normalized is None:
+            continue
+        if normalized in seen_identifiers:
+            source = sources[record["_source_id"]]
+            diagnostics.append({
+                "source_id": record["_source_id"],
+                "row": source.metadata["row"],
+                "filename": source.metadata["original_name"],
+                "severity": "warning",
+                "code": "duplicate_batch_identifier",
+                "message": "another PDF in this batch has the same identifier",
+            })
+        seen_identifiers.add(normalized)
     retained_sources = {record["_source_id"] for record in records}
     batch.staged_files = [
         file for file in batch.staged_files if file.metadata["source_id"] in retained_sources
     ]
     batch.records = records
-    batch.errors = [*initial_errors, *errors]
+    batch.errors = diagnostics
     batch.status = ImportBatchStatus.ready
     record_event(
         db,
@@ -656,7 +700,7 @@ async def finalize_pdf_import_batch(
         "pdf.import.preview",
         "import_batch",
         batch.id,
-        detail={"candidates": len(records), "diagnostics": len(initial_errors) + len(errors)},
+        detail={"candidates": len(records), "diagnostics": len(diagnostics)},
         workspace_id=workspace_id,
         authorization_resource_action=ResourceAction.item_create.value,
     )
@@ -722,7 +766,7 @@ async def _converge_pdf_import_batch_status(
 async def retry_pdf_import_batch(
     db: AsyncSession, user: User, workspace_id: UUID, batch_id: UUID
 ) -> ImportBatchPreview:
-    """Retry a failed PDF Import Batch without relinquishing its staged objects."""
+    """Retry failed preparation or deferred metadata without re-fetching successful siblings."""
     await require_workspace_action(db, user, workspace_id, ResourceAction.item_create)
     observed = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id))
     if observed is None or observed.workspace_id != workspace_id:
@@ -746,11 +790,32 @@ async def retry_pdf_import_batch(
         raise ImportBatchUnavailable("import batch not found")
     if batch.workflow_id == observed_workflow_id:
         await _converge_pdf_import_batch_status(db, batch, workflow)
-    if batch.file_format != "pdf" or batch.status != "failed":
-        raise BatchConflict("only a failed PDF import batch can be retried")
-    pending_records = _pdf_import_inputs(batch.staged_files)
-    if not pending_records:
+    if batch.file_format != "pdf":
+        raise BatchConflict("only PDF import batches can be retried")
+    retry_sources = {
+        error["source_id"]
+        for error in batch.errors
+        if error.get("code") in _RETRYABLE_PDF_DIAGNOSTICS
+    }
+    if not (batch.status == "failed" or (batch.status == "ready" and retry_sources)):
+        raise BatchConflict("only failed PDF preparation or deferred metadata can be retried")
+    if not batch.staged_files:
         raise BatchConflict("the failed import batch has no staged PDFs to retry")
+    lookups = {
+        record["_source_id"]: record["_lookup"] for record in batch.records if "_lookup" in record
+    }
+    batch.records = [
+        record
+        for record in batch.records
+        if "work" in record and record.get("_source_id") not in retry_sources
+    ]
+    retained_sources = {record["_source_id"] for record in batch.records}
+    pending_records = _pdf_import_inputs([
+        file for file in batch.staged_files if file.metadata["source_id"] not in retained_sources
+    ])
+    for pending in pending_records:
+        if pending["_source_id"] in lookups:
+            pending["_lookup"] = lookups[pending["_source_id"]]
 
     workflow_id = f"prepare-pdf-import:{batch.id}:{uuid4()}"
     # A retry is a new authorization boundary.  Keep the Import Batch root,
@@ -759,7 +824,15 @@ async def retry_pdf_import_batch(
     batch.actor_id = user.id
     batch.status = ImportBatchStatus.pending
     batch.workflow_id = workflow_id
-    batch.errors = [error for error in batch.errors if error.get("code") != "authorization_revoked"]
+    batch.errors = [
+        error
+        for error in batch.errors
+        if error.get("code") != "authorization_revoked"
+        and not (
+            error.get("code") in _RETRYABLE_PDF_DIAGNOSTICS
+            and error.get("source_id") in retry_sources
+        )
+    ]
     await durable_operations().enqueue_in_transaction(
         db,
         "library.prepare_pdf_import",
@@ -801,6 +874,7 @@ async def commit_import_batch(
     batch_id: UUID,
     *,
     basic_source_ids: Sequence[UUID] = (),
+    expected_preview_version: UUID | None = None,
 ) -> ImportBatchPreview:
     # Lock the confirmer before Workspace authorization. Account deactivation
     # uses the same User-before-Workspace order, so it cannot deadlock a
@@ -814,7 +888,12 @@ async def commit_import_batch(
     # Confirmation mutates the Import Batch root and creates child Items.  A
     # full UPDATE lock serializes concurrent confirmations before either caller
     # can observe ``ready`` and create duplicate Items.
-    batch = await db.scalar(select(ImportBatch).where(ImportBatch.id == batch_id).with_for_update())
+    batch = await db.scalar(
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
     if batch is None or batch.workspace_id != workspace_id:
         raise ImportBatchUnavailable("import batch not found")
     if batch.status == "committed":
@@ -823,6 +902,10 @@ async def commit_import_batch(
         return receipt
     if batch.status != "ready":
         raise BatchConflict("the import batch is still being prepared")
+    if batch.file_format == "pdf" and expected_preview_version != _import_batch_preview_version(
+        batch
+    ):
+        raise BatchConflict("the import preview changed; refresh it before confirming")
     selected_basic_ids = {str(source_id) for source_id in basic_source_ids}
     available_basic_ids = {record["_source_id"] for record in batch.records if record.get("_basic")}
     if not selected_basic_ids <= available_basic_ids:

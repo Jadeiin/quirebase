@@ -534,6 +534,7 @@ def test_provider_runtime_and_contracts_expose_async_operations():
     required_async_methods = {
         "ProviderRuntime": {
             "lookup",
+            "lookup_many",
             "search",
             "acquire_document",
             "aclose",
@@ -541,6 +542,7 @@ def test_provider_runtime_and_contracts_expose_async_operations():
             "__aexit__",
         },
         "LookupImplementation": {"lookup"},
+        "BatchLookupImplementation": {"lookup_many"},
         "SearchImplementation": {"search"},
         "DocumentImplementation": {"acquire"},
         "BoundedTransport": {"get", "download_pdf"},
@@ -745,10 +747,13 @@ def test_inquiro_facade_exposes_provider_operations_and_bibliographic_value_type
         "InquiroError",
         "InvalidPdfResponse",
         "InvalidProviderRequest",
+        "LookupFailure",
+        "LookupOutcome",
         "MetadataProviderChoices",
         "PdfAccessDenied",
         "PdfNotAvailable",
         "ProviderConfig",
+        "ProviderRateLimited",
         "ProviderChoice",
         "ProviderRuntime",
         "ProviderUnavailable",
@@ -774,7 +779,7 @@ def test_inquiro_architecture_documents_the_public_runtime_operations():
         REPO_ROOT / "docs" / "adr" / "0005-deep-standalone-provider-runtime.md",
     ):
         contents = document.read_text(encoding="utf-8")
-        for operation in ("`lookup`", "`search`", "`acquire_document`"):
+        for operation in ("`lookup`", "`lookup_many`", "`search`", "`acquire_document`"):
             assert operation in contents, f"{document} omits {operation}"
 
 

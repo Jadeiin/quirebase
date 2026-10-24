@@ -74,7 +74,7 @@ def kill_at_marker(mode, marker, directory, environment):
                 assert process.poll() is None, log.read_text(encoding="utf-8")
                 assert time.monotonic() < deadline, log.read_text(encoding="utf-8")
                 time.sleep(0.05)
-            if mode == "worker":
+            if mode in {"worker", "worker-rate"}:
                 state = json.loads((directory / "state.json").read_text(encoding="utf-8"))
                 url = make_url(async_database_url(environment["QUIREBASE_DATABASE_URL"]))
                 url = url.set(
@@ -86,14 +86,29 @@ def kill_at_marker(mode, marker, directory, environment):
                 prefix = "" if url.get_backend_name() == "sqlite" else "dbos."
                 try:
                     with database.connect() as connection:
-                        # Two completed database checks precede the paused second Provider call.
-                        checkpoints = connection.scalar(
+                        if mode == "worker-rate":
+                            # The marker precedes sleep; kill only after its wake deadline is durable.
+                            while not connection.scalar(
+                                text(
+                                    f"SELECT count(*) FROM {prefix}operation_outputs "
+                                    "WHERE workflow_uuid = :id AND function_name = 'DBOS.sleep'"
+                                ),
+                                {"id": state["workflow_id"]},
+                            ):
+                                connection.rollback()
+                                assert process.poll() is None
+                                assert time.monotonic() < deadline
+                                time.sleep(0.01)
+                        # Extraction must be durable before interruption of lookup or backoff.
+                        extractions = connection.scalar(
                             text(
-                                f"SELECT count(*) FROM {prefix}datasource_outputs WHERE workflow_id = :id"
+                                f"SELECT count(*) FROM {prefix}operation_outputs "
+                                "WHERE workflow_uuid = :id "
+                                "AND function_name = 'extract_pdf_import_identifier_step'"
                             ),
                             {"id": state["workflow_id"]},
                         )
-                        assert checkpoints == 2
+                        assert extractions == 2
                         status = connection.execute(
                             text(
                                 f"SELECT status, executor_id FROM {prefix}workflow_status WHERE workflow_uuid = :id"
@@ -136,3 +151,26 @@ def test_pdf_import_replays_checkpoints_and_lost_confirmation_response(recovery_
     kill_at_marker("confirm-crash", tmp_path / "confirmation-committed", tmp_path, environment)
     run_command([DRIVER, "confirm-replay", tmp_path], environment)
     run_command([DRIVER, "finish", tmp_path], environment)
+
+
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_pdf_provider_rate_limits_survive_recovery_and_do_not_fail_the_batch(
+    recovery_database, tmp_path, exhausted
+):
+    environment = os.environ | {
+        "QUIREBASE_DATABASE_URL": recovery_database,
+        "QUIREBASE_DATA_DIR": str(tmp_path / "data"),
+        "QUIREBASE_OBJECT_STORE": "local",
+        "QUIREBASE_WORKFLOW_EXECUTOR_ID": "persistence-recovery-worker",
+        "QUIREBASE_LOG_LEVEL": "WARNING",
+        "QUIREBASE_RECOMMENDATION_ENGINE": "yake",
+        "PYTHONIOENCODING": "utf-8",
+    }
+    run_command(["-c", "from quirebase.cli import app; app()", "init-db"], environment)
+    run_command([DRIVER, "stage", tmp_path], environment)
+    if exhausted:
+        run_command([DRIVER, "run-rate-exhausted", tmp_path], environment)
+    else:
+        kill_at_marker("worker-rate", tmp_path / "backoff-started", tmp_path, environment)
+        run_command([DRIVER, "recover-rate", tmp_path], environment)
+        run_command([DRIVER, "preview-rate", tmp_path], environment)

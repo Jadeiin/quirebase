@@ -29,7 +29,10 @@ updates accompany their canonical write transaction.
 
 An Import Batch persists staged FileObject descriptors with stable source UUIDs. Candidates refer
 to source UUIDs, while durable preparation receives serializable receipt snapshots. Separate
-steps extract a lookup identifier, recheck actor/Workspace eligibility and retrieve Candidate Records.
+steps extract a lookup identifier per file. Each Provider-group lookup step rechecks actor/Workspace
+eligibility and loads settings, ends its read transaction, then retrieves Candidate Records through
+`lookup_many`. Only outcomes enter its checkpoint. arXiv/PubMed use native request merging;
+Crossref/OpenAlex retain singleton endpoints inside the shared runtime. At most 50 PDFs enter a batch.
 PDF lookup accepts an arXiv ID only from an `arXiv:` watermark rotated upward in the first page's
 left margin (within the leftmost 10%, capped at 72 points), including legacy IDs and version suffixes.
 That watermark takes precedence over DOI metadata. Otherwise lookup uses explicit XMP DOI fields
@@ -47,19 +50,52 @@ pages are scanned for lookup. Without an unambiguous identifier, the PDF follows
 basic-candidate path.
 Library selects the identifier and routes through Inquiro; Documents supplies embedded metadata,
 first-page links and text layout without selecting scholarly identifiers.
-Lookup inputs remain query context, and only Provider-returned Work identifiers are persisted.
-Repeated normalized lookup identifiers within one batch produce a warning while retaining both PDFs.
+Lookup inputs remain private Import Batch query context, separate from the Provider-returned
+identifiers in Work metadata. Repeated normalized lookup identifiers within one batch produce a
+warning while retaining both PDFs, including basic candidates with deferred metadata. Finalization
+rebuilds these warnings from the complete merged batch in source order, so partial retries compare
+refreshed candidates with retained siblings without accumulating warnings.
 One final transaction publishes the ready preview for the matching workflow generation.
 
 Valid PDFs with no recognized identifier or no matching Provider metadata remain staged as optional
 basic candidates. Their Work uses a local UUID URN, `Document` type and an escaped filename stem
 as its title, without inferred authors, dates or upstream identifiers. Preview exposes the stable
-source UUID and marks these candidates as basic; no Item exists before confirmation.
+source UUID and marks these candidates as basic; no Item exists before confirmation. Diagnostics
+for staged PDFs carry the same source UUID; filenames and row numbers are display context.
 Users explicitly select basic source UUIDs in the confirmation request. Identified candidates are
 included normally, while unselected basic PDFs are skipped. Unknown source UUIDs are rejected, and
 a selection with no candidates cannot be committed. A batch containing only basic candidates is
-ready for review. Unreadable PDFs remain file errors; transient Provider failures retain the ordinary
-durable retry behavior. After Import, ordinary Metadata editing and identifier-based updates can
+ready for review. Unreadable PDFs remain file errors. Transient Provider failures are checkpointed
+with a basic candidate, a per-file diagnostic and retry information rather than escaping as a step
+exception. Library attempts metadata retrieval at most three times per file, with `DBOS.sleep_async`
+between attempts. `Retry-After` accepts delta-seconds or an HTTP-date; absent or invalid hints use
+5- and 10-second exponential delays. A group waits for the largest delay required by its failed inputs,
+then submits only unavailable sources. Successful outcomes from earlier attempts are retained by
+source UUID. Eligibility is rechecked before each attempt. Completed extraction and group lookup
+steps, including failed Provider outcomes and sleep deadlines, replay during recovery. A process
+failure before a group step checkpoints may repeat that group's requests; completed group steps do
+not repeat successful siblings during recovery or backoff.
+
+One preparation has a 60-second total wait budget. If a group's required retry wait exceeds the
+remaining budget, its unavailable sources are deferred without another request; other Provider
+groups can still execute. Delays are never shortened to fit the budget. This is per-workflow backoff,
+not coordination of credentials across workers. Exhausted or deferred lookups produce warning codes
+`provider_rate_limited` or `provider_unavailable`, retain their PDF as an optional basic candidate
+and preserve the lookup value in batch query and diagnostic context, outside Work metadata.
+These failures do not mark the whole batch failed or become `metadata_not_found`.
+
+A ready PDF batch with these warnings may use the existing retry command. It selects deferred
+sources by diagnostic source UUID and reuses their persisted lookup context without re-reading
+the PDF. It retains successful candidates, their source UUIDs and all staging. Finalization
+merges retained and refreshed candidates in original file order under the batch/workflow guard.
+Concurrent confirmation and retry serialize on the batch root; stale failure publication uses a
+conditional update so it cannot overwrite a newer retry. PDF previews expose an opaque
+`preview_version` to all authorized readers, independently of actor-only workflow visibility.
+Each retry changes that preparation generation. Confirmation supplies the reviewed version as
+`expected_preview_version`; the locked batch rejects missing or superseded versions before mutation,
+even after retry finalization returns the batch to ready. The UI offers Retry metadata alongside
+confirmation; optional basic candidates may also be explicitly imported while metadata is unavailable.
+After Import, ordinary Metadata editing and identifier-based updates can
 complete the Item without an additional Item lifecycle state.
 
 Terminal failure retains staging for retry. A pending batch whose workflow is terminal or missing
@@ -68,7 +104,8 @@ assigns a new workflow identity. Individual file diagnostics allow valid sibling
 Confirmation locks the batch, creates Items and transfers accepted PDFs to File Revisions atomically,
 then clears staging and transactionally enqueues cleanup for skipped PDFs. Discard and expiration
 release both identified and basic staging through the existing cleanup flow. Committed receipts
-retain Item IDs for replay; later confirmations return that receipt regardless of a changed selection.
+retain Item IDs for replay; later confirmations return that receipt regardless of a changed selection
+or obsolete preview version.
 Identifier and within-batch warning rules follow the
 [Work contract](item-metadata-json.md#identifier-comparison-and-suggestions).
 

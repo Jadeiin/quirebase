@@ -9,6 +9,7 @@ from inquiro.models import (
     CandidatePage,
     CandidateRecord,
     Identifier,
+    LookupFailure,
     ProviderConfig,
     ProviderUnavailable,
     SearchQuery,
@@ -34,6 +35,17 @@ class LookupImplementation(Protocol):
         *,
         endpoint: str,
     ) -> CandidateRecord: ...
+
+
+class BatchLookupImplementation(Protocol):
+    async def lookup_many(
+        self,
+        client: BoundedTransport,
+        identifiers: tuple[Identifier, ...],
+        settings: ProviderConfig,
+        *,
+        endpoint: str,
+    ) -> tuple[CandidateRecord | LookupFailure, ...]: ...
 
 
 class SearchImplementation(Protocol):
@@ -68,6 +80,7 @@ class ProviderDefinition:
     search_adapter: SearchImplementation | None = None
     search_sorts: tuple[SearchSort, ...] = ("relevance", "published")
     lookup_adapter: LookupImplementation | None = None
+    batch_lookup_adapter: BatchLookupImplementation | None = None
     document_adapter: DocumentImplementation | None = None
     endpoint: str = ""
     document_endpoint: str = ""
