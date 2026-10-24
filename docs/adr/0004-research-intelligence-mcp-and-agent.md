@@ -34,12 +34,19 @@ examples cover ordinary User research workflows:
 
 | Capability | Tool examples | Boundary |
 | --- | --- | --- |
-| Library | `library.search_items`, `library.get_library_item`, `library.create_library_item`, `library.update_library_item` | Reads use the API pagination contract; writes reuse Workspace resource-action decisions and optimistic version checks |
-| Projects | `projects.list_projects`, `projects.get_project`, `projects.create_user_project`, `projects.update_project`, lifecycle, Item and participant tools | Workspace resource-action and Project participation decisions remain authoritative; Projects have no role or owner axis |
+| Workspace discovery | `workspaces.get_workspaces`, `workspaces.get_user_workspace`, `workspaces.get_workspace_members` | Select an accessible Workspace before research operations; membership directory reads grant no governance mutations |
+| Import | `imports.stage_identifiers_import`, `imports.import_batches`, `imports.import_batch`, `imports.commit_staged_import`, `imports.delete_import` | Identifier staging is an open-world write and creates no Items; confirmation follows explicit User review, preserves preview-version checks and replays the committed receipt; deleting a receipt preserves Items |
+| Library | `library.search_items`, `library.get_library_item`, `library.create_library_item`, `library.update_library_item`, `items.delete_library_item`, `tools.duplicate_items` | Reads use the API pagination contract where available; writes reuse Workspace resource-action decisions and optimistic version checks; duplicate review never implies automatic merge |
+| Projects | `projects.list_projects`, `projects.get_project`, `projects.create_user_project`, `projects.update_project`, `projects.join_project_api`, `projects.leave_project_api`, lifecycle, Item and participant tools | Open Project self-participation is separate from managed participant governance; Project Items use the Library Search project filter |
 | Documents | `documents.list_documents` | Returns revision and attachment metadata, never object keys, bytes or extracted text |
-| Annotations | `annotations.list_annotations`, `annotations.create_annotation`, `annotations.update_annotation`, `annotations.delete_annotation` | Reuses revision, Item and Project participation and discoverability plus annotation ownership/version rules |
-| Organization | `library.list_tags`, `library.add_item_tag`, `library.remove_item_tag`, `library.set_item_tag_selection`, `library.list_discussions`, `library.create_discussion`, `library.delete_discussion` | Reuses Tag resource-action decisions and Discussion authorship rules |
-| Discovery and citation | `discovery.search_discovery`, `library.format_item_citation` | Discovery is marked open-world and never receives the inbound API Token |
+| Annotations | `annotations.list_annotations`, `annotations.create_annotation`, `annotations.update_annotation`, `annotations.delete_annotation`, `annotations.restore_annotation`, `annotations.restore_reply` | Lists may span File Revisions and include Replies; restoration retains authorship, version checks and the undo window |
+| Organization | `items.item_organize`, `library.list_tags`, Item Tag tools, `tools.rename_user_tag`, `tools.merge_user_tags`, `tools.delete_user_tag`, Item/Project Discussion tools | Inspect assignments before and after changes; Tag deletion/merge is distinct from removing one Item assignment |
+| Discovery and citation | `discovery.discovery_providers`, `discovery.search_discovery`, `tools.citation_styles`, `library.format_item_citation` | Query available choices before use; external Discovery and Identifier Lookup never receive the inbound API Token |
+
+The initial tool list contains `search_tools` and `call_tool`; BM25 tool discovery returns at most
+five matches per query. Server instructions direct clients to translate search queries into English,
+choose a Workspace explicitly and review Import previews before confirmation. This guidance does
+not replace the business operation's authorization or validation.
 
 The allowlist deliberately omits administrative and operational capabilities. It also omits file
 upload/download and extracted full text: the current full text is an unstructured plain-text field

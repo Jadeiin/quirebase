@@ -61,7 +61,7 @@ def _tool_annotations(effect: ToolEffect) -> ToolAnnotations:
         destructive_hint=effect is ToolEffect.DESTRUCTIVE,
         idempotent_hint=effect
         in {ToolEffect.READ, ToolEffect.DESTRUCTIVE, ToolEffect.OPEN_WORLD_READ},
-        open_world_hint=effect is ToolEffect.OPEN_WORLD_READ,
+        open_world_hint=effect in {ToolEffect.OPEN_WORLD_READ, ToolEffect.OPEN_WORLD_WRITE},
     )
 
 
@@ -88,8 +88,15 @@ def create_mcp_server(
         auth=token_verifier,
         middleware=[McpInvocationMiddleware()],
         instructions=(
-            "Authenticated research-library tools. File bytes, full text, account "
-            "administration, and site operations are not exposed."
+            "Authenticated research-library tools. Translate tool-search queries into English "
+            "keywords for search_tools, then invoke discovered tools through call_tool. "
+            "Start with workspaces.get_workspaces to choose an accessible workspace_id; "
+            "use that explicit Workspace for subsequent calls and inspect its authorization. "
+            "Query discovery.discovery_providers and tools.citation_styles for available choices. "
+            "Stage identifier imports, show the User the preview and diagnostics, and call "
+            "imports.commit_staged_import only after their explicit confirmation. "
+            "Use items.item_organize to inspect assigned Tags and Projects before and after edits. "
+            "File bytes, full text, account administration, and site operations are not exposed."
         ),
     )
     server.add_transform(BM25SearchTransform(max_results=5))

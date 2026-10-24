@@ -53,11 +53,12 @@ QUIREBASE_DATABASE_URL=postgresql://quirebase:password@localhost/quirebase uv ru
 
 ## Programmatic access
 
-Quirebase exposes authenticated library, project, document-metadata, annotation, tag, discussion,
-Discovery and citation capabilities through a versioned JSON HTTP API at `/api/v1/` and MCP
-Streamable HTTP at `/mcp/`. The curated MCP tool surface is generated from the OpenAPI contract and
-executes those same API operations, so both surfaces share response contracts and ordinary User
-authorization rules; interactive OpenAPI documentation is available at `/docs`. They include reads
+Quirebase exposes authenticated Workspace discovery, library, project, document-metadata, annotation,
+tag, discussion, Identifier Import, Discovery and citation capabilities through a versioned JSON HTTP
+API at `/api/v1/` and MCP Streamable HTTP at `/mcp/`. The curated MCP tool surface is generated from
+the OpenAPI contract and executes those same API operations, so both surfaces share response
+contracts and ordinary User authorization rules; interactive OpenAPI documentation is available at
+`/docs`. They include reads
 and ordinary User mutations; MCP deliberately excludes administrator operations, file bytes and the
 currently unstructured PDF full text. A signed-in User can create and revoke their own time-limited
 API Tokens under **Account settings → MCP and API Tokens**; that page also shows the deployment's
@@ -70,6 +71,14 @@ uv run quirebase create-api-token USERNAME --name "Research client" --days 30
 The plaintext token is shown once. It has the User's current Quirebase permissions and no separate
 tool scopes. Do not place it in a URL; send `Authorization: Bearer qb_api_...`. Inspect or revoke
 tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
+
+MCP clients initially see `search_tools` and `call_tool`. Search with English keywords, then invoke
+the discovered tool through `call_tool`. Begin with `workspaces.get_workspaces` to choose an
+accessible Workspace ID. Provider and Citation Style directories expose the current deployment's
+available choices. Identifier Import follows stage → review preview and diagnostics → explicit
+confirmation → committed Item IDs; deleting the confirmation receipt preserves imported Items.
+Item organization reads, open Project join/leave, duplicate review, Tag maintenance and recent
+Annotation/Reply restoration support follow-up work through the same HTTP authorization rules.
 
 API errors return a JSON object with `code` and `message`, plus optional `fields` for request
 validation and `meta` for structured conflict details.
