@@ -81,7 +81,7 @@ async def test_fastmcp_client_lists_the_tool_search_surface(async_session_factor
     async with fastmcp_client(async_session_factory) as (client, _app):
         tools = await client.list_tools()
 
-    assert {tool.name for tool in tools} == {"search_tools", "call_tool"}
+    assert {tool.name for tool in tools} == {"search_tools", "get_schema", "call_tool"}
 
 
 async def _call(client, raw_token: str, name: str, arguments: dict, request_id: int = 1):
@@ -110,6 +110,14 @@ async def _tool(client, raw_token: str, tool_name: str, **arguments):
     return result["structuredContent"]
 
 
+async def _schemas(client, raw_token: str, *tool_names: str):
+    response = await _call(client, raw_token, "get_schema", {"tools": list(tool_names)})
+    assert response.status_code == 200
+    result = response.json()["result"]
+    assert result["isError"] is False, result
+    return json.loads(result["content"][0]["text"])
+
+
 async def test_token_client_discovers_its_workspace_before_searching(
     async_db, async_session_factory
 ):
@@ -126,8 +134,9 @@ async def test_token_client_discovers_its_workspace_before_searching(
         discovered = await _call(
             client, grant.raw_token, "search_tools", {"query": "list accessible workspaces"}
         )
-        matches = json.loads(discovered.json()["result"]["content"][0]["text"])
-        entry = next(tool for tool in matches if tool["name"] == "workspaces.get_workspaces")
+        summary = discovered.json()["result"]["content"][0]["text"]
+        assert "### workspaces.get_workspaces" in summary
+        (entry,) = await _schemas(client, grant.raw_token, "workspaces.get_workspaces")
         assert "workspace_id" not in entry["inputSchema"].get("required", [])
         workspaces = await _tool(client, grant.raw_token, entry["name"])
         assert workspaces["total"] == 1
@@ -624,10 +633,14 @@ async def test_tool_search_discovers_curated_tools(async_session_factory):
         result = await app.state.mcp_server.call_tool(
             "search_tools", {"query": "update project"}, run_middleware=False
         )
+        schema = await app.state.mcp_server.call_tool(
+            "get_schema", {"tools": ["projects.update_project"]}, run_middleware=False
+        )
 
     assert result.is_error is False
-    matches = json.loads(result.content[0].text)
-    matching_tool = next(tool for tool in matches if tool["name"] == "projects.update_project")
+    assert "### projects.update_project" in result.content[0].text
+    assert schema.is_error is False
+    (matching_tool,) = json.loads(schema.content[0].text)
     assert set(matching_tool["inputSchema"]["properties"]) == {
         "workspace_id",
         "project_id",
@@ -635,6 +648,86 @@ async def test_tool_search_discovers_curated_tools(async_session_factory):
         "description",
         "participation",
     }
+
+
+async def test_search_summaries_keep_full_constraints_and_annotations_available(
+    async_db, async_session_factory
+):
+    user = User(username="mcp-schema-reader", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, user)
+    await async_db.commit()
+    grant = await create_api_token(async_db, user, "Schema discovery", expires_in_days=30)
+
+    async with mcp_client(async_session_factory) as (client, _app):
+        discovered = await _call(
+            client, grant.raw_token, "search_tools", {"query": "import DOI identifiers"}
+        )
+        result = discovered.json()["result"]
+        assert result["isError"] is False
+        summary = result["content"][0]["text"]
+        names = [
+            line.removeprefix("### ") for line in summary.splitlines() if line.startswith("### ")
+        ]
+        assert "imports.stage_identifiers_import" in names
+        assert len(names) <= 5
+        definitions = await _schemas(client, grant.raw_token, *names)
+        assert {definition["name"] for definition in definitions} == set(names)
+        assert len(summary) < len(json.dumps(definitions, separators=(",", ":"))) / 10
+        stage = next(
+            definition
+            for definition in definitions
+            if definition["name"] == "imports.stage_identifiers_import"
+        )
+        identifiers = stage["inputSchema"]["properties"]["identifiers"]
+        assert identifiers["minItems"] == 1
+        assert identifiers["maxItems"] == 50
+        assert stage["annotations"]["openWorldHint"] is True
+        assert stage["annotations"]["readOnlyHint"] is False
+        assert "$defs" in stage["outputSchema"]
+        invalid = await _call(
+            client,
+            grant.raw_token,
+            "call_tool",
+            {
+                "name": stage["name"],
+                "arguments": {"workspace_id": workspace.id, "identifiers": []},
+            },
+        )
+        assert invalid.json()["result"]["isError"] is True
+
+
+async def test_schema_lookup_uses_the_curated_and_authorized_catalog(
+    async_db, async_session_factory
+):
+    user = User(username="mcp-schema-visibility", password_hash="unused")
+    async_db.add(user)
+    await async_db.flush()
+    await provision_initial_workspace(async_db, user)
+    await async_db.commit()
+    grant = await create_api_token(async_db, user, "Schema visibility", expires_in_days=30)
+
+    async with mcp_client(async_session_factory) as (client, app):
+
+        @app.state.mcp_server.tool(auth=lambda _ctx: False)
+        def hidden_schema_probe(secret: str) -> str:
+            return secret
+
+        definitions = await _schemas(
+            client,
+            grant.raw_token,
+            "library.search_items",
+            "workspaces.delete_user_workspace",
+            "hidden_schema_probe",
+        )
+
+    visible = [definition for definition in definitions if "name" in definition]
+    assert [definition["name"] for definition in visible] == ["library.search_items"]
+    assert definitions[-1]["not_found"] == [
+        "workspaces.delete_user_workspace",
+        "hidden_schema_probe",
+    ]
 
 
 async def test_generated_tool_schemas_come_from_the_api_contract(async_session_factory):
@@ -760,12 +853,16 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
             "search_tools",
             {"query": "create bibliographic item"},
         )
+        (definition,) = await _schemas(client, grant.raw_token, "library.create_library_item")
+        metadata = definition["inputSchema"]["$defs"]["Work"]
+        assert "title" in metadata["properties"]
+        assert metadata["additionalProperties"] is False
         created = await _call(
             client,
             grant.raw_token,
             "call_tool",
             {
-                "name": "library.create_library_item",
+                "name": definition["name"],
                 "arguments": {
                     "workspace_id": fixture_workspace_id(user),
                     "metadata": {
@@ -778,8 +875,8 @@ async def test_tool_search_proxy_calls_the_curated_tool(async_db, async_session_
         )
 
     assert discovered.status_code == 200
-    discovered_tools = json.loads(discovered.json()["result"]["content"][0]["text"])
-    assert any(tool["name"] == "library.create_library_item" for tool in discovered_tools)
+    summary = discovered.json()["result"]["content"][0]["text"]
+    assert "### library.create_library_item" in summary
     assert created.status_code == 200
     created_result = created.json()["result"]
     assert created_result["isError"] is False
@@ -838,7 +935,16 @@ async def test_generated_tool_returns_api_version_conflict_as_mcp_error(
     assert "version" in conflict_result["content"][0]["text"].casefold()
 
 
-async def test_generated_tool_does_not_fall_back_to_cookie_auth(async_db, async_session_factory):
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("library.search_items", {}),
+        ("get_schema", {"tools": ["library.search_items"]}),
+    ],
+)
+async def test_generated_tool_does_not_fall_back_to_cookie_auth(
+    async_db, async_session_factory, tool_name, arguments
+):
     user = User(username="generated-mcp-auth", password_hash="unused")
     async_db.add(user)
     await async_db.commit()
@@ -856,10 +962,10 @@ async def test_generated_tool_does_not_fall_back_to_cookie_auth(async_db, async_
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
-                "params": {"name": "library.search_items", "arguments": {}},
+                "params": {"name": tool_name, "arguments": arguments},
             }),
         )
-        invalid = await _call(client, "invalid", "library.search_items", {})
+        invalid = await _call(client, "invalid", tool_name, arguments)
 
     assert missing.status_code == 401
     assert invalid.status_code == 401

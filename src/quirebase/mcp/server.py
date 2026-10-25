@@ -4,10 +4,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 import httpx2
 from fastmcp import FastMCP
+from fastmcp.experimental.transforms.code_mode import GetSchemas
 from fastmcp.server.dependencies import get_access_token, get_http_headers
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.server.providers.openapi import MCPType
-from fastmcp.server.transforms.search import BM25SearchTransform
+from fastmcp.server.transforms.search import (
+    BM25SearchTransform,
+    serialize_tools_for_output_markdown,
+)
+from fastmcp.utilities.json_schema import compress_schema
 from mcp.types import ToolAnnotations
 
 from quirebase.audit import programmatic_invocation
@@ -70,6 +75,9 @@ def _customize_component(route: HTTPRoute, component: Any) -> None:
     component.name = definition.name
     component.description = definition.description
     component.annotations = _tool_annotations(definition.effect)
+    component.parameters = compress_schema(component.parameters, prune_titles=True)
+    if component.output_schema is not None:
+        component.output_schema = compress_schema(component.output_schema, prune_titles=True)
 
 
 def create_mcp_server(
@@ -87,11 +95,17 @@ def create_mcp_server(
         mcp_component_fn=_customize_component,
         auth=token_verifier,
         middleware=[McpInvocationMiddleware()],
+        dereference_schemas=False,
         instructions=(
             "Authenticated research-library tools. Translate tool-search queries into English "
-            "keywords for search_tools, then invoke discovered tools through call_tool. "
+            "keywords for search_tools. Search results are compact summaries that omit parameter "
+            "constraints and safety annotations. For an unfamiliar tool or complex input, use "
+            "get_schema with the selected tool names and detail='full' to inspect the complete "
+            "contract before invoking it. Reuse schemas already retrieved; "
+            "only fetch the tools you intend to use. "
             "Start with workspaces.get_workspaces to choose an accessible workspace_id; "
             "use that explicit Workspace for subsequent calls and inspect its authorization. "
+            "Invoke selected tools through call_tool. "
             "Query discovery.discovery_providers and tools.citation_styles for available choices. "
             "Stage identifier imports, show the User the preview and diagnostics, and call "
             "imports.commit_staged_import only after their explicit confirmation. "
@@ -99,7 +113,13 @@ def create_mcp_server(
             "File bytes, full text, account administration, and site operations are not exposed."
         ),
     )
-    server.add_transform(BM25SearchTransform(max_results=5))
+    search = BM25SearchTransform(
+        max_results=5,
+        always_visible=["get_schema"],
+        search_result_serializer=serialize_tools_for_output_markdown,
+    )
+    server.add_tool(GetSchemas(default_detail="full")(search.get_tool_catalog))
+    server.add_transform(search)
     return server
 
 

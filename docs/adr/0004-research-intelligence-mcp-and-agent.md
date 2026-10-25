@@ -43,10 +43,16 @@ examples cover ordinary User research workflows:
 | Organization | `items.item_organize`, `library.list_tags`, Item Tag tools, `tools.rename_user_tag`, `tools.merge_user_tags`, `tools.delete_user_tag`, Item/Project Discussion tools | Inspect assignments before and after changes; Tag deletion/merge is distinct from removing one Item assignment |
 | Discovery and citation | `discovery.discovery_providers`, `discovery.search_discovery`, `tools.citation_styles`, `library.format_item_citation` | Query available choices before use; external Discovery and Identifier Lookup never receive the inbound API Token |
 
-The initial tool list contains `search_tools` and `call_tool`; BM25 tool discovery returns at most
-five matches per query. Server instructions direct clients to translate search queries into English,
-choose a Workspace explicitly and review Import previews before confirmation. This guidance does
-not replace the business operation's authorization or validation.
+The initial tool list contains `search_tools`, `get_schema` and `call_tool`. BM25 tool discovery
+returns compact Markdown summaries of at most five matches per query. FastMCP's native schema
+compression removes redundant titles and unused definitions, and automatic reference expansion is
+disabled to preserve local `$ref`/`$defs`. The native `GetSchemas` factory provides complete
+input/output schemas and safety annotations by name through the same authorization-filtered
+catalog. It is registered independently and requires no code-execution sandbox.
+Server instructions direct clients to translate search queries into English, retrieve complete
+contracts for unfamiliar tools or complex input, choose a Workspace explicitly and review Import
+previews before confirmation. Summaries omit constraints; the full schemas retain validation rules.
+This guidance does not replace the business operation's authorization or validation.
 
 The allowlist deliberately omits administrative and operational capabilities. It also omits file
 upload/download and extracted full text: the current full text is an unstructured plain-text field

@@ -72,9 +72,12 @@ The plaintext token is shown once. It has the User's current Quirebase permissio
 tool scopes. Do not place it in a URL; send `Authorization: Bearer qb_api_...`. Inspect or revoke
 tokens with `list-api-tokens USERNAME` and `revoke-api-token USERNAME TOKEN_ID`.
 
-MCP clients initially see `search_tools` and `call_tool`. Search with English keywords, then invoke
-the discovered tool through `call_tool`. Begin with `workspaces.get_workspaces` to choose an
-accessible Workspace ID. Provider and Citation Style directories expose the current deployment's
+MCP clients initially see `search_tools`, `get_schema` and `call_tool`. Search with English keywords
+to receive compact Markdown summaries. For an unfamiliar tool or complex input, call
+`get_schema(tools=["tool.name"], detail="full")` to inspect the selected tool's complete input/output
+contract and safety annotations before invoking it through `call_tool`; reuse schemas already
+retrieved. Summaries omit some parameter constraints. Begin with `workspaces.get_workspaces` to
+choose an accessible Workspace ID. Provider and Citation Style directories expose the deployment's
 available choices. Identifier Import follows stage → review preview and diagnostics → explicit
 confirmation → committed Item IDs; deleting the confirmation receipt preserves imported Items.
 Item organization reads, open Project join/leave, duplicate review, Tag maintenance and recent
