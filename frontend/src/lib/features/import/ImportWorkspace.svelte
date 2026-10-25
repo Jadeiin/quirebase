@@ -650,7 +650,7 @@
 			busy={busy || confirmationUnknown || previewUnavailable}
 			resultHref={libraryHref(workspaceId, { import_batch: batch.id })}
 			onDiscard={discard}
-			onDeleteReceipt={discard}
+			onDeleteImportRecord={discard}
 			onRetry={retry}
 			onCommit={commit}
 			onPage={(next) => (previewPage = next)}

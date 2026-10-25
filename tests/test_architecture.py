@@ -758,6 +758,8 @@ def test_inquiro_facade_exposes_provider_operations_and_bibliographic_value_type
         "ProviderRuntime",
         "ProviderUnavailable",
         "SearchClause",
+        "SearchField",
+        "SearchOperator",
         "SearchQuery",
         "metadata_provider_choices",
     }

@@ -41,7 +41,7 @@ _DEFINITIONS = (
     ),
     McpToolDefinition(
         "imports.import_batches",
-        "List pending Import Batches or completed confirmation receipts in the selected Workspace.",
+        "List uncommitted or committed Import Batches in the selected Workspace. Review a ready batch's candidates and diagnostics before confirming.",
         ToolEffect.READ,
     ),
     McpToolDefinition(
@@ -56,12 +56,12 @@ _DEFINITIONS = (
     ),
     McpToolDefinition(
         "imports.commit_staged_import",
-        "Confirm a reviewed Import Batch after the User explicitly approves it; returns committed Item IDs. For ready PDF batches supply the reviewed preview_version as expected_preview_version and explicitly selected basic_source_ids. Confirmation replays the receipt while it exists.",
+        "Confirm a reviewed Import Batch after the User explicitly approves it; returns committed Item IDs. For ready PDF batches supply the reviewed preview_version as expected_preview_version and explicitly selected basic_source_ids. Repeated confirmation returns the retained result while the batch exists.",
         ToolEffect.WRITE,
     ),
     McpToolDefinition(
         "imports.delete_import",
-        "Discard an unconfirmed Import Batch or delete a completed receipt. Imported Items remain; deleting a receipt ends confirmation replay and import_batch Library filtering.",
+        "Discard an unconfirmed Import Batch or delete a committed batch's import record. Imported Items remain; deleting the batch ends confirmation replay and import_batch Library filtering.",
         ToolEffect.DESTRUCTIVE,
     ),
     McpToolDefinition(

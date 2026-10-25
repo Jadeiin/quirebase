@@ -2,10 +2,26 @@ import type { components } from '#lib/api/schema.js';
 
 export type SearchRequest = components['schemas']['DiscoverySearchRequest'];
 export type Candidate = components['schemas']['CandidateView'];
+export type SearchField = components['schemas']['SearchField'];
+export type SearchOperator = components['schemas']['SearchOperator'];
 
-const fields = new Set(['any', 'title', 'author', 'publication', 'abstract']);
-const operators = new Set(['and', 'or', 'not']);
+const fields: ReadonlySet<string> = new Set<SearchField>([
+	'any',
+	'title',
+	'author',
+	'publication',
+	'abstract'
+]);
+const operators: ReadonlySet<string> = new Set<SearchOperator>(['and', 'or', 'not']);
 const sorts = new Set(['relevance', 'published', 'cited', 'updated']);
+
+function isSearchField(value: unknown): value is SearchField {
+	return typeof value === 'string' && fields.has(value);
+}
+
+function isSearchOperator(value: unknown): value is SearchOperator {
+	return typeof value === 'string' && operators.has(value);
+}
 
 export function defaultDiscoverySearch(): SearchRequest {
 	return {
@@ -49,11 +65,9 @@ export function readDiscoverySearch(
 			!value ||
 			typeof value !== 'object' ||
 			!('field' in value) ||
-			typeof value.field !== 'string' ||
-			!fields.has(value.field) ||
+			!isSearchField(value.field) ||
 			!('operator' in value) ||
-			typeof value.operator !== 'string' ||
-			!operators.has(value.operator) ||
+			!isSearchOperator(value.operator) ||
 			!('term' in value) ||
 			typeof value.term !== 'string' ||
 			!value.term.trim() ||

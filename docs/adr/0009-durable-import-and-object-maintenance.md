@@ -28,9 +28,10 @@ with deferred metadata support retrying only those sources under a new workflow 
 their persisted lookup context. Successful candidates remain retained and are merged by source UUID
 during guarded finalization. Single Item lookup errors retain their exception contract. See the
 [PDF staging contract](../architecture/object-lifecycle.md#pdf-import-staging).
-One datasource transaction publishes the ready preview. An unexpected terminal preparation failure transactionally marks the
-batch failed while retaining its staged objects. Cancellation, exhausted workflow recovery and a
-missing workflow record are lazily reconciled to failed when the batch is viewed or retried; retry
+One datasource transaction publishes a ready preview when candidates exist, or marks the batch
+failed when no candidates remain. Failed preparation retains its staged objects for retry.
+An unexpected terminal preparation failure also marks the batch failed. Cancellation, exhausted
+workflow recovery and a missing workflow record are lazily reconciled to failed when the batch is viewed or retried; retry
 transitions it back to pending under a new workflow identity. Lazy reconciliation updates only a
 still-pending batch whose workflow identity matches the observed terminal execution, so a stale
 request cannot overwrite a concurrent retry. The Import Batch and active workflow attributes reserve
@@ -83,4 +84,4 @@ history after seven days through Core's SDK-table adapter, preserving parent/chi
 relationships and sweeping orphan datasource receipts every cycle. Library retires Import Batches
 after their last state change, seven days by default, protecting active or unconfirmed durable
 preparations. Editors can delete any batch early through one operation. Retirement discards staging
-through transactional object cleanup or deletes only a committed receipt, preserving imported data.
+through transactional object cleanup or deletes only a committed batch, preserving imported data.

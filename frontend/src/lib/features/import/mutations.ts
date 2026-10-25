@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/svelte-query';
 import { ApiError, createWorkspaceApi, type ApiResponse } from '#lib/api/client.js';
-import { invalidateUnavailableImportReceipt } from '#lib/query/invalidation.js';
+import { invalidateUnavailableImportBatch } from '#lib/query/invalidation.js';
 import { importBatchQuery, importKeys, readImportBatch } from './queries.js';
 
 type BatchList = ApiResponse<'/workspaces/{workspace_id}/imports', 'get'>;
@@ -13,7 +13,7 @@ async function retireBatch(client: QueryClient, workspaceId: string, batchId: st
 		client.cancelQueries(lists)
 	]);
 	client.setQueryData(preview.queryKey, null, { updatedAt: 0 });
-	await invalidateUnavailableImportReceipt(client, workspaceId, batchId);
+	await invalidateUnavailableImportBatch(client, workspaceId, batchId);
 	client.setQueriesData<BatchList | null>(lists, (data) => {
 		if (!data) return data;
 		const items = data.items.filter((row) => row.id !== batchId);

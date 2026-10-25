@@ -83,7 +83,7 @@ retain only the latest scan with exact error counts and up to 100 samples.
 
 Import history is a secondary paginated page. Import Batches expire after their last state change;
 reads do not extend retention, and active or unconfirmed durable preparations remain protected.
-Editors may delete records early. Expiring or deleting a committed receipt keeps its Items and files
+Editors may delete records early. Expiring or deleting a committed Import Batch keeps its Items and files
 but ends confirmation replay and the corresponding Library filter; expiring staging also releases
 its temporary files through durable cleanup. Complete ItemRead history remains.
 Moderator Annotation deletion is immediate; ordinary Annotation/Reply deletion allows Undo only

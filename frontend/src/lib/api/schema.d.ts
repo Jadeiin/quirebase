@@ -3517,10 +3517,8 @@ export interface components {
 		};
 		/** DiscoveryClause */
 		DiscoveryClause: {
-			/** Field */
-			field: string;
-			/** Operator */
-			operator: string;
+			field: components['schemas']['SearchField'];
+			operator: components['schemas']['SearchOperator'];
 			/** Term */
 			term: string;
 		};
@@ -4062,6 +4060,8 @@ export interface components {
 			status: components['schemas']['ImportBatchStatus'];
 			/** Workflow Id */
 			workflow_id: string | null;
+			/** Can Retry */
+			can_retry: boolean;
 			/** Records */
 			records: components['schemas']['ImportCandidatePreview'][];
 			/** Errors */
@@ -5823,6 +5823,10 @@ export interface components {
 			 */
 			export_ttl_hours: number;
 		};
+		/** @enum {string} */
+		SearchField: 'any' | 'title' | 'author' | 'publication' | 'abstract';
+		/** @enum {string} */
+		SearchOperator: 'and' | 'or' | 'not';
 		/** @enum {string} */
 		SearchSort: 'relevance' | 'published' | 'cited' | 'updated';
 		/** SessionUserView */
@@ -10194,7 +10198,8 @@ export interface operations {
 	'imports.import_batches': {
 		parameters: {
 			query?: {
-				view?: 'pending' | 'completed';
+				/** @description `uncommitted` lists Import Batches in preparation states `pending`, `ready`, and `failed`; `committed` lists Import Batches whose Items have been created. */
+				view?: 'uncommitted' | 'committed';
 				limit?: number;
 				offset?: number;
 			};

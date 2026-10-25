@@ -16,7 +16,9 @@ dependencies = [
   "commonmeta-schema==1.0.1",
   "pydantic>=2.12,<3",
   "jsonschema-rs>=0.58.6,<0.59",
-  "citeproc-py>=0.10,<0.11",
+  # 0.11 normalizes duplicate punctuation at string seams; earlier releases
+  # render "Smith, J.. (2024)" when a group delimiter follows an initial.
+  "citeproc-py>=0.11.1,<0.12",
   "httpx2[socks]>=2.12,<3",
   "pylatexenc>=2.10,<3",
   "python-dateutil>=2.9,<3",

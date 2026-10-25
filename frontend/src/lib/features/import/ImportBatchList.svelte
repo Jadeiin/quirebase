@@ -119,14 +119,18 @@
 		<Tabs
 			value={listing.view}
 			onValueChange={({ value }) => {
-				navigate({ ...listing, view: value === 'completed' ? 'completed' : 'pending', page: 1 });
+				navigate({
+					...listing,
+					view: value === 'committed' ? 'committed' : 'uncommitted',
+					page: 1
+				});
 			}}
 		>
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
 				<Tabs.List aria-label={$t('Import history')}>
 					<Tabs.Indicator />
-					<Tabs.Trigger value="pending">{$t('Pending imports')}</Tabs.Trigger>
-					<Tabs.Trigger value="completed">{$t('Completed imports')}</Tabs.Trigger>
+					<Tabs.Trigger value="uncommitted">{$t('Not imported')}</Tabs.Trigger>
+					<Tabs.Trigger value="committed">{$t('Imported')}</Tabs.Trigger>
 				</Tabs.List>
 			</div>
 			<Tabs.Content value={listing.view}>
@@ -180,12 +184,7 @@
 								>{/if}
 						</ItemRow>
 					{:else}
-						<EmptyState
-							icon="import"
-							title={listing.view === 'pending'
-								? $t('No pending imports')
-								: $t('No completed imports')}
-						/>
+						<EmptyState icon="import" title={$t('No imports found')} />
 					{/each}
 					{#if batches.data.total > listing.pageSize || listing.page > 1}
 						<Pagination

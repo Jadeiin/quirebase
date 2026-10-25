@@ -12,6 +12,8 @@ from inquiro.models import (
     MAX_LOOKUP_BATCH_SIZE,
     MAX_SEARCH_CLAUSES,
     MAX_SEARCH_PAGE_SIZE,
+    SEARCH_FIELDS,
+    SEARCH_OPERATORS,
     AcquiredDocument,
     CandidateNotFound,
     CandidatePage,
@@ -44,9 +46,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from inquiro.providers._contracts import ProviderDefinition
-
-SEARCH_FIELDS = frozenset({"any", "title", "author", "publication", "abstract"})
-SEARCH_OPERATORS = frozenset({"and", "or", "not"})
 
 
 def _lookup_failure(
@@ -342,13 +341,14 @@ class ProviderRuntime:
         if not query.clauses or len(query.clauses) > MAX_SEARCH_CLAUSES:
             raise InvalidProviderRequest(f"one to {MAX_SEARCH_CLAUSES} search clauses required")
         for clause in query.clauses:
-            if (
-                clause.field not in SEARCH_FIELDS
-                or clause.operator not in SEARCH_OPERATORS
-                or not clause.term.strip()
-                or len(clause.term) > 300
-            ):
-                raise InvalidProviderRequest("search clause is invalid")
+            if clause.field not in SEARCH_FIELDS:
+                raise InvalidProviderRequest(f"unknown search field: {clause.field}")
+            if clause.operator not in SEARCH_OPERATORS:
+                raise InvalidProviderRequest(f"unknown search operator: {clause.operator}")
+            if not clause.term.strip():
+                raise InvalidProviderRequest("search term is required")
+            if len(clause.term) > 300:
+                raise InvalidProviderRequest("search term is limited to 300 characters")
         if query.year_from and query.year_to and query.year_from > query.year_to:
             raise InvalidProviderRequest("starting year must not be after ending year")
         query = replace(

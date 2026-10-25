@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from inquiro import SearchClause, SearchQuery
+from inquiro import SearchClause, SearchField, SearchOperator, SearchQuery
 from inquiro.work import contributor_name, work_authors, work_doi
 
 from quirebase.access import require_workspace_membership
@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class DiscoveryClause:
-    field: str
-    operator: str
+    field: SearchField
+    operator: SearchOperator
     term: str
 
 

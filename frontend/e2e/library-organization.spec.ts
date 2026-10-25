@@ -123,6 +123,7 @@ async function mockOrganization(
 		file_format: 'metadata',
 		status: 'committed',
 		workflow_id: null,
+		can_retry: false,
 		created_at: '2026-10-21T00:00:00Z',
 		committed_item_ids: importedIds,
 		records: [],
@@ -451,7 +452,7 @@ test('saved organization views reopen all absence filters and their Import scope
 	await expect(page.getByRole('combobox', { name: 'Files', exact: true })).toHaveValue('false');
 });
 
-test('an Import receipt leads to a cleanup view where bulk Tag and Project assignments remove matching rows', async ({
+test('a committed Import Batch leads to a cleanup view where bulk Tag and Project assignments remove matching rows', async ({
 	page
 }) => {
 	const { itemReads, mutations, importedIds } = await mockOrganization(page, {

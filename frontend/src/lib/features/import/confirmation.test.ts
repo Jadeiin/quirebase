@@ -15,6 +15,7 @@ const ready: ImportBatch = {
 	file_format: 'metadata',
 	status: 'ready',
 	workflow_id: null,
+	can_retry: false,
 	records: [
 		{ metadata: { id: 'urn:uuid:source-1', type: 'Book', title: 'A record' }, is_basic: false }
 	],
@@ -63,7 +64,7 @@ it('caches the authoritative confirmation receipt without another read', async (
 	expect(client.getQueryData(importBatchQuery('workspace-1', ready.id).queryKey)).toEqual(receipt);
 });
 
-it('keeps the committed receipt when an earlier creation response arrives afterward', async () => {
+it('keeps the committed batch when an earlier creation response arrives afterward', async () => {
 	vi.stubGlobal('fetch', async () => new Response(JSON.stringify(committed)));
 	const client = queryClient();
 	await confirmImportBatch(client, 'workspace-1', ready);

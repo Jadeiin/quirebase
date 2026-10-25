@@ -25,6 +25,29 @@ Revision work uses revision partitions with bounded global/worker concurrency. O
 a separate non-partitioned queue; Recommendation inference has its own queue. Search projection
 updates accompany their canonical write transaction.
 
+## Import Batch lifecycle
+
+Library prepares Candidate Records for identifier, bibliography and PDF sources and owns their
+User review and confirmation. `pending` means preparation has not finished, including queued
+and running work.
+Preparation publishes `ready` only when at least one Candidate Record is available for review;
+otherwise it publishes `failed`, retaining diagnostics. An unexpected preparation failure also
+publishes `failed`. Partial source failures do not prevent `ready` when candidates remain, and
+optional basic PDF candidates count as reviewable candidates. Failed PDF preparation retains its
+staged sources for explicit retry; identifier and bibliography failures require a new Import Batch.
+Previews expose `can_retry` from preparation state and retained PDF inputs; the retry command
+uses the same eligibility rule and still requires `item.create` authorization. Rejected uploads
+without retained inputs offer discard or a new Import Batch instead of retry.
+
+The Import directory's `view=uncommitted` (the default) selects `pending`, `ready` and `failed`
+batches; `view=committed` selects committed batches. These are projections of batch status.
+Confirmation requires a ready batch and at least one selected candidate, locks the batch root,
+creates Items and sets the batch to `committed` in one transaction. Document processing,
+Search projection and recommendations may continue after confirmation. Repeated confirmation
+returns the retained confirmation result. Discard releases uncommitted staging; deleting a committed
+batch preserves its Items and Documents while ending confirmation replay and batch-scoped
+Library reads.
+
 ## PDF Import staging
 
 An Import Batch persists staged FileObject descriptors with stable source UUIDs. Candidates refer
@@ -88,6 +111,8 @@ A ready PDF batch with these warnings may use the existing retry command. It sel
 sources by diagnostic source UUID and reuses their persisted lookup context without re-reading
 the PDF. It retains successful candidates, their source UUIDs and all staging. Finalization
 merges retained and refreshed candidates in original file order under the batch/workflow guard.
+Each retry replaces prior diagnostics for its retried source UUIDs while preserving diagnostics
+for sources not retried.
 Concurrent confirmation and retry serialize on the batch root; stale failure publication uses a
 conditional update so it cannot overwrite a newer retry. PDF previews expose an opaque
 `preview_version` to all authorized readers, independently of actor-only workflow visibility.
@@ -103,8 +128,8 @@ converges to failed when read or retried, provided its workflow identity still m
 assigns a new workflow identity. Individual file diagnostics allow valid sibling records to proceed.
 Confirmation locks the batch, creates Items and transfers accepted PDFs to File Revisions atomically,
 then clears staging and transactionally enqueues cleanup for skipped PDFs. Discard and expiration
-release both identified and basic staging through the existing cleanup flow. Committed receipts
-retain Item IDs for replay; later confirmations return that receipt regardless of a changed selection
+release both identified and basic staging through the existing cleanup flow. Committed batches
+retain Item IDs for replay; later confirmations return that result regardless of a changed selection
 or obsolete preview version.
 Identifier and within-batch warning rules follow the
 [Work contract](item-metadata-json.md#identifier-comparison-and-suggestions).
@@ -113,7 +138,7 @@ Identifier and within-batch warning rules follow the
 
 `documents.objects` owns descriptor references, reservation checks, expiration retirement and
 idempotent physical deletion. Library's `import_staging_object_keys` reports pending, ready and
-failed retained PDF batches; committed receipts reserve no staging. Core's reservation encoder
+failed retained PDF batches; committed batches reserve no staging. Core's reservation encoder
 separates active ownership from cleanup intent and supports excluding the current cleanup workflow.
 
 Protection reads occur in this order:

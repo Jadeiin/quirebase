@@ -5,7 +5,7 @@ import {
 } from '#lib/features/discovery/search-state.js';
 
 export type ImportListState = {
-	view: 'pending' | 'completed';
+	view: 'uncommitted' | 'committed';
 	page: number;
 	pageSize: number;
 };
@@ -14,7 +14,7 @@ export function readImportListState(parameters: Pick<URLSearchParams, 'get'>): I
 	const page = Number(parameters.get('page') ?? 1);
 	const size = Number(parameters.get('page_size'));
 	return {
-		view: parameters.get('view') === 'completed' ? 'completed' : 'pending',
+		view: parameters.get('view') === 'committed' ? 'committed' : 'uncommitted',
 		page: Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1,
 		pageSize: [10, 20, 25, 50, 100].includes(size) ? size : 20
 	};
@@ -23,7 +23,7 @@ export function readImportListState(parameters: Pick<URLSearchParams, 'get'>): I
 export function importListParameters(state: ImportListState, current?: URLSearchParams) {
 	const parameters = new URLSearchParams(current);
 	for (const key of ['view', 'page', 'page_size']) parameters.delete(key);
-	if (state.view === 'completed') parameters.set('view', state.view);
+	if (state.view === 'committed') parameters.set('view', state.view);
 	if (state.page > 1) parameters.set('page', String(state.page));
 	if (state.pageSize !== 20) parameters.set('page_size', String(state.pageSize));
 	return parameters;

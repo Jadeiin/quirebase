@@ -85,13 +85,13 @@ export function invalidateLibrary(queryClient: QueryClient, workspaceId: string)
 	return invalidate(queryClient, [libraryKeys.all(workspaceId), dashboardKeys.all(workspaceId)]);
 }
 
-export async function invalidateUnavailableImportReceipt(
+export async function invalidateUnavailableImportBatch(
 	queryClient: QueryClient,
 	workspaceId: string,
 	batchId: string
 ) {
 	const scope = libraryImportScope(workspaceId, batchId);
-	// A deleted receipt cannot leave its cached results available offline or let
+	// A deleted batch cannot leave its cached results available offline or let
 	// an earlier read restore them after the deletion is acknowledged.
 	await queryClient.cancelQueries(scope, { revert: false });
 	queryClient.setQueriesData(scope, null, { updatedAt: 0 });

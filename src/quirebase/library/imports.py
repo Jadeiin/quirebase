@@ -93,6 +93,7 @@ class ImportBatchPreview:
     file_format: str
     status: ImportBatchStatus
     workflow_id: str | None
+    can_retry: bool
     records: tuple[ImportCandidatePreview, ...]
     errors: tuple[ImportDiagnostic, ...]
     created_at: datetime
@@ -115,17 +116,17 @@ async def list_import_batches(
     user: User,
     workspace_id: UUID,
     *,
-    view: Literal["pending", "completed"] = "pending",
+    view: Literal["uncommitted", "committed"] = "uncommitted",
     limit: int = 20,
     offset: int = 0,
 ) -> tuple[list[ImportBatchSummary], int]:
-    """List retained previews and receipts without materializing candidate payloads."""
+    """List uncommitted and committed batches without materializing candidate payloads."""
     await require_workspace_action(db, user, workspace_id, ResourceAction.workspace_read)
-    if view not in {"pending", "completed"} or not 1 <= limit <= 100 or offset < 0:
+    if view not in {"uncommitted", "committed"} or not 1 <= limit <= 100 or offset < 0:
         raise ValidationFailure("invalid import pagination")
     predicate = (
         ImportBatch.status == ImportBatchStatus.committed
-        if view == "completed"
+        if view == "committed"
         else ImportBatch.status != ImportBatchStatus.committed
     )
     scope = (ImportBatch.workspace_id == workspace_id, predicate)
@@ -177,6 +178,15 @@ def _import_batch_preview_version(batch: ImportBatch) -> UUID | None:
     return uuid5(batch.id, batch.workflow_id or "") if batch.file_format == "pdf" else None
 
 
+def _can_retry_pdf_import_batch(batch: ImportBatch) -> bool:
+    if batch.file_format != "pdf" or not batch.staged_files:
+        return False
+    return batch.status == "failed" or (
+        batch.status == "ready"
+        and any(error.get("code") in _RETRYABLE_PDF_DIAGNOSTICS for error in batch.errors)
+    )
+
+
 def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPreview:
     """Keep staging joins and actor-only workflow identities inside Library."""
     sources = {file.metadata["source_id"]: file for file in batch.staged_files}
@@ -203,6 +213,7 @@ def _import_batch_preview(batch: ImportBatch, actor_id: UUID) -> ImportBatchPrev
         file_format=batch.file_format,
         status=ImportBatchStatus(batch.status),
         workflow_id=batch.workflow_id if batch.actor_id == actor_id else None,
+        can_retry=_can_retry_pdf_import_batch(batch),
         records=tuple(previews),
         errors=tuple(
             ImportDiagnostic(**{
@@ -288,6 +299,7 @@ async def stage_import_batch(
         workspace_id=workspace_id,
         actor_id=user.id,
         file_format=file_format,
+        status=ImportBatchStatus.ready if records else ImportBatchStatus.failed,
         records=records,
         errors=errors,
     )
@@ -351,6 +363,7 @@ async def stage_identifiers_import_batch(
         workspace_id=workspace_id,
         actor_id=user_id,
         file_format="metadata",
+        status=ImportBatchStatus.ready if records else ImportBatchStatus.failed,
         records=records,
         errors=errors,
     )
@@ -688,12 +701,14 @@ async def finalize_pdf_import_batch(
             })
         seen_identifiers.add(normalized)
     retained_sources = {record["_source_id"] for record in records}
-    batch.staged_files = [
-        file for file in batch.staged_files if file.metadata["source_id"] in retained_sources
-    ]
+    # A batch with no candidates keeps its sources for explicit preparation retry.
+    if records:
+        batch.staged_files = [
+            file for file in batch.staged_files if file.metadata["source_id"] in retained_sources
+        ]
     batch.records = records
     batch.errors = diagnostics
-    batch.status = ImportBatchStatus.ready
+    batch.status = ImportBatchStatus.ready if records else ImportBatchStatus.failed
     record_event(
         db,
         batch.actor_id,
@@ -792,15 +807,15 @@ async def retry_pdf_import_batch(
         await _converge_pdf_import_batch_status(db, batch, workflow)
     if batch.file_format != "pdf":
         raise BatchConflict("only PDF import batches can be retried")
+    if not _can_retry_pdf_import_batch(batch):
+        raise BatchConflict(
+            "only failed PDF preparation with staged PDFs or deferred metadata can be retried"
+        )
     retry_sources = {
         error["source_id"]
         for error in batch.errors
         if error.get("code") in _RETRYABLE_PDF_DIAGNOSTICS
     }
-    if not (batch.status == "failed" or (batch.status == "ready" and retry_sources)):
-        raise BatchConflict("only failed PDF preparation or deferred metadata can be retried")
-    if not batch.staged_files:
-        raise BatchConflict("the failed import batch has no staged PDFs to retry")
     lookups = {
         record["_source_id"]: record["_lookup"] for record in batch.records if "_lookup" in record
     }
@@ -813,6 +828,7 @@ async def retry_pdf_import_batch(
     pending_records = _pdf_import_inputs([
         file for file in batch.staged_files if file.metadata["source_id"] not in retained_sources
     ])
+    retried_sources = {record["_source_id"] for record in pending_records}
     for pending in pending_records:
         if pending["_source_id"] in lookups:
             pending["_lookup"] = lookups[pending["_source_id"]]
@@ -828,10 +844,7 @@ async def retry_pdf_import_batch(
         error
         for error in batch.errors
         if error.get("code") != "authorization_revoked"
-        and not (
-            error.get("code") in _RETRYABLE_PDF_DIAGNOSTICS
-            and error.get("source_id") in retry_sources
-        )
+        and error.get("source_id") not in retried_sources
     ]
     await durable_operations().enqueue_in_transaction(
         db,
@@ -897,11 +910,11 @@ async def commit_import_batch(
     if batch is None or batch.workspace_id != workspace_id:
         raise ImportBatchUnavailable("import batch not found")
     if batch.status == "committed":
-        receipt = _import_batch_preview(batch, actor.id)
+        result = _import_batch_preview(batch, actor.id)
         await db.commit()
-        return receipt
+        return result
     if batch.status != "ready":
-        raise BatchConflict("the import batch is still being prepared")
+        raise BatchConflict("the import batch is not ready for confirmation")
     if batch.file_format == "pdf" and expected_preview_version != _import_batch_preview_version(
         batch
     ):
@@ -971,9 +984,9 @@ async def commit_import_batch(
             operation="import_batch_commit_skipped",
             target_id=batch.id,
         )
-    receipt = _import_batch_preview(batch, actor.id)
+    result = _import_batch_preview(batch, actor.id)
     await db.commit()
-    return receipt
+    return result
 
 
 async def delete_import_batch(

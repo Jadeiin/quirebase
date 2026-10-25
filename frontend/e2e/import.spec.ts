@@ -27,6 +27,7 @@ function importBatch(overrides: Partial<ImportBatch> = {}): ImportBatch {
 		file_format: 'metadata',
 		status: 'ready',
 		workflow_id: null,
+		can_retry: false,
 		preview_version: overrides.file_format === 'pdf' ? pdfPreviewVersion : null,
 		created_at: '2026-10-21T00:00:00Z',
 		committed_item_ids: [],
@@ -46,6 +47,30 @@ function importBatch(overrides: Partial<ImportBatch> = {}): ImportBatch {
 		errors: [],
 		...overrides
 	};
+}
+
+for (const fileFormat of ['metadata', 'pdf'] as const) {
+	test(`failed ${fileFormat} imports without retry inputs retain diagnostics and offer a new import`, async ({
+		page
+	}) => {
+		await mockSession(page);
+		await page.route(`**/api/v1/workspaces/workspace-1/imports/${batchId}`, (route) =>
+			route.fulfill({
+				json: importBatch({
+					file_format: fileFormat,
+					status: 'failed',
+					records: [],
+					errors: [{ code: 'invalid_pdf', message: 'Invalid source', severity: 'error' }]
+				})
+			})
+		);
+		await page.goto(`${importPath}?batch=${batchId}`);
+		await expect(page.getByText('Invalid source', { exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Discard', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'New import', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: importButtonName })).toHaveCount(0);
+	});
 }
 
 async function mockImportedLibrary(page: Page) {
@@ -761,6 +786,7 @@ test('same-name basic PDFs show independent metadata reasons and offer retry', a
 	];
 	const preview = importBatch({
 		file_format: 'pdf',
+		can_retry: true,
 		records: sourceIds.map((sourceId) => ({
 			metadata: { id: `urn:uuid:${sourceId}`, type: 'Document', title: 'same-name' },
 			source: { id: sourceId, original_name: 'same-name.pdf', size: 100 },
@@ -1196,7 +1222,7 @@ test('a lost commit response reconciles its captured batch after navigation with
 	}
 });
 
-test('a late Import creation response cannot replace a committed receipt opened through history', async ({
+test('a late Import creation response cannot replace a committed batch opened through history', async ({
 	page
 }) => {
 	await mockSession(page);
@@ -1215,7 +1241,7 @@ test('a late Import creation response cannot replace a committed receipt opened 
 		responded.resolve();
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/imports?*', (route) => {
-		const completed = new URL(route.request().url()).searchParams.get('view') === 'completed';
+		const completed = new URL(route.request().url()).searchParams.get('view') === 'committed';
 		return route.fulfill({
 			json: directoryPage(
 				creations > 0 && completed === (batch.status === 'committed')
@@ -1293,7 +1319,11 @@ for (const command of ['commit', 'retry'] as const) {
 		await mockSession(page);
 		const release = Promise.withResolvers<void>();
 		const responded = Promise.withResolvers<void>();
-		let batch = importBatch(command === 'retry' ? { status: 'failed', records: [] } : {});
+		let batch = importBatch(
+			command === 'retry'
+				? { file_format: 'pdf', status: 'failed', can_retry: true, records: [] }
+				: {}
+		);
 		let removed = false;
 		let commands = 0;
 		let deletes = 0;
@@ -1338,15 +1368,15 @@ for (const command of ['commit', 'retry'] as const) {
 				batch = importBatch(
 					command === 'commit'
 						? { status: 'committed', committed_item_ids: importedIds }
-						: { status: 'pending', records: [] }
+						: { file_format: 'pdf', status: 'pending', records: [] }
 				);
 				await release.promise;
 				await route.fulfill({ status: command === 'commit' ? 200 : 202, json: batch });
 				responded.resolve();
 			}
 		);
-		const historyQuery = command === 'commit' ? '&view=completed' : '';
-		const historyUrl = `${importHistoryPath}${command === 'commit' ? '?view=completed' : ''}`;
+		const historyQuery = command === 'commit' ? '&view=committed' : '';
+		const historyUrl = `${importHistoryPath}${command === 'commit' ? '?view=committed' : ''}`;
 		try {
 			await page.goto(`${importPath}?batch=${batchId}&from=history${historyQuery}`);
 			await page
@@ -1409,7 +1439,7 @@ test('a late Import commit response preserves lost receipt deletion recovery', a
 	const recoveryResponded = Promise.withResolvers<void>();
 	const refreshStarted = Promise.withResolvers<void>();
 	const releaseRefreshes = Promise.withResolvers<void>();
-	const historyUrl = `${importHistoryPath}?view=completed`;
+	const historyUrl = `${importHistoryPath}?view=committed`;
 	let batch = importBatch();
 	let removed = false;
 	let commits = 0;
@@ -1470,7 +1500,7 @@ test('a late Import commit response preserves lost receipt deletion recovery', a
 		commitResponded.resolve();
 	});
 	try {
-		await page.goto(`${importPath}?batch=${batchId}&from=history&view=completed`);
+		await page.goto(`${importPath}?batch=${batchId}&from=history&view=committed`);
 		await page.getByRole('button', { name: 'Import 2 records', exact: true }).click();
 		await expect.poll(() => commits).toBe(1);
 		await page.getByRole('button', { name: 'Back to import history', exact: true }).click();
@@ -1576,6 +1606,7 @@ test('failed PDF processing retries its staged batch and commits the ready resul
 	let batch = importBatch({
 		file_format: 'pdf',
 		status: 'failed',
+		can_retry: true,
 		records: [],
 		errors: [{ severity: 'error', message: 'PDF metadata service temporarily unavailable' }]
 	});
@@ -1737,7 +1768,7 @@ test('Chinese Import preview fits a 375px dark screen and keeps its primary acti
 	expect(commits).toBe(1);
 });
 
-test('Import history paginates both views and deleting a completed receipt preserves Library Items', async ({
+test('Import history paginates both views and deleting a committed Import Batch preserves Library Items', async ({
 	page
 }) => {
 	await mockSession(page);
@@ -1759,7 +1790,7 @@ test('Import history paginates both views and deleting a completed receipt prese
 	await page.route('**/api/v1/workspaces/workspace-1/imports?*', (route) => {
 		const url = new URL(route.request().url());
 		directoryReads.push(url);
-		const rows = summaries(url.searchParams.get('view') === 'completed').filter(
+		const rows = summaries(url.searchParams.get('view') === 'committed').filter(
 			(row) => !receiptDeleted || row.id !== batchId
 		);
 		return route.fulfill({ json: directoryPage(rows, route) });
@@ -1793,7 +1824,7 @@ test('Import history paginates both views and deleting a completed receipt prese
 	await expect(pendingLast).toBeVisible();
 	await expect(pendingFirst).toHaveCount(0);
 	await expect(pages).toContainText('Page 2 of 2');
-	await page.getByRole('tab', { name: 'Completed imports', exact: true }).click();
+	await page.getByRole('tab', { name: 'Imported', exact: true }).click();
 	const openReceipt = page.locator(`a[href$="batch=${batchId}"]`);
 	await expect(openReceipt).toBeVisible();
 	await expect(pages).toContainText('Page 1 of 2');
@@ -1809,12 +1840,12 @@ test('Import history paginates both views and deleting a completed receipt prese
 	await expect(page.getByRole('tablist', { name: 'Import methods', exact: true })).toHaveCount(0);
 	await page.getByRole('button', { name: 'New import', exact: true }).click();
 	await page.getByRole('link', { name: 'Import history', exact: true }).click();
-	await page.getByRole('tab', { name: 'Completed imports', exact: true }).click();
+	await page.getByRole('tab', { name: 'Imported', exact: true }).click();
 	await page
 		.locator(`[data-import-batch="${batchId}"]`)
 		.getByRole('button', { name: 'Delete import record', exact: true })
 		.click();
-	await expect(page).toHaveURL(`${importHistoryPath}?view=completed`);
+	await expect(page).toHaveURL(`${importHistoryPath}?view=committed`);
 	await expect(page.getByText('Completed source 2 · 2 records', { exact: true })).toBeVisible();
 	await expect(openReceipt).toHaveCount(0);
 	await page
@@ -1831,7 +1862,7 @@ test('Import history paginates both views and deleting a completed receipt prese
 	await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
 	await expect(page.getByText('Imported 2 records', { exact: true })).toHaveCount(0);
 	expect(receiptDeletes).toBe(1);
-	for (const view of ['pending', 'completed']) {
+	for (const view of ['uncommitted', 'committed']) {
 		expect(
 			directoryReads.some(
 				(url) => url.searchParams.get('view') === view && url.searchParams.get('offset') === '20'
@@ -1891,7 +1922,7 @@ test('a lost receipt deletion response reconciles its inactive batch without red
 		})
 	);
 	try {
-		// Warm the Library module and receipt-scoped result cache before deleting.
+		// Warm the Library module and batch-scoped result cache before deleting.
 		await page.goto(`${libraryPath}?import_batch=${batchId}`);
 		await expect(page.locator('[data-library-item-select]')).toHaveCount(2);
 		await expect(page.getByText('Imported reference 1', { exact: true })).toBeVisible();
@@ -1966,7 +1997,7 @@ test('Import directory restores its completed page through batch navigation, rel
 		const url = new URL(route.request().url());
 		directoryReads.push(url);
 		return route.fulfill({
-			json: directoryPage(url.searchParams.get('view') === 'completed' ? summaries : [], route)
+			json: directoryPage(url.searchParams.get('view') === 'committed' ? summaries : [], route)
 		});
 	});
 	await page.route('**/api/v1/workspaces/workspace-1/imports/completed-21', (route) =>
@@ -1983,12 +2014,12 @@ test('Import directory restores its completed page through batch navigation, rel
 		await expect(page).toHaveURL(
 			(url) =>
 				url.searchParams.get('context') === 'saved-position' &&
-				url.searchParams.get('view') === 'completed' &&
+				url.searchParams.get('view') === 'committed' &&
 				Number(url.searchParams.get('page') ?? 1) === number &&
 				Number(url.searchParams.get('page_size') ?? 20) === size &&
 				!url.searchParams.has('batch')
 		);
-		await expect(page.getByRole('tab', { name: 'Completed imports', exact: true })).toHaveAttribute(
+		await expect(page.getByRole('tab', { name: 'Imported', exact: true })).toHaveAttribute(
 			'aria-selected',
 			'true'
 		);
@@ -1996,7 +2027,7 @@ test('Import directory restores its completed page through batch navigation, rel
 	}
 	const lastBatch = page.locator('a[href$="batch=completed-21"]');
 	await page.goto(`${importHistoryPath}?context=saved-position`);
-	await page.getByRole('tab', { name: 'Completed imports', exact: true }).click();
+	await page.getByRole('tab', { name: 'Imported', exact: true }).click();
 	await expectDirectory(1);
 	await pages.getByRole('button', { name: 'Next page', exact: true }).click();
 	await expectDirectory(2);
@@ -2008,7 +2039,7 @@ test('Import directory restores its completed page through batch navigation, rel
 	await expect(page).toHaveURL(
 		(url) =>
 			url.searchParams.get('context') === 'saved-position' &&
-			url.searchParams.get('view') === 'completed' &&
+			url.searchParams.get('view') === 'committed' &&
 			url.searchParams.get('page') === '2' &&
 			url.searchParams.get('batch') === 'completed-21'
 	);
@@ -2028,20 +2059,20 @@ test('Import directory restores its completed page through batch navigation, rel
 	await expectDirectory(1, 10);
 	await page.goBack();
 	await expectDirectory(2);
-	await page.getByRole('tab', { name: 'Pending imports', exact: true }).click();
+	await page.getByRole('tab', { name: 'Not imported', exact: true }).click();
 	await expect(page).toHaveURL(
 		(url) =>
 			url.searchParams.get('context') === 'saved-position' &&
 			!url.searchParams.has('view') &&
 			!url.searchParams.has('page')
 	);
-	await expect(page.getByText('No pending imports', { exact: true })).toBeVisible();
+	await expect(page.getByText('No imports found', { exact: true })).toBeVisible();
 	await page.goBack();
 	await expectDirectory(2);
 	expect(
 		directoryReads.some(
 			(url) =>
-				url.searchParams.get('view') === 'completed' &&
+				url.searchParams.get('view') === 'committed' &&
 				url.searchParams.get('limit') === '20' &&
 				url.searchParams.get('offset') === '20'
 		)
@@ -2071,17 +2102,17 @@ test('Import directory clamps only a successful settled read and replaces the in
 		return route.fulfill({ json: directoryPage(summaries, route) });
 	});
 	const pages = page.getByRole('navigation', { name: 'Import pages', exact: true });
-	await page.goto(`${importHistoryPath}?context=clamp&view=completed`);
+	await page.goto(`${importHistoryPath}?context=clamp&view=committed`);
 	await expect(pages).toContainText('Page 1 of 2');
-	await page.goto(`${importHistoryPath}?context=clamp&view=completed&page=99`);
+	await page.goto(`${importHistoryPath}?context=clamp&view=committed&page=99`);
 	await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
-	await expect(page).toHaveURL(`${importHistoryPath}?context=clamp&view=completed&page=99`);
+	await expect(page).toHaveURL(`${importHistoryPath}?context=clamp&view=committed&page=99`);
 	failInvalidPage = false;
 	await page.getByRole('button', { name: 'Retry', exact: true }).click();
-	await expect(page).toHaveURL(`${importHistoryPath}?context=clamp&view=completed&page=2`);
+	await expect(page).toHaveURL(`${importHistoryPath}?context=clamp&view=committed&page=2`);
 	await expect(pages).toContainText('Page 2 of 2');
 	await page.goBack();
-	await expect(page).toHaveURL(`${importHistoryPath}?context=clamp&view=completed`);
+	await expect(page).toHaveURL(`${importHistoryPath}?context=clamp&view=committed`);
 	await expect(pages).toContainText('Page 1 of 2');
 });
 
@@ -2250,7 +2281,7 @@ test('history deletion preserves focus moved to another control while the reques
 		release.resolve();
 		await expect(discard).toHaveCount(0);
 		await expect(newImport).toBeFocused();
-		await expect(page.getByText('No pending imports', { exact: true })).toBeVisible();
+		await expect(page.getByText('No imports found', { exact: true })).toBeVisible();
 	} finally {
 		release.resolve();
 	}
@@ -2277,7 +2308,7 @@ test('Chinese read-only Import history opens records without offering creation o
 	await page.route('**/api/v1/workspaces/workspace-1/imports?*', (route) =>
 		route.fulfill({
 			json: directoryPage(
-				new URL(route.request().url()).searchParams.get('view') === 'completed'
+				new URL(route.request().url()).searchParams.get('view') === 'committed'
 					? [
 							{
 								id: batchId,
@@ -2301,7 +2332,7 @@ test('Chinese read-only Import history opens records without offering creation o
 	await page.goto(`${importPath}?batch=${batchId}`);
 	await page.getByRole('button', { name: '导入历史', exact: true }).click();
 	await expect(page).toHaveURL(importHistoryPath);
-	await page.getByRole('tab', { name: '已完成的导入', exact: true }).click();
+	await page.getByRole('tab', { name: '已导入', exact: true }).click();
 	const open = page.getByRole('link', { name: '打开导入记录', exact: true });
 	await expect(open).toBeVisible();
 	await expect(page.getByRole('link', { name: '新建导入', exact: true })).toHaveCount(0);

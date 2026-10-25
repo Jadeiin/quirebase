@@ -60,6 +60,7 @@ async function mockBatch(page: Page, titles: string[]) {
 		file_format: 'metadata',
 		status: 'ready',
 		workflow_id: null,
+		can_retry: false,
 		created_at: '2026-10-22T00:00:00Z',
 		committed_item_ids: [],
 		records: titles.map((title, index) => ({

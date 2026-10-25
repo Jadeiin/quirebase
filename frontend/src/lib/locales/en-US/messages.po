@@ -1369,11 +1369,6 @@ msgid "Complete the required fields."
 msgstr "Complete the required fields."
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "Completed imports"
-msgstr "Completed imports"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Component"
 msgstr "Component"
@@ -4007,11 +4002,6 @@ msgid "No Citation Styles match this search."
 msgstr "No Citation Styles match this search."
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "No completed imports"
-msgstr "No completed imports"
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No description"
 msgstr "No description"
@@ -4050,6 +4040,11 @@ msgstr "No external links."
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "No files."
 msgstr "No files."
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "No imports found"
+msgstr "No imports found"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminInvitations.svelte
@@ -4135,11 +4130,6 @@ msgstr "No note text"
 #: src/lib/features/item/ItemActions.svelte
 msgid "No PDF revisions available."
 msgstr "No PDF revisions available."
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "No pending imports"
-msgstr "No pending imports"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -4240,6 +4230,11 @@ msgstr "Not frozen"
 #: src/lib/domain-labels.ts
 msgid "Not generated"
 msgstr "Not generated"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Not imported"
+msgstr "Not imported"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -4605,11 +4600,6 @@ msgstr "Peer review"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "Pending"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "Pending imports"
-msgstr "Pending imports"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminOverview.svelte

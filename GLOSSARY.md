@@ -169,10 +169,15 @@ explicit selection to create an Item with its PDF.
 _Avoid_: Staged Item, Provisional Work.
 
 **Import Batch**:
-A staged collection of Candidate Records, source files and diagnostics awaiting confirmation.
-PDF batches can be pending, ready or failed during preparation. Confirmation creates Items and
-turns the batch into a committed receipt of their identities. Deleting that receipt preserves
-imported Items and Documents but ends confirmation replay and receipt-scoped Library reads.
+A collection tracking Import sources, Candidate Records, diagnostics and the confirmation result.
+An uncommitted batch is pending, ready or failed. Pending means preparation has not finished,
+including queued and running preparation; ready means preparation finished with at least one
+Candidate Record for review; failed means preparation failed or finished without candidates.
+Ready batches may include diagnostics and basic PDF candidates requiring explicit selection.
+Preparing candidates creates no Items. Confirmation creates Items and sets the batch to committed,
+retaining the created Item identities for confirmation replay. Deleting a committed batch preserves
+imported Items and Documents but ends replay and batch-scoped Library reads. Document processing
+and recommendations may continue after confirmation.
 _Avoid_: Staged Import, Import Queue.
 
 **Import**:
@@ -285,7 +290,7 @@ preserving its record.
 - Discovery produces Candidate Records; selecting one refetches metadata into Import.
 - An Import Batch holds Candidate Records and staged source files until confirmed into Items,
   deleted or expired. A committed batch retains the confirmation result and releases its staging
-  data; deleting the receipt preserves the imported Items and Documents.
+  data; deleting the committed batch preserves the imported Items and Documents.
 - Citation Styles format Items during export or citation generation.
 - An Item may have zero or more supported Upstream Identifiers, including multiple DOIs.
   Shared identifiers yield Library duplicate suggestions, independently of Item UUID identity.

@@ -349,8 +349,10 @@ async def test_search_rejects_invalid_or_excessive_clauses():
         await search_metadata("datacite", [SearchClause("any", "and", "term")])
     with pytest.raises(ValueError, match="one to 5"):
         await search_metadata("openalex", [SearchClause("any", "and", "term")] * 6)
-    with pytest.raises(ValueError, match="clause is invalid"):
+    with pytest.raises(ValueError, match="unknown search field"):
         await search_metadata("openalex", [SearchClause("private-field", "and", "term")])
+    with pytest.raises(ValueError, match="unknown search operator"):
+        await search_metadata("openalex", [SearchClause("title", "contains", "term")])
     with pytest.raises(ValueError, match="only supports OR"):
         await search_metadata(
             "openalex",
@@ -392,9 +394,9 @@ async def test_openalex_supports_adjacent_or_on_same_field():
 
 
 async def test_search_validation_and_page_size_are_bounded():
-    with pytest.raises(ValueError, match="clause is invalid"):
+    with pytest.raises(ValueError, match="search term is required"):
         await search_metadata("crossref", [SearchClause("any", "and", " ")])
-    with pytest.raises(ValueError, match="clause is invalid"):
+    with pytest.raises(ValueError, match="300 characters"):
         await search_metadata("crossref", [SearchClause("any", "and", "x" * 301)])
     with pytest.raises(ValueError, match="must not be after"):
         await search_metadata(

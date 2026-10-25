@@ -19,6 +19,7 @@ const workSchema = JSON.parse(
 		'uv',
 		[
 			'run',
+			'--frozen',
 			'--offline',
 			'python',
 			'-c',

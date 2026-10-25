@@ -10,6 +10,7 @@ const ready: ImportBatch = {
 	file_format: 'metadata',
 	status: 'ready',
 	workflow_id: null,
+	can_retry: false,
 	records: [],
 	errors: [],
 	committed_item_ids: [],
@@ -34,7 +35,7 @@ it('deletes a batch using the unified endpoint and retires its cached history wi
 	});
 	const client = queryClient();
 	const preview = importBatchQuery('workspace-1', ready.id);
-	const directory = importBatchesQuery('workspace-1', 'completed', 1, 20);
+	const directory = importBatchesQuery('workspace-1', 'committed', 1, 20);
 	const library = libraryListQuery('workspace-1', {}, 1);
 	const committed: ImportBatch = { ...ready, status: 'committed' };
 	client.setQueryData(preview.queryKey, committed);

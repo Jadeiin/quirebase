@@ -1150,6 +1150,7 @@ async def test_import_commits_valid_duplicate_alongside_invalid_item(persistence
     preview = await stage_import_batch(
         db, actor, workspace_id, json.dumps(values).encode(), "commonmeta"
     )
+    assert preview.status == "ready"
     assert len(preview.records) == 1
     assert any(error.row == 2 and error.code == "invalid_item" for error in preview.errors)
     assert len(preview.errors) == 1

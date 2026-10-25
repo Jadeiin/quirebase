@@ -18,6 +18,8 @@ from inquiro.models import (
     ProviderRateLimited,
     ProviderUnavailable,
     SearchClause,
+    SearchField,
+    SearchOperator,
     SearchQuery,
 )
 from inquiro.runtime import ProviderRuntime, metadata_provider_choices
@@ -44,6 +46,8 @@ __all__ = [
     "ProviderRuntime",
     "ProviderUnavailable",
     "SearchClause",
+    "SearchField",
+    "SearchOperator",
     "SearchQuery",
     "Work",
     "metadata_provider_choices",

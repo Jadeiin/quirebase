@@ -3,7 +3,7 @@ import { CancelledError, QueryClient } from '@tanstack/svelte-query';
 import { expect, it, vi } from 'vitest';
 import {
 	invalidateItemOrganize,
-	invalidateUnavailableImportReceipt,
+	invalidateUnavailableImportBatch,
 	invalidateUnavailableProject
 } from '#lib/query/invalidation.js';
 import {
@@ -730,7 +730,7 @@ it('retires deleted receipt projections across pages and facets without allowing
 		const pendingList = client.fetchQuery(current).catch((reason: unknown) => reason);
 		const pendingFacets = client.fetchQuery(facets).catch((reason: unknown) => reason);
 		await vi.waitFor(() => expect(requests).toHaveLength(2));
-		await invalidateUnavailableImportReceipt(client, 'workspace-1', 'batch-1');
+		await invalidateUnavailableImportBatch(client, 'workspace-1', 'batch-1');
 		for (const request of requests) expect(request.signal.aborted).toBe(true);
 		for (const release of releases) release();
 		expect(await pendingList).toBeInstanceOf(CancelledError);

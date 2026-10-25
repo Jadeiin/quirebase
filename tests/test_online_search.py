@@ -298,6 +298,48 @@ async def test_discovery_search_rejects_invalid_years(
         get_settings.cache_clear()
 
 
+@pytest.mark.parametrize(
+    ("clause", "path", "allowed"),
+    [
+        (
+            {"field": "private", "operator": "and", "term": "quantum"},
+            ["body", "clauses", 0, "field"],
+            ("any", "title", "author", "publication", "abstract"),
+        ),
+        (
+            {"field": "title", "operator": "contains", "term": "quantum"},
+            ["body", "clauses", 0, "operator"],
+            ("and", "or", "not"),
+        ),
+    ],
+)
+@pytest.mark.anyio
+async def test_discovery_search_rejects_unknown_clause_values_before_calling_provider(
+    async_db, async_session_factory, tmp_path, monkeypatch, clause, path, allowed
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    search_candidates = AsyncMock(side_effect=AssertionError("provider must not be called"))
+    monkeypatch.setattr("quirebase.library.discovery.search_candidates", search_candidates)
+    try:
+        response = await client.post(
+            f"/api/v1/workspaces/{item.workspace_id}/discovery/search",
+            json=json_payload({"provider": "crossref", "clauses": [clause]}),
+        )
+        assert response.status_code == 422
+        error = response.json()
+        assert error["code"] == "validation_failed"
+        (field_error,) = error["fields"]
+        assert field_error["path"] == path
+        assert field_error["code"] == "literal_error"
+        assert all(value in field_error["message"] for value in allowed)
+        search_candidates.assert_not_awaited()
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
 @pytest.mark.anyio
 async def test_discovery_search_preserves_sparse_condition_rows(
     async_db, async_session_factory, tmp_path, monkeypatch

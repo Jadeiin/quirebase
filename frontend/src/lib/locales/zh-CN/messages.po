@@ -1369,11 +1369,6 @@ msgid "Complete the required fields."
 msgstr "请填写必填字段。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "Completed imports"
-msgstr "已完成的导入"
-
-#. js-lingui-explicit-id
 #: src/lib/features/item/metadata-labels.ts
 msgid "Component"
 msgstr "组件"
@@ -4007,11 +4002,6 @@ msgid "No Citation Styles match this search."
 msgstr "没有与此搜索匹配的引文样式。"
 
 #. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "No completed imports"
-msgstr "没有已完成的导入"
-
-#. js-lingui-explicit-id
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "No description"
 msgstr "暂无描述"
@@ -4050,6 +4040,11 @@ msgstr "暂无外部链接。"
 #: src/lib/features/item/files/ItemFilesSection.svelte
 msgid "No files."
 msgstr "暂无文件。"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "No imports found"
+msgstr "暂无导入记录"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminInvitations.svelte
@@ -4135,11 +4130,6 @@ msgstr "无批注文字"
 #: src/lib/features/item/ItemActions.svelte
 msgid "No PDF revisions available."
 msgstr "没有可用的 PDF 版本。"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "No pending imports"
-msgstr "没有待处理的导入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/workspaces/WorkspaceInvitations.svelte
@@ -4240,6 +4230,11 @@ msgstr "未冻结"
 #: src/lib/domain-labels.ts
 msgid "Not generated"
 msgstr "未生成"
+
+#. js-lingui-explicit-id
+#: src/lib/features/import/ImportBatchList.svelte
+msgid "Not imported"
+msgstr "未导入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminMaintenance.svelte
@@ -4605,11 +4600,6 @@ msgstr "同行评审"
 #: src/lib/features/admin/AdminShell.svelte
 msgid "Pending"
 msgstr "待处理"
-
-#. js-lingui-explicit-id
-#: src/lib/features/import/ImportBatchList.svelte
-msgid "Pending imports"
-msgstr "待处理的导入"
 
 #. js-lingui-explicit-id
 #: src/lib/features/admin/AdminOverview.svelte

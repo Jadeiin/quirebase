@@ -66,7 +66,7 @@ describe('Library saved views', () => {
 			expect(view.id).toMatch(/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/);
 	});
 
-	it('saves and restores a combined cleanup view within an import receipt', async () => {
+	it('saves and restores a combined cleanup view within an import batch', async () => {
 		const storage = memoryStorage();
 		const filters = {
 			import_batch: 'batch-1',

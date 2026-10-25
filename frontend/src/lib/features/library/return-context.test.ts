@@ -78,7 +78,7 @@ it('keeps the import scope when returning from an Item or PDF', () => {
 	);
 });
 
-it('retains cleanup filters and the import receipt while opening an Item and returning', () => {
+it('retains cleanup filters and the import batch while opening an Item and returning', () => {
 	const context = libraryReturnTo(
 		'workspace-1',
 		'/workspace/workspace-1/library?import_batch=batch-1&has_files=false&has_tags=false&has_projects=false&sort=created&direction=asc&page=2&page_size=50&preview=item-2',

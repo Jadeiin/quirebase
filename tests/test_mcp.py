@@ -209,6 +209,7 @@ async def test_identifier_import_can_be_reviewed_confirmed_and_replayed_through_
             provider="crossref",
         )
         assert preview["committed_item_ids"] == []
+        assert preview["status"] == "ready"
         assert preview["records"][0]["metadata"]["title"] == "Reviewed MCP import"
         assert preview["errors"][0]["code"] == "metadata_not_found"
         assert (await _tool(client, grant.raw_token, "library.search_items", **context))[
@@ -226,6 +227,10 @@ async def test_identifier_import_can_be_reviewed_confirmed_and_replayed_through_
         )
         assert receipt["status"] == "committed"
         assert len(receipt["committed_item_ids"]) == 1
+        receipts = await _tool(
+            client, grant.raw_token, "imports.import_batches", **context, view="committed"
+        )
+        assert [batch["id"] for batch in receipts["items"]] == [receipt["id"]]
         replay = await _tool(
             client, grant.raw_token, "imports.commit_staged_import", **batch_context
         )
@@ -648,6 +653,32 @@ async def test_tool_search_discovers_curated_tools(async_session_factory):
         "description",
         "participation",
     }
+
+
+async def test_discovery_clause_schema_lists_allowed_fields_and_operators(async_session_factory):
+    async with mcp_client(async_session_factory) as (_client, app):
+        schema = await app.state.mcp_server.call_tool(
+            "get_schema", {"tools": ["discovery.search_discovery"]}, run_middleware=False
+        )
+
+    assert schema.is_error is False
+    (definition,) = json.loads(schema.content[0].text)
+    input_schema = definition["inputSchema"]
+    definitions = input_schema["$defs"]
+    clause = definitions["DiscoveryClause"]
+
+    def resolved(property_schema: dict) -> dict:
+        ref = property_schema.get("$ref")
+        return definitions[ref.rsplit("/", 1)[-1]] if ref else property_schema
+
+    assert resolved(clause["properties"]["field"])["enum"] == [
+        "any",
+        "title",
+        "author",
+        "publication",
+        "abstract",
+    ]
+    assert resolved(clause["properties"]["operator"])["enum"] == ["and", "or", "not"]
 
 
 async def test_search_summaries_keep_full_constraints_and_annotations_available(

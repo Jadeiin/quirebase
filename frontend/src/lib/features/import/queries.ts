@@ -1,7 +1,7 @@
 import { queryOptions, replaceEqualDeep, type QueryClient } from '@tanstack/svelte-query';
 import { ApiError, createWorkspaceApi } from '#lib/api/client.js';
 import type { components } from '#lib/api/schema.js';
-import { invalidateUnavailableImportReceipt } from '#lib/query/invalidation.js';
+import { invalidateUnavailableImportBatch } from '#lib/query/invalidation.js';
 import { workspaceKeys } from '#lib/workspaces/keys.js';
 
 export type ImportBatch = components['schemas']['ImportBatchPreview'];
@@ -15,7 +15,7 @@ export const importKeys = {
 
 export function importBatchesQuery(
 	workspaceId: string,
-	view: 'pending' | 'completed',
+	view: 'uncommitted' | 'committed',
 	page: number,
 	pageSize: number
 ) {
@@ -61,7 +61,7 @@ async function requestImportBatch(
 			cache.get(query.queryHash) === query
 		) {
 			client.setQueryData(queryKey, null, { updatedAt: 0 });
-			await invalidateUnavailableImportReceipt(client, workspaceId, batchId);
+			await invalidateUnavailableImportBatch(client, workspaceId, batchId);
 		}
 		throw reason;
 	}
@@ -75,11 +75,11 @@ export function importBatchQuery(workspaceId: string, batchId: string) {
 			requestImportBatch(client, workspaceId, batchId, signal),
 		retry: false,
 		structuralSharing: (previous, next) => {
-			const receipt = previous as ImportBatch | null | undefined;
+			const previousBatch = previous as ImportBatch | null | undefined;
 			const incoming = next as ImportBatch | null;
 			// A read started before commit may finish after its authoritative response.
-			if (receipt?.status === 'committed' && incoming && incoming.status !== 'committed')
-				return receipt;
+			if (previousBatch?.status === 'committed' && incoming && incoming.status !== 'committed')
+				return previousBatch;
 			return replaceEqualDeep(previous, next);
 		},
 		// The batch read owns preparation recovery, including shared previews without a workflow ID.

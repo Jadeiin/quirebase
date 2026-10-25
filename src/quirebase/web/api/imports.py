@@ -32,7 +32,15 @@ async def import_batches(
     workspace_id: UUID,
     user: ApiUser,
     db: Database,
-    view: Literal["pending", "completed"] = "pending",
+    view: Annotated[
+        Literal["uncommitted", "committed"],
+        Query(
+            description=(
+                "`uncommitted` lists Import Batches in preparation states `pending`, `ready`, "
+                "and `failed`; `committed` lists Import Batches whose Items have been created."
+            )
+        ),
+    ] = "uncommitted",
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):

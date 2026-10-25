@@ -13,7 +13,11 @@ function parameters(clauses: unknown, extra: Record<string, string> = {}) {
 	return new URLSearchParams({ clause: JSON.stringify(clauses), ...extra });
 }
 
-const clause = { field: 'any', operator: 'and', term: 'neural networks' };
+const clause: SearchRequest['clauses'][number] = {
+	field: 'any',
+	operator: 'and',
+	term: 'neural networks'
+};
 const candidate: Candidate = {
 	provider: 'crossref',
 	identifier_provider: 'doi',

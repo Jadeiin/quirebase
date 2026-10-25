@@ -15,6 +15,7 @@ const batch: ImportBatch = {
 	file_format: 'metadata',
 	status: 'committed',
 	workflow_id: null,
+	can_retry: false,
 	records: [],
 	errors: [],
 	committed_item_ids: ['item-1'],
@@ -48,7 +49,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-function receiptCaches(workspaceId: string, batchId: string) {
+function batchCaches(workspaceId: string, batchId: string) {
 	return [
 		{
 			key: libraryListQuery(workspaceId, { import_batch: batchId }, 1).queryKey,
@@ -114,7 +115,7 @@ it('accepts a retry response when the original failed snapshot is unchanged', as
 });
 
 it.each([401, 403, 404])(
-	'purges the unavailable receipt and all its Library projections after HTTP %i',
+	'purges the unavailable batch and all its Library projections after HTTP %i',
 	async (status) => {
 		vi.stubGlobal(
 			'fetch',
@@ -125,10 +126,10 @@ it.each([401, 403, 404])(
 		);
 		const client = queryClient();
 		const preview = importBatchQuery('workspace-1', batch.id);
-		const related = receiptCaches('workspace-1', batch.id);
+		const related = batchCaches('workspace-1', batch.id);
 		const unrelated = [
-			...receiptCaches('workspace-1', 'batch-2'),
-			...receiptCaches('workspace-2', batch.id),
+			...batchCaches('workspace-1', 'batch-2'),
+			...batchCaches('workspace-2', batch.id),
 			{ key: libraryListQuery('workspace-1', {}, 1).queryKey, data: snapshot },
 			{ key: libraryFacetsQuery('workspace-1', { project: 'project-1' }).queryKey, data: facets }
 		];
@@ -145,7 +146,7 @@ it.each([401, 403, 404])(
 	}
 );
 
-it('cancels outstanding Library list and facet reads before unavailable receipt data can return', async () => {
+it('cancels outstanding Library list and facet reads before unavailable batch data can return', async () => {
 	const requests: Request[] = [];
 	const releases: Array<() => void> = [];
 	vi.stubGlobal('fetch', async (request: Request) => {
@@ -190,7 +191,7 @@ it('cancels outstanding Library list and facet reads before unavailable receipt 
 	}
 });
 
-it('purges receipt caches when a status read confirms deletion after a lost response', async () => {
+it('purges import batch caches when a status read confirms deletion after a lost response', async () => {
 	const requests: string[] = [];
 	vi.stubGlobal('fetch', async (request: Request) => {
 		requests.push(request.method);
@@ -201,7 +202,7 @@ it('purges receipt caches when a status read confirms deletion after a lost resp
 		);
 	});
 	const client = queryClient();
-	const related = receiptCaches('workspace-1', batch.id);
+	const related = batchCaches('workspace-1', batch.id);
 	for (const { key, data } of related)
 		client.setQueryData<LibrarySearch | LibraryFacets>(key, data);
 	await expect(deleteImportBatch(client, 'workspace-1', batch.id)).resolves.toBeUndefined();
@@ -223,7 +224,7 @@ it.each([0, 429, 500])(
 		});
 		const client = queryClient();
 		const preview = importBatchQuery('workspace-1', batch.id);
-		const related = receiptCaches('workspace-1', batch.id);
+		const related = batchCaches('workspace-1', batch.id);
 		client.setQueryData(preview.queryKey, batch);
 		for (const { key, data } of related)
 			client.setQueryData<LibrarySearch | LibraryFacets>(key, data);

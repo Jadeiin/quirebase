@@ -14,6 +14,7 @@ from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.storage import get_object_store
 from quirebase.library import (
+    BatchConflict,
     get_import_batch_preview,
     retry_pdf_import_batch,
     stage_pdf_import_batch,
@@ -21,6 +22,148 @@ from quirebase.library import (
 from quirebase.models import ImportBatch, User
 
 pytestmark = pytest.mark.anyio
+
+
+async def test_rejected_pdf_uploads_do_not_offer_retry(
+    async_db, async_session_factory, monkeypatch
+):
+    actor = User(username=f"rejected-pdf-{uuid4().hex}", password_hash="unused")
+    async_db.add(actor)
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, actor)
+    await async_db.commit()
+    staged = await stage_pdf_import_batch(
+        async_db, actor, workspace.id, [(b"not a PDF", "invalid.pdf")]
+    )
+    batch = await async_db.get(ImportBatch, staged.id)
+    await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+    failed = await get_import_batch_preview(async_db, actor, workspace.id, batch.id)
+    assert failed.status == "failed"
+    assert not batch.staged_files
+    assert [error.code for error in failed.errors] == ["invalid_pdf"]
+    assert failed.can_retry is False
+    with pytest.raises(BatchConflict):
+        await retry_pdf_import_batch(async_db, actor, workspace.id, batch.id)
+
+
+@pytest.mark.parametrize("recovered", [False, True])
+async def test_zero_candidate_pdf_retries_replace_previous_source_diagnostics(
+    async_db, async_session_factory, monkeypatch, recovered
+):
+    actor = User(username=f"invalid-metadata-retry-{uuid4().hex}", password_hash="unused")
+    async_db.add(actor)
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, actor)
+    await async_db.commit()
+    title = "x" * 1001
+
+    def response(_request):
+        return TransportResponse(
+            200,
+            json.dumps({
+                "message": {
+                    "DOI": "10.1000/retried",
+                    "title": [title],
+                    "type": "journal-article",
+                }
+            }).encode(),
+        )
+
+    exchange = MockExchange(response)
+    monkeypatch.setattr(
+        "quirebase.library.providers.provider_runtime",
+        lambda _settings: ProviderRuntime.with_exchange(ProviderConfig(), exchange),
+    )
+    staged = await stage_pdf_import_batch(
+        async_db,
+        actor,
+        workspace.id,
+        [(published_pdf_bytes("10.1000/retried"), "retried.pdf")],
+    )
+    batch = await async_db.get(ImportBatch, staged.id)
+    await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+    failed = await get_import_batch_preview(async_db, actor, workspace.id, batch.id)
+    assert failed.status == "failed" and not failed.records
+    assert failed.can_retry is True
+    assert [error.code for error in failed.errors] == ["invalid_pdf"]
+    source_id = failed.errors[0].source_id
+    assert source_id is not None
+
+    title = "Recovered metadata" if recovered else "y" * 1002
+    await retry_pdf_import_batch(async_db, actor, workspace.id, batch.id)
+    await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+    current = await get_import_batch_preview(async_db, actor, workspace.id, batch.id)
+    assert len(exchange.requests) == 2
+    if recovered:
+        assert current.status == "ready"
+        assert [record.metadata.title for record in current.records] == [title]
+        assert current.records[0].source.id == source_id
+        assert current.errors == ()
+        assert current.can_retry is False
+    else:
+        assert current.status == "failed" and not current.records
+        assert current.can_retry is True
+        assert [(error.code, error.source_id) for error in current.errors] == [
+            ("invalid_pdf", source_id)
+        ]
+
+
+async def test_metadata_retry_preserves_diagnostics_for_sources_not_retried(
+    async_db, async_session_factory, monkeypatch
+):
+    actor = User(username=f"source-diagnostic-retry-{uuid4().hex}", password_hash="unused")
+    async_db.add(actor)
+    await async_db.flush()
+    workspace = await provision_initial_workspace(async_db, actor)
+    await async_db.commit()
+    recovered = False
+
+    def response(_request):
+        if not recovered:
+            return TransportResponse(429, headers={"Retry-After": "3600"})
+        return TransportResponse(
+            200,
+            json.dumps({
+                "message": {
+                    "DOI": "10.1000/deferred",
+                    "title": ["Recovered metadata"],
+                    "type": "journal-article",
+                }
+            }).encode(),
+        )
+
+    exchange = MockExchange(response)
+    monkeypatch.setattr(
+        "quirebase.library.providers.provider_runtime",
+        lambda _settings: ProviderRuntime.with_exchange(ProviderConfig(), exchange),
+    )
+    staged = await stage_pdf_import_batch(
+        async_db,
+        actor,
+        workspace.id,
+        [
+            (pdf_bytes(), "unidentified.pdf"),
+            (published_pdf_bytes("10.1000/deferred"), "deferred.pdf"),
+        ],
+    )
+    batch = await async_db.get(ImportBatch, staged.id)
+    await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+    preview = await get_import_batch_preview(async_db, actor, workspace.id, batch.id)
+    untouched = next(error for error in preview.errors if error.code == "missing_identifier")
+    assert any(error.code == "provider_rate_limited" for error in preview.errors)
+    assert preview.can_retry is True
+
+    recovered = True
+    await retry_pdf_import_batch(async_db, actor, workspace.id, batch.id)
+    await finish_pdf_import_preview(async_db, async_session_factory, batch, monkeypatch)
+    current = await get_import_batch_preview(async_db, actor, workspace.id, batch.id)
+    assert current.status == "ready"
+    assert current.can_retry is False
+    assert current.errors == (untouched,)
+    assert [record.source.id for record in current.records] == [
+        record.source.id for record in preview.records
+    ]
+    assert len(exchange.requests) == 2
 
 
 async def test_confirmation_rejects_a_preview_superseded_by_metadata_retry(

@@ -97,6 +97,30 @@ def _batch_lookup(lookup):
 
 
 @pytest.mark.anyio
+async def test_import_directory_accepts_only_commit_state_views(
+    async_db, async_session_factory, tmp_path, monkeypatch
+):
+    client, item, _revision = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    url = f"/api/v1/workspaces/{item.workspace_id}/imports"
+    try:
+        for view in ("uncommitted", "committed"):
+            response = await client.get(url, params={"view": view})
+            assert response.status_code == 200
+            assert response.json() == {"items": [], "total": 0, "limit": 20, "offset": 0}
+        for view in ("pending", "completed"):
+            response = await client.get(url, params={"view": view})
+            assert response.status_code == 422
+            error = response.json()
+            assert error["code"] == "validation_failed"
+            assert error["fields"][0]["path"] == ["query", "view"]
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
+@pytest.mark.anyio
 async def test_http_facets_share_search_filters_and_serialize_counts(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -436,10 +460,12 @@ async def test_failed_pdf_import_can_retry_with_a_new_durable_workflow(
         await async_db.commit()
         preview = await client.get(f"{workspace_base}/imports/{batch.id}")
         assert preview.json()["status"] == "failed"
+        assert preview.json()["can_retry"] is True
         retried = await client.post(
             f"{workspace_base}/imports/{batch.id}/retry", json=json_payload({})
         )
         assert retried.status_code == 200
+        assert retried.json()["can_retry"] is False
         await async_db.refresh(batch)
         assert batch.status == "pending"
         assert batch.workflow_id != "prepare-pdf-import:old"

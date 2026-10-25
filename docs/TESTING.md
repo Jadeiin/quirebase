@@ -68,7 +68,8 @@ as TUNA, and can change the source URLs in `uv.lock`. Commits that change the ro
 Python manifests, `uv.toml`, or `uv.lock` trigger the `uv-lock` hook, which refreshes the lockfile
 against official PyPI. If the hook updates `uv.lock`, review and stage it, then retry the commit.
 Python check hooks use `uv run --frozen` so they do not rewrite the lockfile using your local
-mirror settings. Use `uv run --frozen prek ...` when running hooks manually for the same reason.
+mirror settings. Frontend API generation and schema fixtures also use `--frozen` when invoking
+Python through uv. Use `uv run --frozen prek ...` when running hooks manually for the same reason.
 
 ## Frontend localization
 

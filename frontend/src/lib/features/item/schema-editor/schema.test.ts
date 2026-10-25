@@ -7,6 +7,7 @@ const registry = JSON.parse(
 		'uv',
 		[
 			'run',
+			'--frozen',
 			'--offline',
 			'python',
 			'-c',

@@ -24,7 +24,7 @@
 		canCommit,
 		resultHref,
 		onDiscard,
-		onDeleteReceipt,
+		onDeleteImportRecord,
 		onRetry,
 		onCommit,
 		onPage
@@ -35,7 +35,7 @@
 		canCommit: boolean;
 		resultHref: WorkspacePath;
 		onDiscard: () => void;
-		onDeleteReceipt: () => void;
+		onDeleteImportRecord: () => void;
 		onRetry: () => void;
 		onCommit: (basicSourceIds: string[]) => void;
 		onPage: (page: number) => void;
@@ -89,9 +89,7 @@
 			(row) => row.severity === 'warning' && basicDiagnostics.get(row.source_id ?? '') !== row
 		)
 	);
-	const hasDeferredMetadata = $derived(
-		batch.file_format === 'pdf' && batch.status === 'ready' && batch.errors.some(isDeferredMetadata)
-	);
+	const hasDeferredMetadata = $derived(batch.can_retry && batch.status === 'ready');
 
 	function isDeferredMetadata(diagnostic: ImportDiagnostic): boolean {
 		return ['provider_rate_limited', 'provider_unavailable'].includes(diagnostic.code ?? '');
@@ -309,7 +307,7 @@
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				{#if batch.status === 'committed'}
-					{#if canCommit}<Button size="sm" onclick={onDeleteReceipt} disabled={busy}
+					{#if canCommit}<Button size="sm" onclick={onDeleteImportRecord} disabled={busy}
 							>{$t('Delete import record')}</Button
 						>{/if}
 					<Button as="a" variant="filled" class="flex-1 sm:flex-none" href={resolve(resultHref)}
@@ -320,12 +318,13 @@
 					{#if hasDeferredMetadata}<Button onclick={onRetry} disabled={busy}
 							>{$t('Retry metadata')}</Button
 						>{/if}
-					{#if batch.status === 'failed'}<Button
-							variant="filled"
-							class="flex-1 sm:flex-none"
-							onclick={onRetry}
-							disabled={busy}>{$t('Retry')}</Button
-						>
+					{#if batch.status === 'failed'}
+						{#if batch.can_retry}<Button
+								variant="filled"
+								class="flex-1 sm:flex-none"
+								onclick={onRetry}
+								disabled={busy}>{$t('Retry')}</Button
+							>{/if}
 					{:else}<Button
 							variant="filled"
 							class="flex-1 sm:flex-none"

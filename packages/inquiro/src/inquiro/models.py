@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import IO, Literal, Self
+from typing import IO, Literal, Self, get_args
 
 MAX_SEARCH_CLAUSES = 5
 MAX_SEARCH_PAGE_SIZE = 100
 MAX_LOOKUP_BATCH_SIZE = 50
 type SearchSort = Literal["relevance", "published", "cited", "updated"]
+type SearchField = Literal["any", "title", "author", "publication", "abstract"]
+type SearchOperator = Literal["and", "or", "not"]
+# PEP 695 alias objects hide their Literal arguments from get_args until unwrapped.
+SEARCH_FIELDS: frozenset[str] = frozenset(get_args(SearchField.__value__))
+SEARCH_OPERATORS: frozenset[str] = frozenset(get_args(SearchOperator.__value__))
 
 
 @dataclass(frozen=True)
@@ -147,8 +152,8 @@ class LookupOutcome:
 
 @dataclass(frozen=True)
 class SearchClause:
-    field: str
-    operator: str
+    field: SearchField
+    operator: SearchOperator
     term: str
 
 

@@ -89,20 +89,25 @@ Item IDs. The client caches that response without reproducing the batch's state 
 For ready PDF batches, the request supplies `expected_preview_version` from the displayed preview's
 `preview_version`, captured with the confirmation selection. A missing or superseded version returns
 `409 import_batch_conflict`. The client refreshes the preview for review without automatically
-resubmitting confirmation. Committed receipt replay remains valid with an obsolete version.
+resubmitting confirmation. Replaying a committed batch's confirmation result remains valid with
+an obsolete version.
 A lost response is reconciled by reading the captured batch independently of the current
 route; an uncertain outcome retains a status-recovery action. Successful confirmation opens Library
 with `import_batch`, intersecting its original Item IDs with current Workspace visibility and other
 filters. Sorting, facets, saved views and Item return links preserve this scope. Organization uses
-Library's existing bulk actions; deleting Items does not alter the batch's original commit receipt.
+Library's existing bulk actions; deleting Items does not alter the batch's original confirmation
+result.
 The Import page focuses on new imports and does not request history. Its secondary `/import/history`
-page lists paginated pending and completed summaries without loading candidate payloads, with direct
-delete actions for editors.
+page lists paginated uncommitted and committed Import Batches without loading
+candidate payloads, with direct delete actions for editors. Its `view` values are `uncommitted`
+(the default, including pending, ready and failed preparation) and `committed`. The tabs are
+Not imported and Imported. Failed identifier or bibliography imports offer discard
+and a new import; failed PDF imports can retry their staged sources.
 Its `view`, `page` and `page_size` live in the URL and survive opening a batch, returning and
 refreshing. View and Page Size changes reset the page; user pagination pushes history, while a
 settled successful read may replace an out-of-range page.
 Readers can reopen them; editors may delete any batch through `DELETE /imports/{batch_id}`, discarding
-staging or deleting a completed receipt according to its current state. The latter keeps
+staging or deleting a committed Import Batch according to its current state. The latter keeps
 Items and files, and ends replay and `import_batch` filtering with an unavailable response. Imports
 expire after their last state change (seven days by default), except active or unconfirmed durable
 preparations. Reads do not extend retention. Committing releases candidate payloads, diagnostics and workflow linkage.
@@ -164,7 +169,7 @@ Library uses a native table on desktop and a compact list on narrow screens. Tan
 Table owns column visibility, constrained resizing and row-selection mechanics; Query and the URL
 retain server filtering, sorting and pagination. Only the loaded page is selectable. A changed list
 query clears selection, and successful refreshes remove selected IDs that are no longer displayed.
-Organization filters intersect the current search, including an Import receipt, and remain usable
+Organization filters intersect the current search, including an Import Batch filter, and remain usable
 in saved views and Item return links. File presence counts any File Revision or Attachment; Tag
 presence counts Workspace Item–Tag links. Project presence counts only discoverable Projects,
 including archived ones, so hidden managed associations never affect these results. SQL existence
