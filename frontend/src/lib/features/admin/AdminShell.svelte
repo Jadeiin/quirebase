@@ -9,7 +9,8 @@
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import SectionTab from '#lib/design/SectionTab.svelte';
 	import SectionTabs from '#lib/design/SectionTabs.svelte';
-	import { msg, t, type MessageKey } from '#lib/i18n.js';
+	import { msg, ph, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 	import { setAdminFilters } from './filters';
 	import type { AdminFilters, AdminSection } from './queries';
 	import { readAdminFilters, adminListParameters, defaultAdminSortDirection } from './list-state';
@@ -17,15 +18,15 @@
 	let { children }: { children: Snippet } = $props();
 	const id = $props.id();
 
-	const labels: Record<AdminSection, MessageKey> = {
-		overview: msg('Overview'),
-		users: msg('Users'),
-		invitations: msg('Invitations'),
-		workspaces: msg('Workspaces'),
-		audit: msg('Audit'),
-		workflows: msg('Workflows'),
-		settings: msg('Settings'),
-		maintenance: msg('Maintenance')
+	const labels: Record<AdminSection, MessageDescriptor> = {
+		overview: msg`Overview`,
+		users: msg`Users`,
+		invitations: msg`Invitations`,
+		workspaces: msg`Workspaces`,
+		audit: msg`Audit`,
+		workflows: msg`Workflows`,
+		settings: msg`Settings`,
+		maintenance: msg`Maintenance`
 	};
 	const sectionKeys = Object.keys(labels) as AdminSection[];
 	const section = $derived.by(() => {
@@ -118,39 +119,35 @@
 	}
 	setAdminFilters({ filters, setPage, correctPage, setPageSize, setSort });
 
-	const sortOptions: { value: AdminFilters['sort']; label: MessageKey }[] = $derived(
+	const sortOptions: { value: AdminFilters['sort']; label: MessageDescriptor }[] = $derived(
 		section === 'users'
 			? [
-					{ value: 'username', label: msg('Username') },
-					{ value: 'created', label: msg('Created') }
+					{ value: 'username', label: msg`Username` },
+					{ value: 'created', label: msg`Created` }
 				]
 			: section === 'invitations'
 				? [
-						{ value: 'created', label: msg('Created') },
-						{ value: 'expires', label: msg('Expires') },
-						{ value: 'username', label: msg('Username') }
+						{ value: 'created', label: msg`Created` },
+						{ value: 'expires', label: msg`Expires` },
+						{ value: 'username', label: msg`Username` }
 					]
 				: section === 'workspaces'
 					? [
-							{ value: 'name', label: msg('Name') },
-							{ value: 'owner', label: msg('Owner') },
-							{ value: 'created', label: msg('Created') }
+							{ value: 'name', label: msg`Name` },
+							{ value: 'owner', label: msg`Owner` },
+							{ value: 'created', label: msg`Created` }
 						]
-					: [{ value: 'created', label: msg('Created') }]
+					: [{ value: 'created', label: msg`Created` }]
 	);
 	const nextDirection = $derived(applied.direction === 'asc' ? 'desc' : 'asc');
 	function orderLabel(order: AdminFilters['direction']) {
 		if (['username', 'name', 'owner'].includes(applied.sort))
-			return order === 'asc' ? $t('A–Z') : $t('Z–A');
-		if (applied.sort === 'expires')
-			return order === 'asc' ? $t('Earliest first') : $t('Latest first');
-		return order === 'asc' ? $t('Oldest first') : $t('Newest first');
+			return order === 'asc' ? $t`A–Z` : $t`Z–A`;
+		if (applied.sort === 'expires') return order === 'asc' ? $t`Earliest first` : $t`Latest first`;
+		return order === 'asc' ? $t`Oldest first` : $t`Newest first`;
 	}
 	const directionHint = $derived(
-		$t('Sort order: {current}. Switch to {next}.', {
-			current: orderLabel(applied.direction),
-			next: orderLabel(nextDirection)
-		})
+		$t`Sort order: ${ph({ current: orderLabel(applied.direction) })}. Switch to ${ph({ next: orderLabel(nextDirection) })}.`
 	);
 	function changeSort(value: string) {
 		const option = sortOptions.find((option) => option.value === value);
@@ -191,13 +188,13 @@
 
 <SectionHeader>
 	<div>
-		<h1>{$t('Administration')}</h1>
+		<h1>{$t`Administration`}</h1>
 		<p class="text-surface-700-300">
-			{$t('Users, storage, audit, settings, and durable operations.')}
+			{$t`Users, storage, audit, settings, and durable operations.`}
 		</p>
 	</div>
 </SectionHeader>
-<SectionTabs label={$t('Administration sections')}>
+<SectionTabs label={$t`Administration sections`}>
 	{#each sectionKeys as key (key)}
 		<SectionTab href={resolve(sectionPath(key))} current={section === key}
 			>{$t(labels[key])}</SectionTab
@@ -209,104 +206,104 @@
 		<form class="flex min-w-0 flex-wrap items-end gap-3" onsubmit={applyFilters}>
 			{#if section !== 'workflows'}
 				<label data-filter-search class="grid min-w-0 grow basis-full grid-cols-1 gap-1 text-sm"
-					>{$t('Search')}
+					>{$t`Search`}
 					<input class="input h-9 field-sm" type="search" bind:value={searchInput} />
 				</label>
 			{:else}
 				<label data-filter-search class="grid min-w-0 grow basis-full grid-cols-1 gap-1 text-sm"
-					>{$t('Workflow name (exact)')}
+					>{$t`Workflow name (exact)`}
 					<input class="input h-9 field-sm" bind:value={workflowNameFilter} />
 				</label>
 				<label data-filter-field class="grid min-w-0 grow grid-cols-1 gap-1 text-sm"
-					>{$t('State')}
+					>{$t`State`}
 					<select class="select h-9 field-sm" bind:value={workflowStateFilter}>
-						<option value="">{$t('Any state')}</option>
-						<option value="pending">{$t('Pending')}</option>
-						<option value="running">{$t('Running')}</option>
-						<option value="succeeded">{$t('Succeeded')}</option>
-						<option value="failed">{$t('Failed')}</option>
-						<option value="cancelled">{$t('Cancelled')}</option>
+						<option value="">{$t`Any state`}</option>
+						<option value="pending">{$t`Pending`}</option>
+						<option value="running">{$t`Running`}</option>
+						<option value="succeeded">{$t`Succeeded`}</option>
+						<option value="failed">{$t`Failed`}</option>
+						<option value="cancelled">{$t`Cancelled`}</option>
 					</select>
 				</label>
 			{/if}
 			{#if section === 'users' || section === 'invitations'}
 				<label data-filter-field class="grid min-w-0 grow grid-cols-1 gap-1 text-sm"
-					>{$t('Role')}
+					>{$t`Role`}
 					<select class="select h-9 field-sm" bind:value={roleFilter}>
-						<option value="">{$t('All roles')}</option>
-						<option value="member">{$t('Member')}</option>
-						<option value="administrator">{$t('Administrator')}</option>
+						<option value="">{$t`All roles`}</option>
+						<option value="member">{$t`Member`}</option>
+						<option value="administrator">{$t`Administrator`}</option>
 					</select>
 				</label>
 				<label data-filter-field class="grid min-w-0 grow grid-cols-1 gap-1 text-sm"
-					>{$t('Status')}
+					>{$t`Status`}
 					{#if section === 'users'}
 						<select class="select h-9 field-sm" bind:value={activeFilter}>
-							<option value="">{$t('Any status')}</option>
-							<option value="true">{$t('Active')}</option>
-							<option value="false">{$t('Disabled')}</option>
+							<option value="">{$t`Any status`}</option>
+							<option value="true">{$t`Active`}</option>
+							<option value="false">{$t`Disabled`}</option>
 						</select>
 					{:else}
 						<select class="select h-9 field-sm" bind:value={invitationStateFilter}>
-							<option value="">{$t('Any status')}</option>
-							<option value="pending">{$t('Pending')}</option>
-							<option value="accepted">{$t('Accepted')}</option>
-							<option value="revoked">{$t('Revoked')}</option>
-							<option value="expired">{$t('Expired')}</option>
+							<option value="">{$t`Any status`}</option>
+							<option value="pending">{$t`Pending`}</option>
+							<option value="accepted">{$t`Accepted`}</option>
+							<option value="revoked">{$t`Revoked`}</option>
+							<option value="expired">{$t`Expired`}</option>
 						</select>
 					{/if}
 				</label>
 			{:else if section === 'workspaces'}
 				<label data-filter-field class="grid min-w-0 grow grid-cols-1 gap-1 text-sm"
-					>{$t('State')}
+					>{$t`State`}
 					<select class="select h-9 field-sm" bind:value={workspaceStateFilter}>
-						<option value="">{$t('Any state')}</option>
-						<option value="active">{$t('Active')}</option>
-						<option value="archived">{$t('Archived')}</option>
+						<option value="">{$t`Any state`}</option>
+						<option value="active">{$t`Active`}</option>
+						<option value="archived">{$t`Archived`}</option>
 					</select>
 				</label>
 				<label data-filter-field class="grid min-w-0 grow grid-cols-1 gap-1 text-sm"
-					>{$t('Write freeze')}
+					>{$t`Write freeze`}
 					<select class="select h-9 field-sm" bind:value={frozenFilter}>
-						<option value="">{$t('Any status')}</option>
-						<option value="true">{$t('Frozen')}</option>
-						<option value="false">{$t('Not frozen')}</option>
+						<option value="">{$t`Any status`}</option>
+						<option value="true">{$t`Frozen`}</option>
+						<option value="false">{$t`Not frozen`}</option>
 					</select>
 				</label>
 				<label data-filter-field class="grid min-w-0 grow grid-cols-1 gap-1 text-sm"
-					>{$t('Owner account')}
+					>{$t`Owner account`}
 					<select class="select h-9 field-sm" bind:value={ownerActiveFilter}>
-						<option value="">{$t('Any status')}</option>
-						<option value="true">{$t('Active')}</option>
-						<option value="false">{$t('Disabled')}</option>
+						<option value="">{$t`Any status`}</option>
+						<option value="true">{$t`Active`}</option>
+						<option value="false">{$t`Disabled`}</option>
 					</select>
 				</label>
 			{:else if section === 'audit'}
 				<label data-filter-text class="grid min-w-0 grow basis-36 grid-cols-1 gap-1 text-sm"
-					>{$t('Action')}
+					>{$t`Action`}
 					<input class="input h-9 field-sm" bind:value={actionFilter} />
 				</label>
 				<label data-filter-text class="grid min-w-0 grow basis-36 grid-cols-1 gap-1 text-sm"
-					>{$t('Target type')}
+					>{$t`Target type`}
 					<input class="input h-9 field-sm" bind:value={targetTypeFilter} />
 				</label>
 			{/if}
 			<div data-filter-actions class="flex min-w-0 grow basis-full flex-wrap items-end gap-3">
 				<div data-filter-buttons class="flex grow basis-48 gap-2">
-					<Button variant="filled" size="sm" class="h-9 flex-1">{$t('Apply filters')}</Button>
+					<Button variant="filled" size="sm" class="h-9 flex-1">{$t`Apply filters`}</Button>
 					<Button type="button" size="sm" class="h-9 flex-1" onclick={clearFilters}
-						>{$t('Clear filters')}</Button
+						>{$t`Clear filters`}</Button
 					>
 				</div>
 				<div data-filter-sort class="grid min-w-0 grow basis-36 grid-cols-1 gap-1 text-sm">
-					<label for={`${id}-sort`}>{$t('Sort By')}</label>
+					<label for={`${id}-sort`}>{$t`Sort By`}</label>
 					<div
 						role="group"
-						aria-label={$t('Sort')}
+						aria-label={$t`Sort`}
 						class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
 					>
 						<select
-							aria-label={$t('Sort By')}
+							aria-label={$t`Sort By`}
 							id={`${id}-sort`}
 							class="select h-9 field-sm"
 							value={applied.sort}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getFormContext, retrieveUiOption, type ComponentProps } from '@sjsf/form';
 	import ObjectProperty from '@sjsf/form/fields/object/object-property-field.svelte';
-	import { activeLocale } from '#lib/i18n.js';
+	import { activeLocale } from '#lib/locale.js';
 	import { fieldTitle } from './labels.js';
 	import { getFieldVisibility } from './field-visibility.svelte.js';
 	import { fieldSummary } from './summary.js';

@@ -10,7 +10,7 @@
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { dateFormat } from '#lib/format.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 
 	type User = components['schemas']['AdminUserView'];
 
@@ -46,26 +46,26 @@
 
 <SectionHeader spacing="compact">
 	<div>
-		<h2>{$t('Users')} <span class="text-surface-600-400">({users.total})</span></h2>
-		<p class="text-sm text-surface-600-400">{$t('Manage accounts, roles, and sign-in access.')}</p>
+		<h2>{$t`Users`} <span class="text-surface-600-400">({users.total})</span></h2>
+		<p class="text-sm text-surface-600-400">{$t`Manage accounts, roles, and sign-in access.`}</p>
 	</div>
 	{#snippet actions()}
-		<Button type="button" disabled={busy} onclick={onRefresh}>{$t('Refresh')}</Button>
+		<Button type="button" disabled={busy} onclick={onRefresh}>{$t`Refresh`}</Button>
 		<Button
 			variant="filled"
 			disabled={busy}
 			aria-expanded={createOpen}
-			onclick={() => (createOpen = !createOpen)}>{$t('Create user')}</Button
+			onclick={() => (createOpen = !createOpen)}>{$t`Create user`}</Button
 		>
 	{/snippet}
 </SectionHeader>
 
 {#if createOpen}
 	<Panel as="form" class="mb-4 grid grid-cols-1 gap-3" onsubmit={onCreateUser}>
-		<h3>{$t('Create user')}</h3>
+		<h3>{$t`Create user`}</h3>
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 			<label
-				>{$t('Username')}<input
+				>{$t`Username`}<input
 					disabled={busy}
 					class="input"
 					name="username"
@@ -74,7 +74,7 @@
 				/></label
 			>
 			<label
-				>{$t('Password')}<input
+				>{$t`Password`}<input
 					disabled={busy}
 					class="input"
 					name="password"
@@ -85,16 +85,16 @@
 				/></label
 			>
 			<label
-				>{$t('Role')}<select disabled={busy} class="select" name="role">
-					<option value="member">{$t('Member')}</option>
-					<option value="administrator">{$t('Administrator')}</option>
+				>{$t`Role`}<select disabled={busy} class="select" name="role">
+					<option value="member">{$t`Member`}</option>
+					<option value="administrator">{$t`Administrator`}</option>
 				</select></label
 			>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<Button variant="filled" disabled={busy}>{$t('Create user')}</Button>
+			<Button variant="filled" disabled={busy}>{$t`Create user`}</Button>
 			<Button type="button" disabled={busy} onclick={() => (createOpen = false)}
-				>{$t('Cancel')}</Button
+				>{$t`Cancel`}</Button
 			>
 		</div>
 	</Panel>
@@ -102,31 +102,31 @@
 
 <Panel padding="none">
 	{#if users.items.length}
-		<DataTable label={$t('Users')}>
+		<DataTable label={$t`Users`}>
 			<thead>
 				<tr>
-					<th scope="col">{$t('Username')}</th>
-					<th scope="col">{$t('Role')}</th>
-					<th scope="col">{$t('Status')}</th>
-					<th scope="col">{$t('Created')}</th>
-					<th scope="col">{$t('Actions')}</th>
+					<th scope="col">{$t`Username`}</th>
+					<th scope="col">{$t`Role`}</th>
+					<th scope="col">{$t`Status`}</th>
+					<th scope="col">{$t`Created`}</th>
+					<th scope="col">{$t`Actions`}</th>
 				</tr>
 			</thead>
 			{#each users.items as user (user.id)}
 				<tbody aria-label={user.username}>
 					<tr>
 						<th scope="row" class="font-semibold">{user.username}</th>
-						<td data-label={$t('Role')}>{$t(domainLabel(user.role))}</td>
-						<td data-label={$t('Status')}>
+						<td data-label={$t`Role`}>{$t(domainLabel(user.role))}</td>
+						<td data-label={$t`Status`}>
 							<Badge variant={user.active ? 'success' : 'surface'}
-								>{user.active ? $t('Active') : $t('Disabled')}</Badge
+								>{user.active ? $t`Active` : $t`Disabled`}</Badge
 							>
 						</td>
-						<td data-label={$t('Created')}>
+						<td data-label={$t`Created`}>
 							<time datetime={user.created_at}>{$dateFormat.format(new Date(user.created_at))}</time
 							>
 						</td>
-						<td data-label={$t('Actions')}>
+						<td data-label={$t`Actions`}>
 							<Button
 								type="button"
 								size="sm"
@@ -134,7 +134,7 @@
 								aria-expanded={expandedUsers.has(user.id)}
 								aria-controls={`admin-user-manage-${user.id}`}
 								onclick={() => toggleUser(user.id)}
-								>{$t('Manage user')}<span class:rotate-180={expandedUsers.has(user.id)}
+								>{$t`Manage user`}<span class:rotate-180={expandedUsers.has(user.id)}
 									><Icon name="chevron-down" size={14} /></span
 								></Button
 							>
@@ -148,20 +148,20 @@
 									onsubmit={(event) => onUpdateUserRole(event, user.id)}
 								>
 									<label class="min-w-36"
-										>{$t('Role for {username}', { username: user.username })}
+										>{$t`Role for ${ph({ username: user.username })}`}
 										<select disabled={busy} class="select" name="role" value={user.role}>
-											<option value="member">{$t('Member')}</option>
-											<option value="administrator">{$t('Administrator')}</option>
+											<option value="member">{$t`Member`}</option>
+											<option value="administrator">{$t`Administrator`}</option>
 										</select>
 									</label>
-									<Button disabled={busy}>{$t('Save role')}</Button>
+									<Button disabled={busy}>{$t`Save role`}</Button>
 								</form>
 								<form
 									class="flex flex-wrap items-end gap-2"
 									onsubmit={(event) => onResetUserPassword(event, user.id)}
 								>
 									<label class="min-w-0 grow sm:max-w-sm"
-										>{$t('New password for {username}', { username: user.username })}
+										>{$t`New password for ${ph({ username: user.username })}`}
 										<input
 											disabled={busy}
 											class="input"
@@ -172,19 +172,17 @@
 											required
 										/>
 									</label>
-									<Button disabled={busy}>{$t('Reset password')}</Button>
+									<Button disabled={busy}>{$t`Reset password`}</Button>
 								</form>
 								<p class="text-sm text-surface-600-400">
-									{$t(
-										'Disabling a user ends all sessions and blocks access. Workspace ownership stays assigned; reassign it in Workspace management.'
-									)}
+									{$t`Disabling a user ends all sessions and blocks access. Workspace ownership stays assigned; reassign it in Workspace management.`}
 								</p>
 								<div class="flex flex-wrap gap-2 border-t border-surface-300-700 pt-3">
 									<Button disabled={busy} onclick={() => onRevokeUserSessions(user.id)}
-										>{$t('Revoke sessions')}</Button
+										>{$t`Revoke sessions`}</Button
 									>
 									<Button disabled={busy} onclick={() => onUpdateUserStatus(user)}
-										>{user.active ? $t('Disable user') : $t('Enable user')}</Button
+										>{user.active ? $t`Disable user` : $t`Enable user`}</Button
 									>
 								</div>
 							</div>
@@ -194,7 +192,7 @@
 			{/each}
 		</DataTable>
 	{:else}
-		<p class="px-5 py-6 text-surface-600-400">{$t('No users.')}</p>
+		<p class="px-5 py-6 text-surface-600-400">{$t`No users.`}</p>
 	{/if}
 	{@render pagination()}
 </Panel>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import LoadingState from '#lib/design/LoadingState.svelte';
 	import type { Snippet } from 'svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 
 	let {
 		loading,
@@ -16,11 +16,11 @@
 
 {#if loading}
 	<div class="grid min-h-52 grid-cols-1 place-items-center text-surface-600-400">
-		<LoadingState label={$t('Loading') + '…'} class="w-full" />
+		<LoadingState label={$t`Loading` + '…'} class="w-full" />
 	</div>
 {:else if failed}
 	<div class="grid min-h-52 grid-cols-1 place-items-center text-error-700-300">
-		{$t('Unable to open this Item section.')}
+		{$t`Unable to open this Item section.`}
 	</div>
 {:else}
 	{@render children()}

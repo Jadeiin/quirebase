@@ -4,9 +4,8 @@ from uuid import uuid4
 
 import pymupdf
 import pytest
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from sqlalchemy import event, select
-from test_http import authenticated_async_client
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.access import (

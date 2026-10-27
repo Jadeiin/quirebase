@@ -4,9 +4,13 @@ Date: 2026-09-16
 
 ## Adoption outcome
 
-Quirebase uses Lingui with committed PO catalogs, a project-local Svelte extractor and generated
-TypeScript runtime messages. Locale is a browser preference managed with `@lingui/detect-locale`.
+Quirebase uses Lingui with committed PO catalogs, `lingui-for-svelte` macros/extraction and generated
+TypeScript runtime messages. Ordinary TypeScript uses official Core macros and the Babel extractor.
+Locale is a browser preference managed with `@lingui/detect-locale`.
 [Testing](../TESTING.md#frontend-localization) documents the active workflow.
+
+The Svelte integration was migrated on 2026-10-27; the dated comparison below describes the earlier
+project-local adapter. See the [migration evaluation](2026-10-26-lingui-for-svelte-upstream.md).
 
 The PO requirement decided against Paraglide: the researched official Svelte add-on and storage
 plugin use Inlang Message Format JSON. Supporting PO would require a maintained storage plugin or
@@ -209,7 +213,7 @@ The [application contract](../architecture/application-http-boundary.md) defines
 Lingui's built-in extractor supports JavaScript/TypeScript, while Svelte syntax needs a custom
 extractor ([message extraction](https://lingui.dev/guides/message-extraction#supported-source-types)).
 Quirebase implements that seam in
-[`i18n-extractor.ts`](../../frontend/src/lib/i18n-extractor.ts), recognizing literal `$t` calls and
+[`i18n-extractor.ts` at the evaluated revision](https://github.com/Jadeiin/quirebase/blob/2c6dd3aec88959bc2047eb42dc32b32f52d1d62c/frontend/src/lib/i18n-extractor.ts), recognizing literal `$t` calls and
 marked `msg` descriptors. Fixture tests verify extraction and rejected dynamic markers. It feeds
 Lingui's official PO merge/POT/compile pipeline without owning a general gettext storage plugin.
 

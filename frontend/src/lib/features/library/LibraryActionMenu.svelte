@@ -2,7 +2,7 @@
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { buttonClass } from '#lib/design/button-classes.js';
 	import Icon from '#lib/design/Icon.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { canRunBulkAction } from '#lib/workspaces/actions.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import {
@@ -49,12 +49,12 @@
 					class={secondaryOnly ? buttonClass('tonal', 'sm') : buttonClass('icon', 'sm')}
 					data-library-item-actions={itemId}
 					data-library-selection-actions={secondaryOnly ? '' : undefined}
-					aria-label={label ?? (secondaryOnly ? $t('More actions') : $t('Item actions'))}
+					aria-label={label ?? (secondaryOnly ? $t`More actions` : $t`Item actions`)}
 					aria-keyshortcuts={itemId ? 'Shift+F10' : undefined}
-					title={label ?? (secondaryOnly ? $t('More actions') : $t('Item actions'))}
+					title={label ?? (secondaryOnly ? $t`More actions` : $t`Item actions`)}
 				>
 					<Icon name="more" size={18} />
-					{#if secondaryOnly}<span>{$t('More')}</span>{/if}
+					{#if secondaryOnly}<span>{$t`More`}</span>{/if}
 				</button>
 			{/snippet}
 		</Menu.Trigger>
@@ -65,7 +65,7 @@
 					class="z-60 max-h-[min(70vh,32rem)] w-64 max-w-[calc(100vw-2rem)] min-w-0 overflow-y-auto border-surface-300-700 p-1 shadow-xl"
 				>
 					<div class="px-2.5 py-2 text-xs font-semibold text-surface-600-400">
-						{itemId ? $t('Current Item') : $t('{count} selected', { count: selectedCount })}
+						{itemId ? $t`Current Item` : $t`${ph({ count: selectedCount })} selected`}
 					</div>
 					{#each availableActions as entry (entry.action)}
 						{#if entry.action === 'remove_tag' || entry.action === 'delete_items'}

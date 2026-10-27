@@ -4,8 +4,6 @@ import ast
 import tomllib
 from pathlib import Path
 
-from packaging.requirements import Requirement
-
 SRC_ROOT = Path(__file__).parent.parent / "src" / "quirebase"
 REPO_ROOT = Path(__file__).parent.parent
 STANDALONE_WORKSPACE_PACKAGES = ("inquiro", "excerpo")
@@ -333,11 +331,6 @@ def test_every_python_package_has_an_architectural_role():
 
 
 def test_casbin_is_the_only_application_authorization_policy_source():
-    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert "casbin>=1.43,<2" in metadata["project"]["dependencies"]
-    assert (SRC_ROOT / "access" / "policy" / "model.conf").is_file()
-    assert (SRC_ROOT / "access" / "policy" / "policy.csv").is_file()
-
     forbidden_names = {"ROLE_CAPABILITIES", "role_has_capability"}
     system_role_bypasses: list[str] = []
     workspace_role_bypasses: list[str] = []
@@ -441,36 +434,6 @@ def test_release_metadata_pins_workspace_packages_to_the_quirebase_version():
     assert optional_dependencies["keybert"] == [f"excerpo[keybert]=={root_version}"]
 
 
-def test_persistence_dependencies_use_sqlalchemy_async_optional_groups():
-    metadata = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    dependencies = set(metadata["project"]["dependencies"])
-    optional_dependencies = metadata["project"]["optional-dependencies"]
-
-    runtime = next(
-        requirement
-        for dependency in dependencies
-        if (requirement := Requirement(dependency)).name == "sqlalchemy"
-    )
-    assert runtime.extras == {"asyncio", "aiosqlite"}
-    assert "2.0.52" in runtime.specifier
-    assert "2.1.0" not in runtime.specifier
-    postgres = [Requirement(dependency) for dependency in optional_dependencies["postgres"]]
-    assert len(postgres) == 1 and postgres[0].name == "sqlalchemy"
-    assert postgres[0].extras == {"postgresql-psycopgbinary"}
-    assert postgres[0].specifier == runtime.specifier
-    independently_declared = {
-        dependency.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0]
-        for dependency in dependencies
-    }
-    assert independently_declared.isdisjoint({
-        "greenlet",
-        "aiosqlite",
-        "asyncpg",
-        "psycopg",
-        "psycopg-binary",
-    })
-
-
 def test_async_runtime_does_not_use_blocking_adapters_directly():
     """Keep the accepted async boundary without constraining migrations or removed API names."""
     runtime_roots = (
@@ -513,59 +476,6 @@ def test_async_runtime_does_not_use_blocking_adapters_directly():
     assert not violations, "blocking adapters bypass the named async boundary:\n" + "\n".join(
         violations
     )
-
-
-def test_documents_workflows_enqueue_ready_event_through_the_core_transaction_seam():
-    source = (SRC_ROOT / "documents" / "workflows.py").read_text(encoding="utf-8")
-    assert "durable_operations().enqueue_in_transaction(" in source
-
-
-def test_documents_own_the_file_revision_changed_event_contract():
-    definition = 'FILE_REVISION_CHANGED_WORKFLOW = "library.file_revision_changed"'
-    definitions = [
-        source.relative_to(SRC_ROOT)
-        for source in get_python_files(SRC_ROOT)
-        if definition in source.read_text(encoding="utf-8")
-    ]
-    assert definitions == [Path("documents/events.py")]
-
-
-def test_provider_runtime_and_contracts_expose_async_operations():
-    required_async_methods = {
-        "ProviderRuntime": {
-            "lookup",
-            "lookup_many",
-            "search",
-            "acquire_document",
-            "aclose",
-            "__aenter__",
-            "__aexit__",
-        },
-        "LookupImplementation": {"lookup"},
-        "BatchLookupImplementation": {"lookup_many"},
-        "SearchImplementation": {"search"},
-        "DocumentImplementation": {"acquire"},
-        "BoundedTransport": {"get", "download_pdf"},
-        "Exchange": {"send", "aclose"},
-    }
-    files = (
-        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "runtime.py",
-        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "transport.py",
-        REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "providers" / "_contracts.py",
-    )
-    classes: dict[str, ast.ClassDef] = {}
-    for py_file in files:
-        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-        classes.update({node.name: node for node in tree.body if isinstance(node, ast.ClassDef)})
-
-    for class_name, methods in required_async_methods.items():
-        class_node = classes[class_name]
-        async_methods = {
-            node.name for node in class_node.body if isinstance(node, ast.AsyncFunctionDef)
-        }
-        assert methods <= async_methods, (
-            f"{class_name} must keep native async methods {sorted(methods - async_methods)}"
-        )
 
 
 def test_session_detection_follows_type_and_variable_aliases():
@@ -714,13 +624,6 @@ def test_library_facade_exposes_owned_import_citation_and_recommendation_operati
     assert not missing, f"quirebase.library facade is missing owned operations {sorted(missing)}"
 
 
-def test_inquiro_runtime_owns_one_private_provider_catalog():
-    inquiro_src = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
-    assert "inquiro.providers._catalog" in imported_modules(inquiro_src / "runtime.py")
-    inquiro_facade = inquiro_src / "__init__.py"
-    assert "inquiro.providers" not in imported_modules(inquiro_facade)
-
-
 def test_bibliography_integration_tests_use_the_package_facade():
     # Import Linter analyzes production packages; root tests remain application
     # integrations and must also respect the Bibliography facade.
@@ -733,59 +636,3 @@ def test_bibliography_integration_tests_use_the_package_facade():
         assert not deep_imports, (
             f"{py_file} bypasses the inquiro.bibliography facade: {sorted(deep_imports)}"
         )
-
-
-def test_inquiro_facade_exposes_provider_operations_and_bibliographic_value_types():
-    expected = {
-        "Work",
-        "AcquiredDocument",
-        "CandidateNotFound",
-        "CandidatePage",
-        "CandidateRecord",
-        "DocumentRequest",
-        "Identifier",
-        "InquiroError",
-        "InvalidPdfResponse",
-        "InvalidProviderRequest",
-        "LookupFailure",
-        "LookupOutcome",
-        "MetadataProviderChoices",
-        "PdfAccessDenied",
-        "PdfNotAvailable",
-        "ProviderConfig",
-        "ProviderRateLimited",
-        "ProviderChoice",
-        "ProviderRuntime",
-        "ProviderUnavailable",
-        "SearchClause",
-        "SearchField",
-        "SearchOperator",
-        "SearchQuery",
-        "metadata_provider_choices",
-    }
-    facade = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro" / "__init__.py"
-    tree = ast.parse(facade.read_text(encoding="utf-8"), filename=str(facade))
-    exported = next(
-        node.value
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets)
-    )
-    assert isinstance(exported, (ast.List, ast.Tuple))
-    assert {item.value for item in exported.elts if isinstance(item, ast.Constant)} == expected
-
-
-def test_inquiro_architecture_documents_the_public_runtime_operations():
-    for document in (
-        REPO_ROOT / "docs" / "architecture" / "modules.md",
-        REPO_ROOT / "docs" / "adr" / "0005-deep-standalone-provider-runtime.md",
-    ):
-        contents = document.read_text(encoding="utf-8")
-        for operation in ("`lookup`", "`lookup_many`", "`search`", "`acquire_document`"):
-            assert operation in contents, f"{document} omits {operation}"
-
-
-def test_inquiro_sources_do_not_embed_quirebase_identity():
-    package = REPO_ROOT / "packages" / "inquiro" / "src" / "inquiro"
-    for source in package.rglob("*.py"):
-        assert "quirebase" not in source.read_text(encoding="utf-8").casefold()

@@ -6,7 +6,7 @@
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { kilobytes, numberFormat } from '#lib/format.js';
 	import Panel from '#lib/design/Panel.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import type { FileRow, FilesView } from '../types';
 	import Button from '#lib/design/Button.svelte';
 	import FilePicker from '#lib/design/FilePicker.svelte';
@@ -60,7 +60,7 @@
 
 <div class="grid grid-cols-1 gap-4 min-[800px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
 	<Panel class="grid grid-cols-1 content-start gap-4">
-		<h2 class="mb-0">{$t('Files')}</h2>
+		<h2 class="mb-0">{$t`Files`}</h2>
 		{#each data.files as file (file.id)}
 			<ItemRow
 				class="grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
@@ -71,18 +71,17 @@
 						<strong class="truncate" title={file.original_name}>{file.original_name}</strong>
 					</span>
 					<span class="text-sm text-surface-600-400"
-						>{$t('{kind} · {size} KB', {
-							kind: $t(domainLabel(file.kind)),
-							size: $numberFormat.format(kilobytes(file.size))
-						})}{file.processing_state ? ` · ${$t(domainLabel(file.processing_state))}` : ''}</span
+						>{$t`${ph({ kind: $t(domainLabel(file.kind)) })} · ${ph({ size: $numberFormat.format(kilobytes(file.size)) })} KB`}{file.processing_state
+							? ` · ${$t(domainLabel(file.processing_state))}`
+							: ''}</span
 					>
 					{#if file.processing_state === 'failed'}<p class="mb-0 text-sm text-error-700-300">
-							{$t('PDF processing failed. Retry processing or replace this file.')}
+							{$t`PDF processing failed. Retry processing or replace this file.`}
 						</p>{/if}
 				</div>
 				<div class="flex flex-wrap items-center gap-2 sm:justify-end">
 					{#if canEdit && file.kind === 'revision' && file.processing_state === 'failed'}
-						<Button disabled={busy} onclick={() => onRetry(file)}>{$t('Retry processing')}</Button>
+						<Button disabled={busy} onclick={() => onRetry(file)}>{$t`Retry processing`}</Button>
 					{/if}
 					{#if file.kind === 'revision' && file.processing_state === 'ready'}
 						<Button
@@ -95,21 +94,21 @@
 									`pdf/${file.id}`,
 									readLibraryReturnTo(workspaceId, page.url.searchParams)
 								)
-							)}>{$t('Read')}</Button
+							)}>{$t`Read`}</Button
 						>
 					{/if}
 					{#if workspace.can('workspace.export')}<Button onclick={() => onDownload(file)}
-							>{$t('Download')}</Button
+							>{$t`Download`}</Button
 						>{/if}
 					{#if canDelete}
 						<Button variant="danger" disabled={busy} onclick={() => onDelete(file)}
-							>{$t('Delete')}</Button
+							>{$t`Delete`}</Button
 						>
 					{/if}
 				</div>
 			</ItemRow>
 		{:else}
-			<p class="mb-0 text-surface-600-400">{$t('No files.')}</p>
+			<p class="mb-0 text-surface-600-400">{$t`No files.`}</p>
 		{/each}
 	</Panel>
 	{#if canEdit}
@@ -120,18 +119,18 @@
 				onsubmit={(event) => onUpload(event, 'revision')}
 				onreset={() => revisionPicker?.clearFiles()}
 			>
-				<h2 class="mb-0">{$t('Add PDF revision')}</h2>
+				<h2 class="mb-0">{$t`Add PDF revision`}</h2>
 				<FilePicker
 					bind:this={revisionPicker}
 					name="pdf"
-					label={$t('PDF file')}
-					actionLabel={$t('Choose file')}
+					label={$t`PDF file`}
+					actionLabel={$t`Choose file`}
 					accept={['application/pdf', '.pdf']}
 					disabled={busy}
 					onFilesChange={(files) => (revisionFile = files[0] ?? null)}
 				/>
 				<Button variant="filled" class="justify-self-start" disabled={busy || revisionFile === null}
-					>{$t('Upload PDF')}</Button
+					>{$t`Upload PDF`}</Button
 				>
 			</Panel>
 			<Panel
@@ -143,9 +142,9 @@
 					pdfSearch = null;
 				}}
 			>
-				<h2 class="mb-0">{$t('Add a PDF from URL')}</h2>
+				<h2 class="mb-0">{$t`Add a PDF from URL`}</h2>
 				<SearchSelect
-					label={$t('PDF URL')}
+					label={$t`PDF URL`}
 					inputName="url"
 					inputType="url"
 					allowCustomValue
@@ -156,7 +155,7 @@
 					options={pdfOptions}
 					placeholder="https://example.org/article.pdf"
 				/><Button variant="filled" class="justify-self-start" disabled={busy}
-					>{$t('Download and add PDF')}</Button
+					>{$t`Download and add PDF`}</Button
 				>
 			</Panel>
 			<Panel
@@ -165,23 +164,23 @@
 				onsubmit={(event) => onUpload(event, 'attachment')}
 				onreset={() => attachmentPicker?.clearFiles()}
 			>
-				<h2 class="mb-0">{$t('Add attachment')}</h2>
+				<h2 class="mb-0">{$t`Add attachment`}</h2>
 				<FilePicker
 					bind:this={attachmentPicker}
 					name="attachment"
-					label={$t('Attachment file')}
-					actionLabel={$t('Choose file')}
+					label={$t`Attachment file`}
+					actionLabel={$t`Choose file`}
 					disabled={busy}
 					onFilesChange={(files) => (attachmentFile = files[0] ?? null)}
 				/>
 				<label class="flex items-center gap-2"
 					><input name="graphical_abstract" type="checkbox" value="true" disabled={busy} />
-					{$t('Use as Graphical Abstract')}</label
+					{$t`Use as Graphical Abstract`}</label
 				>
 				<Button
 					variant="filled"
 					class="justify-self-start"
-					disabled={busy || attachmentFile === null}>{$t('Upload attachment')}</Button
+					disabled={busy || attachmentFile === null}>{$t`Upload attachment`}</Button
 				>
 			</Panel>
 			<Panel
@@ -189,7 +188,7 @@
 				class="grid grid-cols-1 gap-3"
 				onsubmit={(event) => onUploadFromUrl(event, 'attachment')}
 			>
-				<h2 class="mb-0">{$t('Add attachment from URL')}</h2>
+				<h2 class="mb-0">{$t`Add attachment from URL`}</h2>
 				<input
 					class="input"
 					name="url"
@@ -200,10 +199,10 @@
 				/>
 				<label class="flex items-center gap-2"
 					><input name="graphical_abstract" type="checkbox" value="true" disabled={busy} />
-					{$t('Use as Graphical Abstract')}</label
+					{$t`Use as Graphical Abstract`}</label
 				>
 				<Button variant="filled" class="justify-self-start" disabled={busy}
-					>{$t('Download and add attachment')}</Button
+					>{$t`Download and add attachment`}</Button
 				>
 			</Panel>
 		</aside>

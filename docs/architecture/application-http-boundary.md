@@ -30,13 +30,21 @@ patterns (`ConfirmDialog`,
 `PromptDialog`, `StatusNotice`, `EmptyState`, `Toast`) live in `src/lib/design`. Destructive or
 text-confirmed actions use those dialog patterns; `window.confirm` and `window.prompt` are not
 used. Frontend localization is owned by Lingui. Committed gettext PO catalogs are the
-translation source of truth; a strict Svelte extractor records literal messages and marked dynamic
-labels, and Lingui generates runtime catalogs during checks and builds. `src/lib/locale.ts` is the single locale inventory.
+translation source of truth. `lingui-for-svelte` owns Svelte macros, extraction and reactive
+translation through the root layout's Lingui context; ordinary TypeScript uses `@lingui/core/macro`
+with the upstream macro transform and Babel extractor. Lingui generates runtime catalogs during
+checks and builds. Message text and optional semantic context determine generated IDs; use context
+when identical source text needs different translations, such as the action and policy meanings of
+"Open". Translator comments describe a message without changing its identity.
+`src/lib/locale.ts` is the single locale inventory.
 Language is a browser display preference like theme or sidebar state: the Frontend Adapter detects
 the stored `quirebase:locale` value with Lingui's `@lingui/detect-locale` and falls back to the
 browser language. Locale selection stays in the browser. Switching the language persists the preference
 immediately and synchronizes other tabs through the `storage` event. ICU interpolation values and
 plural forms flow through `i18n._` rather than message-fragment composition.
+Component-free errors and notifications use the same Lingui instance as the root context.
+Workflow notifications use static message descriptors; the browser ledger stores only their IDs
+and reconstructs descriptors on restoration, so the current locale determines their translation.
 
 Both browsers and programmatic clients use `/api/v1`:
 

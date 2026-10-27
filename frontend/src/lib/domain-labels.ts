@@ -1,4 +1,5 @@
-import { msg, type MessageKey } from '#lib/i18n.js';
+import { msg } from '@lingui/core/macro';
+import type { MessageDescriptor } from '@lingui/core';
 
 const labels = {
 	administrator: msg({ message: 'Administrator', comment: 'User role.' }),
@@ -12,7 +13,11 @@ const labels = {
 	archived: msg({ message: 'Archived', comment: 'Workspace or Project lifecycle state.' }),
 	suspended: msg({ message: 'suspended', comment: 'Workspace member state.' }),
 	workspace: msg({ message: 'Workspace-wide', comment: 'Project participation policy.' }),
-	open: msg({ message: 'Open', comment: 'Project participation policy.' }),
+	open: msg({
+		message: 'Open',
+		context: 'project-participation',
+		comment: 'Project participation policy.'
+	}),
 	managed: msg({ message: 'Managed', comment: 'Project participation policy.' }),
 	private: msg({
 		message: 'Private',
@@ -34,7 +39,7 @@ const labels = {
 	cancelled: msg({ message: 'Cancelled', comment: 'Workflow or record state.' }),
 	expired: msg({ message: 'Expired', comment: 'API Token or invitation state.' }),
 	revoked: msg({ message: 'Revoked', comment: 'API Token or session state.' }),
-	empty: msg('Not generated'),
+	empty: msg`Not generated`,
 	revision: msg({ message: 'PDF', comment: 'File kind for a PDF revision.' }),
 	attachment: msg({
 		message: 'Attachment',
@@ -56,10 +61,10 @@ const labels = {
 	ellipse: msg({ message: 'Ellipse', comment: 'PDF shape annotation kind.' }),
 	line: msg({ message: 'Line', comment: 'PDF shape annotation kind.' }),
 	arrow: msg({ message: 'Arrow', comment: 'PDF shape annotation kind.' })
-} satisfies Record<string, MessageKey>;
+} satisfies Record<string, MessageDescriptor>;
 
 export type DomainLabelValue = keyof typeof labels;
 
-export function domainLabel(value: string): MessageKey {
+export function domainLabel(value: string): MessageDescriptor {
 	return labels[value as DomainLabelValue];
 }

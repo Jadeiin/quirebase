@@ -1,9 +1,12 @@
 import { fromNavigator, fromStorage, multipleDetect } from '@lingui/detect-locale';
+import { i18n } from '@lingui/core';
+import { writable } from 'svelte/store';
 
 export const SUPPORTED_LOCALES = ['en-US', 'zh-CN'] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = 'en-US';
 export const LOCALE_STORAGE_KEY = 'quirebase:locale';
+export const activeLocale = writable<Locale>(DEFAULT_LOCALE);
 
 function matchLocale(value: string): Locale | undefined {
 	const normalized = value.trim().replace('_', '-').toLowerCase();
@@ -49,4 +52,26 @@ export function storeLocale(locale: Locale): void {
 	} catch {
 		return;
 	}
+}
+
+export function activateLocale(requestedLocale: string): Locale {
+	const selected = normalizeLocale(requestedLocale);
+	i18n.activate(selected);
+	activeLocale.set(selected);
+	if (typeof document !== 'undefined') document.documentElement.lang = selected;
+	return selected;
+}
+
+export function setLocale(requestedLocale: string): Locale {
+	const selected = activateLocale(requestedLocale);
+	storeLocale(selected);
+	return selected;
+}
+
+export function syncLocaleAcrossTabs(): () => void {
+	const listener = (event: StorageEvent) => {
+		if (event.key === LOCALE_STORAGE_KEY && event.newValue) activateLocale(event.newValue);
+	};
+	window.addEventListener('storage', listener);
+	return () => window.removeEventListener('storage', listener);
 }

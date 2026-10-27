@@ -9,7 +9,8 @@
 	import { createObjectContext, setObjectContext } from '@sjsf/form/fields/object/context.svelte';
 	import ObjectField from '@sjsf/form/fields/object/object-field.svelte';
 	import { fieldTitle } from './labels.js';
-	import { t, activeLocale } from '#lib/i18n.js';
+	import { activeLocale } from '#lib/locale.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import AddField from './AddField.svelte';
 	import { getFieldVisibility, hasFieldValue } from './field-visibility.svelte.js';
 	import { fieldSummary } from './summary.js';
@@ -116,7 +117,7 @@
 				class="col-span-full min-w-0 rounded-lg border border-surface-300-700 p-4"
 			>
 				{#snippet summary()}<summary class="cursor-pointer font-medium"
-						>{$t('Additional metadata')}</summary
+						>{$t`Additional metadata`}</summary
 					>{/snippet}
 				<div
 					class="mt-4 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,max(11rem,calc((100%_-_2rem)/3))),1fr))] items-start gap-4"

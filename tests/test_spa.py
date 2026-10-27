@@ -5,7 +5,7 @@ import hashlib
 import re
 
 import pytest
-from test_http import authenticated_async_client
+from app_helpers import authenticated_async_client
 
 from quirebase.web.app import _frontend_directory
 
@@ -33,6 +33,15 @@ async def test_frontend_routes_return_the_static_svelte_application(
     assert "_app/immutable" in deep_link.text
     csp = library.headers["content-security-policy"]
     assert "sha256-" in csp
+    directives = {
+        parts[0]: set(parts[1:]) for directive in csp.split(";") if (parts := directive.split())
+    }
+    assert directives["worker-src"] == {"'self'", "blob:"}
+    assert {"'self'", "'wasm-unsafe-eval'"} <= directives["script-src"]
+    assert all(
+        source in {"'self'", "'wasm-unsafe-eval'"} or source.startswith("'sha256-")
+        for source in directives["script-src"]
+    )
     inline_scripts = [
         body
         for attributes, body in re.findall(

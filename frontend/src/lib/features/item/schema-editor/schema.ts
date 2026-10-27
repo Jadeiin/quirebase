@@ -2,7 +2,8 @@ import { Validator, type OutputUnit } from '@cfworker/json-schema';
 import { pathFromLocation } from '@sjsf/form/core';
 import type { Schema, ValidationError } from '@sjsf/form';
 import { convert } from '@sjsf/form/converters/draft-2020-12';
-import { translate } from '#lib/i18n.js';
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 
 export function workSchemas(registry: Record<string, unknown>) {
 	// Keep the official reference context; the registry's entity root is not a Work.
@@ -18,23 +19,23 @@ export function workSchemas(registry: Record<string, unknown>) {
 export function validationMessage(unit: OutputUnit): string {
 	switch (unit.keyword) {
 		case 'required':
-			return translate('Complete the required fields.');
+			return i18n._(msg`Complete the required fields.`);
 		case 'format':
-			return translate('Enter a valid absolute URI.');
+			return i18n._(msg`Enter a valid absolute URI.`);
 		case 'pattern':
-			return translate('The value does not match the required format.');
+			return i18n._(msg`The value does not match the required format.`);
 		case 'enum':
 		case 'const':
-			return translate('Choose a supported value.');
+			return i18n._(msg`Choose a supported value.`);
 		case 'anyOf':
 		case 'oneOf':
-			return translate('Complete at least one of the identifying fields.');
+			return i18n._(msg`Complete at least one of the identifying fields.`);
 		case 'minItems':
-			return translate('Add an entry or remove this optional field.');
+			return i18n._(msg`Add an entry or remove this optional field.`);
 		case 'additionalProperties':
-			return translate('Remove fields that are not part of the metadata standard.');
+			return i18n._(msg`Remove fields that are not part of the metadata standard.`);
 		default:
-			return translate('Check this value against the metadata standard.');
+			return i18n._(msg`Check this value against the metadata standard.`);
 	}
 }
 
@@ -54,7 +55,7 @@ export function workValidator(original: Record<string, unknown>) {
 			}));
 		return errors.length || result.valid
 			? errors
-			: [{ path: [], message: translate('Check this value against the metadata standard.') }];
+			: [{ path: [], message: i18n._(msg`Check this value against the metadata standard.`) }];
 	};
 }
 

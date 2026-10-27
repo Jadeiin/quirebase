@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from uuid import uuid4
 
-import httpx2
 import pytest
 from advanced_alchemy.types import FileObject
-from app_helpers import create_web_test_app, json_payload
+from app_helpers import api_client, bearer, json_payload
 from sqlalchemy import select
 from workspace_helpers import (
     fixture_membership_id,
@@ -15,7 +13,6 @@ from workspace_helpers import (
 )
 
 from quirebase.accounts import create_api_token
-from quirebase.core.database import get_db
 from quirebase.models import (
     AnnotationKind,
     AnnotationScope,
@@ -36,28 +33,6 @@ from quirebase.models import (
     WorkspaceRole,
 )
 from quirebase.workspaces import archive_workspace, freeze_workspace_governance
-
-
-@asynccontextmanager
-async def api_client(factory):
-    app = create_web_test_app(mcp_session_factory=factory)
-
-    async def override_db():
-        session = factory()
-        try:
-            yield session
-        finally:
-            await session.close()
-
-    app.dependency_overrides[get_db] = override_db
-    async with httpx2.AsyncClient(
-        transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
-    ) as client:
-        yield client, app
-
-
-def bearer(raw_token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {raw_token}"}
 
 
 @pytest.mark.anyio

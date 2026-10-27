@@ -80,12 +80,22 @@ jobs:
       - run: uv run quirebase doctor
       - run: uv run alchemy --config quirebase.core.database.database_config check
       - run: uv build --all-packages --no-sources
-      - name: Initialize authorization from installed wheels
+      - name: Verify authorization and static assets from installed wheels
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |
           uv venv "${RUNNER_TEMP}/quirebase-wheel-smoke" --python 3.12
           uv pip install --python "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" dist/*.whl
-          "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" -I -c "from quirebase.access import initialize_authorization; initialize_authorization()"
+          "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" -I - <<'PY'
+          from pathlib import Path
+          import quirebase
+          from quirebase.access import initialize_authorization
+
+          initialize_authorization()
+          frontend = Path(quirebase.__file__).resolve().parent.parent / "quirebase_frontend"
+          assert (frontend / "index.html").is_file()
+          for pattern in ("*.js", "*.css", "pdfium.*.wasm"):
+              assert any(frontend.rglob(pattern)), f"installed wheel is missing {pattern}"
+          PY
       - name: Verify local Model2Vec keyword extraction
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |

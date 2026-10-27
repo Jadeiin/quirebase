@@ -31,7 +31,7 @@
 	import LibrarySavedViews from './LibrarySavedViews.svelte';
 	import { projectDetailQuery } from '#lib/features/projects/queries.js';
 	import { getSession } from '#lib/session.js';
-	import { t } from '#lib/i18n.js';
+	import { plural, t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { canRunBulkAction } from '#lib/workspaces/actions.js';
 	import { can } from '#lib/authorization/can.js';
@@ -323,7 +323,7 @@
 			});
 		} catch (reason) {
 			if (mounted && request === previewRequest && page.url === originUrl) {
-				previewError = apiErrorMessage(reason, $t('Unable to load the adjacent Library page.'));
+				previewError = apiErrorMessage(reason, $t`Unable to load the adjacent Library page.`);
 			}
 		} finally {
 			if (mounted && request === previewRequest) previewBusy = false;
@@ -453,23 +453,21 @@
 >
 	<div>
 		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">
-			{$t('Workspace')}
+			{$t`Workspace`}
 		</p>
-		<h1 class="mb-2">{$t('Library')}</h1>
+		<h1 class="mb-2">{$t`Library`}</h1>
 		<p class="m-0 max-w-2xl text-surface-700-300">
 			{#if submitted.import_batch}
-				{$t('Organize imported Items with Tags and Projects.')}
+				{$t`Organize imported Items with Tags and Projects.`}
 			{:else}
-				{$t('Search, organize, and export Items.')}
+				{$t`Search, organize, and export Items.`}
 			{/if}
 		</p>
 	</div>
 	<div class="flex shrink-0 items-center gap-2">
 		{#if library.data}<span
 				class="hidden rounded-full border border-surface-300-700 bg-surface-50-950 px-3 py-1.5 text-xs font-semibold text-surface-600-400 sm:inline"
-				>{$t('{count, plural, one {# Item} other {# Items}}', {
-					count: library.data.total
-				})}</span
+				>{$plural({ count: library.data.total }, { one: '# Item', other: '# Items' })}</span
 			>{/if}
 		<LibrarySavedViews filters={submitted} {pageSize} />
 		<LibraryShortcuts
@@ -510,7 +508,7 @@
 
 {#if submitted.project && (selectedProject.isError || selectedProject.fetchStatus === 'paused')}
 	<QueryError
-		message={$t('Unable to load Project.')}
+		message={$t`Unable to load Project.`}
 		busy={selectedProject.isFetching}
 		onRetry={() => void selectedProject.refetch()}
 	/>

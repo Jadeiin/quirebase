@@ -7,7 +7,8 @@
 	import QueryError from '#lib/design/QueryError.svelte';
 	import { libraryHref } from '#lib/features/library/filters.js';
 	import { projectListQuery } from '#lib/features/projects/queries.js';
-	import { activeLocale, t } from '#lib/i18n.js';
+	import { activeLocale } from '#lib/locale.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { workspaceHref, type WorkspacePath } from '#lib/workspaces/href.js';
 	import { setDefaultWorkspacePreference } from '#lib/workspaces/preference.js';
 	import { workspaceListQuery, workspaceQuery } from '#lib/workspaces/queries.js';
@@ -158,68 +159,68 @@
 	{#if pageCount > 1 || page > 1}
 		<div class="mt-2 flex flex-wrap items-center justify-between gap-2 px-3">
 			<Button size="sm" disabled={busy || page <= 1} onclick={() => onPage(page - 1)}
-				>{$t('Previous page')}</Button
+				>{$t`Previous page`}</Button
 			>
 			<span class="text-xs text-surface-600-400" aria-live="polite"
-				>{$t('Page {page} of {pageCount}', { page, pageCount })}</span
+				>{$t`Page ${page} of ${pageCount}`}</span
 			>
 			<Button size="sm" disabled={busy || page >= pageCount} onclick={() => onPage(page + 1)}
-				>{$t('Next page')}</Button
+				>{$t`Next page`}</Button
 			>
 		</div>
 	{/if}
 {/snippet}
 
 <label class="sr-only" for="quick-navigation-search">
-	{$t('Search pages, Workspaces, or Projects')}
+	{$t`Search pages, Workspaces, or Projects`}
 </label>
 <input
 	id="quick-navigation-search"
 	bind:this={searchInput}
 	bind:value={search}
 	class="mt-4 input"
-	placeholder={$t('Search pages, Workspaces, or Projects')}
+	placeholder={$t`Search pages, Workspaces, or Projects`}
 	type="search"
 	autocomplete="off"
 	onkeydown={navigateResults}
 />
 
 <div bind:this={results} class="mt-4 grid grid-cols-1 gap-5">
-	<section aria-label={$t('Pages and settings')}>
-		<h3 class="px-3 text-xs font-bold text-surface-600-400">{$t('Pages and settings')}</h3>
+	<section aria-label={$t`Pages and settings`}>
+		<h3 class="px-3 text-xs font-bold text-surface-600-400">{$t`Pages and settings`}</h3>
 		<div class="mt-1">
 			{#each pages as link (link.id)}
 				{@render resultLink(link.href, $t(link.label), link.icon)}
 			{:else}
 				{#if !availableWorkspaceId || !query}
-					<p class="px-3 py-2 text-sm text-surface-600-400">{$t('No matching pages.')}</p>
+					<p class="px-3 py-2 text-sm text-surface-600-400">{$t`No matching pages.`}</p>
 				{/if}
 			{/each}
 			{#if availableWorkspaceId && query}
 				{@render resultLink(
 					libraryHref(availableWorkspaceId, { query }),
-					$t('Search Library for {query}', { query }),
+					$t`Search Library for ${query}`,
 					'search'
 				)}
 			{/if}
 		</div>
 	</section>
 
-	<section aria-label={$t('Workspaces')}>
+	<section aria-label={$t`Workspaces`}>
 		<h3
 			bind:this={workspaceHeading}
 			tabindex="-1"
 			class="px-3 text-xs font-bold text-surface-600-400"
 		>
-			{$t('Workspaces')}
+			{$t`Workspaces`}
 		</h3>
 		{#if debouncing || (workspaces.isPending && workspaces.fetchStatus !== 'paused')}
 			<p class="px-3 py-2 text-sm text-surface-600-400" role="status">
-				{$t('Loading workspaces…')}
+				{$t`Loading workspaces…`}
 			</p>
 		{:else if workspaces.isError || workspaces.fetchStatus === 'paused'}
 			<QueryError
-				message={$t('Unable to load workspaces.')}
+				message={$t`Unable to load workspaces.`}
 				busy={workspaces.isFetching}
 				onRetry={() => void workspaces.refetch()}
 			/>
@@ -228,7 +229,7 @@
 				{#each workspaces.data.items as workspace (workspace.id)}
 					{@render resultLink(workspaceHref(workspace.id), workspace.name, 'panel', workspace.id)}
 				{:else}
-					<p class="px-3 py-2 text-sm text-surface-600-400">{$t('No workspaces available')}</p>
+					<p class="px-3 py-2 text-sm text-surface-600-400">{$t`No workspaces available`}</p>
 				{/each}
 			</div>
 			{@render paging(workspacePage, workspacePages, workspaces.isFetching, (page) => {
@@ -239,27 +240,27 @@
 	</section>
 
 	{#if workspaceId}
-		<section aria-label={$t('Projects')}>
+		<section aria-label={$t`Projects`}>
 			<h3
 				bind:this={projectHeading}
 				tabindex="-1"
 				class="px-3 text-xs font-bold text-surface-600-400"
 			>
-				{$t('Projects')}
+				{$t`Projects`}
 			</h3>
 			{#if current.isError || current.fetchStatus === 'paused'}
 				<QueryError
-					message={$t('Unable to load workspace.')}
+					message={$t`Unable to load workspace.`}
 					busy={current.isFetching}
 					onRetry={() => void current.refetch()}
 				/>
 			{:else if !availableWorkspaceId || debouncing || (projects.isPending && projects.fetchStatus !== 'paused')}
 				<p class="px-3 py-2 text-sm text-surface-600-400" role="status">
-					{$t('Loading Projects…')}
+					{$t`Loading Projects…`}
 				</p>
 			{:else if projects.isError || projects.fetchStatus === 'paused'}
 				<QueryError
-					message={$t('Unable to load Projects.')}
+					message={$t`Unable to load Projects.`}
 					busy={projects.isFetching}
 					onRetry={() => void projects.refetch()}
 				/>
@@ -273,7 +274,7 @@
 							'projects'
 						)}
 					{:else}
-						<p class="px-3 py-2 text-sm text-surface-600-400">{$t('No matching Projects.')}</p>
+						<p class="px-3 py-2 text-sm text-surface-600-400">{$t`No matching Projects.`}</p>
 					{/each}
 				</div>
 				{@render paging(projectPage, projectPages, projects.isFetching, (page) => {

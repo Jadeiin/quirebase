@@ -9,7 +9,7 @@
 	import RichText from '#lib/design/RichText.svelte';
 	import { pdfViewerQuery } from '#lib/features/pdf-reader/queries.js';
 	import { invalidateItemAnnotations } from '#lib/query/invalidation.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import EmbeddedPdfViewer from '#lib/pdf/EmbeddedPdfViewer.svelte';
 	import { annotationSourceFilters } from '#lib/pdf/annotation-sources.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -66,7 +66,7 @@
 			await operation;
 		} catch (reason) {
 			if (isDownloadCancelled(reason)) return;
-			downloadError = apiErrorMessage(reason, $t('Item action failed'));
+			downloadError = apiErrorMessage(reason, $t`Item action failed`);
 		}
 	}
 
@@ -115,19 +115,19 @@
 	>
 		<a
 			class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
-			aria-label={$t('Item')}
+			aria-label={$t`Item`}
 			href={resolve(libraryItemHref(workspaceId, itemId, '', returnTo))}
-			><Icon name="chevron-left" /> <span class="hidden sm:inline">{$t('Item')}</span></a
+			><Icon name="chevron-left" /> <span class="hidden sm:inline">{$t`Item`}</span></a
 		>
 		{#if returnTo}<a
 				class="inline-flex min-h-9 shrink-0 items-center rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 no-underline transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
-				href={resolve(returnTo)}>{$t('Library')}</a
+				href={resolve(returnTo)}>{$t`Library`}</a
 			>{/if}
 		<div class="grid min-w-0 flex-1 grid-cols-1">
 			<strong class="truncate text-sm"
-				><RichText html={viewer.data?.item.title_html ?? $t('PDF Reader')} /></strong
+				><RichText html={viewer.data?.item.title_html ?? $t`PDF Reader`} /></strong
 			><span class="truncate text-xs text-surface-600-400"
-				>{viewer.data?.revision.original_name ?? $t('Loading')}</span
+				>{viewer.data?.revision.original_name ?? $t`Loading`}</span
 			>
 		</div>
 
@@ -139,11 +139,11 @@
 			<Popover positioning={{ placement: 'bottom-end', gutter: 6 }}>
 				<Popover.Trigger
 					class="inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
-					aria-label={$t('Displayed annotation sources')}
-					title={$t('Displayed annotation sources')}
+					aria-label={$t`Displayed annotation sources`}
+					title={$t`Displayed annotation sources`}
 				>
 					<Icon name="annotation" />
-					<span class="hidden md:inline">{$t('Annotations')}</span>
+					<span class="hidden md:inline">{$t`Annotations`}</span>
 					<span class="hidden sm:inline-flex"><Icon name="chevron-down" size={14} /></span>
 				</Popover.Trigger>
 				<Portal>
@@ -153,13 +153,14 @@
 							class="z-100 max-h-72 w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-md border border-surface-300-700 bg-surface-50-950 p-3 text-sm shadow-xl"
 						>
 							<Popover.Title class="mb-3 text-xs font-semibold text-surface-600-400"
-								>{$t('Displayed annotation sources')}</Popover.Title
+								>{$t`Displayed annotation sources`}</Popover.Title
 							>
 							<div class="grid grid-cols-1 gap-2">
 								<label class="flex min-w-0 items-center gap-2"
-									><input type="checkbox" bind:checked={includePrivate} />{$t(
-										'Private annotations'
-									)}</label
+									><input
+										type="checkbox"
+										bind:checked={includePrivate}
+									/>{$t`Private annotations`}</label
 								>
 								{#each viewer.data.projects as project (project.id)}
 									<label class="flex min-w-0 items-center gap-2"
@@ -173,7 +174,7 @@
 							</div>
 							<div class="mt-4 grid grid-cols-1 gap-2 border-t border-surface-300-700 pt-3">
 								<p class="m-0 text-xs font-semibold text-surface-600-400">
-									{$t('Save new annotations to')}
+									{$t`Save new annotations to`}
 								</p>
 								<label class="flex min-w-0 items-center gap-2">
 									<input
@@ -182,7 +183,7 @@
 										checked={writeProject === ''}
 										disabled={!viewer.data.editable}
 										onchange={() => selectWriteProject('')}
-									/>{$t('Private annotations')}
+									/>{$t`Private annotations`}
 								</label>
 								{#each viewer.data.projects as project (project.id)}
 									<label class="flex min-w-0 items-center gap-2">
@@ -204,9 +205,9 @@
 		<Menu positioning={{ placement: 'bottom-end', gutter: 6 }}>
 			<Menu.Trigger
 				class="inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-surface-300-700 bg-surface-50-950 px-2.5 py-1.5 text-sm font-semibold text-surface-700-300 transition-colors hover:bg-surface-200-800 hover:text-primary-800-200"
-				aria-label={$t('Download')}
+				aria-label={$t`Download`}
 			>
-				<Icon name="download" /> <span class="hidden sm:inline">{$t('Download')}</span>
+				<Icon name="download" /> <span class="hidden sm:inline">{$t`Download`}</span>
 				<span class="hidden sm:inline-flex"><Icon name="chevron-down" size={14} /></span>
 			</Menu.Trigger>
 			<Portal>
@@ -222,7 +223,7 @@
 							<button
 								type="button"
 								class="w-full cursor-pointer px-2.5 py-1.5 text-left whitespace-nowrap"
-								onclick={downloadOriginal}>{$t('Download original')}</button
+								onclick={downloadOriginal}>{$t`Download original`}</button
 							>
 						</Menu.Item>
 						<Menu.Item
@@ -233,8 +234,8 @@
 								type="button"
 								class="w-full cursor-pointer px-2.5 py-1.5 text-left whitespace-nowrap disabled:cursor-not-allowed disabled:text-surface-500 dark:disabled:text-surface-400"
 								disabled={!includePrivate && !visibleProjects.length}
-								title={$t('Uses the displayed annotation sources.')}
-								onclick={downloadAnnotated}>{$t('Download with annotations')}</button
+								title={$t`Uses the displayed annotation sources.`}
+								onclick={downloadAnnotated}>{$t`Download with annotations`}</button
 							>
 						</Menu.Item>
 					</Menu.Content>
@@ -262,19 +263,19 @@
 					class="cursor-pointer font-semibold text-error-800-200 hover:underline"
 					onclick={() => {
 						annotationSyncFailed = false;
-					}}>{$t('Dismiss')}</button
+					}}>{$t`Dismiss`}</button
 				>
 			</aside>
 		{/if}
 		{#if viewer.isPending}<div
 				class="grid min-h-0 flex-1 grid-cols-1 place-items-center text-surface-600-400"
 			>
-				{$t('Loading reader configuration…')}
+				{$t`Loading reader configuration…`}
 			</div>
 		{:else if viewer.isError}<div
 				class="grid min-h-0 flex-1 grid-cols-1 place-items-center text-error-700-300"
 			>
-				{$t('Unable to open this PDF.')}
+				{$t`Unable to open this PDF.`}
 			</div>
 		{:else if viewer.data}
 			<!-- EmbedPDF document permissions are fixed at initialization. -->

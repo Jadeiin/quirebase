@@ -10,12 +10,13 @@
 	import { getAdminFilters } from '#lib/features/admin/filters.js';
 	import { adminMutationOptions } from '#lib/features/admin/mutations.js';
 	import { adminUsersQuery } from '#lib/features/admin/queries.js';
-	import { msg, t, type MessageKey } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 
 	type User = components['schemas']['AdminUserView'];
 
 	let error = $state('');
-	let notice = $state<MessageKey | null>(null);
+	let notice = $state<MessageDescriptor | null>(null);
 	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
 	const users = createQuery(() => adminUsersQuery(filters(), true));
 	const queryClient = useQueryClient();
@@ -39,7 +40,11 @@
 		correctPage(pageCount);
 	});
 
-	function mutate(operation: () => Promise<unknown>, success: MessageKey, form?: HTMLFormElement) {
+	function mutate(
+		operation: () => Promise<unknown>,
+		success: MessageDescriptor,
+		form?: HTMLFormElement
+	) {
 		if (busy) return;
 		error = '';
 		notice = null;
@@ -49,7 +54,7 @@
 				notice = success;
 			})
 			.catch((reason) => {
-				error = apiErrorMessage(reason, $t('Administration action failed'));
+				error = apiErrorMessage(reason, $t`Administration action failed`);
 			});
 	}
 
@@ -66,7 +71,7 @@
 						role: values.get('role') === 'administrator' ? 'administrator' : 'member'
 					}
 				}),
-			msg('User created'),
+			msg`User created`,
 			form
 		);
 	}
@@ -78,7 +83,7 @@
 					params: { path: { user_id: user.id } },
 					body: { active: !user.active }
 				}),
-			user.active ? msg('User disabled') : msg('User enabled')
+			user.active ? msg`User disabled` : msg`User enabled`
 		);
 	}
 
@@ -91,7 +96,7 @@
 					params: { path: { user_id: userId } },
 					body: { role: values.get('role') === 'administrator' ? 'administrator' : 'member' }
 				}),
-			msg('User role saved')
+			msg`User role saved`
 		);
 	}
 
@@ -105,7 +110,7 @@
 					params: { path: { user_id: userId } },
 					body: { password: String(values.get('password') ?? '') }
 				}),
-			msg('User password reset'),
+			msg`User password reset`,
 			form
 		);
 	}
@@ -116,7 +121,7 @@
 				apiRequest('DELETE', '/admin/users/{user_id}/sessions', {
 					params: { path: { user_id: userId } }
 				}),
-			msg('User sessions revoked')
+			msg`User sessions revoked`
 		);
 	}
 </script>
@@ -129,7 +134,7 @@
 	onRetry={() => void users.refetch()}
 	loading={users.isPending}
 	failed={users.isError}
-	label={msg('Users')}
+	label={msg`Users`}
 >
 	<AdminUsers
 		users={users.data!}
@@ -149,7 +154,7 @@
 				total={users.data?.total ?? 0}
 				busy={users.isFetching || busy}
 				onPageSize={setPageSize}
-				label={$t('Administration pages')}
+				label={$t`Administration pages`}
 				onPage={setPage}
 			/>
 		{/snippet}

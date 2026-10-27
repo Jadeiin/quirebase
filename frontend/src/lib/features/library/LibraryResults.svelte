@@ -18,7 +18,7 @@
 	import type { LibraryPreviewNavigation } from './preview-navigation.js';
 	import type { LibraryBulkAction } from './mutations.js';
 	import type { WorkspacePath } from '#lib/workspaces/href.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 
 	let {
 		data,
@@ -100,40 +100,37 @@
 		}
 	});
 	const sortOptions = $derived([
-		{ value: 'updated', label: $t('Date modified') },
-		{ value: 'created', label: $t('Date added') },
-		{ value: 'published', label: $t('Publication date') },
-		{ value: 'publication', label: $t('Publication') },
-		{ value: 'author', label: $t('Author') },
-		{ value: 'title', label: $t('Title') }
+		{ value: 'updated', label: $t`Date modified` },
+		{ value: 'created', label: $t`Date added` },
+		{ value: 'published', label: $t`Publication date` },
+		{ value: 'publication', label: $t`Publication` },
+		{ value: 'author', label: $t`Author` },
+		{ value: 'title', label: $t`Title` }
 	] as const);
 	function orderLabel(field: LibrarySort, order: LibrarySortDirection) {
 		return field === 'title' || field === 'publication' || field === 'author'
 			? order === 'asc'
-				? $t('A–Z')
-				: $t('Z–A')
+				? $t`A–Z`
+				: $t`Z–A`
 			: order === 'asc'
-				? $t('Oldest first')
-				: $t('Newest first');
+				? $t`Oldest first`
+				: $t`Newest first`;
 	}
 	const nextDirection = $derived(direction === 'asc' ? 'desc' : 'asc');
 	const directionHint = $derived(
-		$t('Sort order: {current}. Switch to {next}.', {
-			current: orderLabel(sort, direction),
-			next: orderLabel(sort, nextDirection)
-		})
+		$t`Sort order: ${ph({ current: orderLabel(sort, direction) })}. Switch to ${ph({ next: orderLabel(sort, nextDirection) })}.`
 	);
 </script>
 
 {#snippet sortControls()}
 	<div
 		role="group"
-		aria-label={$t('Sort')}
+		aria-label={$t`Sort`}
 		class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
 	>
 		<select
 			id="library-sort-field"
-			aria-label={$t('Sort By')}
+			aria-label={$t`Sort By`}
 			class="select h-9 w-auto max-w-full text-xs"
 			value={sort}
 			disabled={busy}
@@ -182,22 +179,22 @@
 				class="grid min-h-56 grid-cols-1 place-items-center text-surface-600-400"
 				role="status"
 			>
-				{$t('Loading Library…')}
+				{$t`Loading Library…`}
 			</div>
 		{:else if !data}<div class="px-4">
-				<QueryError message={$t('Unable to load the Library.')} {busy} {onRetry} />
+				<QueryError message={$t`Unable to load the Library.`} {busy} {onRetry} />
 			</div>
 		{:else}
 			{#if isError}<div class="px-4">
 					<QueryError
-						message={$t('Unable to refresh the Library. Showing the last loaded results.')}
+						message={$t`Unable to refresh the Library. Showing the last loaded results.`}
 						{busy}
 						{onRetry}
 					/>
 				</div>{/if}
 			{#if !data?.items.length}<EmptyState
-					title={$t('No Items found.')}
-					detail={$t('Try a different Library Search.')}
+					title={$t`No Items found.`}
+					detail={$t`Try a different Library Search.`}
 				/>
 			{:else}<LibraryTable
 					items={data.items}
@@ -228,7 +225,7 @@
 			{pageSize}
 			total={data?.total ?? 0}
 			{busy}
-			label={$t('Library pages')}
+			label={$t`Library pages`}
 			{onPage}
 			{onPageSize}
 		/>
@@ -236,7 +233,7 @@
 	{#if previewItemId}
 		{#key `${previewItemId}:${previewLoadAttempt}`}
 			{#await import('./LibraryPreview.svelte')}
-				<p role="status" class="p-4 text-sm text-surface-600-400">{$t('Loading Item preview…')}</p>
+				<p role="status" class="p-4 text-sm text-surface-600-400">{$t`Loading Item preview…`}</p>
 			{:then { default: LibraryPreview }}
 				<LibraryPreview
 					{workspaceId}
@@ -253,9 +250,9 @@
 				/>
 			{:catch}<div>
 					<QueryError
-						message={$t('Unable to load this Item preview.')}
+						message={$t`Unable to load this Item preview.`}
 						onRetry={() => previewLoadAttempt++}
-					/><Button onclick={onClosePreview}>{$t('Close preview')}</Button>
+					/><Button onclick={onClosePreview}>{$t`Close preview`}</Button>
 				</div>{/await}
 		{/key}
 	{/if}

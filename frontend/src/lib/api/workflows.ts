@@ -1,6 +1,7 @@
 import { apiRequest } from '#lib/api/client.js';
 import { createWorkspaceApi } from '#lib/api/client.js';
-import { translate } from '#lib/i18n.js';
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import type { components } from '#lib/api/schema.js';
 
 type WorkflowStatus = components['schemas']['WorkflowStatusView'];
@@ -67,7 +68,7 @@ export async function waitForWorkflow(
 				});
 		if (workflow.state === 'succeeded') return workflow;
 		if (workflow.state === 'failed' || workflow.state === 'cancelled') {
-			throw new Error(workflow.error || options.failureMessage || translate('Workflow failed'));
+			throw new Error(workflow.error || options.failureMessage || i18n._(msg`Workflow failed`));
 		}
 		await delay(interval, options.signal);
 		interval = Math.min(interval * 2, 4000);

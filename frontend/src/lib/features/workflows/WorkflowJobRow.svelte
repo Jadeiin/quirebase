@@ -9,7 +9,7 @@
 		isTerminalWorkflowState,
 		workflowStatusQuery
 	} from '#lib/features/workflows/queries.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import Button from '#lib/design/Button.svelte';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
@@ -61,11 +61,10 @@
 		<div class="grid min-w-0 flex-1 grid-cols-1 gap-0.5">
 			<strong class="truncate text-sm">{job.label}</strong>
 			<span class="text-xs text-surface-600-400">
-				{#if job.unavailable}{$t(
-						'Workflow history is unavailable. Check the current result.'
-					)}{:else if job.outcome}{job.outcome.state}{#if job.outcome.error}: {job.outcome
+				{#if job.unavailable}{$t`Workflow history is unavailable. Check the current result.`}{:else if job.outcome}{job
+						.outcome.state}{#if job.outcome.error}: {job.outcome
 							.error}{/if}{:else if status.data}{status.data.state}{#if status.data.error}:
-						{status.data.error}{/if}{:else}{$t('Starting…')}{/if}
+						{status.data.error}{/if}{:else}{$t`Starting…`}{/if}
 			</span>
 			{#if !job.unavailable && (!state || !isTerminalWorkflowState(state))}
 				<Progress value={null} aria-label={job.label}>
@@ -88,7 +87,7 @@
 					onclick={(event) => {
 						if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey)
 							onNavigate?.();
-					}}>{$t('View import')}</a
+					}}>{$t`View import`}</a
 				>
 			{/if}
 		</div>
@@ -96,7 +95,7 @@
 			variant="icon"
 			class="shrink-0"
 			type="button"
-			aria-label={$t('Dismiss')}
+			aria-label={$t`Dismiss`}
 			onclick={() => center.dismiss(job.id)}><Icon name="close" size={14} /></Button
 		>
 	</div>

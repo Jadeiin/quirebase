@@ -4,7 +4,8 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { Combobox, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
 	import Icon from '#lib/design/Icon.svelte';
-	import { activeLocale, t } from '#lib/i18n.js';
+	import { activeLocale } from '#lib/locale.js';
+	import { t } from 'lingui-for-svelte/macro';
 
 	type Option = { value: string; label: string; group?: string; kind?: string };
 	let {
@@ -157,7 +158,7 @@
 					bind:this={input}
 				/>{/snippet}
 		</Combobox.Input>
-		<Combobox.Trigger aria-label={$t('Show options for {label}', { label })}
+		<Combobox.Trigger aria-label={$t`Show options for ${label}`}
 			><Icon name="chevron-down" size={16} /></Combobox.Trigger
 		>
 	</Combobox.Control>
@@ -184,7 +185,7 @@
 						{/if}
 					{:else}
 						{#if !loading}<p class="px-2 py-1 text-sm text-surface-600-400">
-								{$t('No matching options.')}
+								{$t`No matching options.`}
 							</p>{/if}
 					{/each}
 				</Combobox.Content>

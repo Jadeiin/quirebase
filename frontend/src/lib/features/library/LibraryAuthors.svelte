@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import AuthorLine from '#lib/design/AuthorLine.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import type { libraryHref, LibraryMetadataFilter } from './filters.js';
 	import type { LibrarySearch } from './queries.js';
 
@@ -36,11 +36,11 @@
 						author_first_name: credit.first_name ?? ''
 					})
 				)}
-				title={$t('View Items by {name}', { name: credit.full_name })}
-				aria-label={$t('View Items by {name}', { name: credit.full_name })}>{credit.full_name}</a
+				title={$t`View Items by ${ph({ name: credit.full_name })}`}
+				aria-label={$t`View Items by ${ph({ name: credit.full_name })}`}>{credit.full_name}</a
 			>
 		{/snippet}
 	</AuthorLine>
 {:else}
-	<span class="block truncate">{$t('Unknown authors')}</span>
+	<span class="block truncate">{$t`Unknown authors`}</span>
 {/if}

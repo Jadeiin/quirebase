@@ -237,16 +237,19 @@ async def test_admin_reset_password(async_db):
 
 
 @pytest.mark.anyio
-async def test_admin_revoke_sessions(async_db):
+@pytest.mark.parametrize("session_count", [0, 2])
+async def test_admin_revoke_sessions(async_db, session_count):
     db = async_db
     admin = await create_test_admin(db, "admin6")
     user = await create_user_admin(db, admin, "sess_target", "pass123456789")
-    await create_login_session(db, user)
-    await create_login_session(db, user)
+    admin_session, _ = await create_login_session(db, admin)
+    for _ in range(session_count):
+        await create_login_session(db, user)
     await db.commit()
 
     revoked = await revoke_user_sessions(db, admin, user.id)
-    assert revoked == 2
+    assert revoked == session_count
+    assert await db.get(LoginSession, admin_session.id) is not None
     event = await db.scalar(
         select(AuditEvent).where(
             AuditEvent.action == "admin.user.sessions_revoked", AuditEvent.target_id == str(user.id)

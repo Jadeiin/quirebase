@@ -22,7 +22,7 @@
 	import StatusNotice from '#lib/design/StatusNotice.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, ph, t } from 'lingui-for-svelte/macro';
 	import { workspaceMembersQuery, type GovernanceMember } from './queries';
 	import { workspaceMemberMutationOptions, type MemberCommand } from './mutations';
 	import {
@@ -55,11 +55,11 @@
 		null
 	);
 	const messages = {
-		role: msg('Member role updated'),
-		suspend: msg('Member suspended'),
-		reactivate: msg('Member reactivated'),
-		terminate: msg('Member removed'),
-		transfer: msg('Ownership transferred')
+		role: msg`Member role updated`,
+		suspend: msg`Member suspended`,
+		reactivate: msg`Member reactivated`,
+		terminate: msg`Member removed`,
+		transfer: msg`Ownership transferred`
 	};
 	function href(state: WorkspaceMembersState) {
 		const parameters = workspaceMemberParameters(state);
@@ -84,17 +84,14 @@
 	function orderLabel(direction: WorkspaceMembersState['direction']) {
 		return listing.sort === 'username'
 			? direction === 'asc'
-				? $t('A–Z')
-				: $t('Z–A')
+				? $t`A–Z`
+				: $t`Z–A`
 			: direction === 'asc'
-				? $t('Oldest first')
-				: $t('Newest first');
+				? $t`Oldest first`
+				: $t`Newest first`;
 	}
 	const directionHint = $derived(
-		$t('Sort order: {current}. Switch to {next}.', {
-			current: orderLabel(listing.direction),
-			next: orderLabel(nextDirection)
-		})
+		$t`Sort order: ${ph({ current: orderLabel(listing.direction) })}. Switch to ${ph({ next: orderLabel(nextDirection) })}.`
 	);
 	async function run(command: MemberCommand) {
 		if (mutation.isPending) return;
@@ -105,7 +102,7 @@
 			confirmOpen = false;
 			notice = $t(messages[command.action]);
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Workspace action failed'));
+			error = apiErrorMessage(reason, $t`Workspace action failed`);
 		}
 	}
 	function ask(member: GovernanceMember, action: 'transfer' | 'terminate') {
@@ -117,15 +114,15 @@
 
 <section class="grid grid-cols-1 gap-4" aria-labelledby="workspace-members-heading">
 	<div>
-		<h2 id="workspace-members-heading" class="text-xl font-semibold">{$t('Members')}</h2>
+		<h2 id="workspace-members-heading" class="text-xl font-semibold">{$t`Members`}</h2>
 		<p class="mt-1 text-sm text-surface-700-300">
-			{$t('Find members and view their roles.')}
+			{$t`Find members and view their roles.`}
 		</p>
 	</div>
 	<Panel>
 		<div class="flex min-w-0 flex-wrap items-end gap-3">
 			<label class="grid min-w-0 grow basis-56 grid-cols-1 gap-1 text-sm">
-				{$t('Search members')}<input
+				{$t`Search members`}<input
 					class="input h-9 field-sm"
 					type="search"
 					bind:value={search.value}
@@ -134,7 +131,7 @@
 				/>
 			</label>
 			<label class="grid min-w-0 grow basis-32 grid-cols-1 gap-1 text-sm">
-				{$t('Role')}<select
+				{$t`Role`}<select
 					class="select h-9 field-sm"
 					value={listing.role}
 					onchange={(event) =>
@@ -144,14 +141,14 @@
 							page: 1
 						})}
 				>
-					<option value="">{$t('All roles')}</option>
+					<option value="">{$t`All roles`}</option>
 					{#each workspaceRoles as role (role)}<option value={role}>{$t(domainLabel(role))}</option
 						>{/each}
 				</select>
 			</label>
 			{#if governance}
 				<label class="grid min-w-0 grow basis-32 grid-cols-1 gap-1 text-sm">
-					{$t('State')}<select
+					{$t`State`}<select
 						class="select h-9 field-sm"
 						value={listing.state}
 						onchange={(event) =>
@@ -161,17 +158,17 @@
 								page: 1
 							})}
 					>
-						<option value="">{$t('Any state')}</option>
-						<option value="active">{$t('Active')}</option>
-						<option value="suspended">{$t('Suspended')}</option>
+						<option value="">{$t`Any state`}</option>
+						<option value="active">{$t`Active`}</option>
+						<option value="suspended">{$t`Suspended`}</option>
 					</select>
 				</label>
 			{/if}
 			<div class="grid min-w-40 grow basis-40 grid-cols-1 gap-1 text-sm">
-				<label for="workspace-members-sort">{$t('Sort By')}</label>
+				<label for="workspace-members-sort">{$t`Sort By`}</label>
 				<div
 					role="group"
-					aria-label={$t('Sort')}
+					aria-label={$t`Sort`}
 					class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
 				>
 					<select
@@ -186,8 +183,8 @@
 								page: 1
 							})}
 					>
-						<option value="username">{$t('Username')}</option>
-						{#if governance}<option value="joined">{$t('Date joined')}</option>{/if}
+						<option value="username">{$t`Username`}</option>
+						{#if governance}<option value="joined">{$t`Date joined`}</option>{/if}
 					</select>
 					<Button
 						type="button"
@@ -206,21 +203,20 @@
 	<StatusNotice error={confirmOpen ? '' : error} {notice} />
 	{#if members.isError || (!members.isPending && !available)}
 		<QueryError
-			message={$t('Unable to load members.')}
+			message={$t`Unable to load members.`}
 			busy={members.isFetching}
 			onRetry={() => void members.refetch()}
 		/>
 	{/if}
-	{#if !available && members.isPending}<p class="text-surface-700-300">{$t('Loading members…')}</p>
+	{#if !available && members.isPending}<p class="text-surface-700-300">{$t`Loading members…`}</p>
 	{:else if available && members.data?.items.length}
 		<Panel padding="none">
-			<DataTable label={$t('Members')}>
+			<DataTable label={$t`Members`}>
 				<thead
 					><tr
-						><th class="p-3">{$t('Username')}</th><th class="p-3">{$t('Role')}</th
-						>{#if governance}<th>{$t('State')}</th><th>{$t('Date joined')}</th><th class="w-28"
-								>{$t('Actions')}</th
-							>{/if}</tr
+						><th class="p-3">{$t`Username`}</th><th class="p-3">{$t`Role`}</th>{#if governance}<th
+								>{$t`State`}</th
+							><th>{$t`Date joined`}</th><th class="w-28">{$t`Actions`}</th>{/if}</tr
 					></thead
 				>
 				{#each members.data.items as member (member.user_id)}
@@ -228,12 +224,12 @@
 					<tbody>
 						<tr class="border-t border-surface-300-700">
 							<th scope="row"><strong class="font-medium break-all">{member.username}</strong></th>
-							<td data-label={$t('Role')}
+							<td data-label={$t`Role`}
 								><span>{$t(domainLabel(member.role))}</span>
 								{#if target && target.allowed_roles.length > 0}
 									<select
 										class="select mt-1 w-full min-w-0"
-										aria-label={$t('Role for {username}', { username: member.username })}
+										aria-label={$t`Role for ${ph({ username: member.username })}`}
 										value=""
 										disabled={mutation.isPending}
 										onchange={(event) => {
@@ -242,24 +238,24 @@
 											event.currentTarget.value = '';
 											void run({ action: 'role', membershipId: target.membership_id, role });
 										}}
-										><option value="" disabled>{$t('Choose a role')}</option
+										><option value="" disabled>{$t`Choose a role`}</option
 										>{#each target.allowed_roles as role (role)}<option value={role}
 												>{$t(domainLabel(role))}</option
 											>{/each}</select
 									>
 								{/if}
 							</td>
-							{#if governance}<td data-label={$t('State')}
+							{#if governance}<td data-label={$t`State`}
 									>{target ? $t(domainLabel(target.state)) : ''}</td
-								><td data-label={$t('Date joined')}
+								><td data-label={$t`Date joined`}
 									>{target ? $dateFormat.format(new Date(target.joined_at)) : ''}</td
-								><td data-label={$t('Actions')}>
+								><td data-label={$t`Actions`}>
 									{#if target && (can(target.authorization, 'workspace_member.suspend') || can(target.authorization, 'workspace_member.reactivate') || can(target.authorization, 'workspace_member.transfer_ownership') || can(target.authorization, 'workspace_member.terminate'))}
 										<Menu positioning={{ placement: 'bottom-end', gutter: 8 }}>
 											<Menu.Trigger
 												class={buttonClass('tonal', 'sm')}
-												aria-label={$t('Actions for {username}', { username: member.username })}
-												disabled={mutation.isPending}>{$t('Actions')}</Menu.Trigger
+												aria-label={$t`Actions for ${ph({ username: member.username })}`}
+												disabled={mutation.isPending}>{$t`Actions`}</Menu.Trigger
 											>
 											<Portal
 												><Menu.Positioner class="z-100"
@@ -270,7 +266,7 @@
 																	void run({
 																		action: 'suspend',
 																		membershipId: target.membership_id
-																	})}>{$t('Suspend')}</Menu.Item
+																	})}>{$t`Suspend`}</Menu.Item
 															>{/if}
 														{#if can(target.authorization, 'workspace_member.reactivate')}<Menu.Item
 																value="reactivate"
@@ -278,17 +274,16 @@
 																	void run({
 																		action: 'reactivate',
 																		membershipId: target.membership_id
-																	})}>{$t('Reactivate')}</Menu.Item
+																	})}>{$t`Reactivate`}</Menu.Item
 															>{/if}
 														{#if can(target.authorization, 'workspace_member.transfer_ownership')}<Menu.Item
 																value="transfer"
 																onclick={() => ask(target, 'transfer')}
-																>{$t('Transfer ownership')}</Menu.Item
+																>{$t`Transfer ownership`}</Menu.Item
 															>{/if}
 														{#if can(target.authorization, 'workspace_member.terminate')}<Menu.Item
 																value="terminate"
-																onclick={() => ask(target, 'terminate')}
-																>{$t('Terminate')}</Menu.Item
+																onclick={() => ask(target, 'terminate')}>{$t`Terminate`}</Menu.Item
 															>{/if}
 													</Menu.Content></Menu.Positioner
 												></Portal
@@ -303,8 +298,8 @@
 		</Panel>
 	{:else if available}<Notice
 			>{listing.search || listing.role || listing.state
-				? $t('No matching members.')
-				: $t('No members to display.')}</Notice
+				? $t`No matching members.`
+				: $t`No members to display.`}</Notice
 		>{/if}
 	{#if available && members.data}<Pagination
 			page={listing.page}
@@ -314,22 +309,17 @@
 			onPage={(next) => navigate({ ...listing, page: next })}
 			onPageSize={(size) => navigate({ ...listing, page: 1, pageSize: size })}
 			busy={members.isFetching}
-			label={$t('Members pagination')}
+			label={$t`Members pagination`}
 		/>{/if}
 </section>
 
 <ConfirmDialog
 	bind:open={confirmOpen}
-	title={confirmation?.action === 'transfer' ? $t('Transfer ownership') : $t('Terminate')}
+	title={confirmation?.action === 'transfer' ? $t`Transfer ownership` : $t`Terminate`}
 	body={confirmation?.action === 'transfer'
-		? $t(
-				'Transfer workspace ownership to {username}? You will become an admin and lose owner-only governance actions.',
-				{ username: confirmation.member.username }
-			)
-		: $t('Remove {username} from this workspace? They will lose access to its content.', {
-				username: confirmation?.member.username ?? ''
-			})}
-	confirmLabel={confirmation?.action === 'transfer' ? $t('Transfer ownership') : $t('Terminate')}
+		? $t`Transfer workspace ownership to ${ph({ username: confirmation.member.username })}? You will become an admin and lose owner-only governance actions.`
+		: $t`Remove ${ph({ username: confirmation?.member.username ?? '' })} from this workspace? They will lose access to its content.`}
+	confirmLabel={confirmation?.action === 'transfer' ? $t`Transfer ownership` : $t`Terminate`}
 	busy={mutation.isPending}
 	{error}
 	onConfirm={() => {

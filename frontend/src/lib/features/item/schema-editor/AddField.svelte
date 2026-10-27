@@ -3,7 +3,8 @@
 	import type { SchemaObjectValue } from '@sjsf/form/core';
 	import { getObjectContext } from '@sjsf/form/fields/object/context.svelte';
 	import { tick } from 'svelte';
-	import { t, activeLocale } from '#lib/i18n.js';
+	import { activeLocale } from '#lib/locale.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { getFieldVisibility } from './field-visibility.svelte.js';
 	import { fieldTitle } from './labels.js';
 
@@ -13,7 +14,7 @@
 	const visibility = getFieldVisibility();
 	const label = $derived.by(() => {
 		void $activeLocale;
-		return config.path.length ? fieldTitle(config.path, config.title) : $t('Metadata');
+		return config.path.length ? fieldTitle(config.path, config.title) : $t`Metadata`;
 	});
 	const available = $derived(
 		object
@@ -68,10 +69,10 @@
 	<div class="col-span-full">
 		<select
 			class="select h-8 w-auto max-w-full"
-			aria-label={$t('Add field to {label}', { label })}
+			aria-label={$t`Add field to ${label}`}
 			onchange={add}
 		>
-			<option value="">{$t('Add field')}</option>
+			<option value="">{$t`Add field`}</option>
 			{#each options as field (field.property)}
 				<option value={field.property}>{field.title}</option>
 			{/each}

@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
+from document_helpers import shared_annotation_context
 from sqlalchemy import select
-from test_workspace_acl import _shared_annotation_context
 
 from quirebase.core.errors import ResourceUnavailable
 from quirebase.core.storage import ObjectSuffix, get_object_store
@@ -29,7 +29,7 @@ from quirebase.models import (
 
 @pytest.mark.anyio
 async def test_expired_annotation_undo_is_denied_before_purge_and_cascades_replies(async_db):
-    author, _, item, _, _, annotation, reply = await _shared_annotation_context(
+    author, _, item, _, _, annotation, reply = await shared_annotation_context(
         async_db, "undo-expiry"
     )
     annotation.deleted_at = datetime.now(UTC) - timedelta(hours=25)
@@ -53,7 +53,7 @@ async def test_expired_annotation_undo_is_denied_before_purge_and_cascades_repli
 
 @pytest.mark.anyio
 async def test_expired_reply_undo_is_denied_and_purge_preserves_live_parent(async_db):
-    author, _, item, _, _, annotation, reply = await _shared_annotation_context(
+    author, _, item, _, _, annotation, reply = await shared_annotation_context(
         async_db, "reply-undo-expiry"
     )
     reply.deleted_at = datetime.now(UTC) - timedelta(hours=25)
@@ -76,7 +76,7 @@ async def test_expired_reply_undo_is_denied_and_purge_preserves_live_parent(asyn
 async def test_missing_inspection_is_visible_as_failed_and_retry_reuses_the_pdf(
     async_db, fake_durable_operations
 ):
-    author, _, item, _, revision, _, _ = await _shared_annotation_context(
+    author, _, item, _, revision, _, _ = await shared_annotation_context(
         async_db, "inspection-retry"
     )
     revision.processing_state = FileRevisionProcessingState.pending
@@ -105,7 +105,7 @@ async def test_missing_inspection_is_visible_as_failed_and_retry_reuses_the_pdf(
 async def test_old_inspection_cannot_fail_or_parse_a_new_attempt(
     async_db, fake_durable_operations, monkeypatch
 ):
-    author, _, item, _, revision, _, _ = await _shared_annotation_context(
+    author, _, item, _, revision, _, _ = await shared_annotation_context(
         async_db, "inspection-stale"
     )
     revision.processing_state = FileRevisionProcessingState.pending
@@ -131,7 +131,7 @@ async def test_old_inspection_cannot_fail_or_parse_a_new_attempt(
 async def test_pdf_publication_rolls_back_ready_and_search_if_event_enqueue_fails(
     async_db, fake_durable_operations, monkeypatch
 ):
-    author, _, item, _, revision, _, _ = await _shared_annotation_context(
+    author, _, item, _, revision, _, _ = await shared_annotation_context(
         async_db, "inspection-atomic"
     )
     store = get_object_store()
@@ -180,7 +180,7 @@ async def test_pdf_publication_rolls_back_ready_and_search_if_event_enqueue_fail
 async def test_committed_pdf_survives_lost_step_response_and_replays_without_reparsing(
     async_db, fake_durable_operations, monkeypatch
 ):
-    author, _, item, _, revision, _, _ = await _shared_annotation_context(
+    author, _, item, _, revision, _, _ = await shared_annotation_context(
         async_db, "inspection-lost-response"
     )
     stored = await get_object_store().put_object(

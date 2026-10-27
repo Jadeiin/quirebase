@@ -6,10 +6,10 @@ from uuid import uuid4
 
 import pymupdf
 import pytest
+from app_helpers import authenticated_async_client
+from import_helpers import finish_pdf_import_preview, pdf_bytes, published_pdf_bytes
 from inquiro import ProviderConfig, ProviderRuntime
 from inquiro.transport import MockExchange, TransportResponse
-from test_http import authenticated_async_client
-from test_library_ui import finish_pdf_import_preview, pdf_bytes, published_pdf_bytes
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.storage import get_object_store

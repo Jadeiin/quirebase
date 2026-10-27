@@ -4,7 +4,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import type { Metadata } from './metadata-draft.js';
 	let {
 		metadata,
@@ -34,11 +34,11 @@
 </script>
 
 {#if schema.isError}
-	<Notice variant="error">{$t('Unable to load metadata editor.')}</Notice>
-	<Button onclick={() => schema.refetch()}>{$t('Retry')}</Button>
+	<Notice variant="error">{$t`Unable to load metadata editor.`}</Notice>
+	<Button onclick={() => schema.refetch()}>{$t`Retry`}</Button>
 {:else if schema.data}
 	{#await editor}
-		<p role="status">{$t('Loading metadata editor…')}</p>
+		<p role="status">{$t`Loading metadata editor…`}</p>
 	{:then module}
 		<module.default
 			{metadata}
@@ -51,8 +51,8 @@
 			{serverErrors}
 		/>
 	{:catch}
-		<Notice variant="error">{$t('Unable to load metadata editor.')}</Notice>
+		<Notice variant="error">{$t`Unable to load metadata editor.`}</Notice>
 	{/await}
 {:else}
-	<p role="status">{$t('Loading metadata editor…')}</p>
+	<p role="status">{$t`Loading metadata editor…`}</p>
 {/if}

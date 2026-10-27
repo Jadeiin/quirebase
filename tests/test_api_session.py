@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import httpx2
 import pytest
-from app_helpers import create_web_test_app, json_payload
+from app_helpers import authenticated_async_client, create_web_test_app, json_payload
 from sqlalchemy import select
-from test_http import authenticated_async_client
 
 from quirebase.accounts import create_api_token, create_login_session
 from quirebase.core.crypto import hash_password

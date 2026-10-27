@@ -6,12 +6,11 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from commonmeta.base_utils import compact
 from inquiro import CandidateRecord, Identifier
 from item_helpers import contributor_values
 from sqlalchemy import select
-from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError, ValidationFailure

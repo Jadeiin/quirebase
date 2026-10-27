@@ -1,6 +1,7 @@
-import { defineConfig } from '@lingui/cli';
+import babelExtractor from '@lingui/cli/api/extractors/babel';
 import { formatter } from '@lingui/format-po';
-import { svelteExtractor, typescriptExtractor } from './src/lib/i18n-extractor';
+import { defineConfig } from 'lingui-for-svelte/config';
+import { svelteExtractor } from 'lingui-for-svelte/extractor';
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from './src/lib/locale';
 
 export default defineConfig({
@@ -20,5 +21,5 @@ export default defineConfig({
 			]
 		}
 	],
-	extractors: [svelteExtractor, typescriptExtractor]
+	extractors: [svelteExtractor, babelExtractor]
 });

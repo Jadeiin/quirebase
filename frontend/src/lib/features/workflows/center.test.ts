@@ -2,7 +2,9 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { msg } from '#lib/i18n.js';
+import { msg } from '@lingui/core/macro';
+import { i18n } from '@lingui/core';
+import { activateLocale } from '#lib/locale.js';
 import { toaster } from '#lib/toaster.js';
 import { WorkflowCenter, type TrackedWorkflow, type WorkflowLedger } from './center.svelte';
 import type { WorkflowStatus } from './queries';
@@ -34,8 +36,8 @@ function status(overrides: Partial<WorkflowStatus> = {}): WorkflowStatus {
 function trackOptions() {
 	return {
 		label: 'Document processing',
-		successMessage: msg('Document processing completed'),
-		failureMessage: msg('Document processing failed')
+		successMessage: msg`Document processing completed`,
+		failureMessage: msg`Document processing failed`
 	};
 }
 
@@ -51,6 +53,43 @@ function memoryLedger() {
 }
 
 describe('WorkflowCenter', () => {
+	it('rejects notifications that cannot round-trip as static message IDs', () => {
+		const { ledger } = memoryLedger();
+		const center = new WorkflowCenter(ledger);
+		for (const successMessage of [
+			{ id: '', message: 'Missing ID' },
+			{ id: 'dynamic', values: { count: 1 } }
+		]) {
+			expect(() => center.track('invalid', { ...trackOptions(), successMessage })).toThrow(
+				'require a static message ID'
+			);
+		}
+		expect(center.jobs).toEqual([]);
+		expect(ledger.read()).toEqual([]);
+	});
+
+	it('restores serialized message IDs and translates them in the current locale', () => {
+		const { ledger } = memoryLedger();
+		const options = trackOptions();
+		const center = new WorkflowCenter(ledger);
+		center.track('workflow-1', options);
+		expect(ledger.read()[0]).toMatchObject({
+			successMessage: options.successMessage.id,
+			failureMessage: options.failureMessage.id
+		});
+
+		try {
+			activateLocale('zh-CN');
+			const restored = new WorkflowCenter(ledger);
+			restored.restore();
+			restored.resolve('workflow-1', status());
+			expect(lastToast().title).toBe(i18n._(options.successMessage));
+			expect(lastToast().title).toMatch(/[\u3400-\u9fff]/);
+		} finally {
+			activateLocale('en-US');
+		}
+	});
+
 	it('marks purged history unavailable without inventing an operation failure', async () => {
 		const { ledger, entries } = memoryLedger();
 		const center = new WorkflowCenter(ledger);
@@ -210,11 +249,17 @@ describe('WorkflowCenter', () => {
 		'keeps the %s import destination after an active job across consecutive reloads',
 		(state) => {
 			const { ledger, entries } = memoryLedger();
+			const options = trackOptions();
+			const storedOptions = {
+				label: options.label,
+				successMessage: options.successMessage.id!,
+				failureMessage: options.failureMessage.id!
+			};
 			const saved: TrackedWorkflow[] = [
-				{ id: 'active-workflow', ...trackOptions(), startedAt: 100 },
+				{ id: 'active-workflow', ...storedOptions, startedAt: 100 },
 				{
 					id: 'import-workflow',
-					...trackOptions(),
+					...storedOptions,
 					workspaceId: 'workspace-1',
 					target: { kind: 'import_batch', id: 'batch-1' },
 					startedAt: 200,
@@ -229,7 +274,13 @@ describe('WorkflowCenter', () => {
 			for (let reload = 0; reload < 2; reload++) {
 				const restored = new WorkflowCenter(ledger);
 				restored.restore();
-				expect(restored.jobs).toEqual(saved);
+				expect(restored.jobs).toEqual(
+					saved.map((entry) => ({
+						...entry,
+						successMessage: { id: entry.successMessage },
+						failureMessage: { id: entry.failureMessage }
+					}))
+				);
 				expect(entries()).toEqual(saved);
 			}
 			expect(createToast).toHaveBeenCalledTimes(toastCount);

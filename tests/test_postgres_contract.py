@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from test_domain_states import assert_closed_state_constraints
+from state_contracts import assert_closed_state_constraints
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.database import Base, async_database_url, make_async_engine

@@ -6,7 +6,7 @@
 	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import RichText from '#lib/design/RichText.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { candidateKey, identifiersForCandidates, type Candidate } from './search-state.js';
 
 	let {
@@ -72,34 +72,34 @@
 	<div
 		class="mb-2 flex flex-wrap items-center gap-2 border-b border-surface-300-700 pb-3"
 		role="group"
-		aria-label={$t('Candidate selection')}
+		aria-label={$t`Candidate selection`}
 	>
-		<span id={`${id}-select`} class="sr-only">{$t('Select')}</span>
+		<span id={`${id}-select`} class="sr-only">{$t`Select`}</span>
 		<Button size="sm" disabled={disabled || tooManyOnPage} onclick={selectPage}
-			>{$t('Select this page')}</Button
+			>{$t`Select this page`}</Button
 		>
 		<Button size="sm" disabled={disabled || selected.size === 0} onclick={() => selected.clear()}
-			>{$t('Clear selection')}</Button
+			>{$t`Clear selection`}</Button
 		>
 		<span class="text-sm text-surface-600-400" role="status"
-			>{$t('{count} selected', { count: selected.size })}</span
+			>{$t`${ph({ count: selected.size })} selected`}</span
 		>
 		<Button
 			size="sm"
 			variant="filled"
 			class="ml-auto"
 			disabled={disabled || !selectedImport}
-			onclick={() => onReview([...selectedCandidates])}>{$t('Review selected')}</Button
+			onclick={() => onReview([...selectedCandidates])}>{$t`Review selected`}</Button
 		>
 	</div>
 	{#if tooManyOnPage}
 		<p class="mb-3 text-sm text-surface-600-400">
-			{$t('Select up to 50 candidates for one import preview.')}
+			{$t`Select up to 50 candidates for one import preview.`}
 		</p>
 	{/if}
 	{#if selectedCandidates.length > 0 && !selectedImport}
 		<Notice variant="warning" class="mb-3"
-			>{$t('Select candidates with the same identifier type to review them together.')}</Notice
+			>{$t`Select candidates with the same identifier type to review them together.`}</Notice
 		>
 	{/if}
 {/if}
@@ -126,15 +126,15 @@
 					<div class="min-w-0 flex-1 basis-64">
 						<BibliographicSummary density="detailed" headingId={`${id}-title-${index}`}>
 							{#snippet title()}<RichText html={candidate.title} />{/snippet}
-							{#snippet authors()}{candidate.authors ?? $t('Unknown authors')}{/snippet}
-							{candidate.publication_title ?? $t('Unknown publication')}
+							{#snippet authors()}{candidate.authors ?? $t`Unknown authors`}{/snippet}
+							{candidate.publication_title ?? $t`Unknown publication`}
 							{#if candidate.publication_date}
 								· {candidate.publication_date}{/if}
 						</BibliographicSummary>
 					</div>
 					{#if canImport}
 						<Button size="sm" {disabled} onclick={() => onReview([candidate])}
-							>{$t('Review and import')}</Button
+							>{$t`Review and import`}</Button
 						>
 					{/if}
 				</div>
@@ -152,7 +152,7 @@
 						aria-expanded={expanded.has(key)}
 						aria-controls={`${id}-abstract-${index}`}
 						onclick={() => toggleAbstract(key)}
-						>{expanded.has(key) ? $t('Hide abstract') : $t('Show abstract')}</Button
+						>{expanded.has(key) ? $t`Hide abstract` : $t`Show abstract`}</Button
 					>
 				{/if}
 				<code class="mt-2 block text-xs break-all"

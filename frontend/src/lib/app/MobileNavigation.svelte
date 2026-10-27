@@ -7,7 +7,7 @@
 	import type { components } from '#lib/api/schema.js';
 	import { hasAllowedAction } from '#lib/authorization/can.js';
 	import Icon from '#lib/design/Icon.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import type { ThemePreference } from '#lib/theme.js';
 	import { mobileMoreNavigation, mobileNavigation, themeOptions } from './navigation';
 	import { workspaceHref } from '#lib/workspaces/href.js';
@@ -65,14 +65,14 @@
 	class={`fixed inset-x-0 bottom-0 z-50 overflow-x-auto bg-primary-950 p-0 text-surface-300 md:hidden ${readerRoute ? 'hidden' : 'flex'}`}
 >
 	{#snippet element(attributes)}
-		<nav {...attributes as HTMLAttributes<HTMLElement>} aria-label={$t('Mobile navigation')}>
+		<nav {...attributes as HTMLAttributes<HTMLElement>} aria-label={$t`Mobile navigation`}>
 			<Navigation.Menu class="w-full gap-0">
 				{#if !workspaceId}<Navigation.TriggerAnchor
 						class="flex min-w-18 flex-1 flex-col items-center gap-1 rounded-none bg-transparent px-1.5 py-2 text-xs no-underline aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 						href={resolve('workspace')}
 						aria-current={routeIsActive('/workspace') ? 'page' : undefined}
 					>
-						<Icon name="panel" size={19} /><span>{$t('My workspaces')}</span>
+						<Icon name="panel" size={19} /><span>{$t`My workspaces`}</span>
 					</Navigation.TriggerAnchor>{/if}
 				{#each mobileItems as [route, label, icon] (label)}
 					<Navigation.TriggerAnchor
@@ -96,7 +96,7 @@
 						class="flex min-w-18 flex-1 cursor-pointer flex-col items-center gap-1 border-0 bg-transparent px-1.5 py-2 text-xs text-inherit aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
 						aria-current={moreActive ? 'page' : undefined}
 					>
-						<Icon name="more" size={19} /><span>{$t('More')}</span>
+						<Icon name="more" size={19} /><span>{$t`More`}</span>
 					</Menu.Trigger>
 					<Portal>
 						<Menu.Positioner class="z-100">
@@ -112,7 +112,7 @@
 								<div
 									class="px-2.5 py-1.5 text-xs font-bold tracking-wide text-surface-600-400 uppercase"
 								>
-									{$t('Appearance')}
+									{$t`Appearance`}
 								</div>
 								{#each themeOptions as [preference, label, icon] (preference)}
 									<Menu.Item
@@ -134,7 +134,7 @@
 										value="/admin"
 										class="min-w-0 cursor-pointer justify-start gap-2 px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-primary-50-950 data-[highlighted]:text-primary-800-200"
 										onclick={() => goto(resolve('admin'))}
-										><Icon name="admin" />{$t('Administration')}</Menu.Item
+										><Icon name="admin" />{$t`Administration`}</Menu.Item
 									>
 								{/if}
 							</Menu.Content>

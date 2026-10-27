@@ -13,30 +13,32 @@ from uuid import UUID, uuid4
 import httpx2
 import pymupdf
 import pytest
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from commonmeta.author_utils import get_one_author
 from commonmeta.base_utils import compact
-from import_helpers import pdf_import_batch_data
+from import_helpers import (
+    finish_pdf_import_preview,
+    pdf_bytes,
+    pdf_import_batch_data,
+    published_pdf_bytes,
+)
 from inquiro import CandidateRecord, Identifier, LookupFailure, LookupOutcome
 from item_helpers import contributor_values, metadata_list_values, work_identifier
 from provider_helpers import provider_runtime
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from storage_helpers import local_object_path
-from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings
 from quirebase.core.errors import ResourceNotFound, UpstreamServiceError
 from quirebase.core.storage import ObjectSuffix, get_object_store
-from quirebase.core.workflows import durable_operations
 from quirebase.documents import workflows as document_workflows
 from quirebase.documents.revisions import delete_unreferenced_objects, stage_pdf
 from quirebase.library import workflows as library_workflows
 from quirebase.library.imports import (
     _pdf_import_inputs,
     delete_import_batch,
-    extract_pdf_import_identifier,
     finalize_pdf_import_batch,
     lookup_pdf_import_candidates,
     retry_pdf_import_batch,
@@ -179,75 +181,6 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
         assert (await client.get(f"{base}/items/facets", params={"limit": 0})).status_code == 422
     finally:
         await client.aclose()
-
-
-async def finish_pdf_import_preview(db, session_factory, batch: ImportBatch, monkeypatch) -> None:
-    operations = durable_operations()
-    enqueued = next(
-        (
-            entry
-            for entry in reversed(getattr(operations, "enqueues", []))
-            if entry.get("workflow_id") == batch.workflow_id
-            and entry["workflow_name"] == "library.prepare_pdf_import"
-        ),
-        None,
-    )
-    pending = enqueued["args"][-1] if enqueued else _pdf_import_inputs(batch.staged_files)
-
-    async def lookup(batch_id, candidates):
-        async with session_factory() as worker_db:
-            return await lookup_pdf_import_candidates(worker_db, batch_id, candidates)
-
-    async def finalize(actor_id, workspace_id, batch_id, workflow_id, records, errors):
-        async with session_factory() as worker_db:
-            result = await finalize_pdf_import_batch(
-                worker_db, actor_id, workspace_id, batch_id, workflow_id, records, errors
-            )
-            await worker_db.commit()
-            return result
-
-    async def cleanup(
-        _workflow_name, _actor_id, _workspace_id, keys, ignore_workflow_id=None, **_options
-    ):
-        async with session_factory() as worker_db:
-            await delete_unreferenced_objects(
-                worker_db, keys, ignore_workflow_id=ignore_workflow_id
-            )
-        return f"cleanup:{batch.id}"
-
-    monkeypatch.setattr(
-        library_workflows, "extract_pdf_import_identifier_step", extract_pdf_import_identifier
-    )
-    monkeypatch.setattr(library_workflows, "lookup_pdf_import_candidates_step", lookup)
-    monkeypatch.setattr(library_workflows, "finalize_pdf_import_batch_step", finalize)
-    monkeypatch.setattr(library_workflows, "enqueue_child_workflow", cleanup)
-    workflow_body = library_workflows.prepare_pdf_import_workflow.__wrapped__.__wrapped__
-    await workflow_body(batch.actor_id, batch.workspace_id, batch.id, batch.workflow_id, pending)
-    operations = durable_operations()
-    workflow = await operations.get(batch.workflow_id)
-    if workflow is not None and hasattr(operations, "workflows"):
-        operations.workflows[batch.workflow_id] = replace(
-            workflow, state="succeeded", raw_status="SUCCESS"
-        )
-    await db.refresh(batch)
-
-
-def pdf_bytes() -> bytes:
-    document = pymupdf.open()
-    document.new_page()
-    contents = document.tobytes()
-    document.close()
-    return contents
-
-
-def published_pdf_bytes(doi: str = "10.1000/published") -> bytes:
-    document = pymupdf.open()
-    page = document.new_page()
-    page.insert_text((72, 72), f"https://doi.org/{doi}")
-    document.set_metadata({"subject": f"doi:{doi}"})
-    contents = document.tobytes()
-    document.close()
-    return contents
 
 
 @pytest.mark.anyio

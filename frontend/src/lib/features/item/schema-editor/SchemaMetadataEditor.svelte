@@ -28,7 +28,9 @@
 	import SchemaFormLayout from '#lib/design/SchemaFormLayout.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import Notice from '#lib/design/Notice.svelte';
-	import { t, translate, activeLocale } from '#lib/i18n.js';
+	import { i18n } from '@lingui/core';
+	import { activeLocale } from '#lib/locale.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
 	import type { Metadata } from '../metadata-draft.js';
 	import PropertyField from './PropertyField.svelte';
 	import WorkFields from './WorkFields.svelte';
@@ -118,7 +120,7 @@
 					if (value === undefined && !config.required) return [];
 					return renderer.isValid(config.schema, schemas.rendering, value as never)
 						? []
-						: [translate('Check this value against the metadata standard.')];
+						: [i18n._(msg`Check this value against the metadata standard.`)];
 				}
 			};
 		},
@@ -148,11 +150,11 @@
 		onSubmit: (value) => {
 			if (busy) return;
 			if (rawEdited) {
-				error = $t('Apply JSON changes before saving.');
+				error = $t`Apply JSON changes before saving.`;
 				return;
 			}
 			if (!value.title?.trim()) {
-				error = $t('Enter an Item title.');
+				error = $t`Enter an Item title.`;
 				return;
 			}
 			if (!element?.reportValidity()) return;
@@ -165,7 +167,7 @@
 			void focusError(result.errors[0]);
 		},
 		onSubmissionFailure: () => {
-			error = $t('Unable to validate metadata.');
+			error = $t`Unable to validate metadata.`;
 		}
 	});
 	setFormContext(form);
@@ -192,7 +194,7 @@
 		event.preventDefault();
 		if (busy) return;
 		if (rawEdited) {
-			error = $t('Apply JSON changes before saving.');
+			error = $t`Apply JSON changes before saving.`;
 			return;
 		}
 		error = '';
@@ -230,7 +232,7 @@
 			const issues = validate(parsed);
 			if (issues.length) {
 				errors = issues;
-				error = $t('Invalid metadata JSON.');
+				error = $t`Invalid metadata JSON.`;
 				return;
 			}
 			setValue(form, parsed as Metadata);
@@ -242,7 +244,7 @@
 			rawOpen = false;
 			rawEdited = false;
 		} catch {
-			error = $t('Invalid metadata JSON.');
+			error = $t`Invalid metadata JSON.`;
 		}
 	}
 </script>
@@ -259,30 +261,30 @@
 	>
 		<label class="flex w-fit items-center gap-2 text-sm">
 			<input type="checkbox" bind:checked={visibility.showAll} />
-			{$t('Show all fields')}
+			{$t`Show all fields`}
 		</label>
 		{#key revision}<Content />{/key}
 		<label class="max-w-md"
-			>{$t('Citation key')}<input
+			>{$t`Citation key`}<input
 				class="input"
 				name="citation_key"
 				maxlength="128"
 				bind:value={key}
 			/></label
 		>
-		<Button type="button" onclick={editJson}>{$t('Edit standard metadata JSON')}</Button>
+		<Button type="button" onclick={editJson}>{$t`Edit standard metadata JSON`}</Button>
 		{#if rawOpen}
 			<label
-				>{$t('Metadata')}<textarea
+				>{$t`Metadata`}<textarea
 					class="textarea min-h-80 font-mono"
 					bind:value={raw}
 					oninput={() => (rawEdited = true)}></textarea></label
 			>
-			<Button type="button" onclick={applyJson}>{$t('Apply JSON')}</Button>
+			<Button type="button" onclick={applyJson}>{$t`Apply JSON`}</Button>
 		{/if}
 		{#if error}<Notice variant="error">{error}</Notice>{/if}
 		{#if errors.length}<Notice as="div" variant="error"
-				><p>{$t('Please check the metadata fields.')}</p>
+				><p>{$t`Please check the metadata fields.`}</p>
 				<ul class="m-0 list-none p-0">
 					{#each errors as issue, index (index)}<li>
 							<button class="text-left underline" type="button" onclick={() => focusError(issue)}

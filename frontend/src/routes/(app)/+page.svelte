@@ -12,7 +12,7 @@
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import Button from '#lib/design/Button.svelte';
 	import Notice from '#lib/design/Notice.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 
 	const workspaces = createQuery(() => workspaceListQuery());
 	let preferredId = $state<string | null>(null);
@@ -45,18 +45,18 @@
 </script>
 
 <main class="mx-auto max-w-3xl p-8" aria-live="polite">
-	{#if workspaces.isPending}<p>{$t('Loading workspaces…')}</p>
+	{#if workspaces.isPending}<p>{$t`Loading workspaces…`}</p>
 	{:else if workspaces.isError || (preferredId && preferred.isError && (!(preferred.error instanceof ApiError) || preferred.error.code !== 'workspace_unavailable'))}
 		<div class="grid grid-cols-1 justify-items-start gap-3">
-			<Notice variant="error">{$t('Unable to load workspaces.')}</Notice>
+			<Notice variant="error">{$t`Unable to load workspaces.`}</Notice>
 			<Button
 				onclick={() => {
 					void workspaces.refetch();
 					if (preferredId) void preferred.refetch();
 				}}
 				disabled={workspaces.isFetching || preferred.isFetching}
-				>{workspaces.isFetching ? $t('Loading workspaces…') : $t('Retry')}</Button
+				>{workspaces.isFetching ? $t`Loading workspaces…` : $t`Retry`}</Button
 			>
 		</div>
-	{:else}<p>{$t('Opening your workspace…')}</p>{/if}
+	{:else}<p>{$t`Opening your workspace…`}</p>{/if}
 </main>

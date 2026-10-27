@@ -16,7 +16,7 @@
 	import QueryError from '#lib/design/QueryError.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import Toast from '#lib/design/Toast.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import Login from '#lib/features/auth/Login.svelte';
 	import { sessionQuery, setSession } from '#lib/session.js';
 	import { WorkflowCenter, setWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
@@ -105,7 +105,7 @@
 			await apiRequest('DELETE', '/session');
 			location.assign('/');
 		} catch (reason) {
-			actionError = apiErrorMessage(reason, $t('Account action failed'));
+			actionError = apiErrorMessage(reason, $t`Account action failed`);
 		} finally {
 			actionBusy = false;
 		}
@@ -114,14 +114,14 @@
 
 {#if session.isPending}
 	<main class="mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]">
-		<LoadingState label={$t('Loading Quirebase…')} />
+		<LoadingState label={$t`Loading Quirebase…`} />
 	</main>
 {:else if session.isError && !session.data}
 	<AuthPage>
 		<Panel>
 			<h1 class="m-0">Quirebase</h1>
 			<QueryError
-				message={$t('Unable to check your account.')}
+				message={$t`Unable to check your account.`}
 				busy={session.isFetching}
 				onRetry={() => void session.refetch()}
 			/>
@@ -145,8 +145,7 @@
 			<a
 				class="grid size-8 grid-cols-1 place-items-center rounded-full bg-primary-100 font-extrabold text-primary-800 no-underline"
 				href={resolve('account')}
-				aria-label={$t('Account settings')}
-				>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
+				aria-label={$t`Account settings`}>{session.data.user?.username.slice(0, 1).toUpperCase()}</a
 			>
 		</div>
 	</header>
@@ -171,8 +170,8 @@
 				: 'mx-auto w-full max-w-[100rem] min-w-0 p-4 md:p-[clamp(1.25rem,3vw,2.75rem)]'}
 		>
 			{#if contextError}<Notice variant="error"
-					>{$t('Unable to load Workspace information. Refresh and try again.')}
-					<Button onclick={() => location.reload()}>{$t('Refresh page')}</Button></Notice
+					>{$t`Unable to load Workspace information. Refresh and try again.`}
+					<Button onclick={() => location.reload()}>{$t`Refresh page`}</Button></Notice
 				>{/if}
 			{#if actionError}<Notice variant="error">{actionError}</Notice>{/if}
 			{@render children()}

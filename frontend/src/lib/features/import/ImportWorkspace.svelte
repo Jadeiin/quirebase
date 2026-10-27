@@ -25,7 +25,7 @@
 	import { libraryHref } from '#lib/features/library/filters.js';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import { invalidateLibrary } from '#lib/query/invalidation.js';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, ph, t } from 'lingui-for-svelte/macro';
 	import { randomUUID } from '#lib/uuid.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
@@ -162,9 +162,9 @@
 			.track(next.workflow_id, {
 				workspaceId,
 				target: { kind: 'import_batch', id: next.id },
-				label: $t('Import processing'),
-				successMessage: msg('Import preview is ready'),
-				failureMessage: msg('Import processing failed')
+				label: $t`Import processing`,
+				successMessage: msg`Import preview is ready`,
+				failureMessage: msg`Import processing failed`
 			})
 			.settled.then(refresh, refresh);
 	}
@@ -196,7 +196,7 @@
 				started
 			);
 		} catch (reason) {
-			if (isCurrent(started)) error = apiErrorMessage(reason, $t('Import preview failed'));
+			if (isCurrent(started)) error = apiErrorMessage(reason, $t`Import preview failed`);
 		} finally {
 			pendingCommands.delete('source');
 		}
@@ -230,7 +230,7 @@
 						});
 			await acceptBatch(uploaded, started);
 		} catch (reason) {
-			if (isCurrent(started)) error = apiErrorMessage(reason, $t('Upload failed'));
+			if (isCurrent(started)) error = apiErrorMessage(reason, $t`Upload failed`);
 		} finally {
 			pendingCommands.delete('source');
 		}
@@ -255,7 +255,7 @@
 				cacheBatch
 			);
 		} catch (reason) {
-			if (isCurrent(started)) error = apiErrorMessage(reason, $t('Unable to retry Import'));
+			if (isCurrent(started)) error = apiErrorMessage(reason, $t`Unable to retry Import`);
 		} finally {
 			pendingCommands.delete(key);
 		}
@@ -293,7 +293,7 @@
 			if (result.status === 'committed') await completed(result.batch, started);
 			else if (result.status === 'unknown') uncertainConfirmations.add(snapshot.id);
 			else if (isCurrent(started))
-				error = apiErrorMessage(result.error, $t('Unable to commit Import'));
+				error = apiErrorMessage(result.error, $t`Unable to commit Import`);
 		} finally {
 			pendingCommands.delete(key);
 		}
@@ -345,8 +345,8 @@
 				error = apiErrorMessage(
 					reason,
 					snapshot.status === 'committed'
-						? $t('Unable to delete import record')
-						: $t('Unable to discard Import')
+						? $t`Unable to delete import record`
+						: $t`Unable to discard Import`
 				);
 		} finally {
 			pendingCommands.delete(key);
@@ -370,7 +370,7 @@
 		} catch (reason) {
 			if (isCurrent(started)) {
 				metadataErrors = reason instanceof ApiError ? reason.fields : [];
-				error = apiErrorMessage(reason, $t('Unable to create Item'));
+				error = apiErrorMessage(reason, $t`Unable to create Item`);
 			}
 		} finally {
 			pendingCommands.delete('source');
@@ -383,33 +383,33 @@
 		{#if !batchId}<p
 				class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase"
 			>
-				{$t('Add to Library')}
+				{$t`Add to Library`}
 			</p>{/if}
-		<h1 class="mb-2">{$t('Import')}</h1>
+		<h1 class="mb-2">{$t`Import`}</h1>
 		{#if !batchId}<p class="mb-0 max-w-2xl text-surface-600-400">
-				{$t('Import from identifiers, bibliography files or PDFs, or create an Item manually.')}
+				{$t`Import from identifiers, bibliography files or PDFs, or create an Item manually.`}
 			</p>{/if}
 	</div>
 	{#if batchId}
 		<Button onclick={returnFromPreview}
 			>{page.url.searchParams.get('from') === 'discovery'
-				? $t('Back to Discovery')
+				? $t`Back to Discovery`
 				: page.url.searchParams.get('from') === 'history'
-					? $t('Back to import history')
+					? $t`Back to import history`
 					: workspace.can('item.create')
-						? $t('New import')
-						: $t('Import history')}</Button
+						? $t`New import`
+						: $t`Import history`}</Button
 		>
 	{:else}
 		<Button as="a" href={resolve(workspaceHref(workspaceId, 'import/history'))}
-			>{$t('Import history')}</Button
+			>{$t`Import history`}</Button
 		>
 	{/if}
 </div>
 <ol
 	class="mb-5 grid list-none grid-cols-3 gap-3 border-b border-surface-300-700 p-0 pb-4 sm:flex sm:gap-6"
 >
-	{#each [{ number: '1', title: $t('Choose a source') }, { number: '2', title: $t('Preview records') }, { number: '3', title: $t('Import to Library') }] as step, index (step.number)}
+	{#each [{ number: '1', title: $t`Choose a source` }, { number: '2', title: $t`Preview records` }, { number: '3', title: $t`Import to Library` }] as step, index (step.number)}
 		<li
 			class="flex min-w-0 items-center gap-2"
 			aria-current={index + 1 === currentStep ? 'step' : undefined}
@@ -429,22 +429,20 @@
 {#if confirmationUnknown}
 	<Notice variant="warning" as="div" class="flex flex-wrap items-center justify-between gap-3">
 		<span
-			>{$t(
-				'We could not confirm whether the import completed. Check its status before trying again.'
-			)}</span
+			>{$t`We could not confirm whether the import completed. Check its status before trying again.`}</span
 		>
-		<Button disabled={busy} onclick={checkStatus}>{$t('Check import status')}</Button>
+		<Button disabled={busy} onclick={checkStatus}>{$t`Check import status`}</Button>
 	</Notice>
 {:else if batchId && previewUnavailable}
 	<QueryError
-		message={apiErrorMessage(preview.error, $t('Unable to load Import preview'))}
+		message={apiErrorMessage(preview.error, $t`Unable to load Import preview`)}
 		busy={preview.isFetching}
 		onRetry={() => void preview.refetch()}
 	/>
 {/if}
 {#if navigationFailed}
 	<Notice variant="warning"
-		>{$t('Import succeeded. Use View imported Items to open the result.')}</Notice
+		>{$t`Import succeeded. Use View imported Items to open the result.`}</Notice
 	>
 {/if}
 {#if !batchId && workspace.can('item.create')}
@@ -455,9 +453,9 @@
 			if (sourceTab === 'manual') manualMounted = true;
 		}}
 	>
-		<Tabs.List class="mb-4 max-w-full overflow-x-auto" aria-label={$t('Import methods')}>
+		<Tabs.List class="mb-4 max-w-full overflow-x-auto" aria-label={$t`Import methods`}>
 			<Tabs.Indicator class="bg-primary-700-300" />
-			{#each [['identifiers', 'search', $t('Identifiers')], ['bibliography', 'library', $t('Bibliography')], ['pdfs', 'import', $t('PDFs')], ['manual', 'plus', $t('Manual creation')]] as [value, icon, label] (value)}
+			{#each [['identifiers', 'search', $t`Identifiers`], ['bibliography', 'library', $t`Bibliography`], ['pdfs', 'import', $t`PDFs`], ['manual', 'plus', $t`Manual creation`]] as [value, icon, label] (value)}
 				<Tabs.Trigger
 					{value}
 					class="flex items-center gap-2 whitespace-nowrap data-selected:text-primary-800-200"
@@ -468,16 +466,16 @@
 		</Tabs.List>
 		{#if hasStagedBatch}
 			<Notice
-				>{$t('Commit or discard the current Import Batch before starting another import.')}</Notice
+				>{$t`Commit or discard the current Import Batch before starting another import.`}</Notice
 			>
 		{/if}
 		<Tabs.Content value="identifiers">
 			<ImportSourceForm
 				icon="search"
-				title={$t('Look up identifiers')}
-				description={$t('Paste up to 50 identifiers, one per line.')}
+				title={$t`Look up identifiers`}
+				description={$t`Paste up to 50 identifiers, one per line.`}
 				busy={busy || hasStagedBatch || providers.isPending || providers.isError}
-				submitLabel={$t('Preview metadata')}
+				submitLabel={$t`Preview metadata`}
 				submitDisabled={identifierEntries.length === 0 || identifierEntries.length > 50}
 				onsubmit={(event) => {
 					event.preventDefault();
@@ -486,13 +484,13 @@
 			>
 				<div class="grid min-w-0 grid-cols-1 gap-1.5">
 					<div class="flex flex-wrap items-center justify-between gap-2">
-						<label for="import-identifiers">{$t('Identifiers')}</label>
+						<label for="import-identifiers">{$t`Identifiers`}</label>
 						<Badge
 							variant={identifierEntries.length > 50 ? 'error' : 'surface'}
 							class="tabular-nums"
 							aria-live="polite"
 						>
-							{$t('{count} / 50 identifiers', { count: identifierEntries.length })}
+							{$t`${ph({ count: identifierEntries.length })} / 50 identifiers`}
 						</Badge>
 					</div>
 					<textarea
@@ -504,35 +502,33 @@
 						aria-describedby="import-identifiers-help"
 						required></textarea>
 					<p id="import-identifiers-help" class="mb-0 text-sm text-surface-600-400">
-						{$t(
-							'Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:.'
-						)}
+						{$t`Use DOI, PMID, arXiv, ISBN, OpenAlex IDs, or their supported URLs. Prefix ISBN-10 with ISBN:.`}
 					</p>
 				</div>
 				<label
-					>{$t('Data source')}<select
+					>{$t`Data source`}<select
 						class="select"
 						bind:value={provider}
 						disabled={providers.isPending || providers.isError}
 					>
-						<option value="auto">{$t('Auto detect')}</option>
+						<option value="auto">{$t`Auto detect`}</option>
 						{#each providers.data?.lookup ?? [] as option (option.id)}
 							<option value={option.id}>{option.name}</option>
 						{/each}
 					</select></label
 				>
 				{#if providers.isError}<Notice variant="error"
-						>{apiErrorMessage(providers.error, $t('Unable to load Import options'))}</Notice
+						>{apiErrorMessage(providers.error, $t`Unable to load Import options`)}</Notice
 					>{/if}
 			</ImportSourceForm>
 		</Tabs.Content>
 		<Tabs.Content value="bibliography">
 			<ImportSourceForm
 				icon="library"
-				title={$t('Import a bibliography')}
-				description={$t('Upload a bibliography file or paste bibliography data.')}
+				title={$t`Import a bibliography`}
+				description={$t`Upload a bibliography file or paste bibliography data.`}
 				busy={busy || hasStagedBatch}
-				submitLabel={$t('Preview bibliography')}
+				submitLabel={$t`Preview bibliography`}
 				submitDisabled={!bibliographyFile && !bibliographyText.trim()}
 				onsubmit={(event) => {
 					event.preventDefault();
@@ -542,19 +538,19 @@
 				<div class="grid min-w-0 grid-cols-1 gap-3">
 					<FilePicker
 						name="bibliography"
-						label={$t('Bibliography file')}
-						actionLabel={$t('Choose file')}
+						label={$t`Bibliography file`}
+						actionLabel={$t`Choose file`}
 						accept={['.bib', '.bibtex', '.ris', '.json', 'application/json', 'text/plain']}
 						disabled={busy || hasStagedBatch}
 						onFilesChange={setBibliographyFiles}
 					/>
 					{#if bibliographyFile}
 						<p class="mb-0 text-sm text-surface-600-400">
-							{$t('Remove the chosen file to paste bibliography data instead.')}
+							{$t`Remove the chosen file to paste bibliography data instead.`}
 						</p>
 					{:else}
 						<label>
-							{$t('Or paste bibliography data')}
+							{$t`Or paste bibliography data`}
 							<textarea
 								class="textarea"
 								bind:value={bibliographyText}
@@ -564,18 +560,16 @@
 						</label>
 					{/if}
 					<p id="bibliography-help" class="mb-0 text-sm text-surface-600-400">
-						{$t(
-							'Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet.'
-						)}
+						{$t`Supports BibTeX, RIS, CSL-JSON, and Commonmeta, up to 5 MiB. Formatted reference text is not supported yet.`}
 					</p>
 				</div>
 				<label
-					>{$t('File format')}<select
+					>{$t`File format`}<select
 						class="select"
 						name="file_format"
 						bind:value={bibliographyFormat}
 					>
-						<option value="auto">{$t('Auto detect')}</option>
+						<option value="auto">{$t`Auto detect`}</option>
 						{#each bibliographyFormats.filter((choice) => choice.importable) as choice (choice.value)}
 							<option value={choice.value}>{$t(choice.label)}</option>
 						{/each}
@@ -586,10 +580,10 @@
 		<Tabs.Content value="pdfs">
 			<ImportSourceForm
 				icon="import"
-				title={$t('Import PDFs')}
-				description={$t('Look up DOI or arXiv IDs from PDFs and import them together.')}
+				title={$t`Import PDFs`}
+				description={$t`Look up DOI or arXiv IDs from PDFs and import them together.`}
 				busy={busy || hasStagedBatch}
-				submitLabel={$t('Preview import')}
+				submitLabel={$t`Preview import`}
 				submitDisabled={pdfFiles.length === 0}
 				onsubmit={(event) => {
 					event.preventDefault();
@@ -599,9 +593,9 @@
 				<div class="grid min-w-0 grid-cols-1 gap-3">
 					<FilePicker
 						name="pdfs"
-						label={$t('PDF files')}
-						hint={$t('Drop PDFs here or choose files. You can add more.')}
-						actionLabel={$t('Choose files')}
+						label={$t`PDF files`}
+						hint={$t`Drop PDFs here or choose files. You can add more.`}
+						actionLabel={$t`Choose files`}
 						accept={['application/pdf', '.pdf']}
 						multiple
 						maxFiles={50}
@@ -621,9 +615,9 @@
 							><Icon name="plus" size={20} /></span
 						>
 						<div class="min-w-0">
-							<h2 class="mb-1">{$t('New Item')}</h2>
+							<h2 class="mb-1">{$t`New Item`}</h2>
 							<p class="mb-0 text-sm text-surface-600-400">
-								{$t('Enter Item metadata manually.')}
+								{$t`Enter Item metadata manually.`}
 							</p>
 						</div>
 					</div>
@@ -631,7 +625,7 @@
 						metadata={emptyMetadata}
 						serverErrors={metadataErrors}
 						busy={busy || hasStagedBatch}
-						submitLabel={$t('Create Item')}
+						submitLabel={$t`Create Item`}
 						onsubmit={createItem}
 					/>
 				</Panel>
@@ -640,7 +634,7 @@
 	</Tabs>
 {/if}
 {#if batchId && preview.isPending && preview.fetchStatus !== 'paused'}
-	<LoadingState label={$t('Loading Import preview…')} />
+	<LoadingState label={$t`Loading Import preview…`} />
 {:else if batch}
 	{#key batch.id}
 		<ImportBatchPreview

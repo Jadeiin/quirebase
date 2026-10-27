@@ -12,7 +12,7 @@
 	import ItemDiscussionSection from '#lib/features/item/discussion/ItemDiscussionSection.svelte';
 	import ItemSectionState from '#lib/features/item/ItemSectionState.svelte';
 	import { itemDiscussionQuery } from '#lib/features/item/queries.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import type { PageProps } from './$types';
 
@@ -38,7 +38,7 @@
 	function track(promise: Promise<unknown>) {
 		mutationError = '';
 		void promise.catch((error) => {
-			mutationError = apiErrorMessage(error, $t('Unable to save changes'));
+			mutationError = apiErrorMessage(error, $t`Unable to save changes`);
 		});
 	}
 
@@ -97,10 +97,10 @@
 </ItemSectionState>
 <PromptDialog
 	bind:open={moderationDialogOpen}
-	title={$t('Moderate Discussion message')}
-	body={$t('Give a reason for removing this message. The action is recorded in the audit log.')}
-	label={$t('Moderation reason')}
-	confirmLabel={$t('Remove message')}
+	title={$t`Moderate Discussion message`}
+	body={$t`Give a reason for removing this message. The action is recorded in the audit log.`}
+	label={$t`Moderation reason`}
+	confirmLabel={$t`Remove message`}
 	busy={discussionModerate.isPending}
 	onConfirm={moderateDiscussion}
 />

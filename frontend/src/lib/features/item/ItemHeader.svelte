@@ -7,7 +7,8 @@
 	import Icon from '#lib/design/Icon.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import ItemActions from '#lib/features/item/ItemActions.svelte';
-	import { msg, t, type MessageKey } from '#lib/i18n.js';
+	import { msg, ph, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 	import type { ItemOverview, ItemSection } from './queries';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { metadataFilterLinks } from './metadata-links.js';
@@ -29,13 +30,13 @@
 		onChanged: () => Promise<unknown>;
 	} = $props();
 
-	const labels: Record<ItemSection, MessageKey> = {
-		overview: msg('Overview'),
-		metadata: msg('Metadata'),
-		files: msg('Files'),
-		organize: msg('Organize'),
-		annotations: msg('Annotations'),
-		discussion: msg('Discussion')
+	const labels: Record<ItemSection, MessageDescriptor> = {
+		overview: msg`Overview`,
+		metadata: msg`Metadata`,
+		files: msg`Files`,
+		organize: msg`Organize`,
+		annotations: msg`Annotations`,
+		discussion: msg`Discussion`
 	};
 	const sectionKeys = Object.keys(labels) as ItemSection[];
 	const { workspaceId } = getWorkspaceContext();
@@ -56,10 +57,10 @@
 	<a
 		class="mb-3 inline-flex items-center gap-1 text-sm font-medium text-primary-700-300 no-underline hover:text-primary-800-200"
 		href={resolve(libraryReturnHref(workspaceId, page.url.searchParams))}
-		><Icon name="chevron-left" size={16} />{$t('Library')}</a
+		><Icon name="chevron-left" size={16} />{$t`Library`}</a
 	>
 	<h1 class="m-0 wrap-anywhere">
-		{#if title}<RichText html={title} />{:else}{$t('Item details')}{/if}
+		{#if title}<RichText html={title} />{:else}{$t`Item details`}{/if}
 	</h1>
 	{#if links}
 		<div class="mt-3 space-y-1 text-sm leading-relaxed wrap-anywhere">
@@ -68,9 +69,9 @@
 					{index > 0 ? '; ' : ''}<a
 						class="underline-offset-4 hover:text-primary-700-300 hover:underline"
 						href={resolve(author.href)}
-						title={$t('View Items by {name}', { name: author.label })}>{author.label}</a
+						title={$t`View Items by ${ph({ name: author.label })}`}>{author.label}</a
 					>
-				{:else}{$t('Unknown authors')}{/each}
+				{:else}{$t`Unknown authors`}{/each}
 			</p>
 			{#if links.publication.href || links.date.href}
 				<p class="m-0 text-surface-600-400">
@@ -78,7 +79,7 @@
 						<a
 							class="underline-offset-4 hover:text-primary-700-300 hover:underline"
 							href={resolve(links.publication.href)}
-							title={$t('View Items in {name}', { name: links.publication.label })}
+							title={$t`View Items in ${ph({ name: links.publication.label })}`}
 							>{links.publication.label}</a
 						>
 					{/if}
@@ -88,7 +89,7 @@
 							<a
 								class="underline-offset-4 hover:text-primary-700-300 hover:underline"
 								href={resolve(links.date.href)}
-								title={$t('View Items published in {year}', { year: links.date.year })}
+								title={$t`View Items published in ${ph({ year: links.date.year })}`}
 								>{links.date.label}</a
 							>
 						</span>
@@ -105,7 +106,7 @@
 		</div>
 	{/if}
 </header>
-<SectionTabs label={$t('Item sections')}>
+<SectionTabs label={$t`Item sections`}>
 	{#each Object.entries(labels) as [key, label] (key)}
 		<SectionTab current={section === key} href={resolve(sectionPath(key))}>{$t(label)}</SectionTab>
 	{/each}

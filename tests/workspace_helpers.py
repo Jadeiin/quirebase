@@ -65,3 +65,12 @@ async def fixture_membership_id(db, workspace_id, user_id):
     )
     assert member_id is not None
     return member_id
+
+
+async def workspace_user(db, username: str) -> User:
+    user = User(username=username, password_hash="unused")
+    db.add(user)
+    await db.flush()
+    await provision_initial_workspace(db, user)
+    await db.commit()
+    return user

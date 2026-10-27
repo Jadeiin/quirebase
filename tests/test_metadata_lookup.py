@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from commonmeta.author_utils import get_one_author
 from commonmeta.base_utils import compact
 from inquiro import (
@@ -18,7 +18,6 @@ from inquiro import (
 from inquiro.transport import MockExchange, TransportResponse
 from item_helpers import stored_doi, work_identifier
 from sqlalchemy import func, select
-from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.library import stage_identifiers_import_batch

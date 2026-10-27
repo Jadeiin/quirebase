@@ -16,7 +16,7 @@
 	import { itemFilesQuery, itemOverviewQuery } from '#lib/features/item/queries.js';
 	import type { FileRow } from '#lib/features/item/types.js';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
 	import type { PageProps } from './$types';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 
@@ -34,9 +34,9 @@
 	async function trackDocument(workflowId: string) {
 		await workflows.track(workflowId, {
 			workspaceId: params.workspaceId,
-			label: $t('Document processing'),
-			successMessage: msg('Document processing completed'),
-			failureMessage: msg('Document processing failed')
+			label: $t`Document processing`,
+			successMessage: msg`Document processing completed`,
+			failureMessage: msg`Document processing failed`
 		}).settled;
 	}
 
@@ -60,7 +60,7 @@
 			() => true,
 			(error) => {
 				if (isDownloadCancelled(error)) return false;
-				mutationError = apiErrorMessage(error, $t('Unable to save changes'));
+				mutationError = apiErrorMessage(error, $t`Unable to save changes`);
 				return false;
 			}
 		);
@@ -120,9 +120,9 @@
 {#if mutationError}<Notice variant="error">{mutationError}</Notice>{/if}
 <ConfirmDialog
 	bind:open={confirmFileOpen}
-	title={$t('Delete this file permanently?')}
+	title={$t`Delete this file permanently?`}
 	body={pendingFile?.original_name ?? ''}
-	confirmLabel={$t('Delete permanently')}
+	confirmLabel={$t`Delete permanently`}
 	busy={fileDelete.isPending}
 	onConfirm={confirmDeleteFile}
 />

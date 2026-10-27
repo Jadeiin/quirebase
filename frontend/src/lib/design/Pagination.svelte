@@ -2,7 +2,7 @@
 	import { Pagination } from '@skeletonlabs/skeleton-svelte';
 	import { buttonClass } from '#lib/design/button-classes.js';
 	import Icon from '#lib/design/Icon.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 
 	let {
 		page,
@@ -49,7 +49,7 @@
 		class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-surface-700-300"
 	>
 		<label class="flex items-center gap-2 whitespace-nowrap">
-			{$t('Page Size')}
+			{$t`Page Size`}
 			<select
 				class="select h-8 w-auto field-xs"
 				value={pageSize}
@@ -66,7 +66,7 @@
 		</label>
 		{#if onSort && sortOptions.length}
 			<label class="flex items-center gap-2 whitespace-nowrap">
-				{$t('Sort By')}
+				{$t`Sort By`}
 				<select
 					class="select h-8 w-auto max-w-52 field-xs"
 					value={sort}
@@ -80,7 +80,7 @@
 			</label>
 		{/if}
 		<span class="whitespace-nowrap tabular-nums" aria-live="polite">
-			{$t('Showing {start}–{end} of {total}', { start, end, total })}
+			{$t`Showing ${start}–${end} of ${total}`}
 		</span>
 	</div>
 	<Pagination
@@ -94,16 +94,16 @@
 			type="button"
 			class={triggerClass}
 			disabled={busy || page <= 1}
-			aria-label={$t('First page')}
-			title={$t('First page')}
+			aria-label={$t`First page`}
+			title={$t`First page`}
 		>
 			<Icon name="chevrons-left" size={17} />
 		</Pagination.FirstTrigger>
 		<Pagination.PrevTrigger
 			class={triggerClass}
 			disabled={busy || page <= 1}
-			aria-label={$t('Previous page')}
-			title={$t('Previous page')}
+			aria-label={$t`Previous page`}
+			title={$t`Previous page`}
 		>
 			<Icon name="chevron-left" size={17} />
 		</Pagination.PrevTrigger>
@@ -111,13 +111,13 @@
 			class="min-w-0 px-2 text-center text-xs font-medium text-surface-700-300 tabular-nums sm:min-w-24"
 			aria-live="polite"
 		>
-			{$t('Page {page} of {pageCount}', { page, pageCount })}
+			{$t`Page ${page} of ${pageCount}`}
 		</span>
 		<Pagination.NextTrigger
 			class={triggerClass}
 			disabled={busy || page >= pageCount}
-			aria-label={$t('Next page')}
-			title={$t('Next page')}
+			aria-label={$t`Next page`}
+			title={$t`Next page`}
 		>
 			<Icon name="chevron-right" size={17} />
 		</Pagination.NextTrigger>
@@ -125,8 +125,8 @@
 			type="button"
 			class={triggerClass}
 			disabled={busy || page >= pageCount}
-			aria-label={$t('Last page')}
-			title={$t('Last page')}
+			aria-label={$t`Last page`}
+			title={$t`Last page`}
 		>
 			<Icon name="chevrons-right" size={17} />
 		</Pagination.LastTrigger>

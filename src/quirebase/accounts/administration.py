@@ -236,8 +236,10 @@ async def revoke_user_sessions(db: AsyncSession, admin: User, user_id: UUID) -> 
     user = await db.get(User, user_id)
     if user is None:
         raise ResourceNotFound("user not found")
-    result = await db.execute(delete(LoginSession).where(LoginSession.user_id == user.id))
-    deleted_count = result.rowcount if hasattr(result, "rowcount") else 1
+    result = await db.execute(
+        delete(LoginSession).where(LoginSession.user_id == user.id).returning(LoginSession.id)
+    )
+    deleted_count = len(result.all())
     record_event(
         db,
         admin.id,

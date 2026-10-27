@@ -1,14 +1,14 @@
-import { msg } from '#lib/i18n.js';
+import { msg } from '@lingui/core/macro';
 import type { components } from '#lib/api/schema.js';
 
 export type BibliographyFormat = components['schemas']['BibliographyFormat'];
 
 export const bibliographyFormats = [
-	{ value: 'csl', label: msg('CSL citation'), extension: 'txt', importable: false },
-	{ value: 'bibtex', label: msg('BibTeX'), extension: 'bib', importable: true },
-	{ value: 'ris', label: msg('RIS'), extension: 'ris', importable: true },
-	{ value: 'csl-json', label: msg('CSL-JSON'), extension: 'json', importable: true },
-	{ value: 'commonmeta', label: msg('Commonmeta'), extension: 'json', importable: true }
+	{ value: 'csl', label: msg`CSL citation`, extension: 'txt', importable: false },
+	{ value: 'bibtex', label: msg`BibTeX`, extension: 'bib', importable: true },
+	{ value: 'ris', label: msg`RIS`, extension: 'ris', importable: true },
+	{ value: 'csl-json', label: msg`CSL-JSON`, extension: 'json', importable: true },
+	{ value: 'commonmeta', label: msg`Commonmeta`, extension: 'json', importable: true }
 ] as const;
 
 export type ExportPreferences = {

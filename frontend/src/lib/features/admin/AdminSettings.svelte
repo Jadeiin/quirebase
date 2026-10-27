@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Panel from '#lib/design/Panel.svelte';
-	import { t, type MessageKey } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 	import type { components } from '#lib/api/schema.js';
 	import Button from '#lib/design/Button.svelte';
 
@@ -13,23 +14,23 @@
 		onSave
 	}: {
 		settings: Settings;
-		fields: ReadonlyArray<readonly [keyof Settings, MessageKey]>;
+		fields: ReadonlyArray<readonly [keyof Settings, MessageDescriptor]>;
 		busy: boolean;
 		onSave: (event: SubmitEvent) => void;
 	} = $props();
 </script>
 
 <Panel class="grid grid-cols-1 gap-3">
-	<h2>{$t('Runtime settings')}</h2>
+	<h2>{$t`Runtime settings`}</h2>
 	<form class="grid grid-cols-1 gap-3" onsubmit={onSave}>
 		{#each fields as [key, label] (key)}
 			<label
 				>{$t(label)}
 				{#if key === 'registration_policy'}
 					<select class="input" name={key} value={settings.registration_policy} disabled={busy}>
-						<option value="open">{$t('Open')}</option>
-						<option value="closed">{$t('Closed')}</option>
-						<option value="invitation_only">{$t('Invitation only')}</option>
+						<option value="open">{$t({ message: 'Open', context: 'registration-policy' })}</option>
+						<option value="closed">{$t`Closed`}</option>
+						<option value="invitation_only">{$t`Invitation only`}</option>
 					</select>
 				{:else if key === 'workspace_creation_policy'}
 					<select
@@ -38,8 +39,8 @@
 						value={settings.workspace_creation_policy}
 						disabled={busy}
 					>
-						<option value="admins_only">{$t('Administrators only')}</option>
-						<option value="members_allowed">{$t('All members')}</option>
+						<option value="admins_only">{$t`Administrators only`}</option>
+						<option value="members_allowed">{$t`All members`}</option>
 					</select>
 				{:else}
 					<input
@@ -54,10 +55,9 @@
 			>
 		{/each}
 		<p class="text-surface-600-400">
-			{$t('Database: {url}', { url: settings.database_url })}<br />{$t('Data directory: {path}', {
-				path: settings.data_dir
-			})}
+			{$t`Database: ${ph({ url: settings.database_url })}`}<br
+			/>{$t`Data directory: ${ph({ path: settings.data_dir })}`}
 		</p>
-		<Button variant="filled" disabled={busy}>{$t('Save settings')}</Button>
+		<Button variant="filled" disabled={busy}>{$t`Save settings`}</Button>
 	</form>
 </Panel>

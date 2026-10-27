@@ -16,7 +16,7 @@
 	import pdfiumWasmUrl from '@embedpdf/pdfium/pdfium.wasm?url';
 	import { i18n } from '@lingui/core';
 	import { apiErrorMessage } from '#lib/api/errors.js';
-	import { t } from '#lib/i18n.js';
+	import { plural, t } from 'lingui-for-svelte/macro';
 	import { resizePdfSidebars } from '#lib/pdf/sidebar-resize.js';
 	import {
 		createAnnotationSync,
@@ -146,31 +146,32 @@
 		if (!onstatus) return;
 		switch (status.state) {
 			case 'loading':
-				onstatus($t('Loading annotations…'), false);
+				onstatus($t`Loading annotations…`, false);
 				break;
 			case 'loaded':
 				onstatus(
-					$t('{count, plural, one {# annotation loaded} other {# annotations loaded}}', {
-						count: status.count
-					}),
+					$plural(
+						{ count: status.count },
+						{ one: '# annotation loaded', other: '# annotations loaded' }
+					),
 					false
 				);
 				break;
 			case 'saving-reply':
-				onstatus($t('Saving reply…'), false);
+				onstatus($t`Saving reply…`, false);
 				break;
 			case 'saving-annotation':
-				onstatus($t('Saving annotation…'), false);
+				onstatus($t`Saving annotation…`, false);
 				break;
 			case 'saved':
-				onstatus($t('Saved'), false);
+				onstatus($t`Saved`, false);
 				onsaved?.();
 				break;
 			case 'sync-failed':
-				onstatus(apiErrorMessage(status.reason, $t('Annotation sync failed')), true, status.reason);
+				onstatus(apiErrorMessage(status.reason, $t`Annotation sync failed`), true, status.reason);
 				break;
 			case 'load-failed':
-				onstatus($t('Unable to load annotations'), true);
+				onstatus($t`Unable to load annotations`, true);
 				break;
 		}
 	}
@@ -205,9 +206,9 @@
 			const state = api.getDocumentState(documentId);
 			if (state?.status === 'loaded') finish(resolve);
 			if (state?.status === 'error')
-				finish(() => reject(new Error(state.error ?? $t('Unable to open this PDF.'))));
+				finish(() => reject(new Error(state.error ?? $t`Unable to open this PDF.`)));
 			timer = window.setTimeout(
-				() => finish(() => reject(new Error($t('Unable to open this PDF.')))),
+				() => finish(() => reject(new Error($t`Unable to open this PDF.`))),
 				30_000
 			);
 		});
@@ -229,8 +230,8 @@
 				const schema = uiApi.getSchema();
 				if (viewerContainer) {
 					disposeSidebarResize = resizePdfSidebars(viewerContainer, schema.sidebars, {
-						name: $t('Resize PDF sidebar'),
-						instructions: $t('Drag to resize. Use arrow keys to adjust; Home to reset.')
+						name: $t`Resize PDF sidebar`,
+						instructions: $t`Drag to resize. Use arrow keys to adjust; Home to reset.`
 					});
 				}
 				type SchemaItem = { id?: string; commandId?: string; items?: SchemaItem[] };
@@ -265,7 +266,7 @@
 			});
 		} catch (error) {
 			if (destroyed) return;
-			onstatus?.(apiErrorMessage(error, $t('Unable to open this PDF.')), true);
+			onstatus?.(apiErrorMessage(error, $t`Unable to open this PDF.`), true);
 		}
 	}
 
@@ -304,7 +305,7 @@
 		if (shallow) return;
 		if (willUnload || !sync.hasPending()) return;
 		return sync.flush().catch((reason) => {
-			onstatus?.(apiErrorMessage(reason, $t('Annotation sync failed')), true);
+			onstatus?.(apiErrorMessage(reason, $t`Annotation sync failed`), true);
 			throw reason;
 		});
 	});

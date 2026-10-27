@@ -9,9 +9,9 @@ from uuid import uuid4
 import pytest
 from advanced_alchemy.types import FileObject, storages
 from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+from app_helpers import authenticated_async_client
 from obstore.store import S3Store
 from sqlalchemy import select
-from test_http import authenticated_async_client
 
 from quirebase.accounts import create_api_token
 from quirebase.core.config import get_settings

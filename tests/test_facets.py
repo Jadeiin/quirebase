@@ -506,7 +506,7 @@ async def test_author_facets_and_suggestions_display_record_names_without_reiden
 async def test_facet_endpoint_uses_the_item_paging_sorting_and_validation_contract(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 

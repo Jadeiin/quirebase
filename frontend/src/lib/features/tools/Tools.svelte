@@ -26,7 +26,7 @@
 		invalidateLibrary,
 		invalidateTags
 	} from '#lib/query/invalidation.js';
-	import { t } from '#lib/i18n.js';
+	import { Plural, Trans, ph, plural, t } from 'lingui-for-svelte/macro';
 	import Button from '#lib/design/Button.svelte';
 	import Badge from '#lib/design/Badge.svelte';
 	import { buttonClass } from '#lib/design/button-classes.js';
@@ -131,12 +131,9 @@
 			navigateTools({ stylePage: stylePageCount }, 'replace');
 	});
 	const nextStyleDirection = $derived(location.styleDirection === 'asc' ? 'desc' : 'asc');
-	const styleOrderLabel = $derived(location.styleDirection === 'asc' ? $t('A–Z') : $t('Z–A'));
+	const styleOrderLabel = $derived(location.styleDirection === 'asc' ? $t`A–Z` : $t`Z–A`);
 	const styleDirectionHint = $derived(
-		$t('Sort order: {current}. Switch to {next}.', {
-			current: styleOrderLabel,
-			next: nextStyleDirection === 'asc' ? $t('A–Z') : $t('Z–A')
-		})
+		$t`Sort order: ${ph({ current: styleOrderLabel })}. Switch to ${ph({ next: nextStyleDirection === 'asc' ? $t`A–Z` : $t`Z–A` })}.`
 	);
 
 	const tagPageCount = $derived(Math.max(1, Math.ceil((tags.data?.total ?? 0) / pageSize)));
@@ -161,7 +158,7 @@
 			notice = success;
 			return true;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Tag action failed'));
+			error = apiErrorMessage(reason, $t`Tag action failed`);
 			if (reason instanceof ApiError && reason.code === 'tag_conflict') {
 				await Promise.all([
 					invalidateTags(queryClient, workspaceId),
@@ -194,7 +191,7 @@
 					params: { path: { tag_id: tag.id } },
 					body: { name }
 				}),
-			$t('Tag renamed')
+			$t`Tag renamed`
 		);
 		if (saved) {
 			renameOpen = false;
@@ -216,7 +213,7 @@
 				workspace.api.request('DELETE', '/workspaces/{workspace_id}/tags/{tag_id}', {
 					params: { path: { tag_id: tag.id } }
 				}),
-			$t('Tag deleted')
+			$t`Tag deleted`
 		);
 		if (saved) {
 			confirmDeleteOpen = false;
@@ -231,7 +228,7 @@
 				workspace.api.request('POST', '/workspaces/{workspace_id}/tags/merge', {
 					body: { source_tag_id: sourceTag, target_tag_id: targetTag }
 				}),
-			$t('Tags merged')
+			$t`Tags merged`
 		).then((saved) => {
 			if (saved) {
 				sourceTag = '';
@@ -264,9 +261,9 @@
 				styleCsl = '';
 			}
 			await invalidateCitationStyles(queryClient, workspaceId);
-			notice = $t('Citation Style added');
+			notice = $t`Citation Style added`;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to add Citation Style'));
+			error = apiErrorMessage(reason, $t`Unable to add Citation Style`);
 		} finally {
 			busy = false;
 		}
@@ -294,9 +291,9 @@
 			await invalidateCitationStyles(queryClient, workspaceId);
 			confirmStyleDeleteOpen = false;
 			pendingStyle = null;
-			notice = $t('Citation Style deleted');
+			notice = $t`Citation Style deleted`;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to delete Citation Style'));
+			error = apiErrorMessage(reason, $t`Unable to delete Citation Style`);
 		} finally {
 			busy = false;
 		}
@@ -305,10 +302,10 @@
 
 <SectionHeader>
 	<div>
-		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('Library maintenance')}</p>
-		<h1>{$t('Tools')}</h1>
+		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t`Library maintenance`}</p>
+		<h1>{$t`Tools`}</h1>
 		<p class="text-surface-600-400">
-			{$t('Review duplicates, maintain Tags, and install Citation Styles.')}
+			{$t`Review duplicates, maintain Tags, and install Citation Styles.`}
 		</p>
 	</div>
 </SectionHeader>
@@ -317,22 +314,22 @@
 	value={activeTool}
 	onValueChange={(details) => navigateTools({ tool: (details.value ?? 'duplicates') as Tool })}
 >
-	<Tabs.List class="max-w-full overflow-x-auto" aria-label={$t('Library tools')}>
+	<Tabs.List class="max-w-full overflow-x-auto" aria-label={$t`Library tools`}>
 		<Tabs.Indicator class="bg-primary-700-300" />
 		<Tabs.Trigger
 			value="duplicates"
 			class="min-w-0 flex-1 text-center whitespace-normal data-selected:text-primary-800-200 sm:flex-none sm:whitespace-nowrap"
-			>{$t('Duplicate review')}</Tabs.Trigger
+			>{$t`Duplicate review`}</Tabs.Trigger
 		>
 		<Tabs.Trigger
 			value="tags"
 			class="min-w-0 flex-1 text-center whitespace-normal data-selected:text-primary-800-200 sm:flex-none sm:whitespace-nowrap"
-			>{$t('Manage Tags')}</Tabs.Trigger
+			>{$t`Manage Tags`}</Tabs.Trigger
 		>
 		<Tabs.Trigger
 			value="citation-styles"
 			class="min-w-0 flex-1 text-center whitespace-normal data-selected:text-primary-800-200 sm:flex-none sm:whitespace-nowrap"
-			>{$t('Citation Styles')}</Tabs.Trigger
+			>{$t`Citation Styles`}</Tabs.Trigger
 		>
 	</Tabs.List>
 
@@ -347,16 +344,16 @@
 				class="flex flex-wrap items-end justify-between gap-4 border-b border-surface-300-700 p-5"
 			>
 				<div>
-					<h2>{$t('Duplicate review')}</h2>
+					<h2>{$t`Duplicate review`}</h2>
 					<p class="mb-0 max-w-2xl text-surface-600-400">
-						{$t('Compare likely duplicate Items before deciding what to retain.')}
+						{$t`Compare likely duplicate Items before deciding what to retain.`}
 					</p>
 				</div>
 				<Button
 					variant="filled"
 					disabled={duplicates.isFetching}
 					onclick={() => void scanDuplicates()}
-					>{duplicates.isFetching ? $t('Scanning…') : $t('Check for duplicates')}</Button
+					>{duplicates.isFetching ? $t`Scanning…` : $t`Check for duplicates`}</Button
 				>
 			</div>
 			<div class="border-b border-surface-300-700 bg-surface-100-900 px-5 py-3">
@@ -368,10 +365,10 @@
 								details.value === 'title' || details.value === 'file' ? details.value : 'identifier'
 						})}
 				>
-					<SegmentedControl.Label>{$t('Match criteria')}</SegmentedControl.Label>
+					<SegmentedControl.Label>{$t`Match criteria`}</SegmentedControl.Label>
 					<SegmentedControl.Control class="flex-wrap">
 						<SegmentedControl.Indicator />
-						{#each [{ value: 'identifier', label: $t('Shared identifier') }, { value: 'title', label: $t('Same title') }, { value: 'file', label: $t('Same PDF') }] as option (option.value)}
+						{#each [{ value: 'identifier', label: $t`Shared identifier` }, { value: 'title', label: $t`Same title` }, { value: 'file', label: $t`Same PDF` }] as option (option.value)}
 							<SegmentedControl.Item value={option.value}>
 								<SegmentedControl.ItemText>{option.label}</SegmentedControl.ItemText>
 								<SegmentedControl.ItemHiddenInput />
@@ -381,38 +378,37 @@
 				</SegmentedControl>
 				<p class="mt-2 mb-0 text-sm text-surface-600-400">
 					{mode === 'file'
-						? $t('Ready PDFs only; older files may be skipped.')
-						: $t('Exact values, case and formatting.')}
+						? $t`Ready PDFs only; older files may be skipped.`
+						: $t`Exact values, case and formatting.`}
 				</p>
 			</div>
 			<div class="p-5">
 				{#if !scannedMode || (duplicates.isPending && !duplicates.isFetching)}
 					<div class="grid min-h-40 grid-cols-1 place-items-center text-center">
 						<div class="max-w-md">
-							<h3>{$t('Start a duplicate check')}</h3>
+							<h3>{$t`Start a duplicate check`}</h3>
 						</div>
 					</div>
 				{:else if scannedMode !== mode}
 					<Notice variant="success">
-						{$t('Match criteria changed. Run the check again.')}
+						{$t`Match criteria changed. Run the check again.`}
 					</Notice>
 				{:else if duplicates.isFetching}
-					<LoadingState label={$t('Scanning…')} />
+					<LoadingState label={$t`Scanning…`} />
 				{:else if duplicates.isError}
 					<QueryError
-						message={apiErrorMessage(duplicates.error, $t('Unable to check for duplicates.'))}
+						message={apiErrorMessage(duplicates.error, $t`Unable to check for duplicates.`)}
 						busy={duplicates.isFetching}
 						onRetry={() => void scanDuplicates()}
 					/>
 				{:else if duplicates.data}
+					{@const count = duplicates.data.scanned}
 					<p class="text-sm text-surface-600-400">
-						{$t('Checked {count, plural, one {# Item} other {# Items}}.', {
-							count: duplicates.data.scanned
-						})}
+						<Trans>Checked <Plural value={count} one="# Item" other="# Items" />.</Trans>
 					</p>
 					{#each duplicates.data.groups as group, index (group.map((item) => item.id).join(':'))}
 						<article class="mb-4 rounded-lg border border-surface-300-700 p-3 last:mb-0">
-							<h3>{$t('Duplicate group {number}', { number: index + 1 })}</h3>
+							<h3>{$t`Duplicate group ${ph({ number: index + 1 })}`}</h3>
 							{#each group as item (item.id)}
 								<a
 									class="block min-w-0 border-b border-surface-300-700 py-4 no-underline last:border-b-0 hover:text-primary-700-300"
@@ -422,7 +418,7 @@
 										{#snippet title()}<RichText html={item.title_html} />{/snippet}
 										{#snippet authors()}{#if item.authors.length}<AuthorLine
 													names={item.authors.map((author) => author.full_name)}
-												/>{:else}{$t('Unknown authors')}{/if}{/snippet}
+												/>{:else}{$t`Unknown authors`}{/if}{/snippet}
 										{#if item.doi}<code>{item.doi}</code>{/if}
 									</BibliographicSummary>
 								</a>
@@ -430,7 +426,7 @@
 						</article>
 					{:else}
 						<p class="text-surface-600-400">
-							{$t('No duplicate groups found.')}
+							{$t`No duplicate groups found.`}
 						</p>
 					{/each}
 				{/if}
@@ -442,27 +438,25 @@
 			<Panel>
 				<SectionHeader class="flex-col items-stretch sm:flex-row sm:items-center">
 					<div>
-						<h2>{$t('Manage Tags')}</h2>
+						<h2>{$t`Manage Tags`}</h2>
 						<p class="text-surface-600-400">
-							{$t('{count, plural, one {# Tag} other {# Tags}}', {
-								count: tags.data?.total ?? 0
-							})}
+							{$plural({ count: tags.data?.total ?? 0 }, { one: '# Tag', other: '# Tags' })}
 						</p>
 					</div>
 					{#snippet actions()}
 						<input
 							class="input w-full sm:w-auto sm:min-w-36"
 							bind:value={tagFilter.value}
-							placeholder={$t('Filter Tags')}
+							placeholder={$t`Filter Tags`}
 						/>
 					{/snippet}
 				</SectionHeader>
 				{#if tags.isError}<QueryError
-						message={apiErrorMessage(tags.error, $t('Unable to load Tags'))}
+						message={apiErrorMessage(tags.error, $t`Unable to load Tags`)}
 						busy={tags.isFetching}
 						onRetry={() => void tags.refetch()}
 					/>
-				{:else if tags.isPending}<LoadingState label={$t('Loading Tags…')} />
+				{:else if tags.isPending}<LoadingState label={$t`Loading Tags…`} />
 				{:else}{#each tags.data?.items ?? [] as tag (tag.id)}
 						<ItemRow
 							class="grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
@@ -470,9 +464,10 @@
 							<div>
 								<strong>{tag.name}</strong>
 								<p class="mb-0 text-sm text-surface-600-400">
-									{$t('{count, plural, one {# Item} other {# Items}}', {
-										count: tag.accessible_item_count
-									})}
+									{$plural(
+										{ count: tag.accessible_item_count },
+										{ one: '# Item', other: '# Items' }
+									)}
 								</p>
 							</div>
 							<div class="flex flex-wrap gap-2">
@@ -480,17 +475,17 @@
 									as="a"
 									href={resolve(
 										workspaceHref(workspaceId, `library?tag=${encodeURIComponent(tag.id)}`)
-									)}>{$t('View Items')}</Button
+									)}>{$t`View Items`}</Button
 								>
 								{#if can(tag.authorization, 'tag.manage')}<Button
 										disabled={busy}
-										onclick={() => renameTag(tag)}>{$t('Rename')}</Button
+										onclick={() => renameTag(tag)}>{$t`Rename`}</Button
 									><Button variant="danger" disabled={busy} onclick={() => deleteTag(tag)}
-										>{$t('Delete')}</Button
+										>{$t`Delete`}</Button
 									>{/if}
 							</div>
 						</ItemRow>
-					{:else}<p class="text-surface-600-400">{$t('No Tags match this filter.')}</p>{/each}{/if}
+					{:else}<p class="text-surface-600-400">{$t`No Tags match this filter.`}</p>{/each}{/if}
 				<Pagination
 					page={tagPage}
 					pageCount={tagPageCount}
@@ -500,32 +495,32 @@
 						navigateTools({ pageSize: size, tagPage: 1 });
 					}}
 					busy={tags.isFetching}
-					label={$t('Tag pages')}
+					label={$t`Tag pages`}
 					onPage={(next) => navigateTools({ tagPage: next })}
 				/>
 			</Panel>
 			<Panel as="aside" class="grid grid-cols-1 gap-3 self-start">
-				<h2>{$t('Merge Tags')}</h2>
+				<h2>{$t`Merge Tags`}</h2>
 				<p class="text-sm text-surface-600-400">
-					{$t('Move every assignment from the source Tag into the target Tag.')}
+					{$t`Move every assignment from the source Tag into the target Tag.`}
 				</p>
 				<TagSelect
-					label={$t('Source Tag')}
+					label={$t`Source Tag`}
 					bind:value={sourceTag}
-					emptyLabel={$t('Select a Tag')}
+					emptyLabel={$t`Select a Tag`}
 					disabled={busy}
 					manageOnly
 				/>
 				<TagSelect
-					label={$t('Target Tag')}
+					label={$t`Target Tag`}
 					bind:value={targetTag}
-					emptyLabel={$t('Select a Tag')}
+					emptyLabel={$t`Select a Tag`}
 					disabled={busy}
 				/>
 				<Button
 					variant="filled"
 					disabled={busy || !sourceTag || !targetTag || sourceTag === targetTag}
-					onclick={mergeTags}>{$t('Merge Tags')}</Button
+					onclick={mergeTags}>{$t`Merge Tags`}</Button
 				>
 			</Panel>
 		</div>
@@ -534,13 +529,13 @@
 		<Panel padding="none" class="min-w-0">
 			<div class="border-b border-surface-300-700 p-5">
 				<h2>
-					{$t('Citation Style catalog')}
+					{$t`Citation Style catalog`}
 					{#if stylesAvailable}<span class="text-base font-normal text-surface-600-400"
 							>{$numberFormat.format(styleTotal)}</span
 						>{/if}
 				</h2>
 				<p class="mt-1 mb-4 text-sm text-surface-600-400">
-					{$t('Built-in CSL styles and custom styles shared in this Workspace.')}
+					{$t`Built-in CSL styles and custom styles shared in this Workspace.`}
 				</p>
 				<Collapsible
 					open={styleInstallOpen}
@@ -549,16 +544,16 @@
 				>
 					<div class="flex flex-wrap items-end gap-3">
 						<label class="grid min-w-0 grow basis-60 grid-cols-1 gap-1 text-sm">
-							<span>{$t('Search Citation Styles')}</span>
+							<span>{$t`Search Citation Styles`}</span>
 							<input
 								type="search"
 								class="input h-9 min-w-0 field-sm"
 								bind:value={styleSearch.value}
-								placeholder={$t('Search styles')}
+								placeholder={$t`Search styles`}
 							/>
 						</label>
 						<label class="grid min-w-32 grow basis-32 grid-cols-1 gap-1 text-sm sm:grow-0">
-							<span>{$t('Source')}</span>
+							<span>{$t`Source`}</span>
 							<select
 								class="select h-9 min-w-0 field-sm"
 								value={location.styleScope}
@@ -570,13 +565,13 @@
 									});
 								}}
 							>
-								<option value="">{$t('All sources')}</option>
-								<option value="builtin">{$t('Built-in')}</option>
-								<option value="custom">{$t('Custom')}</option>
+								<option value="">{$t`All sources`}</option>
+								<option value="builtin">{$t`Built-in`}</option>
+								<option value="custom">{$t`Custom`}</option>
 							</select>
 						</label>
 						<div class="grid min-w-32 grow basis-32 grid-cols-1 gap-1 text-sm sm:grow-0">
-							<span>{$t('Sort By')}</span>
+							<span>{$t`Sort By`}</span>
 							<Button
 								type="button"
 								size="sm"
@@ -585,7 +580,7 @@
 								title={styleDirectionHint}
 								onclick={() => navigateTools({ styleDirection: nextStyleDirection, stylePage: 1 })}
 							>
-								<span>{$t('Name')}</span>
+								<span>{$t`Name`}</span>
 								<span class="text-xs font-normal">{styleOrderLabel}</span>
 								<Icon
 									name={location.styleDirection === 'asc' ? 'arrow-up' : 'arrow-down'}
@@ -597,7 +592,7 @@
 						{#if workspace.can('citation_style.manage')}
 							<Collapsible.Trigger class={`${buttonClass('tonal', 'sm')} h-9`}>
 								<Icon name={styleInstallOpen ? 'minus' : 'plus'} size={16} />
-								{$t('Add custom Citation Style')}
+								{$t`Add custom Citation Style`}
 							</Collapsible.Trigger>
 						{/if}
 					</div>
@@ -611,10 +606,10 @@
 								}}
 							>
 								<label class="grid grid-cols-1 gap-1 text-sm sm:max-w-md">
-									{$t('Style name')}<input class="input" bind:value={styleName} required />
+									{$t`Style name`}<input class="input" bind:value={styleName} required />
 								</label>
 								<label class="grid min-w-0 grid-cols-1 gap-1 text-sm">
-									{$t('CSL XML')}<textarea
+									{$t`CSL XML`}<textarea
 										class="textarea min-h-48 font-mono text-sm"
 										bind:value={styleCsl}
 										spellcheck="false"
@@ -622,7 +617,7 @@
 								</label>
 								<div class="flex flex-wrap justify-end gap-2">
 									<Button variant="filled" type="submit" disabled={busy}>
-										{$t('Install Citation Style')}
+										{$t`Install Citation Style`}
 									</Button>
 								</div>
 							</form>
@@ -632,15 +627,15 @@
 			</div>
 			<div class="p-5">
 				{#if citationStyles.isError || citationStyles.fetchStatus === 'paused' || (!citationStyles.isPending && !stylesAvailable)}<QueryError
-						message={apiErrorMessage(citationStyles.error, $t('Unable to load Citation Styles.'))}
+						message={apiErrorMessage(citationStyles.error, $t`Unable to load Citation Styles.`)}
 						busy={citationStyles.isFetching}
 						onRetry={() => void citationStyles.refetch()}
 					/>{/if}
 				{#if citationStyles.isPending && citationStyles.fetchStatus !== 'paused'}<LoadingState
-						label={$t('Loading Citation Styles…')}
+						label={$t`Loading Citation Styles…`}
 					/>{/if}
 				{#if stylesAvailable && citationStyles.data}
-					<ul aria-label={$t('Citation Styles')}>
+					<ul aria-label={$t`Citation Styles`}>
 						{#each citationStyles.data.items as style (style.key)}
 							<li
 								aria-label={style.name}
@@ -651,7 +646,7 @@
 										>{style.name}</strong
 									>
 									{#if !location.styleScope}<Badge
-											>{style.scope === 'custom' ? $t('Custom') : $t('Built-in')}</Badge
+											>{style.scope === 'custom' ? $t`Custom` : $t`Built-in`}</Badge
 										>{/if}
 								</div>
 								{#if style.scope === 'custom' && workspace.can('citation_style.manage')}
@@ -660,12 +655,12 @@
 										size="sm"
 										class="shrink-0"
 										disabled={busy}
-										onclick={() => deleteStyle(style)}>{$t('Delete')}</Button
+										onclick={() => deleteStyle(style)}>{$t`Delete`}</Button
 									>
 								{/if}
 							</li>
 						{:else}
-							<li class="text-surface-600-400">{$t('No Citation Styles match this search.')}</li>
+							<li class="text-surface-600-400">{$t`No Citation Styles match this search.`}</li>
 						{/each}
 					</ul>
 				{/if}
@@ -678,7 +673,7 @@
 				onPage={(stylePage) => navigateTools({ stylePage })}
 				onPageSize={(styleSize) => navigateTools({ styleSize, stylePage: 1 })}
 				busy={citationStyles.isFetching}
-				label={$t('Citation Styles')}
+				label={$t`Citation Styles`}
 			/>
 		</Panel>
 	</Tabs.Content>
@@ -686,30 +681,30 @@
 
 <ConfirmDialog
 	bind:open={confirmDeleteOpen}
-	title={$t('Delete this Tag from all accessible Items?')}
+	title={$t`Delete this Tag from all accessible Items?`}
 	body={pendingTag?.name ?? ''}
-	confirmLabel={$t('Delete Tag')}
+	confirmLabel={$t`Delete Tag`}
 	{busy}
 	error={confirmDeleteOpen ? error : ''}
 	onConfirm={() => void confirmDeleteTag()}
 />
 <PromptDialog
 	bind:open={renameOpen}
-	title={$t('Rename Tag')}
-	body={$t('Choose a new name for this Tag.')}
-	label={$t('New Tag name')}
+	title={$t`Rename Tag`}
+	body={$t`Choose a new name for this Tag.`}
+	label={$t`New Tag name`}
 	placeholder={renameTarget?.name ?? ''}
 	initialValue={renameTarget?.name ?? ''}
-	confirmLabel={$t('Rename')}
+	confirmLabel={$t`Rename`}
 	{busy}
 	error={renameOpen ? error : ''}
 	onConfirm={(name) => void confirmRenameTag(name)}
 />
 <ConfirmDialog
 	bind:open={confirmStyleDeleteOpen}
-	title={$t('Delete this Citation Style?')}
+	title={$t`Delete this Citation Style?`}
 	body={pendingStyle?.name ?? ''}
-	confirmLabel={$t('Delete Style')}
+	confirmLabel={$t`Delete Style`}
 	{busy}
 	error={confirmStyleDeleteOpen ? error : ''}
 	onConfirm={() => void confirmDeleteStyle()}

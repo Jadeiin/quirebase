@@ -15,7 +15,7 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import Button from '#lib/design/Button.svelte';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { reconcileWorkspaceAccessLoss } from './access-loss.js';
 	import { workspaceLeaveMutationOptions } from './mutations';
 
@@ -38,7 +38,7 @@
 		try {
 			await mutation.mutateAsync(target.membershipId);
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to leave workspace.'));
+			error = apiErrorMessage(reason, $t`Unable to leave workspace.`);
 			// This command-owned read survives route/query observer teardown. It checks
 			// the captured Workspace directly without replaying an uncertain leave.
 			let unavailable = false;
@@ -64,11 +64,9 @@
 </script>
 
 <Panel class="grid grid-cols-1 justify-items-start gap-3">
-	<h2 class="text-xl font-semibold">{$t('Leave workspace')}</h2>
+	<h2 class="text-xl font-semibold">{$t`Leave workspace`}</h2>
 	<p class="text-sm text-surface-700-300">
-		{$t(
-			'Leaving removes your access. Existing workspace content and your contributions are kept. You will need a new invitation to rejoin.'
-		)}
+		{$t`Leaving removes your access. Existing workspace content and your contributions are kept. You will need a new invitation to rejoin.`}
 	</p>
 	{#if workspace.can('workspace_member.leave')}
 		<Button
@@ -81,27 +79,24 @@
 				};
 				error = '';
 				open = true;
-			}}>{$t('Leave workspace')}</Button
+			}}>{$t`Leave workspace`}</Button
 		>
 	{:else if workspace.view?.governance_frozen || workspace.view?.state === 'archived'}
 		<p class="text-sm text-surface-700-300">
-			{$t('You cannot leave while this workspace is read only.')}
+			{$t`You cannot leave while this workspace is read only.`}
 		</p>
 	{:else}
 		<p class="text-sm text-surface-700-300">
-			{$t('Transfer workspace ownership to another member before leaving.')}
+			{$t`Transfer workspace ownership to another member before leaving.`}
 		</p>
 	{/if}
 </Panel>
 
 <ConfirmDialog
 	bind:open
-	title={$t('Leave workspace')}
-	body={$t(
-		'Leave {name}? You will lose access to its library and projects. Your contributions will remain in the workspace.',
-		{ name: target?.name ?? '' }
-	)}
-	confirmLabel={$t('Leave workspace')}
+	title={$t`Leave workspace`}
+	body={$t`Leave ${ph({ name: target?.name ?? '' })}? You will lose access to its library and projects. Your contributions will remain in the workspace.`}
+	confirmLabel={$t`Leave workspace`}
 	{busy}
 	{error}
 	onConfirm={() => void leave()}

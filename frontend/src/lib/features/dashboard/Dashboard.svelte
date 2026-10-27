@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { createQuery } from '@tanstack/svelte-query';
 	import type { components } from '#lib/api/schema.js';
+	import type { MessageDescriptor } from '@lingui/core';
 	import type { AuthorizationAction } from '#lib/authorization/can.js';
 	import Icon from '#lib/design/Icon.svelte';
 	import Panel from '#lib/design/Panel.svelte';
@@ -11,7 +12,7 @@
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { dashboardQuery } from '#lib/features/dashboard/queries.js';
 	import { dateFormat } from '#lib/format.js';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 
@@ -22,36 +23,36 @@
 		{
 			path: 'import',
 			icon: 'import',
-			title: msg('Import Items'),
-			detail: msg('DOI, files, or PDFs'),
+			title: msg`Import Items`,
+			detail: msg`DOI, files, or PDFs`,
 			action: 'item.create'
 		},
 		{
 			path: 'discovery',
 			icon: 'search',
-			title: msg('Discover'),
-			detail: msg('Search scholarly sources'),
+			title: msg`Discover`,
+			detail: msg`Search scholarly sources`,
 			action: 'workspace.read'
 		},
 		{
 			path: 'projects',
 			icon: 'projects',
-			title: msg('New Project'),
-			detail: msg('Organize a collection'),
+			title: msg`New Project`,
+			detail: msg`Organize a collection`,
 			action: 'project.create'
 		},
 		{
 			path: 'library',
 			icon: 'library',
-			title: msg('Search Library'),
-			detail: msg('Find saved research'),
+			title: msg`Search Library`,
+			detail: msg`Find saved research`,
 			action: 'workspace.read'
 		}
 	] satisfies readonly {
 		path: string;
 		icon: string;
-		title: string;
-		detail: string;
+		title: MessageDescriptor;
+		detail: MessageDescriptor;
 		action: AuthorizationAction;
 	}[];
 </script>
@@ -60,28 +61,28 @@
 	{#if authors.length}
 		<AuthorLine names={authors.map((author) => author.full_name)} />
 	{:else}
-		<span class="min-w-0 truncate">{$t('Unknown authors')}</span>
+		<span class="min-w-0 truncate">{$t`Unknown authors`}</span>
 	{/if}
 {/snippet}
 
 <div class="mb-8">
 	<div>
 		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">Quirebase</p>
-		<h1 class="mb-2">{$t('Dashboard')}</h1>
+		<h1 class="mb-2">{$t`Dashboard`}</h1>
 		<p class="m-0 max-w-2xl text-surface-700-300">
-			{$t('Continue reading or open a research collection.')}
+			{$t`Continue reading or open a research collection.`}
 		</p>
 	</div>
 </div>
 {#if dashboard.isPending}<div
 		class="grid min-h-56 grid-cols-1 place-items-center text-surface-600-400"
 	>
-		{$t('Loading dashboard…')}
+		{$t`Loading dashboard…`}
 	</div>
 {:else if dashboard.isError}<div
 		class="grid min-h-56 grid-cols-1 place-items-center text-error-700-300"
 	>
-		{$t('Unable to load the dashboard.')}
+		{$t`Unable to load the dashboard.`}
 	</div>
 {:else}
 	<div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -97,7 +98,7 @@
 			>
 			<span
 				><strong class="block text-xl tabular-nums">{dashboard.data?.new_items.length ?? 0}</strong
-				><small class="text-surface-600-400">{$t('recent additions')}</small></span
+				><small class="text-surface-600-400">{$t`recent additions`}</small></span
 			>
 		</Panel>
 		<Panel
@@ -112,7 +113,7 @@
 			>
 			<span
 				><strong class="block text-xl tabular-nums">{dashboard.data?.project_count ?? 0}</strong
-				><small class="text-surface-600-400">{$t('visible Projects')}</small></span
+				><small class="text-surface-600-400">{$t`visible Projects`}</small></span
 			>
 		</Panel>
 		<Panel
@@ -127,7 +128,7 @@
 			>
 			<span
 				><strong class="block text-xl tabular-nums">{dashboard.data?.session_count ?? 0}</strong
-				><small class="text-surface-600-400">{$t('active sessions')}</small></span
+				><small class="text-surface-600-400">{$t`active sessions`}</small></span
 			>
 		</Panel>
 	</div>
@@ -139,13 +140,13 @@
 				>
 					<div>
 						<p class="m-0 text-xs font-bold tracking-wide text-primary-700-300 uppercase">
-							{$t('Reading')}
+							{$t`Reading`}
 						</p>
-						<h2 class="m-0 mt-1 text-lg">{$t('Continue reading')}</h2>
+						<h2 class="m-0 mt-1 text-lg">{$t`Continue reading`}</h2>
 					</div>
 					<a
 						class="text-sm font-semibold text-primary-700-300 no-underline hover:text-primary-800-200"
-						href={resolve(workspaceHref(workspaceId, 'library'))}>{$t('Open Library')}</a
+						href={resolve(workspaceHref(workspaceId, 'library'))}>{$t`Open Library`}</a
 					>
 				</header>
 				<div class="divide-y divide-surface-300-700">
@@ -172,7 +173,7 @@
 						<div
 							class="grid min-h-40 grid-cols-1 place-items-center p-6 text-center text-sm text-surface-600-400"
 						>
-							{$t('Open an Item to start your reading history.')}
+							{$t`Open an Item to start your reading history.`}
 						</div>
 					{/each}
 				</div>
@@ -183,13 +184,13 @@
 				>
 					<div>
 						<p class="m-0 text-xs font-bold tracking-wide text-primary-700-300 uppercase">
-							{$t('Library')}
+							{$t`Library`}
 						</p>
-						<h2 class="m-0 mt-1 text-lg">{$t('Recently added')}</h2>
+						<h2 class="m-0 mt-1 text-lg">{$t`Recently added`}</h2>
 					</div>
 					{#if workspace.can('item.create')}<a
 							class="text-sm font-semibold text-primary-700-300 no-underline"
-							href={resolve(workspaceHref(workspaceId, 'import'))}>{$t('Import more')}</a
+							href={resolve(workspaceHref(workspaceId, 'import'))}>{$t`Import more`}</a
 						>{/if}
 				</header>
 				<div class="divide-y divide-surface-300-700">
@@ -206,7 +207,7 @@
 									<div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
 										{@render authorSummary(item.authors)}
 										<span class="text-right whitespace-nowrap"
-											>{item.publication_date || $t('Date unknown')}</span
+											>{item.publication_date || $t`Date unknown`}</span
 										>
 									</div>
 								{/snippet}
@@ -214,7 +215,7 @@
 						</a>
 					{:else}
 						<div class="p-5 text-sm text-surface-600-400">
-							{$t('Your library is empty. Import a paper to begin.')}
+							{$t`Your library is empty. Import a paper to begin.`}
 						</div>
 					{/each}
 				</div>
@@ -224,9 +225,9 @@
 			<Panel>
 				<div class="mb-4">
 					<p class="m-0 text-xs font-bold tracking-wide text-primary-700-300 uppercase">
-						{$t('Get started')}
+						{$t`Get started`}
 					</p>
-					<h2 class="m-0 mt-1 text-lg">{$t('Quick actions')}</h2>
+					<h2 class="m-0 mt-1 text-lg">{$t`Quick actions`}</h2>
 				</div>
 				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
 					{#each quickActions.filter( (entry) => (entry.action === 'project.create' ? Boolean(workspace.view?.allowed_project_participations.length) : workspace.can(entry.action)) ) as action (action.path)}
@@ -246,10 +247,10 @@
 			</Panel>
 			<Panel>
 				<div class="mb-4 flex items-center justify-between">
-					<h2 class="m-0 text-lg">{$t('Projects')}</h2>
+					<h2 class="m-0 text-lg">{$t`Projects`}</h2>
 					<a
 						class="text-xs font-semibold text-primary-700-300 no-underline"
-						href={resolve(workspaceHref(workspaceId, 'projects'))}>{$t('View all')}</a
+						href={resolve(workspaceHref(workspaceId, 'projects'))}>{$t`View all`}</a
 					>
 				</div>
 				<div class="grid grid-cols-1 gap-2">
@@ -261,17 +262,17 @@
 								class="text-xs text-surface-600-400">{$t(domainLabel(project.participation))}</span
 							></a
 						>
-					{:else}<p class="m-0 text-sm text-surface-600-400">{$t('No projects yet.')}</p>{/each}
+					{:else}<p class="m-0 text-sm text-surface-600-400">{$t`No projects yet.`}</p>{/each}
 				</div>
 			</Panel>
 			<section class="rounded-xl border border-surface-300-700 bg-primary-50-950 p-5">
-				<h2 class="mb-2 text-lg">{$t('Keep your Library useful')}</h2>
+				<h2 class="mb-2 text-lg">{$t`Keep your Library useful`}</h2>
 				<p class="mb-3 text-sm text-surface-700-300">
-					{$t('Organize Items with Tags and Projects, and check for duplicates.')}
+					{$t`Organize Items with Tags and Projects, and check for duplicates.`}
 				</p>
 				<a
 					class="text-sm font-semibold text-primary-800-200 no-underline"
-					href={resolve(workspaceHref(workspaceId, 'tools'))}>{$t('Open Library tools')} →</a
+					href={resolve(workspaceHref(workspaceId, 'tools'))}>{$t`Open Library tools`} →</a
 				>
 			</section>
 		</div>

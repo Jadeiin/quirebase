@@ -3,11 +3,15 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
+import linguiForSvelte from 'lingui-for-svelte/unplugin/vite';
+import linguiMacro from 'unplugin-lingui-macro/vite';
 
 const apiOrigin = process.env.QUIREBASE_DEV_API_ORIGIN ?? 'http://127.0.0.1:9060';
 
 export default defineConfig({
 	plugins: [
+		linguiMacro(),
+		linguiForSvelte(),
 		tailwindcss(),
 		sveltekit({
 			preprocess: vitePreprocess(),
@@ -43,6 +47,7 @@ export default defineConfig({
 		proxy: {}
 	},
 	test: {
+		setupFiles: ['./vitest.setup.ts'],
 		environment: 'node',
 		include: ['src/**/*.test.ts'],
 		// Cache transforms while retaining Vitest's default per-file module isolation.

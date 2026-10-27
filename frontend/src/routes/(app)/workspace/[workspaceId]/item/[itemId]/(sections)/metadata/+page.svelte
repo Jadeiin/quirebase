@@ -11,7 +11,7 @@
 	import { metadataMutationOptions } from '#lib/features/item/metadata/mutations.js';
 	import { itemOverviewQuery } from '#lib/features/item/queries.js';
 	import type { ItemDetail } from '#lib/features/item/types.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { invalidateItem } from '#lib/query/invalidation.js';
 	import type { PageProps } from './$types';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -40,13 +40,11 @@
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 409) {
 				await invalidateItem(queryClient, params.workspaceId, params.itemId);
-				mutationError = $t(
-					'This Item changed since it was loaded. Your draft was preserved; review the latest metadata.'
-				);
+				mutationError = $t`This Item changed since it was loaded. Your draft was preserved; review the latest metadata.`;
 				return false;
 			}
 			serverErrors = error instanceof ApiError ? error.fields : [];
-			mutationError = apiErrorMessage(error, $t('Unable to save changes'));
+			mutationError = apiErrorMessage(error, $t`Unable to save changes`);
 			return false;
 		}
 	}
@@ -55,9 +53,9 @@
 {#if mutationError}<Notice variant="error">{mutationError}</Notice>{/if}
 {#if overview.isError}
 	<Notice as="div" variant="error" class="mb-4 flex flex-wrap items-center justify-between gap-3">
-		<span>{$t('Unable to open this Item section.')}</span>
+		<span>{$t`Unable to open this Item section.`}</span>
 		<Button disabled={overview.isFetching} onclick={() => void overview.refetch()}
-			>{$t('Retry')}</Button
+			>{$t`Retry`}</Button
 		>
 	</Notice>
 {/if}
@@ -70,5 +68,5 @@
 		onSubmit={updateMetadata}
 	/>
 {:else if overview.isPending}
-	<LoadingState label={$t('Loading') + '…'} />
+	<LoadingState label={$t`Loading` + '…'} />
 {/if}

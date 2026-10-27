@@ -16,7 +16,7 @@
 		readExportPreferences,
 		type ExportPreferences
 	} from '#lib/export-preferences.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { canRunBulkAction } from '#lib/workspaces/actions.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import type { LibraryActionRequest } from './action-request.js';
@@ -107,63 +107,61 @@
 	const locked = $derived(busy || frozenInput !== null);
 	const validationMessage = $derived(
 		!active || !active.itemIds.length || !canRunBulkAction(workspace.can, active.action)
-			? $t('This action is no longer available.')
+			? $t`This action is no longer available.`
 			: frozenInput
 				? ''
 				: active.action === 'add_project' && selectedProject?.id !== projectId
-					? $t('Choose a Project.')
+					? $t`Choose a Project.`
 					: active.action === 'add_tag' && !tagName.trim()
-						? $t('Choose or enter a Tag.')
+						? $t`Choose or enter a Tag.`
 						: active.action === 'remove_tag' && !tagId
-							? $t('Choose a Tag.')
+							? $t`Choose a Tag.`
 							: active.action === 'remove_project' && !active.project?.id
-								? $t('Select a Project filter to remove Items from it.')
+								? $t`Select a Project filter to remove Items from it.`
 								: ''
 	);
 	const targetSummary = $derived(
 		active?.source === 'item'
-			? $t('Current Item')
-			: $t('{count} selected', { count: active?.itemIds.length ?? 0 })
+			? $t`Current Item`
+			: $t`${ph({ count: active?.itemIds.length ?? 0 })} selected`
 	);
 	const title = $derived.by(() => {
 		switch (active?.action) {
 			case 'add_tag':
-				return $t('Add Tag');
+				return $t`Add Tag`;
 			case 'remove_tag':
-				return $t('Remove Tag');
+				return $t`Remove Tag`;
 			case 'add_project':
-				return $t('Add to Project');
+				return $t`Add to Project`;
 			case 'remove_project':
 				return active.source === 'item'
-					? $t('Remove this Item from {project}?', { project: active.project?.name ?? '' })
-					: $t('Remove the selected Items from {project}?', {
-							project: active.project?.name ?? ''
-						});
+					? $t`Remove this Item from ${ph({ project: active.project?.name ?? '' })}?`
+					: $t`Remove the selected Items from ${ph({ project: active.project?.name ?? '' })}?`;
 			case 'delete_items':
 				return active.source === 'item'
-					? $t('Permanently delete this Item?')
-					: $t('Permanently delete the selected Items?');
+					? $t`Permanently delete this Item?`
+					: $t`Permanently delete the selected Items?`;
 			case 'bibliography':
-				return $t('Export bibliography');
+				return $t`Export bibliography`;
 			case 'copy_bibliography':
-				return $t('Copy citation');
+				return $t`Copy citation`;
 			case 'documents':
-				return $t('Download documents');
+				return $t`Download documents`;
 			default:
-				return $t('Item actions');
+				return $t`Item actions`;
 		}
 	});
 	const submitLabel = $derived.by(() => {
 		switch (active?.action) {
 			case 'remove_project':
-				return $t('Remove from Project');
+				return $t`Remove from Project`;
 			case 'delete_items':
-				return $t('Permanently delete');
+				return $t`Permanently delete`;
 			case 'bibliography':
 			case 'documents':
-				return $t('Download file');
+				return $t`Download file`;
 			case 'copy_bibliography':
-				return $t('Copy to clipboard');
+				return $t`Copy to clipboard`;
 			default:
 				return title;
 		}
@@ -274,15 +272,15 @@
 					},
 					() => mounted
 				);
-				complete($t('Copied to clipboard'));
+				complete($t`Copied to clipboard`);
 			} else {
 				await mutation.mutateAsync({ input, afterMutation: submitted.afterMutation });
 				complete(
 					input.action === 'bibliography'
-						? $t('Bibliography downloaded')
+						? $t`Bibliography downloaded`
 						: input.action === 'documents'
-							? $t('Document bundle downloaded')
-							: $t('Bulk action completed')
+							? $t`Document bundle downloaded`
+							: $t`Bulk action completed`
 				);
 			}
 		} catch (reason) {
@@ -293,8 +291,8 @@
 			}
 			error =
 				citationCopy.text !== null
-					? $t('Clipboard access was denied. Copy the citation text below or download it.')
-					: apiErrorMessage(reason, $t('Bulk action failed'));
+					? $t`Clipboard access was denied. Copy the citation text below or download it.`
+					: apiErrorMessage(reason, $t`Bulk action failed`);
 		} finally {
 			if (mounted) busy = false;
 		}
@@ -303,7 +301,7 @@
 	function downloadCitation() {
 		if (citationCopy.text === null || frozenInput?.action !== 'copy_bibliography') return;
 		downloadBibliographyText(citationCopy.text, frozenInput.exportFormat);
-		complete($t('Bibliography downloaded'));
+		complete($t`Bibliography downloaded`);
 	}
 </script>
 
@@ -314,10 +312,10 @@
 				<strong>{title}</strong>
 				<p class="m-0 text-sm">{targetSummary}</p>
 				<p class="m-0 text-sm">
-					{error || (busy ? $t('Applying action…') : $t('Review this action to continue.'))}
+					{error || (busy ? $t`Applying action…` : $t`Review this action to continue.`)}
 				</p>
 			</div>
-			<Button size="sm" onclick={review}>{$t('Review action')}</Button>
+			<Button size="sm" onclick={review}>{$t`Review action`}</Button>
 		</div>
 	</Notice>
 {/if}
@@ -363,8 +361,8 @@
 						{#if active?.action === 'add_tag'}
 							<TagSelect
 								bind:value={tagName}
-								label={$t('Select Tag')}
-								emptyLabel={$t('Select Tag')}
+								label={$t`Select Tag`}
+								emptyLabel={$t`Select Tag`}
 								valueBy="name"
 								allowCustomValue={workspace.can('tag.create')}
 								disabled={locked}
@@ -372,44 +370,42 @@
 						{:else if active?.action === 'remove_tag'}
 							<TagSelect
 								bind:value={tagId}
-								label={$t('Select Tag')}
-								emptyLabel={$t('Select Tag')}
+								label={$t`Select Tag`}
+								emptyLabel={$t`Select Tag`}
 								disabled={locked}
 							/>
 						{:else if active?.action === 'add_project'}
 							<ProjectSelect
 								bind:value={projectId}
 								bind:selectedProject
-								label={$t('Select Project')}
-								emptyLabel={$t('Select Project')}
+								label={$t`Select Project`}
+								emptyLabel={$t`Select Project`}
 								manageOnly
 								disabled={locked}
 							/>
 						{:else if active?.action === 'remove_project'}
 							<p class="m-0 text-sm text-surface-600-400">
-								{$t(
-									'This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved.'
-								)}
+								{$t`This permanently deletes their Annotations and Replies in this Project. Items, files, private Annotations, and other Projects are preserved.`}
 							</p>
 						{:else if active?.action === 'delete_items'}
-							<p class="m-0 text-sm text-surface-600-400">{$t('This cannot be undone.')}</p>
+							<p class="m-0 text-sm text-surface-600-400">{$t`This cannot be undone.`}</p>
 						{:else if bibliography}
 							<p class="m-0 text-sm text-surface-600-400">
-								{$t('Uses your Account export settings.')}
+								{$t`Uses your Account export settings.`}
 							</p>
 							<label class="grid grid-cols-1 gap-1"
-								>{$t('Format')}<select class="select" bind:value={format} disabled={locked}>
+								>{$t`Format`}<select class="select" bind:value={format} disabled={locked}>
 									{#each bibliographyFormats as choice (choice.value)}<option value={choice.value}
 											>{$t(choice.label)}</option
 										>{/each}
 								</select></label
 							>
 							{#if format === 'csl'}<p class="m-0 text-sm text-surface-600-400">
-									{$t('Citation Style')}: <strong>{preferences.citation.style}</strong>
+									{$t`Citation Style`}: <strong>{preferences.citation.style}</strong>
 								</p>{/if}
 						{:else if active?.action === 'documents'}
 							<p class="m-0 text-sm text-surface-600-400">
-								{$t('Uses your Account export settings.')}
+								{$t`Uses your Account export settings.`}
 							</p>
 							<label class="flex items-center gap-2"
 								><input
@@ -417,7 +413,7 @@
 									class="checkbox"
 									bind:checked={preferences.document.includeAnnotations}
 									disabled={locked}
-								/>{$t('Include Annotations')}</label
+								/>{$t`Include Annotations`}</label
 							>
 							<label class="flex items-center gap-2"
 								><input
@@ -425,13 +421,13 @@
 									class="checkbox"
 									bind:checked={preferences.document.includeSupplements}
 									disabled={locked}
-								/>{$t('Include supplementary files')}</label
+								/>{$t`Include supplementary files`}</label
 							>
 						{/if}
 						{#if error}<Notice variant="error" class="m-0">{error}</Notice>{/if}
 						{#if citationCopy.text !== null}
 							<label class="grid grid-cols-1 gap-1"
-								>{$t('Citation text')}<textarea
+								>{$t`Citation text`}<textarea
 									class="textarea min-h-40"
 									readonly
 									value={citationCopy.text}></textarea></label
@@ -442,19 +438,19 @@
 								role={busy ? 'status' : undefined}
 								class="m-0 text-sm text-surface-600-400"
 							>
-								{busy ? $t('Applying action…') : validationMessage}
+								{busy ? $t`Applying action…` : validationMessage}
 							</p>{/if}
 						<div class="flex flex-wrap justify-end gap-2">
 							{#if frozenInput && !busy}<Button type="button" onclick={changeOptions}
-									>{$t('Change options')}</Button
+									>{$t`Change options`}</Button
 								>{/if}
 							<Button type="button" data-library-action-cancel onclick={close}
-								>{busy ? $t('Continue in Library') : $t('Cancel')}</Button
+								>{busy ? $t`Continue in Library` : $t`Cancel`}</Button
 							>
 							{#if citationCopy.text !== null}<Button
 									type="button"
 									disabled={busy}
-									onclick={downloadCitation}>{$t('Download file')}</Button
+									onclick={downloadCitation}>{$t`Download file`}</Button
 								>{/if}
 							<Button
 								type="submit"
@@ -462,7 +458,7 @@
 								variant={destructive ? 'danger-filled' : 'filled'}
 								disabled={busy || Boolean(validationMessage)}
 								aria-describedby={busy || validationMessage ? 'library-action-hint' : undefined}
-								>{error && citationCopy.text === null ? $t('Retry') : submitLabel}</Button
+								>{error && citationCopy.text === null ? $t`Retry` : submitLabel}</Button
 							>
 						</div>
 					</form>

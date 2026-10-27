@@ -2,7 +2,7 @@
 	import { Toast } from '@skeletonlabs/skeleton-svelte';
 	import Icon from '#lib/design/Icon.svelte';
 	import { toaster } from '#lib/toaster.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 </script>
 
 <Toast.Group {toaster} class="group">
@@ -33,7 +33,7 @@
 			</Toast.Message>
 			<Toast.CloseTrigger
 				class="relative z-1 btn-icon shrink-0 preset-tonal-surface"
-				aria-label={$t('Dismiss')}><Icon name="close" size={14} /></Toast.CloseTrigger
+				aria-label={$t`Dismiss`}><Icon name="close" size={14} /></Toast.CloseTrigger
 			>
 		</Toast>
 	{/snippet}

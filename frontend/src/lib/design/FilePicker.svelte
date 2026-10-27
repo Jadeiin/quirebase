@@ -5,7 +5,7 @@
 	import IconButton from '#lib/design/IconButton.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import { kilobytes, numberFormat } from '#lib/format.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 
 	type FilePickerProps = {
 		name: string;
@@ -137,10 +137,10 @@
 					</span>
 					<span class="flex shrink-0 items-center gap-1">
 						<span class="text-sm text-surface-600-400"
-							>{$t('{size} KB', { size: $numberFormat.format(kilobytes(file.size)) })}</span
+							>{$t`${ph({ size: $numberFormat.format(kilobytes(file.size)) })} KB`}</span
 						>
 						<IconButton
-							label={$t('Remove {name}', { name: file.name })}
+							label={$t`Remove ${ph({ name: file.name })}`}
 							icon="close"
 							onclick={() => {
 								api.deleteFile(file);
@@ -156,9 +156,7 @@
 		<Notice variant="warning" class="flex flex-wrap items-center gap-x-2 gap-y-1">
 			<Badge variant="warning">{api.rejectedFiles.length}</Badge>
 			<span
-				>{$t(
-					'Some files were skipped because they are duplicates, unsupported, or over the batch limit.'
-				)}</span
+				>{$t`Some files were skipped because they are duplicates, unsupported, or over the batch limit.`}</span
 			>
 		</Notice>
 	{/if}

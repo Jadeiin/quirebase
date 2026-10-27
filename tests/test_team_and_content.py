@@ -1,9 +1,8 @@
 from datetime import UTC, datetime
 
 import pytest
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from sqlalchemy import func, select
-from test_http import authenticated_async_client
 
 from quirebase.accounts.throttling import check_login_throttle, record_login_failure
 from quirebase.core.config import get_settings

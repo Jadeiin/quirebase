@@ -5,7 +5,7 @@ import hashlib
 import re
 
 import pytest
-from test_http import authenticated_async_client
+from app_helpers import authenticated_async_client
 
 DOCUMENTATION_PATHS = ("/docs", "/docs/oauth2-redirect", "/redoc")
 _SCRIPT_PATTERN = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.DOTALL | re.IGNORECASE)

@@ -5,7 +5,7 @@
 	import AdminSectionState from '#lib/features/admin/AdminSectionState.svelte';
 	import { getAdminFilters } from '#lib/features/admin/filters.js';
 	import { adminAuditQuery } from '#lib/features/admin/queries.js';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
 
 	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
 	const audit = createQuery(() => adminAuditQuery(filters(), true));
@@ -27,7 +27,7 @@
 	onRetry={() => void audit.refetch()}
 	loading={audit.isPending}
 	failed={audit.isError}
-	label={msg('Audit')}
+	label={msg`Audit`}
 >
 	<AdminAudit
 		events={audit.data!.items}
@@ -41,7 +41,7 @@
 		total={audit.data?.total ?? 0}
 		busy={audit.isFetching}
 		onPageSize={setPageSize}
-		label={$t('Administration pages')}
+		label={$t`Administration pages`}
 		onPage={setPage}
 	/>
 </AdminSectionState>

@@ -4,7 +4,8 @@
 	import Button from '#lib/design/Button.svelte';
 	import SearchSelect from '#lib/design/SearchSelect.svelte';
 	import { apiErrorMessage } from '#lib/api/errors.js';
-	import { activeLocale, t } from '#lib/i18n.js';
+	import { activeLocale } from '#lib/locale.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { tagOptionsQuery, tagsQuery } from './queries.js';
 
@@ -44,7 +45,7 @@
 					.toLocaleLowerCase($activeLocale)
 					.includes((search?.trim() ?? '').toLocaleLowerCase($activeLocale))
 			)
-			.map((option) => ({ ...option, group: $t('Filter conditions'), kind: $t('Condition') }))
+			.map((option) => ({ ...option, group: $t`Filter conditions`, kind: $t`Condition` }))
 	);
 	$effect(() => {
 		const query = search?.trim() ?? '';
@@ -73,7 +74,7 @@
 			.map((tag) => ({
 				value: valueBy === 'name' ? tag.name : tag.id,
 				label: tag.name,
-				...(presetOptions.length ? { group: $t('Tags'), kind: $t('Tag') } : {})
+				...(presetOptions.length ? { group: $t`Tags`, kind: $t`Tag` } : {})
 			}))
 			.filter((option) => !presetOptions.some((preset) => preset.value === option.value))
 	]);
@@ -87,10 +88,10 @@
 	{hideLabel}
 	class={className}
 	{selectedLabel}
-	selectedKind={presetOptions.length ? (selectedPreset ? $t('Condition') : $t('Tag')) : undefined}
+	selectedKind={presetOptions.length ? (selectedPreset ? $t`Condition` : $t`Tag`) : undefined}
 	{emptyLabel}
 	emptyOption={presetOptions.length
-		? { group: $t('Filter conditions'), kind: $t('Condition') }
+		? { group: $t`Filter conditions`, kind: $t`Condition` }
 		: undefined}
 	{disabled}
 	{allowCustomValue}
@@ -101,10 +102,10 @@
 	{#snippet footer()}
 		{#if tags.isError}
 			<p role="alert" class="px-2 py-1 text-sm text-error-700-300">
-				{apiErrorMessage(tags.error, $t('Unable to load Tags'))}
+				{apiErrorMessage(tags.error, $t`Unable to load Tags`)}
 			</p>
 		{:else if tags.isFetching}
-			<p role="status" class="px-2 py-1 text-sm text-surface-600-400">{$t('Loading Tags…')}</p>
+			<p role="status" class="px-2 py-1 text-sm text-surface-600-400">{$t`Loading Tags…`}</p>
 		{/if}
 		{#if tags.hasNextPage}
 			<Button
@@ -112,7 +113,7 @@
 				disabled={tags.isFetchingNextPage}
 				onclick={() => void tags.fetchNextPage()}
 			>
-				{$t('Load more Tags')}
+				{$t`Load more Tags`}
 			</Button>
 		{/if}
 	{/snippet}

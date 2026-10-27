@@ -63,6 +63,8 @@ describe('localStorageWorkflowLedger', () => {
 	});
 
 	it.each([
+		{ successMessage: '' },
+		{ failureMessage: '' },
 		{ workspaceId: 'workspace-1', target: { kind: 'url', id: 'javascript:alert(1)' } },
 		{ workspaceId: 'workspace-1', target: { kind: 'import_batch', id: '' } },
 		{ target: { kind: 'import_batch', id: 'batch-1' } },
@@ -77,7 +79,7 @@ describe('localStorageWorkflowLedger', () => {
 			target: { kind: 'import_batch', id: 'batch-1' },
 			outcome: { id: entry.id, state: 'pending' }
 		}
-	])('rejects malformed destinations and outcomes: %j', (invalid) => {
+	])('rejects malformed stored workflows: %j', (invalid) => {
 		localStorage.setItem(
 			'quirebase:tracked-workflows:user-a',
 			JSON.stringify([{ ...entry, ...invalid }])

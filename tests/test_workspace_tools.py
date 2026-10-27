@@ -5,10 +5,9 @@ from uuid import uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
-from test_http import authenticated_async_client
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.config import get_settings

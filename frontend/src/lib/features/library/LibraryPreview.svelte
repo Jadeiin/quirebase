@@ -17,7 +17,7 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
 	import RichText from '#lib/design/RichText.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import type { LibraryMetadataFilter } from './filters';
 	import type { LibraryPreviewNavigation } from './preview-navigation.js';
@@ -154,9 +154,9 @@
 		copyStatus = '';
 		try {
 			await navigator.clipboard.writeText(doi);
-			copyStatus = $t('Copied to clipboard');
+			copyStatus = $t`Copied to clipboard`;
 		} catch {
-			copyStatus = $t('Unable to copy DOI. Select and copy it manually.');
+			copyStatus = $t`Unable to copy DOI. Select and copy it manually.`;
 		}
 	}
 
@@ -198,22 +198,22 @@
 					tabindex="-1"
 					bind:this={heading}
 				>
-					{$t('Item preview')}
+					{$t`Item preview`}
 				</h2>
 				<div class="flex items-center gap-1">
 					<Button
 						variant="icon"
 						size="sm"
 						disabled={refreshing || item.isFetching}
-						aria-label={$t('Refresh preview')}
+						aria-label={$t`Refresh preview`}
 						onclick={() => void refreshPreview()}><Icon name="rotate" size={16} /></Button
 					>
 					<Button
 						variant="icon"
 						size="sm"
-						aria-label={$t('Close preview')}
+						aria-label={$t`Close preview`}
 						aria-keyshortcuts="Escape"
-						title={$t('Close preview')}
+						title={$t`Close preview`}
 						onclick={onClose}><Icon name="close" size={16} /></Button
 					>
 				</div>
@@ -221,29 +221,26 @@
 			{#if navigation}
 				<div
 					class="mt-2 flex items-center justify-between gap-2"
-					aria-label={$t('Preview navigation')}
+					aria-label={$t`Preview navigation`}
 					aria-busy={navigation.busy}
 				>
 					<p class="text-xs text-surface-600-400" aria-live="polite">
-						{#if navigation.position !== null}{$t('Item {position} of {total}', {
-								position: navigation.position,
-								total: navigation.total
-							})}{:else}{$t('Outside current results')}{/if}
+						{#if navigation.position !== null}{$t`Item ${ph({ position: navigation.position })} of ${ph({ total: navigation.total })}`}{:else}{$t`Outside current results`}{/if}
 					</p>
 					<div class="flex items-center gap-1">
 						<Button
 							variant="icon"
 							size="sm"
-							aria-label={$t('Previous Item')}
-							title={$t('Previous Item')}
+							aria-label={$t`Previous Item`}
+							title={$t`Previous Item`}
 							disabled={navigation.busy || !navigation.canPrevious}
 							onclick={() => move('previous')}><Icon name="chevron-left" size={16} /></Button
 						>
 						<Button
 							variant="icon"
 							size="sm"
-							aria-label={$t('Next Item')}
-							title={$t('Next Item')}
+							aria-label={$t`Next Item`}
+							title={$t`Next Item`}
 							disabled={navigation.busy || !navigation.canNext}
 							onclick={() => move('next')}><Icon name="chevron-right" size={16} /></Button
 						>
@@ -258,10 +255,10 @@
 		</header>
 		<div class="max-h-[70vh] overflow-y-auto p-4">
 			{#if item.isPending}<p class="text-sm text-surface-600-400" role="status">
-					{$t('Loading Item preview…')}
+					{$t`Loading Item preview…`}
 				</p>
 			{:else if item.isError}<QueryError
-					message={apiErrorMessage(item.error, $t('Unable to load this Item preview.'))}
+					message={apiErrorMessage(item.error, $t`Unable to load this Item preview.`)}
 					busy={item.isFetching}
 					onRetry={() => void item.refetch()}
 				/>
@@ -274,21 +271,21 @@
 						{index ? '; ' : ''}<a
 							class="text-inherit no-underline hover:text-primary-700-300 hover:underline focus-visible:underline"
 							href={resolve(filterHref(author.filter))}
-							title={$t('View Items by {name}', { name: author.label })}>{author.label}</a
+							title={$t`View Items by ${ph({ name: author.label })}`}>{author.label}</a
 						>
-					{:else}{contributors || $t('Unknown authors')}{/each}
+					{:else}{contributors || $t`Unknown authors`}{/each}
 				</p>
 				<p class="mb-4 text-sm leading-6 break-words text-surface-600-400">
 					{#if publicationTitle}<a
 							class="text-inherit no-underline hover:text-primary-700-300 hover:underline focus-visible:underline"
 							href={resolve(filterHref({ publication_title: publication }))}
-							title={$t('View Items in {name}', { name: publication })}>{publication}</a
+							title={$t`View Items in ${ph({ name: publication })}`}>{publication}</a
 						>{:else}{publication}{/if}
 					{publication && publicationDate ? ' · ' : ''}
 					{#if publicationYear}<a
 							class="text-inherit no-underline hover:text-primary-700-300 hover:underline focus-visible:underline"
 							href={resolve(filterHref({ year: publicationYear }))}
-							title={$t('View Items published in {year}', { year: publicationYear })}
+							title={$t`View Items published in ${ph({ year: publicationYear })}`}
 							>{publicationYear}</a
 						>{publicationDate.slice(4)}{:else}{publicationDate}{/if}
 					{!publication && !publicationDate ? '—' : ''}
@@ -298,36 +295,36 @@
 							as="a"
 							variant="primary"
 							href={resolve(itemHref(`pdf/${item.data.latest_revision_id}`))}
-							><Icon name="file" size={16} />{$t('Read PDF')}</Button
+							><Icon name="file" size={16} />{$t`Read PDF`}</Button
 						>{/if}
-					<Button as="a" href={resolve(itemHref())}>{$t('Open full details')}</Button>
+					<Button as="a" href={resolve(itemHref())}>{$t`Open full details`}</Button>
 					<LibraryActionMenu {itemId} {currentProject} {onAction} disabled={actionsBusy} />
 				</div>
 				{#if doi}
 					<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-						<span class="min-w-0 break-all text-surface-600-400">{$t('DOI')}: {doi}</span>
-						<Button size="sm" onclick={() => void copyDoi()}>{$t('Copy DOI')}</Button>
+						<span class="min-w-0 break-all text-surface-600-400">{$t`DOI`}: {doi}</span>
+						<Button size="sm" onclick={() => void copyDoi()}>{$t`Copy DOI`}</Button>
 					</div>
 					{#if copyStatus}<p role="status" class="mt-1 text-xs text-surface-600-400">
 							{copyStatus}
 						</p>{/if}
 				{/if}
 				<section class="mt-6 border-t border-surface-300-700 pt-4">
-					<h3 class="mb-2 text-sm font-semibold">{$t('Abstract')}</h3>
+					<h3 class="mb-2 text-sm font-semibold">{$t`Abstract`}</h3>
 					<div class="text-sm leading-7 break-words text-surface-700-300">
 						{#if item.data.metadata.description}<RichText
 								html={item.data.metadata.description}
-							/>{:else}<p class="m-0 text-surface-600-400">{$t('No abstract available.')}</p>{/if}
+							/>{:else}<p class="m-0 text-surface-600-400">{$t`No abstract available.`}</p>{/if}
 					</div>
 				</section>
 				<section class="mt-5 border-t border-surface-300-700 pt-4">
 					<div class="mb-3 flex items-center justify-between gap-2">
-						<h3 class="text-sm font-semibold">{$t('Tags')}</h3>
+						<h3 class="text-sm font-semibold">{$t`Tags`}</h3>
 						<Button
 							size="sm"
 							aria-expanded={organizeOpen}
 							aria-controls="preview-organize-content"
-							onclick={toggleOrganize}>{$t('Organize this Item')}</Button
+							onclick={toggleOrganize}>{$t`Organize this Item`}</Button
 						>
 					</div>
 					{#if !organizeOpen}
@@ -335,13 +332,13 @@
 							{#each item.data.tags as tag (tag.id)}<a
 									class="max-w-full rounded-full bg-primary-50-950 px-2.5 py-1 text-xs font-semibold break-words text-primary-800-200"
 									href={resolve(filterHref({ tag: tag.id }))}>{tag.name}</a
-								>{:else}<span class="text-sm text-surface-600-400">{$t('No tags')}</span>{/each}
+								>{:else}<span class="text-sm text-surface-600-400">{$t`No tags`}</span>{/each}
 						</div>
 					{/if}
 					<div id="preview-organize-content" hidden={!organizeOpen}>
 						{#if organizeModule}
 							{#await organizeModule}<p role="status" class="mt-3 text-sm text-surface-600-400">
-									{$t('Loading organization options…')}
+									{$t`Loading organization options…`}
 								</p>
 							{:then { default: LibraryPreviewOrganize }}
 								{#key `${workspaceId}:${itemId}`}<LibraryPreviewOrganize
@@ -349,17 +346,17 @@
 										{itemId}
 									/>{/key}
 							{:catch}<QueryError
-									message={$t('Unable to load organization options.')}
+									message={$t`Unable to load organization options.`}
 									onRetry={() => (organizeModule = import('./LibraryPreviewOrganize.svelte'))}
 								/>{/await}
 						{/if}
 					</div>
 				</section>
 				<section class="mt-5 border-t border-surface-300-700 pt-4">
-					<h3 class="mb-3 text-sm font-semibold">{$t('Files')}</h3>
+					<h3 class="mb-3 text-sm font-semibold">{$t`Files`}</h3>
 					<a class="flex flex-wrap gap-x-4 gap-y-1 text-sm" href={resolve(itemHref('files'))}
-						><span>{$t('{count} PDF revisions', { count: item.data.counts.revisions })}</span><span
-							>{$t('{count} supplements', { count: item.data.counts.attachments })}</span
+						><span>{$t`${ph({ count: item.data.counts.revisions })} PDF revisions`}</span><span
+							>{$t`${ph({ count: item.data.counts.attachments })} supplements`}</span
 						></a
 					>
 				</section>

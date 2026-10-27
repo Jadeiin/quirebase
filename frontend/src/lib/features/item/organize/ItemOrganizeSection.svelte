@@ -4,7 +4,7 @@
 	import Badge from '#lib/design/Badge.svelte';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import Panel from '#lib/design/Panel.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import type { components } from '#lib/api/schema.js';
 	import type { OrganizeView } from '../types';
 	import Button from '#lib/design/Button.svelte';
@@ -103,7 +103,7 @@
 					disabled={busy || !canManageProjects}
 					onclick={() => toggleProject(project)}
 				>
-					{project.assigned ? $t('Remove') : $t('Add')}
+					{project.assigned ? $t`Remove` : $t`Add`}
 				</Button>
 			</div>
 		{/each}
@@ -115,15 +115,15 @@
 		<Panel>
 			<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<h2 class="m-0">{$t('Tag matrix')}</h2>
+					<h2 class="m-0">{$t`Tag matrix`}</h2>
 					<p class="m-0 text-sm text-surface-600-400">
-						{$t('Browse all Tags.')}
+						{$t`Browse all Tags.`}
 					</p>
 				</div>
 				<input
 					class="input w-auto min-w-36 field-sm"
 					bind:value={tagFilter}
-					placeholder={$t('Filter Tags')}
+					placeholder={$t`Filter Tags`}
 				/>
 			</div>
 			<div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 2xl:grid-cols-3">
@@ -150,45 +150,44 @@
 					</div>
 				{/each}
 			</div>
-			{#if !groups.length}<p class="m-0 text-sm text-surface-600-400">{$t('No tags')}</p>{/if}
+			{#if !groups.length}<p class="m-0 text-sm text-surface-600-400">{$t`No tags`}</p>{/if}
 		</Panel>
 		<Panel>
-			<h2 class="m-0 mb-2">{$t('Projects')}</h2>
+			<h2 class="m-0 mb-2">{$t`Projects`}</h2>
 
 			{#if primaryProjects.length > 0}
-				<p class="text-sm text-surface-600-400">{$t('Assigned, Workspace and Your Projects')}</p>
+				<p class="text-sm text-surface-600-400">{$t`Assigned, Workspace and Your Projects`}</p>
 				{@render projectRows(primaryProjects)}
 			{/if}
 			{#if data.projects.some((project: OrganizeView['projects'][number]) => !project.assigned && !project.is_participating && project.participation === 'open')}
 				<details class="mt-3">
-					<summary class="cursor-pointer text-sm font-semibold">{$t('Other open Projects')}</summary
-					>
+					<summary class="cursor-pointer text-sm font-semibold">{$t`Other open Projects`}</summary>
 					<input
 						class="mt-2 input"
 						bind:value={projectFilter}
-						aria-label={$t('Search Projects')}
-						placeholder={$t('Search Projects')}
+						aria-label={$t`Search Projects`}
+						placeholder={$t`Search Projects`}
 					/>
 					{@render projectRows(otherOpenProjects)}
 					{#if otherOpenProjects.length === 0}<p class="text-sm text-surface-600-400">
-							{$t('No matching Projects.')}
+							{$t`No matching Projects.`}
 						</p>{/if}
 				</details>
 			{/if}
 			{#if managedProjects.length > 0}
 				<details class="mt-3">
-					<summary class="cursor-pointer text-sm font-semibold">{$t('Managed Projects')}</summary>
+					<summary class="cursor-pointer text-sm font-semibold">{$t`Managed Projects`}</summary>
 					{@render projectRows(managedProjects)}
 				</details>
 			{/if}
 			{#if data.projects.length === 0}<p class="m-0 text-sm text-surface-600-400">
-					{$t('No available projects.')}
+					{$t`No available projects.`}
 				</p>{/if}
 		</Panel>
 	</div>
 	<div class="grid grid-cols-1 gap-4">
 		<Panel>
-			<h2 class="m-0 mb-3">{$t('Item Tags')}</h2>
+			<h2 class="m-0 mb-3">{$t`Item Tags`}</h2>
 			<div class="flex flex-wrap gap-1.5">
 				{#each assignedTags as tag (tag.id)}
 					<Badge
@@ -197,35 +196,35 @@
 						variant="primary"
 						class="cursor-pointer"
 						disabled={busy || !canUseTags}
-						aria-label={$t('Remove {name}', { name: tag.name })}
+						aria-label={$t`Remove ${ph({ name: tag.name })}`}
 						onclick={() => onToggleTag(tag.id, true)}
 						>{tag.name}<span aria-hidden="true"> ×</span></Badge
 					>
 				{:else}
-					<span class="text-sm text-surface-600-400">{$t('No tags')}</span>
+					<span class="text-sm text-surface-600-400">{$t`No tags`}</span>
 				{/each}
 			</div>
 			{#if canCreateTags}<form class="mt-3 flex items-center gap-2" onsubmit={onAddTag}>
 					<input
 						class="input min-w-0 flex-1 field-sm"
 						name="name"
-						placeholder={$t('New tag')}
+						placeholder={$t`New tag`}
 						required
-					/><Button size="sm" class="shrink-0" disabled={busy}>{$t('Add tag')}</Button>
+					/><Button size="sm" class="shrink-0" disabled={busy}>{$t`Add tag`}</Button>
 				</form>{/if}
 		</Panel>
 		<Panel>
 			<div class="flex items-start justify-between gap-3">
-				<h2 class="m-0">{$t('Tag Recommendations')}</h2>
+				<h2 class="m-0">{$t`Tag Recommendations`}</h2>
 				<Button
 					size="sm"
 					class="shrink-0"
 					disabled={busy || !can(data.authorization, 'item.update')}
-					onclick={onRefresh}>{$t('Refresh')}</Button
+					onclick={onRefresh}>{$t`Refresh`}</Button
 				>
 			</div>
 			<p class="mt-1 mb-3 text-sm text-surface-600-400">
-				{$t('Suggestions derived from metadata and the latest ready PDF.')}
+				{$t`Suggestions derived from metadata and the latest ready PDF.`}
 			</p>
 			{#if data.tag_matrix.recommendation_error}
 				<p class="text-error-700-300">{data.tag_matrix.recommendation_error}</p>
@@ -241,13 +240,13 @@
 						onclick={() => onAddSuggestedTag(name)}>+ {name}</Badge
 					>
 				{:else}
-					<span class="text-sm text-surface-600-400">{$t('No new Tag suggestions.')}</span>
+					<span class="text-sm text-surface-600-400">{$t`No new Tag suggestions.`}</span>
 				{/each}
 			</div>
 			<div
 				class="mt-3 flex items-center gap-2 border-t border-surface-300-700 pt-3 text-xs text-surface-600-400"
 			>
-				{$t('State')}
+				{$t`State`}
 				<Badge>{$t(domainLabel(data.tag_matrix.recommendation_state))}</Badge>
 			</div>
 		</Panel>
@@ -256,12 +255,10 @@
 
 <ConfirmDialog
 	bind:open={removeProjectDialogOpen}
-	title={$t('Remove Item from Project?')}
-	body={$t(
-		'Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.',
-		{ name: pendingRemoveProject?.name ?? '' }
-	) + (removeProjectDialogOpen && error ? ` ${error}` : '')}
-	confirmLabel={$t('Remove from Project')}
+	title={$t`Remove Item from Project?`}
+	body={$t`Removing this Item from ${ph({ name: pendingRemoveProject?.name ?? '' })} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.` +
+		(removeProjectDialogOpen && error ? ` ${error}` : '')}
+	confirmLabel={$t`Remove from Project`}
 	{busy}
 	onConfirm={() => void confirmRemoveProject()}
 />

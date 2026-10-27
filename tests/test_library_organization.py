@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 
 import pytest
 from advanced_alchemy.types import FileObject
+from app_helpers import authenticated_async_client
 from item_helpers import contributor
-from test_http import authenticated_async_client
 from workspace_helpers import fixture_membership_id, provision_initial_workspace
 
 from quirebase.core.errors import ResourceUnavailable, WorkspaceMembershipRequired

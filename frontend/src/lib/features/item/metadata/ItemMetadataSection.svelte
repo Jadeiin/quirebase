@@ -14,7 +14,7 @@
 		identifierRows,
 		type Metadata
 	} from '../metadata-draft.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import type { ItemDetail } from '../types';
 	let {
 		item,
@@ -51,25 +51,23 @@
 </script>
 
 <Panel class="grid grid-cols-1 gap-3">
-	<h2>{$t('Metadata')}</h2>
+	<h2>{$t`Metadata`}</h2>
 	{#if canEdit}
 		{#if stale}
 			<Notice variant="warning"
-				>{$t(
-					'This Item has changed. Your draft is preserved. Review the latest metadata before retrying.'
-				)}</Notice
+				>{$t`This Item has changed. Your draft is preserved. Review the latest metadata before retrying.`}</Notice
 			>
 			<details>
-				<summary>{$t('Latest saved metadata')}</summary>
+				<summary>{$t`Latest saved metadata`}</summary>
 				<pre class="max-h-80 overflow-auto text-sm">{JSON.stringify(item.metadata, null, 2)}</pre>
 			</details>
 			<div class="flex flex-wrap gap-2">
 				<Button
 					onclick={() => {
 						editingItem = structuredClone($state.snapshot(item));
-					}}>{$t('Use latest version and keep draft')}</Button
+					}}>{$t`Use latest version and keep draft`}</Button
 				>
-				<Button onclick={loadLatest}>{$t('Discard draft and load latest')}</Button>
+				<Button onclick={loadLatest}>{$t`Discard draft and load latest`}</Button>
 			</div>
 		{/if}
 		{#key `${editingItem.id}:${editorRevision}`}
@@ -77,7 +75,7 @@
 				metadata={editingItem.metadata}
 				citationKey={editingItem.citation_key ?? ''}
 				busy={busy || stale}
-				submitLabel={$t('Save metadata')}
+				submitLabel={$t`Save metadata`}
 				{serverErrors}
 				onsubmit={save}
 				ondirty={(changed) => (dirty = changed)}
@@ -87,7 +85,7 @@
 		<RichText html={text(item.metadata.title)} />
 		<dl class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
 			<div>
-				<dt>{$t('Authors')}</dt>
+				<dt>{$t`Authors`}</dt>
 				<dd>
 					{objects(item.metadata.contributors)
 						.filter((row) => Array.isArray(row.roles) && row.roles.includes('Author'))
@@ -96,7 +94,7 @@
 				</dd>
 			</div>
 			<div>
-				<dt>{$t('Editors')}</dt>
+				<dt>{$t`Editors`}</dt>
 				<dd>
 					{objects(item.metadata.contributors)
 						.filter((row) => Array.isArray(row.roles) && row.roles.includes('Editor'))
@@ -105,27 +103,27 @@
 				</dd>
 			</div>
 			<div>
-				<dt>{$t('Publication')}</dt>
+				<dt>{$t`Publication`}</dt>
 				<dd>{text(object(item.metadata.container).title) || '—'}</dd>
 			</div>
 			<div>
-				<dt>{$t('Publication date')}</dt>
+				<dt>{$t`Publication date`}</dt>
 				<dd>{text(item.metadata.date_published) || '—'}</dd>
 			</div>
 			<div>
-				<dt>{$t('Reference type')}</dt>
+				<dt>{$t`Reference type`}</dt>
 				<dd>{text(item.metadata.type)}</dd>
 			</div>
 			<div>
-				<dt>{$t('Citation key')}</dt>
+				<dt>{$t`Citation key`}</dt>
 				<dd>{item.citation_key || '—'}</dd>
 			</div>
 			<div>
-				<dt>{$t('Keywords')}</dt>
+				<dt>{$t`Keywords`}</dt>
 				<dd>{workKeywords(item.metadata).join('; ') || '—'}</dd>
 			</div>
 			<div>
-				<dt>{$t('Upstream identifiers')}</dt>
+				<dt>{$t`Upstream identifiers`}</dt>
 				<dd>
 					{text(item.metadata.id)}{#each identifierRows(item.metadata) as row, index (index)}<div>
 							{row.namespace}: {row.value}

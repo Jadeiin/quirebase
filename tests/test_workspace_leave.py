@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from app_helpers import authenticated_async_client
 from sqlalchemy import select
-from test_http import authenticated_async_client
 
 from quirebase.access import ResourceAction, require_workspace_membership, workspace_decisions
 from quirebase.core.config import get_settings

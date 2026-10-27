@@ -20,7 +20,7 @@
 	import RichText from '#lib/design/RichText.svelte';
 	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
 	import { getSession } from '#lib/session.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import type { WorkspacePath } from '#lib/workspaces/href.js';
 	import type { LibrarySearch } from './queries';
 	import { libraryRowCommands, runLibraryShortcut, type LibraryRowCommand } from './shortcuts.js';
@@ -95,7 +95,7 @@
 	const columns = $derived([
 		{
 			id: 'select',
-			header: $t('Select'),
+			header: $t`Select`,
 			size: 48,
 			minSize: 48,
 			maxSize: 48,
@@ -104,31 +104,31 @@
 		},
 		{
 			accessorKey: 'title_html',
-			header: $t('Title'),
+			header: $t`Title`,
 			size: 360,
 			minSize: 240,
 			maxSize: 800,
 			enableHiding: false
 		},
-		{ accessorKey: 'authors', header: $t('Authors'), size: 180, minSize: 100, maxSize: 800 },
+		{ accessorKey: 'authors', header: $t`Authors`, size: 180, minSize: 100, maxSize: 800 },
 		{
 			accessorKey: 'publication_date',
-			header: $t('Publication Date'),
+			header: $t`Publication Date`,
 			size: 140,
 			minSize: 100,
 			maxSize: 800
 		},
 		{
 			accessorKey: 'publication_title',
-			header: $t('Publication'),
+			header: $t`Publication`,
 			size: 190,
 			minSize: 100,
 			maxSize: 800
 		},
-		{ accessorKey: 'doi', header: $t('DOI'), size: 190, minSize: 100, maxSize: 800 },
+		{ accessorKey: 'doi', header: $t`DOI`, size: 190, minSize: 100, maxSize: 800 },
 		{
 			id: 'preview',
-			header: $t('Actions'),
+			header: $t`Actions`,
 			size: 104,
 			minSize: 104,
 			maxSize: 104,
@@ -324,14 +324,12 @@
 	}
 
 	function selectionLabel(authors: LibrarySearch['items'][number]['authors']) {
-		if (!authors.length) return $t('Select');
+		if (!authors.length) return $t`Select`;
 		const names = authors
 			.slice(0, 3)
 			.map((author) => author.full_name)
 			.join('; ');
-		return $t('Select {name}', {
-			name: authors.length > 3 ? $t('{names} et al.', { names }) : names
-		});
+		return $t`Select ${ph({ name: authors.length > 3 ? $t`${names} et al.` : names })}`;
 	}
 </script>
 
@@ -348,8 +346,8 @@
 	{#if publication}<a
 			class="text-surface-700-300 no-underline underline-offset-4 hover:text-primary-700-300 hover:underline focus-visible:underline"
 			href={resolve(filterHref({ publication_title: publication }))}
-			title={$t('View Items in {name}', { name: publication })}
-			aria-label={$t('View Items in {name}', { name: publication })}>{publication}</a
+			title={$t`View Items in ${ph({ name: publication })}`}
+			aria-label={$t`View Items in ${ph({ name: publication })}`}>{publication}</a
 		>{:else}—{/if}
 {/snippet}
 
@@ -359,8 +357,8 @@
 		<a
 			class="text-surface-700-300 no-underline underline-offset-4 hover:text-primary-700-300 hover:underline focus-visible:underline"
 			href={resolve(filterHref({ year }))}
-			title={$t('View Items published in {year}', { year })}
-			aria-label={$t('View Items published in {year}', { year })}>{year}</a
+			title={$t`View Items published in ${year}`}
+			aria-label={$t`View Items published in ${year}`}>{year}</a
 		>{date.slice(4)}
 	{:else}{date || '—'}{/if}
 {/snippet}
@@ -368,7 +366,7 @@
 <div
 	class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-surface-300-700 px-4 py-3"
 	role="group"
-	aria-label={$t('Library controls')}
+	aria-label={$t`Library controls`}
 >
 	<label class="flex items-center gap-2 text-sm font-medium">
 		<input
@@ -377,7 +375,7 @@
 			indeterminate={table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()}
 			onchange={(event) => selectPage(event.currentTarget.checked)}
 		/>
-		{$t('Select this page')}
+		{$t`Select this page`}
 	</label>
 	<div class="ml-auto flex max-w-full flex-wrap items-center gap-3">
 		{@render toolbar()}
@@ -386,10 +384,10 @@
 			onValueChange={({ value }) =>
 				save({ ...preferences, view: value === 'table' || value === 'list' ? value : 'auto' })}
 		>
-			<SegmentedControl.Label class="sr-only">{$t('View')}</SegmentedControl.Label>
+			<SegmentedControl.Label class="sr-only">{$t`View`}</SegmentedControl.Label>
 			<SegmentedControl.Control class="gap-0 p-0.5">
 				<SegmentedControl.Indicator />
-				{#each [{ value: 'auto', icon: 'responsive', label: $t('Automatic'), hint: $t('Automatic: Table on wide screens, List on narrow screens') }, { value: 'table', icon: 'table', label: $t('Table'), hint: $t('Table') }, { value: 'list', icon: 'list', label: $t('List'), hint: $t('List') }] as option (option.value)}
+				{#each [{ value: 'auto', icon: 'responsive', label: $t`Automatic`, hint: $t`Automatic: Table on wide screens, List on narrow screens` }, { value: 'table', icon: 'table', label: $t`Table`, hint: $t`Table` }, { value: 'list', icon: 'list', label: $t`List`, hint: $t`List` }] as option (option.value)}
 					<SegmentedControl.Item value={option.value} title={option.hint} class="px-2.5 py-2">
 						<SegmentedControl.ItemText>
 							<Icon name={option.icon} size={16} />
@@ -404,8 +402,8 @@
 			<PopoverTriggerButton
 				variant="icon"
 				class="size-9"
-				aria-label={$t('Display options')}
-				title={$t('Display options')}><Icon name="settings" size={16} /></PopoverTriggerButton
+				aria-label={$t`Display options`}
+				title={$t`Display options`}><Icon name="settings" size={16} /></PopoverTriggerButton
 			>
 			<Portal>
 				<Popover.Positioner>
@@ -413,7 +411,7 @@
 						class="z-40 w-64 rounded-xl border border-surface-300-700 bg-surface-50-950 p-4 shadow-xl"
 					>
 						<label class="flex items-center gap-2 text-xs text-surface-700-300">
-							{$t('Density')}
+							{$t`Density`}
 							<select
 								class="select w-auto py-1 text-xs"
 								value={preferences.density}
@@ -423,13 +421,13 @@
 										density: event.currentTarget.value === 'compact' ? 'compact' : 'comfortable'
 									})}
 							>
-								<option value="comfortable">{$t('Comfortable')}</option>
-								<option value="compact">{$t('Compact')}</option>
+								<option value="comfortable">{$t`Comfortable`}</option>
+								<option value="compact">{$t`Compact`}</option>
 							</select>
 						</label>
 						{#if showTable}
 							<fieldset class="grid grid-cols-1 gap-3">
-								<legend class="mt-4 mb-3 font-semibold">{$t('Visible columns')}</legend>
+								<legend class="mt-4 mb-3 font-semibold">{$t`Visible columns`}</legend>
 								{#each table
 									.getAllLeafColumns()
 									.filter((column) => column.getCanHide()) as column (column.id)}
@@ -445,7 +443,7 @@
 						{/if}
 						<div class="mt-4 border-t border-surface-300-700 pt-3">
 							<Button size="sm" onclick={() => save(defaultLibraryTablePreferences())}
-								>{$t('Reset display')}</Button
+								>{$t`Reset display`}</Button
 							>
 						</div>
 					</Popover.Content>
@@ -462,7 +460,7 @@
 		class="max-h-[65vh] table-wrap"
 		tabindex="0"
 		role="region"
-		aria-label={$t('Library Items')}
+		aria-label={$t`Library Items`}
 		{@attach rowHotkeys}
 	>
 		<!-- Column dimensions come from TanStack's constrained sizing state. -->
@@ -470,7 +468,7 @@
 			class="table min-w-(--library-table-width) table-fixed"
 			style:--library-table-width={`${table.getTotalSize()}px`}
 		>
-			<caption class="sr-only">{$t('Library Items')}</caption>
+			<caption class="sr-only">{$t`Library Items`}</caption>
 			<colgroup
 				>{#each table.getVisibleLeafColumns() as column (column.id)}
 					<col
@@ -513,14 +511,14 @@
 										type="button"
 										class="group flex items-center gap-2 text-left hover:text-primary-700-300"
 										disabled={busy}
-										title={field === 'author' ? $t('Sort by first author or editor') : undefined}
+										title={field === 'author' ? $t`Sort by first author or editor` : undefined}
 										aria-label={field === 'title'
-											? $t('Sort by title')
+											? $t`Sort by title`
 											: field === 'author'
-												? $t('Sort by authors')
+												? $t`Sort by authors`
 												: field === 'publication'
-													? $t('Sort by publication')
-													: $t('Sort by publication date')}
+													? $t`Sort by publication`
+													: $t`Sort by publication date`}
 										onclick={() =>
 											onSort(
 												field,
@@ -549,10 +547,8 @@
 									<button
 										type="button"
 										class="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none border-r border-surface-300-700 hover:bg-primary-200-800 focus-visible:bg-primary-200-800"
-										aria-label={$t('Resize {name} column', {
-											name: String(header.column.columnDef.header)
-										})}
-										title={$t('Drag to resize. Use arrow keys to adjust; Home to reset.')}
+										aria-label={$t`Resize ${ph({ name: String(header.column.columnDef.header) })} column`}
+										title={$t`Drag to resize. Use arrow keys to adjust; Home to reset.`}
 										onmousedown={header.getResizeHandler()}
 										ontouchstart={header.getResizeHandler()}
 										onkeydown={(event) => resizeWithKeyboard(event, header.column.id)}
@@ -585,7 +581,7 @@
 										aria-describedby={`library-item-title-${row.id}`}
 										checked={row.getIsSelected()}
 										onclick={(event) => selectWithPointer(row.id, event)}
-										title={$t('Shift-click an Item checkbox to select a range on this page.')}
+										title={$t`Shift-click an Item checkbox to select a range on this page.`}
 										aria-label={selectionLabel(row.original.authors)}
 									/>
 								{:else if cell.column.id === 'title_html'}<a
@@ -616,8 +612,8 @@
 										<Button
 											variant="icon"
 											size="sm"
-											aria-label={$t('Preview Item {number}', { number: row.index + 1 })}
-											title={$t('Preview Item')}
+											aria-label={$t`Preview Item ${ph({ number: row.index + 1 })}`}
+											title={$t`Preview Item`}
 											aria-expanded={previewItemId === row.id}
 											aria-controls={previewItemId === row.id ? 'library-preview' : undefined}
 											onclick={(event) => onPreview(row.id, event.currentTarget)}
@@ -649,7 +645,7 @@
 		class="divide-y divide-surface-300-700"
 		tabindex="0"
 		role="region"
-		aria-label={$t('Library Items')}
+		aria-label={$t`Library Items`}
 		{@attach rowHotkeys}
 	>
 		{#each table.getRowModel().rows as row (row.id)}
@@ -668,7 +664,7 @@
 					aria-describedby={`library-item-title-${row.id}`}
 					checked={row.getIsSelected()}
 					onclick={(event) => selectWithPointer(row.id, event)}
-					title={$t('Shift-click an Item checkbox to select a range on this page.')}
+					title={$t`Shift-click an Item checkbox to select a range on this page.`}
 					aria-label={selectionLabel(row.original.authors)}
 				/>
 				<BibliographicSummary>
@@ -692,8 +688,8 @@
 					<Button
 						variant="icon"
 						size="sm"
-						aria-label={$t('Preview Item {number}', { number: row.index + 1 })}
-						title={$t('Preview Item')}
+						aria-label={$t`Preview Item ${ph({ number: row.index + 1 })}`}
+						title={$t`Preview Item`}
 						aria-expanded={previewItemId === row.id}
 						aria-controls={previewItemId === row.id ? 'library-preview' : undefined}
 						onclick={(event) => onPreview(row.id, event.currentTarget)}

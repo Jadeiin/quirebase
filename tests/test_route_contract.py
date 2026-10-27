@@ -3,8 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from app_helpers import json_payload
-from test_http import authenticated_async_client
+from app_helpers import authenticated_async_client, json_payload
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.crypto import hash_password

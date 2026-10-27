@@ -8,7 +8,7 @@
 	import { hasAllowedAction } from '#lib/authorization/can.js';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { canOpenQuickNavigation } from './quick-navigation.js';
 
 	let {
@@ -81,7 +81,7 @@
 </script>
 
 {#snippet loading()}
-	<p role="status" class="py-6 text-sm text-surface-600-400">{$t('Loading navigation…')}</p>
+	<p role="status" class="py-6 text-sm text-surface-600-400">{$t`Loading navigation…`}</p>
 {/snippet}
 
 <Dialog
@@ -100,13 +100,13 @@
 					<header class="flex items-start justify-between gap-3">
 						<Dialog.Title class="text-lg font-bold">
 							{#snippet element(attributes)}
-								<h2 {...attributes} bind:this={heading} tabindex="-1">{$t('Quick navigation')}</h2>
+								<h2 {...attributes} bind:this={heading} tabindex="-1">{$t`Quick navigation`}</h2>
 							{/snippet}
 						</Dialog.Title>
 						<DialogCloseButton />
 					</header>
 					<Dialog.Description class="mt-2 text-sm text-surface-600-400">
-						{$t('Go to a page, Workspace, or Project.')}
+						{$t`Go to a page, Workspace, or Project.`}
 					</Dialog.Description>
 					{#if open}
 						{#if dialogModule}
@@ -123,7 +123,7 @@
 								{/key}
 							{:catch}
 								<QueryError
-									message={$t('Unable to load navigation.')}
+									message={$t`Unable to load navigation.`}
 									onRetry={() => (dialogModule = import('./QuickNavigationDialog.svelte'))}
 								/>
 							{/await}

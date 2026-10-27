@@ -144,7 +144,7 @@ async def test_shared_citation_styles_require_workspace_membership_to_list(async
 async def test_duplicate_shared_citation_style_returns_validation_response(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 
@@ -341,7 +341,7 @@ def test_builtin_style_selection_reuses_one_catalog_snapshot(monkeypatch):
 async def test_bibliography_entry_points_share_export_options_and_download_headers(
     async_db, async_session_factory, tmp_path, monkeypatch, scope
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 
@@ -382,7 +382,7 @@ async def test_bibliography_entry_points_share_export_options_and_download_heade
 async def test_bibliography_entry_points_reject_unsupported_formats(
     async_db, async_session_factory, tmp_path, monkeypatch, scope
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 
@@ -414,7 +414,7 @@ async def test_bibliography_entry_points_reject_unsupported_formats(
 async def test_citation_style_search_includes_owned_custom_styles(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 
@@ -444,7 +444,7 @@ async def test_citation_style_search_includes_owned_custom_styles(
 async def test_citation_style_directory_finds_requested_saved_style(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 
@@ -750,7 +750,7 @@ async def test_citation_style_catalog_reads_a_bounded_metadata_window(async_db, 
 async def test_citation_style_api_validates_pages_and_exact_key_lookup(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
     from quirebase.library import citations
@@ -934,7 +934,7 @@ async def test_citation_text_preserves_unexpected_rendering_errors(async_db, mon
 async def test_citation_routes_enforce_custom_style_ownership(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 
@@ -980,7 +980,7 @@ async def test_citation_routes_enforce_custom_style_ownership(
 async def test_custom_styles_accessible_in_item_sections(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
-    from test_http import authenticated_async_client
+    from app_helpers import authenticated_async_client
 
     from quirebase.core.config import get_settings
 

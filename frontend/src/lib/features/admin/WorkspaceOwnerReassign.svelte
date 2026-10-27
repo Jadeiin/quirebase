@@ -12,7 +12,7 @@
 	import { adminUsersQuery, adminWorkspaceQuery } from '#lib/features/admin/queries.js';
 	import { isAdminUnavailableError } from './read-state.js';
 	import { invalidateWorkspaces } from '#lib/query/invalidation.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 
 	let {
 		workspace,
@@ -84,12 +84,10 @@
 		} catch (failure) {
 			if (failure instanceof ApiError && failure.code === 'version_conflict') {
 				reportError(
-					$t(
-						'Ownership changed. Review the refreshed owner and submit again. Your draft is preserved.'
-					)
+					$t`Ownership changed. Review the refreshed owner and submit again. Your draft is preserved.`
 				);
 				await queryClient.invalidateQueries({ queryKey: ['admin', 'workspaces'] });
-			} else reportError(apiErrorMessage(failure, $t('Workspace governance action failed')));
+			} else reportError(apiErrorMessage(failure, $t`Workspace governance action failed`));
 		} finally {
 			busy = false;
 		}
@@ -99,38 +97,36 @@
 <Panel class="min-w-0">
 	{#if detail.isError || detail.data === null}
 		<QueryError
-			message={apiErrorMessage(detail.error, $t('Unable to load workspaces.'))}
+			message={apiErrorMessage(detail.error, $t`Unable to load workspaces.`)}
 			busy={detail.isFetching}
 			onRetry={() => void detail.refetch()}
 		/>
 	{/if}
 	{#if current}
 		<form
-			aria-label={$t('Reassign owner for {workspace}', { workspace: current.name })}
+			aria-label={$t`Reassign owner for ${ph({ workspace: current.name })}`}
 			class="grid w-full min-w-0 grid-cols-1 gap-3"
 			onsubmit={reassign}
 		>
 			<h3 class="font-semibold">
-				{$t('Reassign owner for {workspace}', { workspace: current.name })}
+				{$t`Reassign owner for ${ph({ workspace: current.name })}`}
 			</h3>
 			<p class="text-xs break-all text-surface-600-400">{current.id}</p>
 			<p class="text-sm text-surface-600-400">
-				{$t(
-					'The selected user gains Workspace owner access. The previous owner becomes a Workspace admin. This does not disable the previous account.'
-				)}
+				{$t`The selected user gains Workspace owner access. The previous owner becomes a Workspace admin. This does not disable the previous account.`}
 			</p>
-			<p class="text-sm">{$t('Current owner: {username}', { username: current.owner_username })}</p>
+			<p class="text-sm">{$t`Current owner: ${ph({ username: current.owner_username })}`}</p>
 			{#if !current.can_reassign_owner}<Notice
-					>{$t('Owner reassignment is currently unavailable for this Workspace.')}</Notice
+					>{$t`Owner reassignment is currently unavailable for this Workspace.`}</Notice
 				>{/if}
 			{#if users.isError || users.data === null}<QueryError
-					message={apiErrorMessage(users.error, $t('Failed to load users'))}
+					message={apiErrorMessage(users.error, $t`Failed to load users`)}
 					busy={users.isFetching}
 					onRetry={() => void users.refetch()}
 				/>{/if}
 			<SearchSelect
-				label={$t('New owner')}
-				emptyLabel={$t('Search active users')}
+				label={$t`New owner`}
+				emptyLabel={$t`Search active users`}
 				bind:value={() => receiverId, selectReceiver}
 				bind:search
 				selectedLabel={selectedUser?.id === receiverId ? selectedUser.username : undefined}
@@ -144,10 +140,10 @@
 				required
 			/>
 			<p class="text-xs text-surface-600-400">
-				{$t('Showing up to 20 active users. Type to narrow the search.')}
+				{$t`Showing up to 20 active users. Type to narrow the search.`}
 			</p>
 			<label class="grid grid-cols-1 gap-1"
-				>{$t('Reason (at least 10 characters)')}
+				>{$t`Reason (at least 10 characters)`}
 				<textarea
 					class="input"
 					bind:value={reason}
@@ -163,10 +159,10 @@
 						!current.can_reassign_owner ||
 						!receiverId ||
 						receiverId === current.owner_id ||
-						reason.trim().length < 10}>{$t('Confirm owner reassignment')}</Button
+						reason.trim().length < 10}>{$t`Confirm owner reassignment`}</Button
 				>
-				<Button type="button" disabled={busy} onclick={onClose}>{$t('Cancel')}</Button>
+				<Button type="button" disabled={busy} onclick={onClose}>{$t`Cancel`}</Button>
 			</div>
 		</form>
-	{:else}<Button type="button" onclick={onClose}>{$t('Cancel')}</Button>{/if}
+	{:else}<Button type="button" onclick={onClose}>{$t`Cancel`}</Button>{/if}
 </Panel>

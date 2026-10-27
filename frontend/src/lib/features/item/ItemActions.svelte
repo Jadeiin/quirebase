@@ -29,7 +29,7 @@
 	import { itemFilesQuery, itemMetadataSourcesQuery } from '#lib/features/item/queries.js';
 	import { reconcileRevisionSelection } from '#lib/features/item/revision-selection.js';
 	import { invalidateLibrary, invalidateProject, invalidateTags } from '#lib/query/invalidation.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import {
@@ -179,10 +179,10 @@
 			if (isDownloadCancelled(reason)) return;
 			if (reason instanceof ApiError && reason.status === 409) {
 				await onchanged();
-				error = $t('This Item changed. Latest state was loaded; review it and explicitly retry.');
+				error = $t`This Item changed. Latest state was loaded; review it and explicitly retry.`;
 				return;
 			}
-			error = failure?.() ?? apiErrorMessage(reason, $t('Item action failed'));
+			error = failure?.() ?? apiErrorMessage(reason, $t`Item action failed`);
 		} finally {
 			busy = false;
 		}
@@ -194,7 +194,7 @@
 			downloadBibliographyText(citationCopy.text, citationInput.format);
 			citationCompleted = true;
 			error = '';
-			notice = $t('Bibliography downloaded');
+			notice = $t`Bibliography downloaded`;
 			return;
 		}
 		const input = citationInput ?? {
@@ -203,16 +203,19 @@
 			parameters: bibliographyParameters()
 		};
 		citationInput = input;
-		void action(async () => {
-			await workspaceContext.api.downloadGet(
-				'/workspaces/{workspace_id}/items/{item_id}/bibliography',
-				{
-					params: { path: { item_id: input.itemId }, query: input.parameters }
-				},
-				{ suggestedName: bibliographyFilename(input.format) }
-			);
-			citationCompleted = true;
-		}, $t('Bibliography downloaded'));
+		void action(
+			async () => {
+				await workspaceContext.api.downloadGet(
+					'/workspaces/{workspace_id}/items/{item_id}/bibliography',
+					{
+						params: { path: { item_id: input.itemId }, query: input.parameters }
+					},
+					{ suggestedName: bibliographyFilename(input.format) }
+				);
+				citationCompleted = true;
+			},
+			$t`Bibliography downloaded`
+		);
 	}
 
 	function copyBibliography() {
@@ -241,10 +244,10 @@
 				);
 				citationCompleted = true;
 			},
-			$t('Copied to clipboard'),
+			$t`Copied to clipboard`,
 			() =>
 				citationCopy.text !== null
-					? $t('Clipboard access was denied. Copy the citation text below or download it.')
+					? $t`Clipboard access was denied. Copy the citation text below or download it.`
 					: undefined
 		);
 	}
@@ -276,37 +279,43 @@
 					},
 					{ suggestedName: archiveFilename() }
 				),
-			$t('Document bundle downloaded')
+			$t`Document bundle downloaded`
 		);
 	}
 
 	function synchronize(provider: string, uid: string) {
 		if (!sources.data) return;
 		const expectedVersion = sources.data.version;
-		void action(async () => {
-			await workspaceContext.api.request(
-				'POST',
-				'/workspaces/{workspace_id}/items/{item_id}/metadata/sync',
-				{
-					params: { path: { item_id: itemId } },
-					body: { expected_version: expectedVersion, provider, uid }
-				}
-			);
-			await onchanged();
-		}, $t('Metadata synchronized'));
+		void action(
+			async () => {
+				await workspaceContext.api.request(
+					'POST',
+					'/workspaces/{workspace_id}/items/{item_id}/metadata/sync',
+					{
+						params: { path: { item_id: itemId } },
+						body: { expected_version: expectedVersion, provider, uid }
+					}
+				);
+				await onchanged();
+			},
+			$t`Metadata synchronized`
+		);
 	}
 
 	function regenerateCitationKey() {
-		void action(async () => {
-			await workspaceContext.api.request(
-				'POST',
-				'/workspaces/{workspace_id}/items/{item_id}/citation-key/regenerate',
-				{
-					params: { path: { item_id: itemId } }
-				}
-			);
-			await onchanged();
-		}, $t('Citation key updated'));
+		void action(
+			async () => {
+				await workspaceContext.api.request(
+					'POST',
+					'/workspaces/{workspace_id}/items/{item_id}/citation-key/regenerate',
+					{
+						params: { path: { item_id: itemId } }
+					}
+				);
+				await onchanged();
+			},
+			$t`Citation key updated`
+		);
 	}
 
 	function deleteItem() {
@@ -321,18 +330,21 @@
 		const destination = libraryReturnHref(workspaceId, page.url.searchParams, {
 			deletedItemId
 		});
-		void action(async () => {
-			await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
-				params: { path: { item_id: deletedItemId } }
-			});
-			// Deletion also removes the Item from its Projects, changing their
-			// counts, lists and reader sources.
-			await Promise.all([
-				invalidateTags(queryClient, workspaceId),
-				invalidateProject(queryClient, workspaceId)
-			]);
-			if (mounted && page.url === originUrl) await goto(resolve(destination));
-		}, $t('Item deleted'));
+		void action(
+			async () => {
+				await workspaceContext.api.request('DELETE', '/workspaces/{workspace_id}/items/{item_id}', {
+					params: { path: { item_id: deletedItemId } }
+				});
+				// Deletion also removes the Item from its Projects, changing their
+				// counts, lists and reader sources.
+				await Promise.all([
+					invalidateTags(queryClient, workspaceId),
+					invalidateProject(queryClient, workspaceId)
+				]);
+				if (mounted && page.url === originUrl) await goto(resolve(destination));
+			},
+			$t`Item deleted`
+		);
 	}
 
 	function copyItem() {
@@ -343,20 +355,23 @@
 			)
 		)
 			return;
-		void action(async () => {
-			const copied = await workspaceContext.api.request(
-				'POST',
-				'/workspaces/{workspace_id}/items/{item_id}/copy',
-				{
-					params: { path: { item_id: itemId } },
-					body: { target_workspace_id: targetWorkspaceId }
-				}
-			);
-			await invalidateLibrary(queryClient, copied.target_workspace_id);
-			copiedItemUrl = resolve(
-				workspaceHref(copied.target_workspace_id, `item/${copied.target_item_id}`)
-			);
-		}, $t('Item copied to Workspace'));
+		void action(
+			async () => {
+				const copied = await workspaceContext.api.request(
+					'POST',
+					'/workspaces/{workspace_id}/items/{item_id}/copy',
+					{
+						params: { path: { item_id: itemId } },
+						body: { target_workspace_id: targetWorkspaceId }
+					}
+				);
+				await invalidateLibrary(queryClient, copied.target_workspace_id);
+				copiedItemUrl = resolve(
+					workspaceHref(copied.target_workspace_id, `item/${copied.target_item_id}`)
+				);
+			},
+			$t`Item copied to Workspace`
+		);
 	}
 </script>
 
@@ -372,23 +387,23 @@
 					`pdf/${overview.latest_revision_id}`,
 					readLibraryReturnTo(workspaceId, page.url.searchParams)
 				)
-			)}>{$t('Read PDF')}</Button
+			)}>{$t`Read PDF`}</Button
 		>{#if can(overview.authorization, 'workspace.export')}<Button
 				class="inline-flex items-center gap-2"
-				onclick={() => show('documents')}><Icon name="download" /> {$t('Download')}</Button
+				onclick={() => show('documents')}><Icon name="download" /> {$t`Download`}</Button
 			>{/if}{/if}
 	{#if can(overview.authorization, 'workspace.export')}<Button onclick={() => show('citation')}
-			>{$t('Export')}</Button
+			>{$t`Export`}</Button
 		>{/if}
 	{#if can(overview.authorization, 'item.update')}<Button onclick={() => show('sources')}
-			>{$t('Record tools')}</Button
+			>{$t`Record tools`}</Button
 		>{/if}
 	{#if copyDestinations.length}<Button variant="tonal" onclick={() => show('copy')}
-			>{$t('Copy to Workspace')}</Button
+			>{$t`Copy to Workspace`}</Button
 		>{/if}
 	{#if can(overview.authorization, 'item.delete')}<Button
 			class="inline-flex items-center gap-2"
-			onclick={() => show('danger')}><Icon name="more" /> {$t('More')}</Button
+			onclick={() => show('danger')}><Icon name="more" /> {$t`More`}</Button
 		>{/if}
 </div>
 
@@ -405,7 +420,7 @@
 				class="grid max-h-[min(46rem,calc(100dvh-2rem))] w-full max-w-3xl grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-container border border-surface-300-700 bg-surface-50-950 shadow-2xl"
 			>
 				<header class="flex items-center justify-between border-b border-surface-300-700 px-5 py-4">
-					<Dialog.Title class="text-lg font-bold">{$t('Item actions')}</Dialog.Title>
+					<Dialog.Title class="text-lg font-bold">{$t`Item actions`}</Dialog.Title>
 					<DialogCloseButton disabled={busy} />
 				</header>
 				<Tabs
@@ -415,37 +430,37 @@
 					}}
 					class="grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]"
 				>
-					<Tabs.List class="mb-0 overflow-x-auto px-3 pt-2" aria-label={$t('Item actions')}>
+					<Tabs.List class="mb-0 overflow-x-auto px-3 pt-2" aria-label={$t`Item actions`}>
 						<Tabs.Indicator class="bg-primary-700-300" />
 						<Tabs.Trigger
 							class="whitespace-nowrap data-selected:text-primary-800-200"
-							value="citation">{$t('Citation')}</Tabs.Trigger
+							value="citation">{$t`Citation`}</Tabs.Trigger
 						>
 
 						{#if copyDestinations.length}
 							<Tabs.Trigger
 								class="whitespace-nowrap data-selected:text-primary-800-200"
-								value="copy">{$t('Copy')}</Tabs.Trigger
+								value="copy">{$t`Copy`}</Tabs.Trigger
 							>
 						{/if}
 
 						{#if overview.latest_revision_id && can(overview.authorization, 'workspace.export')}
 							<Tabs.Trigger
 								class="whitespace-nowrap data-selected:text-primary-800-200"
-								value="documents">{$t('Documents')}</Tabs.Trigger
+								value="documents">{$t`Documents`}</Tabs.Trigger
 							>
 						{/if}
 
 						{#if can(overview.authorization, 'item.update')}
 							<Tabs.Trigger
 								class="whitespace-nowrap data-selected:text-primary-800-200"
-								value="sources">{$t('Metadata sources')}</Tabs.Trigger
+								value="sources">{$t`Metadata sources`}</Tabs.Trigger
 							>
 						{/if}
 
 						{#if can(overview.authorization, 'item.delete')}
 							<Tabs.Trigger class="whitespace-nowrap text-error-700-300" value="danger"
-								>{$t('Danger zone')}</Tabs.Trigger
+								>{$t`Danger zone`}</Tabs.Trigger
 							>
 						{/if}
 					</Tabs.List>
@@ -456,13 +471,13 @@
 							{#if open && section === 'citation'}
 								<div class="grid grid-cols-1 gap-3">
 									<div>
-										<h2>{$t('Export bibliography')}</h2>
+										<h2>{$t`Export bibliography`}</h2>
 										<p class="text-surface-600-400">
-											{$t('Uses your Account export settings.')}
+											{$t`Uses your Account export settings.`}
 										</p>
 									</div>
 									<label
-										>{$t('Format')}<select
+										>{$t`Format`}<select
 											class="select"
 											bind:value={format}
 											disabled={busy || citationInput !== null}
@@ -474,7 +489,7 @@
 									>
 									{#if citationCopy.text !== null}
 										<label class="grid grid-cols-1 gap-1"
-											>{$t('Citation text')}<textarea
+											>{$t`Citation text`}<textarea
 												class="textarea min-h-40"
 												readonly
 												value={citationCopy.text}></textarea></label
@@ -482,17 +497,16 @@
 									{/if}
 									<div class="flex flex-wrap gap-2">
 										{#if citationInput}<Button disabled={busy} onclick={changeCitationOptions}
-												>{$t('Change options')}</Button
+												>{$t`Change options`}</Button
 											>{/if}
 										<Button variant="filled" disabled={busy} onclick={downloadBibliography}
-											>{$t('Download file')}</Button
+											>{$t`Download file`}</Button
 										>
 
 										<Button disabled={busy} onclick={copyBibliography}
-											>{$t('Copy to clipboard')}</Button
+											>{$t`Copy to clipboard`}</Button
 										>
-										<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button
-										>
+										<Button onclick={() => goto(resolve('account'))}>{$t`Export settings`}</Button>
 									</div>
 								</div>
 							{/if}
@@ -500,14 +514,14 @@
 						<Tabs.Content value="copy">
 							{#if open && section === 'copy'}
 								<div class="grid max-w-xl grid-cols-1 gap-3">
-									<h2>{$t('Copy to another Workspace')}</h2>
+									<h2>{$t`Copy to another Workspace`}</h2>
 									<p class="text-surface-600-400">
-										{$t('Creates an Item copy in the target Workspace.')}
+										{$t`Creates an Item copy in the target Workspace.`}
 									</p>
 									<SearchSelect
-										label={$t('Target Workspace')}
+										label={$t`Target Workspace`}
 										bind:value={targetWorkspaceId}
-										emptyLabel={$t('Choose a Workspace')}
+										emptyLabel={$t`Choose a Workspace`}
 										disabled={busy}
 										options={copyDestinations.map(
 											(target: ItemOverviewView['copy_targets'][number]) => ({
@@ -520,9 +534,8 @@
 										<Button
 											variant="filled"
 											disabled={busy || !targetWorkspaceId}
-											onclick={copyItem}>{$t('Create copy')}</Button
-										>{#if copiedItemUrl}<Button as="a" href={copiedItemUrl}
-												>{$t('Open copy')}</Button
+											onclick={copyItem}>{$t`Create copy`}</Button
+										>{#if copiedItemUrl}<Button as="a" href={copiedItemUrl}>{$t`Open copy`}</Button
 											>{/if}
 									</div>
 								</div>
@@ -532,9 +545,9 @@
 							{#if open && section === 'documents'}
 								<div class="grid grid-cols-1 gap-3">
 									<div>
-										<h2>{$t('Download documents')}</h2>
+										<h2>{$t`Download documents`}</h2>
 										<p class="text-surface-600-400">
-											{$t('Choose PDF revisions to download.')}
+											{$t`Choose PDF revisions to download.`}
 										</p>
 									</div>
 									{#each revisions as revision (revision.id)}<label
@@ -553,37 +566,32 @@
 											></label
 										>{/each}
 									{#if files.isError}<QueryError
-											message={apiErrorMessage(files.error, $t('Unable to load documents.'))}
+											message={apiErrorMessage(files.error, $t`Unable to load documents.`)}
 											busy={files.isFetching}
 											onRetry={() => void files.refetch()}
 										/>{:else if files.isPaused}<QueryError
-											message={$t('Unable to load documents.')}
+											message={$t`Unable to load documents.`}
 											busy={false}
 											onRetry={() => void files.refetch()}
-										/>{:else if files.isPending}<LoadingState label={$t('Loading documents…')} />
+										/>{:else if files.isPending}<LoadingState label={$t`Loading documents…`} />
 									{:else if revisions.length === 0}<p>
-											{$t('No PDF revisions available.')}
+											{$t`No PDF revisions available.`}
 										</p>{/if}
 									<p class="text-sm text-surface-600-400">
-										{$t('Annotations: {state}', {
-											state: preferences.document.includeAnnotations
-												? $t('included')
-												: $t('excluded')
-										})}
-										· {$t('Supplements: {state}', {
-											state: preferences.document.includeSupplements
-												? $t('included')
-												: $t('excluded')
-										})}
+										{$t`Annotations: ${ph({
+											state: preferences.document.includeAnnotations ? $t`included` : $t`excluded`
+										})}`}
+										· {$t`Supplements: ${ph({
+											state: preferences.document.includeSupplements ? $t`included` : $t`excluded`
+										})}`}
 									</p>
 									<div class="flex flex-wrap gap-2">
 										<Button
 											variant="filled"
 											disabled={busy || !documentsAvailable || selectedRevisionIds.length === 0}
-											onclick={downloadDocuments}>{$t('Download bundle')}</Button
+											onclick={downloadDocuments}>{$t`Download bundle`}</Button
 										>
-										<Button onclick={() => goto(resolve('account'))}>{$t('Export settings')}</Button
-										>
+										<Button onclick={() => goto(resolve('account'))}>{$t`Export settings`}</Button>
 									</div>
 								</div>
 							{/if}
@@ -592,21 +600,21 @@
 							{#if open && section === 'sources'}
 								<div class="grid grid-cols-1 gap-3">
 									<div>
-										<h2>{$t('Metadata sources')}</h2>
+										<h2>{$t`Metadata sources`}</h2>
 										<p class="text-surface-600-400">
-											{$t('Update metadata using an identifier.')}
+											{$t`Update metadata using an identifier.`}
 										</p>
 									</div>
 									{#if sources.isPending}
-										<p>{$t('Loading…')}</p>
+										<p>{$t`Loading…`}</p>
 									{:else if sources.isError}
 										<Notice variant="error"
 											>{apiErrorMessage(
 												sources.error,
-												$t('Could not load metadata sources.')
+												$t`Could not load metadata sources.`
 											)}</Notice
 										>
-										<Button onclick={() => sources.refetch()}>{$t('Retry')}</Button>
+										<Button onclick={() => sources.refetch()}>{$t`Retry`}</Button>
 									{:else}
 										{#if doiSource}<div
 												class="grid grid-cols-1 gap-3 rounded-lg border border-surface-300-700 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
@@ -620,9 +628,9 @@
 													<select
 														class="select h-8 w-auto min-w-36"
 														bind:value={doiProvider}
-														aria-label={$t('Provider')}
+														aria-label={$t`Provider`}
 													>
-														<option value="auto">{$t('Auto detect')}</option>
+														<option value="auto">{$t`Auto detect`}</option>
 														{#each doiProviders as choice (choice.id)}
 															<option value={choice.id}>{choice.name}</option>
 														{/each}
@@ -630,7 +638,7 @@
 													<Button
 														disabled={busy}
 														onclick={() => synchronize(doiProvider, doiSource!.value)}
-														>{$t('Autoupdate')}</Button
+														>{$t`Autoupdate`}</Button
 													>
 												</div>
 											</div>{/if}
@@ -647,14 +655,14 @@
 														disabled={busy}
 														onclick={() =>
 															synchronize(identifier.providers[0].id, identifier.value)}
-														>{$t('Autoupdate')}</Button
+														>{$t`Autoupdate`}</Button
 													>
 												{/if}
 											</div>{/each}
 									{/if}
 									<div class="border-t border-surface-300-700 pt-4">
 										<Button disabled={busy} onclick={regenerateCitationKey}
-											>{$t('Regenerate citation key')}</Button
+											>{$t`Regenerate citation key`}</Button
 										>
 									</div>
 								</div>
@@ -664,29 +672,27 @@
 							{#if open && section === 'danger'}
 								<div class="grid grid-cols-1 gap-3">
 									<div>
-										<h2 class="text-error-700-300">{$t('Delete Item')}</h2>
+										<h2 class="text-error-700-300">{$t`Delete Item`}</h2>
 										<p class="text-surface-600-400">
-											{$t(
-												'Associated files, annotations, and assignments of this Item to Projects will also be removed.'
-											)}
+											{$t`Associated files, annotations, and assignments of this Item to Projects will also be removed.`}
 										</p>
 									</div>
 									{#if deleteArmed}
 										<p class="text-sm text-error-700-300" role="alert">
-											{$t('This cannot be undone. Delete this Item permanently?')}
+											{$t`This cannot be undone. Delete this Item permanently?`}
 										</p>
 										<div class="flex flex-wrap gap-2">
 											<Button disabled={busy} onclick={() => (deleteArmed = false)}
-												>{$t('Cancel')}</Button
+												>{$t`Cancel`}</Button
 											>
 
 											<Button variant="danger-filled" disabled={busy} onclick={confirmDeleteItem}
-												>{$t('Delete Item permanently')}</Button
+												>{$t`Delete Item permanently`}</Button
 											>
 										</div>
 									{:else}
 										<Button variant="danger" disabled={busy} onclick={deleteItem}
-											>{$t('Delete Item permanently')}</Button
+											>{$t`Delete Item permanently`}</Button
 										>
 									{/if}
 								</div>

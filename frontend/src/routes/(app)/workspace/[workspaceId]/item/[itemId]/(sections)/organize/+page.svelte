@@ -14,7 +14,7 @@
 	import { itemOrganizeQuery } from '#lib/features/item/queries.js';
 	import type { OrganizeView } from '#lib/features/item/types.js';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();
@@ -26,9 +26,9 @@
 	async function trackTagRecommendations(workflowId: string) {
 		await workflows.track(workflowId, {
 			workspaceId: params.workspaceId,
-			label: $t('Tag recommendation'),
-			successMessage: msg('Tag recommendations updated'),
-			failureMessage: msg('Tag recommendation failed')
+			label: $t`Tag recommendation`,
+			successMessage: msg`Tag recommendations updated`,
+			failureMessage: msg`Tag recommendation failed`
 		}).settled;
 	}
 
@@ -63,7 +63,7 @@
 	function track(promise: Promise<unknown>) {
 		mutationError = '';
 		void promise.catch((error) => {
-			mutationError = apiErrorMessage(error, $t('Unable to save changes'));
+			mutationError = apiErrorMessage(error, $t`Unable to save changes`);
 		});
 	}
 
@@ -73,7 +73,7 @@
 			await projectAssignment.mutateAsync({ project });
 			return true;
 		} catch (reason) {
-			mutationError = apiErrorMessage(reason, $t('Unable to save changes'));
+			mutationError = apiErrorMessage(reason, $t`Unable to save changes`);
 			return false;
 		}
 	}

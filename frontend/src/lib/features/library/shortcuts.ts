@@ -1,6 +1,6 @@
 /* eslint-disable lingui/no-unlocalized-strings -- Hotkey grammar and DOM selectors are machine-readable; UI labels use msg. */
 import type { HotkeyChord } from '@tanstack/svelte-hotkeys';
-import { msg } from '#lib/i18n.js';
+import { msg } from '@lingui/core/macro';
 
 function key(hotkey: HotkeyChord, character = false) {
 	return { hotkey, character };
@@ -10,42 +10,42 @@ function key(hotkey: HotkeyChord, character = false) {
 export const libraryRowCommands = [
 	{
 		id: 'previous',
-		label: msg('Previous Item'),
+		label: msg`Previous Item`,
 		keys: [key('ArrowUp'), key('K', true)],
 		repeat: true
 	},
-	{ id: 'next', label: msg('Next Item'), keys: [key('ArrowDown'), key('J', true)], repeat: true },
-	{ id: 'first', label: msg('First Item on this page'), keys: [key('Home')], repeat: true },
-	{ id: 'last', label: msg('Last Item on this page'), keys: [key('End')], repeat: true },
-	{ id: 'extendUp', label: msg('Extend selection up'), keys: [key('Shift+ArrowUp')], repeat: true },
+	{ id: 'next', label: msg`Next Item`, keys: [key('ArrowDown'), key('J', true)], repeat: true },
+	{ id: 'first', label: msg`First Item on this page`, keys: [key('Home')], repeat: true },
+	{ id: 'last', label: msg`Last Item on this page`, keys: [key('End')], repeat: true },
+	{ id: 'extendUp', label: msg`Extend selection up`, keys: [key('Shift+ArrowUp')], repeat: true },
 	{
 		id: 'extendDown',
-		label: msg('Extend selection down'),
+		label: msg`Extend selection down`,
 		keys: [key('Shift+ArrowDown')],
 		repeat: true
 	},
 	{
 		id: 'toggle',
-		label: msg('Select or unselect current Item'),
+		label: msg`Select or unselect current Item`,
 		keys: [key('X', true)],
 		repeat: false
 	},
 	{
 		id: 'only',
-		label: msg('Select only current Item'),
+		label: msg`Select only current Item`,
 		keys: [key('Shift+X', true)],
 		repeat: false
 	},
-	{ id: 'all', label: msg('Select this page'), keys: [key('Mod+A')], repeat: false },
+	{ id: 'all', label: msg`Select this page`, keys: [key('Mod+A')], repeat: false },
 	{
 		id: 'preview',
-		label: msg('Preview current Item'),
+		label: msg`Preview current Item`,
 		keys: [key('I', true), key('Enter')],
 		repeat: false
 	},
 	{
 		id: 'actions',
-		label: msg('Open Item actions'),
+		label: msg`Open Item actions`,
 		keys: [key('Shift+F10')],
 		repeat: false
 	}
@@ -56,19 +56,19 @@ export type LibraryRowCommand = (typeof libraryRowCommands)[number]['id'];
 export const libraryPreviewCommands = [
 	{
 		id: 'previous',
-		label: msg('Previous Item in preview'),
+		label: msg`Previous Item in preview`,
 		keys: [key('ArrowUp'), key('K', true)],
 		repeat: true
 	},
 	{
 		id: 'next',
-		label: msg('Next Item in preview'),
+		label: msg`Next Item in preview`,
 		keys: [key('ArrowDown'), key('J', true)],
 		repeat: true
 	},
 	{
 		id: 'actions',
-		label: msg('Open Item actions'),
+		label: msg`Open Item actions`,
 		keys: [key('Shift+F10')],
 		repeat: false
 	}

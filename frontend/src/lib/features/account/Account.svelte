@@ -12,7 +12,9 @@
 	import ExportPreferences from '#lib/features/account/ExportPreferences.svelte';
 	import { accountQuery } from '#lib/features/account/queries.js';
 	import { dateFormat, dateTimeFormat } from '#lib/format.js';
-	import { activeLocale, msg, setLocale, t, type MessageKey } from '#lib/i18n.js';
+	import { activeLocale, setLocale } from '#lib/locale.js';
+	import { msg, plural, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 	import { SUPPORTED_LOCALES, type Locale } from '#lib/locale.js';
 	import Button from '#lib/design/Button.svelte';
 
@@ -27,7 +29,7 @@
 	let externalOrigin = $state('');
 	let sidebarCollapsed = $state(false);
 	let error = $state('');
-	let notice = $state<MessageKey | null>(null);
+	let notice = $state<MessageDescriptor | null>(null);
 	let busy = $state(false);
 	const account = createQuery(() => accountQuery());
 
@@ -42,7 +44,7 @@
 
 	async function mutate(
 		operation: () => Promise<unknown>,
-		success: MessageKey,
+		success: MessageDescriptor,
 		form?: HTMLFormElement
 	) {
 		busy = true;
@@ -54,7 +56,7 @@
 			form?.reset();
 			notice = success;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Account action failed'));
+			error = apiErrorMessage(reason, $t`Account action failed`);
 		} finally {
 			busy = false;
 		}
@@ -69,7 +71,7 @@
 			await operation();
 			location.assign('/');
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Account action failed'));
+			error = apiErrorMessage(reason, $t`Account action failed`);
 		} finally {
 			busy = false;
 		}
@@ -87,7 +89,7 @@
 			tokenName = '';
 			await account.refetch();
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to create token'));
+			error = apiErrorMessage(reason, $t`Unable to create token`);
 		} finally {
 			busy = false;
 		}
@@ -105,18 +107,21 @@
 						new_password: String(values.get('new_password') ?? '')
 					}
 				}),
-			msg('Password changed'),
+			msg`Password changed`,
 			form
 		);
 	}
 
 	function revokeToken(tokenId: string) {
-		void mutate(async () => {
-			await apiRequest('DELETE', '/account/api-tokens/{token_id}', {
-				params: { path: { token_id: tokenId } }
-			});
-			if (createdToken?.id === tokenId) createdToken = null;
-		}, msg('API Token revoked'));
+		void mutate(
+			async () => {
+				await apiRequest('DELETE', '/account/api-tokens/{token_id}', {
+					params: { path: { token_id: tokenId } }
+				});
+				if (createdToken?.id === tokenId) createdToken = null;
+			},
+			msg`API Token revoked`
+		);
 	}
 
 	function revokeSession(sessionId: string, current: boolean) {
@@ -133,7 +138,7 @@
 				apiRequest('DELETE', '/account/sessions/{session_id}', {
 					params: { path: { session_id: sessionId } }
 				}),
-			msg('Session revoked')
+			msg`Session revoked`
 		);
 	}
 
@@ -149,22 +154,22 @@
 <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
 	<div>
 		<p class="mb-2 text-xs font-bold tracking-[0.12em] text-primary-700-300 uppercase">
-			{$t('Personal settings')}
+			{$t`Personal settings`}
 		</p>
-		<h1 class="mb-2">{$t('Account')}</h1>
-		<p class="mb-0 text-surface-600-400">{$t('Sessions, API Tokens, locale, and password.')}</p>
+		<h1 class="mb-2">{$t`Account`}</h1>
+		<p class="mb-0 text-surface-600-400">{$t`Sessions, API Tokens, locale, and password.`}</p>
 	</div>
-	<Button disabled={busy} onclick={logout}>{$t('Sign out')}</Button>
+	<Button disabled={busy} onclick={logout}>{$t`Sign out`}</Button>
 </div>
 {#if error}<Notice variant="error">{error}</Notice>{/if}
 {#if notice}<Notice variant="success">{$t(notice)}</Notice>{/if}
 {#if account.isError}<QueryError
-		message={apiErrorMessage(account.error, $t('Unable to load account.'))}
+		message={apiErrorMessage(account.error, $t`Unable to load account.`)}
 		busy={account.isFetching}
 		onRetry={() => void account.refetch()}
 	/>{/if}
 {#if account.isPending}
-	<p class="text-surface-600-400">{$t('Loading account…')}</p>
+	<p class="text-surface-600-400">{$t`Loading account…`}</p>
 {:else if account.data}
 	<Panel class="mb-4 flex flex-wrap items-center justify-between gap-4">
 		<div class="flex min-w-0 items-center gap-3">
@@ -177,7 +182,7 @@
 				<p class="m-0 text-sm text-surface-600-400">{$t(domainLabel(account.data.user.role))}</p>
 			</div>
 		</div>
-		<Badge>{$t('Signed in')}</Badge>
+		<Badge>{$t`Signed in`}</Badge>
 	</Panel>
 	<div
 		class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]"
@@ -185,17 +190,17 @@
 		<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 			<Panel class="grid grid-cols-1 gap-3">
 				<div>
-					<h2>{$t('Preferences')}</h2>
+					<h2>{$t`Preferences`}</h2>
 					<p class="mb-0 text-sm text-surface-600-400">
-						{$t('Language and navigation preferences.')}
+						{$t`Language and navigation preferences.`}
 					</p>
 				</div>
 				<label
-					>{$t('Language')}<select
+					>{$t`Language`}<select
 						class="select"
 						value={$activeLocale}
 						onchange={(event) => setLocale(event.currentTarget.value)}
-						aria-label={$t('Locale')}
+						aria-label={$t`Locale`}
 						>{#each SUPPORTED_LOCALES as locale (locale)}<option value={locale} lang={locale}
 								>{localeLabels[locale]}</option
 							>{/each}</select
@@ -204,22 +209,22 @@
 				<label class="flex items-start gap-2 border-t border-surface-300-700 pt-4">
 					<input type="checkbox" bind:checked={sidebarCollapsed} onchange={saveSidebarPreference} />
 					<span
-						><strong>{$t('Collapse navigation sidebar by default')}</strong><small
-							class="block text-surface-600-400">{$t('More space for reading.')}</small
+						><strong>{$t`Collapse navigation sidebar by default`}</strong><small
+							class="block text-surface-600-400">{$t`More space for reading.`}</small
 						></span
 					>
 				</label>
 			</Panel>
 			<Panel class="grid grid-cols-1 gap-3">
 				<div>
-					<h2>{$t('Password')}</h2>
+					<h2>{$t`Password`}</h2>
 					<p class="mb-0 text-sm text-surface-600-400">
-						{$t('Use at least 12 characters.')}
+						{$t`Use at least 12 characters.`}
 					</p>
 				</div>
 				<form class="grid grid-cols-1 gap-3" onsubmit={changePassword}>
 					<label
-						>{$t('Current password')}<input
+						>{$t`Current password`}<input
 							class="input"
 							name="current_password"
 							type="password"
@@ -228,7 +233,7 @@
 						/></label
 					>
 					<label
-						>{$t('New password')}<input
+						>{$t`New password`}<input
 							class="input"
 							name="new_password"
 							type="password"
@@ -238,7 +243,7 @@
 						/></label
 					>
 					<div>
-						<Button variant="filled" disabled={busy}>{$t('Change password')}</Button>
+						<Button variant="filled" disabled={busy}>{$t`Change password`}</Button>
 					</div>
 				</form>
 			</Panel>
@@ -247,14 +252,15 @@
 			<Panel class="grid min-w-0 grid-cols-1 gap-3">
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div>
-						<h2 class="mb-1">{$t('Sessions')}</h2>
+						<h2 class="mb-1">{$t`Sessions`}</h2>
 						<p class="mb-0 text-sm text-surface-600-400">
-							{$t('{count, plural, one {# active session} other {# active sessions}}', {
-								count: account.data.sessions.length
-							})}
+							{$plural(
+								{ count: account.data.sessions.length },
+								{ one: '# active session', other: '# active sessions' }
+							)}
 						</p>
 					</div>
-					<Button disabled={busy} onclick={revokeAllSessions}>{$t('Revoke all sessions')}</Button>
+					<Button disabled={busy} onclick={revokeAllSessions}>{$t`Revoke all sessions`}</Button>
 				</div>
 				<div class="divide-y divide-surface-300-700">
 					{#each account.data.sessions as session (session.id)}
@@ -262,13 +268,13 @@
 							class="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
 						>
 							<div class="min-w-0">
-								<strong>{session.current ? $t('Current session') : $t('Session')}</strong>
+								<strong>{session.current ? $t`Current session` : $t`Session`}</strong>
 								<p class="m-0 text-sm text-surface-600-400">
-									{$t('Created')}
+									{$t`Created`}
 									{$dateTimeFormat.format(new Date(session.created_at))}
 								</p>
 								<p class="m-0 text-xs text-surface-600-400">
-									{$t('Expires')}
+									{$t`Expires`}
 									{$dateTimeFormat.format(new Date(session.expires_at))}
 								</p>
 							</div>
@@ -276,19 +282,19 @@
 								class="shrink-0"
 								disabled={busy}
 								onclick={() => revokeSession(session.id, session.current)}
-								>{session.current ? $t('Revoke current session') : $t('Revoke session')}</Button
+								>{session.current ? $t`Revoke current session` : $t`Revoke session`}</Button
 							>
 						</div>
 					{:else}
-						<p class="text-surface-600-400">{$t('No sessions.')}</p>
+						<p class="text-surface-600-400">{$t`No sessions.`}</p>
 					{/each}
 				</div>
 			</Panel>
 			<Panel class="grid min-w-0 grid-cols-1 gap-3 overflow-hidden">
 				<div>
-					<h2 class="mb-1">{$t('API Tokens')}</h2>
+					<h2 class="mb-1">{$t`API Tokens`}</h2>
 					<p class="mb-0 text-sm text-surface-600-400">
-						{$t('Create revocable credentials for API and MCP clients.')}
+						{$t`Create revocable credentials for API and MCP clients.`}
 					</p>
 				</div>
 				<form
@@ -301,15 +307,15 @@
 					<input
 						class="input grow basis-64"
 						bind:value={tokenName}
-						placeholder={$t('Token name')}
+						placeholder={$t`Token name`}
 						required
 					/>
-					<select class="select" bind:value={tokenDays} aria-label={$t('Expires after')}>
-						<option value={7}>{$t('7 days')}</option><option value={30}>{$t('30 days')}</option
-						><option value={90}>{$t('90 days')}</option><option value={365}>{$t('365 days')}</option
-						>
+					<select class="select" bind:value={tokenDays} aria-label={$t`Expires after`}>
+						<option value={7}>{$t`7 days`}</option><option value={30}>{$t`30 days`}</option><option
+							value={90}>{$t`90 days`}</option
+						><option value={365}>{$t`365 days`}</option>
 					</select>
-					<Button variant="filled" disabled={busy}>{$t('Create')}</Button>
+					<Button variant="filled" disabled={busy}>{$t`Create`}</Button>
 				</form>
 				{#if createdToken}
 					<Notice
@@ -317,7 +323,7 @@
 						variant="warning"
 						class="grid min-w-0 grid-cols-1 gap-2 [overflow-wrap:anywhere]"
 					>
-						<strong>{$t('Copy this token now')}</strong><code>{createdToken.token}</code>
+						<strong>{$t`Copy this token now`}</strong><code>{createdToken.token}</code>
 					</Notice>
 				{/if}
 				{#each account.data.api_tokens as token (token.id)}
@@ -327,34 +333,32 @@
 						<div class="min-w-0">
 							<strong class="block truncate">{token.name}</strong><span
 								class="text-sm text-surface-600-400"
-								>{$t(domainLabel(token.status))} · {$t('Expires')}
+								>{$t(domainLabel(token.status))} · {$t`Expires`}
 								{$dateFormat.format(new Date(token.expires_at))}</span
 							>
 						</div>
 						<Button class="shrink-0" disabled={busy} onclick={() => revokeToken(token.id)}
-							>{$t('Revoke token')}</Button
+							>{$t`Revoke token`}</Button
 						>
 					</div>
 				{:else}
-					<p class="text-surface-600-400">{$t('No API Tokens.')}</p>
+					<p class="text-surface-600-400">{$t`No API Tokens.`}</p>
 				{/each}
 				<details class="mt-2 min-w-0 border-t border-surface-300-700 pt-4">
-					<summary class="cursor-pointer font-semibold">{$t('Client connection guide')}</summary>
+					<summary class="cursor-pointer font-semibold">{$t`Client connection guide`}</summary>
 					<div class="mt-4 min-w-0">
-						<h3>{$t('Connect an HTTP API client')}</h3>
+						<h3>{$t`Connect an HTTP API client`}</h3>
 						<p class="text-sm text-surface-600-400">
-							{$t(
-								'Use the versioned JSON API and send your API Token in the Authorization header.'
-							)}
+							{$t`Use the versioned JSON API and send your API Token in the Authorization header.`}
 						</p>
 						<dl
 							class="grid min-w-0 grid-cols-1 gap-x-3 gap-y-2 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]"
 						>
-							<dt class="text-surface-600-400">{$t('Base endpoint')}</dt>
+							<dt class="text-surface-600-400">{$t`Base endpoint`}</dt>
 							<dd class="m-0 min-w-0 break-all">
 								<code class="whitespace-normal">{externalOrigin}/api/v1</code>
 							</dd>
-							<dt class="text-surface-600-400">{$t('OpenAPI')}</dt>
+							<dt class="text-surface-600-400">{$t`OpenAPI`}</dt>
 							<dd class="m-0 min-w-0 break-all">
 								<button
 									type="button"
@@ -363,7 +367,7 @@
 									><code class="whitespace-normal">{externalOrigin}/docs</code></button
 								>
 							</dd>
-							<dt class="text-surface-600-400">{$t('Header')}</dt>
+							<dt class="text-surface-600-400">{$t`Header`}</dt>
 							<dd class="m-0 min-w-0 break-all">
 								<code class="whitespace-normal">Authorization: Bearer YOUR_API_TOKEN</code>
 							</dd>
@@ -377,9 +381,9 @@
 							></pre>
 					</div>
 					<div class="mt-4 border-t border-surface-300-700 pt-4">
-						<h3>{$t('Connect an MCP client')}</h3>
+						<h3>{$t`Connect an MCP client`}</h3>
 						<p class="text-sm text-surface-600-400">
-							{$t('Use Streamable HTTP. Never put an API Token in the URL.')}
+							{$t`Use Streamable HTTP. Never put an API Token in the URL.`}
 						</p>
 						<pre
 							class="overflow-x-auto rounded-lg border border-surface-300-700 bg-surface-200-800 p-3 text-xs"><code

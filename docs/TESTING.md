@@ -143,9 +143,26 @@ The committed catalogs are `frontend/src/lib/locales/en-US/messages.po` and
 `frontend/src/lib/locales/zh-CN/messages.po`. English source text is the gettext `msgid`; edit
 translations only in the PO files. Runtime `messages.ts` files are generated and ignored.
 
-Use `$t('Literal message')` for direct text. Wrap labels translated later through a variable with
-`msg('Literal message')`; the extractor rejects a dynamic argument to `msg()`. After changing UI
-text, run:
+In `.svelte` files import macros from `lingui-for-svelte/macro` and use ``$t`Literal message` ``
+for direct text and ``$t`Page ${page} of ${pageCount}` `` for interpolation. Use `$plural` for a
+standalone plural message; a named argument such as `$plural({ count: items.length }, options)`
+preserves its ICU placeholder name. Use `<Trans>` with a nested `<Plural>` for a whole sentence
+containing a plural, keeping its surrounding text in the same translation unit. `$select` and
+`$selectOrdinal` are available for grammatical selections and ordinal forms. Use `ph` in string
+templates when an expression needs a stable placeholder name.
+Define labels translated later with ``msg`Literal message` `` and render them with `$t(descriptor)`.
+In ordinary `.ts` and `.svelte.ts` files import `msg` from `@lingui/core/macro`; translate descriptors
+through the `i18n` instance imported from `@lingui/core` when a string is needed outside a component.
+
+Use `msg({ message: 'Open', context: 'action' })` and
+`msg({ message: 'Open', context: 'project-participation' })` for different meanings of the same text.
+Context participates in generated IDs and produces separate PO entries; `comment` is only a
+translator note. Avoid assigning the same explicit ID to different meanings. Runtime IDs are
+generated from message text and context, while PO `msgid` remains readable English.
+
+The old `$t('text', values)` and `msg('text')` helper signatures are not macro syntax. Place values
+in template expressions; do not attach `values` to an inline macro descriptor object. The root
+layout installs the Lingui context before translated components render. After changing UI text, run:
 
 ```sh
 bun run --cwd frontend i18n:extract
@@ -158,6 +175,12 @@ additionally rejects catalog drift after extraction. Run
 `bun run --cwd frontend i18n:template` only when a translation service needs a generated POT file;
 the POT and compiled TypeScript catalogs are build artifacts. During a translation session,
 `bun run --cwd frontend i18n:watch` recompiles edited PO files for the running frontend.
+
+For browser tests, reuse an installed Chromium by setting `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
+to its executable before running `bun run --cwd frontend test:e2e`. For example, macOS Chromium
+normally uses `/Applications/Chromium.app/Contents/MacOS/Chromium`. When running in a sandbox,
+grant the test process the needed browser/localhost access before assuming another browser download
+is necessary. The environment override leaves CI's default Playwright browser selection intact.
 
 ## Real open-access PDF suite
 

@@ -5,7 +5,7 @@
 	import LoadingState from '#lib/design/LoadingState.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { adminWorkflowDetailQuery } from './queries.js';
 	import { isAdminUnavailableError } from './read-state.js';
 
@@ -18,7 +18,7 @@
 <div data-workflow-details class="min-w-0" aria-busy={detail.isFetching}>
 	{#if failed}
 		<QueryError
-			message={apiErrorMessage(detail.error, $t('Unable to load workflow details.'))}
+			message={apiErrorMessage(detail.error, $t`Unable to load workflow details.`)}
 			busy={detail.isFetching}
 			onRetry={() => void detail.refetch()}
 		/>
@@ -26,37 +26,37 @@
 	{#if workflow}
 		<dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
 			<div>
-				<dt>{$t('Workflow ID')}</dt>
+				<dt>{$t`Workflow ID`}</dt>
 				<dd>{workflow.id}</dd>
 			</div>
 			<div>
-				<dt>{$t('State')}</dt>
+				<dt>{$t`State`}</dt>
 				<dd>{$t(domainLabel(workflow.state))}</dd>
 			</div>
 			<div>
-				<dt>{$t('Raw status')}</dt>
+				<dt>{$t`Raw status`}</dt>
 				<dd>{workflow.raw_status}</dd>
 			</div>
 			{#if workflow.queue_name}<div>
-					<dt>{$t('Queue')}</dt>
+					<dt>{$t`Queue`}</dt>
 					<dd>{workflow.queue_name}</dd>
 				</div>{/if}
 			{#if workflow.executor_id}<div>
-					<dt>{$t('Executor ID')}</dt>
+					<dt>{$t`Executor ID`}</dt>
 					<dd>{workflow.executor_id}</dd>
 				</div>{/if}
 			{#if workflow.authenticated_user}<div>
-					<dt>{$t('Authenticated user')}</dt>
+					<dt>{$t`Authenticated user`}</dt>
 					<dd>{workflow.authenticated_user}</dd>
 				</div>{/if}
 		</dl>
 		{#if workflow.error}
-			<h3 class="mt-4 mb-2 text-sm font-medium">{$t('Error')}</h3>
+			<h3 class="mt-4 mb-2 text-sm font-medium">{$t`Error`}</h3>
 			<pre
 				class="max-h-80 overflow-y-auto rounded bg-surface-200-800 p-3 text-xs">{workflow.error}</pre>
 		{/if}
 		{#if workflow.output != null}
-			<h3 class="mt-4 mb-2 text-sm font-medium">{$t('Output')}</h3>
+			<h3 class="mt-4 mb-2 text-sm font-medium">{$t`Output`}</h3>
 			<pre
 				class="max-h-80 overflow-y-auto rounded bg-surface-200-800 p-3 text-xs">{typeof workflow.output ===
 				'string'
@@ -64,7 +64,7 @@
 					: JSON.stringify(workflow.output, null, 2)}</pre>
 		{/if}
 		{#if workflow.attributes && Object.keys(workflow.attributes).length}
-			<h3 class="mt-4 mb-2 text-sm font-medium">{$t('Attributes')}</h3>
+			<h3 class="mt-4 mb-2 text-sm font-medium">{$t`Attributes`}</h3>
 			<pre class="max-h-80 overflow-y-auto rounded bg-surface-200-800 p-3 text-xs">{JSON.stringify(
 					workflow.attributes,
 					null,
@@ -76,13 +76,13 @@
 			type="button"
 			size="sm"
 			disabled={detail.isFetching}
-			onclick={() => void detail.refetch()}>{$t('Refresh details')}</Button
+			onclick={() => void detail.refetch()}>{$t`Refresh details`}</Button
 		>
 	{:else if !failed}
 		<LoadingState
 			label={detail.fetchStatus === 'paused'
-				? $t('Waiting for a connection.')
-				: $t('Loading workflow details…')}
+				? $t`Waiting for a connection.`
+				: $t`Loading workflow details…`}
 		/>
 	{/if}
 </div>

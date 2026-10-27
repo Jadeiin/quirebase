@@ -9,30 +9,31 @@
 	import { getAdminFilters } from '#lib/features/admin/filters.js';
 	import { adminMutationOptions } from '#lib/features/admin/mutations.js';
 	import { adminSettingsQuery } from '#lib/features/admin/queries.js';
-	import { msg, t, type MessageKey } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 
 	type Settings = components['schemas']['AdminSettingsView'];
 
 	let error = $state('');
-	let notice = $state<MessageKey | null>(null);
+	let notice = $state<MessageDescriptor | null>(null);
 	const { filters } = getAdminFilters();
 	const settings = createQuery(() => adminSettingsQuery(filters(), true));
 	const adminMutation = createMutation(() =>
 		adminMutationOptions('settings', () => settings.refetch())
 	);
 	const busy = $derived(adminMutation.isPending);
-	const settingFields: ReadonlyArray<readonly [keyof Settings, MessageKey]> = [
-		['registration_policy', msg('Registration policy')],
-		['workspace_creation_policy', msg('Workspace creation policy')],
-		['metadata_contact_email', msg('Metadata contact email')],
-		['ncbi_api_key', msg('NCBI API key')],
-		['openalex_api_key', msg('OpenAlex API key')],
-		['nasa_ads_token', msg('NASA ADS token')],
-		['ieee_api_key', msg('IEEE API key')],
-		['session_days', msg('Session lifetime in days')],
-		['max_pdf_bytes', msg('Maximum PDF size in bytes')],
-		['max_attachment_bytes', msg('Maximum attachment size in bytes')],
-		['export_ttl_hours', msg('Export lifetime in hours')]
+	const settingFields: ReadonlyArray<readonly [keyof Settings, MessageDescriptor]> = [
+		['registration_policy', msg`Registration policy`],
+		['workspace_creation_policy', msg`Workspace creation policy`],
+		['metadata_contact_email', msg`Metadata contact email`],
+		['ncbi_api_key', msg`NCBI API key`],
+		['openalex_api_key', msg`OpenAlex API key`],
+		['nasa_ads_token', msg`NASA ADS token`],
+		['ieee_api_key', msg`IEEE API key`],
+		['session_days', msg`Session lifetime in days`],
+		['max_pdf_bytes', msg`Maximum PDF size in bytes`],
+		['max_attachment_bytes', msg`Maximum attachment size in bytes`],
+		['export_ttl_hours', msg`Export lifetime in hours`]
 	] as const;
 
 	function saveSettings(event: SubmitEvent) {
@@ -50,10 +51,10 @@
 				run: () => apiRequest('PUT', '/admin/settings', { body: values as Settings })
 			})
 			.then(() => {
-				notice = msg('Settings saved');
+				notice = msg`Settings saved`;
 			})
 			.catch((reason) => {
-				error = apiErrorMessage(reason, $t('Administration action failed'));
+				error = apiErrorMessage(reason, $t`Administration action failed`);
 			});
 	}
 </script>
@@ -66,7 +67,7 @@
 	onRetry={() => void settings.refetch()}
 	loading={settings.isPending}
 	failed={settings.isError}
-	label={msg('Settings')}
+	label={msg`Settings`}
 >
 	<AdminSettings settings={settings.data!} fields={settingFields} {busy} onSave={saveSettings} />
 </AdminSectionState>

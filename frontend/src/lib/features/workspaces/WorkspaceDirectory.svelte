@@ -9,7 +9,7 @@
 	import Badge from '#lib/design/Badge.svelte';
 	import Pagination from '#lib/design/Pagination.svelte';
 	import Notice from '#lib/design/Notice.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import {
@@ -51,13 +51,13 @@
 	});
 </script>
 
-<svelte:head><title>{$t('Workspaces · Quirebase')}</title></svelte:head>
+<svelte:head><title>{$t`Workspaces · Quirebase`}</title></svelte:head>
 <section class="mx-auto grid w-full max-w-5xl min-w-0 grid-cols-1 gap-6">
 	<header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 		<div class="grid min-w-0 grid-cols-1 gap-2">
-			<h1 class="text-3xl font-bold">{$t('My workspaces')}</h1>
+			<h1 class="text-3xl font-bold">{$t`My workspaces`}</h1>
 			<p class="text-surface-700-300">
-				{$t('Choose a workspace to open its library and projects.')}
+				{$t`Choose a workspace to open its library and projects.`}
 			</p>
 		</div>
 		{#if creation.data?.allowed}<Button
@@ -66,29 +66,29 @@
 				onclick={() => {
 					notice = '';
 					createOpen = true;
-				}}>{$t('Create workspace')}</Button
+				}}>{$t`Create workspace`}</Button
 			>{/if}
 	</header>
 	<ReceivedInvitations />
 	{#if notice}<Notice variant="success">{notice}</Notice>{/if}
 	{#if creation.isError}<Notice variant="error"
-			>{$t('Unable to check Workspace creation permissions. Refresh and try again.')}
+			>{$t`Unable to check Workspace creation permissions. Refresh and try again.`}
 			<Button onclick={() => void creation.refetch()} disabled={creation.isFetching}
-				>{$t('Retry')}</Button
+				>{$t`Retry`}</Button
 			></Notice
 		>{/if}
 	<label class="grid max-w-xl grid-cols-1 gap-1"
-		>{$t('Search workspaces')}<input
+		>{$t`Search workspaces`}<input
 			class="input"
 			value={listing.search}
 			oninput={(event) => navigate(event.currentTarget.value, 1, listing.pageSize, true)}
 		/></label
 	>
-	{#if workspaces.isPending}<p class="text-surface-700-300">{$t('Loading workspaces…')}</p>
+	{#if workspaces.isPending}<p class="text-surface-700-300">{$t`Loading workspaces…`}</p>
 	{:else if workspaces.isError}<Notice variant="error"
-			>{$t('Unable to load workspaces.')}
+			>{$t`Unable to load workspaces.`}
 			<Button disabled={workspaces.isFetching} onclick={() => void workspaces.refetch()}
-				>{$t('Retry')}</Button
+				>{$t`Retry`}</Button
 			></Notice
 		>
 	{:else if workspaces.data?.items.length}
@@ -111,24 +111,21 @@
 					>
 					<span
 						class="grid shrink-0 grid-cols-1 justify-items-end gap-2 text-sm font-semibold text-primary-700-300"
-						>{#if workspace.id === defaultWorkspaceId}<Badge variant="primary"
-								>{$t('Default')}</Badge
-							>{/if}<span class="group-hover:underline">{$t('Open Workspace')} →</span></span
+						>{#if workspace.id === defaultWorkspaceId}<Badge variant="primary">{$t`Default`}</Badge
+							>{/if}<span class="group-hover:underline">{$t`Open Workspace`} →</span></span
 					>
 				</Panel>
 			{/each}
 		</div>
 	{:else if listing.search}
 		<Notice
-			>{$t('No matching workspaces.')}
-			<Button onclick={() => navigate('')}>{$t('Clear search')}</Button></Notice
+			>{$t`No matching workspaces.`}
+			<Button onclick={() => navigate('')}>{$t`Clear search`}</Button></Notice
 		>
 	{:else}
-		<Notice>{$t('No Workspaces yet.')}</Notice>
+		<Notice>{$t`No Workspaces yet.`}</Notice>
 		{#if creation.data && !creation.data.allowed}<p class="text-sm text-surface-700-300">
-				{$t(
-					'Workspace creation is restricted by the instance policy. Ask an administrator for access.'
-				)}
+				{$t`Workspace creation is restricted by the instance policy. Ask an administrator for access.`}
 			</p>{/if}
 	{/if}
 	{#if workspaces.isSuccess}<Pagination
@@ -139,7 +136,7 @@
 			onPage={(next) => navigate(listing.search, next)}
 			onPageSize={(size) => navigate(listing.search, 1, size)}
 			busy={workspaces.isFetching}
-			label={$t('Workspaces')}
+			label={$t`Workspaces`}
 		/>{/if}
 </section>
 {#if creation.data?.allowed}<WorkspaceCreateDialog

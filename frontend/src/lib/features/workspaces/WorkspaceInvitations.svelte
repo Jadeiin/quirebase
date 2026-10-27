@@ -19,7 +19,7 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import StatusNotice from '#lib/design/StatusNotice.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { workspaceInvitationsQuery } from './queries';
 	import {
 		readWorkspaceInvitationsState,
@@ -95,16 +95,13 @@
 	}
 	const nextDirection = $derived(listing.direction === 'asc' ? 'desc' : 'asc');
 	function orderLabel(direction: WorkspaceInvitationsState['direction']) {
-		if (listing.sort === 'username') return direction === 'asc' ? $t('A–Z') : $t('Z–A');
+		if (listing.sort === 'username') return direction === 'asc' ? $t`A–Z` : $t`Z–A`;
 		if (listing.sort === 'expires')
-			return direction === 'asc' ? $t('Earliest first') : $t('Latest first');
-		return direction === 'asc' ? $t('Oldest first') : $t('Newest first');
+			return direction === 'asc' ? $t`Earliest first` : $t`Latest first`;
+		return direction === 'asc' ? $t`Oldest first` : $t`Newest first`;
 	}
 	const directionHint = $derived(
-		$t('Sort order: {current}. Switch to {next}.', {
-			current: orderLabel(listing.direction),
-			next: orderLabel(nextDirection)
-		})
+		$t`Sort order: ${ph({ current: orderLabel(listing.direction) })}. Switch to ${ph({ next: orderLabel(nextDirection) })}.`
 	);
 	async function invite() {
 		if (busy || !roles.includes(role) || !username.trim()) return;
@@ -123,9 +120,9 @@
 			)
 				oneTimeInvitation = created;
 			username = '';
-			notice = $t('Invitation created. Copy this token now; it will not be shown again.');
+			notice = $t`Invitation created. Copy this token now; it will not be shown again.`;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to create invitation'));
+			error = apiErrorMessage(reason, $t`Unable to create invitation`);
 		}
 	}
 	async function revokeInvitation(id: string) {
@@ -135,9 +132,9 @@
 		try {
 			await revoke.mutateAsync(id);
 			if (oneTimeInvitation?.id === id) oneTimeInvitation = null;
-			notice = $t('Invitation revoked');
+			notice = $t`Invitation revoked`;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Workspace action failed'));
+			error = apiErrorMessage(reason, $t`Workspace action failed`);
 		}
 	}
 	async function copyLink() {
@@ -146,18 +143,18 @@
 		notice = '';
 		try {
 			await navigator.clipboard.writeText(`${location.origin}/invite/${oneTimeInvitation.token}`);
-			notice = $t('Invitation link copied');
+			notice = $t`Invitation link copied`;
 		} catch {
-			error = $t('Unable to copy the invitation link. Select and copy it manually.');
+			error = $t`Unable to copy the invitation link. Select and copy it manually.`;
 		}
 	}
 </script>
 
 <section class="grid grid-cols-1 gap-6" aria-labelledby="workspace-invitations-heading">
 	<div>
-		<h2 id="workspace-invitations-heading" class="text-xl font-semibold">{$t('Invitations')}</h2>
+		<h2 id="workspace-invitations-heading" class="text-xl font-semibold">{$t`Invitations`}</h2>
 		<p class="mt-1 text-sm text-surface-700-300">
-			{$t('Invite an existing user to join this workspace.')}
+			{$t`Invite an existing user to join this workspace.`}
 		</p>
 	</div>
 	{#if workspace.can('workspace_invitation.read')}
@@ -171,7 +168,7 @@
 					}}
 				>
 					<label class="grid grid-cols-1 gap-1 sm:col-span-2"
-						>{$t('Exact username')}<input
+						>{$t`Exact username`}<input
 							class="input"
 							bind:value={username}
 							required
@@ -179,14 +176,14 @@
 						/></label
 					>
 					<label class="grid grid-cols-1 gap-1"
-						>{$t('Role')}<select class="select" bind:value={role} disabled={busy}
+						>{$t`Role`}<select class="select" bind:value={role} disabled={busy}
 							>{#each roles as choice (choice)}<option value={choice}
 									>{$t(domainLabel(choice))}</option
 								>{/each}</select
 						></label
 					>
 					<label class="grid grid-cols-1 gap-1"
-						>{$t('Expires in days')}<input
+						>{$t`Expires in days`}<input
 							class="input"
 							type="number"
 							min="1"
@@ -198,7 +195,7 @@
 					>
 					<div class="sm:col-span-2">
 						<Button type="submit" variant="filled" disabled={busy || !username.trim()}
-							>{$t('Create invitation')}</Button
+							>{$t`Create invitation`}</Button
 						>
 					</div>
 				</form>
@@ -210,14 +207,14 @@
 				<code class="break-all">{location.origin}/invite/{oneTimeInvitation.token}</code>
 				<div class="flex flex-wrap gap-2">
 					<Button size="sm" disabled={busy} onclick={() => void copyLink()}
-						>{$t('Copy one-time link')}</Button
+						>{$t`Copy one-time link`}</Button
 					>
 					<Button
 						size="sm"
 						disabled={busy}
 						onclick={() => {
 							oneTimeInvitation = null;
-						}}>{$t('Dismiss')}</Button
+						}}>{$t`Dismiss`}</Button
 					>
 				</div>
 			</Panel>
@@ -225,7 +222,7 @@
 		<Panel>
 			<div class="flex min-w-0 flex-wrap items-end gap-3">
 				<label class="grid min-w-0 grow basis-56 grid-cols-1 gap-1 text-sm">
-					{$t('Search invitations')}<input
+					{$t`Search invitations`}<input
 						class="input h-9 field-sm"
 						type="search"
 						bind:value={search.value}
@@ -234,7 +231,7 @@
 					/>
 				</label>
 				<label class="grid min-w-0 grow basis-32 grid-cols-1 gap-1 text-sm">
-					{$t('Role')}<select
+					{$t`Role`}<select
 						class="select h-9 field-sm"
 						value={listing.role}
 						onchange={(event) =>
@@ -244,17 +241,17 @@
 								page: 1
 							})}
 					>
-						<option value="">{$t('All roles')}</option>
+						<option value="">{$t`All roles`}</option>
 						{#each workspaceInvitationRoles as choice (choice)}<option value={choice}
 								>{$t(domainLabel(choice))}</option
 							>{/each}
 					</select>
 				</label>
 				<div class="grid min-w-40 grow basis-40 grid-cols-1 gap-1 text-sm">
-					<label for="workspace-invitations-sort">{$t('Sort By')}</label>
+					<label for="workspace-invitations-sort">{$t`Sort By`}</label>
 					<div
 						role="group"
-						aria-label={$t('Sort')}
+						aria-label={$t`Sort`}
 						class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
 					>
 						<select
@@ -271,9 +268,9 @@
 								});
 							}}
 						>
-							<option value="created">{$t('Created')}</option>
-							<option value="expires">{$t('Expires')}</option>
-							<option value="username">{$t('Username')}</option>
+							<option value="created">{$t`Created`}</option>
+							<option value="expires">{$t`Expires`}</option>
+							<option value="username">{$t`Username`}</option>
 						</select>
 						<Button
 							type="button"
@@ -291,23 +288,21 @@
 		</Panel>
 		{#if invitations.isError || (!invitations.isPending && !available)}
 			<QueryError
-				message={$t('Unable to load invitations.')}
+				message={$t`Unable to load invitations.`}
 				busy={invitations.isFetching}
 				onRetry={() => void invitations.refetch()}
 			/>
 		{/if}
 		{#if !available && invitations.isPending}<p class="text-surface-700-300">
-				{$t('Loading invitations…')}
+				{$t`Loading invitations…`}
 			</p>
 		{:else if available && invitations.data?.items.length}
 			<Panel padding="none">
-				<DataTable label={$t('Invitations')}>
+				<DataTable label={$t`Invitations`}>
 					<thead
 						><tr
-							><th>{$t('Username')}</th><th>{$t('Role')}</th><th>{$t('Created')}</th><th
-								>{$t('Expires')}</th
-							>{#if workspace.can('workspace_invitation.revoke')}<th class="w-28"
-									>{$t('Actions')}</th
+							><th>{$t`Username`}</th><th>{$t`Role`}</th><th>{$t`Created`}</th><th>{$t`Expires`}</th
+							>{#if workspace.can('workspace_invitation.revoke')}<th class="w-28">{$t`Actions`}</th
 								>{/if}</tr
 						></thead
 					>
@@ -317,21 +312,19 @@
 								<th scope="row"
 									><strong class="font-medium break-all">{invitation.username}</strong></th
 								>
-								<td data-label={$t('Role')}>{$t(domainLabel(invitation.role))}</td>
-								<td data-label={$t('Created')}
+								<td data-label={$t`Role`}>{$t(domainLabel(invitation.role))}</td>
+								<td data-label={$t`Created`}
 									>{$dateFormat.format(new Date(invitation.created_at))}</td
 								>
-								<td data-label={$t('Expires')}
+								<td data-label={$t`Expires`}
 									>{$dateFormat.format(new Date(invitation.expires_at))}</td
 								>
-								{#if workspace.can('workspace_invitation.revoke')}<td data-label={$t('Actions')}
+								{#if workspace.can('workspace_invitation.revoke')}<td data-label={$t`Actions`}
 										><Button
 											size="sm"
 											disabled={busy}
-											aria-label={$t('Revoke invitation for {username}', {
-												username: invitation.username
-											})}
-											onclick={() => void revokeInvitation(invitation.id)}>{$t('Revoke')}</Button
+											aria-label={$t`Revoke invitation for ${ph({ username: invitation.username })}`}
+											onclick={() => void revokeInvitation(invitation.id)}>{$t`Revoke`}</Button
 										></td
 									>{/if}
 							</tr></tbody
@@ -341,8 +334,8 @@
 			</Panel>
 		{:else if available}<Notice
 				>{listing.search || listing.role
-					? $t('No matching invitations.')
-					: $t('No pending invitations.')}</Notice
+					? $t`No matching invitations.`
+					: $t`No pending invitations.`}</Notice
 			>{/if}
 		{#if available && invitations.data}<Pagination
 				page={listing.page}
@@ -352,7 +345,7 @@
 				onPage={(next) => navigate({ ...listing, page: next })}
 				onPageSize={(size) => navigate({ ...listing, page: 1, pageSize: size })}
 				busy={invitations.isFetching}
-				label={$t('Invitations pagination')}
+				label={$t`Invitations pagination`}
 			/>{/if}
-	{:else}<Notice>{$t('Invitations are not available for this workspace.')}</Notice>{/if}
+	{:else}<Notice>{$t`Invitations are not available for this workspace.`}</Notice>{/if}
 </section>

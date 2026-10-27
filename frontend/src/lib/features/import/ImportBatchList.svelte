@@ -18,7 +18,7 @@
 	import QueryError from '#lib/design/QueryError.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { dateTimeFormat } from '#lib/format.js';
-	import { t } from '#lib/i18n.js';
+	import { plural, t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import { importBatchesQuery } from './queries.js';
@@ -89,8 +89,8 @@
 				apiErrorMessage(
 					reason,
 					batch.status === 'committed'
-						? $t('Unable to delete import record')
-						: $t('Unable to discard Import')
+						? $t`Unable to delete import record`
+						: $t`Unable to discard Import`
 				)
 			);
 		} finally {
@@ -114,7 +114,7 @@
 	}}
 />
 
-<section bind:this={results} tabindex="-1" aria-label={$t('Import history')}>
+<section bind:this={results} tabindex="-1" aria-label={$t`Import history`}>
 	<Panel class="mb-6">
 		<Tabs
 			value={listing.view}
@@ -127,22 +127,22 @@
 			}}
 		>
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-				<Tabs.List aria-label={$t('Import history')}>
+				<Tabs.List aria-label={$t`Import history`}>
 					<Tabs.Indicator />
-					<Tabs.Trigger value="uncommitted">{$t('Not imported')}</Tabs.Trigger>
-					<Tabs.Trigger value="committed">{$t('Imported')}</Tabs.Trigger>
+					<Tabs.Trigger value="uncommitted">{$t`Not imported`}</Tabs.Trigger>
+					<Tabs.Trigger value="committed">{$t`Imported`}</Tabs.Trigger>
 				</Tabs.List>
 			</div>
 			<Tabs.Content value={listing.view}>
 				{#if batches.isError || unavailable}
 					<QueryError
-						message={apiErrorMessage(batches.error, $t('Unable to load imports'))}
+						message={apiErrorMessage(batches.error, $t`Unable to load imports`)}
 						busy={batches.isFetching}
 						onRetry={() => void batches.refetch()}
 					/>
 				{/if}
 				{#if batches.isPending && !unavailable}
-					<LoadingState label={$t('Loading imports…')} />
+					<LoadingState label={$t`Loading imports…`} />
 				{:else if batches.data && !unavailable}
 					{#each batches.data.items as batch (batch.id)}
 						<ItemRow data-import-batch={batch.id}>
@@ -152,29 +152,31 @@
 										<strong>{$dateTimeFormat.format(new Date(batch.created_at))}</strong>
 										<Badge
 											>{batch.status === 'committed'
-												? $t('Imported')
+												? $t`Imported`
 												: $t(domainLabel(batch.status))}</Badge
 										>
 									</div>
 									<span class="text-sm text-surface-600-400">
-										{batch.file_format} · {$t('{count, plural, one {# record} other {# records}}', {
-											count: batch.record_count
-										})}
+										{batch.file_format} · {$plural(
+											{ count: batch.record_count },
+											{ one: '# record', other: '# records' }
+										)}
 										{#if batch.diagnostic_count}
-											· {$t('{count, plural, one {# issue} other {# issues}}', {
-												count: batch.diagnostic_count
-											})}{/if}
+											· {$plural(
+												{ count: batch.diagnostic_count },
+												{ one: '# issue', other: '# issues' }
+											)}{/if}
 									</span>
 								</div>
 								<div class="flex flex-wrap items-center gap-2">
-									<Button as="a" href={resolve(batchHref(batch.id))}>{$t('Open import')}</Button>
+									<Button as="a" href={resolve(batchHref(batch.id))}>{$t`Open import`}</Button>
 									{#if workspace.can('item.create')}
 										<Button
 											variant="danger"
 											disabled={pending.has(batch.id)}
 											onclick={() => void remove(batch)}
 										>
-											{batch.status === 'committed' ? $t('Delete import record') : $t('Discard')}
+											{batch.status === 'committed' ? $t`Delete import record` : $t`Discard`}
 										</Button>
 									{/if}
 								</div>
@@ -184,7 +186,7 @@
 								>{/if}
 						</ItemRow>
 					{:else}
-						<EmptyState icon="import" title={$t('No imports found')} />
+						<EmptyState icon="import" title={$t`No imports found`} />
 					{/each}
 					{#if batches.data.total > listing.pageSize || listing.page > 1}
 						<Pagination
@@ -192,7 +194,7 @@
 							pageSize={listing.pageSize}
 							pageCount={lastPage}
 							total={batches.data.total}
-							label={$t('Import pages')}
+							label={$t`Import pages`}
 							busy={batches.isFetching}
 							onPage={(next) => navigate({ ...listing, page: next })}
 							onPageSize={(next) => navigate({ ...listing, pageSize: next, page: 1 })}

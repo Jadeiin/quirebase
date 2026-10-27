@@ -4,7 +4,7 @@
 	import { buttonClass } from '#lib/design/button-classes.js';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import Notice from '#lib/design/Notice.svelte';
 
 	let {
@@ -51,7 +51,7 @@
 				{#if error}<Notice variant="error" class="mt-3">{error}</Notice>{/if}
 				<div class="mt-5 flex flex-wrap justify-end gap-2">
 					<Dialog.CloseTrigger class={buttonClass('tonal')} disabled={busy}
-						>{$t('Cancel')}</Dialog.CloseTrigger
+						>{$t`Cancel`}</Dialog.CloseTrigger
 					>
 					<Button variant="danger-filled" disabled={busy} onclick={onConfirm}>{confirmLabel}</Button
 					>

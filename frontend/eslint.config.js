@@ -179,7 +179,7 @@ export default defineConfig(
 						'comment',
 						'key'
 					],
-					ignoreFunctions: ['console.*', '$t', 'translate', 'Error', 'DOMException']
+					ignoreFunctions: ['console.*', '$t', 'Error', 'DOMException']
 				}
 			]
 		}

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pymupdf
 import pytest
-from test_http import authenticated_async_client
+from app_helpers import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.documents.pdf import create_thumbnail, inspect_pdf, validate_pdf_container

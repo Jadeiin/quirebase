@@ -1,7 +1,9 @@
 import { createContext } from 'svelte';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { waitForWorkflow } from '#lib/api/workflows.js';
-import { translate, type MessageKey } from '#lib/i18n.js';
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import type { MessageDescriptor } from '@lingui/core';
 import { toaster } from '#lib/toaster.js';
 import type { WorkflowStatus } from './queries';
 
@@ -12,8 +14,8 @@ export type TrackedJob = {
 	workspaceId?: string;
 	target?: WorkflowTarget;
 	label: string;
-	successMessage: MessageKey;
-	failureMessage: MessageKey;
+	successMessage: MessageDescriptor;
+	failureMessage: MessageDescriptor;
 	startedAt: number;
 	outcome?: WorkflowStatus;
 	unavailable?: boolean;
@@ -40,8 +42,8 @@ export type TrackOptions = {
 	workspaceId?: string;
 	target?: WorkflowTarget;
 	label: string;
-	successMessage: MessageKey;
-	failureMessage: MessageKey;
+	successMessage: MessageDescriptor;
+	failureMessage: MessageDescriptor;
 };
 
 type Waiter = {
@@ -52,6 +54,13 @@ type Waiter = {
 const MAX_JOBS = 20;
 const SUCCESS_TOAST_DURATION = 6000;
 const workflowToastId = (workflowId: string) => `workflow-toast-${workflowId}`;
+
+function notificationId(message: MessageDescriptor): string {
+	if (!message.id || (message.values && Object.keys(message.values).length)) {
+		throw new Error('Workflow notifications require a static message ID');
+	}
+	return message.id;
+}
 
 export class WorkflowCenter {
 	jobs = $state<TrackedJob[]>([]);
@@ -85,8 +94,8 @@ export class WorkflowCenter {
 				// Completed destinations survive reload without polling or repeating the toast.
 				this.jobs.push({
 					...entry,
-					successMessage: entry.successMessage as MessageKey,
-					failureMessage: entry.failureMessage as MessageKey
+					successMessage: { id: entry.successMessage },
+					failureMessage: { id: entry.failureMessage }
 				});
 				continue;
 			}
@@ -94,8 +103,8 @@ export class WorkflowCenter {
 				workspaceId: entry.workspaceId,
 				target: entry.target,
 				label: entry.label,
-				successMessage: entry.successMessage as MessageKey,
-				failureMessage: entry.failureMessage as MessageKey
+				successMessage: { id: entry.successMessage },
+				failureMessage: { id: entry.failureMessage }
 			});
 			const stored = this.jobs.find((job) => job.id === entry.id);
 			if (stored) stored.startedAt = entry.startedAt;
@@ -115,8 +124,8 @@ export class WorkflowCenter {
 					workspaceId: job.workspaceId,
 					target: job.target,
 					label: job.label,
-					successMessage: job.successMessage,
-					failureMessage: job.failureMessage,
+					successMessage: notificationId(job.successMessage),
+					failureMessage: notificationId(job.failureMessage),
 					startedAt: job.startedAt,
 					outcome: job.outcome,
 					unavailable: job.unavailable
@@ -128,12 +137,14 @@ export class WorkflowCenter {
 		workflowId: string,
 		options: TrackOptions
 	): { job: TrackedJob; settled: Promise<WorkflowStatus> } {
+		notificationId(options.successMessage);
+		notificationId(options.failureMessage);
 		const existing = this.jobs.find((job) => job.id === workflowId);
 		if (existing?.unavailable) {
 			return {
 				job: existing,
 				settled: Promise.reject(
-					new Error(translate('Workflow history is unavailable. Check the current result.'))
+					new Error(i18n._(msg`Workflow history is unavailable. Check the current result.`))
 				)
 			};
 		}
@@ -145,7 +156,7 @@ export class WorkflowCenter {
 					existing.outcome.state === 'succeeded'
 						? terminal
 						: terminal.then(() => {
-								throw new Error(existing.outcome?.error || translate(options.failureMessage));
+								throw new Error(existing.outcome?.error || i18n._(options.failureMessage));
 							})
 			};
 		}
@@ -193,19 +204,19 @@ export class WorkflowCenter {
 			if (status.state === 'succeeded') waiter.resolve(status);
 			else
 				waiter.reject(
-					new Error(status.error || translate(job.failureMessage) || translate('Workflow failed'))
+					new Error(status.error || i18n._(job.failureMessage) || i18n._(msg`Workflow failed`))
 				);
 		}
 		if (job && status.state !== 'succeeded') {
 			this.notify(job, {
 				type: 'error',
-				title: status.error || translate(job.failureMessage),
+				title: status.error || i18n._(job.failureMessage),
 				duration: Infinity
 			});
 		} else if (job) {
 			this.notify(job, {
 				type: 'success',
-				title: translate(job.successMessage),
+				title: i18n._(job.successMessage),
 				duration: SUCCESS_TOAST_DURATION
 			});
 		}
@@ -231,7 +242,7 @@ export class WorkflowCenter {
 		const job = this.jobs.find((entry) => entry.id === workflowId);
 		if (!job || job.outcome || job.unavailable) return;
 		job.unavailable = true;
-		const message = translate('Workflow history is unavailable. Check the current result.');
+		const message = i18n._(msg`Workflow history is unavailable. Check the current result.`);
 		const pending = this.waiters.get(workflowId) ?? [];
 		this.waiters.delete(workflowId);
 		for (const waiter of pending) waiter.reject(new Error(message));

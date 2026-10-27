@@ -40,8 +40,10 @@ function isTrackedWorkflow(entry: unknown): entry is TrackedWorkflow {
 		typeof entry.label === 'string' &&
 		'successMessage' in entry &&
 		typeof entry.successMessage === 'string' &&
+		entry.successMessage.length > 0 &&
 		'failureMessage' in entry &&
 		typeof entry.failureMessage === 'string' &&
+		entry.failureMessage.length > 0 &&
 		'startedAt' in entry &&
 		typeof entry.startedAt === 'number' &&
 		Number.isFinite(entry.startedAt) &&

@@ -13,10 +13,9 @@ from zipfile import ZipFile
 
 import pytest
 from advanced_alchemy.types import FileObject
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from item_helpers import contributor
 from sqlalchemy import event, select
-from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.access import resolve_workspace_context

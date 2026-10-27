@@ -11,12 +11,13 @@
 	import { adminMutationOptions } from '#lib/features/admin/mutations.js';
 	import { getAdminFilters } from '#lib/features/admin/filters.js';
 	import { adminInvitationsQuery } from '#lib/features/admin/queries.js';
-	import { msg, t, type MessageKey } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 
 	type InvitationCreated = components['schemas']['AdminInvitationCreatedView'];
 
 	let error = $state('');
-	let notice = $state<MessageKey | null>(null);
+	let notice = $state<MessageDescriptor | null>(null);
 	let oneTimeInvitation = $state<{ id: string; url: string } | null>(null);
 	const invitationUrl = $derived(oneTimeInvitation?.url ?? '');
 	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
@@ -36,7 +37,7 @@
 
 	function mutate(
 		operation: () => Promise<unknown>,
-		success: MessageKey,
+		success: MessageDescriptor,
 		form?: HTMLFormElement,
 		onSuccess?: (result: unknown) => void
 	) {
@@ -54,7 +55,7 @@
 				form
 			})
 			.catch((reason) => {
-				error = apiErrorMessage(reason, $t('Administration action failed'));
+				error = apiErrorMessage(reason, $t`Administration action failed`);
 			});
 	}
 
@@ -70,7 +71,7 @@
 						role: values.get('role') === 'administrator' ? 'administrator' : 'member'
 					}
 				}),
-			msg('Invitation created'),
+			msg`Invitation created`,
 			form,
 			(result) => {
 				const invitation = result as InvitationCreated;
@@ -88,7 +89,7 @@
 				apiRequest('DELETE', '/admin/invitations/{invitation_id}', {
 					params: { path: { invitation_id: invitationId } }
 				}),
-			msg('Invitation revoked'),
+			msg`Invitation revoked`,
 			undefined,
 			() => {
 				if (oneTimeInvitation?.id === invitationId) oneTimeInvitation = null;
@@ -102,7 +103,7 @@
 				apiRequest('POST', '/admin/invitations/{invitation_id}/reissue', {
 					params: { path: { invitation_id: invitationId } }
 				}),
-			msg('Invitation link reissued'),
+			msg`Invitation link reissued`,
 			undefined,
 			(result) => {
 				const invitation = result as InvitationCreated;
@@ -118,7 +119,7 @@
 <AdminNotices {error} {notice} />
 {#if invitationUrl}
 	<Notice as="div" variant="warning" class="mb-4 grid grid-cols-1 gap-2 [overflow-wrap:anywhere]">
-		<strong>{$t('Copy this invitation URL now')}</strong>
+		<strong>{$t`Copy this invitation URL now`}</strong>
 		<a href={invitationUrl} rel="external">{invitationUrl}</a>
 	</Notice>
 {/if}
@@ -129,7 +130,7 @@
 	onRetry={() => void invitations.refetch()}
 	loading={invitations.isPending}
 	failed={invitations.isError}
-	label={msg('Invitations')}
+	label={msg`Invitations`}
 >
 	<AdminInvitations
 		invitations={invitations.data!}
@@ -146,7 +147,7 @@
 				pageCount={Math.max(1, Math.ceil((invitations.data?.total ?? 0) / filters().pageSize))}
 				total={invitations.data?.total ?? 0}
 				busy={invitations.isFetching || busy}
-				label={$t('Invitation pages')}
+				label={$t`Invitation pages`}
 				onPage={setPage}
 				onPageSize={setPageSize}
 			/>

@@ -1,13 +1,14 @@
 <script lang="ts">
 	import Notice from '#lib/design/Notice.svelte';
-	import { t, type MessageKey } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 
 	let {
 		error = '',
 		notice = null
 	}: {
 		error?: string;
-		notice?: MessageKey | null;
+		notice?: MessageDescriptor | null;
 	} = $props();
 </script>
 

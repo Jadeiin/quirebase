@@ -32,7 +32,7 @@
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { projectDetailQuery } from '#lib/features/projects/queries.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { toaster } from '#lib/toaster.js';
 	import { invalidateProject } from '#lib/query/invalidation.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
@@ -228,7 +228,7 @@
 			}
 			return true;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Project action failed'));
+			error = apiErrorMessage(reason, $t`Project action failed`);
 			if (
 				reason instanceof ApiError &&
 				['project_lifecycle_error', 'project_participation_conflict'].includes(reason.code)
@@ -267,7 +267,7 @@
 					params: { path: { project_id: targetProjectId } },
 					body: changes
 				}),
-			$t('Project settings saved')
+			$t`Project settings saved`
 		);
 		if (saved) settingsDialogOpen = false;
 	}
@@ -305,7 +305,7 @@
 				workspace.api.request('POST', '/workspaces/{workspace_id}/projects/{project_id}/join', {
 					params: { path: { project_id: projectId } }
 				}),
-			$t('Joined Project')
+			$t`Joined Project`
 		);
 	}
 
@@ -315,7 +315,7 @@
 				workspace.api.request('POST', '/workspaces/{workspace_id}/projects/{project_id}/leave', {
 					params: { path: { project_id: projectId } }
 				}),
-			$t('Left Project')
+			$t`Left Project`
 		);
 	}
 
@@ -342,7 +342,7 @@
 						body: { username }
 					}
 				),
-			$t('Project participant added')
+			$t`Project participant added`
 		);
 		if (added) {
 			selectedMemberId = '';
@@ -359,7 +359,7 @@
 					'/workspaces/{workspace_id}/projects/{project_id}/participants/{user_id}',
 					{ params: { path: { project_id: projectId, user_id: userId } } }
 				),
-			$t('Project participant removed')
+			$t`Project participant removed`
 		);
 	}
 
@@ -371,7 +371,7 @@
 					`/workspaces/{workspace_id}/projects/{project_id}/${action}`,
 					{ params: { path: { project_id: projectId } } }
 				),
-			$t(action === 'archive' ? 'Project archived' : 'Project restored')
+			action === 'archive' ? $t`Project archived` : $t`Project restored`
 		);
 	}
 
@@ -395,7 +395,7 @@
 			if (page.url.pathname === requestedPath) {
 				await goto(resolve(workspaceHref(workspaceId, 'projects')));
 			}
-			toaster.success({ title: `${$t('Project deleted')}: ${targetProjectName}` });
+			toaster.success({ title: `${$t`Project deleted`}: ${targetProjectName}` });
 		}
 	}
 
@@ -418,7 +418,7 @@
 						params: { path: { project_id: target.projectId, item_id: target.itemId } }
 					}
 				),
-			$t('Item removed from Project')
+			$t`Item removed from Project`
 		);
 		if (removed) {
 			removeItemDialogOpen = false;
@@ -437,7 +437,7 @@
 					'/workspaces/{workspace_id}/projects/{project_id}/discussions',
 					{ params: { path: { project_id: projectId } }, body: { body: submittedBody.trim() } }
 				),
-			$t('Discussion posted'),
+			$t`Discussion posted`,
 			true,
 			true
 		);
@@ -461,7 +461,7 @@
 					'/workspaces/{workspace_id}/projects/{project_id}/discussions/{message_id}',
 					{ params: { path: { project_id: projectId, message_id: messageId } } }
 				),
-			$t('Discussion message deleted')
+			$t`Discussion message deleted`
 		);
 	}
 
@@ -490,7 +490,7 @@
 						body: { reason: reason.trim() }
 					}
 				),
-			$t('Discussion message moderated')
+			$t`Discussion message moderated`
 		);
 		if (moderated && projectId === targetProjectId && moderationMessageId === messageId)
 			moderationDialogOpen = false;
@@ -501,13 +501,13 @@
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<a
 			class="text-sm text-primary-700-300 no-underline"
-			href={resolve(workspaceHref(workspaceId, 'projects'))}>← {$t('Projects')}</a
+			href={resolve(workspaceHref(workspaceId, 'projects'))}>← {$t`Projects`}</a
 		>
 		{#if project}
 			<div class="ml-auto flex flex-wrap justify-end gap-2">
 				{#if can('project.update')}
 					<Button variant="tonal" size="sm" disabled={busy} onclick={openSettings}>
-						<Icon name="settings" size={16} />{$t('Project settings')}
+						<Icon name="settings" size={16} />{$t`Project settings`}
 					</Button>
 				{/if}
 				{#if can('project.delete')}
@@ -518,7 +518,7 @@
 						onclick={() => {
 							error = '';
 							deleteDialogOpen = true;
-						}}>{$t('Delete Project')}</Button
+						}}>{$t`Delete Project`}</Button
 					>
 				{/if}
 			</div>
@@ -528,9 +528,9 @@
 			variant="error">{error}</Notice
 		>{/if}
 	{#if notice}<Notice>{notice}</Notice>{/if}
-	{#if detail.isPending}<p>{$t('Loading Project…')}</p>
+	{#if detail.isPending}<p>{$t`Loading Project…`}</p>
 	{:else if detail.isError || !project}<QueryError
-			message={$t('Unable to load Project.')}
+			message={$t`Unable to load Project.`}
 			busy={detail.isFetching}
 			onRetry={() => void detail.refetch()}
 		/>
@@ -539,53 +539,49 @@
 			<div>
 				<p class="mb-1 text-sm text-primary-700-300">
 					{$t(domainLabel(project.state))} · {$t(domainLabel(project.participation))} · {project.item_count}
-					{$t('Items')}
+					{$t`Items`}
 				</p>
 				<h1 class="wrap-anywhere">{project.name}</h1>
 				<p class="wrap-anywhere text-surface-600-400">
-					{project.description || $t('No description')}
+					{project.description || $t`No description`}
 				</p>
 			</div>
 			{#snippet actions()}
 				<div class="flex flex-wrap gap-2">
 					{#if can('project_participation.join')}<Button
 							disabled={busy}
-							onclick={() => void joinProject()}>{$t('Join Project')}</Button
+							onclick={() => void joinProject()}>{$t`Join Project`}</Button
 						>{/if}
 					{#if can('project_participation.leave')}<Button
 							variant="tonal"
 							disabled={busy}
-							onclick={() => void leaveProject()}>{$t('Leave Project')}</Button
+							onclick={() => void leaveProject()}>{$t`Leave Project`}</Button
 						>{/if}
-					<Button as="a" href={resolve(libraryDestination)}>{$t('Open in Library')}</Button>
+					<Button as="a" href={resolve(libraryDestination)}>{$t`Open in Library`}</Button>
 					{#if can('project.archive')}<Button
 							variant="tonal"
 							disabled={busy}
-							onclick={() => void changeState('archive')}>{$t('Archive')}</Button
+							onclick={() => void changeState('archive')}>{$t`Archive`}</Button
 						>{:else if can('project.restore')}<Button
 							disabled={busy}
-							onclick={() => void changeState('restore')}>{$t('Restore')}</Button
+							onclick={() => void changeState('restore')}>{$t`Restore`}</Button
 						>{/if}
 				</div>
 			{/snippet}
 		</SectionHeader>
 
 		<Panel>
-			<h2>{$t('Participation')}</h2>
+			<h2>{$t`Participation`}</h2>
 			{#if project.participation === 'workspace'}
 				<p class="text-sm text-surface-600-400">
-					{$t('All active Workspace members participate in this Project.')}
+					{$t`All active Workspace members participate in this Project.`}
 				</p>
 			{:else}
 				<p class="text-sm text-surface-600-400">
 					{#if project.participation === 'managed'}
-						{$t(
-							'Managed Projects are visible only to their participants and Workspace owners/admins.'
-						)}
+						{$t`Managed Projects are visible only to their participants and Workspace owners/admins.`}
 					{:else}
-						{$t(
-							'Open Projects are visible to all Workspace members. Joining one adds it to Your Projects.'
-						)}
+						{$t`Open Projects are visible to all Workspace members. Joining one adds it to Your Projects.`}
 					{/if}
 				</p>
 				{#if project.active_participants.length > 0}
@@ -598,19 +594,18 @@
 										size="sm"
 										variant="tonal"
 										disabled={busy}
-										onclick={() => void removeParticipant(participant.user_id)}
-										>{$t('Remove')}</Button
+										onclick={() => void removeParticipant(participant.user_id)}>{$t`Remove`}</Button
 									>{/if}
 							</li>{/each}
 					</ul>
 				{:else}<p class="mt-3 text-sm text-surface-600-400">
-						{$t('No Project participants yet.')}
+						{$t`No Project participants yet.`}
 					</p>{/if}
 				{#if can('project_participation.manage')}
-					{#if directory.isPending}<p>{$t('Loading members…')}</p>
+					{#if directory.isPending}<p>{$t`Loading members…`}</p>
 					{:else if directory.isError}
-						<Notice variant="error">{$t('Unable to load members.')}</Notice>
-						<Button onclick={() => void directory.refetch()}>{$t('Retry')}</Button>
+						<Notice variant="error">{$t`Unable to load members.`}</Notice>
+						<Button onclick={() => void directory.refetch()}>{$t`Retry`}</Button>
 					{/if}
 					<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={addParticipant}>
 						<Combobox
@@ -634,10 +629,10 @@
 								);
 							}}
 						>
-							<Combobox.Label>{$t('Workspace member')}</Combobox.Label>
+							<Combobox.Label>{$t`Workspace member`}</Combobox.Label>
 							<Combobox.Control>
-								<Combobox.Input placeholder={$t('Search members')} />
-								<Combobox.Trigger aria-label={$t('Show members')}>⌄</Combobox.Trigger>
+								<Combobox.Input placeholder={$t`Search members`} />
+								<Combobox.Trigger aria-label={$t`Show members`}>⌄</Combobox.Trigger>
 							</Combobox.Control>
 							<Portal
 								><Combobox.Positioner
@@ -646,7 +641,7 @@
 											<Combobox.Item item={member}
 												><Combobox.ItemText>{member.username}</Combobox.ItemText></Combobox.Item
 											>
-										{:else}<p class="p-3">{$t('No matching members.')}</p>{/each}
+										{:else}<p class="p-3">{$t`No matching members.`}</p>{/each}
 									</Combobox.Content></Combobox.Positioner
 								></Portal
 							>
@@ -654,9 +649,9 @@
 						{#if directory.hasNextPage}<Button
 								type="button"
 								disabled={directory.isFetchingNextPage}
-								onclick={() => void directory.fetchNextPage()}>{$t('Load more members')}</Button
+								onclick={() => void directory.fetchNextPage()}>{$t`Load more members`}</Button
 							>{/if}
-						<Button disabled={busy || !selectedMember}>{$t('Add participant')}</Button>
+						<Button disabled={busy || !selectedMember}>{$t`Add participant`}</Button>
 					</form>
 				{/if}
 			{/if}
@@ -664,11 +659,11 @@
 
 		<Panel padding="none" aria-labelledby="project-items-title">
 			<div class="p-4">
-				<h2 id="project-items-title">{$t('Items')}</h2>
+				<h2 id="project-items-title">{$t`Items`}</h2>
 				<input
 					class="input"
-					aria-label={$t('Search Items')}
-					placeholder={$t('Search Items')}
+					aria-label={$t`Search Items`}
+					placeholder={$t`Search Items`}
 					value={itemSearch}
 					oninput={(event) => {
 						navigateItems({ search: event.currentTarget.value, page: 1 }, true);
@@ -676,11 +671,11 @@
 				/>
 			</div>
 			{#if items.isPending || (!items.data && items.isFetching)}<p class="px-4 pb-4">
-					{$t('Loading Items…')}
+					{$t`Loading Items…`}
 				</p>
 			{:else if items.isError || !items.data}<div class="px-4 pb-4">
 					<QueryError
-						message={$t('Unable to load Items.')}
+						message={$t`Unable to load Items.`}
 						busy={items.isFetching}
 						onRetry={() => void items.refetch()}
 					/>
@@ -708,7 +703,7 @@
 									{#snippet authors()}
 										{#if item.authors.length}<AuthorLine
 												names={item.authors.map((author) => author.full_name)}
-											/>{:else}{$t('Unknown authors')}{/if}
+											/>{:else}{$t`Unknown authors`}{/if}
 									{/snippet}
 									{item.publication_title || '—'} · {item.publication_date || '—'}
 								</BibliographicSummary></a
@@ -719,10 +714,10 @@
 										error = '';
 										pendingRemoveItem = { projectId, itemId: item.id };
 										removeItemDialogOpen = true;
-									}}>{$t('Remove')}</Button
+									}}>{$t`Remove`}</Button
 								>{/if}
 						</article>{:else}<p class="px-4 pb-4 text-surface-600-400">
-							{itemSearch ? $t('No matching Items.') : $t('No Items in this Project.')}
+							{itemSearch ? $t`No matching Items.` : $t`No Items in this Project.`}
 						</p>{/each}
 				</div>
 			{/if}
@@ -736,9 +731,9 @@
 				}}
 				sort={itemSort}
 				sortOptions={[
-					{ value: 'updated', label: $t('Recently updated') },
-					{ value: 'created', label: $t('Recently added') },
-					{ value: 'title', label: $t('Title') }
+					{ value: 'updated', label: $t`Recently updated` },
+					{ value: 'created', label: $t`Recently added` },
+					{ value: 'title', label: $t`Title` }
 				]}
 				onSort={(value) => {
 					navigateItems({
@@ -747,16 +742,16 @@
 					});
 				}}
 				onPage={(page) => navigateItems({ page })}
-				label={$t('Items pagination')}
+				label={$t`Items pagination`}
 				busy={items.isFetching}
 			/>
 		</Panel>
 
 		<Panel>
-			<h2>{$t('Discussion')}</h2>
-			{#if discussions.isPending}<p>{$t('Loading discussion…')}</p>
+			<h2>{$t`Discussion`}</h2>
+			{#if discussions.isPending}<p>{$t`Loading discussion…`}</p>
 			{:else if discussions.isError}<QueryError
-					message={$t('Unable to load Project discussion.')}
+					message={$t`Unable to load Project discussion.`}
 					busy={discussions.isFetching}
 					onRetry={() => void discussions.refetch()}
 				/>
@@ -768,7 +763,7 @@
 									size="sm"
 									variant="tonal"
 									disabled={busy}
-									onclick={() => void deleteDiscussion(message.id)}>{$t('Delete')}</Button
+									onclick={() => void deleteDiscussion(message.id)}>{$t`Delete`}</Button
 								>{/if}
 							{#if !message.mine && isAllowed(message.authorization, 'project_discussion.delete')}<Button
 									size="sm"
@@ -777,7 +772,7 @@
 									onclick={() => {
 										moderationMessageId = message.id;
 										moderationDialogOpen = true;
-									}}>{$t('Moderate')}</Button
+									}}>{$t`Moderate`}</Button
 								>{/if}
 						</div>
 						<p class="whitespace-pre-wrap">{message.body}</p>
@@ -785,7 +780,7 @@
 							>{new Date(message.created_at).toLocaleString()}</small
 						>
 					</article>
-				{:else}<p class="text-surface-600-400">{$t('No discussion messages yet.')}</p>{/each}{/if}
+				{:else}<p class="text-surface-600-400">{$t`No discussion messages yet.`}</p>{/each}{/if}
 			{#if can('project_discussion.create')}
 				<form class="mt-3 grid grid-cols-1 gap-2" onsubmit={addDiscussion}>
 					<textarea
@@ -793,8 +788,8 @@
 						bind:value={body}
 						required
 						maxlength="10000"
-						placeholder={$t('Write a message')}></textarea>
-					<div><Button disabled={busy || !body.trim()}>{$t('Post')}</Button></div>
+						placeholder={$t`Write a message`}></textarea>
+					<div><Button disabled={busy || !body.trim()}>{$t`Post`}</Button></div>
 				</form>
 			{/if}
 		</Panel>
@@ -820,8 +815,8 @@
 						<SectionHeader>
 							<Dialog.Title class="text-lg font-bold"
 								>{participationDialogOpen
-									? $t('Clear Project participant selection?')
-									: $t('Project settings')}</Dialog.Title
+									? $t`Clear Project participant selection?`
+									: $t`Project settings`}</Dialog.Title
 							>
 							{#snippet actions()}
 								<DialogCloseButton disabled={busy} />
@@ -830,9 +825,7 @@
 						{#if error}<Notice variant="error" class="mb-4">{error}</Notice>{/if}
 						{#if participationDialogOpen}
 							<p class="text-sm text-surface-600-400">
-								{$t(
-									'All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them.'
-								)}
+								{$t`All active Workspace members will participate. Existing participant selections will be permanently cleared, including suspended members. Switching back will not restore them.`}
 							</p>
 							<div class="mt-5 flex flex-wrap justify-end gap-2">
 								<Button
@@ -841,7 +834,7 @@
 									onclick={() => {
 										participationDialogOpen = false;
 										pendingSettings = undefined;
-									}}>{$t('Cancel')}</Button
+									}}>{$t`Cancel`}</Button
 								>
 								<Button
 									variant="danger-filled"
@@ -849,13 +842,13 @@
 									onclick={() => {
 										if (pendingSettings)
 											void applySettings(pendingSettings.projectId, pendingSettings.changes);
-									}}>{$t('Clear selection and save')}</Button
+									}}>{$t`Clear selection and save`}</Button
 								>
 							</div>
 						{:else}
 							<form class="grid grid-cols-1 gap-3 sm:grid-cols-2" onsubmit={saveSettings}>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Name')}<input
+									>{$t`Name`}<input
 										class="input"
 										bind:value={settingsName}
 										disabled={busy}
@@ -864,7 +857,7 @@
 									/></label
 								>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Participation')}<select
+									>{$t`Participation`}<select
 										class="select"
 										bind:value={settingsParticipation}
 										disabled={busy}
@@ -880,24 +873,18 @@
 								{#if settingsParticipation !== project.participation}
 									<p class="text-sm text-surface-600-400 sm:col-span-2">
 										{#if settingsParticipation === 'workspace'}
-											{$t('All active Workspace members will participate in this Project.')}
+											{$t`All active Workspace members will participate in this Project.`}
 										{:else if settingsParticipation === 'managed' && project.participation === 'workspace'}
-											{$t(
-												'A managed Project starts with no participants; Workspace owners/admins can add them.'
-											)}
+											{$t`A managed Project starts with no participants; Workspace owners/admins can add them.`}
 										{:else if project.participation === 'workspace'}
-											{$t(
-												'Switching from Workspace-wide participation starts with you as the first participant.'
-											)}
+											{$t`Switching from Workspace-wide participation starts with you as the first participant.`}
 										{:else}
-											{$t(
-												'Switching between open and managed participation preserves current participants.'
-											)}
+											{$t`Switching between open and managed participation preserves current participants.`}
 										{/if}
 									</p>
 								{/if}
 								<label class="grid grid-cols-1 gap-1 sm:col-span-2"
-									>{$t('Description')}<textarea
+									>{$t`Description`}<textarea
 										class="textarea min-h-24"
 										disabled={busy}
 										bind:value={settingsDescription}></textarea></label
@@ -907,14 +894,14 @@
 										type="button"
 										variant="tonal"
 										disabled={busy}
-										onclick={() => (settingsDialogOpen = false)}>{$t('Cancel')}</Button
+										onclick={() => (settingsDialogOpen = false)}>{$t`Cancel`}</Button
 									>
 									<Button
 										disabled={busy ||
 											!settingsName.trim() ||
 											(settingsParticipation !== project.participation &&
 												!project.allowed_participation_changes.includes(settingsParticipation))}
-										>{$t('Save Project settings')}</Button
+										>{$t`Save Project settings`}</Button
 									>
 								</div>
 							</form>
@@ -927,34 +914,32 @@
 
 	<ConfirmDialog
 		bind:open={removeItemDialogOpen}
-		title={$t('Remove Item from Project?')}
-		body={$t(
-			'Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.',
-			{ name: project?.name ?? '' }
-		) + (removeItemDialogOpen && error ? ` ${error}` : '')}
-		confirmLabel={$t('Remove from Project')}
+		title={$t`Remove Item from Project?`}
+		body={$t`Removing this Item from ${ph({ name: project?.name ?? '' })} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.` +
+			(removeItemDialogOpen && error ? ` ${error}` : '')}
+		confirmLabel={$t`Remove from Project`}
 		{busy}
 		onConfirm={() => void confirmRemoveItem()}
 	/>
 	<PromptDialog
 		bind:open={deleteDialogOpen}
-		title={$t('Permanently delete this Project?')}
-		body={$t('Type the Project name to confirm. This cannot be undone.')}
-		label={$t('Project name')}
+		title={$t`Permanently delete this Project?`}
+		body={$t`Type the Project name to confirm. This cannot be undone.`}
+		label={$t`Project name`}
 		placeholder={project?.name ?? ''}
 		requireMatch={project?.name ?? ''}
-		confirmLabel={$t('Delete Project')}
+		confirmLabel={$t`Delete Project`}
 		{busy}
 		error={deleteDialogOpen ? error : ''}
 		onConfirm={() => void confirmDeleteProject()}
 	/>
 	<PromptDialog
 		bind:open={moderationDialogOpen}
-		title={$t('Moderate Discussion message')}
+		title={$t`Moderate Discussion message`}
 		error={moderationDialogOpen ? error : ''}
-		body={$t('Give a reason for removing this message. The action is recorded in the audit log.')}
-		label={$t('Moderation reason')}
-		confirmLabel={$t('Remove message')}
+		body={$t`Give a reason for removing this message. The action is recorded in the audit log.`}
+		label={$t`Moderation reason`}
+		confirmLabel={$t`Remove message`}
 		{busy}
 		onConfirm={(reason) => void moderateDiscussion(reason)}
 	/>

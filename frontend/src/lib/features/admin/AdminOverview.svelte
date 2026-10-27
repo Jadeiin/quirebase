@@ -3,20 +3,20 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import Stat from '#lib/design/Stat.svelte';
 	import { dateTimeFormat } from '#lib/format.js';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import type { components } from '#lib/api/schema.js';
 
 	let { overview }: { overview: components['schemas']['AdminOverviewView'] } = $props();
 </script>
 
 <div class="grid grid-cols-2 gap-3 min-[800px]:grid-cols-4">
-	<Stat value={overview.user_count} label={$t('Users')} />
-	<Stat value={overview.pending_invitation_count} label={$t('Pending invitations')} />
-	<Stat value={overview.storage.items_count} label={$t('Items')} />
-	<Stat value={overview.failed_workflow_count} label={$t('Failed workflows')} />
+	<Stat value={overview.user_count} label={$t`Users`} />
+	<Stat value={overview.pending_invitation_count} label={$t`Pending invitations`} />
+	<Stat value={overview.storage.items_count} label={$t`Items`} />
+	<Stat value={overview.failed_workflow_count} label={$t`Failed workflows`} />
 </div>
 <Panel class="mt-4">
-	<h2>{$t('Recent audit events')}</h2>
+	<h2>{$t`Recent audit events`}</h2>
 	{#each overview.recent_events.items as event (event.id)}
 		<ItemRow>
 			<strong>{event.action}</strong><span class="text-surface-600-400"
@@ -24,6 +24,6 @@
 			>
 		</ItemRow>
 	{:else}
-		<p class="text-surface-600-400">{$t('No audit events.')}</p>
+		<p class="text-surface-600-400">{$t`No audit events.`}</p>
 	{/each}
 </Panel>

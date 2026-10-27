@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from test_http import authenticated_async_client
+from app_helpers import authenticated_async_client
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.core.config import get_settings

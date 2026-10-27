@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { i18n } from '@lingui/core';
+import { get } from 'svelte/store';
+import { domainLabel } from '#lib/domain-labels.js';
 import {
 	DEFAULT_LOCALE,
 	LOCALE_STORAGE_KEY,
+	activeLocale,
+	activateLocale,
 	detectInitialLocale,
 	normalizeLocale,
-	storeLocale
+	storeLocale,
+	setLocale,
+	syncLocaleAcrossTabs
 } from '#lib/locale.js';
 
 function setBrowserLanguage(language: string) {
@@ -15,8 +22,47 @@ function setBrowserLanguage(language: string) {
 
 describe('frontend locale metadata', () => {
 	afterEach(() => {
+		activateLocale('en-US');
 		localStorage.clear();
 		setBrowserLanguage('en-US');
+	});
+
+	it('applies and persists a normalized preference to the application and document', () => {
+		expect(setLocale('zh_CN')).toBe('zh-CN');
+		expect(i18n.locale).toBe('zh-CN');
+		expect(get(activeLocale)).toBe('zh-CN');
+		expect(document.documentElement.lang).toBe('zh-CN');
+		expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('zh-CN');
+		expect(activateLocale('unsupported')).toBe('en-US');
+	});
+
+	it('synchronizes another tab without writing the preference again and stops on cleanup', () => {
+		const stop = syncLocaleAcrossTabs();
+		try {
+			window.dispatchEvent(
+				new StorageEvent('storage', { key: 'quirebase:theme', newValue: 'zh-CN' })
+			);
+			expect(i18n.locale).toBe('en-US');
+			window.dispatchEvent(
+				new StorageEvent('storage', { key: LOCALE_STORAGE_KEY, newValue: 'zh-CN' })
+			);
+			expect(i18n.locale).toBe('zh-CN');
+			expect(get(activeLocale)).toBe('zh-CN');
+			expect(document.documentElement.lang).toBe('zh-CN');
+			expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBeNull();
+			stop();
+			window.dispatchEvent(
+				new StorageEvent('storage', { key: LOCALE_STORAGE_KEY, newValue: 'en-US' })
+			);
+			expect(i18n.locale).toBe('zh-CN');
+		} finally {
+			stop();
+		}
+	});
+
+	it('resolves the Project participation label from the committed context-specific catalog', () => {
+		activateLocale('zh-CN');
+		expect(i18n._(domainLabel('open'))).toBe('开放');
 	});
 
 	it('normalizes supported BCP 47 tags and falls back to the default locale', () => {

@@ -13,7 +13,7 @@
 	import { ApiError } from '#lib/api/client.js';
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import { getSession } from '#lib/session.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { dateTimeFormat } from '#lib/format.js';
 	import Button from '#lib/design/Button.svelte';
@@ -85,8 +85,8 @@
 		} catch (reason) {
 			uncertain = !(reason instanceof ApiError && reason.status === 404);
 			error = uncertain
-				? $t('Unable to confirm whether you joined. Check status before trying again.')
-				: $t('This invitation is no longer available. Ask the inviter for a new invitation.');
+				? $t`Unable to confirm whether you joined. Check status before trying again.`
+				: $t`This invitation is no longer available. Ask the inviter for a new invitation.`;
 		} finally {
 			await Promise.all([
 				client.invalidateQueries({ queryKey: receivedInvitationKeys.all(userId) }),
@@ -104,7 +104,7 @@
 		try {
 			await mutation.mutateAsync(invitation.id);
 		} catch (reason) {
-			failure = apiErrorMessage(reason, $t('Unable to accept invitation'));
+			failure = apiErrorMessage(reason, $t`Unable to accept invitation`);
 		}
 		await checkStatus(invitation, failure);
 	}
@@ -120,19 +120,19 @@
 			<div class="flex flex-wrap items-center gap-2.5">
 				<Icon name="mail" size={20} />
 				<h2 id="invitations-heading" class="text-lg font-semibold">
-					{$t('Workspace invitations')}
+					{$t`Workspace invitations`}
 				</h2>
 				{#if inbox.data?.total}<span
 						class="rounded-full bg-primary-700-300 px-2.5 py-0.5 text-xs font-bold text-primary-50-950 tabular-nums"
-						aria-label={$t('{count} pending invitations', { count: inbox.data.total })}
+						aria-label={$t`${ph({ count: inbox.data.total })} pending invitations`}
 						>{inbox.data.total}</span
 					>{/if}
 			</div>
 			<Button
 				variant="icon"
 				size="sm"
-				aria-label={$t('Refresh')}
-				title={$t('Refresh')}
+				aria-label={$t`Refresh`}
+				title={$t`Refresh`}
 				disabled={busy || inbox.isFetching}
 				onclick={() => {
 					void client.invalidateQueries({ queryKey: receivedInvitationKeys.all(userId) });
@@ -140,27 +140,27 @@
 				}}><Icon name="rotate" size={16} /></Button
 			>
 			<p class="col-span-2 text-sm text-surface-700-300">
-				{$t('Accept an invitation to join a Workspace.')}
+				{$t`Accept an invitation to join a Workspace.`}
 			</p>
 		</header>
 		{#if target}
-			<Panel aria-label={$t('Invitation status')} class="grid min-w-0 grid-cols-1 gap-3">
+			<Panel aria-label={$t`Invitation status`} class="grid min-w-0 grid-cols-1 gap-3">
 				<div class="flex items-start justify-between gap-3">
 					<strong class="min-w-0 break-words">{target.workspace_name}</strong>
 					{#if !busy && !uncertain}<Button
 							variant="icon"
 							size="sm"
 							class="shrink-0"
-							aria-label={$t('Dismiss')}
+							aria-label={$t`Dismiss`}
 							onclick={() => {
 								target = null;
 								error = '';
 							}}><Icon name="close" size={16} /></Button
 						>{/if}
 				</div>
-				{#if busy}<p role="status">{$t('Checking invitation…')}</p>
+				{#if busy}<p role="status">{$t`Checking invitation…`}</p>
 				{:else if !uncertain && !detail.isError && detail.data?.state === 'accepted'}
-					<Notice variant="success">{$t('Invitation accepted.')}</Notice>
+					<Notice variant="success">{$t`Invitation accepted.`}</Notice>
 					{#if detail.data.can_open}
 						<Button
 							as="a"
@@ -168,31 +168,27 @@
 							class="justify-self-start"
 							href={resolve(workspaceHref(detail.data.workspace_id))}
 							onclick={() => setDefaultWorkspacePreference(detail.data!.workspace_id)}
-							>{$t('Open Workspace')}</Button
+							>{$t`Open Workspace`}</Button
 						>
 					{:else}<Notice
-							>{$t(
-								'You joined this workspace, but access is no longer available. Contact a workspace administrator.'
-							)}</Notice
+							>{$t`You joined this workspace, but access is no longer available. Contact a workspace administrator.`}</Notice
 						>{/if}
 				{:else if detail.data?.state === 'revoked' || detail.data?.state === 'expired'}
 					<Notice
-						>{$t(
-							'This invitation is no longer available. Ask the inviter for a new invitation.'
-						)}</Notice
+						>{$t`This invitation is no longer available. Ask the inviter for a new invitation.`}</Notice
 					>
 				{/if}
 				{#if error}<Notice variant="error">{error}</Notice>{/if}
 				{#if uncertain}<Button
 						class="justify-self-start"
 						disabled={busy}
-						onclick={() => target && checkStatus(target)}>{$t('Check status')}</Button
+						onclick={() => target && checkStatus(target)}>{$t`Check status`}</Button
 					>{/if}
 			</Panel>
 		{/if}
-		{#if inbox.isPending}<p role="status">{$t('Loading invitations…')}</p>
+		{#if inbox.isPending}<p role="status">{$t`Loading invitations…`}</p>
 		{:else if inbox.isError}<QueryError
-				message={$t('Unable to load workspace invitations.')}
+				message={$t`Unable to load workspace invitations.`}
 				busy={inbox.isFetching}
 				onRetry={() => void inbox.refetch()}
 			/>
@@ -206,27 +202,23 @@
 						<div class="grid min-w-0 flex-1 grid-cols-1 gap-2">
 							<h3 class="font-semibold break-words">{invitation.workspace_name}</h3>
 							<p class="text-sm break-words text-surface-700-300">
-								{$t('Invited by {username}', { username: invitation.inviter_username })} · {$t(
+								{$t`Invited by ${ph({ username: invitation.inviter_username })}`} · {$t(
 									domainLabel(invitation.role)
 								)}
 							</p>
 							<p class="text-sm text-surface-700-300">
-								{$t('Expires')}
+								{$t`Expires`}
 								{$dateTimeFormat.format(new Date(invitation.expires_at))}
 							</p>
 							{#if invitation.unavailable_reason === 'workspace_read_only'}<p
 									class="text-sm text-surface-700-300"
 								>
-									{$t(
-										'This workspace is read only. You can accept when membership changes are available again.'
-									)}
+									{$t`This workspace is read only. You can accept when membership changes are available again.`}
 								</p>
 							{:else if invitation.unavailable_reason === 'current_member'}<p
 									class="text-sm text-surface-700-300"
 								>
-									{$t(
-										'You already have a membership. Contact a workspace administrator to restore access.'
-									)}
+									{$t`You already have a membership. Contact a workspace administrator to restore access.`}
 								</p>{/if}
 						</div>
 						<Button
@@ -237,7 +229,7 @@
 								uncertain ||
 								!invitation.can_accept ||
 								(target?.id === invitation.id && detail.isError && !uncertain)}
-							onclick={() => accept(invitation)}>{$t('Accept invitation')}</Button
+							onclick={() => accept(invitation)}>{$t`Accept invitation`}</Button
 						>
 					</article>
 				{/each}
@@ -251,7 +243,7 @@
 				onPage={(next) => navigate(next)}
 				onPageSize={(size) => navigate(1, size)}
 				busy={inbox.isFetching}
-				label={$t('Workspace invitations')}
+				label={$t`Workspace invitations`}
 			/>{/if}
 	</section>
 {/if}

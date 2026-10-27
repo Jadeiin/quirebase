@@ -4,7 +4,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
 	import { metadataValueLabel } from '#lib/features/item/metadata-labels.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { libraryFacetsQuery } from './queries.js';
 	import type { LibraryFilters, LibraryMetadataFilter, libraryHref } from './filters.js';
@@ -28,7 +28,7 @@
 	const groups = $derived<{ key: string; label: string; choices: Choice[] }[]>([
 		{
 			key: 'authors',
-			label: $t('Author'),
+			label: $t`Author`,
 			choices: (facets.data?.authors ?? []).map((author) => ({
 				label: author.full_name,
 				count: author.item_count,
@@ -37,7 +37,7 @@
 		},
 		{
 			key: 'keywords',
-			label: $t('Keyword'),
+			label: $t`Keyword`,
 			choices: (facets.data?.keywords ?? []).map((keyword) => ({
 				label: keyword.value,
 				count: keyword.item_count,
@@ -46,7 +46,7 @@
 		},
 		{
 			key: 'types',
-			label: $t('Type'),
+			label: $t`Type`,
 			choices: (facets.data?.reference_types ?? []).map((type) => ({
 				label: metadataValueLabel(type.value),
 				count: type.item_count,
@@ -56,14 +56,14 @@
 	]);
 </script>
 
-<section aria-label={$t('Refine current results')} class="border-t border-surface-300-700 pt-4">
-	<h2 class="text-sm font-semibold">{$t('Refine current results')}</h2>
+<section aria-label={$t`Refine current results`} class="border-t border-surface-300-700 pt-4">
+	<h2 class="text-sm font-semibold">{$t`Refine current results`}</h2>
 	<p class="mt-1 text-xs text-surface-600-400">
-		{$t('Authors, keywords, types and matching Items on this page.')}
+		{$t`Authors, keywords, types and matching Items on this page.`}
 	</p>
 	{#if facets.isError || facets.fetchStatus === 'paused' || facets.data === null}
 		<QueryError
-			message={$t('Unable to load filter values.')}
+			message={$t`Unable to load filter values.`}
 			busy={facets.isFetching}
 			onRetry={() => void facets.refetch()}
 		/>
@@ -93,7 +93,7 @@
 								</a>
 							</li>
 						{:else}
-							<li class="text-xs text-surface-600-400">{$t('No values on this page.')}</li>
+							<li class="text-xs text-surface-600-400">{$t`No values on this page.`}</li>
 						{/each}
 					</ul>
 					{#if group.choices.length > 5}
@@ -104,16 +104,16 @@
 							aria-expanded={Boolean(expanded[group.key])}
 							aria-controls={`${listId}-${group.key}`}
 							aria-label={expanded[group.key]
-								? $t('Show less {field}', { field: group.label })
-								: $t('Show more {field}', { field: group.label })}
+								? $t`Show less ${ph({ field: group.label })}`
+								: $t`Show more ${ph({ field: group.label })}`}
 							onclick={() => (expanded[group.key] = !expanded[group.key])}
-							>{expanded[group.key] ? $t('Show less') : $t('Show more')}</Button
+							>{expanded[group.key] ? $t`Show less` : $t`Show more`}</Button
 						>
 					{/if}
 				</div>
 			{/each}
 		</div>
 	{:else if facets.isPending && facets.fetchStatus !== 'paused'}
-		<p role="status" class="mt-3 text-sm text-surface-600-400">{$t('Loading filter values…')}</p>
+		<p role="status" class="mt-3 text-sm text-surface-600-400">{$t`Loading filter values…`}</p>
 	{/if}
 </section>

@@ -5,7 +5,7 @@
 	import AdminWorkflows from '#lib/features/admin/AdminWorkflows.svelte';
 	import { getAdminFilters } from '#lib/features/admin/filters.js';
 	import { adminWorkflowsQuery } from '#lib/features/admin/queries.js';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, t } from 'lingui-for-svelte/macro';
 
 	const { filters, setPage, correctPage, setPageSize } = getAdminFilters();
 	const workflows = createQuery(() => adminWorkflowsQuery(filters(), true));
@@ -23,7 +23,7 @@
 	onRetry={() => void workflows.refetch()}
 	loading={workflows.isPending}
 	failed={workflows.isError}
-	label={msg('Workflows')}
+	label={msg`Workflows`}
 >
 	<AdminWorkflows
 		workflows={workflows.data!.items}
@@ -36,7 +36,7 @@
 		pageCount={Math.max(1, Math.ceil((workflows.data?.total ?? 0) / filters().pageSize))}
 		total={workflows.data?.total ?? 0}
 		busy={workflows.isFetching}
-		label={$t('Administration pages')}
+		label={$t`Administration pages`}
 		onPage={setPage}
 		onPageSize={setPageSize}
 	/>

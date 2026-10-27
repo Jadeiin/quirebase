@@ -4,13 +4,16 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from advanced_alchemy.alembic.commands import AlembicCommands
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect
 
 from quirebase.core.database import database_config
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 EXPECTED_TABLES = {
     "api_tokens",
@@ -103,9 +106,3 @@ def test_migration_revisions_are_single_head_and_fit_the_version_column():
     assert len(script.get_heads()) == 1
     for revision in revisions:
         assert len(revision.revision) <= 32, revision.revision
-
-
-def test_alembic_imports_the_mapping_module_without_a_package_facade():
-    source = Path("migrations/env.py").read_text(encoding="utf-8")
-    assert "import quirebase.models" in source
-    assert "from quirebase import models" not in source

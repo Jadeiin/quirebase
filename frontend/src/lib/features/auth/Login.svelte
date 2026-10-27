@@ -4,7 +4,7 @@
 	import AuthPage from '#lib/design/AuthPage.svelte';
 	import Notice from '#lib/design/Notice.svelte';
 	import Panel from '#lib/design/Panel.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import Button from '#lib/design/Button.svelte';
 
 	let username = $state('');
@@ -21,7 +21,7 @@
 			});
 			window.location.reload();
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to sign in'));
+			error = apiErrorMessage(reason, $t`Unable to sign in`);
 		} finally {
 			busy = false;
 		}
@@ -38,13 +38,13 @@
 		}}
 	>
 		<h1 class="m-0">Quirebase</h1>
-		<p class="text-surface-600-400">{$t('Sign in to your research workspace.')}</p>
+		<p class="text-surface-600-400">{$t`Sign in to your research workspace.`}</p>
 		<label
-			>{$t('Username')}
+			>{$t`Username`}
 			<input class="input" bind:value={username} autocomplete="username" required /></label
 		>
 		<label
-			>{$t('Password')}
+			>{$t`Password`}
 			<input
 				class="input"
 				bind:value={password}
@@ -55,7 +55,7 @@
 		>
 		{#if error}<Notice variant="error">{error}</Notice>{/if}
 		<Button variant="filled" type="submit" disabled={busy}
-			>{busy ? $t('Signing in…') : $t('Sign in')}</Button
+			>{busy ? $t`Signing in…` : $t`Sign in`}</Button
 		>
 	</Panel>
 </AuthPage>

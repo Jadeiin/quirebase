@@ -3,7 +3,8 @@
 	import { onMount } from 'svelte';
 	import { DatePicker, Portal, parseDate, type DateValue } from '@skeletonlabs/skeleton-svelte';
 	import Icon from '#lib/design/Icon.svelte';
-	import { activeLocale, t } from '#lib/i18n.js';
+	import { activeLocale } from '#lib/locale.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 
 	let {
 		value = $bindable(''),
@@ -63,7 +64,7 @@
 
 	$effect(() => {
 		input?.setCustomValidity(
-			value && !parseInput(value) ? $t('Enter a valid {format} date.', { format: placeholder }) : ''
+			value && !parseInput(value) ? $t`Enter a valid ${ph({ format: placeholder })} date.` : ''
 		);
 	});
 </script>
@@ -112,13 +113,13 @@
 					</DatePicker.Input>
 				{/snippet}
 			</DatePicker.Context>
-			<DatePicker.Trigger aria-label={$t('Choose date for {label}', { label })}
+			<DatePicker.Trigger aria-label={$t`Choose date for ${label}`}
 				><Icon name="calendar" size={16} /></DatePicker.Trigger
 			>
 		</DatePicker.Control>
 		<Portal target={portalTarget}>
 			<DatePicker.Positioner class="z-100">
-				<DatePicker.Content aria-label={$t('Calendar for {label}', { label })} class="shadow-xl">
+				<DatePicker.Content aria-label={$t`Calendar for ${label}`} class="shadow-xl">
 					<DatePicker.Context>
 						{#snippet children(calendar)}
 							{#if precision === 'day'}
@@ -186,14 +187,14 @@
 
 {#snippet viewControl(textId: string)}
 	<DatePicker.ViewControl>
-		<DatePicker.PrevTrigger aria-label={$t('Previous calendar period')}
+		<DatePicker.PrevTrigger aria-label={$t`Previous calendar period`}
 			><Icon name="chevron-left" size={16} /></DatePicker.PrevTrigger
 		>
 		<!-- Name the trigger with its visible range text so WCAG 2.5.3 (label in name) holds. -->
 		<DatePicker.ViewTrigger aria-labelledby={textId}
 			><DatePicker.RangeText id={textId} /></DatePicker.ViewTrigger
 		>
-		<DatePicker.NextTrigger aria-label={$t('Next calendar period')}
+		<DatePicker.NextTrigger aria-label={$t`Next calendar period`}
 			><Icon name="chevron-right" size={16} /></DatePicker.NextTrigger
 		>
 	</DatePicker.ViewControl>

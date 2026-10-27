@@ -21,7 +21,7 @@
 		importKeys,
 		type ImportBatch
 	} from '#lib/features/import/queries.js';
-	import { t } from '#lib/i18n.js';
+	import { plural, t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import DiscoveryResults from './DiscoveryResults.svelte';
@@ -82,10 +82,10 @@
 		results.data ? Math.max(1, Math.ceil(results.data.total / results.data.per_page)) : 1
 	);
 	const sortLabels = $derived({
-		relevance: $t('Relevance'),
-		published: $t('Publication date'),
-		cited: $t('Citation count'),
-		updated: $t('Updated')
+		relevance: $t`Relevance`,
+		published: $t`Publication date`,
+		cited: $t`Citation count`,
+		updated: $t`Updated`
 	});
 	$effect(() => {
 		if (!providers.data) return;
@@ -146,7 +146,7 @@
 			await goto(target, { reset: false, replace });
 		} catch {
 			publishedHref = undefined;
-			navigationError = $t('Unable to open the search results. Try again.');
+			navigationError = $t`Unable to open the search results. Try again.`;
 		}
 	}
 	// A Provider can return a smaller page or a corrected page number.
@@ -177,11 +177,11 @@
 			year_to: yearTo ? Number(yearTo) : null
 		};
 		if (!body.clauses.every((clause) => clause.term)) {
-			validationError = $t('Enter a search term for each condition.');
+			validationError = $t`Enter a search term for each condition.`;
 			return;
 		}
 		if (body.year_from && body.year_to && body.year_from > body.year_to) {
-			validationError = $t('The starting year must not be after the ending year.');
+			validationError = $t`The starting year must not be after the ending year.`;
 			return;
 		}
 		void loadResults(body);
@@ -243,30 +243,30 @@
 			await goto(resolve(workspaceHref(workspaceId, `import?${parameters}`)));
 		} catch (reason) {
 			if (isCurrent(started))
-				navigationError = apiErrorMessage(reason, $t('Unable to open Import preview. Try again.'));
+				navigationError = apiErrorMessage(reason, $t`Unable to open Import preview. Try again.`);
 		}
 	}
 </script>
 
 <SectionHeader>
 	<div>
-		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('External metadata')}</p>
-		<h1>{$t('Discovery')}</h1>
+		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t`External metadata`}</p>
+		<h1>{$t`Discovery`}</h1>
 		<p class="text-surface-600-400">
-			{$t('Search external sources and preview records before importing.')}
+			{$t`Search external sources and preview records before importing.`}
 		</p>
 	</div>
 </SectionHeader>
 {#if providers.isError || providers.fetchStatus === 'paused'}
 	<QueryError
-		message={apiErrorMessage(providers.error, $t('Unable to load Discovery providers.'))}
+		message={apiErrorMessage(providers.error, $t`Unable to load Discovery providers.`)}
 		busy={providers.isFetching}
 		onRetry={() => void providers.refetch()}
 	/>
 {:else if providers.isPending}
-	<LoadingState label={$t('Loading Discovery providers…')} />
+	<LoadingState label={$t`Loading Discovery providers…`} />
 {:else if providers.data.search.length === 0}
-	<Notice>{$t('No Discovery providers are available.')}</Notice>
+	<Notice>{$t`No Discovery providers are available.`}</Notice>
 {/if}
 <Panel
 	as="form"
@@ -280,7 +280,7 @@
 		class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.7fr)_9rem_9rem]"
 	>
 		<label class="grid grid-cols-1 gap-1">
-			<span class="text-sm font-semibold">{$t('Provider')}</span>
+			<span class="text-sm font-semibold">{$t`Provider`}</span>
 			<select class="select" bind:value={provider}>
 				{#each providers.data?.search ?? [] as option (option.id)}
 					<option value={option.id}>{option.name}</option>
@@ -288,43 +288,43 @@
 			</select>
 		</label>
 		<label class="grid grid-cols-1 gap-1">
-			<span class="text-sm font-semibold">{$t('Sort')}</span>
+			<span class="text-sm font-semibold">{$t`Sort`}</span>
 			<select class="select" bind:value={sort}>
 				{#each selectedProvider?.sorts ?? [] as option (option)}
 					<option value={option}>{sortLabels[option]}</option>
 				{/each}
 			</select>
 		</label>
-		<DateField precision="year" label={$t('From year')} min="1000-01-01" bind:value={yearFrom} />
-		<DateField precision="year" label={$t('To year')} min="1000-01-01" bind:value={yearTo} />
+		<DateField precision="year" label={$t`From year`} min="1000-01-01" bind:value={yearFrom} />
+		<DateField precision="year" label={$t`To year`} min="1000-01-01" bind:value={yearTo} />
 	</div>
 
-	<div class="grid grid-cols-1 gap-2" aria-label={$t('Search conditions')}>
+	<div class="grid grid-cols-1 gap-2" aria-label={$t`Search conditions`}>
 		{#each clauses as clause, index (clause.id)}
 			<div class="grid grid-cols-1 gap-2 md:grid-cols-[7rem_10rem_minmax(12rem,1fr)_auto]">
-				<select class="select" bind:value={clause.operator} aria-label={$t('Boolean operator')}>
-					<option value="and">{$t('AND')}</option>
-					<option value="or">{$t('OR')}</option>
-					<option value="not">{$t('NOT')}</option>
+				<select class="select" bind:value={clause.operator} aria-label={$t`Boolean operator`}>
+					<option value="and">{$t`AND`}</option>
+					<option value="or">{$t`OR`}</option>
+					<option value="not">{$t`NOT`}</option>
 				</select>
-				<select class="select" bind:value={clause.field} aria-label={$t('Search field')}>
-					<option value="any">{$t('Any field')}</option>
-					<option value="title">{$t('Title')}</option>
-					<option value="author">{$t('Author')}</option>
-					<option value="publication">{$t('Publication')}</option>
-					<option value="abstract">{$t('Abstract')}</option>
+				<select class="select" bind:value={clause.field} aria-label={$t`Search field`}>
+					<option value="any">{$t`Any field`}</option>
+					<option value="title">{$t`Title`}</option>
+					<option value="author">{$t`Author`}</option>
+					<option value="publication">{$t`Publication`}</option>
+					<option value="abstract">{$t`Abstract`}</option>
 				</select>
 				<input
 					class="input"
 					bind:value={clause.term}
 					maxlength="300"
-					placeholder={index === 0 ? $t('Title, author, DOI, or topic') : $t('Another condition')}
+					placeholder={index === 0 ? $t`Title, author, DOI, or topic` : $t`Another condition`}
 					required
 				/>
 				<Button
 					type="button"
 					disabled={clauses.length === 1}
-					onclick={() => removeClause(clause.id)}>{$t('Remove')}</Button
+					onclick={() => removeClause(clause.id)}>{$t`Remove`}</Button
 				>
 			</div>
 		{/each}
@@ -333,11 +333,11 @@
 		<Button
 			type="button"
 			disabled={!providers.data || clauses.length >= providers.data.max_search_clauses}
-			onclick={addClause}>{$t('Add condition')}</Button
+			onclick={addClause}>{$t`Add condition`}</Button
 		>
 		<span class="grow basis-64"></span>
 		<Button variant="filled" disabled={busy || !selectedProvider}
-			>{busy ? $t('Searching…') : $t('Search Discovery')}</Button
+			>{busy ? $t`Searching…` : $t`Search Discovery`}</Button
 		>
 	</div>
 </Panel>
@@ -346,20 +346,20 @@
 {#if navigationError}<Notice variant="error" class="mt-4">{navigationError}</Notice>{/if}
 {#if attemptFailed}
 	<QueryError
-		message={apiErrorMessage(attempt.error, $t('Search failed'))}
+		message={apiErrorMessage(attempt.error, $t`Search failed`)}
 		{busy}
 		onRetry={() => lastAttempt && void loadResults(lastAttempt)}
 	/>
 {:else if unavailable}
 	<QueryError
-		message={apiErrorMessage(results.error, $t('Search failed'))}
+		message={apiErrorMessage(results.error, $t`Search failed`)}
 		{busy}
 		onRetry={() => submitted && void loadResults(submitted)}
 	/>
 {/if}
 {#if reviewMutation.isError}
 	<QueryError
-		message={apiErrorMessage(reviewMutation.error, $t('Import preview failed'))}
+		message={apiErrorMessage(reviewMutation.error, $t`Import preview failed`)}
 		busy={reviewMutation.isPending}
 		onRetry={() => void review(reviewAttempt)}
 	/>
@@ -367,13 +367,13 @@
 <Panel class="mt-4" aria-busy={busy}>
 	<SectionHeader>
 		<div>
-			<h2>{$t('Candidate Records')}</h2>
+			<h2>{$t`Candidate Records`}</h2>
 			{#if results.data}<p class="text-surface-600-400">
-					{$t('{count, plural, one {# result} other {# results}}', { count: results.data.total })}
+					{$plural({ count: results.data.total }, { one: '# result', other: '# results' })}
 				</p>{/if}
 		</div>
 	</SectionHeader>
-	{#if busy}<LoadingState label={$t('Searching…')} />{/if}
+	{#if busy}<LoadingState label={$t`Searching…`} />{/if}
 	{#if results.data}
 		{#if results.data.results.length}
 			<DiscoveryResults
@@ -387,8 +387,8 @@
 		{:else}
 			<EmptyState
 				icon="search"
-				title={$t('No candidates found')}
-				detail={$t('Try different terms, fewer conditions, or another Provider.')}
+				title={$t`No candidates found`}
+				detail={$t`Try different terms, fewer conditions, or another Provider.`}
 			/>
 		{/if}
 		<Pagination
@@ -398,7 +398,7 @@
 			pageSizeOptions={pageSizes}
 			total={results.data.total}
 			{busy}
-			label={$t('Discovery result pages')}
+			label={$t`Discovery result pages`}
 			onPage={(next) => submitted && void loadResults({ ...submitted, page: next })}
 			onPageSize={(size) =>
 				submitted && void loadResults({ ...submitted, page: 1, per_page: size })}
@@ -406,8 +406,8 @@
 	{:else if !busy && !unavailable && !attemptFailed}
 		<EmptyState
 			icon="search"
-			title={$t('Search results will appear here.')}
-			detail={$t('Search an external Provider to find records for your Library.')}
+			title={$t`Search results will appear here.`}
+			detail={$t`Search an external Provider to find records for your Library.`}
 		/>
 	{/if}
 </Panel>

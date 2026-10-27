@@ -10,12 +10,11 @@ from uuid import UUID, uuid4
 import pymupdf
 import pytest
 from advanced_alchemy.types import FileObject
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from import_helpers import pdf_import_batch_data
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from storage_helpers import collect_body, local_object_path, put_pdf_object
-from test_http import authenticated_async_client
 from workspace_helpers import (
     fixture_membership_id,
     fixture_workspace_id,

@@ -11,7 +11,7 @@
 	import StatusNotice from '#lib/design/StatusNotice.svelte';
 	import ConfirmDialog from '#lib/design/ConfirmDialog.svelte';
 	import PromptDialog from '#lib/design/PromptDialog.svelte';
-	import { msg, t } from '#lib/i18n.js';
+	import { msg, ph, t } from 'lingui-for-svelte/macro';
 	import { workspaceLifecycleMutationOptions, workspaceReindexMutationOptions } from './mutations';
 
 	const workspace = getWorkspaceContext();
@@ -46,9 +46,9 @@
 				await goto(resolve('workspace'), { replace: true });
 				return;
 			}
-			notice = action === 'archive' ? $t('Workspace archived') : $t('Workspace restored');
+			notice = action === 'archive' ? $t`Workspace archived` : $t`Workspace restored`;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Workspace action failed'));
+			error = apiErrorMessage(reason, $t`Workspace action failed`);
 		}
 	}
 	async function reindex() {
@@ -60,38 +60,38 @@
 			void workflows
 				.track(started.id, {
 					workspaceId: workspace.workspaceId,
-					label: $t('Workspace reindex'),
-					successMessage: msg('Workspace reindex completed'),
-					failureMessage: msg('Workspace reindex failed')
+					label: $t`Workspace reindex`,
+					successMessage: msg`Workspace reindex completed`,
+					failureMessage: msg`Workspace reindex failed`
 				})
 				.settled.catch(() => undefined);
-			maintenanceNotice = $t('Workspace reindex started');
+			maintenanceNotice = $t`Workspace reindex started`;
 		} catch (reason) {
-			maintenanceError = apiErrorMessage(reason, $t('Workspace action failed'));
+			maintenanceError = apiErrorMessage(reason, $t`Workspace action failed`);
 		}
 	}
 </script>
 
 <section class="grid grid-cols-1 gap-6" aria-labelledby="workspace-advanced-heading">
 	<div>
-		<h2 id="workspace-advanced-heading" class="text-xl font-semibold">{$t('Advanced')}</h2>
+		<h2 id="workspace-advanced-heading" class="text-xl font-semibold">{$t`Advanced`}</h2>
 		<p class="mt-1 text-sm text-surface-700-300">
-			{$t('Workspace maintenance, archiving and deletion.')}
+			{$t`Workspace maintenance, archiving and deletion.`}
 		</p>
 	</div>
 	{#if workspace.can('workspace_maintenance.run')}
 		<Panel class="grid grid-cols-1 justify-items-start gap-3">
-			<h3 class="text-lg font-semibold">{$t('Workspace maintenance')}</h3>
-			<p class="text-sm text-surface-700-300">{$t('Rebuild search indexes for this Workspace.')}</p>
-			<Button disabled={busy} onclick={() => void reindex()}>{$t('Reindex Workspace')}</Button>
+			<h3 class="text-lg font-semibold">{$t`Workspace maintenance`}</h3>
+			<p class="text-sm text-surface-700-300">{$t`Rebuild search indexes for this Workspace.`}</p>
+			<Button disabled={busy} onclick={() => void reindex()}>{$t`Reindex Workspace`}</Button>
 			<StatusNotice error={maintenanceError} notice={maintenanceNotice} />
 		</Panel>
 	{/if}
 	{#if hasLifecycle}
 		<Panel class="grid grid-cols-1 justify-items-start gap-3">
-			<h3 class="text-lg font-semibold">{$t('Lifecycle')}</h3>
+			<h3 class="text-lg font-semibold">{$t`Lifecycle`}</h3>
 			<p class="text-sm text-surface-700-300">
-				{$t('Archived content is read only. You can restore the Workspace later.')}
+				{$t`Archived content is read only. You can restore the Workspace later.`}
 			</p>
 			{#if workspace.can('workspace.archive') && workspace.view?.state === 'active'}
 				<Button
@@ -100,12 +100,12 @@
 					onclick={() => {
 						error = '';
 						archiveOpen = true;
-					}}>{$t('Archive workspace')}</Button
+					}}>{$t`Archive workspace`}</Button
 				>
 			{/if}
 			{#if workspace.can('workspace.restore') && workspace.view?.state === 'archived'}
 				<Button variant="success" disabled={busy} onclick={() => void changeLifecycle('restore')}
-					>{$t('Restore workspace')}</Button
+					>{$t`Restore workspace`}</Button
 				>
 			{/if}
 			<StatusNotice error={archiveOpen || deleteOpen ? '' : error} {notice} />
@@ -113,11 +113,9 @@
 	{/if}
 	{#if workspace.can('workspace.delete')}
 		<Panel class="grid grid-cols-1 justify-items-start gap-3 border-error-500/40">
-			<h3 class="text-lg font-semibold">{$t('Permanent deletion')}</h3>
+			<h3 class="text-lg font-semibold">{$t`Permanent deletion`}</h3>
 			<p class="text-sm text-surface-700-300">
-				{$t(
-					'This permanently removes the archived workspace and its content. This cannot be undone.'
-				)}
+				{$t`This permanently removes the archived workspace and its content. This cannot be undone.`}
 			</p>
 			<Button
 				variant="danger-filled"
@@ -125,35 +123,31 @@
 				onclick={() => {
 					error = '';
 					deleteOpen = true;
-				}}>{$t('Permanently delete workspace')}</Button
+				}}>{$t`Permanently delete workspace`}</Button
 			>
 		</Panel>
 	{/if}
 	{#if !hasLifecycle && !workspace.can('workspace_maintenance.run')}<Notice
-			>{$t('No advanced actions are available for this workspace.')}</Notice
+			>{$t`No advanced actions are available for this workspace.`}</Notice
 		>{/if}
 </section>
 
 <ConfirmDialog
 	bind:open={archiveOpen}
-	title={$t('Archive workspace')}
-	body={$t('Archive {name}? Members will retain read access to its content.', {
-		name: workspace.view?.name ?? ''
-	})}
-	confirmLabel={$t('Archive workspace')}
+	title={$t`Archive workspace`}
+	body={$t`Archive ${ph({ name: workspace.view?.name ?? '' })}? Members will retain read access to its content.`}
+	confirmLabel={$t`Archive workspace`}
 	{busy}
 	{error}
 	onConfirm={() => void changeLifecycle('archive')}
 />
 <PromptDialog
 	bind:open={deleteOpen}
-	title={$t('Permanently delete workspace')}
-	body={$t('Permanently delete {name} and its content? This cannot be undone.', {
-		name: workspace.view?.name ?? ''
-	})}
-	label={$t('Type the workspace name to confirm')}
+	title={$t`Permanently delete workspace`}
+	body={$t`Permanently delete ${ph({ name: workspace.view?.name ?? '' })} and its content? This cannot be undone.`}
+	label={$t`Type the workspace name to confirm`}
 	requireMatch={workspace.view?.name ?? ''}
-	confirmLabel={$t('Permanently delete workspace')}
+	confirmLabel={$t`Permanently delete workspace`}
 	{busy}
 	{error}
 	onConfirm={() => void changeLifecycle('delete')}

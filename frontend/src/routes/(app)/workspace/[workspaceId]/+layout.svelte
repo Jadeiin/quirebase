@@ -17,7 +17,7 @@
 	import { isUnavailableReadError } from '#lib/api/query-state.js';
 	import Notice from '#lib/design/Notice.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 
 	let { children } = $props();
 	const workspaceId = $derived(page.params.workspaceId ?? '');
@@ -92,24 +92,22 @@
 {#if workspace.isError || (!workspace.isPending && workspace.data == null)}
 	<QueryError
 		message={unavailable
-			? $t('This workspace is unavailable. Choose another workspace.')
-			: $t('Unable to load workspace.')}
+			? $t`This workspace is unavailable. Choose another workspace.`
+			: $t`Unable to load workspace.`}
 		busy={workspace.isFetching || recoveryStarted}
 		onRetry={() => void recover()}
 	/>
 {/if}
 {#if workspace.isPending && workspace.data == null}<p class="text-surface-600-400">
-		{$t('Loading workspace…')}
+		{$t`Loading workspace…`}
 	</p>
 {:else if workspace.data && !isUnavailableReadError(workspace.error)}
 	{#if workspace.data?.governance_frozen}
 		<Notice variant="warning"
-			>{$t(
-				'This Workspace is frozen and read only. An instance administrator can unfreeze it.'
-			)}</Notice
+			>{$t`This Workspace is frozen and read only. An instance administrator can unfreeze it.`}</Notice
 		>
 	{:else if workspace.data?.state === 'archived'}
-		<Notice>{$t('Archived Workspace · read-only content.')}</Notice>
+		<Notice>{$t`Archived Workspace · read-only content.`}</Notice>
 	{/if}
 
 	{#key workspaceId}

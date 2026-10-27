@@ -5,7 +5,7 @@
 	import Button from '#lib/design/Button.svelte';
 	import Panel from '#lib/design/Panel.svelte';
 	import StatusNotice from '#lib/design/StatusNotice.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { workspaceRenameMutationOptions } from './mutations';
 	import WorkspaceLeave from './WorkspaceLeave.svelte';
 
@@ -25,9 +25,9 @@
 		try {
 			await mutation.mutateAsync(name.trim());
 			draft = null;
-			notice = $t('Workspace name updated');
+			notice = $t`Workspace name updated`;
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Workspace action failed'));
+			error = apiErrorMessage(reason, $t`Workspace action failed`);
 		}
 	}
 </script>
@@ -35,9 +35,9 @@
 <section class="grid grid-cols-1 gap-6">
 	<Panel class="grid grid-cols-1 gap-4">
 		<div>
-			<h2 class="text-xl font-semibold">{$t('General')}</h2>
+			<h2 class="text-xl font-semibold">{$t`General`}</h2>
 			<p class="mt-1 text-sm text-surface-700-300">
-				{$t('Change the Workspace name.')}
+				{$t`Change the Workspace name.`}
 			</p>
 		</div>
 		{#if workspace.can('workspace.update')}
@@ -49,7 +49,7 @@
 				}}
 			>
 				<label class="grid w-full grid-cols-1 gap-1"
-					>{$t('Name')}<input
+					>{$t`Name`}<input
 						class="input"
 						value={name}
 						oninput={(event) => (draft = event.currentTarget.value)}
@@ -62,11 +62,11 @@
 					type="submit"
 					variant="filled"
 					disabled={mutation.isPending || !name.trim() || name.trim() === workspace.view?.name}
-					>{$t('Save name')}</Button
+					>{$t`Save name`}</Button
 				>
 			</form>
 		{:else}<div>
-				<p class="text-sm text-surface-700-300">{$t('Name')}</p>
+				<p class="text-sm text-surface-700-300">{$t`Name`}</p>
 				<p class="font-semibold break-all">{workspace.view?.name}</p>
 			</div>{/if}
 		<StatusNotice {error} {notice} />

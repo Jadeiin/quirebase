@@ -10,7 +10,7 @@
 	import Panel from '#lib/design/Panel.svelte';
 	import type { components } from '#lib/api/schema.js';
 	import { domainLabel } from '#lib/domain-labels.js';
-	import { t } from '#lib/i18n.js';
+	import { Plural, Trans, ph, plural, t } from 'lingui-for-svelte/macro';
 	import type { WorkspacePath } from '#lib/workspaces/href.js';
 	import ImportCandidateRow from './ImportCandidateRow.svelte';
 
@@ -96,10 +96,10 @@
 	}
 	function basicReason(record: ImportBatch['records'][number]): string {
 		const diagnostic = record.source ? basicDiagnostics.get(record.source.id) : undefined;
-		if (diagnostic?.code === 'missing_identifier') return $t('No DOI or arXiv ID found');
-		if (diagnostic?.code === 'metadata_not_found') return $t('No matching metadata found');
-		if (diagnostic && isDeferredMetadata(diagnostic)) return $t('Metadata temporarily unavailable');
-		return $t('Metadata not identified');
+		if (diagnostic?.code === 'missing_identifier') return $t`No DOI or arXiv ID found`;
+		if (diagnostic?.code === 'metadata_not_found') return $t`No matching metadata found`;
+		if (diagnostic && isDeferredMetadata(diagnostic)) return $t`Metadata temporarily unavailable`;
+		return $t`Metadata not identified`;
 	}
 	function selectAllBasic(selected: boolean) {
 		for (const record of basicRecords) {
@@ -116,7 +116,7 @@
 		<p class="mb-1 font-medium wrap-anywhere">
 			{#if source}<span>{source}</span>{/if}
 			{#if source && diagnostic.row != null}<span aria-hidden="true"> · </span>{/if}
-			{#if diagnostic.row != null}<span>{$t('Row {row}', { row: diagnostic.row })}</span>{/if}
+			{#if diagnostic.row != null}<span>{$t`Row ${ph({ row: diagnostic.row })}`}</span>{/if}
 		</p>
 	{/if}
 {/snippet}
@@ -125,48 +125,50 @@
 	<Panel padding="none" class="mt-2">
 		<header class="border-b border-surface-300-700 px-4 py-4">
 			<div class="flex flex-wrap items-center justify-between gap-3">
-				<h2 class="mb-0 text-lg">{$t('Import preview')}</h2>
+				<h2 class="mb-0 text-lg">{$t`Import preview`}</h2>
 				<Badge variant={statusVariant} class="shrink-0"
-					>{batch.status === 'committed' ? $t('Imported') : $t(domainLabel(batch.status))}</Badge
+					>{batch.status === 'committed' ? $t`Imported` : $t(domainLabel(batch.status))}</Badge
 				>
 			</div>
 			{#if batch.status === 'ready' && batch.records.length > 0}
 				<div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-surface-600-400">
 					<span class="flex items-center gap-2"
-						><span class="size-1.5 rounded-full bg-primary-700-300" aria-hidden="true"></span>{$t(
-							'{count, plural, one {# ready to import} other {# ready to import}}',
-							{ count: identifiedCount }
+						><span class="size-1.5 rounded-full bg-primary-700-300" aria-hidden="true"
+						></span>{$plural(
+							{ count: identifiedCount },
+							{ one: '# ready to import', other: '# ready to import' }
 						)}</span
 					>
 					{#if basicRecords.length > 0}<span class="flex items-center gap-2"
-							><span class="size-1.5 rounded-full bg-warning-700-300" aria-hidden="true"></span>{$t(
-								'{count, plural, one {# needs metadata} other {# need metadata}}',
-								{ count: basicRecords.length }
+							><span class="size-1.5 rounded-full bg-warning-700-300" aria-hidden="true"
+							></span>{$plural(
+								{ count: basicRecords.length },
+								{ one: '# needs metadata', other: '# need metadata' }
 							)}</span
 						>{/if}
 				</div>
 			{/if}
 		</header>
 		{#if batch.status === 'pending'}
-			<div class="p-6"><LoadingState label={$t('Preparing uploaded PDFs…')} /></div>
+			<div class="p-6"><LoadingState label={$t`Preparing uploaded PDFs…`} /></div>
 		{:else if batch.status === 'committed'}
+			{@const count = batch.committed_item_ids.length}
 			<div class="p-5 sm:p-6">
 				<p class="mb-3 flex items-center gap-2 font-semibold text-primary-700-300">
-					<Icon name="check" size={20} />{$t(
-						'Imported {count, plural, one {# record} other {# records}}',
-						{ count: batch.committed_item_ids.length }
-					)}
+					<Icon name="check" size={20} /><Trans
+						>Imported <Plural value={count} one="# record" other="# records" /></Trans
+					>
 				</p>
 				<p class="mb-0 text-sm text-surface-600-400">
-					{$t('Import completed. Deleting this record keeps the Items and files.')}
+					{$t`Import completed. Deleting this record keeps the Items and files.`}
 				</p>
 			</div>
 		{:else if batch.records.length === 0}
 			<div class="p-6">
 				<EmptyState
 					icon="import"
-					title={$t('No records in this batch')}
-					detail={$t('See the import issues below.')}
+					title={$t`No records in this batch`}
+					detail={$t`See the import issues below.`}
 				/>
 			</div>
 		{/if}
@@ -175,26 +177,26 @@
 					class="border-b border-surface-300-700 bg-surface-100-900 px-4 py-3"
 				>
 					<h3 class="mb-0 text-xs font-semibold tracking-wide text-surface-600-400">
-						{$t('Identified records')}
+						{$t`Identified records`}
 					</h3>
 				</div>{/if}
 			{#each identifiedRecords as record (record)}<ImportCandidateRow {record} />{/each}
 		{/if}
 		{#if basicPageRecords.length > 0}
-			<section aria-label={$t('PDFs without metadata')}>
+			<section aria-label={$t`PDFs without metadata`}>
 				<div
 					class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-y border-surface-300-700 bg-surface-100-900 px-4 py-4"
 				>
 					<div class="min-w-0">
 						<h3 class="mb-1 flex items-center gap-2 text-sm">
-							{$t('PDFs without metadata')}<span class="text-xs font-normal text-surface-500"
+							{$t`PDFs without metadata`}<span class="text-xs font-normal text-surface-500"
 								>{basicRecords.length}</span
 							>
 						</h3>
 						<p class="mb-0 text-xs leading-5 text-surface-600-400">
 							{canCommit
-								? $t('Keep the PDF now. Add its metadata after import.')
-								: $t('These PDFs have no identified metadata.')}
+								? $t`Keep the PDF now. Add its metadata after import.`
+								: $t`These PDFs have no identified metadata.`}
 						</p>
 					</div>
 					{#if canCommit}<div class="flex items-center gap-4">
@@ -204,13 +206,13 @@
 								disabled={busy ||
 									batch.status !== 'ready' ||
 									selectedBasicIds.length === basicRecords.length}
-								onclick={() => selectAllBasic(true)}>{$t('Select all')}</button
+								onclick={() => selectAllBasic(true)}>{$t`Select all`}</button
 							>
 							<button
 								type="button"
 								class="text-xs font-medium text-surface-600-400 hover:underline disabled:text-surface-500"
 								disabled={busy || selectedBasicIds.length === 0}
-								onclick={() => selectAllBasic(false)}>{$t('Clear selection')}</button
+								onclick={() => selectAllBasic(false)}>{$t`Clear selection`}</button
 							>
 						</div>{/if}
 				</div>
@@ -240,15 +242,16 @@
 					onPage(1);
 				}}
 				{busy}
-				label={$t('Import preview pages')}
+				label={$t`Import preview pages`}
 				{onPage}
 			/>{/if}
 		{#if errors.length > 0}
-			<section class="border-t border-surface-300-700 px-4 py-4" aria-label={$t('Import issues')}>
+			<section class="border-t border-surface-300-700 px-4 py-4" aria-label={$t`Import issues`}>
 				<h3 class="mb-3 flex items-center gap-2 text-sm">
-					<span class="text-error-700-300"><Icon name="close" size={16} /></span>{$t(
-						'Could not import'
-					)}<span class="text-xs font-normal text-surface-500">{errors.length}</span>
+					<span class="text-error-700-300"><Icon name="close" size={16} /></span
+					>{$t`Could not import`}<span class="text-xs font-normal text-surface-500"
+						>{errors.length}</span
+					>
 				</h3>
 				<ul class="m-0 grid list-none grid-cols-1 gap-3 p-0">
 					{#each errors as diagnostic (diagnostic)}<li
@@ -263,8 +266,7 @@
 		{#if warnings.length > 0}
 			<details class="border-t border-surface-300-700 px-4 py-4">
 				<summary class="cursor-pointer text-xs font-medium text-surface-600-400"
-					>{$t('Import details')}<span class="ml-2 text-surface-500">{warnings.length}</span
-					></summary
+					>{$t`Import details`}<span class="ml-2 text-surface-500">{warnings.length}</span></summary
 				>
 				<ul class="mt-3 mb-0 grid list-none grid-cols-1 gap-3 p-0">
 					{#each warnings as diagnostic (diagnostic)}<li
@@ -280,7 +282,7 @@
 	{#if canCommit || batch.status === 'committed'}
 		<footer
 			class="sticky bottom-16 z-30 mt-4 grid grid-cols-1 gap-3 rounded-container border border-surface-300-700 bg-surface-50-950 px-4 py-4 shadow-lg sm:flex sm:items-center sm:justify-between md:bottom-4"
-			aria-label={$t('Import actions')}
+			aria-label={$t`Import actions`}
 		>
 			<div
 				class="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 sm:block"
@@ -288,51 +290,56 @@
 			>
 				<p class="mb-0 text-sm font-semibold">
 					{batch.status === 'pending'
-						? $t('Preparing uploaded PDFs…')
+						? $t`Preparing uploaded PDFs…`
 						: batch.status === 'failed'
-							? $t('Import processing failed')
+							? $t`Import processing failed`
 							: batch.status === 'committed'
-								? $t('Import completed')
-								: $t('{count, plural, one {# record selected} other {# records selected}}', {
-										count: importCount
-									})}
+								? $t`Import completed`
+								: $plural(
+										{ count: importCount },
+										{ one: '# record selected', other: '# records selected' }
+									)}
 				</p>
 				{#if basicRecords.length > 0 && batch.status === 'ready'}<p
 						class="mb-0 text-xs text-surface-600-400 sm:mt-1"
 					>
-						{$t('{count, plural, one {# PDF will be skipped} other {# PDFs will be skipped}}', {
-							count: skippedCount
-						})}
+						{$plural(
+							{ count: skippedCount },
+							{ one: '# PDF will be skipped', other: '# PDFs will be skipped' }
+						)}
 					</p>{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				{#if batch.status === 'committed'}
 					{#if canCommit}<Button size="sm" onclick={onDeleteImportRecord} disabled={busy}
-							>{$t('Delete import record')}</Button
+							>{$t`Delete import record`}</Button
 						>{/if}
 					<Button as="a" variant="filled" class="flex-1 sm:flex-none" href={resolve(resultHref)}
-						>{$t('View imported Items')}<Icon name="chevron-right" size={16} /></Button
+						>{$t`View imported Items`}<Icon name="chevron-right" size={16} /></Button
 					>
 				{:else}
-					<Button onclick={onDiscard} disabled={busy}>{$t('Discard')}</Button>
+					<Button onclick={onDiscard} disabled={busy}>{$t`Discard`}</Button>
 					{#if hasDeferredMetadata}<Button onclick={onRetry} disabled={busy}
-							>{$t('Retry metadata')}</Button
+							>{$t`Retry metadata`}</Button
 						>{/if}
 					{#if batch.status === 'failed'}
 						{#if batch.can_retry}<Button
 								variant="filled"
 								class="flex-1 sm:flex-none"
 								onclick={onRetry}
-								disabled={busy}>{$t('Retry')}</Button
+								disabled={busy}>{$t`Retry`}</Button
 							>{/if}
-					{:else}<Button
+					{:else}
+						{@const count = importCount}
+						<Button
 							variant="filled"
 							class="flex-1 sm:flex-none"
 							onclick={() => onCommit(selectedBasicIds)}
 							disabled={busy || batch.status !== 'ready' || importCount === 0}
-							>{$t('Import {count, plural, one {# record} other {# records}}', {
-								count: importCount
-							})}<Icon name="chevron-right" size={16} /></Button
+							><Trans>Import <Plural value={count} one="# record" other="# records" /></Trans><Icon
+								name="chevron-right"
+								size={16}
+							/></Button
 						>{/if}
 				{/if}
 			</div>

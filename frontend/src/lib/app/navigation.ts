@@ -1,35 +1,36 @@
-import { msg, type MessageKey } from '#lib/i18n.js';
+import { msg } from '@lingui/core/macro';
+import type { MessageDescriptor } from '@lingui/core';
 
 export type NavigationPath =
 	'' | 'library' | 'import' | 'discovery' | 'projects' | 'tools' | '/workspace';
-export type NavigationItem = readonly [NavigationPath | '/account', MessageKey, string];
+export type NavigationItem = readonly [NavigationPath | '/account', MessageDescriptor, string];
 
 export const navigation: readonly NavigationItem[] = [
-	['', msg('Dashboard'), 'dashboard'],
-	['library', msg('Library'), 'library'],
-	['import', msg('Import'), 'import'],
-	['discovery', msg('Discovery'), 'search'],
-	['projects', msg('Projects'), 'projects'],
-	['tools', msg('Tools'), 'tools']
+	['', msg`Dashboard`, 'dashboard'],
+	['library', msg`Library`, 'library'],
+	['import', msg`Import`, 'import'],
+	['discovery', msg`Discovery`, 'search'],
+	['projects', msg`Projects`, 'projects'],
+	['tools', msg`Tools`, 'tools']
 ];
 
 export const mobileNavigation: readonly NavigationItem[] = [
-	['library', msg('Library'), 'library'],
-	['discovery', msg('Discovery'), 'search'],
-	['projects', msg('Projects'), 'projects']
+	['library', msg`Library`, 'library'],
+	['discovery', msg`Discovery`, 'search'],
+	['projects', msg`Projects`, 'projects']
 ];
 
 export const mobileMoreNavigation: readonly NavigationItem[] = [
-	['', msg('Dashboard'), 'dashboard'],
-	['import', msg('Import'), 'import'],
-	['tools', msg('Tools'), 'tools'],
-	['/account', msg('Account settings'), 'user']
+	['', msg`Dashboard`, 'dashboard'],
+	['import', msg`Import`, 'import'],
+	['tools', msg`Tools`, 'tools'],
+	['/account', msg`Account settings`, 'user']
 ];
 
 export const themeOptions = [
-	['system', msg('System theme'), 'monitor'],
-	['light', msg('Light theme'), 'sun'],
-	['dark', msg('Dark theme'), 'moon']
+	['system', msg`System theme`, 'monitor'],
+	['light', msg`Light theme`, 'sun'],
+	['dark', msg`Dark theme`, 'moon']
 ] as const;
 
 export function isRouteActive(pathname: string, route: string, exact = false): boolean {

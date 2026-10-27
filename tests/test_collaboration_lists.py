@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
-from test_http import authenticated_async_client
+from app_helpers import authenticated_async_client
 
 from quirebase.access import resolve_workspace_context
 from quirebase.core.config import get_settings

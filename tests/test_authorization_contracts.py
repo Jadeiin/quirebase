@@ -3,8 +3,8 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from app_helpers import authenticated_async_client
 from sqlalchemy import select
-from test_http import authenticated_async_client
 
 from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash

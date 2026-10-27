@@ -5,14 +5,13 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-from app_helpers import json_payload
+from app_helpers import authenticated_async_client, json_payload
 from commonmeta.author_utils import get_one_author
 from commonmeta.base_utils import compact
 from inquiro import CandidatePage, CandidateRecord, Identifier
 from item_helpers import work_identifier
 from provider_helpers import provider_runtime
 from sqlalchemy import event, select
-from test_http import authenticated_async_client
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.config import get_settings

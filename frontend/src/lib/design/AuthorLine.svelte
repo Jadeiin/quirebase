@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { fitAuthorLine } from './author-line.js';
 
 	let {
@@ -121,8 +121,8 @@
 						<button
 							type="button"
 							class="px-0.5 hover:text-primary-700-300"
-							aria-label={$t('Show all authors')}
-							title={$t('Show all authors')}
+							aria-label={$t`Show all authors`}
+							title={$t`Show all authors`}
 							aria-expanded={expanded}
 							aria-controls={expanded ? controls : undefined}
 							onclick={(event) => onShowAll?.(event.currentTarget)}>…</button

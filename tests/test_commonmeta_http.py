@@ -3,9 +3,9 @@ from uuid import uuid4
 
 import bibtexparser
 import pytest
+from app_helpers import authenticated_async_client
 from inquiro.work import validate_work
 from sqlalchemy import select
-from test_http import authenticated_async_client
 
 from quirebase.models import AuditEvent, Item
 

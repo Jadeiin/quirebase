@@ -15,7 +15,7 @@
 	} from '#lib/features/item/organize/mutations.js';
 	import { itemOrganizeQuery } from '#lib/features/item/queries.js';
 	import type { OrganizeView } from '#lib/features/item/types.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 
 	// The caller keys this controller by Workspace and Item so pending operations
 	// and their feedback remain attached to the Item submitted by the user.
@@ -85,7 +85,7 @@
 				heading.focus();
 			return true;
 		} catch (error) {
-			mutationError = apiErrorMessage(error, $t('Unable to save changes'));
+			mutationError = apiErrorMessage(error, $t`Unable to save changes`);
 			return false;
 		}
 	}
@@ -130,13 +130,13 @@
 
 <section aria-labelledby="preview-organize-heading" aria-busy={busy} class="mt-4">
 	<h3 id="preview-organize-heading" class="sr-only" tabindex="-1" bind:this={heading}>
-		{$t('Organize this Item')}
+		{$t`Organize this Item`}
 	</h3>
 	{#if organize.isPending}
-		<p role="status" class="text-sm text-surface-600-400">{$t('Loading organization options…')}</p>
+		<p role="status" class="text-sm text-surface-600-400">{$t`Loading organization options…`}</p>
 	{:else if organize.isError}
 		<QueryError
-			message={apiErrorMessage(organize.error, $t('Unable to load organization options.'))}
+			message={apiErrorMessage(organize.error, $t`Unable to load organization options.`)}
 			busy={organize.isFetching}
 			onRetry={() => void organize.refetch()}
 		/>
@@ -149,16 +149,16 @@
 						size="sm"
 						class="mt-2"
 						disabled={busy}
-						onclick={() => retryOperation && void run(retryOperation)}>{$t('Retry')}</Button
+						onclick={() => retryOperation && void run(retryOperation)}>{$t`Retry`}</Button
 					>
 				{/if}
 			</Notice>
 		{/if}
 		{#if saved}<p role="status" class="mb-3 text-sm text-success-700-300">
-				{$t('Item organization updated')}
+				{$t`Item organization updated`}
 			</p>{/if}
 		<div>
-			<h4 class="mb-2 text-sm font-semibold">{$t('Tags')}</h4>
+			<h4 class="mb-2 text-sm font-semibold">{$t`Tags`}</h4>
 			<div class="flex flex-wrap gap-1.5">
 				{#each assignedTags as tag (tag.id)}
 					<Badge
@@ -167,30 +167,30 @@
 						variant="primary"
 						class="max-w-full whitespace-normal"
 						disabled={busy || !canUseTags}
-						aria-label={$t('Remove {name}', { name: tag.name })}
+						aria-label={$t`Remove ${ph({ name: tag.name })}`}
 						onclick={() =>
 							void run(() => tagAssignment.mutateAsync({ tagId: tag.id, assigned: true }))}
 					>
 						<span class="min-w-0 break-words">{tag.name}</span><span aria-hidden="true"> ×</span>
 					</Badge>
-				{:else}<span class="text-sm text-surface-600-400">{$t('No tags')}</span>{/each}
+				{:else}<span class="text-sm text-surface-600-400">{$t`No tags`}</span>{/each}
 			</div>
 			{#if canUseTags}
 				<form class="mt-3 flex items-end gap-2" onsubmit={addTag}>
 					<SearchSelect
 						bind:value={tagName}
-						label={$t('Add a Tag to this Item')}
+						label={$t`Add a Tag to this Item`}
 						class="flex-1"
 						disabled={busy}
 						options={availableTags.map((tag) => ({ value: tag.name, label: tag.name }))}
 						allowCustomValue={canCreateTags}
 					/>
-					<Button type="submit" disabled={busy || !canAddTag}>{$t('Add tag')}</Button>
+					<Button type="submit" disabled={busy || !canAddTag}>{$t`Add tag`}</Button>
 				</form>
 			{/if}
 		</div>
 		<div class="mt-5 border-t border-surface-300-700 pt-4">
-			<h4 class="mb-2 text-sm font-semibold">{$t('Projects')}</h4>
+			<h4 class="mb-2 text-sm font-semibold">{$t`Projects`}</h4>
 			<div class="grid grid-cols-1 gap-2">
 				{#each assignedProjects as project (project.id)}
 					<div class="flex min-w-0 items-center justify-between gap-2">
@@ -198,17 +198,17 @@
 						<Button
 							size="sm"
 							disabled={busy || !canManageProjects}
-							aria-label={$t('Remove from {name}', { name: project.name })}
-							onclick={() => removeProject(project)}>{$t('Remove')}</Button
+							aria-label={$t`Remove from ${ph({ name: project.name })}`}
+							onclick={() => removeProject(project)}>{$t`Remove`}</Button
 						>
 					</div>
-				{:else}<span class="text-sm text-surface-600-400">{$t('No assigned Projects')}</span>{/each}
+				{:else}<span class="text-sm text-surface-600-400">{$t`No assigned Projects`}</span>{/each}
 			</div>
 			{#if canManageProjects}
 				<form class="mt-3 flex items-end gap-2" onsubmit={addProject}>
 					<SearchSelect
 						bind:value={projectId}
-						label={$t('Add to a Project')}
+						label={$t`Add to a Project`}
 						class="flex-1"
 						disabled={busy}
 						options={availableProjects.map((project) => ({
@@ -216,7 +216,7 @@
 							label: project.name
 						}))}
 					/>
-					<Button type="submit" disabled={busy || !selectedProject}>{$t('Add')}</Button>
+					<Button type="submit" disabled={busy || !selectedProject}>{$t`Add`}</Button>
 				</form>
 			{/if}
 		</div>
@@ -225,12 +225,9 @@
 
 <ConfirmDialog
 	bind:open={removeProjectOpen}
-	title={$t('Remove Item from Project?')}
-	body={$t(
-		'Removing this Item from {name} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.',
-		{ name: pendingProject?.name ?? '' }
-	)}
-	confirmLabel={$t('Remove from Project')}
+	title={$t`Remove Item from Project?`}
+	body={$t`Removing this Item from ${ph({ name: pendingProject?.name ?? '' })} permanently deletes all of its Project Annotations and Replies in this Project. This cannot be undone. The Item, its files, private Annotations and other Projects are preserved.`}
+	confirmLabel={$t`Remove from Project`}
 	{busy}
 	error={mutationError}
 	finalFocusEl={() => (heading?.isConnected ? heading : null)}

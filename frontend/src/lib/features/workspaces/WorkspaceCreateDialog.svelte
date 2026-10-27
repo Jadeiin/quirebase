@@ -12,7 +12,7 @@
 	import { buttonClass } from '#lib/design/button-classes.js';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import Notice from '#lib/design/Notice.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 	import { workspaceCreationMutationOptions } from './mutations';
 
 	let {
@@ -55,13 +55,11 @@
 				await goto(resolve(workspaceHref(created.id)), { replace: true });
 			} else {
 				onCreated(
-					$t(
-						'Workspace created. Its owner can open it; you have no content access unless you are also a member.'
-					)
+					$t`Workspace created. Its owner can open it; you have no content access unless you are also a member.`
 				);
 			}
 		} catch (reason) {
-			error = apiErrorMessage(reason, $t('Unable to create workspace'));
+			error = apiErrorMessage(reason, $t`Unable to create workspace`);
 		}
 	}
 </script>
@@ -79,13 +77,11 @@
 				class="w-full max-w-lg rounded-container border border-surface-300-700 bg-surface-50-950 p-5 shadow-2xl"
 			>
 				<div class="flex items-center justify-between gap-3">
-					<Dialog.Title class="text-xl font-semibold">{$t('Create a workspace')}</Dialog.Title
+					<Dialog.Title class="text-xl font-semibold">{$t`Create a workspace`}</Dialog.Title
 					><DialogCloseButton disabled={mutation.isPending} />
 				</div>
 				<p class="mt-2 text-sm text-surface-700-300">
-					{#if availability.owner_username_required}{$t(
-							'Choose an active user to own this workspace. Instance administrators do not automatically get content access.'
-						)}{:else}{$t('You will own this Workspace and can invite members.')}{/if}
+					{#if availability.owner_username_required}{$t`Choose an active user to own this workspace. Instance administrators do not automatically get content access.`}{:else}{$t`You will own this Workspace and can invite members.`}{/if}
 				</p>
 				{#if error}<Notice variant="error" class="mt-3">{error}</Notice>{/if}
 				<form
@@ -96,7 +92,7 @@
 					}}
 				>
 					<label class="grid grid-cols-1 gap-1"
-						>{$t('Workspace name')}<input
+						>{$t`Workspace name`}<input
 							class="input"
 							bind:value={name}
 							required
@@ -107,7 +103,7 @@
 						/></label
 					>
 					{#if availability.owner_username_required}<label class="grid grid-cols-1 gap-1"
-							>{$t('Owner username (exact match)')}<input
+							>{$t`Owner username (exact match)`}<input
 								class="input"
 								bind:value={ownerUsername}
 								required
@@ -118,7 +114,7 @@
 						>{/if}
 					<div class="flex flex-wrap justify-end gap-2">
 						<Dialog.CloseTrigger class={buttonClass('tonal')} disabled={mutation.isPending}
-							>{$t('Cancel')}</Dialog.CloseTrigger
+							>{$t`Cancel`}</Dialog.CloseTrigger
 						>
 						<Button
 							type="submit"
@@ -126,7 +122,7 @@
 							disabled={mutation.isPending ||
 								!name.trim() ||
 								(availability.owner_username_required && !ownerUsername.trim())}
-							>{$t('Create workspace')}</Button
+							>{$t`Create workspace`}</Button
 						>
 					</div>
 				</form>

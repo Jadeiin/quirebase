@@ -5,7 +5,7 @@
 	import PopoverTriggerButton from '#lib/design/PopoverTriggerButton.svelte';
 	import { getWorkflowCenter } from '#lib/features/workflows/center.svelte.js';
 	import WorkflowJobRow from '#lib/features/workflows/WorkflowJobRow.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 
 	const center = getWorkflowCenter();
 	let panelOpen = $state(false);
@@ -28,7 +28,7 @@
 			<PopoverTriggerButton
 				variant="filled"
 				class="h-12 rounded-full pr-5 pl-4 shadow-xl"
-				aria-label={$t('Background tasks ({count})', { count: badgeCount })}
+				aria-label={$t`Background tasks (${ph({ count: badgeCount })})`}
 			>
 				<Icon name="rotate" size={20} />
 				<span class="min-w-6 text-center text-sm tabular-nums" aria-hidden="true">{badgeCount}</span
@@ -42,7 +42,7 @@
 						<header
 							class="flex items-center justify-between border-b border-surface-300-700 px-4 py-3"
 						>
-							<Popover.Title class="text-sm font-bold">{$t('Background tasks')}</Popover.Title>
+							<Popover.Title class="text-sm font-bold">{$t`Background tasks`}</Popover.Title>
 							<PopoverCloseButton />
 						</header>
 						<div class="max-h-80 divide-y divide-surface-300-700 overflow-auto">

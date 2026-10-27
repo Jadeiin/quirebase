@@ -7,7 +7,7 @@
 	import { buttonClass } from '#lib/design/button-classes.js';
 	import DialogCloseButton from '#lib/design/DialogCloseButton.svelte';
 	import Notice from '#lib/design/Notice.svelte';
-	import { t } from '#lib/i18n.js';
+	import { ph, t } from 'lingui-for-svelte/macro';
 	import { getSession } from '#lib/session.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import type { LibraryFilters } from './filters.js';
@@ -81,7 +81,7 @@
 			}
 		} catch (reason) {
 			if (feedback) {
-				error = $t('Unable to load saved views.');
+				error = $t`Unable to load saved views.`;
 				loadFailed = true;
 				damaged = reason instanceof InvalidSavedViews;
 			}
@@ -156,7 +156,7 @@
 			return true;
 		} catch (reason) {
 			if (!isCurrent(version, key)) return false;
-			error = $t('Unable to update saved views.');
+			error = $t`Unable to update saved views.`;
 			loadFailed = false;
 			damaged = reason instanceof InvalidSavedViews;
 			notice = '';
@@ -175,7 +175,7 @@
 			await change(
 				(key) =>
 					saveLibraryView(() => localStorage, key, nextName, current.filters, current.pageSize),
-				$t('View saved')
+				$t`View saved`
 			)
 		)
 			name = '';
@@ -216,7 +216,7 @@
 		if (
 			await change(
 				(key) => renameLibraryView(() => localStorage, key, id, nextName),
-				$t('View renamed')
+				$t`View renamed`
 			)
 		)
 			stopRename(restore);
@@ -227,7 +227,7 @@
 		const restore = viewLinks[id]
 			?.closest('[data-saved-view-row]')
 			?.contains(document.activeElement);
-		if (await change((key) => deleteLibraryView(() => localStorage, key, id), $t('View deleted'))) {
+		if (await change((key) => deleteLibraryView(() => localStorage, key, id), $t`View deleted`)) {
 			if (editingId === id) editingId = '';
 			if (restore) focusRemainingView(index);
 		}
@@ -240,7 +240,7 @@
 	initialFocusEl={() => nameInput ?? null}
 	onOpenChange={(details) => setOpen(details.open)}
 >
-	<Dialog.Trigger class={buttonClass('tonal', 'sm')}>{$t('Saved views')}</Dialog.Trigger>
+	<Dialog.Trigger class={buttonClass('tonal', 'sm')}>{$t`Saved views`}</Dialog.Trigger>
 	<Portal>
 		<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
 		<Dialog.Positioner class="fixed inset-0 z-71 grid grid-cols-1 place-items-center p-4">
@@ -249,15 +249,15 @@
 				class="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-container border border-surface-300-700 bg-surface-50-950 p-5 shadow-2xl"
 			>
 				<header class="flex items-start justify-between gap-3">
-					<Dialog.Title class="text-lg font-bold">{$t('Saved views')}</Dialog.Title>
+					<Dialog.Title class="text-lg font-bold">{$t`Saved views`}</Dialog.Title>
 					<DialogCloseButton />
 				</header>
 				<Dialog.Description class="mt-2 text-sm text-surface-600-400">
-					{$t('Saved in this browser for this account and Workspace.')}
+					{$t`Saved in this browser for this account and Workspace.`}
 				</Dialog.Description>
 				<form class="mt-4 flex flex-wrap items-end gap-2" onsubmit={save}>
 					<label class="min-w-0 flex-1">
-						{$t('View name')}
+						{$t`View name`}
 						<input
 							bind:this={nameInput}
 							bind:value={name}
@@ -268,17 +268,17 @@
 						/>
 					</label>
 					<Button type="submit" variant="filled" disabled={pending || !name.trim() || !storageKey}
-						>{$t('Save current view')}</Button
+						>{$t`Save current view`}</Button
 					>
 				</form>
 				<p class="mt-2 text-xs text-surface-600-400">
-					{$t('Saves the current filters, sort order, and page size.')}
+					{$t`Saves the current filters, sort order, and page size.`}
 				</p>
 				{#if error}
 					<Notice as="div" variant="error" class="my-4">
 						<p>{error}</p>
 						{#if loadFailed}<Button size="sm" disabled={pending} onclick={() => load()}
-								>{$t('Retry')}</Button
+								>{$t`Retry`}</Button
 							>{/if}
 						{#if damaged}
 							<Button
@@ -287,14 +287,14 @@
 								onclick={() =>
 									change(
 										(key) => resetInvalidLibrarySavedViews(() => localStorage, key),
-										$t('Saved views reset')
-									)}>{$t('Reset saved views')}</Button
+										$t`Saved views reset`
+									)}>{$t`Reset saved views`}</Button
 							>
 						{/if}
 					</Notice>
 				{/if}
 				{#if pending}<p class="mt-3 text-sm text-surface-600-400" role="status">
-						{$t('Applying action…')}
+						{$t`Applying action…`}
 					</p>{/if}
 				{#if notice}<p class="mt-3 text-sm text-success-700-300" role="status">{notice}</p>{/if}
 				<ul class="mt-4 grid grid-cols-1 divide-y divide-surface-300-700">
@@ -310,16 +310,15 @@
 									<Button
 										size="sm"
 										disabled={pending}
-										aria-label={$t('Rename {name}', { name: view.name })}
-										onclick={(event) => startRename(view, event.currentTarget)}
-										>{$t('Rename')}</Button
+										aria-label={$t`Rename ${ph({ name: view.name })}`}
+										onclick={(event) => startRename(view, event.currentTarget)}>{$t`Rename`}</Button
 									>
 									<Button
 										size="sm"
 										disabled={pending}
 										variant="danger"
-										aria-label={$t('Delete {name}', { name: view.name })}
-										onclick={() => remove(view.id)}>{$t('Delete')}</Button
+										aria-label={$t`Delete ${ph({ name: view.name })}`}
+										onclick={() => remove(view.id)}>{$t`Delete`}</Button
 									>
 								</div>
 								{#if editingId === view.id}
@@ -329,7 +328,7 @@
 										onsubmit={(event) => rename(event, view.id)}
 									>
 										<label class="min-w-0 flex-1">
-											{$t('New name')}<input
+											{$t`New name`}<input
 												bind:this={renameInput}
 												class="input"
 												bind:value={renamed}
@@ -339,10 +338,10 @@
 											/>
 										</label>
 										<Button type="submit" disabled={pending || !renamed.trim()}
-											>{$t('Save name')}</Button
+											>{$t`Save name`}</Button
 										>
 										<Button type="button" disabled={pending} onclick={() => stopRename()}
-											>{$t('Cancel')}</Button
+											>{$t`Cancel`}</Button
 										>
 									</form>
 								{/if}
@@ -350,7 +349,7 @@
 						</li>
 					{:else}
 						{#if !error}
-							<li class="py-4 text-sm text-surface-600-400">{$t('No saved views yet.')}</li>
+							<li class="py-4 text-sm text-surface-600-400">{$t`No saved views yet.`}</li>
 						{/if}
 					{/each}
 				</ul>

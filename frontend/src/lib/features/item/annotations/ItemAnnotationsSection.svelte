@@ -13,7 +13,8 @@
 	import Pagination from '#lib/design/Pagination.svelte';
 	import SectionHeader from '#lib/design/SectionHeader.svelte';
 	import { invalidateItemAnnotations } from '#lib/query/invalidation.js';
-	import { t, msg, type MessageKey } from '#lib/i18n.js';
+	import { msg, plural, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { libraryItemHref, readLibraryReturnTo } from '#lib/features/library/return-context.js';
 	import { itemAnnotationsQuery } from '../queries';
@@ -46,13 +47,13 @@
 	);
 	const workspaceRevisionId = $derived(revision === 'all' ? revisions[0]?.id : revision);
 	const moderationLabels = {
-		hide: msg('Hide'),
-		archive: msg('Archive'),
-		restore: msg('Restore'),
-		lock: msg('Lock'),
-		unlock: msg('Unlock'),
-		delete: msg('Delete')
-	} as const satisfies Record<AnnotationModerationAction, MessageKey>;
+		hide: msg`Hide`,
+		archive: msg`Archive`,
+		restore: msg`Restore`,
+		lock: msg`Lock`,
+		unlock: msg`Unlock`,
+		delete: msg`Delete`
+	} as const satisfies Record<AnnotationModerationAction, MessageDescriptor>;
 	const moderationActions = Object.keys(moderationLabels) as AnnotationModerationAction[];
 
 	function annotationCanModerate(
@@ -81,8 +82,8 @@
 		} catch (reason) {
 			if (reason instanceof ApiError && reason.status === 409) {
 				await invalidateItemAnnotations(queryClient, workspaceId, itemId);
-				moderationError = $t('This Annotation changed. Review the latest version and try again.');
-			} else moderationError = apiErrorMessage(reason, $t('Unable to moderate Annotation'));
+				moderationError = $t`This Annotation changed. Review the latest version and try again.`;
+			} else moderationError = apiErrorMessage(reason, $t`Unable to moderate Annotation`);
 		} finally {
 			moderating = '';
 		}
@@ -103,24 +104,24 @@
 
 <Panel class="mt-4">
 	<SectionHeader>
-		<h2>{$t('Annotations')}</h2>
+		<h2>{$t`Annotations`}</h2>
 		{#snippet actions()}
 			<label class="flex items-center gap-2 text-sm text-surface-700-300"
-				>{$t('Annotation source')}
+				>{$t`Annotation source`}
 				<select class="input w-auto min-w-36" bind:value={source} onchange={() => (page = 1)}>
-					<option value="all">{$t('All sources')}</option>
-					<option value="private">{$t('Private annotations')}</option>
+					<option value="all">{$t`All sources`}</option>
+					<option value="private">{$t`Private annotations`}</option>
 					{#each projects as project (project.id)}<option value={project.id}>{project.name}</option
 						>{/each}
 				</select>
 			</label>
 			{#if revisions.length > 1}
 				<label class="flex items-center gap-2 text-sm text-surface-700-300"
-					>{$t('PDF revision')}<select
+					>{$t`PDF revision`}<select
 						class="input w-auto min-w-36"
 						bind:value={revision}
 						onchange={() => (page = 1)}
-						><option value="all">{$t('All revisions')}</option
+						><option value="all">{$t`All revisions`}</option
 						>{#each revisions as item (item.id)}<option value={item.id}>{item.original_name}</option
 							>{/each}</select
 					></label
@@ -129,18 +130,18 @@
 		{/snippet}
 	</SectionHeader>
 	{#if annotations.isPending}
-		<p class="text-surface-600-400">{$t('Loading annotations…')}</p>
+		<p class="text-surface-600-400">{$t`Loading annotations…`}</p>
 	{:else if annotations.isError}
-		<p class="text-error-700-300">{$t('Unable to load annotations.')}</p>
+		<p class="text-error-700-300">{$t`Unable to load annotations.`}</p>
 	{:else if revisions.length === 0}
-		<p class="text-surface-600-400">{$t('Add a PDF revision to begin annotating.')}</p>
+		<p class="text-surface-600-400">{$t`Add a PDF revision to begin annotating.`}</p>
 	{:else}
 		{#if moderationError}<Notice variant="error">{moderationError}</Notice>{/if}
 		{#each displayed as annotation (annotation.id)}
 			<ItemRow class="min-w-0 grid-cols-1 wrap-anywhere">
 				<div class="flex flex-wrap justify-between gap-2">
 					<strong
-						>{$t(domainLabel(annotation.kind))} · {$t('page')}
+						>{$t(domainLabel(annotation.kind))} · {$t`page`}
 						{annotation.page_index + 1}</strong
 					><a
 						class="text-sm font-semibold text-primary-700-300 no-underline"
@@ -151,20 +152,21 @@
 								`pdf/${annotation.revision_id}${annotation.project_id ? `?${new URLSearchParams({ project_id: annotation.project_id })}` : ''}`,
 								returnTo
 							)
-						)}>{$t('Open PDF')}</a
+						)}>{$t`Open PDF`}</a
 					>
 				</div>
-				<span>{annotation.body ?? annotation.selected_text ?? $t('No note text')}</span><span
+				<span>{annotation.body ?? annotation.selected_text ?? $t`No note text`}</span><span
 					class="text-surface-600-400"
-					>{annotation.scope === 'private' ? $t('Private annotations') : annotation.project_name} · {annotation.author_display_name}
+					>{annotation.scope === 'private' ? $t`Private annotations` : annotation.project_name} · {annotation.author_display_name}
 					· {annotation.revision_name} ·
-					{$t('{count, plural, one {# reply} other {# replies}}', {
-						count: (annotation.replies ?? []).length
-					})}</span
+					{$plural(
+						{ count: (annotation.replies ?? []).length },
+						{ one: '# reply', other: '# replies' }
+					)}</span
 				>
 				{#if moderationActions.some((action) => annotationCanModerate(annotation, action))}<div
 						class="flex flex-wrap gap-2 border-t border-surface-300-700 pt-2"
-						aria-label={$t('Moderator actions')}
+						aria-label={$t`Moderator actions`}
 					>
 						{#each moderationActions.filter( (action) => annotationCanModerate(annotation, action) ) as action (action)}
 							{#if action === 'delete'}<Button
@@ -183,7 +185,7 @@
 					</div>{/if}
 			</ItemRow>
 		{:else}
-			<p class="text-surface-600-400">{$t('No annotations.')}</p>
+			<p class="text-surface-600-400">{$t`No annotations.`}</p>
 		{/each}
 		<Button
 			as="a"
@@ -195,7 +197,7 @@
 					`pdf/${workspaceRevisionId}${source !== 'all' && source !== 'private' ? `?${new URLSearchParams({ project_id: source })}` : ''}`,
 					returnTo
 				)
-			)}>{$t('Open annotation workspace')}</Button
+			)}>{$t`Open annotation workspace`}</Button
 		>
 	{/if}
 	<Pagination
@@ -207,7 +209,7 @@
 			pageSize = size;
 			page = 1;
 		}}
-		label={$t('Annotation pages')}
+		label={$t`Annotation pages`}
 		busy={annotations.isFetching}
 		class="mt-4"
 		onPage={(next) => (page = next)}
@@ -215,9 +217,9 @@
 </Panel>
 <ConfirmDialog
 	bind:open={confirmDeleteOpen}
-	title={$t('Delete')}
-	body={$t('This cannot be undone.')}
-	confirmLabel={$t('Delete')}
+	title={$t`Delete`}
+	body={$t`This cannot be undone.`}
+	confirmLabel={$t`Delete`}
 	busy={moderating !== ''}
 	onConfirm={confirmDelete}
 />

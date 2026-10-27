@@ -1,7 +1,8 @@
 <script lang="ts">
 	import Panel from '#lib/design/Panel.svelte';
 	import { dateTimeFormat, megabytes, numberFormat } from '#lib/format.js';
-	import { t, type MessageKey } from '#lib/i18n.js';
+	import { ph, plural, t } from 'lingui-for-svelte/macro';
+	import type { MessageDescriptor } from '@lingui/core';
 	import type { components } from '#lib/api/schema.js';
 	import Button from '#lib/design/Button.svelte';
 
@@ -14,7 +15,7 @@
 		onRun
 	}: {
 		maintenance: components['schemas']['StorageMetricsView'];
-		operations: ReadonlyArray<readonly [Operation, MessageKey]>;
+		operations: ReadonlyArray<readonly [Operation, MessageDescriptor]>;
 		busy: boolean;
 		onRun: (operation: Operation) => void;
 	} = $props();
@@ -26,65 +27,58 @@
 </script>
 
 <Panel class="grid grid-cols-1 gap-3">
-	<h2>{$t('Maintenance')}</h2>
+	<h2>{$t`Maintenance`}</h2>
 	<p>
-		{$t('{count, plural, one {# Item} other {# Items}}', {
-			count: maintenance.items_count
-		})} · {$t('{size} MB', {
-			size: $numberFormat.format(megabytes(maintenance.total_disk_bytes))
-		})}
+		{$plural({ count: maintenance.items_count }, { one: '# Item', other: '# Items' })} · {$t`${ph({ size: $numberFormat.format(megabytes(maintenance.total_disk_bytes)) })} MB`}
 	</p>
 	<dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
-		<dt>{$t('Database allocation')}</dt>
+		<dt>{$t`Database allocation`}</dt>
 		<dd>
-			{$t('{size} MB', {
-				size: $numberFormat.format(megabytes(maintenance.database_allocated_bytes))
-			})}
+			{$t`${ph({ size: $numberFormat.format(megabytes(maintenance.database_allocated_bytes)) })} MB`}
 		</dd>
 		{#if maintenance.database_reusable_bytes != null}
-			<dt>{$t('Reusable database space')}</dt>
+			<dt>{$t`Reusable database space`}</dt>
 			<dd>
-				{$t('{size} MB', {
-					size: $numberFormat.format(megabytes(maintenance.database_reusable_bytes))
-				})}
+				{$t`${ph({ size: $numberFormat.format(megabytes(maintenance.database_reusable_bytes)) })} MB`}
 			</dd>
 		{/if}
-		<dt>{$t('Workflow history')}</dt>
+		<dt>{$t`Workflow history`}</dt>
 		<dd>{maintenance.workflow_history_count ?? '—'}</dd>
-		<dt>{$t('Workflow checkpoints')}</dt>
+		<dt>{$t`Workflow checkpoints`}</dt>
 		<dd>{maintenance.workflow_checkpoint_count ?? '—'}</dd>
-		<dt>{$t('Transaction checkpoints')}</dt>
+		<dt>{$t`Transaction checkpoints`}</dt>
 		<dd>{maintenance.datasource_checkpoint_count ?? '—'}</dd>
-		<dt>{$t('Object integrity')}</dt>
+		<dt>{$t`Object integrity`}</dt>
 		<dd>
 			{#if maintenance.integrity_status === 'failed'}
-				{$t('Failed')}
+				{$t`Failed`}
 			{:else if maintenance.integrity_checked_at}
 				{$dateTimeFormat.format(new Date(maintenance.integrity_checked_at))}
-				· {$t('{count, plural, one {# error} other {# errors}}', {
-					count: maintenance.integrity_error_count ?? 0
-				})}
+				· {$plural(
+					{ count: maintenance.integrity_error_count ?? 0 },
+					{ one: '# error', other: '# errors' }
+				)}
 			{:else}
-				{$t('Not checked')}
+				{$t`Not checked`}
 			{/if}
 		</dd>
-		<dt>{$t('Automatic cleanup')}</dt>
+		<dt>{$t`Automatic cleanup`}</dt>
 		<dd>
 			{#if maintenance.cleanup_error}
-				{$t('Failed')} ({maintenance.cleanup_error})
+				{$t`Failed`} ({maintenance.cleanup_error})
 			{:else if maintenance.cleanup_checked_at}
 				{$dateTimeFormat.format(new Date(maintenance.cleanup_checked_at))}
-				· {$t('Removed {count} records', { count: removedRecords })}
+				· {$t`Removed ${ph({ count: removedRecords })} records`}
 			{:else if maintenance.cleanup_started_at}
-				{$t('Running')}
+				{$t`Running`}
 			{:else}
-				{$t('Not run yet')}
+				{$t`Not run yet`}
 			{/if}
 		</dd>
 	</dl>
 	{#if integrityErrors.length}
 		<details>
-			<summary>{$t('Integrity error samples')}</summary>
+			<summary>{$t`Integrity error samples`}</summary>
 			<ul class="mt-2 max-h-48 overflow-auto text-sm">
 				{#each integrityErrors as error, index (index)}
 					<li class="break-all">{error}</li>

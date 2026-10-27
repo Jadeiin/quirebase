@@ -81,15 +81,33 @@ function staticAttributeValue(attribute: AstNode): string | undefined {
 function collect(source: string, file: string): { text: Finding[]; attributes: Finding[] } {
 	const text: Finding[] = [];
 	const attributes: Finding[] = [];
+	const ast = parse(source, { filename: file, modern: true });
+	const macroComponents = new Set(
+		(ast.instance?.content.body ?? []).flatMap((node) => {
+			if (node.type !== 'ImportDeclaration' || node.source.value !== 'lingui-for-svelte/macro')
+				return [];
+			return node.specifiers.flatMap((specifier) => {
+				if (specifier.type !== 'ImportSpecifier') return [];
+				const name =
+					specifier.imported.type === 'Identifier'
+						? specifier.imported.name
+						: specifier.imported.value;
+				return typeof name === 'string' &&
+					['Trans', 'Plural', 'Select', 'SelectOrdinal'].includes(name)
+					? [specifier.local.name]
+					: [];
+			});
+		})
+	);
 
-	function walk(value: unknown, inCode: boolean): void {
+	function walk(value: unknown, inCode: boolean, inTranslation: boolean): void {
 		if (!value || typeof value !== 'object') return;
 		if (Array.isArray(value)) {
-			for (const child of value) walk(child, inCode);
+			for (const child of value) walk(child, inCode, inTranslation);
 			return;
 		}
 		const node = value as AstNode;
-		if (node.type === 'Text' && typeof node.data === 'string' && !inCode) {
+		if (node.type === 'Text' && typeof node.data === 'string' && !inCode && !inTranslation) {
 			const trimmed = node.data.replace(/\s+/g, ' ').trim();
 			if (/[A-Za-z]/.test(trimmed)) {
 				text.push({ file, line: lineAt(source, node.start ?? 0), text: trimmed });
@@ -112,13 +130,15 @@ function collect(source: string, file: string): { text: Finding[]; attributes: F
 		}
 		const nextInCode =
 			inCode || (node.type === 'RegularElement' && CODE_ELEMENTS.has(node.name ?? ''));
+		const nextInTranslation =
+			inTranslation || (node.type === 'Component' && macroComponents.has(node.name ?? ''));
 		for (const [key, child] of Object.entries(node)) {
 			if (!CHILD_KEYS.has(key)) continue;
-			walk(child, nextInCode);
+			walk(child, nextInCode, nextInTranslation);
 		}
 	}
 
-	walk(parse(source, { filename: file, modern: true }).fragment, false);
+	walk(ast.fragment, false, false);
 	return { text, attributes };
 }
 
@@ -133,6 +153,24 @@ function unwrapped(items: Finding[], allowed: Set<string>): string[] {
 }
 
 describe('localization coverage', () => {
+	it('accepts aliased translation components while checking their static attributes', () => {
+		const findings = collect(
+			`<script>import {Trans as Translation} from 'lingui-for-svelte/macro';</script>
+			<Translation>Read <a title="Untranslated title">more</a></Translation>`,
+			'Fixture.svelte'
+		);
+		expect(findings.text).toEqual([]);
+		expect(findings.attributes.map(({ text }) => text)).toEqual(['title="Untranslated title"']);
+	});
+
+	it('checks text inside an ordinary component with the same name', () => {
+		const findings = collect(
+			`<script>import Trans from './Ordinary.svelte';</script><Trans>Untranslated</Trans>`,
+			'Fixture.svelte'
+		);
+		expect(findings.text.map(({ text }) => text)).toEqual(['Untranslated']);
+	});
+
 	it('wraps every user-facing Svelte text node', () => {
 		expect(findings.flatMap(({ text }) => unwrapped(text, ALLOWED_TEXT))).toEqual([]);
 	});

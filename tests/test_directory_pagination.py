@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from test_public_api import api_client, bearer
+from app_helpers import api_client, bearer
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.accounts import create_api_token

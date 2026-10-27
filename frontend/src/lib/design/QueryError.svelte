@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from '#lib/design/Button.svelte';
 	import Notice from '#lib/design/Notice.svelte';
-	import { t } from '#lib/i18n.js';
+	import { t } from 'lingui-for-svelte/macro';
 
 	let {
 		message,
@@ -16,5 +16,5 @@
 
 <Notice as="div" variant="error" class="my-3 flex flex-wrap items-center justify-between gap-3">
 	<span>{message}</span>
-	<Button type="button" disabled={busy} onclick={onRetry}>{$t('Retry')}</Button>
+	<Button type="button" disabled={busy} onclick={onRetry}>{$t`Retry`}</Button>
 </Notice>

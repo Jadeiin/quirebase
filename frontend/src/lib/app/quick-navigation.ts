@@ -1,11 +1,12 @@
 /* eslint-disable lingui/no-unlocalized-strings -- Navigation identifiers and DOM selectors are machine-readable; labels use msg. */
-import { msg, type MessageKey } from '#lib/i18n.js';
+import { msg } from '@lingui/core/macro';
+import type { MessageDescriptor } from '@lingui/core';
 import { workspaceHref, type WorkspacePath } from '#lib/workspaces/href.js';
 import { navigation } from './navigation.js';
 
 type PageLink = {
 	id: string;
-	label: MessageKey;
+	label: MessageDescriptor;
 	icon: string;
 	href: WorkspacePath | 'workspace' | 'account' | 'admin';
 };
@@ -25,16 +26,16 @@ export function quickPageLinks(
 	if (workspaceId)
 		links.push({
 			id: 'workspace-settings',
-			label: msg('Workspace settings'),
+			label: msg`Workspace settings`,
 			icon: 'settings',
 			href: workspaceHref(workspaceId, 'settings')
 		});
 	links.push(
-		{ id: 'workspaces', label: msg('My workspaces'), icon: 'panel', href: 'workspace' },
-		{ id: 'account', label: msg('Account settings'), icon: 'user', href: 'account' }
+		{ id: 'workspaces', label: msg`My workspaces`, icon: 'panel', href: 'workspace' },
+		{ id: 'account', label: msg`Account settings`, icon: 'user', href: 'account' }
 	);
 	if (administration)
-		links.push({ id: 'admin', label: msg('Administration'), icon: 'admin', href: 'admin' });
+		links.push({ id: 'admin', label: msg`Administration`, icon: 'admin', href: 'admin' });
 	return links;
 }
 

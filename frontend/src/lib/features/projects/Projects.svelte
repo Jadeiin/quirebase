@@ -20,7 +20,7 @@
 	import { domainLabel } from '#lib/domain-labels.js';
 	import { projectListQuery } from '#lib/features/projects/queries.js';
 	import { invalidateProject } from '#lib/query/invalidation.js';
-	import { t } from '#lib/i18n.js';
+	import { ph, plural, t } from 'lingui-for-svelte/macro';
 	import { numberFormat } from '#lib/format.js';
 	import { createUrlDraft } from '#lib/navigation/url-draft.svelte.js';
 	import { libraryHref } from '#lib/features/library/filters.js';
@@ -73,14 +73,11 @@
 	});
 	const nextDirection = $derived(listing.direction === 'asc' ? 'desc' : 'asc');
 	function orderLabel(direction: ProjectListState['direction']) {
-		if (listing.sort === 'name') return direction === 'asc' ? $t('A–Z') : $t('Z–A');
-		return direction === 'asc' ? $t('Oldest first') : $t('Newest first');
+		if (listing.sort === 'name') return direction === 'asc' ? $t`A–Z` : $t`Z–A`;
+		return direction === 'asc' ? $t`Oldest first` : $t`Newest first`;
 	}
 	const directionHint = $derived(
-		$t('Sort order: {current}. Switch to {next}.', {
-			current: orderLabel(listing.direction),
-			next: orderLabel(nextDirection)
-		})
+		$t`Sort order: ${ph({ current: orderLabel(listing.direction) })}. Switch to ${ph({ next: orderLabel(nextDirection) })}.`
 	);
 
 	let createOpen = $state(false);
@@ -118,7 +115,7 @@
 			await refresh();
 			await goto(resolve(workspaceHref(workspaceId, `projects/${created.id}`)));
 		} catch (reason) {
-			createError = apiErrorMessage(reason, $t('Unable to create Project'));
+			createError = apiErrorMessage(reason, $t`Unable to create Project`);
 		} finally {
 			busy = false;
 		}
@@ -150,7 +147,7 @@
 		} catch (reason) {
 			error = apiErrorMessage(
 				reason,
-				action === 'join' ? $t('Unable to join Project') : $t('Unable to leave Project')
+				action === 'join' ? $t`Unable to join Project` : $t`Unable to leave Project`
 			);
 			// A failed response can follow a committed membership change.
 			await refresh();
@@ -162,10 +159,10 @@
 
 <SectionHeader>
 	<div>
-		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t('Collaboration')}</p>
-		<h1>{$t('Projects')}</h1>
+		<p class="mb-1 text-sm font-medium text-primary-700-300">{$t`Collaboration`}</p>
+		<h1>{$t`Projects`}</h1>
 		<p class="text-surface-600-400">
-			{$t('Organize Items and collaborate in Projects.')}
+			{$t`Organize Items and collaborate in Projects.`}
 		</p>
 	</div>
 	{#snippet actions()}
@@ -178,7 +175,7 @@
 					if (!details.open) createError = '';
 				}}
 			>
-				<DialogTriggerButton><Icon name="plus" /> {$t('New Project')}</DialogTriggerButton>
+				<DialogTriggerButton><Icon name="plus" /> {$t`New Project`}</DialogTriggerButton>
 				<Portal>
 					<Dialog.Backdrop class="fixed inset-0 z-70 bg-surface-950/45 backdrop-blur-[2px]" />
 					<Dialog.Positioner class="fixed inset-0 z-71 grid grid-cols-1 place-items-center p-4">
@@ -186,7 +183,7 @@
 							class="w-full max-w-lg rounded-container border border-surface-300-700 bg-surface-50-950 p-5 shadow-2xl"
 						>
 							<SectionHeader>
-								<Dialog.Title class="text-xl font-bold">{$t('Create Project')}</Dialog.Title>
+								<Dialog.Title class="text-xl font-bold">{$t`Create Project`}</Dialog.Title>
 								{#snippet actions()}<DialogCloseButton disabled={busy} />{/snippet}
 							</SectionHeader>
 							{#if createError}<Notice variant="error" class="mb-3">{createError}</Notice>{/if}
@@ -198,7 +195,7 @@
 								}}
 							>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Name')}<input
+									>{$t`Name`}<input
 										class="input"
 										bind:value={name}
 										disabled={busy}
@@ -207,14 +204,14 @@
 									/></label
 								>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Description')}<textarea
+									>{$t`Description`}<textarea
 										class="textarea min-h-28"
 										bind:value={description}
 										disabled={busy}
 										maxlength="2000"></textarea></label
 								>
 								<label class="grid grid-cols-1 gap-1"
-									>{$t('Participation')}<select
+									>{$t`Participation`}<select
 										class="select"
 										bind:value={participation}
 										disabled={busy}
@@ -226,21 +223,17 @@
 								>
 								<p class="text-sm text-surface-600-400">
 									{#if participation === 'workspace'}
-										{$t('All active Workspace members participate in this Project.')}
+										{$t`All active Workspace members participate in this Project.`}
 									{:else if participation === 'open'}
-										{$t('Active Workspace members can choose to join or leave this Project.')}
-										{$t('You will join automatically when you create an open Project.')}
+										{$t`Active Workspace members can choose to join or leave this Project.`}
+										{$t`You will join automatically when you create an open Project.`}
 									{:else}
-										{$t(
-											'Workspace owners and admins create managed Projects and manage participants.'
-										)}
-										{$t(
-											'Managed Projects are visible only to their participants and Workspace owners/admins.'
-										)}
+										{$t`Workspace owners and admins create managed Projects and manage participants.`}
+										{$t`Managed Projects are visible only to their participants and Workspace owners/admins.`}
 									{/if}
 								</p>
 								<Button variant="filled" disabled={busy || !name.trim()}
-									>{$t('Create Project')}</Button
+									>{$t`Create Project`}</Button
 								>
 							</form>
 						</Dialog.Content>
@@ -260,7 +253,7 @@
 		}}
 	>
 		<label class="grid min-w-0 grow basis-full grid-cols-1 gap-1 text-sm xl:basis-48">
-			{$t('Search Projects')}
+			{$t`Search Projects`}
 			<input
 				class="input h-9 field-sm"
 				type="search"
@@ -270,7 +263,7 @@
 			/>
 		</label>
 		<label class="grid min-w-0 grow basis-36 grid-cols-1 gap-1 text-sm xl:grow-0">
-			{$t('Projects')}
+			{$t`Projects`}
 			<select
 				class="select h-9 field-sm"
 				value={listing.view}
@@ -279,13 +272,13 @@
 					navigate({ view: value === 'mine' || value === 'joinable' ? value : 'all', page: 1 });
 				}}
 			>
-				<option value="all">{$t('All Projects')}</option>
-				<option value="mine">{$t('Your Projects')}</option>
-				<option value="joinable">{$t('Open Projects')}</option>
+				<option value="all">{$t`All Projects`}</option>
+				<option value="mine">{$t`Your Projects`}</option>
+				<option value="joinable">{$t`Open Projects`}</option>
 			</select>
 		</label>
 		<label class="grid min-w-0 grow basis-36 grid-cols-1 gap-1 text-sm xl:grow-0">
-			{$t('State')}
+			{$t`State`}
 			<select
 				class="select h-9 field-sm"
 				value={listing.state}
@@ -294,16 +287,16 @@
 					navigate({ state: value === 'active' || value === 'archived' ? value : '', page: 1 });
 				}}
 			>
-				<option value="">{$t('Any state')}</option>
-				<option value="active">{$t('Active')}</option>
-				<option value="archived">{$t('Archived')}</option>
+				<option value="">{$t`Any state`}</option>
+				<option value="active">{$t`Active`}</option>
+				<option value="archived">{$t`Archived`}</option>
 			</select>
 		</label>
 		<div class="grid min-w-37 grow basis-36 grid-cols-1 gap-1 text-sm xl:grow-0">
-			<label for={`${id}-sort`}>{$t('Sort By')}</label>
+			<label for={`${id}-sort`}>{$t`Sort By`}</label>
 			<div
 				role="group"
-				aria-label={$t('Sort')}
+				aria-label={$t`Sort`}
 				class="field-group min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-0"
 			>
 				<select
@@ -316,9 +309,9 @@
 						navigate({ sort, direction: defaultProjectSortDirection(sort), page: 1 });
 					}}
 				>
-					<option value="name">{$t('Name')}</option>
-					<option value="created">{$t('Created')}</option>
-					<option value="updated">{$t('Updated')}</option>
+					<option value="name">{$t`Name`}</option>
+					<option value="created">{$t`Created`}</option>
+					<option value="updated">{$t`Updated`}</option>
 				</select>
 				<Button
 					type="button"
@@ -338,7 +331,7 @@
 {#if error}<Notice variant="error" class="mb-4">{error}</Notice>{/if}
 {#if projects.isError || (!projects.isPending && !available)}
 	<QueryError
-		message={$t('Unable to load Projects.')}
+		message={$t`Unable to load Projects.`}
 		busy={projects.isFetching}
 		onRetry={() => void projects.refetch()}
 	/>
@@ -347,7 +340,7 @@
 <Panel padding="none" class="min-w-0">
 	<SectionHeader class="px-5 pt-5" spacing="compact">
 		<h2>
-			{$t('Projects')}
+			{$t`Projects`}
 			{#if available}<span class="text-base font-normal text-surface-600-400"
 					>{$numberFormat.format(total)}</span
 				>{/if}
@@ -355,7 +348,7 @@
 	</SectionHeader>
 	{#if available && projects.data}
 		{#if projects.data.items.length}
-			<ul aria-label={$t('Projects')}>
+			<ul aria-label={$t`Projects`}>
 				{#each projects.data.items as project (project.id)}
 					<li
 						aria-label={project.name}
@@ -381,15 +374,16 @@
 								class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-surface-600-400"
 							>
 								<span
-									>{$t('{count, plural, one {# Item} other {# Items}}', {
-										count: project.item_count
-									})}</span
+									>{$plural(
+										{ count: project.item_count },
+										{ one: '# Item', other: '# Items' }
+									)}</span
 								>
 								<span aria-hidden="true">·</span>
 								<span>{$t(domainLabel(project.participation))}</span>
 								{#if project.is_participating && project.participation !== 'workspace'}
 									<span aria-hidden="true">·</span>
-									<span>{$t('Joined')}</span>
+									<span>{$t`Joined`}</span>
 								{/if}
 								{#if project.state === 'archived'}
 									<Badge>{$t(domainLabel(project.state))}</Badge>
@@ -401,29 +395,29 @@
 								as="a"
 								size="sm"
 								href={resolve(libraryHref(workspaceId, { project: project.id }))}
-								>{$t('Open in Library')}</Button
+								>{$t`Open in Library`}</Button
 							>
 							{#if can(project.authorization, 'project_participation.join')}
 								<Button
 									size="sm"
 									disabled={busy}
-									onclick={() => changeParticipation(project.id, 'join')}>{$t('Join')}</Button
+									onclick={() => changeParticipation(project.id, 'join')}>{$t`Join`}</Button
 								>
 							{:else if can(project.authorization, 'project_participation.leave')}
 								<Button
 									size="sm"
 									disabled={busy}
 									onclick={() => changeParticipation(project.id, 'leave')}
-									>{$t('Leave Project')}</Button
+									>{$t`Leave Project`}</Button
 								>
 							{/if}
 						</div>
 					</li>
 				{/each}
 			</ul>
-		{:else}<p class="px-5 pb-5 text-surface-600-400">{$t('No matching Projects.')}</p>{/if}
+		{:else}<p class="px-5 pb-5 text-surface-600-400">{$t`No matching Projects.`}</p>{/if}
 	{:else if projects.isPending}<p class="px-5 pb-5 text-surface-600-400">
-			{$t('Loading Projects…')}
+			{$t`Loading Projects…`}
 		</p>{/if}
 	<Pagination
 		page={listing.page}
@@ -433,6 +427,6 @@
 		onPageSize={(pageSize) => navigate({ pageSize, page: 1 })}
 		onPage={(page) => navigate({ page })}
 		busy={projects.isFetching}
-		label={$t('Projects')}
+		label={$t`Projects`}
 	/>
 </Panel>
