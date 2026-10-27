@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quirebase"
-version = "0.3.1"
+version = "0.3.2"
 description = "A collaborative, self-hosted research library"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,10 +12,10 @@ license = "AGPL-3.0-only"
 dependencies = [
   "advanced-alchemy[argon2,cli,obstore,uuid]>=1.12.0,<2",
   "casbin>=1.43,<2",
-  "excerpo==0.3.1",
+  "excerpo==0.3.2",
   "fastapi>=0.141.1,<1",
   "httpx2>=2.12,<3",
-  "inquiro==0.3.1",
+  "inquiro==0.3.2",
   "pymupdf>=2.0,<3",
   "pydantic-settings>=2.10,<3",
   "python-multipart>=0.0.20,<1",
@@ -34,8 +34,8 @@ dependencies = [
 postgres = [
   "sqlalchemy[postgresql-psycopgbinary]>=2.0,<2.1",
 ]
-citation = ["inquiro[citation]==0.3.1"]
-keybert = ["excerpo[keybert]==0.3.1"]
+citation = ["inquiro[citation]==0.3.2"]
+keybert = ["excerpo[keybert]==0.3.2"]
 
 [tool.uv]
 required-version = ">=0.13.5"

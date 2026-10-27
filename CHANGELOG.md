@@ -1,3 +1,20 @@
+## 0.3.2 (2026-10-27)
+
+### Feat
+
+- **mcp**: add compact discovery and on-demand schemas
+- **mcp**: complete core research library workflows
+- **import**: add durable batch metadata lookup and safe PDF retries
+
+### Fix
+
+- correct import lifecycle, discovery enums, and citations
+- **import**: restore printed PDF identifiers and update fullstack smoke test
+
+### Refactor
+
+- adopt Lingui macros and simplify test boundaries
+
 ## 0.3.1 (2026-10-24)
 
 ### Feat
