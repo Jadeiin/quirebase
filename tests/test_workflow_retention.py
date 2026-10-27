@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 from dbos import DBOS, DBOSConfig
 from dbos._schemas import SCHEMA_PLACEHOLDER
-from dbos._schemas.datasource_database import DatasourceSchema
+from dbos._schemas.datasource_database import datasource_outputs_table
 from dbos._schemas.system_database import SystemSchema
 from sqlalchemy import delete, event, func, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +22,8 @@ from quirebase.core.workflows import ads, enqueue_child_workflow
 from quirebase.models import MaintenanceSnapshot
 from quirebase.operations import workflows as maintenance
 
+_DATASOURCE_OUTPUTS = datasource_outputs_table(SCHEMA_PLACEHOLDER)
+
 
 @pytest.fixture
 async def workflow_store(async_session_factory):
@@ -32,6 +34,8 @@ async def workflow_store(async_session_factory):
         )
         await connection.run_sync(SystemSchema.workflow_status.create)
         await connection.run_sync(SystemSchema.operation_outputs.create)
+        await connection.run_sync(SystemSchema.workflow_input.create)
+        await connection.run_sync(SystemSchema.workflow_output.create)
     return async_session_factory
 
 
@@ -45,7 +49,9 @@ async def retention_race_store(persistence_sessions):
     tables = (
         SystemSchema.workflow_status,
         SystemSchema.operation_outputs,
-        DatasourceSchema.datasource_outputs,
+        SystemSchema.workflow_input,
+        SystemSchema.workflow_output,
+        _DATASOURCE_OUTPUTS,
     )
     async with engine.begin() as connection:
         connection = await connection.execution_options(
@@ -68,10 +74,18 @@ async def retention_race_store(persistence_sessions):
                 schema_translate_map={SCHEMA_PLACEHOLDER: schema}
             )
             await connection.execute(
-                delete(DatasourceSchema.datasource_outputs).where(
-                    DatasourceSchema.datasource_outputs.c.workflow_id.startswith(prefix)
+                delete(_DATASOURCE_OUTPUTS).where(
+                    _DATASOURCE_OUTPUTS.c.workflow_id.startswith(prefix)
                 )
             )
+            for table in (
+                SystemSchema.operation_outputs,
+                SystemSchema.workflow_input,
+                SystemSchema.workflow_output,
+            ):
+                await connection.execute(
+                    delete(table).where(table.c.workflow_uuid.startswith(prefix))
+                )
             await connection.execute(
                 delete(SystemSchema.workflow_status).where(
                     SystemSchema.workflow_status.c.workflow_uuid.startswith(prefix)
@@ -103,11 +117,25 @@ async def _workflow(
     )
     await db.execute(
         SystemSchema.operation_outputs.insert().values(
-            workflow_uuid=identity, function_id=1, function_name="example", output="checkpoint"
+            workflow_uuid=identity,
+            function_id=1,
+            function_name="example",
+            output="checkpoint",
+            retention_timestamp=instant,
         )
     )
     await db.execute(
-        DatasourceSchema.datasource_outputs.insert().values(
+        SystemSchema.workflow_input.insert().values(
+            workflow_uuid=identity, inputs="arguments", retention_timestamp=instant
+        )
+    )
+    await db.execute(
+        SystemSchema.workflow_output.insert().values(
+            workflow_uuid=identity, output="result", retention_timestamp=instant
+        )
+    )
+    await db.execute(
+        _DATASOURCE_OUTPUTS.insert().values(
             workflow_id=identity, step_id=1, output="receipt", created_at=instant
         )
     )
@@ -136,6 +164,7 @@ async def test_retention_preserves_active_recent_foreign_and_retained_parent_chi
                 function_id=2,
                 function_name="enqueue",
                 child_workflow_id="operation-child",
+                retention_timestamp=1,
             )
         )
     async with workflow_store() as db, db.begin():
@@ -147,6 +176,18 @@ async def test_retention_preserves_active_recent_foreign_and_retained_parent_chi
             "workflow_checkpoint_count": 10,
             "datasource_checkpoint_count": 9,
         }
+        for table in (SystemSchema.workflow_input, SystemSchema.workflow_output):
+            assert set(await db.scalars(select(table.c.workflow_uuid))) == {
+                "running",
+                "queued",
+                "delayed",
+                "unknown",
+                "unconfirmed-completion",
+                "recent",
+                "foreign",
+                "native-child",
+                "operation-child",
+            }
 
 
 @pytest.mark.anyio
@@ -166,9 +207,12 @@ async def test_expired_parent_is_retired_before_its_descendants(workflow_store):
             "workflow_checkpoint_count": 0,
             "datasource_checkpoint_count": 0,
         }
+        for table in (SystemSchema.workflow_input, SystemSchema.workflow_output):
+            assert await db.scalar(select(func.count()).select_from(table)) == 0
 
 
 @pytest.mark.anyio
+@pytest.mark.usefixtures("isolated_dbos_registry")
 async def test_sdk_created_child_is_protected_until_its_parent_retires(async_session_factory):
     engine = async_session_factory.kw["bind"]
     queue = "tests.retention"
@@ -192,7 +236,6 @@ async def test_sdk_created_child_is_protected_until_its_parent_retires(async_ses
             name="quirebase",
             application_version="retention-test",
             system_database_url=str(engine.url.set(drivername="sqlite")),
-            run_admin_server=False,
             enable_otlp=False,
         )
     )
@@ -240,7 +283,9 @@ async def test_sdk_created_child_is_protected_until_its_parent_retires(async_ses
                 "workflow_history": 0,
                 "datasource_checkpoints": 0,
             }
-            assert (await workflow_storage_counts(db))["datasource_checkpoint_count"] == 1
+            # DBOS 3 copies the committed result into operation_outputs, then
+            # removes the completed workflow's datasource receipt.
+            assert (await workflow_storage_counts(db))["datasource_checkpoint_count"] == 0
             await db.execute(
                 update(status)
                 .where(status.c.workflow_uuid == parent_id)
@@ -253,10 +298,12 @@ async def test_sdk_created_child_is_protected_until_its_parent_retires(async_ses
                 "datasource_checkpoints": 0,
             }
             assert await db.scalar(select(status.c.workflow_uuid)) == child_id
+        child = await DBOS.retrieve_workflow_async(child_id)
+        assert await child.get_result() == 42
         async with async_session_factory() as db, db.begin():
             assert await purge_workflow_history(db, before=before) == {
                 "workflow_history": 1,
-                "datasource_checkpoints": 1,
+                "datasource_checkpoints": 0,
             }
             assert await workflow_storage_counts(db) == {
                 "workflow_history_count": 0,
@@ -279,6 +326,8 @@ async def test_history_and_datasource_receipts_retire_atomically(workflow_store)
             "workflow_checkpoint_count": 1,
             "datasource_checkpoint_count": 1,
         }
+        for table in (SystemSchema.workflow_input, SystemSchema.workflow_output):
+            assert await db.scalar(select(table.c.workflow_uuid)) == "rollback"
 
 
 @pytest.mark.anyio
@@ -288,7 +337,7 @@ async def test_resume_and_retirement_preserve_the_winning_transaction(retention_
     engine = sessions.kw["bind"]
     schema = None if engine.dialect.name == "sqlite" else "dbos"
     status = SystemSchema.workflow_status
-    receipts = DatasourceSchema.datasource_outputs
+    receipts = _DATASOURCE_OUTPUTS
     async with sessions() as db, db.begin():
         await _workflow(db, identity, status="CANCELLED")
     attempted = asyncio.Event()
@@ -350,6 +399,10 @@ async def test_resume_and_retirement_preserve_the_winning_transaction(retention_
         )
         assert current == ("ENQUEUED" if winner == "resume" else None)
         assert count == (1 if winner == "resume" else 0)
+        for table in (SystemSchema.workflow_input, SystemSchema.workflow_output):
+            assert await db.scalar(
+                select(func.count()).select_from(table).where(table.c.workflow_uuid == identity)
+            ) == (1 if winner == "resume" else 0)
 
 
 @pytest.mark.anyio
@@ -365,7 +418,7 @@ async def test_late_datasource_error_is_collected_on_later_round_without_expired
     # after an entire GC round has finished. This must not become permanent.
     async with workflow_store() as db, db.begin():
         await db.execute(
-            DatasourceSchema.datasource_outputs
+            _DATASOURCE_OUTPUTS
             .insert()
             .values(
                 workflow_id="cancelled",
@@ -389,7 +442,7 @@ async def test_orphan_sweep_is_bounded_and_keeps_live_receipts(workflow_store):
         await _workflow(db, "live", status="PENDING")
         for index in range(3):
             await db.execute(
-                DatasourceSchema.datasource_outputs.insert().values(
+                _DATASOURCE_OUTPUTS.insert().values(
                     workflow_id=f"orphan-{index}", step_id=1, created_at=1
                 )
             )

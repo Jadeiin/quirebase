@@ -14,7 +14,7 @@ Discover papers, organize your Library, annotate PDFs together, and take your re
 
 ## Development
 
-Requirements: Python 3.12+, `uv` 0.12.14+, and Bun 1.4+ (or Node.js 22+ with npm) for building the Svelte application and bundled PDFium asset.
+Requirements: Python 3.12+, `uv` 0.13.5+, and Bun 1.4+ (or Node.js 22+ with npm) for building the Svelte application and bundled PDFium asset.
 
 For a quick local test, run:
 

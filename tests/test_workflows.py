@@ -330,38 +330,77 @@ async def test_workflow_detail_keeps_output_and_failure(raw_status, output, fail
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("name", [None, "operations.check_objects"])
-async def test_workflow_state_counts_use_database_aggregation(name):
+@pytest.mark.usefixtures("isolated_dbos_registry")
+async def test_workflow_state_counts_with_real_sdk_client(tmp_path):
+    from dbos import DBOS, DBOSClient, DBOSConfig
+    from dbos._schemas.system_database import SystemSchema
+
     from quirebase.core.workflows import DBOSAdapter
 
-    class AggregateDatabase:
-        def __init__(self):
-            self.options = None
+    url = f"sqlite:///{tmp_path / 'workflow-counts.db'}"
+    DBOS(
+        config=DBOSConfig(
+            name="quirebase",
+            application_version="state-counts-test",
+            system_database_url=url,
+            enable_otlp=False,
+        )
+    )
+    DBOS.launch()
+    client = DBOSClient(system_database_url=url, application_name="quirebase")
+    adapter = DBOSAdapter(client)
+    try:
+        assert await adapter.state_counts() == {}
+        name = "operations.check_objects"
+        rows = [
+            (raw_status, name, "quirebase")
+            for raw_status in (
+                ["SUCCESS"] * 125
+                + [
+                    "ENQUEUED",
+                    "DELAYED",
+                    "PENDING",
+                    "ERROR",
+                    "MAX_RECOVERY_ATTEMPTS_EXCEEDED",
+                    "CANCELLED",
+                    "FUTURE_STATUS",
+                    None,
+                ]
+            )
+        ]
+        rows.extend([
+            ("SUCCESS", f"{name}.other", "quirebase"),
+            ("SUCCESS", name, None),
+            ("ERROR", name, "another-application"),
+        ])
+        now = int(datetime.now(UTC).timestamp() * 1000)
+        with client._sys_db.engine.begin() as connection:
+            connection.execute(
+                SystemSchema.workflow_status.insert(),
+                [
+                    {
+                        "workflow_uuid": str(uuid4()),
+                        "status": raw_status,
+                        "name": workflow_name,
+                        "application_name": application,
+                        "created_at": now,
+                        "updated_at": now,
+                        "priority": 0,
+                    }
+                    for raw_status, workflow_name, application in rows
+                ],
+            )
 
-        def get_workflow_aggregates(self, **options):
-            self.options = options
-            return [
-                {"group": {"status": "SUCCESS"}, "count": 7},
-                {"group": {"status": "ERROR"}, "count": 2},
-                {"group": {"status": "MAX_RECOVERY_ATTEMPTS_EXCEEDED"}, "count": 1},
-                {"group": {"status": "FUTURE_STATUS"}, "count": 4},
-                {"group": {"status": "ENQUEUED"}, "count": 3},
-            ]
-
-    database = AggregateDatabase()
-    client = SimpleNamespace(_sys_db=database)
-
-    assert await DBOSAdapter(client).state_counts(name=name) == {
-        "succeeded": 7,
-        "failed": 7,
-        "pending": 3,
-    }
-    assert database.options == {
-        "group_by_status": True,
-        "select_count": True,
-        "application_name": ["quirebase"],
-        **({"name": [name]} if name is not None else {}),
-    }
+        expected = {"succeeded": 127, "pending": 2, "running": 1, "failed": 4, "cancelled": 1}
+        assert await adapter.state_counts() == expected
+        assert await adapter.state_counts(name=name) == {**expected, "succeeded": 126}
+        assert await adapter.state_counts(name="check_objects") == {}
+        assert await adapter.state_counts(name="absent") == {}
+        # SDK listing and aggregate counts must agree on application ownership,
+        # including rows the SDK treats as unclaimed (application_name IS NULL).
+        assert len(await adapter.list(limit=1000)) == sum(expected.values())
+    finally:
+        client.destroy()
 
 
 @pytest.mark.anyio
@@ -997,8 +1036,11 @@ async def test_integrity_scan_publishes_backfills_without_checkpointing_inventor
 
 
 @pytest.mark.anyio
-async def test_datasource_step_writes_checkpoint_in_datasource_outputs(async_db, tmp_path):
-    from dbos import DBOS, DBOSConfig
+@pytest.mark.usefixtures("isolated_dbos_registry")
+async def test_datasource_step_moves_checkpoint_to_system_database_on_completion(
+    async_db, tmp_path
+):
+    from dbos import DBOS, DBOSConfig, SetWorkflowID
     from sqlalchemy import text
 
     from quirebase.core.workflows import ads
@@ -1018,15 +1060,23 @@ async def test_datasource_step_writes_checkpoint_in_datasource_outputs(async_db,
         return await sample_step(value)
 
     try:
-        result = await sample_workflow(21)
+        identity = str(uuid4())
+        with SetWorkflowID(identity):
+            result = await sample_workflow(21)
         assert result == 42
         outputs = (
             await async_db.execute(
                 text("SELECT workflow_id, step_id, output FROM datasource_outputs")
             )
         ).fetchall()
-        assert len(outputs) == 1
-        assert outputs[0][1] == 1
+        assert outputs == []
+        checkpoints = await DBOS.list_workflow_steps_async(identity)
+        assert checkpoints is not None
+        assert len(checkpoints) == 1
+        assert checkpoints[0]["function_id"] == 1
+        assert checkpoints[0]["output"] == 42
+        with SetWorkflowID(identity):
+            assert await sample_workflow(21) == 42
     finally:
         DBOS.destroy()
 

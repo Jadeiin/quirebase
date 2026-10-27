@@ -54,7 +54,7 @@ async def _resolve_addresses(host: str, port: int) -> tuple[str, ...]:
         )
     except OSError as error:
         raise UpstreamServiceError("attachment source address could not be resolved") from error
-    return tuple(dict.fromkeys(row[4][0] for row in rows))
+    return tuple(dict.fromkeys(str(row[4][0]) for row in rows))
 
 
 async def _public_request_target(source: str) -> tuple[str, str, str]:

@@ -213,6 +213,8 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // The HTTP UUID fallback adds a shared Library chunk; only measured overages move.
 // Shared bibliographic summaries, author previews and the Import review layout add route-owned
 // code. Only measured overages move to the existing 1 kB raw / 500 B gzip boundaries.
+// The October 2026 dependency refresh adds less than 1 kB raw / 500 B gzip to these routes.
+// Only exceeded dimensions move to the next existing boundary.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
 	raw: 795000,
@@ -223,24 +225,24 @@ enforce('Quick navigation when open', bundleSize(graphFiles(quickNavigation)), {
 	gzip: 229500
 });
 enforce('Library route', bundleSize(graphFiles(library)), {
-	raw: 1142000,
+	raw: 1143000,
 	// Includes whole-name author folding, scoped selection cleanup and last-page recovery.
-	gzip: 331000
+	gzip: 331500
 });
 enforce('Library refinements when open', bundleSize(graphFiles(libraryRefinements)), {
-	raw: 1146000,
+	raw: 1147000,
 	gzip: 333000
 });
 enforce(
 	'Library preview when open',
 	bundleSize(graphFiles(libraryPreview)),
 	// Bibliographic preview and scoped navigation add about 14 kB raw / 5.5 kB gzip on demand.
-	{ raw: 1156000, gzip: 336000 }
+	{ raw: 1156000, gzip: 336500 }
 );
 enforce(
 	'Library organization when open',
 	bundleSize(graphFiles(mergeGraphs(libraryPreview, dependencyGraph([libraryOrganizeKey], false)))),
-	{ raw: 1168000, gzip: 341000 }
+	{ raw: 1169000, gzip: 341500 }
 );
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.
@@ -257,7 +259,7 @@ enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 	gzip: 276000
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
-	raw: 940000,
+	raw: 941000,
 	gzip: 274500
 });
 enforce('Import history route', routeBundle('/(app)/workspace/[workspaceId]/import/history'), {

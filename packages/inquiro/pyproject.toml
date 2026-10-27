@@ -11,16 +11,17 @@ requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 dependencies = [
-  # 0.311 drops distinct contributor roles sharing an ORCID; see structured metadata tests.
-  "commonmeta-py==0.309",
-  "commonmeta-schema==1.0.1",
+  # 0.312 preserves distinct contributor roles sharing an ORCID; 0.311 drops them.
+  "commonmeta-py==0.312",
+  "commonmeta-schema==1.0.3",
   "pydantic>=2.12,<3",
-  "jsonschema-rs>=0.58.6,<0.59",
+  "jsonschema-rs>=0.60.1,<0.61",
   # 0.11 normalizes duplicate punctuation at string seams; earlier releases
   # render "Smith, J.. (2024)" when a group delimiter follows an initial.
   "citeproc-py>=0.11.1,<0.12",
   "httpx2[socks]>=2.12,<3",
   "pylatexenc>=2.10,<3",
+  # commonmeta-py still requires python-dateutil<3.
   "python-dateutil>=2.9,<3",
 ]
 

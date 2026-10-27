@@ -4,7 +4,7 @@ status: accepted
 
 # ADR 0008: DBOS workflows and owned UUID objects
 
-Quirebase uses DBOS 2.x for durable execution. Web is a DBOS Client and a separately invoked
+Quirebase uses DBOS for durable execution. Web is a DBOS Client and a separately invoked
 `quirebase worker` process owns workflow execution. Workflow definitions live with the Documents,
 Library, or Operations capability whose behaviour they implement; Core exposes only the durable
 operation interface and DBOS Adapter. DBOS system tables share the physical application database

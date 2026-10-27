@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 from advanced_alchemy.utils.serialization import decode_json, encode_json
-from dbos import AsyncSQLAlchemyDatasource
+from dbos import DBOS, AsyncSQLAlchemyDatasource, _dbos
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -153,6 +153,21 @@ def fake_durable_operations(monkeypatch):
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture
+def isolated_dbos_registry(monkeypatch):
+    """Keep real SDK lifecycles separate from module-level workflow registrations."""
+    # Decorated steps retain this registry, so isolate its mutable state rather
+    # than replacing it and disconnecting already-imported workflow definitions.
+    registry = _dbos._get_or_create_dbos_registry()
+    monkeypatch.setattr(registry, "dbos", None)
+    monkeypatch.setattr(registry, "datasources", [])
+    monkeypatch.setattr(registry, "workflow_info_map", registry.workflow_info_map.copy())
+    try:
+        yield
+    finally:
+        DBOS.destroy()
 
 
 @pytest.fixture

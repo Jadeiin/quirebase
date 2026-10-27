@@ -11,6 +11,15 @@ cannot silently combine incompatible workspace releases. Build all three togethe
 `uv build --all-packages --no-sources` after building the frontend, and verify the full wheel set in
 an isolated environment before distribution.
 
+Repository installs with uv 0.13.5+ and the Docker image use the root manifest's version-scoped
+dependency exclusions. They omit unused commonmeta PDF/XML output dependencies, PyMuPDF's ONNX
+layout backend and KeyBERT's Sentence Transformers/Torch backend. Quirebase's PDF operations and
+local Model2Vec recommendations remain supported. The rules do not change published wheel
+metadata: `pip install`, `uv pip install` and `uv tool install` of release wheels still install
+the original upstream requirements. Use the repository's locked uv installation or Docker for
+the reduced dependency set; the application wheel itself does not bundle these dependencies.
+See [Testing](TESTING.md#dependency-exclusions) before changing an exclusion's upstream version.
+
 SQLite is intended for a single-host installation with one worker. The application uses SQLAlchemy's
 `asyncio` and `aiosqlite` optional groups and derives `sqlite+aiosqlite` from the familiar
 `sqlite:///...` setting. PostgreSQL is recommended for teams and supports concurrent workers
@@ -188,3 +197,10 @@ instructions; an alpha release may require recreating the database and reimporti
 `quirebase init-db` applies the installed migration chain and initializes workflow storage.
 Run `quirebase doctor` before restarting web and workers. Source checkouts also require a new
 frontend build as described above.
+
+The DBOS 3 upgrade moves workflow inputs and outputs into separate SDK-managed tables.
+Upgrade Web's DBOS Client and every worker together: DBOS 2 processes cannot read workflows
+created by DBOS 3. Stop all old processes before running the new `quirebase init-db`, then run
+`quirebase doctor` and restart with the new dependencies. Do not roll back only the installed
+packages after initialization; restore the matching database backup as well. See the
+[DBOS upgrade guide](https://docs.dbos.dev/python/upgrading).

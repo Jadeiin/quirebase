@@ -86,6 +86,11 @@ jobs:
           uv venv "${RUNNER_TEMP}/quirebase-wheel-smoke" --python 3.12
           uv pip install --python "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" dist/*.whl
           "${RUNNER_TEMP}/quirebase-wheel-smoke/bin/python" -I -c "from quirebase.access import initialize_authorization; initialize_authorization()"
+      - name: Verify local Model2Vec keyword extraction
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv sync --frozen --extra keybert
+          uv run --frozen --extra keybert pytest -q packages/excerpo/tests/test_local_keybert.py
   postgres:
     runs-on: ubuntu-latest
     timeout-minutes: 15

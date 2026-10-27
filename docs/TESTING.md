@@ -71,6 +71,72 @@ Python check hooks use `uv run --frozen` so they do not rewrite the lockfile usi
 mirror settings. Frontend API generation and schema fixtures also use `--frozen` when invoking
 Python through uv. Use `uv run --frozen prek ...` when running hooks manually for the same reason.
 
+## Dependency updates
+
+Use `git-pkgs outdated --format json` to discover new releases, including versions outside the
+declared ranges. Compare candidates with the direct dependencies in the root and workspace
+`pyproject.toml` files and `frontend/package.json`; Python uses PEP 440 and the frontend uses
+SemVer. The output also includes transitive dependencies. Review their owning direct dependency
+rather than adding application requirements just to bypass its constraints. Registry aggregation
+can lag, so also check the official registry when reviewing an intentional pin.
+
+Read release notes and change ranges deliberately before running `git-pkgs update -m uv` from
+the root or `git-pkgs update -m bun` from `frontend`. These commands delegate to the package
+manager and respect its declared ranges; they do not discover or authorize a range migration.
+Keep shared package families aligned and review `git-pkgs diff` for the actual root locks,
+excluding unrelated untracked experiments. Use `uv audit --frozen` and `bun audit` on the updated
+locks; `git-pkgs vulns scan` defaults to the committed baseline.
+
+Validate changed runtime behavior, generated schemas and models, the fast suite, frontend build
+and bundle budgets. PDF upgrades also run the OA corpus; workflow/storage upgrades run durable
+recovery, retention races and fresh database initialization. PostgreSQL contracts require an
+isolated PostgreSQL service. Keep hook revisions aligned with the locked lint tools.
+
+The October 2026 update retains these upstream limits; review them on each dependency cycle:
+
+- SQLAlchemy stays below 2.1 because Advanced Alchemy 1.12 imports the removed
+  `sqlalchemy.util.portable_instancemethod` and fails during model import.
+- TypeScript stays on 6: SvelteKit 3.1 and svelte-check 4.7 do not support 7;
+  typescript-eslint 8.72 requires TypeScript below 6.1.
+- python-dateutil stays below 3 because commonmeta-py 0.312 requires it.
+
+commonmeta-py 0.312 passes the shared-ORCID contributor-role regression that blocked 0.311.
+PyMuPDF 2.0 bundles layout/LLM code. Its `pymupdf-layout` and `pymupdf4llm` requirements are
+empty packages for safe pip upgrades; removing them would not shrink the bundled code.
+
+### Dependency exclusions
+
+The root `pyproject.toml` requires uv 0.13.5+ and scopes exclusions to exact upstream versions:
+
+- commonmeta-py: omit unused PDF rendering/metadata, XML schema validation and legacy dependency
+  chains. Preserve startup schemas and ORCID/ISNI validation with scoped Marshmallow and idutils
+  overrides. WeasyPrint 69 and its known vulnerabilities are absent from the resulting lock.
+- PyMuPDF: omit ONNX Runtime; Quirebase uses basic PDF operations, whose import supports running
+  without the layout backend.
+- KeyBERT: omit Sentence Transformers and its Torch/CUDA chain; Excerpo loads local Model2Vec.
+- datamodel-code-generator: omit Black and isort; the generation script selects Ruff explicitly.
+
+These rules remove specific dependency edges, so another package can still require a shared
+dependency. Do not turn them into global bans or remove NumPy/NetworkX needed by YAKE. Upgrade
+an affected upstream version without extending its scope first, inspect its imports and metadata,
+then revalidate before applying exclusions to the new version. This deliberately restores the
+upstream requirements until the new version has been reviewed.
+
+Use a new environment to prove excluded packages are actually absent; an existing environment
+can hide missing imports. Run the fast suite, real OA PDFs, bibliography import/export and APA
+citations, plus `scripts/generate-commonmeta-models.py --check`. For the optional engine:
+
+```sh
+uv sync --frozen --extra keybert
+uv run --frozen --extra keybert pytest -q packages/excerpo/tests/test_local_keybert.py
+```
+
+The contract creates a tiny local model and extracts real keywords and phrases with Hub access
+disabled. CI runs it with the extra installed on Linux/Python 3.12; ordinary environments skip it.
+Run `uv audit --frozen` on the resulting lock. Exclusions affect repository uv resolution and the
+Docker build; they are not part of wheel dependency metadata. Standard wheel installations still
+resolve the upstream dependency chains. See [Deployment](DEPLOYMENT.md).
+
 ## Frontend localization
 
 The committed catalogs are `frontend/src/lib/locales/en-US/messages.po` and

@@ -211,6 +211,8 @@ test('account menu keeps the active theme during client-side navigation', async 
 	);
 
 	await page.goto('/');
+	await expect(page).toHaveURL(/\/workspace\/workspace-1$/);
+	await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
 	await expect.poll(() => documentRequests).toBe(1);
 	await page.getByRole('button', { name: /reader/i }).click();

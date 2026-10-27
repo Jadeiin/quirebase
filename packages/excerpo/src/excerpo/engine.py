@@ -84,8 +84,8 @@ def _english_stopwords() -> frozenset[str]:
     return frozenset(extractor.stopword_set) | _DOMAIN_STOPWORDS
 
 
-def _keybert_stopwords() -> tuple[str, ...]:
-    return tuple(sorted(_english_stopwords()))
+def _keybert_stopwords() -> list[str]:
+    return sorted(_english_stopwords())
 
 
 def _extend_yake_stopwords(extractor: Any) -> Any:

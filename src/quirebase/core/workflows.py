@@ -15,6 +15,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.database import async_database_url, engine, is_sqlite_database_url
 from quirebase.core.logging import configure_logging
 from quirebase.core.storage import get_object_store
+from quirebase.core.workflow_storage import workflow_status_counts
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Sequence
@@ -455,22 +456,14 @@ class DBOSAdapter:
 
     async def state_counts(self, *, name: str | None = None) -> dict[WorkflowState, int]:
         """Aggregate workflow states in the DBOS system database without loading history."""
-        # DBOS 2.31 exposes aggregation only on its system database implementation.
-        # Keep this private SDK dependency local until DBOSClient gains an equivalent method.
-        system_database: Any = self._client._sys_db
-        filters = {"name": [name]} if name is not None else {}
+        # The client has no public aggregation API; reuse its schema-bound system engine.
         rows = await asyncio.to_thread(
-            system_database.get_workflow_aggregates,
-            group_by_status=True,
-            select_count=True,
-            application_name=["quirebase"],
-            **filters,
+            workflow_status_counts, self._client._sys_db.engine, name=name
         )
         counts: dict[WorkflowState, int] = {}
-        for row in rows:
-            raw_status = row["group"].get("status")
-            state = _visible_state(raw_status or "")
-            counts[state] = counts.get(state, 0) + int(row["count"] or 0)
+        for raw_status, count in rows.items():
+            state = _visible_state(raw_status)
+            counts[state] = counts.get(state, 0) + count
         return counts
 
 
@@ -512,7 +505,6 @@ async def _launch_runtime(executor_id: str) -> None:
                 system_database_url=_sync_database_url(),
                 executor_id=executor_id,
                 use_listen_notify=False,
-                run_admin_server=False,
             )
         )
     finally:

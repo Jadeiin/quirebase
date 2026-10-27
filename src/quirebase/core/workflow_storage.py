@@ -1,7 +1,7 @@
-"""DBOS storage retention for the SDK's non-cascading datasource receipts.
+"""DBOS system storage metrics and retention of non-cascading payloads.
 
-Keep vendor table knowledge here. Each helper uses the caller's short transaction;
-it never changes SDK execution, enqueue or transaction behavior.
+Keep vendor table knowledge here. Retention uses the caller's short transaction;
+adapter queries use the SDK's schema-bound system engine. Neither changes SDK execution.
 """
 
 from __future__ import annotations
@@ -9,17 +9,33 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from dbos._schemas import SCHEMA_PLACEHOLDER
-from dbos._schemas.datasource_database import DatasourceSchema
+from dbos._schemas.datasource_database import datasource_outputs_table
 from dbos._schemas.system_database import SystemSchema
-from sqlalchemy import delete, func, inspect, select, tuple_
+from sqlalchemy import delete, func, inspect, or_, select, tuple_
 
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from sqlalchemy import Engine
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
 _TERMINAL_STATUSES = ("SUCCESS", "ERROR", "CANCELLED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED")
+_DATASOURCE_OUTPUTS = datasource_outputs_table(SCHEMA_PLACEHOLDER)
+
+
+def workflow_status_counts(engine: Engine, *, name: str | None = None) -> dict[str | None, int]:
+    """Count raw statuses with the same application visibility as DBOS Client listing."""
+    status = SystemSchema.workflow_status
+    statement = (
+        select(status.c.status, func.count())
+        .where(or_(status.c.application_name == "quirebase", status.c.application_name.is_(None)))
+        .group_by(status.c.status)
+    )
+    if name is not None:
+        statement = statement.where(status.c.name == name)
+    with engine.connect() as connection:
+        return dict(connection.execute(statement).tuples().all())
 
 
 async def _connection(db: AsyncSession):
@@ -80,10 +96,16 @@ async def purge_workflow_history(
     )
     removed = 0
     if retired:
+        # DBOS 3 payload tables have no status FK. Retire them only after the
+        # guarded status delete, in the same transaction as datasource receipts.
+        for table in (
+            SystemSchema.operation_outputs,
+            SystemSchema.workflow_input,
+            SystemSchema.workflow_output,
+        ):
+            await db.execute(delete(table).where(table.c.workflow_uuid.in_(retired)))
         result = await db.execute(
-            delete(DatasourceSchema.datasource_outputs).where(
-                DatasourceSchema.datasource_outputs.c.workflow_id.in_(retired)
-            )
+            delete(_DATASOURCE_OUTPUTS).where(_DATASOURCE_OUTPUTS.c.workflow_id.in_(retired))
         )
         removed = cast("CursorResult", result).rowcount
     return {"workflow_history": len(retired), "datasource_checkpoints": removed}
@@ -98,7 +120,7 @@ async def purge_orphan_datasource_outputs(
     recorder may commit after history retirement; the next round collects it.
     """
     await _connection(db)
-    outputs = DatasourceSchema.datasource_outputs
+    outputs = _DATASOURCE_OUTPUTS
     status = SystemSchema.workflow_status
     orphan = ~(
         select(status.c.workflow_uuid)
@@ -127,7 +149,7 @@ async def workflow_storage_counts(db: AsyncSession) -> dict[str, int | None]:
     tables = {
         "workflow_history_count": SystemSchema.workflow_status,
         "workflow_checkpoint_count": SystemSchema.operation_outputs,
-        "datasource_checkpoint_count": DatasourceSchema.datasource_outputs,
+        "datasource_checkpoint_count": _DATASOURCE_OUTPUTS,
     }
     existing = await connection.run_sync(
         lambda sync: set(inspect(sync).get_table_names(schema=schema))

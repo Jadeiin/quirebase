@@ -552,6 +552,7 @@ async def test_expiration_rechecks_lifetime_and_preserves_other_references(persi
 
 
 @pytest.mark.anyio
+@pytest.mark.usefixtures("isolated_dbos_registry")
 async def test_dbos_expiration_retries_io_and_replays_retirement_checkpoint(
     async_db, async_session_factory, tmp_path, monkeypatch
 ):
@@ -613,7 +614,15 @@ async def test_dbos_expiration_retries_io_and_replays_retirement_checkpoint(
             text("SELECT step_id FROM datasource_outputs WHERE workflow_id = :identity"),
             {"identity": identity},
         )
-        assert len(checkpoints.all()) == 1
+        assert checkpoints.all() == []
+        steps = await DBOS.list_workflow_steps_async(identity)
+        retirement = [
+            step
+            for step in steps
+            if step["function_name"].endswith("retire_expired_export_artifacts_step")
+        ]
+        assert len(retirement) == 1
+        assert retirement[0]["output"] == (stored.key,)
         assert not await store.exists(stored.key)
     finally:
         DBOS.destroy()

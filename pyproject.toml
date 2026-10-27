@@ -16,9 +16,10 @@ dependencies = [
   "fastapi>=0.141.1,<1",
   "httpx2>=2.12,<3",
   "inquiro==0.3.1",
-  "pymupdf>=1.28,<1.29",
+  "pymupdf>=2.0,<3",
   "pydantic-settings>=2.10,<3",
   "python-multipart>=0.0.20,<1",
+  # Advanced Alchemy 1.12 uses portable_instancemethod, removed in SQLAlchemy 2.1.
   "sqlalchemy[asyncio,aiosqlite]>=2.0,<2.1",
   "typer>=0.16,<1",
   "uvicorn[standard]>=0.35,<1",
@@ -26,7 +27,7 @@ dependencies = [
   "tzlocal>=5.3,<6",
   "fastmcp>=4,<5",
   "stream-zip>=0.0.84,<0.1",
-  "dbos>=2.31.0,<3",
+  "dbos>=3.3.0,<4",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +36,26 @@ postgres = [
 ]
 citation = ["inquiro[citation]==0.3.1"]
 keybert = ["excerpo[keybert]==0.3.1"]
+
+[tool.uv]
+required-version = ">=0.13.5"
+# Recheck upstream imports and the affected contracts before extending these
+# exact-version scopes. Other packages' requirements for shared dependencies stay intact.
+exclude-dependencies = [
+  # Inquiro uses metadata readers and bibliography writers, not PDF or XML-schema output.
+  # datacite, marshmallow-utils and orjsonl are unused legacy requirements in 0.312.
+  { package = { name = "commonmeta-py", version = "0.312" }, dependencies = ["datacite", "marshmallow-utils", "orjsonl", "pikepdf", "weasyprint", "xmlschema"] },
+  # Basic PDF operations support running without the optional ONNX layout backend.
+  { package = { name = "pymupdf", version = "2.0" }, dependencies = ["onnxruntime"] },
+  # Excerpo supplies a local Model2Vec backend; Sentence Transformers would add Torch/CUDA.
+  { package = { name = "keybert", version = "0.9.0" }, dependencies = ["sentence-transformers"] },
+  # scripts/generate-commonmeta-models.py explicitly selects the Ruff formatters.
+  { package = { name = "datamodel-code-generator", version = "0.86.0" }, dependencies = ["black", "isort"] },
+]
+override-dependencies = [
+  # Keep startup schemas and lazy ORCID/ISNI validation formerly supplied by legacy dependencies.
+  { package = { name = "commonmeta-py", version = "0.312" }, dependencies = ["marshmallow>=3,<4", "idutils>=1.7.1,<2"] },
+]
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -47,10 +68,10 @@ excerpo = { workspace = true }
 dev = [
   "commitizen>=4.17,<5",
   "citeproc-py-styles>=0.1.6,<0.2",
-  "mypy>=1.17,<2",
+  "mypy>=2.4,<3",
   "prek>=0.3,<1",
   "pytest>=9.0.3,<10",
-  "pytest-cov>=6.2,<7",
+  "pytest-cov>=7.1,<8",
   "pytest-xdist>=3.8,<4",
   "ruff>=0.16,<1",
   "import-linter[ui]>=2.15,<3.0",

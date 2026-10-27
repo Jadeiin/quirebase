@@ -418,13 +418,22 @@ def test_search_projection_revision_roundtrip(migration_database):
             assert not connection.execute(text(query)).all()
 
 
+@pytest.mark.parametrize("initialize_workflows", [False, True])
 def test_autogenerate_has_no_pending_schema_changes(
-    migration_database, tmp_path: Path, monkeypatch
+    migration_database, tmp_path: Path, monkeypatch, initialize_workflows
 ):
     database_url, _ = migration_database
     _migrate_database(database_url)
     monkeypatch.setenv("QUIREBASE_DATABASE_URL", database_url)
     get_settings.cache_clear()
+    if initialize_workflows:
+        subprocess.run(
+            [sys.executable, "-c", "from quirebase.cli import app; app()", "init-db"],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=os.environ | {"QUIREBASE_DATA_DIR": str(tmp_path / "data")},
+        )
     script_location = tmp_path / "migrations"
     shutil.copytree("migrations", script_location, ignore=shutil.ignore_patterns("__pycache__"))
     commands = AlembicCommands(_make_database_config(database_url))

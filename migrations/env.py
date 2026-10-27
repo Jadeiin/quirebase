@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING, cast
 
 from alembic import context
-from dbos._schemas.datasource_database import DatasourceSchema
+from dbos._schemas.datasource_database import datasource_outputs_table
 from dbos._schemas.system_database import SystemSchema
 
 import quirebase.models  # ruff: ignore[unused-import]
@@ -38,9 +38,9 @@ FTS5_SHADOW_SUFFIXES = (
 # Alembic owns business tables; DBOS owns its system and datasource tables.
 DBOS_TABLES = frozenset(
     table.name
-    for metadata in (SystemSchema.metadata_obj, DatasourceSchema.metadata_obj)
+    for metadata in (SystemSchema.metadata_obj, datasource_outputs_table(None).metadata)
     for table in metadata.tables.values()
-) | {"dbos_migrations"}
+) | {"dbos_migrations", "dbos_datasource_migrations"}
 
 
 def _is_search_projection(name: str) -> bool:
