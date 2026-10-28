@@ -11,6 +11,7 @@ from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import VersionConflict, WorkspaceMembershipRequired, WorkspaceUnavailable
 from quirebase.library import (
+    AuthorFilter,
     LibraryFilter,
     copy_item_to_workspace,
     create_item,
@@ -165,7 +166,7 @@ async def test_publication_sort_preserves_precision_and_puts_missing_dates_last(
             dates[ids.index(id)] for id in expected
         ]
     rows, total = await search_library(
-        db, actor, workspace_id, sort="published", year="2024", limit=2, offset=2
+        db, actor, workspace_id, LibraryFilter(year="2024"), sort="published", limit=2, offset=2
     )
     assert total == 5 and [row.id for row in rows] == [ids[3], ids[2]]
 
@@ -219,7 +220,11 @@ async def test_publication_sort_supports_both_directions_and_missing_names(persi
     )
     assert total == 6 and rows[0].id == ids[0]
     rows, total = await search_library(
-        db, actor, workspace_id, sort="publication", publication_title="Alpha Journal"
+        db,
+        actor,
+        workspace_id,
+        LibraryFilter(publication_title="Alpha Journal"),
+        sort="publication",
     )
     assert total == 2 and [row.id for row in rows] == sorted(ids[1:3])
 
@@ -678,9 +683,9 @@ async def test_search_indexes_active_credit_name_and_all_supplied_name_parts(per
         ),
     )
     for term in ("Ada", "Researcher"):
-        items, count = await search_library(db, actor, workspace_id, q=term)
+        items, count = await search_library(db, actor, workspace_id, LibraryFilter(q=term))
         assert count == 1 and [item.id for item in items] == [created.item_id]
-    assert (await search_library(db, actor, workspace_id, q="Inactive"))[1] == 0
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(q="Inactive")))[1] == 0
 
 
 async def test_identifier_lookup_is_authorized_and_workspace_scoped(persistence_db):
@@ -804,9 +809,11 @@ async def test_search_facets_read_work_and_author_roles(persistence_db):
     facets = await get_library_facets(db, actor, workspace_id)
     assert [(row.last_name, row.item_count) for row in facets.authors] == [("Smith", 1)]
     assert [(row.value, row.item_count) for row in facets.keywords] == [("Graph; theory", 1)]
-    assert (await search_library(db, actor, workspace_id, q="123456"))[1] == 1
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(q="123456")))[1] == 1
     assert (
-        await search_library(db, actor, workspace_id, author="Smith", keyword_exact="Graph; theory")
+        await search_library(
+            db, actor, workspace_id, LibraryFilter(author="Smith", keyword_exact="Graph; theory")
+        )
     )[1] == 1
 
 
@@ -843,14 +850,15 @@ async def test_publication_filters_share_exact_candidates_pagination_and_facets(
             db,
             actor,
             workspace_id,
-            publication_title=publication,
+            LibraryFilter(
+                publication_title=publication,
+                year="2024",
+                reference_type="Dataset",
+                keyword_exact="Graph; theory",
+                authors=(AuthorFilter("Ada", ""),),
+            ),
             limit=1,
             offset=offset,
-            year="2024",
-            reference_type="Dataset",
-            keyword_exact="Graph; theory",
-            author_last_name="Ada",
-            author_first_name="",
         )
         assert total == 2
         pages.extend(item.id for item in rows)
@@ -1234,10 +1242,10 @@ async def test_single_name_authors_have_consistent_suggestions_facets_and_filter
         ("Ada", None, 1)
     ]
     filtered = await get_library_facets(
-        db, actor, workspace_id, LibraryFilter(author_last_name="Ada", author_first_name="")
+        db, actor, workspace_id, LibraryFilter(authors=(AuthorFilter("Ada", ""),))
     )
     assert filtered == facets
-    items, total = await search_library(db, actor, workspace_id, author="Ada")
+    items, total = await search_library(db, actor, workspace_id, LibraryFilter(author="Ada"))
     assert total == 1 and [item.id for item in items] == [created.item_id]
 
 
@@ -1275,8 +1283,8 @@ async def test_contributor_type_selects_active_names_in_library_projections(pers
     assert [(row.last_name, row.first_name) for row in facets.authors] == [
         ("Research Council", None)
     ]
-    assert (await search_library(db, actor, workspace_id, author="Ada"))[1] == 0
-    assert (await search_library(db, actor, workspace_id, author="Council"))[1] == 1
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(author="Ada")))[1] == 0
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(author="Council")))[1] == 1
 
 
 async def test_summary_author_credits_round_trip_exact_library_filters(persistence_db):
@@ -1325,8 +1333,7 @@ async def test_summary_author_credits_round_trip_exact_library_filters(persisten
             db,
             actor,
             workspace_id,
-            author_last_name=author["last_name"],
-            author_first_name=author["first_name"] or "",
+            LibraryFilter(authors=(AuthorFilter(author["last_name"], author["first_name"] or ""),)),
         )
         assert total == 1 and [row.id for row in matches] == [created.item_id]
     empty = await create_item(db, actor, workspace_id, work())

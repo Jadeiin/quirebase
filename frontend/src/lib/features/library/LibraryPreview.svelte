@@ -80,9 +80,13 @@
 				return {
 					label: contributorName(row),
 					filter: {
-						author_last_name: family || text(entity.name) || text(entity.given_name),
-						author_first_name: family ? text(entity.given_name) : ''
-					}
+						authors: [
+							{
+								last_name: family || text(entity.name) || text(entity.given_name),
+								first_name: family ? text(entity.given_name) : ''
+							}
+						]
+					} satisfies LibraryMetadataFilter
 				};
 			})
 			.filter((author) => author.label)

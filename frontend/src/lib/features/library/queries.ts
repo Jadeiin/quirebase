@@ -26,8 +26,7 @@ function libraryFilterParameters(filters: LibraryFilters) {
 		reference_type: filters.reference_type,
 		publication_title: filters.publication_title,
 		keyword_exact: filters.keyword_exact,
-		author_last_name: filters.author_last_name,
-		author_first_name: filters.author_first_name,
+		authors: filters.authors?.length ? JSON.stringify(filters.authors) : undefined,
 		has_files: filters.has_files,
 		has_tags: filters.has_tags,
 		has_projects: filters.has_projects

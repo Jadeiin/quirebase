@@ -201,3 +201,26 @@ def test_openapi_api_routes_share_the_structured_error_contract() -> None:
             responses = operation["responses"]
             assert responses["default"]["content"]["application/json"]["schema"] == expected_schema
             assert responses["422"]["content"]["application/json"]["schema"] == expected_schema
+
+
+def test_library_query_schema_describes_author_json_and_keeps_get_parameters_flat() -> None:
+    for suffix in ("", "/facets"):
+        operation = OPENAPI["paths"][f"/api/v1/workspaces/{{workspace_id}}/items{suffix}"]["get"]
+        assert "requestBody" not in operation
+        parameters = {p["name"]: p for p in operation["parameters"] if p["in"] == "query"}
+        authors = parameters["authors"]
+        assert authors["required"] is False
+        schema = authors["schema"]
+        assert schema["type"] == "string"
+        assert schema["contentMediaType"] == "application/json"
+        assert schema["contentSchema"]["type"] == "array"
+        reference = schema["contentSchema"]["items"]["$ref"].rsplit("/", 1)[1]
+        author = OPENAPI["components"]["schemas"][reference]
+        assert author["required"] == ["last_name"]
+        assert author["properties"]["last_name"]["type"] == "string"
+        assert {part["type"] for part in author["properties"]["first_name"]["anyOf"]} == {
+            "string",
+            "null",
+        }
+        assert parameters["limit"]["schema"]["minimum"] == 1
+        assert parameters["offset"]["schema"]["minimum"] == 0

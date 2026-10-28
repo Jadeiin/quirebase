@@ -12,7 +12,13 @@ from sqlalchemy import select
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
 from quirebase.core.errors import VersionConflict
-from quirebase.library import create_item, find_duplicates, revise_item_metadata, search_library
+from quirebase.library import (
+    LibraryFilter,
+    create_item,
+    find_duplicates,
+    revise_item_metadata,
+    search_library,
+)
 from quirebase.library.identifiers import sync_metadata_from_upstream
 from quirebase.models import AuditEvent, Item, User
 
@@ -310,7 +316,7 @@ async def test_provider_sync_retains_replaced_primary_identity_for_search_and_du
     assert item.work["id"] == "https://doi.org/10.1234/synced"
     assert work_identifiers(item.work) == {("doi", "10.1234/synced"), ("openalex", "W123")}
     assert {"identifier_type": "OpenAlex", "identifier": primary} in item.work["identifiers"]
-    assert (await search_library(db, actor, workspace_id, q="W123"))[1] == 1
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(q="W123")))[1] == 1
     repeated = await sync_metadata_from_upstream(
         db, actor, workspace_id, item.id, item.version, "crossref", "10.1234/synced"
     )

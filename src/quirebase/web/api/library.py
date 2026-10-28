@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from advanced_alchemy.service import OffsetPagination
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Query, status
 
 from quirebase.access import (
     tag_decisions,
@@ -14,7 +14,6 @@ from quirebase.library import (
     ItemMetadataData,
     ItemSection,
     LibraryFacets,
-    LibraryFilter,
     add_discussion_message,
     add_tag_to_item,
     apply_bulk_item_action,
@@ -45,6 +44,7 @@ from quirebase.web.api.library_schemas import (
     ItemCreateRequest,
     ItemDetailView,
     ItemUpdateRequest,
+    LibrarySearchQuery,
     LibrarySearchView,
     NameRequest,
     TagSetRequest,
@@ -55,45 +55,6 @@ from quirebase.web.api.library_schemas import (
 )
 
 router = APIRouter(tags=["Library"])
-
-
-def library_filters(
-    query: str = "",
-    tag: UUID | None = None,
-    project: UUID | None = None,
-    year: str = "",
-    keyword: str = "",
-    author: str = "",
-    has_files: bool | None = None,
-    has_tags: bool | None = None,
-    has_projects: bool | None = None,
-    reference_type: str | None = None,
-    keyword_exact: str | None = None,
-    author_last_name: str | None = None,
-    author_first_name: str | None = None,
-    publication_title: str | None = None,
-    import_batch: UUID | None = None,
-) -> LibraryFilter:
-    return LibraryFilter(
-        q=query,
-        tag=tag,
-        project=project,
-        year=year,
-        keyword=keyword,
-        author=author,
-        has_files=has_files,
-        has_tags=has_tags,
-        has_projects=has_projects,
-        reference_type=reference_type,
-        keyword_exact=keyword_exact,
-        author_last_name=author_last_name,
-        author_first_name=author_first_name,
-        publication_title=publication_title,
-        import_batch=import_batch,
-    )
-
-
-LibraryFilters = Annotated[LibraryFilter, Depends(library_filters)]
 
 
 @router.post("/items/bulk", response_model=OkView)
@@ -116,41 +77,23 @@ async def search_items(
     workspace_id: UUID,
     user: ApiUser,
     db: Database,
-    filters: LibraryFilters,
-    limit: Annotated[int, Query(ge=1, le=100)] = 25,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated",
-    direction: Literal["asc", "desc"] | None = None,
+    data: Annotated[LibrarySearchQuery, Query()],
 ) -> LibrarySearchView:
     items, total = await search_library(
         db,
         user,
         workspace_id,
-        q=filters.q,
-        tag=filters.tag,
-        project=filters.project,
-        year=filters.year,
-        keyword=filters.keyword,
-        author=filters.author,
-        limit=limit,
-        offset=offset,
-        sort=sort,
-        direction=direction,
-        has_files=filters.has_files,
-        has_tags=filters.has_tags,
-        has_projects=filters.has_projects,
-        reference_type=filters.reference_type,
-        keyword_exact=filters.keyword_exact,
-        author_last_name=filters.author_last_name,
-        author_first_name=filters.author_first_name,
-        publication_title=filters.publication_title,
-        import_batch=filters.import_batch,
+        data.to_filters(),
+        limit=data.limit,
+        offset=data.offset,
+        sort=data.sort,
+        direction=data.direction,
     )
     return LibrarySearchView(
         items=[item_search_view(item) for item in items],
         total=total,
-        limit=limit,
-        offset=offset,
+        limit=data.limit,
+        offset=data.offset,
     )
 
 
@@ -159,21 +102,17 @@ async def get_item_facets(
     workspace_id: UUID,
     user: ApiUser,
     db: Database,
-    filters: LibraryFilters,
-    limit: Annotated[int, Query(ge=1, le=100)] = 25,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated",
-    direction: Literal["asc", "desc"] | None = None,
+    data: Annotated[LibrarySearchQuery, Query()],
 ) -> LibraryFacets:
     return await get_library_facets(
         db,
         user,
         workspace_id,
-        filters,
-        limit=limit,
-        offset=offset,
-        sort=sort,
-        direction=direction,
+        data.to_filters(),
+        limit=data.limit,
+        offset=data.offset,
+        sort=data.sort,
+        direction=data.direction,
     )
 
 

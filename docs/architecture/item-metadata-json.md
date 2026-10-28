@@ -147,8 +147,17 @@ Search indexes title, descriptions, Author/Editor names, subjects and only the W
 identifiers. Existing SQLite FTS5 and PostgreSQL tsvector projections remain rebuildable.
 Filtering and distinct-Item facets query nested Work contributors/subjects directly over the
 same authorized scope. Facets use Library's filters, ordering and Item-page bounds before expanding
-contributors/subjects, and return all candidates and distinct-Item counts on that page. No targeted
-JSON index is added without query/performance evidence.
+contributors/subjects, and return all candidates and distinct-Item counts on that page. Author
+candidates omit the exact author selection so additional authors remain selectable; keyword and
+type counts still describe the actual result page. No targeted JSON index is added without
+query/performance evidence.
+The `authors` Query value is a JSON array of `{last_name, first_name}` conditions, combined with OR
+inside one Author credit. Other filters intersect this selection. Omitting or setting `first_name`
+to null matches any given name; an empty string matches a credit with no given-name part. Broad
+`author` text, when supplied together with `authors`, must match that same credit. HTTP declares
+these parameters, pagination and sorting in one Query model; `Json[tuple[AuthorFilter, ...]]`
+provides parsing, nested validation and the OpenAPI content schema. Missing, blank or empty-array
+`authors` means no exact author restriction; malformed JSON and invalid name fields return 422.
 Exact author and keyword selection compares returned facet values verbatim, preserving
 leading/trailing whitespace and repeated interior whitespace. An empty given name projects as
 an absent first name in facets, suggestions and exact filtering; the stored Work stays intact.

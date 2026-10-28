@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from advanced_alchemy.filters import LimitOffset
@@ -36,31 +35,13 @@ from ._json_queries import (
     keyword_condition,
     uuid_array_contains,
 )
+from .filters import LibraryFilter
 from .imports import BatchConflict, ImportBatchUnavailable
 
 if TYPE_CHECKING:
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-@dataclass(frozen=True)
-class LibraryFilter:
-    q: str = ""
-    tag: UUID | None = None
-    project: UUID | None = None
-    year: str = ""
-    keyword: str = ""
-    author: str = ""
-    has_files: bool | None = None
-    has_tags: bool | None = None
-    has_projects: bool | None = None
-    reference_type: str | None = None
-    keyword_exact: str | None = None
-    author_last_name: str | None = None
-    author_first_name: str | None = None
-    publication_title: str | None = None
-    import_batch: UUID | None = None
 
 
 async def _library_query(
@@ -130,16 +111,9 @@ async def _library_query(
         item_query = item_query.where(keyword_condition(db, filters.keyword.strip(), exact=False))
     if filters.keyword_exact is not None:
         item_query = item_query.where(keyword_condition(db, filters.keyword_exact, exact=True))
-    if filters.author_first_name is not None and filters.author_last_name is None:
-        raise ValidationFailure("an exact author filter requires a last name")
-    if filters.author.strip() or filters.author_last_name is not None:
+    if filters.author.strip() or filters.authors:
         item_query = item_query.where(
-            author_condition(
-                db,
-                text=filters.author.strip(),
-                last_name=filters.author_last_name,
-                first_name=filters.author_first_name,
-            )
+            author_condition(db, text=filters.author.strip(), names=filters.authors)
         )
     if filters.has_files is not None:
         file_conditions = [
@@ -207,48 +181,16 @@ async def search_library(
     db: AsyncSession,
     user: User,
     workspace_id: UUID,
-    q: str = "",
-    tag: UUID | None = None,
-    project: UUID | None = None,
-    year: str = "",
-    keyword: str = "",
-    author: str = "",
+    filters: LibraryFilter = LibraryFilter(),
+    *,
     limit: int = 25,
     offset: int = 0,
     sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated",
-    has_files: bool | None = None,
-    has_tags: bool | None = None,
-    has_projects: bool | None = None,
-    reference_type: str | None = None,
-    keyword_exact: str | None = None,
-    author_last_name: str | None = None,
-    author_first_name: str | None = None,
-    publication_title: str | None = None,
     direction: Literal["asc", "desc"] | None = None,
-    import_batch: UUID | None = None,
 ) -> tuple[list[Item], int]:
-    item_query = await _library_query(
-        db,
-        user,
-        workspace_id,
-        LibraryFilter(
-            q=q,
-            tag=tag,
-            project=project,
-            year=year,
-            keyword=keyword,
-            author=author,
-            has_files=has_files,
-            has_tags=has_tags,
-            has_projects=has_projects,
-            reference_type=reference_type,
-            keyword_exact=keyword_exact,
-            author_last_name=author_last_name,
-            author_first_name=author_first_name,
-            publication_title=publication_title,
-            import_batch=import_batch,
-        ),
-    )
+    item_query = await _library_query(db, user, workspace_id, filters)
+    if not 1 <= limit <= 100 or offset < 0:
+        raise ValidationFailure("invalid Library page")
     records, total = await select_page(
         db,
         _ordered_library_query(db, item_query, sort, direction),

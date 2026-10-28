@@ -62,6 +62,7 @@ from quirebase.library import (
     BulkItemAction,
     ItemMetadataData,
     ItemSection,
+    LibraryFilter,
     TagConflict,
     add_discussion_message,
     add_existing_tag_to_item,
@@ -1626,7 +1627,9 @@ async def test_import_confirmation_and_deactivation_follow_user_workspace_lock_o
     assert outcomes == ["confirmed", "deactivated"]
     async with postgres_race.session("verify") as db:
         administrator = await db.get(User, administrator_id)
-        items, total, *_ = await search_library(db, administrator, workspace_id, q="Confirmed")
+        items, total, *_ = await search_library(
+            db, administrator, workspace_id, LibraryFilter(q="Confirmed")
+        )
         assert total == 1 and items[0].work.get("title") == "Confirmed without a deadlock"
 
 
@@ -2497,7 +2500,9 @@ async def test_concurrent_import_confirmation_and_response_loss_replay(
         assert total == 2 and {event.target_id for event in events} == {
             str(item_id) for item_id in first_ids
         }
-        items, total, *_ = await search_library(db, owner, workspace_id, q="Alphaconfirm")
+        items, total, *_ = await search_library(
+            db, owner, workspace_id, LibraryFilter(q="Alphaconfirm")
+        )
         assert total == 1 and items[0].id in first_ids
 
 
@@ -2624,9 +2629,9 @@ async def test_concurrent_metadata_replacements_reject_stale_version(
         assert view.metadata.title == winner and view.item.version == 2
         assert view.item.work["contributors"] == [contributor(winner, "Author", True)]
         assert view.item.work["subjects"] == [{"subject": winner}]
-        items, total, *_ = await search_library(db, actor, workspace_id, q=winner)
+        items, total, *_ = await search_library(db, actor, workspace_id, LibraryFilter(q=winner))
         assert total == 1 and items[0].id == item_id
-        assert (await search_library(db, actor, workspace_id, q=loser))[1] == 0
+        assert (await search_library(db, actor, workspace_id, LibraryFilter(q=loser)))[1] == 0
         events, total = await query_events(db, actor, action="item.update")
         assert total == 1 and events[0].target_id == str(item_id)
 

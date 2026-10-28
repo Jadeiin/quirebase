@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
@@ -10,7 +11,13 @@ from item_helpers import contributor
 from workspace_helpers import fixture_membership_id, provision_initial_workspace
 
 from quirebase.core.errors import ResourceUnavailable, WorkspaceMembershipRequired
-from quirebase.library import LibraryFilter, create_item, get_library_facets, search_library
+from quirebase.library import (
+    AuthorFilter,
+    LibraryFilter,
+    create_item,
+    get_library_facets,
+    search_library,
+)
 from quirebase.models import (
     Attachment,
     FileRevision,
@@ -188,7 +195,7 @@ async def test_presence_filters_respect_workspace_and_project_discovery(persiste
                 else set(library.items) - names
             )
             rows, total = await search_library(
-                db, user, library.workspace_id, **{field: value}, sort="title"
+                db, user, library.workspace_id, LibraryFilter(**{field: value}), sort="title"
             )
             assert total == len(expected_names)
             assert {row.id for row in rows} == {library.items[name] for name in expected_names}
@@ -196,7 +203,10 @@ async def test_presence_filters_respect_workspace_and_project_discovery(persiste
     for value in (True, False):
         with pytest.raises(WorkspaceMembershipRequired):
             await search_library(
-                db, user, library.foreign_workspace_id, has_tags=value, has_projects=value
+                db,
+                user,
+                library.foreign_workspace_id,
+                LibraryFilter(has_tags=value, has_projects=value),
             )
 
 
@@ -214,23 +224,27 @@ async def test_presence_filters_intersect_receipts_metadata_and_specific_associa
         "import_batch": library.receipt_id,
         "year": "2026",
         "keyword_exact": "Organization",
-        "author_last_name": "Research",
         "publication_title": "Organization journal",
         "reference_type": "JournalArticle",
+        "authors": (AuthorFilter("Research"),),
     }
-    rows, total = await search_library(db, viewer, library.workspace_id, **filters)
+    rows, total = await search_library(db, viewer, library.workspace_id, LibraryFilter(**filters))
     assert total == 1 and [row.id for row in rows] == [library.items["Gamma"]]
     facets = await get_library_facets(db, viewer, library.workspace_id, LibraryFilter(**filters))
     assert [(row.first_name, row.item_count) for row in facets.authors] == [("Gamma", 1)]
     assert {row.value for row in facets.keywords} == {"Gamma", "Organization"}
     assert sum(row.item_count for row in facets.reference_types) == 1
-    rows, total = await search_library(db, library.users["owner"], library.workspace_id, **filters)
+    rows, total = await search_library(
+        db, library.users["owner"], library.workspace_id, LibraryFilter(**filters)
+    )
     assert rows == [] and total == 0
     for specific, present in (
         ({"tag": library.tags[0]}, {"has_tags": False}),
         ({"project": library.projects["Open"]}, {"has_projects": False}),
     ):
-        rows, total = await search_library(db, viewer, library.workspace_id, **specific, **present)
+        rows, total = await search_library(
+            db, viewer, library.workspace_id, LibraryFilter(**specific, **present)
+        )
         assert rows == [] and total == 0
         facets = await get_library_facets(
             db, viewer, library.workspace_id, LibraryFilter(**specific, **present)
@@ -241,8 +255,7 @@ async def test_presence_filters_intersect_receipts_metadata_and_specific_associa
             db,
             viewer,
             library.workspace_id,
-            project=library.projects["Hidden"],
-            has_projects=False,
+            LibraryFilter(project=library.projects["Hidden"], has_projects=False),
         )
 
 
@@ -260,8 +273,7 @@ async def test_filtered_facets_follow_the_current_sorted_page(persistence_db):
                 db,
                 viewer,
                 library.workspace_id,
-                has_tags=False,
-                has_files=False,
+                LibraryFilter(has_tags=False, has_files=False),
                 sort="title",
                 direction=direction,
                 limit=1,
@@ -324,12 +336,12 @@ async def test_http_organization_filters_share_search_and_current_page_facets(
             "has_files": "false",
             "query": "study",
             "import_batch": str(receipt.id),
-            "author_last_name": "Research",
             "keyword_exact": "Organization",
             "sort": "title",
             "direction": "desc",
             "limit": 1,
             "offset": 1,
+            "authors": json.dumps([{"last_name": "Research"}]),
         }
         response = await client.get(path, params=params)
         assert response.status_code == 200, response.text

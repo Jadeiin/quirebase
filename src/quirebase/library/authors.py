@@ -15,7 +15,8 @@ from ._json_queries import (
     author_role,
     contributor_name_parts,
 )
-from .catalog import LibraryFilter, _library_query
+from .catalog import _library_query
+from .filters import LibraryFilter
 
 if TYPE_CHECKING:
     from uuid import UUID

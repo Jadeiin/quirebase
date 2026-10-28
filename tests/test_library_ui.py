@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -166,7 +167,8 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
             "reference_types": [{"value": item.work["type"], "item_count": 1}],
         }
         matches = await client.get(
-            f"{base}/items", params={"author_last_name": "Smith", "author_first_name": "John"}
+            f"{base}/items",
+            params={"authors": json.dumps([{"last_name": "Smith", "first_name": "John"}])},
         )
         assert matches.status_code == 200 and matches.json()["total"] == 1
         assert matches.json()["items"][0]["authors"] == [
@@ -179,6 +181,30 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
             "total"
         ] == 0
         assert (await client.get(f"{base}/items/facets", params={"limit": 0})).status_code == 422
+        for invalid in ("broken", "{}", "null", '[{"first_name":"John"}]', '[{"last_name":42}]'):
+            for endpoint in ("items", "items/facets"):
+                rejected = await client.get(f"{base}/{endpoint}", params={"authors": invalid})
+                assert rejected.status_code == 422
+                assert rejected.json()["fields"][0]["path"][:2] == ["query", "authors"]
+        nested_error = await client.get(
+            f"{base}/items", params={"authors": '[{"last_name":"Smith","first_name":42}]'}
+        )
+        assert nested_error.status_code == 422
+        assert nested_error.json()["fields"][0]["path"] == ["query", "authors", 0, "first_name"]
+        for params in ({}, {"authors": ""}, {"authors": "[]"}):
+            unfiltered = await client.get(f"{base}/items", params=params)
+            assert unfiltered.status_code == 200 and unfiltered.json()["total"] == 1
+        union = await client.get(
+            f"{base}/items",
+            params={
+                "authors": json.dumps([
+                    {"last_name": "Missing", "first_name": ""},
+                    {"last_name": "Smith", "first_name": "John"},
+                ])
+            },
+        )
+        assert union.status_code == 200 and union.json()["total"] == 1
+
     finally:
         await client.aclose()
 

@@ -11,6 +11,7 @@ from workspace_helpers import provision_initial_workspace
 from quirebase.audit import record_event
 from quirebase.core.errors import ValidationFailure
 from quirebase.library import (
+    LibraryFilter,
     commit_import_batch,
     create_item,
     find_duplicates,
@@ -216,7 +217,9 @@ async def test_title_search_sort_and_duplicate_results(persistence_db):
     records, total = await search_library(db, actor, workspace_id, sort="title")
     assert total == 3
     assert [item.work.get("title") for item in records] == sorted(titles)
-    matches, total = await search_library(db, actor, workspace_id, q="spectral", sort="title")
+    matches, total = await search_library(
+        db, actor, workspace_id, LibraryFilter(q="spectral"), sort="title"
+    )
     assert total == 2
     assert {item.id for item in matches} == {ids[0], ids[2]}
     duplicates = (await find_duplicates(db, actor, workspace_id, "title")).groups

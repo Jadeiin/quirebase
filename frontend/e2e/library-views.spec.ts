@@ -289,7 +289,9 @@ test('author refinements and applied chips retain the credited display name and 
 			)
 		})
 	);
-	await page.goto(`${libraryPath}?author_last_name=Chen&author_first_name=Li&preview=item-1`);
+	await page.goto(
+		`${libraryPath}?authors=%5B%7B%22last_name%22%3A%22Chen%22%2C%22first_name%22%3A%22Li%22%7D%5D&preview=item-1`
+	);
 	const applied = page.getByRole('group', { name: 'Applied filters', exact: true });
 	await expect(
 		applied.getByRole('button', { name: 'Remove filter Author: 陈丽', exact: true })
@@ -302,8 +304,8 @@ test('author refinements and applied chips retain the credited display name and 
 	const credited = authors.getByRole('link', { name: '陈丽 1', exact: true });
 	await expect(credited).toBeVisible();
 	const parameters = await linkParameters(credited, page);
-	expect(parameters.get('author_last_name')).toBe('Chen');
-	expect(parameters.get('author_first_name')).toBe('Li');
+	await expect(credited).toHaveAttribute('aria-current', 'true');
+	expect(parameters.has('authors')).toBe(false);
 	expect(parameters.get('preview')).toBe('item-1');
 });
 
@@ -332,9 +334,11 @@ test('native refinement links replace broad criteria with exact values while pre
 		.getByRole('group', { name: 'Author', exact: true })
 		.getByRole('link', { name: 'Research & Council 6', exact: true });
 	const authorParameters = await linkParameters(author, page);
-	expect(authorParameters.get('author_last_name')).toBe('Research & Council');
-	expect(authorParameters.has('author_first_name')).toBe(true);
-	expect(authorParameters.get('author_first_name')).toBe('');
+	expect(JSON.parse(authorParameters.get('authors') ?? '[]')[0]?.last_name).toBe(
+		'Research & Council'
+	);
+	expect(authorParameters.has('authors')).toBe(true);
+	expect(JSON.parse(authorParameters.get('authors') ?? '[]')[0]?.first_name).toBe('');
 	expect(authorParameters.has('author')).toBe(false);
 	expect(authorParameters.has('page')).toBe(false);
 	expect(authorParameters.get('preview')).toBe('item-21');
@@ -364,8 +368,7 @@ test('native refinement links replace broad criteria with exact values while pre
 			has_files: 'false',
 			page_size: '10',
 			preview: 'item-21',
-			author_last_name: 'Research & Council',
-			author_first_name: '',
+			authors: JSON.stringify([{ last_name: 'Research & Council', first_name: '' }]),
 			keyword_exact: ' graph; theory & ML ',
 			reference_type: 'JournalArticle'
 		});
@@ -373,7 +376,7 @@ test('native refinement links replace broad criteria with exact values while pre
 	await expect
 		.poll(() => itemReads.at(-1)?.searchParams.get('reference_type'))
 		.toBe('JournalArticle');
-	expect(itemReads.at(-1)?.searchParams.get('author_first_name')).toBe('');
+	expect(JSON.parse(itemReads.at(-1)?.searchParams.get('authors') ?? '[]')[0]?.first_name).toBe('');
 	expect(itemReads.at(-1)?.searchParams.has('author')).toBe(false);
 	expect(itemReads.at(-1)?.searchParams.has('keyword')).toBe(false);
 	expect(itemReads.at(-1)?.searchParams.get('offset')).toBe('0');
@@ -419,8 +422,7 @@ test('saved views persist submitted filters, open native links, rename and delet
 		project: 'project-1',
 		sort: 'author',
 		direction: 'desc',
-		author_last_name: 'Research & Council',
-		author_first_name: '',
+		authors: JSON.stringify([{ last_name: 'Research & Council', first_name: '' }]),
 		keyword_exact: ' graph; theory & ML ',
 		has_files: 'false',
 		page_size: '10'
@@ -630,7 +632,7 @@ test('authoritative Project denial purges earlier refinement snapshots before a 
 	const refinements = page.getByRole('region', { name: 'Refine current results', exact: true });
 	const author = refinements.getByRole('link', { name: 'Research & Council 6', exact: true });
 	await expect(author).toBeVisible();
-	const denied = (url: string) => new URL(url).searchParams.has('author_last_name');
+	const denied = (url: string) => new URL(url).searchParams.has('authors');
 	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
 		route.fulfill({
 			status: denied(route.request().url()) ? 404 : 503,

@@ -24,7 +24,7 @@ test('Library pagination keeps size, sort and exact filters through navigation',
 		return route.fulfill({ json: directoryPage(items, route) });
 	});
 	await page.goto(
-		'/workspace/workspace-1/library?q=research&sort=created&author_first_name=&page=3&page_size=10'
+		'/workspace/workspace-1/library?q=research&sort=created&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D&page=3&page_size=10'
 	);
 	const pagination = page.getByRole('navigation', { name: 'Library pages' });
 	const size = pagination.getByRole('combobox', { name: 'Page Size', exact: true });
@@ -40,7 +40,7 @@ test('Library pagination keeps size, sort and exact filters through navigation',
 	expect(requests.at(-1)?.get('limit')).toBe('50');
 	expect(requests.at(-1)?.get('offset')).toBe('0');
 	expect(requests.at(-1)?.get('query')).toBe('research');
-	expect(requests.at(-1)?.get('author_first_name')).toBe('');
+	expect(JSON.parse(requests.at(-1)?.get('authors') ?? '[]')[0]?.first_name).toBe('');
 	await pagination.getByRole('button', { name: 'Last page', exact: true }).click();
 	await expect(pagination.getByText('Showing 51–73 of 73')).toBeVisible();
 	await expect(pagination.getByRole('button', { name: 'Next page', exact: true })).toBeDisabled();
@@ -59,7 +59,9 @@ test('Library pagination keeps size, sort and exact filters through navigation',
 	await expect(size).toHaveValue('50');
 	await expect(sort).toHaveValue('title');
 	await expect(pagination.getByText('Showing 1–50 of 73')).toBeVisible();
-	expect(new URL(page.url()).searchParams.get('author_first_name')).toBe('');
+	expect(JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]')[0]?.first_name).toBe(
+		''
+	);
 });
 
 test('Library deletion recovers the last valid page with filters, sorting and page size intact', async ({
@@ -82,7 +84,7 @@ test('Library deletion recovers the last valid page with filters, sorting and pa
 		return route.fulfill({ json: { ok: true } });
 	});
 	await page.goto(
-		'/workspace/workspace-1/library?q=research&sort=created&author_first_name=&page=2&page_size=20'
+		'/workspace/workspace-1/library?q=research&sort=created&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D&page=2&page_size=20'
 	);
 	await expect(page.getByText('Item 21', { exact: true })).toBeVisible();
 	await page.getByRole('checkbox', { name: 'Select this page', exact: true }).check();
@@ -101,7 +103,7 @@ test('Library deletion recovers the last valid page with filters, sorting and pa
 	await expect(page.getByRole('combobox', { name: 'Sort By', exact: true })).toHaveValue('created');
 	const params = new URL(page.url()).searchParams;
 	expect(params.get('q')).toBe('research');
-	expect(params.get('author_first_name')).toBe('');
+	expect(JSON.parse(params.get('authors') ?? '[]')[0]?.first_name).toBe('');
 	expect(params.get('page')).toBeNull();
 	expect(params.get('page_size')).toBe('20');
 });

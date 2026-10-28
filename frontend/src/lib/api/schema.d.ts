@@ -3019,6 +3019,13 @@ export interface components {
 			/** Item Count */
 			item_count: number;
 		};
+		/** AuthorFilter */
+		AuthorFilter: {
+			/** Last Name */
+			last_name: string;
+			/** First Name */
+			first_name?: string | null;
+		};
 		/** AuthorSuggestionView */
 		AuthorSuggestionView: {
 			/** Last Name */
@@ -9277,10 +9284,6 @@ export interface operations {
 	'library.search_items': {
 		parameters: {
 			query?: {
-				limit?: number;
-				offset?: number;
-				sort?: 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
-				direction?: ('asc' | 'desc') | null;
 				query?: string;
 				tag?: string | null;
 				project?: string | null;
@@ -9292,10 +9295,14 @@ export interface operations {
 				has_projects?: boolean | null;
 				reference_type?: string | null;
 				keyword_exact?: string | null;
-				author_last_name?: string | null;
-				author_first_name?: string | null;
+				/** @description Match any selected Author. An empty first_name selects a single-field name; an omitted or null first_name matches any given name. */
+				authors?: string;
 				publication_title?: string | null;
 				import_batch?: string | null;
+				limit?: number;
+				offset?: number;
+				sort?: 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
+				direction?: ('asc' | 'desc') | null;
 			};
 			header?: never;
 			path: {
@@ -9381,10 +9388,6 @@ export interface operations {
 	'library.get_item_facets': {
 		parameters: {
 			query?: {
-				limit?: number;
-				offset?: number;
-				sort?: 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
-				direction?: ('asc' | 'desc') | null;
 				query?: string;
 				tag?: string | null;
 				project?: string | null;
@@ -9396,10 +9399,14 @@ export interface operations {
 				has_projects?: boolean | null;
 				reference_type?: string | null;
 				keyword_exact?: string | null;
-				author_last_name?: string | null;
-				author_first_name?: string | null;
+				/** @description Match any selected Author. An empty first_name selects a single-field name; an omitted or null first_name matches any given name. */
+				authors?: string;
 				publication_title?: string | null;
 				import_batch?: string | null;
+				limit?: number;
+				offset?: number;
+				sort?: 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
+				direction?: ('asc' | 'desc') | null;
 			};
 			header?: never;
 			path: {

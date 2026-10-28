@@ -36,8 +36,7 @@ it('combines organization filters while preserving import scope, exact criteria 
 		import_batch: 'batch-1',
 		tag: 'tag-1',
 		project: 'project-1',
-		author_last_name: ' Council & Co. ',
-		author_first_name: '',
+		authors: [{ last_name: ' Council & Co. ', first_name: '' }],
 		publication_title: ' Journal & 特刊 ',
 		sort: 'author' as const,
 		direction: 'desc' as const
@@ -58,8 +57,7 @@ it('combines organization filters while preserving import scope, exact criteria 
 	expect(readLibraryFilters(libraryParameters(unorganized))).toMatchObject({
 		query: applied.query,
 		import_batch: applied.import_batch,
-		author_last_name: applied.author_last_name,
-		author_first_name: '',
+		authors: applied.authors,
 		publication_title: applied.publication_title,
 		sort: 'author',
 		direction: 'desc',
@@ -172,7 +170,7 @@ it.each(['updated', 'created', 'published', 'title', 'publication', 'author'] as
 	}
 );
 
-it('refines submitted results and replaces conflicting author criteria', () => {
+it('toggles exact authors while replacing the broad author criterion', () => {
 	const applied = {
 		query: 'committed',
 		tag: 'tag-1',
@@ -182,24 +180,26 @@ it('refines submitted results and replaces conflicting author criteria', () => {
 		year: '2025',
 		publication_title: 'Old journal',
 		author: 'old query',
-		author_last_name: 'Old',
-		author_first_name: 'Name',
+		authors: [{ last_name: 'Old', first_name: 'Name' }],
 		sort: 'title' as const
 	};
 	const author = refineLibraryFilters(applied, {
-		author_last_name: ' Council; & 一 ',
-		author_first_name: ''
+		authors: [{ last_name: ' Council; & 一 ', first_name: '' }]
 	});
 	expect(author).toEqual({
 		...applied,
 		author: undefined,
-		author_last_name: ' Council; & 一 ',
-		author_first_name: ''
+		authors: [
+			{ last_name: 'Old', first_name: 'Name' },
+			{ last_name: ' Council; & 一 ', first_name: '' }
+		]
 	});
 	expect(readLibraryFilters(libraryParameters(author))).toMatchObject({
 		author: '',
-		author_last_name: ' Council; & 一 ',
-		author_first_name: '',
+		authors: [
+			{ last_name: 'Old', first_name: 'Name' },
+			{ last_name: ' Council; & 一 ', first_name: '' }
+		],
 		has_files: false
 	});
 	expect(refineLibraryFilters(author, { year: '2026' })).toEqual({ ...author, year: '2026' });
@@ -211,8 +211,7 @@ it('refines submitted results and replaces conflicting author criteria', () => {
 
 it('round-trips precise filters, empty given names, Unicode and URL punctuation', () => {
 	const filters = {
-		author_last_name: '研究 & Council; 50%_+',
-		author_first_name: '',
+		authors: [{ last_name: '研究 & Council; 50%_+', first_name: '' }],
 		publication_title: ' Journal & 特刊? #1 ',
 		keyword_exact: ' graph; theory & ML ',
 		reference_type: 'JournalArticle',
@@ -221,13 +220,15 @@ it('round-trips precise filters, empty given names, Unicode and URL punctuation'
 		has_files: false
 	};
 	const parameters = libraryParameters(filters, 3);
-	expect(parameters.has('author_first_name')).toBe(true);
+	expect(JSON.parse(parameters.get('authors')!)).toEqual(filters.authors);
 	expect(readLibraryFilters(parameters)).toMatchObject(filters);
 	expect(libraryPage(parameters)).toBe(3);
 	expect(libraryHref('workspace /一', filters)).toContain(
 		'workspace/workspace%20%2F%E4%B8%80/library?'
 	);
-	expect(libraryParameters({ author_last_name: 'Smith' }).has('author_first_name')).toBe(false);
+	expect(
+		readLibraryFilters(libraryParameters({ authors: [{ last_name: 'Smith' }] })).authors
+	).toEqual([{ last_name: 'Smith' }]);
 });
 
 it('preserves an import scope through refinements, search submissions and pagination', () => {
@@ -267,8 +268,7 @@ it('replaces a broad keyword with an exact refinement while preserving the resul
 
 it('broad author and keyword searches replace exact criteria without clearing unrelated refinements', () => {
 	const applied = {
-		author_last_name: 'Smith',
-		author_first_name: '',
+		authors: [{ last_name: 'Smith', first_name: '' }],
 		keyword_exact: 'Graph theory',
 		reference_type: 'JournalArticle',
 		project: 'project-1',
@@ -294,7 +294,11 @@ it.each(['NaN', 'Infinity', '-2', '0', ''])('keeps invalid page %s on page one',
 });
 
 it.each([10, 20, 25, 50, 100])('round-trips page size %i with filters and the page', (pageSize) => {
-	const filters = { query: '研究 & ML', sort: 'title' as const, author_first_name: '' };
+	const filters = {
+		query: '研究 & ML',
+		sort: 'title' as const,
+		authors: [{ last_name: 'Smith', first_name: '' }]
+	};
 	const url = new URL(`https://test/${libraryHref('workspace-1', filters, 3, pageSize)}`);
 	expect(libraryPageSize(url.searchParams)).toBe(pageSize);
 	expect(libraryPage(url.searchParams)).toBe(3);
@@ -303,7 +307,11 @@ it.each([10, 20, 25, 50, 100])('round-trips page size %i with filters and the pa
 });
 
 it('keeps a shareable preview independent of the submitted Library query', () => {
-	const filters = { query: '研究 & ML', sort: 'title' as const, author_first_name: '' };
+	const filters = {
+		query: '研究 & ML',
+		sort: 'title' as const,
+		authors: [{ last_name: 'Smith', first_name: '' }]
+	};
 	const withoutPreview = new URL(`https://test/${libraryHref('workspace-1', filters, 3, 50)}`);
 	const withPreview = new URL(
 		`https://test/${libraryHref('workspace-1', filters, 3, 50, 'item /一')}`
@@ -363,11 +371,37 @@ it('builds author links from active entities and Author roles in record order', 
 		readLibraryFilters(new URL(`https://test/${author.href}`).searchParams)
 	);
 	expect(filters).toMatchObject([
-		{ author_last_name: 'Smith', author_first_name: 'Jane' },
-		{ author_last_name: 'Ada', author_first_name: '' },
-		{ author_last_name: 'Research Council', author_first_name: '' }
+		{ authors: [{ last_name: 'Smith', first_name: 'Jane' }] },
+		{ authors: [{ last_name: 'Ada', first_name: '' }] },
+		{ authors: [{ last_name: 'Research Council', first_name: '' }] }
 	]);
 	expect(links.date.href).toBe('workspace/workspace-1/library?year=2024');
 	expect(links.publication.href).toContain('publication_title=Journal+%26+');
 	expect(links.type.href).toBe('workspace/workspace-1/library?reference_type=JournalArticle');
+});
+
+it('removes one selected author at a time and clears the final author criterion', () => {
+	const first = { last_name: 'Smith', first_name: 'Jane' };
+	const second = { last_name: '研究 & Council; 50%_+', first_name: '' };
+	const applied = { authors: [first, second], year: '2026', has_files: false };
+	expect(readLibraryFilters(libraryParameters(applied)).authors).toEqual(applied.authors);
+	const remaining = refineLibraryFilters(applied, { authors: [first] });
+	expect(remaining.authors).toEqual([second]);
+	expect(refineLibraryFilters(remaining, { authors: [second] })).toEqual({
+		authors: undefined,
+		author: undefined,
+		year: '2026',
+		has_files: false
+	});
+	expect(applied.authors).toEqual([first, second]);
+});
+
+it('ignores malformed author selections and deduplicates exact names in links', () => {
+	for (const value of ['broken', '{}', '[{"first_name":"Jane"}]', '[{"last_name":42}]']) {
+		expect(readLibraryFilters(new URLSearchParams({ authors: value })).authors).toBeUndefined();
+	}
+	const author = { last_name: 'Smith', first_name: '' };
+	expect(
+		readLibraryFilters(new URLSearchParams({ authors: JSON.stringify([author, author]) })).authors
+	).toEqual([author]);
 });

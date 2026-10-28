@@ -9,11 +9,11 @@ import {
 
 it('preserves submitted Library filters, sorting, paging and preview without nested state', () => {
 	const current = new URL(
-		'https://app.example/workspace/workspace-1/library?q=研究+%26+ML&project=project-1&tag=tag-1&sort=author&direction=desc&page=3&page_size=50&author_first_name=&preview=item-2&return_to=ignored&unrelated=value'
+		'https://app.example/workspace/workspace-1/library?q=研究+%26+ML&project=project-1&tag=tag-1&sort=author&direction=desc&page=3&page_size=50&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D&preview=item-2&return_to=ignored&unrelated=value'
 	);
 	const context = libraryReturnTo('workspace-1', current, 'item-1');
 	expect(context).toBe(
-		'workspace/workspace-1/library?q=%E7%A0%94%E7%A9%B6+%26+ML&tag=tag-1&project=project-1&sort=author&direction=desc&author_first_name=&page=3&page_size=50&preview=item-2#library-item-item-1'
+		'workspace/workspace-1/library?q=%E7%A0%94%E7%A9%B6+%26+ML&tag=tag-1&project=project-1&sort=author&direction=desc&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D&page=3&page_size=50&preview=item-2#library-item-item-1'
 	);
 	const item = new URL(`/${libraryItemHref('workspace-1', 'item-1', 'files', context)}`, current);
 	expect(item.pathname).toBe('/workspace/workspace-1/item/item-1/files');

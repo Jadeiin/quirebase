@@ -189,6 +189,16 @@ test('Library metadata links filter real structured author credits in both views
 	await expect(rows).toHaveCount(3);
 	await rows.first().getByRole('link', { name: 'View Items by Jane Smith', exact: true }).click();
 	await expect(rows).toHaveCount(2);
+	await page.getByRole('button', { name: 'Filters', exact: true }).click();
+	const authorChoices = page.getByRole('group', { name: 'Author', exact: true });
+	await authorChoices.getByRole('link', { name: 'Council; & 一 2', exact: true }).click();
+	await expect(rows).toHaveCount(3);
+	await page.reload();
+	await expect(rows).toHaveCount(3);
+	await page
+		.getByRole('button', { name: 'Remove filter Author: Council; & 一', exact: true })
+		.click();
+	await expect(rows).toHaveCount(2);
 	await rows
 		.first()
 		.getByRole('link', { name: 'View Items published in 2026', exact: true })
@@ -219,7 +229,7 @@ test('Library metadata links filter real structured author credits in both views
 	await page.goBack();
 	await expect(cards).toHaveCount(1);
 	const response = await page.request.get(
-		`${base}?author_last_name=Smith&author_first_name=Jane&query=Library+facet+smoke`
+		`${base}?${new URLSearchParams({ authors: JSON.stringify([{ last_name: 'Smith', first_name: 'Jane' }]), query: 'Library facet smoke' })}`
 	);
 	const result = await response.json();
 	expect(result.total).toBe(2);

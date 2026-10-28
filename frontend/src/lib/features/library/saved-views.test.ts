@@ -73,8 +73,7 @@ describe('Library saved views', () => {
 			has_files: false,
 			has_tags: false,
 			has_projects: false,
-			author_last_name: 'Research Council',
-			author_first_name: '',
+			authors: [{ last_name: 'Research Council', first_name: '' }],
 			sort: 'created' as const,
 			direction: 'asc' as const
 		};
@@ -93,8 +92,7 @@ describe('Library saved views', () => {
 			has_files: 'false',
 			has_tags: 'false',
 			has_projects: 'false',
-			author_last_name: 'Research Council',
-			author_first_name: '',
+			authors: JSON.stringify([{ last_name: 'Research Council', first_name: '' }]),
 			page_size: '50'
 		});
 	});
@@ -118,8 +116,7 @@ describe('Library saved views', () => {
 			project: 'project-1',
 			import_batch: 'batch-1',
 			tag: 'tag-1',
-			author_last_name: 'Smith',
-			author_first_name: '',
+			authors: [{ last_name: 'Smith', first_name: '' }],
 			publication_title: ' Journal & 特刊 ',
 			has_files: false,
 			sort: 'author',
@@ -137,7 +134,7 @@ describe('Library saved views', () => {
 			filters: {
 				query: '研究 & ML',
 				import_batch: 'batch-1',
-				author_first_name: '',
+				authors: [{ last_name: 'Smith', first_name: '' }],
 				publication_title: ' Journal & 特刊 ',
 				has_files: false,
 				sort: 'author',
@@ -149,7 +146,7 @@ describe('Library saved views', () => {
 		const parameters = new URLSearchParams(stored[0].parameters);
 		for (const transient of ['page', 'preview', 'return_to', 'unknown'])
 			expect(parameters.has(transient)).toBe(false);
-		expect(parameters.has('author_first_name')).toBe(true);
+		expect(parameters.has('authors')).toBe(true);
 		expect(readLibrarySavedViews(storage, key)).toEqual([view]);
 		expect(
 			new URL(savedLibraryViewHref('workspace-1', view), 'https://app.example/').pathname
@@ -165,13 +162,13 @@ describe('Library saved views', () => {
 					id: 'view-1',
 					name: 'Local view',
 					parameters:
-						'q=hello&page=8&preview=item-1&return_to=https%3A%2F%2Fevil.example%2F&url=%2F%2Fevil.example&author_first_name=&page_size=1000&sort=unsafe'
+						'q=hello&page=8&preview=item-1&return_to=https%3A%2F%2Fevil.example%2F&url=%2F%2Fevil.example&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D&page_size=1000&sort=unsafe'
 				}
 			])
 		);
 		const [view] = readLibrarySavedViews(storage, key);
 		expect(savedLibraryViewHref('workspace-1', view)).toBe(
-			'workspace/workspace-1/library?q=hello&author_first_name='
+			'workspace/workspace-1/library?q=hello&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D'
 		);
 	});
 

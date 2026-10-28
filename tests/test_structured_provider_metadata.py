@@ -9,6 +9,7 @@ from item_helpers import contributor
 from workspace_helpers import provision_initial_workspace
 
 from quirebase.library import (
+    LibraryFilter,
     commit_import_batch,
     create_item,
     search_library,
@@ -119,7 +120,7 @@ async def test_sync_distinguishes_missing_and_empty_contributor_lists(
         db, actor, workspace_id, created.item_id, created.version, "openalex", "W123"
     )
     assert item.work.get("contributors", []) == (work["contributors"] if credits is None else [])
-    assert (await search_library(db, actor, workspace_id, q="Lovelace"))[1] == (
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(q="Lovelace")))[1] == (
         1 if credits is None else 0
     )
 
@@ -142,5 +143,5 @@ async def test_revision_updates_identifier_search_without_losing_hidden_facts(pe
     changed["identifiers"][0]["identifier"] = "newmarker"
     await revise_item_metadata(db, actor, workspace_id, created.item_id, created.version, changed)
     assert (await db.get(Item, created.item_id)).work == changed
-    assert (await search_library(db, actor, workspace_id, q="newmarker"))[1] == 1
-    assert (await search_library(db, actor, workspace_id, q="oldmarker"))[1] == 0
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(q="newmarker")))[1] == 1
+    assert (await search_library(db, actor, workspace_id, LibraryFilter(q="oldmarker")))[1] == 0

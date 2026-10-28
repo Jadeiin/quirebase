@@ -326,9 +326,13 @@ for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
 		await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
 		await expect(page.locator('#library-results')).toBeFocused();
 		await short.getByRole('link', { name: 'View Items by D', exact: true }).click();
-		await expect.poll(() => new URL(page.url()).searchParams.get('author_last_name')).toBe('D');
+		await expect
+			.poll(
+				() => JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]').at(-1)?.last_name
+			)
+			.toBe('D');
 		parameters = new URL(page.url()).searchParams;
-		expect(parameters.get('author_first_name')).toBe('');
+		expect(JSON.parse(parameters.get('authors') ?? '[]').at(-1)?.first_name).toBe('');
 		expect(parameters.get('q')).toBe('research');
 		expect(parameters.get('sort')).toBe('title');
 		expect(parameters.get('direction')).toBe('desc');
@@ -903,7 +907,7 @@ for (const view of ['table', 'list'] as const) {
 		if (view === 'list') await page.setViewportSize({ width: 390, height: 844 });
 		const { reads } = await mockLibrary(page);
 		await page.goto(
-			'/workspace/workspace-1/library?q=research&sort=created&direction=asc&author_last_name=Smith&author_first_name=&page=2&page_size=10&preview=item-99'
+			'/workspace/workspace-1/library?q=research&sort=created&direction=asc&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D&page=2&page_size=10&preview=item-99'
 		);
 		const sort = page.getByRole('combobox', { name: 'Sort By', exact: true });
 		const direction = page.locator('#library-sort-direction');
@@ -919,8 +923,7 @@ for (const view of ['table', 'list'] as const) {
 		expect(parameters.has('direction')).toBe(false);
 		for (const [key, value] of Object.entries({
 			q: 'research',
-			author_last_name: 'Smith',
-			author_first_name: '',
+			authors: JSON.stringify([{ last_name: 'Smith', first_name: '' }]),
 			page_size: '10',
 			preview: 'item-99'
 		}))
@@ -1018,8 +1021,7 @@ for (const view of ['table', 'list'] as const) {
 		const initial = new URLSearchParams({
 			q: 'committed',
 			author: 'old text',
-			author_last_name: 'Old',
-			author_first_name: 'Name',
+			authors: JSON.stringify([{ last_name: 'Old', first_name: 'Name' }]),
 			year: '2025',
 			publication_title: 'Old journal',
 			keyword_exact: 'Graph & ML',
@@ -1046,9 +1048,13 @@ for (const view of ['table', 'list'] as const) {
 		const author = row().getByRole('link', { name: 'View Items by Jane Smith', exact: true });
 		await author.focus();
 		await author.press('Enter');
-		await expect.poll(() => new URL(page.url()).searchParams.get('author_last_name')).toBe('Smith');
+		await expect
+			.poll(
+				() => JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]').at(-1)?.last_name
+			)
+			.toBe('Smith');
 		let parameters = new URL(page.url()).searchParams;
-		expect(parameters.get('author_first_name')).toBe('Jane');
+		expect(JSON.parse(parameters.get('authors') ?? '[]').at(-1)?.first_name).toBe('Jane');
 		expect(parameters.has('author')).toBe(false);
 		expect(parameters.has('page')).toBe(false);
 		for (const key of [
@@ -1064,7 +1070,9 @@ for (const view of ['table', 'list'] as const) {
 		])
 			expect(parameters.get(key)).toBe(initial.get(key));
 		await expect(row().getByRole('checkbox')).not.toBeChecked();
-		await expect.poll(() => reads.at(-1)?.searchParams.get('author_last_name')).toBe('Smith');
+		await expect
+			.poll(() => JSON.parse(reads.at(-1)?.searchParams.get('authors') ?? '[]').at(-1)?.last_name)
+			.toBe('Smith');
 		expect(reads.at(-1)?.searchParams.get('offset')).toBe('0');
 		expect(reads.at(-1)?.searchParams.get('query')).toBe('committed');
 		await expect(
@@ -1073,9 +1081,13 @@ for (const view of ['table', 'list'] as const) {
 
 		await row().getByRole('link', { name: 'View Items by Council; & 一', exact: true }).click();
 		await expect
-			.poll(() => new URL(page.url()).searchParams.get('author_last_name'))
+			.poll(
+				() => JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]').at(-1)?.last_name
+			)
 			.toBe('Council; & 一');
-		expect(new URL(page.url()).searchParams.get('author_first_name')).toBe('');
+		expect(
+			JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]').at(-1)?.first_name
+		).toBe('');
 		const date = row().getByRole('link', { name: 'View Items published in 2026', exact: true });
 		await expect(date).toHaveText('2026');
 		await expect(row()).toContainText('2026-10-19');
@@ -1093,7 +1105,7 @@ for (const view of ['table', 'list'] as const) {
 		parameters = new URL(page.url()).searchParams;
 		expect(parameters.get('publication_title')).toBe('Old journal');
 		expect(parameters.get('year')).toBe('2026');
-		expect(parameters.get('author_last_name')).toBe('Council; & 一');
+		expect(JSON.parse(parameters.get('authors') ?? '[]').at(-1)?.last_name).toBe('Council; & 一');
 		expect(parameters.get('preview')).toBe('item-99');
 		expect(previews).toEqual(['item-99']);
 		await expect(row().locator('a a')).toHaveCount(0);
@@ -1104,7 +1116,9 @@ for (const view of ['table', 'list'] as const) {
 		expect(details.pathname).toBe('/workspace/workspace-1/item/item-1');
 		const returnTo = new URL(details.searchParams.get('return_to')!, page.url());
 		expect(returnTo.searchParams.get('preview')).toBe('item-99');
-		expect(returnTo.searchParams.get('author_last_name')).toBe('Council; & 一');
+		expect(JSON.parse(returnTo.searchParams.get('authors') ?? '[]').at(-1)?.last_name).toBe(
+			'Council; & 一'
+		);
 		expect(returnTo.searchParams.get('year')).toBe('2026');
 		expect(returnTo.hash).toBe('#library-item-item-1');
 	});

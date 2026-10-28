@@ -7,7 +7,12 @@
 	import { ph, t } from 'lingui-for-svelte/macro';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { libraryFacetsQuery } from './queries.js';
-	import type { LibraryFilters, LibraryMetadataFilter, libraryHref } from './filters.js';
+	import {
+		sameAuthor,
+		type LibraryFilters,
+		type LibraryMetadataFilter,
+		type libraryHref
+	} from './filters.js';
 
 	let {
 		filters,
@@ -24,6 +29,11 @@
 	const facets = createQuery(() => libraryFacetsQuery(workspaceId, filters, pageNumber, pageSize));
 	let expanded = $state<Record<string, boolean>>({});
 	const listId = $props.id();
+	function isSelected(filter: LibraryMetadataFilter) {
+		const author = 'authors' in filter ? filter.authors[0] : undefined;
+		return author && filters.authors?.some((name) => sameAuthor(name, author));
+	}
+
 	type Choice = { label: string; count: number; filter: LibraryMetadataFilter };
 	const groups = $derived<{ key: string; label: string; choices: Choice[] }[]>([
 		{
@@ -32,7 +42,7 @@
 			choices: (facets.data?.authors ?? []).map((author) => ({
 				label: author.full_name,
 				count: author.item_count,
-				filter: { author_last_name: author.last_name, author_first_name: author.first_name ?? '' }
+				filter: { authors: [{ last_name: author.last_name, first_name: author.first_name ?? '' }] }
 			}))
 		},
 		{
@@ -59,7 +69,7 @@
 <section aria-label={$t`Refine current results`} class="border-t border-surface-300-700 pt-4">
 	<h2 class="text-sm font-semibold">{$t`Refine current results`}</h2>
 	<p class="mt-1 text-xs text-surface-600-400">
-		{$t`Authors, keywords, types and matching Items on this page.`}
+		{$t`Filter Items by author, keyword and type.`}
 	</p>
 	{#if facets.isError || facets.fetchStatus === 'paused' || facets.data === null}
 		<QueryError
@@ -84,7 +94,8 @@
 								<a
 									href={resolve(filterHref(choice.filter))}
 									title={choice.label}
-									class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-base px-2 py-1.5 text-sm no-underline hover:bg-surface-100-900"
+									aria-current={isSelected(choice.filter) ? 'true' : undefined}
+									class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-base px-2 py-1.5 text-sm no-underline hover:bg-surface-100-900 aria-[current=true]:bg-primary-100-900 aria-[current=true]:font-semibold"
 								>
 									<span class="line-clamp-2 min-w-0 wrap-anywhere">{choice.label}</span><span
 										class="min-w-6 pt-0.5 text-right text-xs text-surface-600-400 tabular-nums"

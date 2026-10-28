@@ -23,7 +23,6 @@ from quirebase.library.bulk_items import (
     download_selected_item_documents,
 )
 from quirebase.library.catalog import (
-    LibraryFilter,
     get_dashboard_data,
     search_library,
 )
@@ -63,6 +62,7 @@ from quirebase.library.discussions import (
 )
 from quirebase.library.duplicates import DuplicateMode, DuplicateScan, find_duplicates
 from quirebase.library.facets import LibraryFacets, get_library_facets
+from quirebase.library.filters import AuthorFilter, LibraryFilter
 from quirebase.library.identifiers import (
     get_item_metadata_sources,
     sync_metadata_from_upstream,
@@ -128,6 +128,7 @@ from quirebase.library.workflows import (
 __all__ = [
     "BIBLIOGRAPHY_MEDIA_TYPES",
     "DEFAULT_CITATION_KEY_FORMULA",
+    "AuthorFilter",
     "BatchConflict",
     "BibliographyExport",
     "BibliographyExportOptions",

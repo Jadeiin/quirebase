@@ -218,6 +218,9 @@ if ([...dashboard].some((key) => manifest[key].name === 'DateField')) {
 // Lingui-for migration vs 155e223: shell -42 KiB raw / +5.6 KiB gzip.
 // Generated IDs and framework translation accessors change compression across route chunks.
 // Only exceeded gzip budgets move to the next 500 B boundary; raw limits and isolation stay.
+// Author multi-selection adds about 1.2 KiB raw / 0.5 KiB gzip to Library vs bdbf0d8.
+// Structured return filters and labels add about 0.3 KiB gzip to shared route graphs.
+// Only measured gzip overages move to the next 500 B boundary; raw limits stay unchanged.
 enforce('Application shell', bundleSize(graphFiles(dashboard)), {
 	// Includes shared Invitation and owner-governance navigation and translations.
 	raw: 795000,
@@ -230,11 +233,11 @@ enforce('Quick navigation when open', bundleSize(graphFiles(quickNavigation)), {
 enforce('Library route', bundleSize(graphFiles(library)), {
 	raw: 1143000,
 	// Includes whole-name author folding, scoped selection cleanup and last-page recovery.
-	gzip: 337500
+	gzip: 338000
 });
 enforce('Library refinements when open', bundleSize(graphFiles(libraryRefinements)), {
 	raw: 1147000,
-	gzip: 339500
+	gzip: 340000
 });
 enforce(
 	'Library preview when open',
@@ -245,7 +248,7 @@ enforce(
 enforce(
 	'Library organization when open',
 	bundleSize(graphFiles(mergeGraphs(libraryPreview, dependencyGraph([libraryOrganizeKey], false)))),
-	{ raw: 1169000, gzip: 347500 }
+	{ raw: 1169000, gzip: 348000 }
 );
 enforce('Discovery route', routeBundle('/(app)/workspace/[workspaceId]/discovery'), {
 	// Includes shared pagination, Invitation lifecycle and open reassignment form translations.
@@ -263,7 +266,7 @@ enforce('Tools route', routeBundle('/(app)/workspace/[workspaceId]/tools'), {
 });
 enforce('Import route', routeBundle('/(app)/workspace/[workspaceId]/import'), {
 	raw: 941000,
-	gzip: 280500
+	gzip: 281000
 });
 enforce('Import history route', routeBundle('/(app)/workspace/[workspaceId]/import/history'), {
 	raw: 851000,
@@ -282,7 +285,7 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/metadata'),
 	{
 		raw: 921000,
-		gzip: 272500
+		gzip: 273000
 	}
 );
 enforce(
@@ -290,7 +293,7 @@ enforce(
 	routeBundle('/(app)/workspace/[workspaceId]/item/[itemId]/(sections)/files'),
 	{
 		raw: 973000,
-		gzip: 289000
+		gzip: 289500
 	}
 );
 enforce(
@@ -308,7 +311,7 @@ enforce(
 	{
 		// Includes shared pagination styles and account-management translations.
 		raw: 935000,
-		gzip: 277000
+		gzip: 277500
 	}
 );
 enforce(
@@ -317,7 +320,7 @@ enforce(
 	{
 		// Includes shared pagination styles and account-management translations.
 		raw: 922000,
-		gzip: 273500
+		gzip: 274000
 	}
 );
 enforce('Admin overview route', routeBundle('/(app)/admin'), {
@@ -380,7 +383,7 @@ enforce(
 enforce(
 	'Workspace advanced settings',
 	routeBundle('/(app)/workspace/[workspaceId]/settings/advanced'),
-	{ raw: 830000, gzip: 243500 }
+	{ raw: 830000, gzip: 244000 }
 );
 enforce('PDF reader route', bundleSize(graphFiles(pdfReader)), {
 	raw: 8000000,

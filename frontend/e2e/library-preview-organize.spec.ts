@@ -408,9 +408,11 @@ test('preview facets refine the submitted Library query while preserving sort an
 	}
 	await preview.getByRole('link', { name: 'Ada Lovelace', exact: true }).click();
 	await expect
-		.poll(() => new URL(page.url()).searchParams.get('author_last_name'))
+		.poll(() => JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]')[0]?.last_name)
 		.toBe('Lovelace');
-	expect(new URL(page.url()).searchParams.get('author_first_name')).toBe('Ada');
+	expect(JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]')[0]?.first_name).toBe(
+		'Ada'
+	);
 	expect(new URL(page.url()).searchParams.get('tag')).toBe('tag-reviewed');
 	expect(new URL(page.url()).searchParams.get('preview')).toBe('item-1');
 });

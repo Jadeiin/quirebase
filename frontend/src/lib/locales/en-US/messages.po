@@ -622,10 +622,6 @@ msgstr "Authorization role"
 msgid "Authors"
 msgstr "Authors"
 
-#: src/lib/features/library/LibraryRefinements.svelte
-msgid "Authors, keywords, types and matching Items on this page."
-msgstr "Authors, keywords, types and matching Items on this page."
-
 #: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 msgid "Auto detect"
@@ -1954,6 +1950,10 @@ msgstr "Files"
 #: src/lib/features/tags/TagSelect.svelte
 msgid "Filter conditions"
 msgstr "Filter conditions"
+
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Filter Items by author, keyword and type."
+msgstr "Filter Items by author, keyword and type."
 
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/tools/Tools.svelte

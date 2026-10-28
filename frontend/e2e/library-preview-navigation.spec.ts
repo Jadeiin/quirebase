@@ -150,8 +150,7 @@ for (const view of ['table', 'list'] as const) {
 			sort: 'author',
 			direction: 'desc',
 			has_files: 'true',
-			author_last_name: 'Smith',
-			author_first_name: '',
+			authors: JSON.stringify([{ last_name: 'Smith', first_name: '' }]),
 			publication_title: 'Journal of Research',
 			page_size: '10'
 		};
@@ -197,8 +196,7 @@ for (const view of ['table', 'list'] as const) {
 				sort: filters.sort,
 				direction: filters.direction,
 				has_files: filters.has_files,
-				author_last_name: filters.author_last_name,
-				author_first_name: filters.author_first_name,
+				authors: filters.authors,
 				publication_title: filters.publication_title,
 				limit: '10'
 			});

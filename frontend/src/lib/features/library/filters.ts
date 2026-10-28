@@ -1,4 +1,7 @@
+import type { components } from '#lib/api/schema.js';
 import { workspaceHref } from '#lib/workspaces/href.js';
+
+export type LibraryAuthorFilter = components['schemas']['AuthorFilter'];
 
 export type LibraryFilters = {
 	query?: string;
@@ -16,12 +19,11 @@ export type LibraryFilters = {
 	reference_type?: string;
 	publication_title?: string;
 	keyword_exact?: string;
-	author_last_name?: string;
-	author_first_name?: string;
+	authors?: LibraryAuthorFilter[];
 };
 
 export type LibraryMetadataFilter =
-	| { author_last_name: string; author_first_name: string }
+	| { authors: [LibraryAuthorFilter] }
 	| { publication_title: string }
 	| { year: string }
 	| { keyword_exact: string }
@@ -31,8 +33,14 @@ export function refineLibraryFilters(
 	applied: LibraryFilters,
 	filter: LibraryMetadataFilter | { tag: string }
 ): LibraryFilters {
-	// An exact credit replaces both free-text and exact author criteria.
-	if ('author_last_name' in filter) return { ...applied, author: undefined, ...filter };
+	if ('authors' in filter) {
+		const [author] = filter.authors;
+		const selected = applied.authors ?? [];
+		const authors = selected.some((name) => sameAuthor(name, author))
+			? selected.filter((name) => !sameAuthor(name, author))
+			: [...selected, author];
+		return { ...applied, author: undefined, authors: authors.length ? authors : undefined };
+	}
 	if ('keyword_exact' in filter) return { ...applied, keyword: undefined, ...filter };
 	if ('tag' in filter && filter.tag) {
 		return { ...applied, has_tags: undefined, ...filter };
@@ -63,8 +71,7 @@ export function submitLibraryFilters(
 	const next = { ...applied, ...draft };
 	// Typing a broad search replaces its exact refinement; unrelated fields preserve it.
 	if (draft.author) {
-		delete next.author_last_name;
-		delete next.author_first_name;
+		delete next.authors;
 	}
 	if (draft.keyword) delete next.keyword_exact;
 	for (const [key, presence] of [
@@ -89,13 +96,7 @@ function optionalBoolean(value: string | null): boolean | undefined {
 	return value === 'true' ? true : value === 'false' ? false : undefined;
 }
 
-const exactKeys = [
-	'reference_type',
-	'publication_title',
-	'keyword_exact',
-	'author_last_name',
-	'author_first_name'
-] as const;
+const exactKeys = ['reference_type', 'publication_title', 'keyword_exact'] as const;
 
 export type LibrarySort = 'updated' | 'created' | 'title' | 'published' | 'publication' | 'author';
 export type LibrarySortDirection = 'asc' | 'desc';
@@ -114,6 +115,36 @@ export function defaultSortDirection(sort: LibrarySort): LibrarySortDirection {
 	return sort === 'title' || sort === 'publication' || sort === 'author' ? 'asc' : 'desc';
 }
 
+export function sameAuthor(left: LibraryAuthorFilter, right: LibraryAuthorFilter) {
+	return (
+		left.last_name === right.last_name &&
+		(left.first_name ?? undefined) === (right.first_name ?? undefined)
+	);
+}
+
+function readAuthors(value: string | null): LibraryAuthorFilter[] | undefined {
+	if (value === null) return undefined;
+	try {
+		const parsed: unknown = JSON.parse(value);
+		if (!Array.isArray(parsed)) return undefined;
+		const authors: LibraryAuthorFilter[] = [];
+		for (const name of parsed) {
+			if (
+				!name ||
+				typeof name !== 'object' ||
+				typeof name.last_name !== 'string' ||
+				(name.first_name != null && typeof name.first_name !== 'string')
+			)
+				return undefined;
+			const author = { last_name: name.last_name, first_name: name.first_name ?? undefined };
+			if (!authors.some((selected) => sameAuthor(selected, author))) authors.push(author);
+		}
+		return authors.length ? authors : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function readLibraryFilters(
 	parameters: Pick<URLSearchParams, 'get' | 'has'>
 ): LibraryFilters {
@@ -127,6 +158,7 @@ export function readLibraryFilters(
 		year: parameters.get('year')?.trim() ?? '',
 		keyword: parameters.get('keyword')?.trim() ?? '',
 		author: parameters.get('author')?.trim() ?? '',
+		authors: readAuthors(parameters.get('authors')),
 		sort,
 		direction: direction === 'asc' || direction === 'desc' ? direction : defaultSortDirection(sort),
 		...Object.fromEntries(
@@ -174,9 +206,10 @@ export function libraryParameters(
 		if (filters[key] !== undefined) result.set(key, String(filters[key]));
 	}
 	for (const key of exactKeys) {
-		// Empty given names select single-field and organization names exactly.
+		// Exact metadata values preserve explicit empty strings.
 		if (filters[key] !== undefined) result.set(key, filters[key]);
 	}
+	if (filters.authors?.length) result.set('authors', JSON.stringify(filters.authors));
 	if (page > 1) result.set('page', String(page));
 	if (pageSize !== 25) result.set('page_size', String(pageSize));
 	return result;

@@ -622,10 +622,6 @@ msgstr "授权角色"
 msgid "Authors"
 msgstr "作者"
 
-#: src/lib/features/library/LibraryRefinements.svelte
-msgid "Authors, keywords, types and matching Items on this page."
-msgstr "本页条目中的作者、关键词和类型及对应条目。"
-
 #: src/lib/features/import/ImportWorkspace.svelte
 #: src/lib/features/item/ItemActions.svelte
 msgid "Auto detect"
@@ -1954,6 +1950,10 @@ msgstr "文件"
 #: src/lib/features/tags/TagSelect.svelte
 msgid "Filter conditions"
 msgstr "筛选条件"
+
+#: src/lib/features/library/LibraryRefinements.svelte
+msgid "Filter Items by author, keyword and type."
+msgstr "按作者、关键词和类型筛选条目。"
 
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/tools/Tools.svelte

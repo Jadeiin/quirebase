@@ -89,8 +89,7 @@ it('sends explicit empty exact name parts while omitting blank broad filters', a
 			libraryListQuery(
 				'workspace-1',
 				{
-					author_last_name: '研究 Council & Co.',
-					author_first_name: '',
+					authors: [{ last_name: '研究 Council & Co.', first_name: '' }],
 					publication_title: ' Journal & 特刊 ',
 					keyword_exact: 'Graph; theory',
 					query: '',
@@ -102,8 +101,9 @@ it('sends explicit empty exact name parts while omitting blank broad filters', a
 			)
 		);
 		const parameters = new URL(received!.url).searchParams;
-		expect(parameters.get('author_first_name')).toBe('');
-		expect(parameters.get('author_last_name')).toBe('研究 Council & Co.');
+		expect(JSON.parse(parameters.get('authors')!)).toEqual([
+			{ last_name: '研究 Council & Co.', first_name: '' }
+		]);
 		expect(parameters.get('publication_title')).toBe(' Journal & 特刊 ');
 		expect(parameters.get('keyword_exact')).toBe('Graph; theory');
 		expect(parameters.get('has_files')).toBe('false');
@@ -170,8 +170,7 @@ it('reads facets for the current page, size and sorting while preserving exact f
 		reference_type: 'Dataset',
 		publication_title: ' Journal & 特刊 ',
 		keyword_exact: 'Graph; theory',
-		author_last_name: '研究 Council & Co.',
-		author_first_name: '',
+		authors: [{ last_name: '研究 Council & Co.', first_name: '' }],
 		has_files: false
 	};
 	try {
@@ -203,8 +202,7 @@ it('reads facets for the current page, size and sorting while preserving exact f
 			reference_type: 'Dataset',
 			publication_title: ' Journal & 特刊 ',
 			keyword_exact: 'Graph; theory',
-			author_last_name: '研究 Council & Co.',
-			author_first_name: '',
+			authors: JSON.stringify([{ last_name: '研究 Council & Co.', first_name: '' }]),
 			has_files: 'false',
 			limit: '10',
 			offset: '10',

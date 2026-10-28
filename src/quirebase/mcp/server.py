@@ -70,12 +70,35 @@ def _tool_annotations(effect: ToolEffect) -> ToolAnnotations:
     )
 
 
+def _localize_openapi_refs(value: Any) -> Any:
+    """Keep references inside contentSchema resolvable in a standalone tool schema."""
+    if isinstance(value, list):
+        return [_localize_openapi_refs(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {
+        key: item
+        if key in {"default", "examples", "enum", "const"}
+        else _localize_openapi_refs(item)
+        for key, item in value.items()
+    }
+    reference = result.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/components/schemas/"):
+        result["$ref"] = reference.replace("#/components/schemas/", "#/$defs/", 1)
+    return result
+
+
 def _customize_component(route: HTTPRoute, component: Any) -> None:
     definition = MCP_TOOLS[cast("str", route.operation_id)]
     component.name = definition.name
     component.description = definition.description
     component.annotations = _tool_annotations(definition.effect)
-    component.parameters = compress_schema(component.parameters, prune_titles=True)
+    # FastMCP's parameter conversion currently skips refs inside contentSchema.
+    parameters = _localize_openapi_refs({
+        **component.parameters,
+        "$defs": {**route.request_schemas, **component.parameters.get("$defs", {})},
+    })
+    component.parameters = compress_schema(parameters, prune_titles=True)
     if component.output_schema is not None:
         component.output_schema = compress_schema(component.output_schema, prune_titles=True)
 

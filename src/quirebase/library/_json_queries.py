@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Integer, Text, Uuid, case, cast, column, func, or_, select
+from sqlalchemy import JSON, Integer, Text, Uuid, and_, case, cast, column, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 
 from quirebase.models import Item
@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.sql.selectable import FromClause
+
+    from .filters import AuthorFilter
 
 
 def array_elements(db: AsyncSession, array: Any, *, objects: bool = False) -> FromClause:
@@ -139,8 +141,7 @@ def author_condition(
     db: AsyncSession,
     *,
     text: str = "",
-    last_name: str | None = None,
-    first_name: str | None = None,
+    names: tuple[AuthorFilter, ...] = (),
 ) -> ColumnElement[bool]:
     authors = array_elements(db, Item.work["contributors"], objects=True)
     family, given = contributor_name_parts(authors.c.value)
@@ -152,12 +153,21 @@ def author_condition(
         else_=authors.c.value["organization"]["name"].as_string(),
     )
     query = select(1).select_from(authors).where(author_role(db, authors.c.value))
-    if last_name is not None:
-        # Facet values preserve Work strings. Exact selection must compare the
-        # returned value verbatim rather than normalize only the request.
-        query = query.where(family == last_name)
-        if first_name is not None:
-            query = query.where(given == first_name if first_name != "" else given.is_(None))
+    if names:
+        # Keep paired names and broad text on the same Author credit.
+        query = query.where(
+            or_(
+                *(
+                    and_(
+                        family == name.last_name,
+                        given == name.first_name if name.first_name else given.is_(None),
+                    )
+                    if name.first_name is not None
+                    else family == name.last_name
+                    for name in names
+                )
+            )
+        )
     if text:
         full_name = family + ", " + func.coalesce(given, "")
         query = query.where(

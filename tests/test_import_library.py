@@ -13,6 +13,7 @@ from quirebase.core.config import get_settings
 from quirebase.core.crypto import token_hash
 from quirebase.core.errors import PermissionDenied
 from quirebase.library import (
+    AuthorFilter,
     BatchConflict,
     ImportBatchUnavailable,
     LibraryFilter,
@@ -171,7 +172,13 @@ async def test_readonly_import_library_intersects_search_project_tag_and_metadat
     await db.commit()
 
     rows, total = await search_library(
-        db, viewer, workspace.id, import_batch=preview.id, sort="title", limit=1, offset=1
+        db,
+        viewer,
+        workspace.id,
+        LibraryFilter(import_batch=preview.id),
+        sort="title",
+        limit=1,
+        offset=1,
     )
     assert total == 3 and [row.id for row in rows] == [item_ids[1]]
     page_facets = await get_library_facets(
@@ -193,13 +200,12 @@ async def test_readonly_import_library_intersects_search_project_tag_and_metadat
         "reference_type": "JournalArticle",
         "publication_title": "Import journal",
         "author": "Smith",
-        "author_last_name": "Smith",
-        "author_first_name": "",
         "keyword": "Quan",
         "keyword_exact": "Quantum",
         "has_files": False,
+        "authors": (AuthorFilter("Smith", ""),),
     }
-    rows, total = await search_library(db, viewer, workspace.id, **filters)
+    rows, total = await search_library(db, viewer, workspace.id, LibraryFilter(**filters))
     assert total == 1 and [row.id for row in rows] == [item_ids[1]]
     facets = await get_library_facets(db, viewer, workspace.id, LibraryFilter(**filters))
     assert [(row.last_name, row.item_count) for row in facets.authors] == [("Smith", 1)]
@@ -247,7 +253,9 @@ async def test_large_import_receipt_filters_in_database_without_per_item_paramet
     engine = db.get_bind()
     event.listen(engine, "before_cursor_execute", capture_parameters)
     try:
-        rows, total = await search_library(db, actor, workspace.id, import_batch=batch.id)
+        rows, total = await search_library(
+            db, actor, workspace.id, LibraryFilter(import_batch=batch.id)
+        )
         assert total == 1 and [row.id for row in rows] == [imported.item_id]
         facets = await get_library_facets(
             db, actor, workspace.id, LibraryFilter(import_batch=batch.id)
@@ -284,7 +292,9 @@ async def test_uncommitted_import_scope_is_unavailable_to_search_and_facets(pers
         await get_import_batch_preview(db, actor, workspace.id, batch.id)
     ).committed_item_ids == ()
     with pytest.raises(BatchConflict, match="has not been committed"):
-        await search_library(db, actor, workspace.id, import_batch=batch.id, q="no results")
+        await search_library(
+            db, actor, workspace.id, LibraryFilter(import_batch=batch.id, q="no results")
+        )
     with pytest.raises(BatchConflict, match="has not been committed"):
         await get_library_facets(db, actor, workspace.id, LibraryFilter(import_batch=batch.id))
 
@@ -377,7 +387,7 @@ async def test_import_scope_http_validates_batch_lineage_and_state_for_readonly_
         )
         assert rows.status_code == 200 and rows.json()["items"] == []
         with pytest.raises(ImportBatchUnavailable):
-            await search_library(db, viewer, workspace_id, import_batch=foreign.id)
+            await search_library(db, viewer, workspace_id, LibraryFilter(import_batch=foreign.id))
         for scope in (uuid4(), foreign.id):
             response = await client.get(f"{base}/imports/{scope}")
             assert response.status_code == 404, response.text

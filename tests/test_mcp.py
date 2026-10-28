@@ -153,6 +153,24 @@ async def test_token_client_discovers_its_workspace_before_searching(
             client, grant.raw_token, "library.search_items", workspace_id=workspace_id
         )
         assert items["items"] == []
+        (search_schema,) = await _schemas(client, grant.raw_token, "library.search_items")
+        inputs = search_schema["inputSchema"]
+        author_reference = inputs["properties"]["authors"]["contentSchema"]["items"]["$ref"]
+        assert inputs["$defs"][author_reference.removeprefix("#/$defs/")]["required"] == [
+            "last_name"
+        ]
+        filtered = await _tool(
+            client,
+            grant.raw_token,
+            "library.search_items",
+            workspace_id=workspace_id,
+            authors=json.dumps([
+                {"last_name": "Smith", "first_name": ""},
+                {"last_name": "Council"},
+            ]),
+        )
+        assert filtered["total"] == 0
+
         denied = await _call(
             client,
             grant.raw_token,
@@ -784,13 +802,22 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "has_projects",
         "reference_type",
         "keyword_exact",
-        "author_last_name",
-        "author_first_name",
+        "authors",
         "publication_title",
     }
     assert set(tools["library.get_item_facets"].parameters["properties"]) == set(
         tools["library.search_items"].parameters["properties"]
     )
+    for name in ("library.search_items", "library.get_item_facets"):
+        schema = tools[name].parameters
+        authors = schema["properties"]["authors"]
+        assert authors["type"] == "string"
+        assert authors["contentMediaType"] == "application/json"
+        reference = authors["contentSchema"]["items"]["$ref"]
+        assert reference.startswith("#/$defs/")
+        author = schema["$defs"][reference.removeprefix("#/$defs/")]
+        assert author["required"] == ["last_name"]
+        assert author["properties"]["last_name"]["type"] == "string"
     assert set(tools["projects.update_project"].parameters["properties"]) == {
         "workspace_id",
         "project_id",

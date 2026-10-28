@@ -18,6 +18,7 @@ from quirebase.core.storage import ObjectSuffix, get_object_store
 from quirebase.documents import delete_unreferenced_objects
 from quirebase.library import (
     ImportBatchUnavailable,
+    LibraryFilter,
     commit_import_batch,
     delete_import_batch,
     get_import_batch_preview,
@@ -117,7 +118,7 @@ async def test_import_receipt_deletion_preserves_items_and_invalidates_old_filte
         with pytest.raises(ImportBatchUnavailable):
             await operation(db, editor, workspace_id, preview.id)
     with pytest.raises(ImportBatchUnavailable):
-        await search_library(db, editor, workspace_id, import_batch=preview.id)
+        await search_library(db, editor, workspace_id, LibraryFilter(import_batch=preview.id))
 
 
 async def test_committing_import_releases_candidate_diagnostics_and_workflow_link(persistence_db):

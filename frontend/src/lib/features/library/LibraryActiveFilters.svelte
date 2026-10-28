@@ -8,19 +8,21 @@
 	import { workspaceHref, type WorkspacePath } from '#lib/workspaces/href.js';
 	import { ph, t } from 'lingui-for-svelte/macro';
 	import { authorFilterLabel } from './author-names.js';
-	import type { LibraryFilters } from './filters.js';
+	import type { LibraryFilters, LibraryAuthorFilter } from './filters.js';
 	import type { LibrarySearch } from './queries.js';
 
 	let {
 		filters,
 		authors = [],
 		project = null,
-		onRemove
+		onRemove,
+		onRemoveAuthor
 	}: {
 		filters: LibraryFilters;
 		authors?: LibrarySearch['items'][number]['authors'];
 		project?: { id: string; name: string } | null;
 		onRemove: (keys: (keyof LibraryFilters)[]) => void;
+		onRemoveAuthor: (author: LibraryAuthorFilter) => void;
 	} = $props();
 	const { workspaceId } = getWorkspaceContext();
 	const tag = createQuery(() => ({
@@ -32,6 +34,7 @@
 			label: string;
 			keys: (keyof LibraryFilters)[];
 			href?: WorkspacePath;
+			author?: LibraryAuthorFilter;
 		}[] = [];
 		function add(
 			label: string,
@@ -60,12 +63,12 @@
 					: undefined
 			);
 		}
-		if (filters.author_last_name !== undefined)
-			add(
-				$t`Author`,
-				authorFilterLabel(filters.author_last_name, filters.author_first_name, authors),
-				['author_last_name', 'author_first_name']
-			);
+		for (const author of filters.authors ?? [])
+			result.push({
+				label: `${$t`Author`}: ${authorFilterLabel(author.last_name, author.first_name ?? undefined, authors)}`,
+				keys: ['authors'],
+				author
+			});
 		if (filters.author) add($t`Contributor`, filters.author, ['author']);
 		if (filters.year) add($t`Year`, filters.year, ['year']);
 		if (filters.publication_title !== undefined)
@@ -90,7 +93,7 @@
 
 {#if chips.length}
 	<div class="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label={$t`Applied filters`}>
-		{#each chips as chip (chip.keys[0])}
+		{#each chips as chip (chip.author ? JSON.stringify(chip.author) : chip.keys[0])}
 			<div class="field-group max-w-full grid-cols-[minmax(0,1fr)_auto] gap-0">
 				{#if chip.href}
 					<Button as="a" size="sm" class="min-w-0" href={resolve(chip.href)} title={chip.label}
@@ -100,7 +103,7 @@
 				<Button
 					size="sm"
 					class="min-w-0"
-					onclick={() => onRemove(chip.keys)}
+					onclick={() => (chip.author ? onRemoveAuthor(chip.author) : onRemove(chip.keys))}
 					aria-label={$t`Remove filter ${ph({ name: chip.label })}`}
 					title={chip.label}
 				>

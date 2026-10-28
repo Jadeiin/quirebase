@@ -75,10 +75,13 @@ async function setup(page: Page) {
 }
 
 const targets = [
-	{ label: 'Jane Smith', expected: { author_last_name: 'Smith', author_first_name: 'Jane' } },
+	{
+		label: 'Jane Smith',
+		expected: { authors: JSON.stringify([{ last_name: 'Smith', first_name: 'Jane' }]) }
+	},
 	{
 		label: '研究 Council & Co.',
-		expected: { author_last_name: '研究 Council & Co.', author_first_name: '' }
+		expected: { authors: JSON.stringify([{ last_name: '研究 Council & Co.', first_name: '' }]) }
 	},
 	{ label: metadata.container.title, expected: { publication_title: metadata.container.title } },
 	{ label: metadata.date_published, expected: { year: '2024' } },
@@ -117,7 +120,7 @@ test('exact filters survive search, pagination and browser history without apply
 }) => {
 	const requests = await setup(page);
 	await page.goto(
-		'/workspace/workspace-1/library?author_last_name=Ada&author_first_name=&keyword_exact=Graph%3B+theory&publication_title=Journal&has_files=false'
+		'/workspace/workspace-1/library?authors=%5B%7B%22last_name%22%3A%22Ada%22%2C%22first_name%22%3A%22%22%7D%5D&keyword_exact=Graph%3B+theory&publication_title=Journal&has_files=false'
 	);
 	const input = page.getByPlaceholder('Search title, author, Tag, or full text');
 	await input.fill('applied search');
@@ -127,12 +130,12 @@ test('exact filters survive search, pagination and browser history without apply
 	await page.getByRole('button', { name: 'Next page' }).click();
 	await expect(page).toHaveURL(/page=2/);
 	await expect.poll(() => requests.at(-1)?.get('query')).toBe('applied search');
-	expect(requests.at(-1)?.get('author_first_name')).toBe('');
+	expect(JSON.parse(requests.at(-1)?.get('authors') ?? '[]')[0]?.first_name).toBe('');
 	expect(requests.at(-1)?.get('keyword_exact')).toBe('Graph; theory');
 	expect(requests.at(-1)?.get('has_files')).toBe('false');
 	await page.getByRole('button', { name: 'Remove filter Author: Ada', exact: true }).click();
-	await expect.poll(() => new URL(page.url()).searchParams.has('author_last_name')).toBe(false);
-	expect(new URL(page.url()).searchParams.has('author_first_name')).toBe(false);
+	await expect.poll(() => new URL(page.url()).searchParams.has('authors')).toBe(false);
+	expect(new URL(page.url()).searchParams.has('authors')).toBe(false);
 	expect(new URL(page.url()).searchParams.has('page')).toBe(false);
 	await page.goBack();
 	await expect(

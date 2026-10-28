@@ -4,12 +4,64 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from advanced_alchemy.service import OffsetPagination
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, Json
 
 from quirebase.access import WorkspaceContext, discussion_message_decisions
-from quirebase.library import BulkItemAction, ItemMetadataData, Work, item_summary
+from quirebase.library import (
+    AuthorFilter,
+    BulkItemAction,
+    ItemMetadataData,
+    LibraryFilter,
+    Work,
+    item_summary,
+)
 from quirebase.models import MAX_CITATION_KEY_LENGTH
 from quirebase.web.api.common import WorkspaceAuthorizationView, authorization_view
+
+
+class LibrarySearchQuery(BaseModel):
+    query: str = ""
+    tag: UUID | None = None
+    project: UUID | None = None
+    year: str = ""
+    keyword: str = ""
+    author: str = ""
+    has_files: bool | None = None
+    has_tags: bool | None = None
+    has_projects: bool | None = None
+    reference_type: str | None = None
+    keyword_exact: str | None = None
+    authors: Json[tuple[AuthorFilter, ...]] = Field(
+        # Validate the encoded default as well as user-supplied JSON.
+        default="[]",
+        validate_default=True,
+        description="Match any selected Author. An empty first_name selects a single-field name; "
+        "an omitted or null first_name matches any given name.",
+    )
+    publication_title: str | None = None
+    import_batch: UUID | None = None
+    limit: int = Field(default=25, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+    sort: Literal["updated", "created", "title", "published", "publication", "author"] = "updated"
+    direction: Literal["asc", "desc"] | None = None
+
+    def to_filters(self) -> LibraryFilter:
+        return LibraryFilter(
+            q=self.query,
+            tag=self.tag,
+            project=self.project,
+            year=self.year,
+            keyword=self.keyword,
+            author=self.author,
+            has_files=self.has_files,
+            has_tags=self.has_tags,
+            has_projects=self.has_projects,
+            reference_type=self.reference_type,
+            keyword_exact=self.keyword_exact,
+            authors=self.authors,
+            publication_title=self.publication_title,
+            import_batch=self.import_batch,
+        )
 
 
 class ItemAuthorView(BaseModel):

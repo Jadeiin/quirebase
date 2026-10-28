@@ -504,6 +504,8 @@
 	authors={library.data?.items.flatMap((item) => item.authors) ?? []}
 	project={appliedProject}
 	onRemove={removeFilters}
+	onRemoveAuthor={(author) =>
+		navigate({ ...submitted, authors: submitted.authors?.filter((name) => name !== author) })}
 />
 
 {#if submitted.project && (selectedProject.isError || selectedProject.fetchStatus === 'paused')}

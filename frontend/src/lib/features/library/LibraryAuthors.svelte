@@ -32,8 +32,7 @@
 				class="text-surface-700-300 no-underline underline-offset-4 hover:text-primary-700-300 hover:underline focus-visible:underline"
 				href={resolve(
 					filterHref({
-						author_last_name: credit.last_name,
-						author_first_name: credit.first_name ?? ''
+						authors: [{ last_name: credit.last_name, first_name: credit.first_name ?? '' }]
 					})
 				)}
 				title={$t`View Items by ${ph({ name: credit.full_name })}`}

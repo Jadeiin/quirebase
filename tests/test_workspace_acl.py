@@ -88,6 +88,7 @@ from quirebase.documents.workflows import (
 )
 from quirebase.library import (
     ItemSection,
+    LibraryFilter,
     add_discussion_message,
     add_project_discussion_message,
     copy_item_to_workspace,
@@ -1444,13 +1445,15 @@ async def test_project_filtered_library_search_obeys_project_participation(async
     library_items, *_ = await search_library(async_db, outsider, workspace_id)
     assert item.id in {row.id for row in library_items}
     with pytest.raises(ResourceUnavailable, match="Project not found"):
-        await search_library(async_db, outsider, workspace_id, project=project.id)
+        await search_library(async_db, outsider, workspace_id, LibraryFilter(project=project.id))
     await add_project_participant(async_db, owner, workspace_id, project.id, outsider.username)
     outsider_scoped_items, *_ = await search_library(
-        async_db, outsider, workspace_id, project=project.id
+        async_db, outsider, workspace_id, LibraryFilter(project=project.id)
     )
     assert [row.id for row in outsider_scoped_items] == [item.id]
-    scoped_items, *_ = await search_library(async_db, owner, workspace_id, project=project.id)
+    scoped_items, *_ = await search_library(
+        async_db, owner, workspace_id, LibraryFilter(project=project.id)
+    )
     assert [row.id for row in scoped_items] == [item.id]
 
 

@@ -97,9 +97,7 @@ async def test_project_library_combines_scope_filters_sorting_and_read_models(
             db,
             editor,
             workspace.id,
-            q="Project",
-            project=project.id,
-            year="2025",
+            LibraryFilter(q="Project", project=project.id, year="2025"),
             sort="title",
             direction="desc",
             limit=1,
@@ -108,12 +106,12 @@ async def test_project_library_combines_scope_filters_sorting_and_read_models(
         assert total == 2
         assert [row.id for row in rows] == [expected]
     rows, total = await search_library(
-        db, editor, workspace.id, project=project.id, sort="author", direction="asc"
+        db, editor, workspace.id, LibraryFilter(project=project.id), sort="author", direction="asc"
     )
     assert total == 3
     assert [row.id for row in rows] == [ids[2], ids[0], ids[1]]
     rows, total = await search_library(
-        db, editor, workspace.id, project=project.id, publication_title="Journal A"
+        db, editor, workspace.id, LibraryFilter(project=project.id, publication_title="Journal A")
     )
     assert total == 2
     assert {row.id for row in rows} == {ids[0], ids[2]}
@@ -139,7 +137,9 @@ async def test_project_library_reads_recheck_participation_without_revoking_cano
 ):
     db = persistence_db
     owner, editor, workspace, project, ids = await _project_library(db)
-    assert (await search_library(db, editor, workspace.id, project=project.id))[1] == 3
+    assert (await search_library(db, editor, workspace.id, LibraryFilter(project=project.id)))[
+        1
+    ] == 3
     assert (
         await get_library_facets(db, editor, workspace.id, LibraryFilter(project=project.id))
     ).authors
@@ -148,7 +148,7 @@ async def test_project_library_reads_recheck_participation_without_revoking_cano
     await remove_project_participant(db, owner, workspace.id, project.id, editor.id)
 
     with pytest.raises(ResourceUnavailable):
-        await search_library(db, editor, workspace.id, project=project.id)
+        await search_library(db, editor, workspace.id, LibraryFilter(project=project.id))
     with pytest.raises(ResourceUnavailable):
         await get_library_facets(db, editor, workspace.id, LibraryFilter(project=project.id))
     for query in ("A", ""):

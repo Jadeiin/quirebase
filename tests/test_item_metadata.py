@@ -19,6 +19,7 @@ from quirebase.library import (
     ItemMetadataData,
     ItemOverviewData,
     ItemSection,
+    LibraryFilter,
     create_item,
     open_item_section,
     regenerate_citation_key,
@@ -140,7 +141,7 @@ async def test_revise_item_metadata_replaces_contributors_in_order(async_db):
     assert "CorrespondingAuthor" in work["contributors"][0]["roles"]
     assert (
         await search_library(
-            async_db, owner, fixture_workspace_id(owner), q="Contributor replacement"
+            async_db, owner, fixture_workspace_id(owner), LibraryFilter(q="Contributor replacement")
         )
     )[1] == 1
 

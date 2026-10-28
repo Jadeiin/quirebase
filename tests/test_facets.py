@@ -14,6 +14,7 @@ from quirebase.core.errors import (
     WorkspaceMembershipRequired,
 )
 from quirebase.library import (
+    AuthorFilter,
     LibraryFilter,
     create_item,
     get_library_facets,
@@ -179,15 +180,20 @@ async def test_exact_filters_select_the_preserved_author_and_keyword_facet_value
     assert len(facets.authors) == len(facets.keywords) == 2
     for facet in facets.authors:
         filters = {
-            "author_last_name": facet.last_name,
-            "author_first_name": facet.first_name if facet.first_name is not None else "",
+            "authors": (
+                AuthorFilter(
+                    facet.last_name, facet.first_name if facet.first_name is not None else ""
+                ),
+            )
         }
-        _, total = await search_library(db, owner, workspace.id, **filters)
+        _, total = await search_library(db, owner, workspace.id, LibraryFilter(**filters))
         assert total == facet.item_count == 1
         narrowed = await get_library_facets(db, owner, workspace.id, LibraryFilter(**filters))
-        assert narrowed.authors == (facet,)
+        assert narrowed.authors == facets.authors
     for facet in facets.keywords:
-        _, total = await search_library(db, owner, workspace.id, keyword_exact=facet.value)
+        _, total = await search_library(
+            db, owner, workspace.id, LibraryFilter(keyword_exact=facet.value)
+        )
         assert total == facet.item_count == 1
         narrowed = await get_library_facets(
             db, owner, workspace.id, LibraryFilter(keyword_exact=facet.value)
@@ -199,34 +205,44 @@ async def test_exact_filters_select_the_preserved_author_and_keyword_facet_value
     "filters, indexes",
     [
         ({"author": "sMiTh, jOhN"}, [0, 1]),
+        ({"authors": (AuthorFilter("Smith", "John"), AuthorFilter("Smith", "Jane"))}, [0, 1, 2]),
+        ({"authors": (AuthorFilter("Smith", "John"), AuthorFilter("Smith", "John"))}, [0, 1]),
+        ({"authors": (AuthorFilter("Smith", "Wei"), AuthorFilter("Wang", "John"))}, []),
+        (
+            {
+                "authors": (AuthorFilter("Research; Council", ""), AuthorFilter("Smith", "Jane")),
+                "year": "2026",
+            },
+            [2],
+        ),
         ({"author": "Research; Council"}, [0]),
-        ({"author_last_name": "Smith", "author_first_name": "John"}, [0, 1]),
-        ({"author_last_name": "Smith", "author_first_name": "Jane"}, [2]),
-        ({"author_last_name": "Smith"}, [0, 1, 2]),
-        ({"author_last_name": "Smith", "author_first_name": "Wei"}, []),
+        ({"authors": (AuthorFilter("Smith", "John"),)}, [0, 1]),
+        ({"authors": (AuthorFilter("Smith", "Jane"),)}, [2]),
+        ({"authors": (AuthorFilter("Smith"),)}, [0, 1, 2]),
+        ({"authors": (AuthorFilter("Smith", "Wei"),)}, []),
         pytest.param(
-            {"author": "John", "author_last_name": "Wang", "author_first_name": "Wei"},
+            {"author": "John", "authors": (AuthorFilter("Wang", "Wei"),)},
             [],
             id="combined-author-cross-credits",
         ),
         pytest.param(
-            {"author": "Wei", "author_last_name": "Wang", "author_first_name": "Wei"},
+            {"author": "Wei", "authors": (AuthorFilter("Wang", "Wei"),)},
             [1],
             id="combined-author-same-credit",
         ),
         pytest.param(
-            {"author": "JOHN", "author_last_name": "Smith", "author_first_name": "John"},
+            {"author": "JOHN", "authors": (AuthorFilter("Smith", "John"),)},
             [0, 1],
             id="combined-author-case-insensitive-text",
         ),
         pytest.param(
-            {"author": "%", "author_last_name": "Smith", "author_first_name": "John"},
+            {"author": "%", "authors": (AuthorFilter("Smith", "John"),)},
             [],
             id="combined-author-literal-wildcard",
         ),
-        ({"author_last_name": "Research; Council", "author_first_name": ""}, [0]),
-        ({"author_last_name": "Smith", "author_first_name": ""}, []),
-        ({"author_last_name": "smith"}, []),
+        ({"authors": (AuthorFilter("Research; Council", ""),)}, [0]),
+        ({"authors": (AuthorFilter("Smith", ""),)}, []),
+        ({"authors": (AuthorFilter("smith"),)}, []),
         ({"keyword": "graph;"}, [0]),
         ({"keyword_exact": "Graph; theory"}, [0]),
         ({"keyword_exact": "Graph"}, []),
@@ -240,7 +256,9 @@ async def test_json_filters_match_elements_and_share_facet_candidates(
     persistence_db, filters, indexes
 ):
     owner, _, workspace_id, _, ids, _ = await _library(persistence_db)
-    items, total = await search_library(persistence_db, owner, workspace_id, **filters)
+    items, total = await search_library(
+        persistence_db, owner, workspace_id, LibraryFilter(**filters)
+    )
     facets = await get_library_facets(persistence_db, owner, workspace_id, LibraryFilter(**filters))
     assert total == len(indexes)
     assert {item.id for item in items} == {ids[index] for index in indexes}
@@ -337,8 +355,6 @@ async def test_facets_follow_the_same_result_page_for_every_sort(persistence_db)
     ]:
         with pytest.raises(ValidationFailure):
             await get_library_facets(db, owner, workspace_id, **parameters)
-    with pytest.raises(ValidationFailure):
-        await get_library_facets(db, owner, workspace_id, LibraryFilter(author_first_name="John"))
 
 
 async def test_facets_return_all_values_in_the_item_page_without_top_fifty_cutoff(persistence_db):
@@ -488,9 +504,9 @@ async def test_author_facets_and_suggestions_display_record_names_without_reiden
             db,
             owner,
             workspace_id,
-            q="projections",
-            author_last_name=choice.last_name,
-            author_first_name=choice.first_name or "",
+            LibraryFilter(
+                q="projections", authors=(AuthorFilter(choice.last_name, choice.first_name or ""),)
+            ),
         )
         assert total == choice.item_count
     assert await search_authors_typeahead(db, owner, workspace_id, "王") == [
@@ -548,3 +564,20 @@ async def test_facet_endpoint_uses_the_item_paging_sorting_and_validation_contra
     finally:
         await client.aclose()
         get_settings.cache_clear()
+
+
+async def test_author_choices_keep_other_filters_and_page_bounds_without_selected_authors(
+    persistence_db,
+):
+    db = persistence_db
+    owner, _, workspace_id, _, ids, _ = await _library(db)
+    filters = LibraryFilter(year="2026", authors=(AuthorFilter("Smith", "Jane"),))
+    rows, total = await search_library(db, owner, workspace_id, filters, sort="title", limit=1)
+    assert total == 1 and [row.id for row in rows] == [ids[2]]
+    facets = await get_library_facets(db, owner, workspace_id, filters, sort="title", limit=1)
+    assert [(row.last_name, row.first_name, row.item_count) for row in facets.authors] == [
+        ("Smith", "John", 1),
+        ("Wang", "Wei", 1),
+    ]
+    assert [(row.value, row.item_count) for row in facets.keywords] == [("Biology", 1)]
+    assert [(row.value, row.item_count) for row in facets.reference_types] == [("Book", 1)]
