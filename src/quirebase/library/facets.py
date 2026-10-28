@@ -1,8 +1,8 @@
-"""Page facets, keeping author choices available across exact author selections."""
+"""Bibliographic facets computed from the current Library result page."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import func, select, true
@@ -76,27 +76,16 @@ async def get_library_facets(
         .offset(offset)
         .subquery()
     )
-    # Author choices stay available while OR selections narrow the result page.
-    author_candidates = candidates
-    if filters.authors:
-        author_query = await _library_query(db, user, workspace_id, replace(filters, authors=()))
-        author_candidates = (
-            _ordered_library_query(db, author_query, sort, direction)
-            .with_only_columns(Item.id, Item.work)
-            .limit(limit)
-            .offset(offset)
-            .subquery()
-        )
-    authors = array_elements(db, author_candidates.c.work["contributors"], objects=True)
+    authors = array_elements(db, candidates.c.work["contributors"], objects=True)
     family, given = contributor_name_parts(authors.c.value)
     names = (
         select(
-            author_candidates.c.id.label("item_id"),
+            candidates.c.id.label("item_id"),
             family.label("last_name"),
             given.label("first_name"),
             _contributor_display_name(authors.c.value).label("display_name"),
         )
-        .select_from(author_candidates.join(authors, true()))
+        .select_from(candidates.join(authors, true()))
         .where(family.is_not(None), family != "", author_role(db, authors.c.value))
         .subquery()
     )

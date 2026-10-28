@@ -189,7 +189,7 @@ async def test_exact_filters_select_the_preserved_author_and_keyword_facet_value
         _, total = await search_library(db, owner, workspace.id, LibraryFilter(**filters))
         assert total == facet.item_count == 1
         narrowed = await get_library_facets(db, owner, workspace.id, LibraryFilter(**filters))
-        assert narrowed.authors == facets.authors
+        assert narrowed.authors == (facet,)
     for facet in facets.keywords:
         _, total = await search_library(
             db, owner, workspace.id, LibraryFilter(keyword_exact=facet.value)
@@ -205,7 +205,17 @@ async def test_exact_filters_select_the_preserved_author_and_keyword_facet_value
     "filters, indexes",
     [
         ({"author": "sMiTh, jOhN"}, [0, 1]),
-        ({"authors": (AuthorFilter("Smith", "John"), AuthorFilter("Smith", "Jane"))}, [0, 1, 2]),
+        ({"authors": (AuthorFilter("Smith", "John"), AuthorFilter("Smith", "Jane"))}, []),
+        ({"authors": (AuthorFilter("Smith", "John"), AuthorFilter("Wang", "Wei"))}, [1]),
+        ({"authors": (AuthorFilter("Smith", "John"), AuthorFilter("Research; Council", ""))}, [0]),
+        ({"authors": (AuthorFilter("Smith"), AuthorFilter("Smith", "John"))}, [0, 1]),
+        (
+            {
+                "authors": (AuthorFilter("Smith", "John"), AuthorFilter("Wang", "Wei")),
+                "year": "2025",
+            },
+            [],
+        ),
         ({"authors": (AuthorFilter("Smith", "John"), AuthorFilter("Smith", "John"))}, [0, 1]),
         ({"authors": (AuthorFilter("Smith", "Wei"), AuthorFilter("Wang", "John"))}, []),
         (
@@ -213,7 +223,7 @@ async def test_exact_filters_select_the_preserved_author_and_keyword_facet_value
                 "authors": (AuthorFilter("Research; Council", ""), AuthorFilter("Smith", "Jane")),
                 "year": "2026",
             },
-            [2],
+            [],
         ),
         ({"author": "Research; Council"}, [0]),
         ({"authors": (AuthorFilter("Smith", "John"),)}, [0, 1]),
@@ -566,7 +576,7 @@ async def test_facet_endpoint_uses_the_item_paging_sorting_and_validation_contra
         get_settings.cache_clear()
 
 
-async def test_author_choices_keep_other_filters_and_page_bounds_without_selected_authors(
+async def test_author_choices_follow_the_selected_result_page(
     persistence_db,
 ):
     db = persistence_db
@@ -576,8 +586,57 @@ async def test_author_choices_keep_other_filters_and_page_bounds_without_selecte
     assert total == 1 and [row.id for row in rows] == [ids[2]]
     facets = await get_library_facets(db, owner, workspace_id, filters, sort="title", limit=1)
     assert [(row.last_name, row.first_name, row.item_count) for row in facets.authors] == [
-        ("Smith", "John", 1),
-        ("Wang", "Wei", 1),
+        ("Smith", "Jane", 1),
     ]
     assert [(row.value, row.item_count) for row in facets.keywords] == [("Biology", 1)]
     assert [(row.value, row.item_count) for row in facets.reference_types] == [("Book", 1)]
+
+
+async def test_all_selected_authors_are_required_before_paging_without_duplicate_items(
+    persistence_db,
+):
+    db = persistence_db
+    owner, other, workspace_id, foreign_id, ids, _ = await _library(db)
+    john, wei = contributor("Smith", "John"), contributor("Wang", "Wei")
+    joint = await create_item(
+        db,
+        owner,
+        workspace_id,
+        {
+            "id": f"urn:uuid:{uuid4()}",
+            "type": "JournalArticle",
+            "title": "Another joint study",
+            "contributors": [john, wei, john],
+        },
+    )
+    for actor, scope, credits in (
+        (owner, workspace_id, [john, {**wei, "roles": ["Editor"]}]),
+        (other, foreign_id, [john, wei]),
+    ):
+        await create_item(
+            db,
+            actor,
+            scope,
+            {
+                "id": f"urn:uuid:{uuid4()}",
+                "type": "JournalArticle",
+                "title": "Excluded study",
+                "contributors": credits,
+            },
+        )
+    filters = LibraryFilter(authors=(AuthorFilter("Smith", "John"), AuthorFilter("Wang", "Wei")))
+    pages = []
+    for offset in (0, 1):
+        rows, total = await search_library(
+            db, owner, workspace_id, filters, sort="title", limit=1, offset=offset
+        )
+        assert total == 2 and len(rows) == 1
+        pages.append(rows[0].id)
+        facets = await get_library_facets(
+            db, owner, workspace_id, filters, sort="title", limit=1, offset=offset
+        )
+        assert [(row.last_name, row.first_name, row.item_count) for row in facets.authors] == [
+            ("Smith", "John", 1),
+            ("Wang", "Wei", 1),
+        ]
+    assert pages == [joint.item_id, ids[1]]

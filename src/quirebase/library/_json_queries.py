@@ -153,21 +153,6 @@ def author_condition(
         else_=authors.c.value["organization"]["name"].as_string(),
     )
     query = select(1).select_from(authors).where(author_role(db, authors.c.value))
-    if names:
-        # Keep paired names and broad text on the same Author credit.
-        query = query.where(
-            or_(
-                *(
-                    and_(
-                        family == name.last_name,
-                        given == name.first_name if name.first_name else given.is_(None),
-                    )
-                    if name.first_name is not None
-                    else family == name.last_name
-                    for name in names
-                )
-            )
-        )
     if text:
         full_name = family + ", " + func.coalesce(given, "")
         query = query.where(
@@ -178,8 +163,18 @@ def author_condition(
                 full_name.icontains(text, autoescape=True),
             )
         )
-    predicate: ColumnElement[bool] = query.correlate(Item).exists()
-    return predicate
+    if not names:
+        return query.correlate(Item).exists()
+    # Each selected name must have a matching Author credit on the same Item.
+    predicates = []
+    for name in dict.fromkeys(names):
+        matching = query.where(family == name.last_name)
+        if name.first_name is not None:
+            matching = matching.where(
+                given == name.first_name if name.first_name else given.is_(None)
+            )
+        predicates.append(matching.correlate(Item).exists())
+    return and_(*predicates)
 
 
 def keyword_condition(db: AsyncSession, value: str, *, exact: bool) -> ColumnElement[bool]:

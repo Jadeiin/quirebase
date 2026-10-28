@@ -35,7 +35,7 @@ class LibrarySearchQuery(BaseModel):
         # Validate the encoded default as well as user-supplied JSON.
         default="[]",
         validate_default=True,
-        description="Match any selected Author. An empty first_name selects a single-field name; "
+        description="Require all selected Authors. An empty first_name selects a single-field name; "
         "an omitted or null first_name matches any given name.",
     )
     publication_title: str | None = None

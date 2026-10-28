@@ -147,14 +147,14 @@ Search indexes title, descriptions, Author/Editor names, subjects and only the W
 identifiers. Existing SQLite FTS5 and PostgreSQL tsvector projections remain rebuildable.
 Filtering and distinct-Item facets query nested Work contributors/subjects directly over the
 same authorized scope. Facets use Library's filters, ordering and Item-page bounds before expanding
-contributors/subjects, and return all candidates and distinct-Item counts on that page. Author
-candidates omit the exact author selection so additional authors remain selectable; keyword and
-type counts still describe the actual result page. No targeted JSON index is added without
-query/performance evidence.
-The `authors` Query value is a JSON array of `{last_name, first_name}` conditions, combined with OR
-inside one Author credit. Other filters intersect this selection. Omitting or setting `first_name`
+contributors/subjects, and return all candidates and distinct-Item counts on that page. All selected
+authors remain part of the candidate query, so additional choices are coauthors in matching Items.
+No targeted JSON index is added without query/performance evidence.
+The `authors` Query value is a JSON array of `{last_name, first_name}` conditions, combined with AND:
+each condition must match an Author credit on the Item. Duplicate conditions do not require repeated
+credits or duplicate Items. Other filters intersect this selection. Omitting or setting `first_name`
 to null matches any given name; an empty string matches a credit with no given-name part. Broad
-`author` text, when supplied together with `authors`, must match that same credit. HTTP declares
+`author` text, when supplied together with `authors`, must match each selected credit. HTTP declares
 these parameters, pagination and sorting in one Query model; `Json[tuple[AuthorFilter, ...]]`
 provides parsing, nested validation and the OpenAPI content schema. Missing, blank or empty-array
 `authors` means no exact author restriction; malformed JSON and invalid name fields return 422.

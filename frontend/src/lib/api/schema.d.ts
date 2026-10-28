@@ -9295,7 +9295,7 @@ export interface operations {
 				has_projects?: boolean | null;
 				reference_type?: string | null;
 				keyword_exact?: string | null;
-				/** @description Match any selected Author. An empty first_name selects a single-field name; an omitted or null first_name matches any given name. */
+				/** @description Require all selected Authors. An empty first_name selects a single-field name; an omitted or null first_name matches any given name. */
 				authors?: string;
 				publication_title?: string | null;
 				import_batch?: string | null;
@@ -9399,7 +9399,7 @@ export interface operations {
 				has_projects?: boolean | null;
 				reference_type?: string | null;
 				keyword_exact?: string | null;
-				/** @description Match any selected Author. An empty first_name selects a single-field name; an omitted or null first_name matches any given name. */
+				/** @description Require all selected Authors. An empty first_name selects a single-field name; an omitted or null first_name matches any given name. */
 				authors?: string;
 				publication_title?: string | null;
 				import_batch?: string | null;

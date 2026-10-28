@@ -194,7 +194,7 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
         for params in ({}, {"authors": ""}, {"authors": "[]"}):
             unfiltered = await client.get(f"{base}/items", params=params)
             assert unfiltered.status_code == 200 and unfiltered.json()["total"] == 1
-        union = await client.get(
+        intersection = await client.get(
             f"{base}/items",
             params={
                 "authors": json.dumps([
@@ -203,7 +203,7 @@ async def test_http_facets_share_search_filters_and_serialize_counts(
                 ])
             },
         )
-        assert union.status_code == 200 and union.json()["total"] == 1
+        assert intersection.status_code == 200 and intersection.json()["total"] == 0
 
     finally:
         await client.aclose()

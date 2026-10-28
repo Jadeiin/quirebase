@@ -185,11 +185,11 @@ filters run before paging and current-page facets. Presence choices live in the 
 Project and Files controls and apply with Search; selecting a specific association replaces its
 presence choice. History restores submitted criteria. Existing bulk actions remove organized Items
 from the corresponding absence results.
-Clicking an author toggles that exact name in an OR selection, clears the broad author text and
-resets result paging. Each selected author has an independent removal chip. Author candidates and
-their counts come from the same scoped, sorted page with the exact author selection omitted;
-keywords and types describe the selected result page. URL state, saved views, preview navigation
-and Item return links preserve the complete selection. Submitting broad author text replaces it.
+Clicking an author toggles that exact name in an AND selection, clears the broad author text and
+resets result paging. Items must include every selected Author. Each selected author has an
+independent removal chip. Author, keyword and type candidates and counts describe the same scoped,
+sorted result page, including all selected author conditions. URL state, saved views, preview
+navigation and Item return links preserve the complete selection. Submitting broad author text replaces it.
 Authoritative access/not-found failures discard cached lists for that Project and clear selection;
 transient refresh failures may retain the last loaded rows.
 Titles remain ordinary Item links. The independent `preview` URL parameter opens a nonmodal Item

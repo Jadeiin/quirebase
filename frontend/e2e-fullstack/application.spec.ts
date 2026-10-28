@@ -147,9 +147,7 @@ test('Library sorting orders real records before pagination and keeps undated re
 	]);
 });
 
-test('Library metadata links filter real structured author credits in both views', async ({
-	page
-}) => {
+test('Library author selections intersect and survive reload in both views', async ({ page }) => {
 	const workspaceId = await signIn(page);
 	const base = `/api/v1/workspaces/${workspaceId}/items`;
 	const headers = { Origin: new URL(page.url()).origin };
@@ -191,10 +189,11 @@ test('Library metadata links filter real structured author credits in both views
 	await expect(rows).toHaveCount(2);
 	await page.getByRole('button', { name: 'Filters', exact: true }).click();
 	const authorChoices = page.getByRole('group', { name: 'Author', exact: true });
-	await authorChoices.getByRole('link', { name: 'Council; & 一 2', exact: true }).click();
-	await expect(rows).toHaveCount(3);
+	await authorChoices.getByRole('link', { name: 'Council; & 一 1', exact: true }).click();
+	await expect(rows).toHaveCount(1);
+	await expect(rows.first()).toContainText('Library facet smoke 1');
 	await page.reload();
-	await expect(rows).toHaveCount(3);
+	await expect(rows).toHaveCount(1);
 	await page
 		.getByRole('button', { name: 'Remove filter Author: Council; & 一', exact: true })
 		.click();
@@ -221,6 +220,8 @@ test('Library metadata links filter real structured author credits in both views
 	await expect(
 		page.getByRole('button', { name: 'Remove filter Author: Council; & 一', exact: true })
 	).toBeVisible();
+	await expect(cards).toHaveCount(1);
+	await page.getByRole('button', { name: 'Remove filter Author: Jane Smith', exact: true }).click();
 	await expect(cards).toHaveCount(1);
 	await page
 		.getByRole('button', { name: 'Remove filter Publication: Journal & Alpha', exact: true })
