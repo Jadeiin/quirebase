@@ -8,6 +8,8 @@ frontend/build/
 frontend/openapi.json
 frontend/playwright-report/
 frontend/test-results/
+site/.astro/
+site/public/openapi.json
 quirebase.db*
 quirebase-data/
 __pycache__/

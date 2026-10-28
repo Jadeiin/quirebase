@@ -61,7 +61,7 @@ contracts and ordinary User authorization rules; interactive OpenAPI documentati
 `/docs`. They include reads
 and ordinary User mutations; MCP deliberately excludes administrator operations, file bytes and the
 currently unstructured PDF full text. A signed-in User can create and revoke their own time-limited
-API Tokens under **Account settings → MCP and API Tokens**; that page also shows the deployment's
+API Tokens under **Account settings → API Tokens**; that page's **Client connection guide** shows the deployment's
 HTTP API and MCP endpoints plus an MCP client configuration example. Operators may alternatively use the CLI:
 
 ```sh
@@ -108,6 +108,9 @@ Password-protected PDFs, OCR and flattened annotation exports are unsupported.
 
 ## Documentation
 
+- [Documentation site](site/README.md): user guides, concepts, administration, API Reference, and help center.
+  Run `bun install --cwd site --frozen-lockfile` and `make docs-dev` for a local preview.
+- [Engineering documentation index](docs/README.md): architecture, decisions, and contributor contracts.
 - [Deployment and operations](docs/DEPLOYMENT.md)
 - [Import and Discovery](docs/METADATA_LOOKUP.md)
 - [Testing and development checks](docs/TESTING.md)

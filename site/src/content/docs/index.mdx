@@ -1,0 +1,30 @@
+---
+title: Quirebase documentation
+description: Build a shared research library, read and annotate PDFs, and connect your tools.
+template: splash
+hero:
+  title: Your research, organized together.
+  tagline: Learn to collect references, read and annotate PDFs, and collaborate in a self-hosted research library.
+  actions:
+    - text: Get started
+      link: /getting-started/quickstart/
+      icon: right-arrow
+    - text: Deploy Quirebase
+      link: /administration/deployment/
+      variant: secondary
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <LinkCard title="Import and organize" description="Review imports, find Items, and organize your Library." href="/guides/import/" />
+  <LinkCard title="Read and annotate" description="Choose private or Project annotations and export a PDF." href="/guides/pdf-annotations/" />
+  <LinkCard title="Collaborate" description="Understand Workspaces, Project participation, and access." href="/guides/collaboration/" />
+  <LinkCard title="Connect your tools" description="Use API Tokens with the HTTP API and MCP." href="/developers/http-api/" />
+</CardGrid>
+
+Quirebase is alpha software. These guides describe the current development version.
+Check the target release's instructions before upgrading a self-hosted installation.
+
+For answers and recovery steps, visit the [FAQ](/knowledge-base/faq/) and
+[troubleshooting guide](/knowledge-base/troubleshooting/).

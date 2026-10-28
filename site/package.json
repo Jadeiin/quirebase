@@ -1,0 +1,29 @@
+{
+  "name": "@quirebase/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "api:generate": "uv run --frozen python ../scripts/export-openapi.py public/openapi.json",
+    "dev": "bun run api:generate && astro dev",
+    "check": "bun run api:generate && astro check",
+    "build": "bun run api:generate && astro build && bun run check:build",
+    "check:build": "uv run --frozen python scripts/check-built-site.py",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.5",
+    "@astrojs/markdown-satteri": "^0.4.6",
+    "@astrojs/starlight": "^0.42.7",
+    "astro": "^7.4.3",
+    "starlight-links-validator": "^0.27.0",
+    "starlight-openapi": "^0.27.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "packageManager": "bun@1.4.4"
+}

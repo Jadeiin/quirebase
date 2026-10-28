@@ -1,0 +1,9 @@
+---
+import DefaultLanguageSelect from '@astrojs/starlight/components/LanguageSelect.astro';
+
+// Generated API pages have canonical English routes and no translated counterparts.
+const isAPIReference = Astro.url.pathname.startsWith('/reference/api/');
+const isNotFound = Astro.locals.starlightRoute.entry.id === '404';
+---
+
+{!isAPIReference && !isNotFound && <DefaultLanguageSelect />}

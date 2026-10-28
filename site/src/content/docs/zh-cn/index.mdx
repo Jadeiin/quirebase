@@ -1,0 +1,29 @@
+---
+title: Quirebase 文档
+description: 导入与整理文献、阅读和批注 PDF，以及部署和集成 Quirebase。
+template: splash
+hero:
+  title: 一起整理和使用研究资料。
+  tagline: 从导入第一条文献开始，建立可协作、自托管的研究资料库。
+  actions:
+    - text: 快速上手
+      link: /zh-cn/getting-started/quickstart/
+      icon: right-arrow
+    - text: 部署 Quirebase
+      link: /zh-cn/administration/deployment/
+      variant: secondary
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <LinkCard title="导入与整理" description="预览和确认导入，用标签和项目组织条目。" href="/zh-cn/guides/import/" />
+  <LinkCard title="阅读和批注 PDF" description="选择私人或项目批注，并下载带批注的副本。" href="/zh-cn/guides/pdf-annotations/" />
+  <LinkCard title="理解工作空间与项目" description="了解研究数据的权限边界和协作方式。" href="/zh-cn/concepts/workspaces-and-projects/" />
+  <LinkCard title="连接其他工具" description="使用 API Token 接入 HTTP API 和 MCP。" href="/zh-cn/developers/http-api/" />
+</CardGrid>
+
+Quirebase 目前处于 alpha 阶段。本文档描述当前开发版本；升级自托管实例前，请查看目标版本的升级说明。
+
+文档以英文为主，中文逐页补充。尚未翻译的页面会显示英文内容及回退提示；页面内容与部署版本不一致时，
+请以该实例的 `/docs` 和 `/openapi.json` 为准。
