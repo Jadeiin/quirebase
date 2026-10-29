@@ -53,8 +53,8 @@ its own shared Annotations and Discussions.
 4. Ask the colleague to open the same revision and enable this Project under **Displayed annotation sources**.
 
 **Check the result:** the colleague can see the Project mark and, when authorized, reply to it.
-Use Annotation Replies for a specific mark, Item Discussion for
-the reference, and Project Discussion for the working group's broader conversation.
+Use Annotation Replies for a specific mark. Exchange reading questions and group plans through
+[Item and Project Discussions](/guides/discussions/).
 
 ## Archive or delete a Project
 

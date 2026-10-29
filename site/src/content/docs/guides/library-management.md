@@ -62,6 +62,9 @@ that association's Project Annotations and Replies.
 For several Items, select the intended Library rows and choose a bulk action. **Select this page**
 selects the current page. Check the selected count before making a change or exporting.
 
+For keyboard browsing, range selection, and citation copying, see the
+[keyboard guide](/guides/keyboard-shortcuts/).
+
 ## Review duplicate suggestions
 
 Open **Tools → Duplicate review**, choose **Shared identifier**, **Same title**, or **Same PDF**, and
