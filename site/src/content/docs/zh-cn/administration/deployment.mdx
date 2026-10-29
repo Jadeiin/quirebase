@@ -3,6 +3,8 @@ title: 部署并验证 Quirebase
 description: 从源码构建，初始化持久化数据，运行 Web 和 Worker，并核对首次登录与 PDF 处理。
 ---
 
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
 下面任选一种方式，它们都使用当前源码检出的锁定依赖。安装已发布的发行包时，应遵循对应版本的包索引与版本说明。
 
 | 方式 | 需要准备什么 | 进程和数据 |
@@ -13,7 +15,10 @@ description: 从源码构建，初始化持久化数据，运行 Web 和 Worker�
 命令示例使用 Linux、macOS 或 WSL 终端。请选择长期保留的安装目录，并让所有进程使用同一份配置。
 Web 提供应用页面和 API，独立的 Worker 负责 PDF 处理及持久化任务。
 
-## 方式 A：构建并运行 Compose 服务
+## 安装 Quirebase
+
+<Tabs>
+<TabItem label="Docker Compose">
 
 ```sh
 git clone https://github.com/Jadeiin/quirebase.git
@@ -40,7 +45,8 @@ docker compose --env-file .env.docker logs --tail 50 worker
 数据库保存在 Compose 的 `postgres-data` 卷，本地对象文件保存在 `quirebase-data` 卷。
 `make docker-down` 会停止服务并保留这些卷。默认 Web 端口绑定本机回环地址。
 
-## 方式 B：从源码运行 SQLite 实例
+</TabItem>
+<TabItem label="源码运行">
 
 ```sh
 git clone https://github.com/Jadeiin/quirebase.git
@@ -75,12 +81,19 @@ uv run quirebase worker
 再在初始化前通过 `.env` 设置 `QUIREBASE_DATABASE_URL`。
 使用 libpq URL，例如 `postgresql://quirebase:encoded-password@localhost/quirebase`。
 
+</TabItem>
+</Tabs>
+
 ## 验证一次完整使用流程
+
+<Steps>
 
 1. 登录，并打开管理员账号的普通工作区。
 2. 按[快速上手](/zh-cn/getting-started/quickstart/)创建条目、上传 PDF。
 3. 确认 PDF 处理就绪，阅读器可以打开文件。
 4. 保存私人笔记，再打开同一修订版核对它仍然存在。
+
+</Steps>
 
 完成以上步骤即可验证 Web、Worker 和文件存储。遇到问题时，使用[故障排查](/zh-cn/knowledge-base/troubleshooting/)。
 

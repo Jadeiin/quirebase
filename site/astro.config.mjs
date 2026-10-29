@@ -1,12 +1,15 @@
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
+import mermaid from 'astro-mermaid';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
+import starlightSidebarTopics from 'starlight-sidebar-topics';
 
 export default defineConfig({
   site: process.env.QUIREBASE_DOCS_SITE || undefined,
   trailingSlash: 'always',
   integrations: [
+    mermaid({ autoTheme: true, enableLog: false }),
     starlight({
       title: 'Quirebase',
       description: 'User guides, administration, and integrations for a collaborative research library.',
@@ -22,55 +25,85 @@ export default defineConfig({
         root: { label: 'English', lang: 'en' },
         'zh-cn': { label: '简体中文', lang: 'zh-CN' },
       },
-      // Sidebar translation keys use the language tag, not the locale's URL prefix.
-      sidebar: [
-        {
-          label: 'Start here',
-          translations: { 'zh-CN': '开始使用' },
-          items: ['getting-started/quickstart'],
-        },
-        {
-          label: 'User guides',
-          translations: { 'zh-CN': '用户指南' },
-          items: [
-            'guides/discovery',
-            'guides/import',
-            'guides/library-management',
-            'guides/files',
-            'guides/pdf-annotations',
-            'guides/collaboration',
-            'guides/citations-and-exports',
-            'guides/account',
-          ],
-        },
-        {
-          label: 'Concepts',
-          translations: { 'zh-CN': '核心概念' },
-          items: ['concepts/research-library', 'concepts/workspaces-and-projects'],
-        },
-        {
-          label: 'Administration',
-          translations: { 'zh-CN': '部署与管理' },
-          items: [
-            'administration/deployment',
-            'administration/configuration',
-            'administration/workspaces-and-members',
-            'administration/maintenance',
-          ],
-        },
-        {
-          label: 'Developers',
-          translations: { 'zh-CN': '开发与集成' },
-          items: ['developers/http-api', 'developers/mcp', 'developers/contributing'],
-        },
-        {
-          label: 'Knowledge base',
-          translations: { 'zh-CN': '知识库' },
-          items: ['knowledge-base/faq', 'knowledge-base/troubleshooting'],
-        },
-        ...openAPISidebarGroups,
-      ],
       plugins: [
+        starlightSidebarTopics(
+          [
+            {
+              label: { en: 'User guide', 'zh-CN': '使用指南' },
+              link: '/getting-started/quickstart/',
+              icon: 'open-book',
+              id: 'guides',
+              items: [
+                {
+                  label: 'Start here',
+                  translations: { 'zh-CN': '开始使用' },
+                  items: ['getting-started/quickstart'],
+                },
+                {
+                  label: 'User guides',
+                  translations: { 'zh-CN': '用户指南' },
+                  items: [
+                    'guides/discovery',
+                    'guides/import',
+                    'guides/library-management',
+                    'guides/files',
+                    'guides/pdf-annotations',
+                    'guides/collaboration',
+                    'guides/citations-and-exports',
+                    'guides/account',
+                  ],
+                },
+                {
+                  label: 'Concepts',
+                  translations: { 'zh-CN': '核心概念' },
+                  items: ['concepts/research-library', 'concepts/workspaces-and-projects'],
+                },
+                {
+                  label: 'Knowledge base',
+                  translations: { 'zh-CN': '知识库' },
+                  items: ['knowledge-base/faq', 'knowledge-base/troubleshooting'],
+                },
+              ],
+            },
+            {
+              label: { en: 'Administration', 'zh-CN': '部署与管理' },
+              link: '/administration/deployment/',
+              icon: 'setting',
+              items: [
+                {
+                  label: 'Administration',
+                  translations: { 'zh-CN': '部署与管理' },
+                  items: [
+                    'administration/deployment',
+                    'administration/configuration',
+                    'administration/workspaces-and-members',
+                    'administration/maintenance',
+                  ],
+                },
+              ],
+            },
+            {
+              label: { en: 'Developers', 'zh-CN': '开发与集成' },
+              link: '/developers/http-api/',
+              icon: 'seti:json',
+              id: 'developers',
+              items: [
+                {
+                  label: 'Developers',
+                  translations: { 'zh-CN': '开发与集成' },
+                  items: ['developers/http-api', 'developers/mcp', 'developers/contributing'],
+                },
+                ...openAPISidebarGroups,
+              ],
+            },
+          ],
+          {
+            topics: {
+              guides: ['/404', '/zh-cn/404'],
+              developers: ['/reference/api', '/reference/api/**/*'],
+            },
+          },
+        ),
         starlightOpenAPI([
           {
             base: 'reference/api',

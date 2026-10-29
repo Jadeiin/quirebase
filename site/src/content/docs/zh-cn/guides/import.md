@@ -17,6 +17,16 @@ description: 选择导入方式，读懂预览，并确认哪些记录和文件�
 
 前三种方式先生成“导入批次”（Import Batch）供检查，手工创建则直接保存条目。
 
+```mermaid
+flowchart TD
+  accTitle: 把文献导入文献库
+  accDescr: 标识符、书目和 PDF 经过预览与确认后保存条目，手工创建直接保存条目。
+  source["标识符、书目或 PDF"] --> preview["检查导入预览"]
+  preview --> confirm["确认导入"]
+  confirm --> library["文献库中的已保存条目"]
+  manual["手工创建"] --> library
+```
+
 ## 用标识符导入
 
 1. 选择“标识符列表”，每行输入一个标识符，最多 50 个。例如：

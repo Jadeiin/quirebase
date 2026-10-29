@@ -11,6 +11,18 @@ If you add this Item to two Projects, both Projects refer to the same Workspace 
 hold its own Project Annotations and Discussions. Updating the Item metadata updates that shared
 record, while private marks and each Project's reading context have their own visibility.
 
+```mermaid
+flowchart TD
+  accTitle: Projects, Items, and PDF revisions
+  accDescr: Two reading Projects reference one Item. Each PDF revision has its own Annotations.
+  projectA["Reading Project A"] -.-> item["One Item"]
+  projectB["Reading Project B"] -.-> item
+  item --> published["Published PDF"]
+  item --> corrected["Corrected PDF"]
+  published --> notesA["Annotations on the published PDF"]
+  corrected --> notesB["Annotations on the corrected PDF"]
+```
+
 ## Match the term to the thing you are editing
 
 | Term | What it represents | Example |

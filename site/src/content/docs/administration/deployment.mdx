@@ -3,6 +3,8 @@ title: Deploy and verify Quirebase
 description: Build a checkout, initialize persistent data, run web and worker, and verify the first login.
 ---
 
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
 Choose one installation method below. Both run the current source checkout with locked dependencies.
 For published release wheels, follow that release's package-index and version instructions.
 
@@ -15,7 +17,10 @@ The shell examples use Linux, macOS, or WSL. Use a persistent installation direc
 same configuration for every process. The web process serves the application; the separate worker
 processes PDFs and durable jobs.
 
-## Option A: build and run the Compose stack
+## Install Quirebase
+
+<Tabs>
+<TabItem label="Docker Compose">
 
 ```sh
 git clone https://github.com/Jadeiin/quirebase.git
@@ -43,7 +48,8 @@ docker compose --env-file .env.docker logs --tail 50 worker
 The database uses the Compose `postgres-data` volume and local objects use `quirebase-data`.
 `make docker-down` stops the stack while preserving those volumes. The default web port binds to loopback.
 
-## Option B: run a source checkout with SQLite
+</TabItem>
+<TabItem label="Source checkout">
 
 ```sh
 git clone https://github.com/Jadeiin/quirebase.git
@@ -79,12 +85,19 @@ For PostgreSQL, create a database and credentials through your database service,
 `uv sync --frozen --extra postgres`, and set `QUIREBASE_DATABASE_URL` in `.env` before initialization.
 Use a libpq URL such as `postgresql://quirebase:encoded-password@localhost/quirebase`.
 
+</TabItem>
+</Tabs>
+
 ## Verify the first end-to-end task
+
+<Steps>
 
 1. Sign in and open the administrator's ordinary Workspace.
 2. [Create a reference and upload a PDF](/getting-started/quickstart/).
 3. Confirm PDF processing reaches ready and the reader opens it.
 4. Save a private note and reopen the same revision to check persistence.
+
+</Steps>
 
 This verifies web, worker, and file storage together. For problems along the way, follow
 [troubleshooting](/knowledge-base/troubleshooting/).

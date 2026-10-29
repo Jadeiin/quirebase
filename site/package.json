@@ -16,8 +16,11 @@
     "@astrojs/markdown-satteri": "^0.4.6",
     "@astrojs/starlight": "^0.42.7",
     "astro": "^7.4.3",
+    "astro-mermaid": "^2.2.0",
+    "mermaid": "^12.2.0",
     "starlight-links-validator": "^0.27.0",
-    "starlight-openapi": "^0.27.0"
+    "starlight-openapi": "^0.27.0",
+    "starlight-sidebar-topics": "^0.9.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",

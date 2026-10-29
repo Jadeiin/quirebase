@@ -10,6 +10,18 @@ description: 用同一篇文献的导入、PDF 修订、私人笔记和项目共
 如果把这个条目加入两个项目，它们引用的是同一条工作区文献记录，各自保存项目批注和讨论。
 修改条目元数据会更新共同使用的记录；私人笔记和各项目的阅读上下文则保持各自的可见范围。
 
+```mermaid
+flowchart TD
+  accTitle: 项目、条目与 PDF 修订版
+  accDescr: 两个读书项目引用同一个条目，每份 PDF 修订版保存自己的批注。
+  projectA["读书项目 A"] -.-> item["同一个条目"]
+  projectB["读书项目 B"] -.-> item
+  item --> published["出版版 PDF"]
+  item --> corrected["修正版 PDF"]
+  published --> notesA["出版版上的批注"]
+  corrected --> notesB["修正版上的批注"]
+```
+
 ## 先辨认你正在编辑什么
 
 | 术语 | 它代表什么 | 例子 |

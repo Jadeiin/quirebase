@@ -17,6 +17,16 @@ looking for references by topic or title, begin with [Discovery](/guides/discove
 
 The first three methods create an **Import Batch** for review. Manual creation saves an Item directly.
 
+```mermaid
+flowchart TD
+  accTitle: Import a reference into Library
+  accDescr: Review and confirm candidates from identifiers, bibliography, or PDFs. Manual creation saves an Item directly.
+  source["Identifiers, bibliography, or PDFs"] --> preview["Review the preview"]
+  preview --> confirm["Confirm import"]
+  confirm --> library["Saved Items in Library"]
+  manual["Manual creation"] --> library
+```
+
 ## Import from identifiers
 
 1. Choose **Identifiers** and paste up to 50 inputs, one per line. For example:

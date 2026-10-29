@@ -36,6 +36,32 @@ assets, anchors, search artifacts, and API operation coverage against the export
 Search is available in the built preview; Astro's development server does not build a Pagefind index.
 The root Makefile also exposes `docs-dev`, `docs-check`, and `docs-build`.
 
+## Navigation and content components
+
+The sidebar has three topics: User guide, Administration, and Developers. Each topic shows its own
+pages. The generated API Reference belongs to Developers, including its generated operation routes.
+Configure topic membership and translated labels in `astro.config.mjs`.
+
+| Extension | Purpose | Where it is used |
+| --- | --- | --- |
+| [starlight-sidebar-topics](https://starlight-sidebar-topics.netlify.app/docs/configuration/) | Navigation by audience | Three localized topics; generated API routes map to `developers` |
+| [astro-mermaid](https://github.com/joesaby/astro-mermaid) with Mermaid | Diagrams maintained beside the prose | Item/PDF/Project relationships and the import workflow in both languages |
+| Starlight [Tabs](https://starlight.astro.build/components/tabs/) and [Steps](https://starlight.astro.build/components/steps/) | Installation choices and sequential checks | Compose/source tabs and the first successful deployment workflow |
+| starlight-openapi | Reference from the current API contract | API Reference |
+| starlight-links-validator | Local link and locale validation | Every build |
+
+Write diagrams in fenced `mermaid` blocks in Markdown. Keep them focused on one relationship or
+workflow, with localized labels and explanatory prose. Mermaid renders in the browser, follows
+the light/dark theme, and loads its renderer on pages containing diagrams.
+
+Use MDX for Tabs and Steps. Keep section headings outside tab panels so the table of contents leads
+to visible sections. Change both locale files when adding a diagram or changing a workflow.
+When updating these extensions, preview topic switching, a generated API operation, both installation
+tabs, and diagrams in light/dark themes and at a 390px viewport width.
+
+Select extensions for a current reader or maintenance task. Image zoom becomes useful with UI
+screenshots; version navigation becomes useful when several releases are supported concurrently.
+
 ## Organize content by reader and task
 
 | Location | Owner and maintenance rule |
