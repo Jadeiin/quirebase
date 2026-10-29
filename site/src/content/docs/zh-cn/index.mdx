@@ -1,29 +1,48 @@
 ---
-title: Quirebase 文档
-description: 导入与整理文献、阅读和批注 PDF，以及部署和集成 Quirebase。
+title: Quirebase 使用文档
+description: 从导入第一条文献，到整理、PDF 共读、引文导出和自托管运维。
 template: splash
 hero:
-  title: 一起整理和使用研究资料。
-  tagline: 从导入第一条文献开始，建立可协作、自托管的研究资料库。
+  title: 从第一条文献开始，完成整理与共读。
+  tagline: 按实际任务学习导入文献、管理文献库、阅读和批注 PDF，以及把成果用于写作。
   actions:
-    - text: 快速上手
+    - text: 添加第一条文献
       link: /zh-cn/getting-started/quickstart/
       icon: right-arrow
-    - text: 部署 Quirebase
+    - text: 安装 Quirebase
       link: /zh-cn/administration/deployment/
       variant: secondary
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+## 根据你的情况选择入口
 
-<CardGrid>
-  <LinkCard title="导入与整理" description="预览和确认导入，用标签和项目组织条目。" href="/zh-cn/guides/import/" />
-  <LinkCard title="阅读和批注 PDF" description="选择私人或项目批注，并下载带批注的副本。" href="/zh-cn/guides/pdf-annotations/" />
-  <LinkCard title="理解工作空间与项目" description="了解研究数据的权限边界和协作方式。" href="/zh-cn/concepts/workspaces-and-projects/" />
-  <LinkCard title="连接其他工具" description="使用 API Token 接入 HTTP API 和 MCP。" href="/zh-cn/developers/http-api/" />
-</CardGrid>
+| 你现在要做什么 | 从这里开始 | 完成后得到什么 |
+| --- | --- | --- |
+| 团队已经有 Quirebase，我刚开始使用 | [添加第一条文献](/zh-cn/getting-started/quickstart/) | 一个已保存的条目、可阅读的 PDF 和私人批注 |
+| 手头有 DOI、书目文件或一批 PDF | [导入文献](/zh-cn/guides/import/) | 已检查并确认写入工作区的导入结果 |
+| 只有主题、标题或作者，想在线找文献 | [搜索外部来源](/zh-cn/guides/discovery/) | 可以进一步预览和导入的候选记录 |
+| 想在已有文献中查找和分类 | [搜索与整理文献库](/zh-cn/guides/library-management/) | 筛选结果、标签或已保存视图 |
+| 想与同事一起阅读、讨论 | [项目协作](/zh-cn/guides/collaboration/) | 项目中的文献集合和共享批注 |
+| 负责部署和维护实例 | [部署 Quirebase](/zh-cn/administration/deployment/) | 数据持久化、Web 和 Worker 正常运行的实例 |
+| 想接入脚本或智能体客户端 | [HTTP API](/zh-cn/developers/http-api/) 或 [MCP](/zh-cn/developers/mcp/) | 使用 API 令牌并明确选择工作区的客户端 |
 
-Quirebase 目前处于 alpha 阶段。本文档描述当前开发版本；升级自托管实例前，请查看目标版本的升级说明。
+## 按一次完整工作流程阅读
 
-文档以英文为主，中文逐页补充。尚未翻译的页面会显示英文内容及回退提示；页面内容与部署版本不一致时，
-请以该实例的 `/docs` 和 `/openapi.json` 为准。
+1. [选择工作区并添加文献](/zh-cn/getting-started/quickstart/)。
+2. [添加 PDF 修订或附件](/zh-cn/guides/files/)。
+3. [阅读、批注，并确认保存成功](/zh-cn/guides/pdf-annotations/)。
+4. 需要共读时，[把条目加入项目](/zh-cn/guides/collaboration/)。
+5. 写作时，[导出引文、书目或文件包](/zh-cn/guides/citations-and-exports/)。
+
+正文中的“条目（Item）”指一条文献记录，“文件修订版（File Revision）”指关联的一份主 PDF。
+工作区（Workspace）决定谁能访问文献库；项目（Project）组织该工作区内的一组协作文献。
+[核心概念](/zh-cn/concepts/research-library/) 用一个例子解释它们的关系。
+
+## 遇到问题时
+
+导入一直等待、PDF 处理失败、找不到操作按钮、批注没有保存，都可以从[故障排查](/zh-cn/knowledge-base/troubleshooting/)开始。
+[常见问题](/zh-cn/knowledge-base/faq/)解释权限、共享和删除的影响。
+
+Quirebase 目前处于 alpha 阶段，本文档描述当前开发版本；升级前请查看目标版本说明。
+手写教程均有中文版本。[自动生成的 API 参考](/reference/api/)保留 FastAPI Schema 的英文描述，
+可配合中文 HTTP API 和 MCP 教程使用。实例自身的 `/docs`、`/openapi.json` 对应它正在运行的版本。

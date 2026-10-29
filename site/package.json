@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "api:generate": "uv run --frozen python ../scripts/export-openapi.py public/openapi.json",
+    "content:check": "uv run --frozen python scripts/check-content.py",
     "dev": "bun run api:generate && astro dev",
-    "check": "bun run api:generate && astro check",
-    "build": "bun run api:generate && astro build && bun run check:build",
+    "check": "bun run content:check && bun run api:generate && astro check",
+    "build": "bun run content:check && bun run api:generate && astro build && bun run check:build",
     "check:build": "uv run --frozen python scripts/check-built-site.py",
     "preview": "astro preview"
   },

@@ -1,30 +1,49 @@
 ---
 title: Quirebase documentation
-description: Build a shared research library, read and annotate PDFs, and connect your tools.
+description: Follow a complete workflow from your first reference to shared PDF reading and export.
 template: splash
 hero:
-  title: Your research, organized together.
-  tagline: Learn to collect references, read and annotate PDFs, and collaborate in a self-hosted research library.
+  title: From your first reference to shared reading.
+  tagline: Import references, organize a research Library, annotate PDFs, and take the results into your writing.
   actions:
-    - text: Get started
+    - text: Add your first reference
       link: /getting-started/quickstart/
       icon: right-arrow
-    - text: Deploy Quirebase
+    - text: Install Quirebase
       link: /administration/deployment/
       variant: secondary
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+## Choose where to start
 
-<CardGrid>
-  <LinkCard title="Import and organize" description="Review imports, find Items, and organize your Library." href="/guides/import/" />
-  <LinkCard title="Read and annotate" description="Choose private or Project annotations and export a PDF." href="/guides/pdf-annotations/" />
-  <LinkCard title="Collaborate" description="Understand Workspaces, Project participation, and access." href="/guides/collaboration/" />
-  <LinkCard title="Connect your tools" description="Use API Tokens with the HTTP API and MCP." href="/developers/http-api/" />
-</CardGrid>
+| Your situation | Start here | What you will finish with |
+| --- | --- | --- |
+| Your team already runs Quirebase | [First reference](/getting-started/quickstart/) | One saved Item, a readable PDF, and a private note |
+| You have a DOI, bibliography, or PDFs | [Import references](/guides/import/) | A reviewed Import Batch committed to your Workspace |
+| You know a topic or title | [Search external sources](/guides/discovery/) | Candidates you can review before importing |
+| You need to find saved research | [Search and organize Library](/guides/library-management/) | A filtered Library, Tags, or a saved view |
+| You want to read with colleagues | [Project collaboration](/guides/collaboration/) | A Project working set with shared Annotations |
+| You run the installation | [Deploy Quirebase](/administration/deployment/) | Web and worker processes with persistent data |
+| You are connecting a program | [HTTP API](/developers/http-api/) or [MCP](/developers/mcp/) | An authenticated client using an explicit Workspace |
 
-Quirebase is alpha software. These guides describe the current development version.
-Check the target release's instructions before upgrading a self-hosted installation.
+## Follow the research workflow
 
-For answers and recovery steps, visit the [FAQ](/knowledge-base/faq/) and
-[troubleshooting guide](/knowledge-base/troubleshooting/).
+1. [Choose a Workspace and add a reference](/getting-started/quickstart/).
+2. [Add a PDF revision or supplementary file](/guides/files/).
+3. [Read, annotate, and check saving](/guides/pdf-annotations/).
+4. [Add the Item to a Project](/guides/collaboration/) when you need a shared reading context.
+5. [Export citations or a document bundle](/guides/citations-and-exports/).
+
+An **Item** is the reference record; a **File Revision** is one primary PDF attached to it. A
+**Workspace** governs access to the Library, while a **Project** organizes a working set inside
+that Workspace. The [concept guide](/concepts/research-library/) explains these terms with an example.
+
+## When something does not work
+
+Use the [troubleshooting guide](/knowledge-base/troubleshooting/) for a pending import, failed PDF,
+missing action, or unsaved Annotation. The [FAQ](/knowledge-base/faq/) answers visibility and data-lifetime questions.
+
+Quirebase is alpha software. These pages describe the current development version. Before an
+upgrade, read the target release's instructions. The generated [API Reference](/reference/api/)
+uses the FastAPI schema's English descriptions; the integration tutorials are available in English
+and Chinese. An installation's own `/docs` and `/openapi.json` describe its running release.

@@ -32,6 +32,7 @@ export default defineConfig({
           label: 'User guides',
           translations: { 'zh-cn': '用户指南' },
           items: [
+            'guides/discovery',
             'guides/import',
             'guides/library-management',
             'guides/files',
@@ -77,7 +78,8 @@ export default defineConfig({
           },
         ]),
         starlightLinksValidator({
-          errorOnFallbackPages: false,
+          errorOnFallbackPages: true,
+          errorOnInconsistentLocale: true,
           // The OpenAPI plugin supplies this route outside the docs collection.
           // check:build validates the generated routes and their links in the final HTML.
           exclude: ['/reference/api/'],

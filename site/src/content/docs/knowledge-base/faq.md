@@ -1,50 +1,78 @@
 ---
 title: Frequently asked questions
-description: Answers about imports, visibility, PDF support, and programmatic access.
+description: Understand imports, private notes, Project visibility, file revisions, and export limits.
 ---
 
-## Why is my imported reference missing from Library?
+## I can see an Import preview. Why is the Item missing from Library?
 
-Preparing an Import Batch does not create Items. Review the preview and confirm your selection.
-Check that you are viewing the destination Workspace and that Library filters do not exclude it.
-See [Import](/guides/import/).
+Preparation creates candidates, not Items. Check the preview, then choose **Import … records**.
+After completion, use **View imported Items** and verify the Workspace. Manual creation is different:
+**Create Item** saves directly. See [Import](/guides/import/).
 
-## Does joining a Project grant access to its Items?
+## Which preview records can I choose?
 
-Project participation grants no additional Workspace authority or canonical Item access. Workspace
-membership and resource-action policy govern the Items. A managed Project limits discovery of its
-collaboration context, not access to its canonical Items within the Workspace.
+Identified records are committed together. In **PDFs without metadata**, explicitly select the basic
+PDF candidates you want to keep; unselected ones are skipped. If the identified batch is wrong,
+discard it and correct the inputs. [The preview guide](/guides/import/#review-the-preview-and-commit-once)
+explains the confirmation count.
 
-## Can an instance administrator read all research data?
+## Does a managed Project hide its Items from everyone else?
 
-An instance administrator has no implicit access to Workspace research data. Account and instance
-governance are separate from Workspace content authority. See [access concepts](/concepts/workspaces-and-projects/).
+It limits discovery of the Project collaboration context. Canonical Items still follow Workspace
+access. Project participation does not grant extra Item authority. Use a different Workspace when a
+separate membership boundary is required; copying across Workspaces creates independent records.
 
-## Does a new PDF revision carry over annotations?
+## Why can a viewer create a private note?
 
-Annotations are anchored to one page of one File Revision. Another revision does not inherit them.
-Keep the original revision when you need its marks. [Annotation exports](/guides/pdf-annotations/)
-create temporary copies and leave the stored source unchanged.
+Private Annotations belong to their author. In an active Workspace, all five roles may maintain their
+own private notes. Shared Project Annotation creation has different grants. See [roles](/administration/workspaces-and-members/).
 
-## Are scanned or password-protected PDFs supported?
+## Can an instance administrator read my private notes?
 
-Quirebase does not provide OCR or password-protected PDF support. An image-only PDF can lack
-searchable extracted text. Flattened annotation exports are also unsupported.
+Instance administration has no implicit Workspace-content access, and private Annotations remain
+author-restricted. Reason-bound read-only inspection and ownership reassignment are explicit,
+audited governance operations, not general browsing authority. See [access concepts](/concepts/workspaces-and-projects/).
 
-## Does deleting an import record delete its Items?
+## My colleague cannot see my mark. What should I check?
 
-Deleting a committed Import Batch keeps imported Items and files. It removes the retained
-confirmation result and the batch-scoped Library filter. Unconfirmed staging is temporary and
-follows the configured retention policy.
+Check that both of you opened the same PDF revision. Your mark must have been created with the
+Project selected under **Save new annotations to**, and the colleague must enable that Project as a
+displayed source and have the required authority. Showing a Project source does not make a new
+private mark shared. See [PDF annotations](/guides/pdf-annotations/).
 
-## Can I edit this help center in the application?
+## Do annotations move to a new PDF revision?
 
-Documentation is maintained as Markdown and MDX in Git. Use a page's edit link to propose a change.
-Research content, Annotations, and Discussions live in the application; this documentation site has
-its own independent static build.
+No automatic migration is performed. Each mark is anchored to one page of one revision. Keep the
+old revision if you need its marks. An export creates a copy without changing the stored source.
 
-## Which API should an integration use?
+## Can I use a scanned or password-protected PDF?
 
-Use the [HTTP API](/developers/http-api/) for direct requests or [MCP](/developers/mcp/) for a client
-that supports its curated research tools. Both use expiring API Tokens and current User authority.
-The installation's own `/docs` and `/openapi.json` describe its running release.
+OCR and password-protected PDFs are unsupported. An image-only scan may render without producing
+searchable text. Flattened annotation exports are also unsupported.
+
+## Does deleting import history remove the imported Items?
+
+Deleting or expiring a committed batch preserves its Items and files. It removes the retained
+confirmation result and corresponding Library filter. Import history is not a backup of source files.
+
+## What is removed when I leave a Workspace?
+
+Leaving terminates your membership and its explicit Project selections, while preserving content
+and authorship. Rejoining needs a new invitation and does not restore prior selections. Owners need
+to transfer ownership before leaving.
+
+## Why are my saved views or export preferences different on another device?
+
+They are browser-local preferences, scoped to the account and, where applicable, the Workspace.
+They are not server-synchronized research content. Recheck the current browser's settings.
+
+## Is a bibliography export enough for backup?
+
+It exchanges reference metadata. It does not replace a database-and-object backup, including
+membership, Discussions, and stored files. Follow [backup and restore](/administration/maintenance/).
+
+## How do integrations authenticate?
+
+Use an expiring API Token with the [HTTP API](/developers/http-api/) or [MCP](/developers/mcp/).
+Tokens use the User's current authority. The installation's `/docs` and `/openapi.json` describe its
+own running release; the static reference retains schema descriptions in English.

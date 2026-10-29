@@ -1,60 +1,99 @@
 ---
 title: Configure an installation
-description: Choose database, storage, access, Provider, and worker settings.
+description: Understand configuration precedence, set a working baseline, and choose database, storage, and Provider options.
 ---
 
-Quirebase reads `QUIREBASE_` environment variables and a `.env` file in the working directory.
-The Compose deployment uses `.env.docker`. Configure web and worker consistently; changes require
-restarting the affected processes.
+Configure web and worker for the same installation. First distinguish startup settings from values
+that an administrator has saved in the application.
 
-## Core settings
+## Know which value takes effect
 
-| Setting | Default | Purpose |
+| Source | Where it is set | How it takes effect |
+| --- | --- | --- |
+| Deployment environment | Process environment or a working-directory `.env` | Process environment overrides `.env`; restart affected processes after changes |
+| Compose environment | `.env.docker` and `docker-compose.yml` | Apply changes with `make docker-up`; Compose also supplies database/data-directory defaults |
+| Runtime settings | The administrator Settings page | For supported keys, saved database values override deployment defaults |
+
+Runtime overrides include registration and Workspace-creation policies, Provider contact/credentials,
+session duration, upload byte limits, and export lifetime. If editing `.env` does not change one of
+these values, inspect the effective value on the administrator Settings page. Database connection,
+object-store backend, origin, and worker identity remain deployment settings.
+
+## Set a local baseline
+
+For a source checkout, create `.env` in the directory where you run `uv run quirebase …`:
+
+```dotenv
+QUIREBASE_DATABASE_URL=sqlite:///./quirebase.db
+QUIREBASE_DATA_DIR=./quirebase-data
+QUIREBASE_ALLOWED_HOSTS=localhost,127.0.0.1
+QUIREBASE_EXTERNAL_ORIGIN=http://127.0.0.1:9060
+QUIREBASE_SECURE_COOKIES=false
+INQUIRO_CONTACT_EMAIL=operator@example.org
+```
+
+Use your monitored email address. This example is for local HTTP access. For public HTTPS, use the
+actual hostname/origin and secure cookies described in [deployment](/administration/deployment/).
+Relative filesystem paths resolve from the process working directory, so web and worker must agree.
+
+## Select database and admission policy
+
+| Setting | Application default | Meaning |
 | --- | --- | --- |
 | `QUIREBASE_DATABASE_URL` | `sqlite:///./quirebase.db` | SQLite file or PostgreSQL libpq connection URL |
-| `QUIREBASE_DATA_DIR` | `./quirebase-data` | Persistent application data directory |
-| `QUIREBASE_OBJECT_STORE` | `local` | `local` objects below the data directory, or `s3` |
-| `QUIREBASE_ALLOWED_HOSTS` | `localhost,127.0.0.1,testserver` | Accepted HTTP hostnames, comma separated |
-| `QUIREBASE_EXTERNAL_ORIGIN` | Unset | Public origin used to validate browser mutations |
-| `QUIREBASE_SECURE_COOKIES` | `false` | Enable for HTTPS deployments |
-| `QUIREBASE_REGISTRATION_POLICY` | `invitation_only` | `open`, `closed`, or `invitation_only` |
-| `QUIREBASE_WORKSPACE_CREATION_POLICY` | `admins_only` | `admins_only` or `members_allowed` |
-| `QUIREBASE_WORKFLOW_EXECUTOR_ID` | `quirebase-worker` | Stable, unique worker identity |
+| `QUIREBASE_DATA_DIR` | `./quirebase-data` | Persistent application data |
+| `QUIREBASE_REGISTRATION_POLICY` | `invitation_only` | `open`, `closed`, or `invitation_only` account admission |
+| `QUIREBASE_WORKSPACE_CREATION_POLICY` | `admins_only` | `admins_only` or `members_allowed` for additional Workspaces |
+| `QUIREBASE_WORKFLOW_EXECUTOR_ID` | `quirebase-worker` | Stable worker identity; use a different value for each worker |
 
-These are the application defaults. Compose overrides some settings, including the database URL,
-data directory, and accepted hosts. See the repository's
-[Compose example](https://github.com/Jadeiin/quirebase/blob/main/.env.docker.example).
+These are application defaults, not every Compose value. A Workspace created during User provisioning
+is independent of the policy for creating additional Workspaces. Use the Settings page to verify any
+runtime policy overrides. For PostgreSQL source installs, include the `postgres` extra before starting.
 
-## Metadata Providers and citations
+## Configure Providers and citation support
 
-Set `INQUIRO_CONTACT_EMAIL` to a monitored address for scholarly Provider identification.
-Optional credentials include `INQUIRO_NCBI_API_KEY`, `INQUIRO_OPENALEX_API_KEY`,
-`INQUIRO_NASA_ADS_TOKEN`, and `INQUIRO_IEEE_API_KEY`. Provider capabilities and available choices
-are exposed in the application; do not assume all Providers support every identifier or query.
+Set `INQUIRO_CONTACT_EMAIL` for Provider identification. Available optional credentials are
+`INQUIRO_NCBI_API_KEY`, `INQUIRO_OPENALEX_API_KEY`, `INQUIRO_NASA_ADS_TOKEN`, and `INQUIRO_IEEE_API_KEY`.
+Some sources require credentials; the application exposes the available lookup/search choices.
+Check the administrator's saved runtime values as well as environment defaults.
 
-Install the optional `citation` extra to include built-in CSL styles. Custom styles can be added
-through **Tools** without the extra.
+Built-in Citation Styles require the `citation` extra (`uv sync --frozen --extra citation` for a
+source checkout). Preserve other needed extras when synchronizing, such as `--extra postgres`.
+The Docker image includes PostgreSQL and citation extras. Authorized Users can add custom styles.
 
-Tag Recommendations use offline YAKE by default. The optional `keybert` extra requires
-`QUIREBASE_RECOMMENDATION_ENGINE=keybert` and `QUIREBASE_KEYBERT_MODEL_PATH` pointing to
-administrator-provisioned local Model2Vec files. Runtime model downloads are unsupported.
+Tag Recommendations use offline YAKE by default. For the optional local KeyBERT engine, install the
+`keybert` extra, set `QUIREBASE_RECOMMENDATION_ENGINE=keybert`, and point
+`QUIREBASE_KEYBERT_MODEL_PATH` to an administrator-provisioned local Model2Vec directory. Runtime
+model downloads and remote model identifiers are unsupported.
 
-## Object storage
+## Configure file storage and limits
 
-For S3-compatible storage, set `QUIREBASE_OBJECT_STORE=s3`, `QUIREBASE_S3_BUCKET`, and the
-applicable `QUIREBASE_S3_REGION`, `QUIREBASE_S3_ENDPOINT`, and `QUIREBASE_S3_PREFIX` settings.
-Supply native AWS credentials to web and worker processes. Copy existing objects with their keys
-preserved before switching backends; changing configuration does not migrate data.
+Local objects use `QUIREBASE_DATA_DIR/objects`. For S3-compatible storage, set:
 
-Keep application streaming for container-only endpoints. Direct signed downloads require a
+```dotenv
+QUIREBASE_OBJECT_STORE=s3
+QUIREBASE_S3_BUCKET=your-bucket
+QUIREBASE_S3_REGION=your-region
+```
+
+Also set the applicable endpoint/prefix and native AWS credentials for both web and workers. Switching
+configuration does not copy old objects; migrate their physical keys before switching an existing
+installation. Back up S3 separately: `quirebase backup` supports local object storage only.
+
+PDF and Attachment limits default to `262144000` bytes (250 MiB) each. The settings are
+`QUIREBASE_MAX_PDF_BYTES` and `QUIREBASE_MAX_ATTACHMENT_BYTES`, with possible administrator runtime
+overrides. Enter byte values, not a bare MiB count, and align the proxy's request-size limit.
+
+Keep streaming downloads for container-only S3 hostnames. Direct signed downloads need a
 browser-reachable endpoint and separately configured bucket CORS. See the detailed
-[storage contract](https://github.com/Jadeiin/quirebase/blob/main/docs/DEPLOYMENT.md#object-storage).
+[object-storage contract](https://github.com/Jadeiin/quirebase/blob/main/docs/DEPLOYMENT.md#object-storage)
+for endpoint, signature, and migration requirements.
 
 ## Browser MCP access
 
-Native MCP clients normally send no Origin. Browser-based clients require an explicit
-`QUIREBASE_MCP_ALLOWED_ORIGINS` allowlist. This configures MCP CORS only; it does not enable
-cross-origin browser access to `/api/v1/` or configure your S3 bucket.
+Native MCP clients normally send no Origin. Browser clients need an explicit
+`QUIREBASE_MCP_ALLOWED_ORIGINS` allowlist. It configures MCP CORS only, independently of the HTTP
+API's browser Origin policy and the S3 bucket's CORS.
 
-Use [API Tokens](/developers/http-api/) for programmatic clients and
-[maintenance](/administration/maintenance/) for retention and recovery settings.
+After configuration, run the [health and recovery checks](/administration/maintenance/) with the
+same installation settings.

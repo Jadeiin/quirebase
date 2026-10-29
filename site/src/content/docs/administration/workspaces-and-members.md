@@ -1,74 +1,78 @@
 ---
 title: Manage Workspaces and members
-description: Invite existing Users, choose roles, transfer ownership, and manage Workspace lifecycle.
+description: Choose roles, invite an existing User, transfer ownership, and handle archived or frozen Workspaces.
 ---
 
-Workspace governance belongs to the Workspace owner and the actions delegated to its admins.
-An instance administrator does not gain implicit access to its research data. The application shows
-the available actions and target role choices after evaluating current authority and lifecycle.
+Workspace owners and delegated admins manage research membership. Instance administration and
+Workspace governance are separate: being an instance administrator does not automatically admit you
+to another Workspace's research content.
 
-## Choose roles for the work
+## Choose a role for the person's task
 
-These summaries describe common responsibilities in an active, unfrozen Workspace. Individual
-operations also check resource relations, participation, authorship, and current state.
+These responsibilities assume an active User, active membership, and an active, unfrozen Workspace.
+Concrete operations also check participation, authorship, resource relations, and lifecycle.
 
-| Role | Typical responsibilities |
-| --- | --- |
-| `owner` | Workspace governance, ownership transfer, and permanent deletion of an archived Workspace |
-| `admin` | Delegated membership governance, content moderation, and permanent Item deletion |
-| `editor` | Import and maintain Items and files, assign Tags, and organize working Projects |
-| `reviewer` | Contribute Project Annotations, Replies, and Discussions |
-| `viewer` | Read and export content, with personal private Annotations |
+| Role | Typical responsibility | Important boundary |
+| --- | --- | --- |
+| `owner` | Workspace governance and ownership transfer | Only the owner can permanently delete an archived Workspace |
+| `admin` | Delegated membership governance, moderation, and Item deletion | Governing admins and ownership is more restricted |
+| `editor` | Import, metadata/files, Tags assignments, working Projects | Permanent Item deletion is not an editor grant |
+| `reviewer` | Shared Annotations, Replies, and Discussions | Does not maintain canonical bibliographic metadata/files |
+| `viewer` | Read/export content and keep personal private notes | Does not create shared Project Annotations |
 
-All five roles can create their own private Annotations in an active Workspace. A viewer cannot
-therefore be treated as having no writes of any kind. Project participation adds no extra authority
-over canonical Workspace Items.
-
-The [generated authorization matrix](https://github.com/Jadeiin/quirebase/blob/main/docs/architecture/authorization-matrix.md)
-contains the exact resource-action grants. It is maintained from policy rather than duplicated as
-a second complete table here.
+All five roles can create their own private Annotations in an active Workspace. Project participation
+does not add extra Item permissions. For exact grants, consult the generated
+[authorization matrix](https://github.com/Jadeiin/quirebase/blob/main/docs/architecture/authorization-matrix.md).
 
 ## Invite an existing User
 
-1. Open **Workspace settings → Invitations**.
-2. Enter the User's exact username, choose an available role and expiration period, and create the
-   Invitation.
-3. Copy the one-time link and send it to the intended person through your normal communication
-   channel. The secret is not shown again in invitation history.
-4. The recipient signs in as that User and accepts the invitation. Received invitations are also
-   listed under **My workspaces**.
-5. Verify the new membership in **Workspace settings → Members**.
+1. Confirm the recipient already has an instance account. If needed, ask the instance administrator
+   to provision it with an account Invitation first.
+2. Open **Workspace settings → Invitations**.
+3. Enter the exact username, choose one of the offered roles and an expiry, then **Create invitation**.
+4. Copy the one-time link and deliver it to the intended recipient. It is not recoverable from history.
+5. The recipient signs in as that User and accepts, either through the link or **My workspaces**.
+6. Verify their active membership in **Workspace settings → Members**.
 
-This admits an existing User; creating an account uses a separate instance Invitation. If the link
-is expired or revoked, create a new invitation. Rejoining after termination creates a new membership
-generation and does not restore previous Project selections.
+A link for one User cannot be accepted by another signed-in User. For an expired or revoked link,
+create a new invitation. Suspending a membership is handled through membership reactivation, while
+termination and later admission create a new membership generation.
 
-## Change membership and ownership
+## Change a member's role or state
 
-Use **Members** to change one of the target's available roles, suspend, reactivate, or terminate
-membership. An owner can govern admins; an admin's choices for other members are narrower.
-Suspension removes effective access but preserves Project selections. Termination removes those
-selections while preserving content and authorship.
+In **Members**, locate the target and use the offered role choices or lifecycle action. The UI offers
+only transitions your current authority allows. Owners can govern admins; admins have narrower
+choices for ordinary members.
 
-To hand over ownership, the owner chooses **Transfer ownership** for an eligible active member and
-reviews the confirmation. The new member becomes owner and the previous owner becomes admin.
-An owner must transfer ownership before leaving the Workspace.
+- **Suspend** removes effective access while preserving content, authorship, and Project selections.
+- **Reactivate** restores the suspended membership's effective participation when other conditions allow.
+- **Terminate** ends that generation and removes its explicit Project selections. Content and
+  authorship remain. Rejoining requires a new invitation and does not restore those selections.
 
-User deactivation removes effective access but preserves the ownership assignment. When normal
-transfer is unavailable, an instance administrator can explicitly reassign ownership to an active
-User with a recorded reason. Reassignment is a distinct governance operation, not automatic access
-for the administrator.
+An active non-owner can leave an active, unfrozen Workspace. Leaving has termination semantics for
+that membership; it does not delete the person's research contributions.
 
-## Archive, freeze, or delete a Workspace
+## Transfer or reassign ownership
 
-Under **Workspace settings → Advanced**, authorized governors can reindex, archive, or restore the
-Workspace. Archived content stays readable and exportable while ordinary mutations are disabled.
+The current owner chooses **Transfer ownership** for an eligible active member and reviews the
+confirmation. The recipient becomes owner; the former owner becomes admin. Transfer ownership
+before the owner leaves or their membership is removed.
 
-An instance administrator can impose a read-only freeze. It preserves membership and the underlying
-active or archived state, but blocks Workspace mutations and governance-list access. Unfreezing is
-an instance operation; ordinary Workspace restoration does not remove the freeze.
+User deactivation preserves the structural ownership assignment but removes effective authority.
+If ordinary transfer cannot be performed, an instance administrator can explicitly reassign
+ownership to an active User with a recorded reason. This can grant the receiving User owner access;
+it does not implicitly grant content access to the administrator executing it.
 
-Permanent Workspace deletion is owner-only and requires an archived, unfrozen Workspace. It removes
-the Workspace and its content, with durable cleanup of stored objects. Export or back up what you
-need before using **Permanently delete workspace**. Deleting a Project or removing one Item from a
-Project has a different scope; see [collaboration](/guides/collaboration/).
+## Archive, freeze, restore, and delete
+
+| Operation | Where to perform it | Effect |
+| --- | --- | --- |
+| Archive / restore | **Workspace settings → Advanced**, when authorized | Preserve a readable/exportable Workspace and later restore it |
+| Reindex | **Advanced**, when authorized | Rebuild this Workspace's Library Search projection |
+| Freeze / unfreeze | Instance governance | Impose/remove an administrative read-only overlay without changing membership or underlying archive state |
+| Permanently delete | **Advanced**, owner only | Remove an archived, unfrozen Workspace and its content |
+
+A frozen Workspace also blocks restoration and governance-list access until an instance administrator
+unfreezes it. Restoring an archived Workspace does not bypass a freeze. Permanent deletion has no
+Undo; preserve required content and backups first. Deleting a Project or removing one Project–Item
+association has a different scope, described in [collaboration](/guides/collaboration/).

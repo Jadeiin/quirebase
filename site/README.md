@@ -27,7 +27,8 @@ bun run --cwd site build
 bun run --cwd site preview
 ```
 
-`check` validates Astro and TypeScript. `build` validates content frontmatter, sidebar entries, and
+`check` requires matching English and Chinese source pages and validates Astro and TypeScript.
+`build` repeats the translation coverage check, validates content frontmatter, sidebar entries,
 internal Markdown/MDX links and anchors, generates API Reference, and builds Pagefind indexes. It then
 runs `check:build` against every generated HTML page, checking local navigation, language choices,
 assets, anchors, search artifacts, and API operation coverage against the exported schema. Run
@@ -49,8 +50,16 @@ The root Makefile also exposes `docs-dev`, `docs-check`, and `docs-build`.
 | `docs/`, `GLOSSARY.md` | Engineering contracts, accepted ADRs, agent conventions, and research; keep their existing ownership |
 
 Route paths should describe a task or concept, not a Python module. Prefer Markdown; use MDX when a
-component adds value. Give every page a `title` and a useful `description`. Keep generated API route
-fields in FastAPI rather than duplicating parameter tables in guides. The `starlight-openapi`
+component adds value. Give every page a `title` and a useful `description`.
+
+For an operation guide, state prerequisites and the starting screen, then give numbered steps using
+the current UI labels. Explain what a successful result looks like and how to recover from a common
+failure or uncertain result. Distinguish preparing work from committing it, private from shared
+content, and removing a relation from deleting a resource. Check those claims against the current
+UI and operation contracts. Concept pages should use a concrete example and explain the practical
+consequences of the model. Link to the next task instead of repeating whole guides.
+
+Keep generated API route fields in FastAPI rather than duplicating parameter tables in guides. The `starlight-openapi`
 plugin reads the freshly exported contract and publishes pages under `/reference/api/`; the exact
 same schema is downloadable at `/openapi.json` on the documentation host.
 
@@ -71,19 +80,24 @@ For a behavior change, review these questions in the same PR:
 
 The repository's pull request template includes a documentation check to surface this review.
 
-## Translate progressively
+## Keep public guides bilingual
 
-English is the root locale. Add Chinese translations at the same relative path under `zh-cn/`,
-for example `zh-cn/guides/import.md`. Starlight supplies Chinese navigation UI and displays English
-fallback content with a notice for untranslated pages. Keep sidebar labels translated in
-`astro.config.mjs`.
+English is the root locale. Every handwritten page, including the landing and 404 pages, must have
+a Chinese counterpart at the same relative path under `zh-cn/`, for example
+`zh-cn/guides/import.md`. Add or update both versions in the same PR. Keep sidebar labels translated
+in `astro.config.mjs` and use the application's actual Chinese UI labels in Chinese steps.
+
+`bun run --cwd site content:check` reports manual page coverage and fails on missing counterparts
+in either direction. Both `check` and `build` run it. The build also rejects untranslated fallback
+pages and authored links that unexpectedly switch locale. A file pair proves presence; reviewers
+must still check that both pages explain the same current behavior clearly.
 
 Translated pages should link to the corresponding locale route, such as
 `/zh-cn/guides/pdf-annotations/`. Generated API Reference remains in English and keeps its canonical
 `/reference/api/` routes, with the locale selector hidden on those generated pages. Do not create
-hand-maintained translations of API parameter schemas.
-When the English meaning changes, update the translation in the same PR or remove its stale version
-so the current English content is used as fallback. Do not leave a knowingly inaccurate translation.
+hand-maintained translations of API parameter schemas. The coverage count applies to handwritten
+manuals, not generated API operation pages; Chinese HTTP API and MCP guides explain how to use that
+reference. Do not remove a stale translation to silently fall back to English: update both versions.
 
 ## CI and static hosting
 

@@ -1,59 +1,85 @@
 ---
-title: Troubleshoot common problems
-description: Diagnose import, processing, authorization, save, and configuration failures.
+title: Troubleshoot a failed task
+description: Start from the observed symptom, check the current state, and take the next safe action.
 ---
+
+Before retrying a write, distinguish a failed operation from a lost response. Check the existing
+resource or job state first. Use the installation's actual Workspace, version, and configuration.
+
+| You observe | Start by checking |
+| --- | --- |
+| Import preview but no saved Item | Confirmation status and destination Workspace |
+| Confirmation outcome unknown | **Check import status**, not another new batch |
+| PDF processing stays pending | Running worker and shared database/storage configuration |
+| An action is missing | Membership, role, freeze/archive state, and target relationship |
+| A colleague cannot see a mark | PDF revision, original write destination, and displayed sources |
+| Browser changes fail behind a proxy | Public Origin, host allowlist, HTTPS cookie settings |
+| Environment changes appear ineffective | Administrator runtime overrides for supported settings |
 
 ## Import or PDF processing stays pending
 
-Check whether the separate `quirebase worker` process is running with the same database and object
-storage settings as web. Preparing PDFs and other durable jobs needs that worker. Operators can
-inspect job state in the administrator interface and run `quirebase doctor`.
+1. Return to **Import history** or the Item's **Files** section and inspect the retained state.
+2. The operator checks whether the separate worker is running. For Compose, use `make docker-ps` and
+   `docker compose --env-file .env.docker logs --tail 50 worker`.
+3. Verify web and worker use the same database and object backend, including bucket/prefix if relevant.
+4. Run Doctor with that installation's configuration and inspect failed diagnostics.
 
-If a worker was replaced with a different executor ID, follow
-[durable recovery](/administration/maintenance/#recover-durable-work).
+After a worker replacement, keep its stable executor ID. If an old executor is permanently gone,
+use [durable recovery](/administration/maintenance/#recover-durable-work). Restarting web alone does
+not execute the pending durable job.
 
-## Metadata cannot be identified
+## An import result is uncertain or missing
 
-Confirm the input is a supported identifier rather than an arbitrary article URL. Prefix ISBN-10
-values with `ISBN:`. Review each preview diagnostic; a failure for one source does not invalidate
-successful candidates. Retry temporary metadata failures when offered, select a basic PDF candidate
-explicitly, or enter metadata manually.
+If the application cannot confirm whether Import completed, use **Check import status**. If it is
+committed, open **View imported Items**. If Library appears empty, check the Workspace and active
+filters, including the batch filter. Do not infer failure solely from a navigation error.
 
-Operators should check Provider credentials, outbound connectivity, and `INQUIRO_CONTACT_EMAIL`.
-See [Import](/guides/import/) and [configuration](/administration/configuration/).
+For missing metadata, inspect each diagnostic. Use supported identifiers, prefix ISBN-10 with
+`ISBN:`, retry temporary source failures when offered, or explicitly keep a basic PDF candidate and
+edit its metadata later. A general article URL is not a supported identifier. See [Import](/guides/import/).
 
 ## An action is missing or access is denied
 
-Check the selected Workspace, active User and membership status, role, and resource lifecycle.
-A frozen Workspace blocks mutations. A Project may be archived or have managed participation.
-Being an instance administrator or a Project participant does not independently grant Item access.
+Check active User status, active membership, role, and resource lifecycle. A freeze blocks writes;
+a Project can be archived or have managed participation. Instance administrator status and Project
+participation do not independently grant canonical Item authority.
 
-Ask a Workspace governor to review the relevant authority. Do not work around the failure by changing
-resource IDs or repeatedly replaying a rejected mutation.
+Ask an authorized Workspace governor to inspect the relevant membership/action. Repeatedly replaying
+a rejected request or changing resource IDs is not a permission-recovery procedure.
 
 ## Annotation saving reports a failure
 
-Keep the reader open while inspecting the error and its save state. Check connectivity, the selected
-annotation destination, Project lifecycle, and whether the Item remains associated with that
-Project. Concurrent changes can require reviewing the latest resource state before retrying.
-Do not assume a visible local mark has reached the server after a reported save failure.
+Keep the reader open and inspect the save status. Check network connectivity, the selected write
+destination, whether the Project is still active, and whether its Item association still exists.
+A concurrent change may require reviewing the current resource before retrying.
 
-## A download fails or an export has expired
+A local mark after a reported save failure is not proof of server persistence. For a visibility
+problem after a successful save, verify the same File Revision and the reader's displayed source.
+A private mark does not become Project-visible by changing checkboxes afterward.
 
-Create a new Annotation export and retry while authorized. If direct S3 downloads are enabled,
-operators should verify that the signed endpoint is browser-reachable and bucket CORS permits the
-application origin, range requests, and the required response headers. A container hostname such as
-`garage` is not normally browser-reachable; use application streaming for that topology.
+## A download or export fails
+
+An expired Annotation Export needs a fresh export while you still have authority. If direct S3
+signed downloads are enabled, check that the endpoint is reachable from the browser and bucket CORS
+allows the application origin, range requests, and required response headers. A hostname like
+`garage` may be reachable only inside the container network; use application streaming there.
 
 ## Sign-in works but browser changes fail behind a proxy
 
-Set `QUIREBASE_EXTERNAL_ORIGIN` to the exact public scheme, hostname, and port. Confirm the request
-origin matches, `QUIREBASE_ALLOWED_HOSTS` contains the public hostname, and secure cookies are used
-over HTTPS. MCP CORS settings do not configure the HTTP API's browser Origin policy.
+Set `QUIREBASE_EXTERNAL_ORIGIN` to the exact public scheme/host/port, include the public host in
+`QUIREBASE_ALLOWED_HOSTS`, and use secure cookies with HTTPS. Restart/recreate the affected services
+and retry from the configured application origin. MCP CORS does not configure this HTTP browser policy.
 
-## Get help with evidence
+## A configuration edit does not take effect
 
-Report the Quirebase version, the failing task, a redacted error `code` and `message`, and the
-response's `X-Request-ID` when available. Operators can correlate it with logs and health diagnostics.
-Do not include passwords, API Tokens, private research files, or unredacted connection URLs in a
-public issue. Use the repository's [issue tracker](https://github.com/Jadeiin/quirebase/issues).
+Verify the process working directory and environment first. Then inspect the administrator Settings
+page: supported runtime values override environment defaults. Database, object-store, origin, and
+worker deployment settings require consistent process configuration and restart. See
+[configuration precedence](/administration/configuration/#know-which-value-takes-effect).
+
+## Report a problem with useful evidence
+
+Include the Quirebase version, task and selected Workspace context, redacted error `code`/`message`,
+and `X-Request-ID` when available. Operators can correlate the request ID with logs. Public issues
+must not contain passwords, API Tokens, private research files, or unredacted connection URLs.
+The [issue tracker](https://github.com/Jadeiin/quirebase/issues) is the repository's public reporting channel.

@@ -1,39 +1,87 @@
 ---
-title: Connect an MCP client
-description: Use the curated research tool surface with a revocable API Token.
+title: Connect and verify an MCP client
+description: Configure Streamable HTTP with an API Token, discover tools, select a Workspace, and verify a read.
 ---
 
-Quirebase exposes MCP Streamable HTTP at `/mcp/` on your application's origin.
-Open **Account settings → API Tokens → Client connection guide** for the exact endpoint and a client configuration
-example. Create a token there and configure your client to send it as a Bearer Authorization header.
+Use an MCP client that supports Streamable HTTP and a configured Bearer Authorization header.
+Quirebase does not currently provide OAuth authorization discovery. The server uses the same current
+User and Workspace authority as the HTTP API.
 
-MCP uses [API Tokens](/developers/http-api/#create-a-credential), not browser Login Session cookies.
-The current server does not implement OAuth authorization discovery. Choose a client that supports
-an explicitly configured endpoint and Bearer header.
+## 1. Create the connection
 
-## Discover tools and choose a Workspace
+1. In the application, open **Account settings → API Tokens** and create a token for the client.
+2. Expand **Client connection guide** and copy the installation's MCP endpoint/configuration example.
+3. Add that endpoint and Bearer header in the client's MCP settings. For clients using an
+   `mcpServers` JSON structure, the shape is:
 
-Clients initially see `search_tools`, `get_schema`, and `call_tool`:
+   ```json
+   {
+     "mcpServers": {
+       "quirebase": {
+         "url": "http://127.0.0.1:9060/mcp/",
+         "headers": {"Authorization": "Bearer YOUR_API_TOKEN"}
+       }
+     }
+   }
+   ```
 
-1. Search with English keywords for the task you want to perform.
-2. For an unfamiliar tool or complex input, retrieve its full contract with
-   `get_schema(tools=["tool.name"], detail="full")`. Compact search summaries omit some constraints.
-3. Begin with `workspaces.get_workspaces` to select an accessible Workspace ID.
-4. Invoke the selected operation through `call_tool` using its full schema.
-5. Review Import previews and diagnostics before explicit confirmation.
+4. Replace the example origin and token. A remote client needs a network-reachable application URL;
+   its `127.0.0.1` refers to the client's own host.
+5. Save/reconnect and inspect the tool list.
 
-The curated surface includes ordinary research reads and mutations: Item metadata and organization,
-Projects, document metadata, Annotations and Replies, Tags, Discussions, Identifier Import,
-Discovery, and citations. Available tools execute the same HTTP operations and authorization rules.
+Client configuration formats differ; use the equivalent Streamable HTTP/header fields in your client.
+Browser Login Session cookies are not MCP credentials, and query-string tokens are rejected.
 
-Administrator operations, file bytes, and the currently unstructured PDF full text are excluded.
-MCP does not give an agent additional Workspace permissions or a separate research-data identity.
+## 2. Discover a tool and inspect its schema
 
-## Browser clients
+**Check the connection:** the initial tool list contains `search_tools`, `get_schema`, and `call_tool`.
+Search with English task keywords; for example, use `search_tools` with:
 
-Native clients normally send no Origin. Browser-based MCP clients need the operator to configure
-`QUIREBASE_MCP_ALLOWED_ORIGINS` for their trusted origins. See
-[configuration](/administration/configuration/#browser-mcp-access).
+```json
+{"query": "list accessible workspaces"}
+```
 
-For implementation decisions and the curated allowlist, see the repository's
-[MCP architecture decision](https://github.com/Jadeiin/quirebase/blob/main/docs/adr/0004-research-intelligence-mcp-and-agent.md).
+For an unfamiliar tool, retrieve its full input/output schema before calling it:
+
+```json
+{"tools": ["workspaces.get_workspaces"], "detail": "full"}
+```
+
+Pass this to `get_schema`. Compact search summaries omit some constraints; reuse a schema you already
+retrieved instead of guessing required arguments.
+
+## 3. Select a Workspace and verify a read
+
+Call the chosen tool through `call_tool`. To list accessible Workspaces:
+
+```json
+{"name": "workspaces.get_workspaces", "arguments": {}}
+```
+
+Choose a returned Workspace ID before requesting research content. Search for the task you want,
+inspect its schema, and supply the required Workspace and resource IDs. A successful list proves
+transport and token access; a research read additionally verifies that Workspace's current authority.
+
+For Identifier Import, the sequence is preparation → preview and diagnostics → explicit confirmation.
+Ask the User to review the prepared result before confirmation. An agent does not receive extra
+permissions just because it can discover a tool.
+
+## Know the tool boundary
+
+The curated surface includes ordinary Item metadata/organization, Projects, document metadata,
+Annotations/Replies, Tags, Discussions, Identifier Import, Discovery, and citations. Tools execute
+the same HTTP operations. Administrator operations, file bytes, and the currently unstructured PDF
+full text are excluded. API Tokens have no independent per-tool scopes.
+
+## Resolve connection problems
+
+| Symptom | Check |
+| --- | --- |
+| Cannot reach endpoint | Application origin, network access, TLS, and the client's Streamable HTTP support |
+| 401 | Token expiration/revocation, exact Bearer header, active User |
+| Connected but research denied | Explicit Workspace ID, active membership, and current resource authority |
+| Browser client blocked by Origin/CORS | Operator's explicit `QUIREBASE_MCP_ALLOWED_ORIGINS` allowlist |
+
+Native clients normally send no Origin. Browser MCP CORS is separate from HTTP API and S3 CORS.
+See [configuration](/administration/configuration/#browser-mcp-access). Implementation choices live
+in the [MCP ADR](https://github.com/Jadeiin/quirebase/blob/main/docs/adr/0004-research-intelligence-mcp-and-agent.md).

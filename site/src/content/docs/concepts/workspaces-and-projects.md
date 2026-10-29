@@ -1,43 +1,61 @@
 ---
-title: Workspaces, Projects, and access
-description: Understand the governance boundary and the collaborative contexts inside it.
+title: Understand Workspace and Project access
+description: Decide where research belongs, who can read it, and what Project participation changes.
 ---
 
-A **Workspace** governs its Items, files, Tags, Discussions, and Projects. Every owned research
-resource has one Workspace lineage. There is no separate personal or shared Workspace kind;
-the Workspace created for a new User follows the same rules as every other Workspace.
+A **Workspace** is the governance and access boundary for its Items, files, Tags, Discussions, and
+Projects. A **Project** is a working set and collaboration context inside one Workspace.
 
-A **Project** organizes a working set of Items inside one Workspace and holds Project-scoped
-Annotations and Discussions. It has no owner. Creating a Project records provenance, not an
-additional ownership role.
+## Use a Workspace for a membership boundary
 
-## Two levels of authority
+For example, Alice has a Workspace created with her account. Bob does not gain access to it simply
+by having an account on the same instance. Alice or an authorized governor must admit Bob to that
+Workspace and choose his role.
 
-The instance **System Role** is `administrator` or `member`. It governs account and instance
-operations. Being an instance administrator does not grant implicit research-data access.
+There is no separate personal/shared Workspace type. A Workspace used only by Alice follows the
+same rules as a team Workspace. An Item, its files, and its ordinary associations keep one Workspace
+lineage. Copying an Item into another Workspace creates an independent record.
 
-The **Workspace Role** is `owner`, `admin`, `editor`, `reviewer`, or `viewer`. It participates in
-resource-action decisions such as `item.update` or `item.delete`. Active User status and an active
-membership are required for effective data access. Authorship records provenance separately.
+## Use a Project for a collaborative context
 
-Project participation grants no additional Workspace authority or canonical Item access. The
-application shows actions based on server decisions and resource lifecycle; a role name alone does
-not mean every operation is available.
+Within their Workspace, Alice and Bob can add an Item to a reading Project. The Project can hold its
+own Annotations and Discussions, while the Item remains in the Workspace Library. Adding it to a
+second Project does not duplicate the bibliographic record.
 
-For exact grants, contributors can consult the generated
-[authorization matrix](https://github.com/Jadeiin/quirebase/blob/main/docs/architecture/authorization-matrix.md).
+Project participation has no separate owner/editor/viewer role and grants no extra authority over
+the canonical Item. A managed Project limits who discovers its context; it does not make the
+underlying Item private from other authorized Workspace readers. A Project has no owner; its
+creator is recorded as provenance.
 
-## Read-only and membership states
+## Separate instance and Workspace roles
 
-- A **Workspace Freeze** is an administrator read-only overlay. It blocks mutations while retaining
-  active members' content reads, downloads, and exports. It does not grant administrator access.
-- Archiving preserves a Workspace or Project for restoration and affects available operations.
-- Suspending membership removes effective access while retaining participation selections.
-- Terminating membership removes access and its Project selections. A new Invitation creates a new
-  membership generation.
+| Level | Role values | Controls |
+| --- | --- | --- |
+| System Role | `administrator`, `member` | Account operations and instance governance |
+| Workspace Role | `owner`, `admin`, `editor`, `reviewer`, `viewer` | Specific research-content and membership actions |
 
-Workspace ownership remains assigned when its User is deactivated. An instance administrator can
-explicitly reassign ownership to an active User with a recorded reason; that is distinct from
-implicit administrator content access.
+An instance administrator has no implicit research-content access. Workspace access needs an active
+User and active membership, then the relevant resource-action and lifecycle checks. Private
+Annotations remain restricted to their author. Ownership reassignment and reason-bound read-only
+inspection are explicit instance operations, not a general grant to browse content.
 
-See [collaboration](/guides/collaboration/) for invitations and participation modes.
+For practical role choices, follow [member management](/administration/workspaces-and-members/).
+The repository's generated [authorization matrix](https://github.com/Jadeiin/quirebase/blob/main/docs/architecture/authorization-matrix.md)
+contains exact grants.
+
+## Understand why an action becomes unavailable
+
+| State or change | Reads | Ordinary changes | Recovery |
+| --- | --- | --- | --- |
+| Active Workspace and membership | According to authority | According to authority | Use the relevant task guide |
+| Archived Workspace | Content remains readable/exportable | Disabled | An authorized governor restores the Workspace |
+| Administrative freeze | Active members retain content reads/downloads/exports | Blocked, including restoration and governance-list access | An instance administrator unfreezes it |
+| Suspended membership | Effective content access removed | Disabled for that member | An authorized governor reactivates membership |
+| Terminated membership or leaving | Effective content access removed | Disabled | A new invitation creates a new membership generation |
+
+Suspension retains explicit Project selections; termination removes them. Rejoining does not restore
+previous selections. Deactivating a User removes effective authority while preserving the Workspace
+ownership assignment and content provenance. Ownership transfer or administrative reassignment is
+an explicit operation.
+
+For a complete shared-reading procedure, continue with [Project collaboration](/guides/collaboration/).

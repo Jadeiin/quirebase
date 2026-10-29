@@ -1,61 +1,89 @@
 ---
 title: Import references and PDFs
-description: Review identifiers, bibliography data, or PDFs before adding Items to a Workspace.
+description: Choose an import method, understand the preview, and verify exactly what is saved.
 ---
 
-Select the destination Workspace and open **Import**. Import requires permission to create Items.
+Open the destination Workspace, then **Import**. You need permission to create Items. If you are
+looking for references by topic or title, begin with [Discovery](/guides/discovery/).
 
-| Source | Input |
+## Choose an input method
+
+| Import tab | Use it when | Action that creates Items |
+| --- | --- | --- |
+| Identifiers | You have DOI, PMID, arXiv, ISBN, or OpenAlex identifiers | Confirm the prepared preview |
+| Bibliography | You have BibTeX, RIS, CSL-JSON, or Commonmeta data | Confirm the prepared preview |
+| PDFs | You have up to 50 PDF files and want metadata candidates | Confirm the preview, including any basic PDFs you explicitly select |
+| Manual creation | You want to enter one record yourself | Choose **Create Item** in the editor |
+
+The first three methods create an **Import Batch** for review. Manual creation saves an Item directly.
+
+## Import from identifiers
+
+1. Choose **Identifiers** and paste up to 50 inputs, one per line. For example:
+
+   ```text
+   10.1073/pnas.92.6.2288
+   https://pubmed.ncbi.nlm.nih.gov/11607519/
+   arXiv:2304.08030
+   ISBN:0674016394
+   ```
+
+2. Keep **Data source → Auto detect**, or select a Provider that supports the input.
+3. Choose **Preview metadata**, then follow the preview checks below.
+
+Prefix ISBN-10 with `ISBN:` so it is not mistaken for a PubMed ID. General article landing pages and
+arbitrary website URLs are unsupported for metadata lookup. PMCID lookup is currently unsupported;
+PMC is available through Discovery.
+
+## Import a bibliography
+
+1. Choose **Bibliography**.
+2. Use **Choose file**, or paste the data into **Or paste bibliography data**. Remove a chosen file
+   before switching to pasted input.
+3. Leave **File format** on **Auto detect**, unless you need to choose the format explicitly.
+4. Choose **Preview bibliography**.
+
+The input must be UTF-8 and at most 5 MiB. Supported formats are BibTeX, RIS, CSL-JSON, and Commonmeta.
+Formatted references copied from a paper and EndNote XML are unsupported; export a supported format
+from the original reference manager first.
+
+## Import PDFs
+
+1. Choose **PDFs**, then drop files into the picker or choose them. You can add up to 50 files.
+2. Choose **Preview import**. A worker prepares candidates; leave the retained preview available
+   while this runs.
+3. Review the identified records and the separate **PDFs without metadata** section.
+4. Explicitly check each basic PDF candidate you want to keep, or use **Select all** in that section.
+
+A basic candidate keeps the file with minimal metadata so you can edit it after import. Unselected
+basic PDFs are skipped. Password-protected PDFs and OCR are unsupported.
+
+## Review the preview and commit once
+
+Check the title, Contributors, Reference Type, identifiers, publication details, and **Import issues**.
+Provider metadata can be incomplete.
+
+| Preview content | What confirmation does |
 | --- | --- |
-| Identifiers | Up to 50 supported identifiers or identifier URLs, one per line |
-| Bibliography | A UTF-8 file or pasted BibTeX, RIS, CSL-JSON, or Commonmeta data, up to 5 MiB |
-| PDFs | PDF files from which Quirebase prepares metadata candidates |
-| Manual creation | Details entered directly in the metadata editor |
+| Identified records | Imports the prepared identified records together |
+| Basic PDFs without metadata | Imports only the basic PDF candidates you explicitly selected |
+| Diagnostics or failures | Explains skipped or unavailable inputs; successful candidates remain usable |
 
-## Look up identifiers
+The identified-record preview is not an arbitrary per-record selection list. If its records are not
+what you intended, use **Discard** and prepare a corrected input batch before confirming. A **Retry
+metadata** action may be offered for temporary Provider failures.
 
-Keep **Auto detect** selected or choose an available Provider explicitly. For example:
+When the preview is ready, review the count on **Import … records** and confirm. After **Import
+completed**, use **View imported Items**. This opens Library filtered to that batch's imported Items;
+clear the filter when you want the rest of your Library. File processing and Tag Recommendations may
+continue after confirmation.
 
-```text
-10.1073/pnas.92.6.2288
-https://pubmed.ncbi.nlm.nih.gov/11607519/
-arXiv:2304.08030
-ISBN:0674016394
-```
+## Return later or recover an uncertain result
 
-Prefix ISBN-10 values with `ISBN:` to distinguish them from PubMed IDs.
-General website and article landing-page URLs are unsupported. Use a supported identifier or
-manual creation. PMCID lookup is currently unsupported, although PMC is available for Discovery.
+Use **Import history** to reopen a retained batch. Refreshing a preview does not discard it. If the
+application says it could not confirm whether the import completed, choose **Check import status**
+first. A lost response does not prove that confirmation failed.
 
-## Review before confirming
-
-Preparation creates an Import Batch containing Candidate Records and diagnostics.
-Review titles, Contributors, publication details, and the selected candidates before confirmation.
-Provider metadata can be incomplete. Confirming creates the selected Items in the destination
-Workspace; document processing and Tag Recommendations may continue afterward.
-
-Successful candidates remain available when other inputs fail. Refreshing a preview preserves the
-prepared batch. For temporary metadata failures, use **Retry metadata** when offered.
-
-For PDFs without identified metadata, explicitly select the basic PDF candidates you want to keep.
-You can fill in their metadata after import. Password-protected PDFs and OCR are unsupported.
-
-## Find references online
-
-Open **Discovery** when you have a title, author, or topic rather than an identifier.
-Choose an available Provider, enter search conditions, and use its supported year filters and
-sorting. Where supported, combine conditions with **AND**, **OR**, or **NOT**; OpenAlex permits
-**OR** only between adjacent conditions on the same field.
-
-Selecting a Discovery result prepares it for Import. Review and confirm it before it becomes an
-Item. Discovery queries external Providers; [Library Search](/guides/library-management/) searches
-content already stored in your Workspace.
-
-## Manage import history
-
-Use Import history to return to a retained preview or a committed batch's imported Items.
-Discard an unconfirmed batch to abandon it. Deleting a committed import record keeps its Items and
-files, but removes the receipt and the corresponding batch filter in Library.
-
-Batches are temporary and expire according to the installation's retention settings. Import history
-is not a permanent backup of your source files. See [maintenance](/administration/maintenance/).
+**Delete import record** on a committed batch preserves its Items and files, but removes the receipt
+and its batch filter. Unconfirmed batches and history expire under the installation's retention
+policy; they are not permanent source-file backups.

@@ -1,0 +1,102 @@
+---
+title: 部署并验证 Quirebase
+description: 从源码构建，初始化持久化数据，运行 Web 和 Worker，并核对首次登录与 PDF 处理。
+---
+
+下面任选一种方式，它们都使用当前源码检出的锁定依赖。安装已发布的发行包时，应遵循对应版本的包索引与版本说明。
+
+| 方式 | 需要准备什么 | 进程和数据 |
+| --- | --- | --- |
+| Compose | Git、Docker Compose 或 Podman Compose、Make、OpenSSL | PostgreSQL、初始化服务、Web、Worker 及命名数据卷 |
+| 源码运行 | Git、Python 3.12+、uv 0.13.5+、Bun 1.4.4 | 自行运行 Web 和 Worker；默认使用 SQLite 和本地文件 |
+
+命令示例使用 Linux、macOS 或 WSL 终端。请选择长期保留的安装目录，并让所有进程使用同一份配置。
+Web 提供应用页面和 API，独立的 Worker 负责 PDF 处理及持久化任务。
+
+## 方式 A：构建并运行 Compose 服务
+
+```sh
+git clone https://github.com/Jadeiin/quirebase.git
+cd quirebase
+make docker-env
+make docker-build
+make docker-up
+make docker-admin
+make docker-doctor
+```
+
+`docker-env` 创建 `.env.docker` 并生成数据库密码；开放公网前应检查其中配置。
+`docker-build` 构建当前检出的镜像，包含浏览器资源。`docker-up` 启动 PostgreSQL、一次性迁移服务、Web 和 Worker。
+`docker-admin` 创建首个管理员并提示输入密码，默认用户名是 `admin`。
+
+打开 `http://127.0.0.1:9060`，用刚创建的管理员凭据登录。
+`make docker-ps` 查看服务状态；`make docker-doctor` 应以退出码 0 完成，并显示 `[ok]` 诊断。
+任务一直等待时，可以查看 Worker 日志：
+
+```sh
+docker compose --env-file .env.docker logs --tail 50 worker
+```
+
+数据库保存在 Compose 的 `postgres-data` 卷，本地对象文件保存在 `quirebase-data` 卷。
+`make docker-down` 会停止服务并保留这些卷；删除数据卷是另一项破坏性操作。
+默认 Web 端口只绑定本机回环地址。
+
+## 方式 B：从源码运行 SQLite 实例
+
+```sh
+git clone https://github.com/Jadeiin/quirebase.git
+cd quirebase
+uv sync --frozen
+bun install --cwd frontend --frozen-lockfile
+bun run --cwd frontend build
+uv run quirebase init-db
+uv run quirebase create-admin
+uv run quirebase doctor
+```
+
+`create-admin` 会交互式询问用户名和密码，不会设置共用演示密码。
+`init-db` 初始化或应用数据库与工作流存储结构，但不会替代持续运行的 Worker。
+
+在终端 1 中，从安装目录运行：
+
+```sh
+uv run quirebase serve
+```
+
+在终端 2 中，从**同一目录**、使用**同一份 `.env` 和环境配置**运行：
+
+```sh
+uv run quirebase worker
+```
+
+打开 `http://127.0.0.1:9060`。默认数据库是当前目录的 `./quirebase.db`，数据目录是 `./quirebase-data`。
+生产数据不应放在临时检出目录中。无人值守运行时，需要用进程管理器维持 Web 和 Worker，并固定它们的工作目录与配置。
+
+使用 PostgreSQL 时，先在数据库服务中创建数据库和凭据，执行 `uv sync --frozen --extra postgres`，
+再在初始化前通过 `.env` 设置 `QUIREBASE_DATABASE_URL`。
+使用 libpq URL，例如 `postgresql://quirebase:encoded-password@localhost/quirebase`，不支持 `postgresql+psycopg://` 这类驱动名写法。
+
+## 验证一次完整使用流程
+
+1. 登录，并打开管理员账号的普通工作区。
+2. 按[快速上手](/zh-cn/getting-started/quickstart/)创建条目、上传 PDF。
+3. 确认 PDF 处理就绪，阅读器可以打开文件。
+4. 保存私人笔记，再打开同一修订版核对它仍然存在。
+
+仅看到登录页面，还没有验证 Worker 和文件存储。上述流程中断时，请使用[故障排查](/zh-cn/knowledge-base/troubleshooting/)。
+
+## 通过 HTTPS 反向代理开放访问
+
+公网使用前，在反向代理终止 TLS，并在 `.env` 或 `.env.docker` 中填写实际公网地址：
+
+```dotenv
+QUIREBASE_ALLOWED_HOSTS=library.example.org
+QUIREBASE_EXTERNAL_ORIGIN=https://library.example.org
+QUIREBASE_SECURE_COOKIES=true
+```
+
+把示例域名换成自己的地址。外部 Origin 包含协议和非默认端口；浏览器修改请求的 Origin 必须与其匹配。
+代理的上传大小限制也应与应用限制协调。修改部署设置后，源码进程需要重启；Compose 使用 `make docker-up` 应用配置。
+
+Web 和所有 Worker 必须连接同一数据库与对象存储。每个额外 Worker 都需要不同且稳定的 executor ID，
+默认 Compose Worker 不允许以同一身份直接扩容。接下来阅读[配置](/zh-cn/administration/configuration/)和[备份升级](/zh-cn/administration/maintenance/)。

@@ -1,64 +1,79 @@
 ---
-title: Export references, citations, and document bundles
-description: Choose formats and Citation Styles, configure browser defaults, and export the intended selection.
+title: Export references and document bundles
+description: Pick the correct citation format, export a known selection, and verify browser-specific defaults.
 ---
 
-## Choose the output you need
+Use this guide after the references are saved in Library. Choose the intended Workspace and check
+which Items are selected before opening an export action.
 
-| Output | Use it for |
-| --- | --- |
-| BibTeX | References for a BibTeX-based writing workflow |
-| RIS | Bibliography interchange with a reference manager |
-| CSL-JSON | Structured citation metadata for CSL-aware tools |
-| Commonmeta | The complete Work metadata interchange value |
-| Formatted bibliography | Citation Style-based text for copying into writing |
-| Document bundle | Selected PDFs and optional supplementary content |
+## Choose an output
 
-These exports operate on Items visible to you. A bibliography file is not a backup of the database,
-Workspace membership, Discussions, or all research files. Operators should use the separate
-[backup procedure](/administration/maintenance/#back-up-and-restore-local-object-storage).
+| Output | Choose it for | What it contains |
+| --- | --- | --- |
+| CSL citation | Copying a formatted bibliography into writing | Text rendered with an available CSL Citation Style |
+| BibTeX | A BibTeX-based writing workflow | Bibliography data, including Citation Keys |
+| RIS | Transfer to a reference manager | Interchange reference data |
+| CSL-JSON | CSL-aware tools or structured interchange | Citation metadata in JSON |
+| Commonmeta | Complete bibliographic metadata interchange | Structured metadata, including abstracts and identifiers |
+| Document bundle | Downloading research files | Selected PDF revisions and optional supplementary content |
 
-## Set browser defaults
+A bibliography export is not a full installation backup. It does not preserve Workspace governance,
+all Discussions, or every file. Operators should use [backup and restore](/administration/maintenance/#back-up-and-restore-local-object-storage).
 
-Open **Account settings → Export preferences**. Choose the default format, sorting, abstract
-inclusion, DOI/URL policy, and applicable format-specific options. Field exclusions apply only to
-BibTeX and CSL-JSON; required identity and type fields remain. Commonmeta exports retain all metadata,
-including abstracts and identifiers.
+## Export one Item
 
-Defaults are stored in the current browser rather than synchronized as server-side preferences.
-The selected CSL Citation Style is also specific to the Workspace context. Recheck your choices
-when using another browser, device, or Workspace.
+1. Open the Item and choose **Export**.
+2. In the citation action, choose **Format**. For a formatted bibliography, choose **CSL citation**;
+   for a reference-manager import, choose a supported interchange format.
+3. Review the displayed text and options. Use **Change options** or **Export settings** when needed.
+4. Choose **Copy to clipboard** or **Download file**.
+5. Open the result in the destination tool and check the Contributor order, dates, title, and Citation Key.
 
-## Export a reference or selection
+If clipboard access is denied, copy the displayed **Citation text** manually or download the file.
+A missing Citation Style affects formatted CSL output; it does not make a ready PDF unreadable.
 
-1. For one Item, open **Export**. For a Library selection, check the selected Items before opening
-   the available export action.
-2. Choose the format and inspect the presented options. Use **Change options** or **Export settings**
-   if the defaults do not match this task.
-3. Choose **Download file** or **Copy to clipboard**, as appropriate.
-4. Check the result in your writing tool, including Contributor order, publication details, and
-   Citation Keys.
+## Export a Library selection
 
-If clipboard access is denied, copy the displayed citation text manually or download the file.
-Filtering Library or navigating to another page can change what you are acting on; verify the
-selected set before exporting.
+Select the intended Library rows, then use an available bibliography or document action. Verify the
+selection count; selecting the current page does not select every result across all pages.
+Exports include only Items you are authorized to read.
 
-## Choose a Citation Style
+To export a Project's references, first open its working set in Library and check the Project filter,
+then select the intended records. Project filtering chooses records; the export format chooses how
+their metadata is represented.
 
-Use an available CSL style for formatted citations. In **Tools → Citation Styles**, search the
-built-in catalog and the custom styles shared in the Workspace. Operators can install the optional
-`citation` extra for built-in styles; authorized members can add custom CSL styles without it.
+## Set defaults for this browser
 
-A Citation Key is an editable Item property, distinct from a Citation Style. A key names the Item in
-citation output; a style controls the formatted bibliography. Changing the generation formula in
-browser preferences does not by itself rewrite every stored Item's Citation Key.
+Open **Account settings → Export preferences**:
 
-## Download PDFs with the intended context
+1. Set the default citation format and, for CSL output, choose a Citation Style from an accessible
+   Workspace's catalog.
+2. Review sorting, abstract inclusion, DOI/URL policy, and format-specific options.
+3. For document bundles, check whether Annotations and supplements should be included.
+4. Return to the export action and inspect the resulting choices before downloading.
 
-Use an Item's **Download** action to choose PDF revisions for a document bundle. Review whether the
-current preferences include Annotations and supplements before downloading. A new revision does not
-inherit marks from another revision.
+Preferences are stored in this browser for your account. Citation Style selection is also scoped to
+the Workspace. Another browser or device will not automatically have the same defaults.
 
-For one PDF and an explicit set of displayed annotation sources, use the
-[reader's download menu](/guides/pdf-annotations/#download-a-pdf). Annotation exports leave the stored
-source unchanged and expire independently of the Item.
+Field exclusions apply to BibTeX and CSL-JSON; required identity/type fields remain. Commonmeta
+exports retain all metadata. Changing a Citation Key formula in preferences does not automatically
+rewrite all stored Item keys.
+
+## Find or add a Citation Style
+
+Open **Tools → Citation Styles** to search built-in and Workspace custom styles. Built-in styles
+require the operator's optional `citation` extra. A User with style-management authority can add a
+custom CSL style without that extra. A viewer may use an available style without managing the catalog.
+
+A **Citation Key** identifies the Item in citation output. A **Citation Style** controls formatting.
+Changing one is not the same operation as changing the other.
+
+## Download the right PDF context
+
+Use the Item's **Download** action to choose PDF revisions and **Download bundle**. Review the shown
+Annotation/supplement preferences. For one PDF and an explicit set of displayed annotation sources,
+use the [reader's Download menu](/guides/pdf-annotations/#download-a-pdf).
+
+**Check the result:** the archive or PDF contains the intended revision and sources. A new PDF
+revision does not inherit another revision's marks. Annotation exports are temporary copies and
+leave the stored original unchanged.

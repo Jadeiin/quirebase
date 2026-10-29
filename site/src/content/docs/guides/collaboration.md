@@ -1,53 +1,71 @@
 ---
-title: Collaborate in a Workspace
-description: Invite members, choose Project participation, and share research context.
+title: Build a Project for shared reading
+description: Bring a colleague into the Workspace, add an Item to a Project, and verify a shared Annotation.
 ---
 
-## Bring someone into your Workspace
+This walkthrough assumes you already have an Item in the destination Workspace. You need the
+appropriate Workspace actions to invite members, create a Project, and assign Items. A colleague
+needs an active User and active membership in the same Workspace.
 
-An instance Invitation creates a User. A Workspace Invitation admits an existing User into a
-particular Workspace. Having an account on the same installation does not automatically grant
-access to every Workspace.
+## 1. Admit the colleague to the Workspace
 
-Open the Workspace settings and use its membership and invitation controls when your role allows
-them. Choose the role that matches the person's work. The available controls reflect the server's
-authorization decisions; see [Workspaces and Projects](/concepts/workspaces-and-projects/) for the
-role and lifecycle model.
+An **account Invitation** creates a User; a **Workspace Invitation** admits an existing User to this
+Workspace. Ask the instance administrator to create the account first if necessary.
 
-For exact invitation steps, role responsibilities, and ownership transfer, see
-[Workspace and member management](/administration/workspaces-and-members/).
+1. Open **Workspace settings → Invitations**.
+2. Enter the colleague's exact username, choose an available role and expiration, and create the invitation.
+3. Copy its one-time link and deliver it through your normal communication channel.
+4. The colleague signs in as the invited User and accepts the invitation. Received invitations are
+   also available from **My workspaces**.
+5. Verify the membership in **Workspace settings → Members**.
 
-Suspending or terminating membership removes effective access while retaining content and
-authorship. Leaving a Workspace terminates that membership generation; returning requires a new
-Invitation and does not restore previous Project selections.
+Choose a role for the intended work. Reviewers can contribute shared Annotations and Discussions;
+viewers can read shared context and maintain their own private notes. Role and lifecycle details
+are in [member management](/administration/workspaces-and-members/).
 
-## Choose a Project participation mode
+## 2. Create a Project
 
-Create a Project in **Projects**, then choose from the participation modes available to you.
+Open **Projects → New Project**. Enter its name and description, choose an available **Participation**
+mode, and choose **Create Project**.
 
-| Mode | Discovery and participation |
-| --- | --- |
-| `workspace` | All active Workspace members discover and implicitly participate |
-| `open` | All active Workspace members discover it and may join or leave |
-| `managed` | Participants and Workspace governors discover it; governance selects participants |
+| Mode | Who discovers and participates? | Typical choice |
+| --- | --- | --- |
+| `workspace` | Every active Workspace member implicitly participates | A reading context for the whole Workspace |
+| `open` | Active members discover it and may join or leave | An optional reading group |
+| `managed` | Participants and Workspace governors discover it; governors select participants | A curated working group |
 
-Add Items from the same Workspace to build the Project working set. An Item can be in more than one
-Project. Participation is role-less and does not grant extra authority over the Workspace Library.
-A managed Project limits discovery of its collaboration context; it does not make its canonical
-Items private within the Workspace.
+Editors can create the available Workspace/open modes; managed participation is governed by
+owners/admins. An open Project's creator joins automatically. For an existing open Project, use
+**Join** before contributing Project context when required.
 
-## Share annotations and conversations
+## Add an Item to the working set
 
-Open a Project Item's PDF and select the Project under **Save new annotations to** before marking it.
-Use Annotation Replies for responses to a specific mark, Item Discussion for the reference, and
-Project Discussion for the collaborative context.
+1. Open the Item in the same Workspace and select **Organize**.
+2. Find the Project under the available Project groups and choose **Add**.
+3. Open the Project, or choose its **Open in Library** action, and verify that the Item appears.
 
-Private Annotations remain personal to their author. Check the selected audience before creating a
-shared Annotation. See [PDF annotations](/guides/pdf-annotations/).
+Adding the Item creates an association, not another bibliographic record. The same Item can be in
+several Projects in this Workspace. Project participation adds no extra Workspace authority over
+that canonical Item. A managed Project restricts its collaborative context; it does not make the
+underlying Workspace Item private from other authorized Workspace readers.
 
-## Retire a working context
+## 4. Share and verify a reading note
 
-Archive a Project when you want to preserve it for restoration. Deleting a Project removes its
-Project-owned context while preserving canonical Workspace Items and historical Audit Events.
-Removing one Item from a Project permanently deletes that association's Project Annotations and
-Replies. Deleting the canonical Item is a separate Workspace-governed action.
+1. Open a ready PDF revision of the Project Item.
+2. In **Annotations → Save new annotations to**, select this Project before making the note.
+3. Create the mark and wait for saving to complete.
+4. Ask the colleague to open the same revision and enable this Project under **Displayed annotation sources**.
+
+**Check the result:** the colleague can see the Project mark and, when authorized, reply to it.
+Your private marks remain private. Use Annotation Replies for a specific mark, Item Discussion for
+the reference, and Project Discussion for the working group's broader conversation.
+
+## Retire a Project without losing the wrong content
+
+Archiving preserves the Project for restoration and makes its context read-only. Deleting a Project
+removes its participants and Project-owned context while preserving canonical Workspace Items,
+their files, and private Annotations.
+
+Removing just one Item from a Project permanently deletes that association's Project Annotations
+and Replies. Deleting the canonical Item is a different Workspace-governed operation. Read the
+confirmation for the exact scope before proceeding.
