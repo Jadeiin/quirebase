@@ -1,15 +1,15 @@
 ---
 title: Troubleshoot a failed task
-description: Start from the observed symptom, check the current state, and take the next safe action.
+description: Start from the symptom, check the current state, and follow the recovery steps.
 ---
 
-Before retrying a write, distinguish a failed operation from a lost response. Check the existing
-resource or job state first. Use the installation's actual Workspace, version, and configuration.
+Start with the symptom, inspect the current resource or job state, and follow the steps below.
+Use the installation's actual Workspace, version, and configuration.
 
 | You observe | Start by checking |
 | --- | --- |
 | Import preview but no saved Item | Confirmation status and destination Workspace |
-| Confirmation outcome unknown | **Check import status**, not another new batch |
+| Confirmation outcome unknown | **Check import status** to see the result |
 | PDF processing stays pending | Running worker and shared database/storage configuration |
 | An action is missing | Membership, role, freeze/archive state, and target relationship |
 | A colleague cannot see a mark | PDF revision, original write destination, and displayed sources |
@@ -25,27 +25,23 @@ resource or job state first. Use the installation's actual Workspace, version, a
 4. Run Doctor with that installation's configuration and inspect failed diagnostics.
 
 After a worker replacement, keep its stable executor ID. If an old executor is permanently gone,
-use [durable recovery](/administration/maintenance/#recover-durable-work). Restarting web alone does
-not execute the pending durable job.
+use [durable recovery](/administration/maintenance/#recover-durable-work).
 
 ## An import result is uncertain or missing
 
 If the application cannot confirm whether Import completed, use **Check import status**. If it is
 committed, open **View imported Items**. If Library appears empty, check the Workspace and active
-filters, including the batch filter. Do not infer failure solely from a navigation error.
+filters, including the batch filter.
 
 For missing metadata, inspect each diagnostic. Use supported identifiers, prefix ISBN-10 with
 `ISBN:`, retry temporary source failures when offered, or explicitly keep a basic PDF candidate and
-edit its metadata later. A general article URL is not a supported identifier. See [Import](/guides/import/).
+edit its metadata later. See [Import](/guides/import/) for supported input formats.
 
 ## An action is missing or access is denied
 
-Check active User status, active membership, role, and resource lifecycle. A freeze blocks writes;
-a Project can be archived or have managed participation. Instance administrator status and Project
-participation do not independently grant canonical Item authority.
-
-Ask an authorized Workspace governor to inspect the relevant membership/action. Repeatedly replaying
-a rejected request or changing resource IDs is not a permission-recovery procedure.
+Ask the Workspace owner or admin to check your membership status and role. Then check whether the
+Workspace is frozen, the Project is archived, and you have joined the target Project. Follow
+[member management](/administration/workspaces-and-members/) to restore access or adjust roles.
 
 ## Annotation saving reports a failure
 
@@ -53,9 +49,8 @@ Keep the reader open and inspect the save status. Check network connectivity, th
 destination, whether the Project is still active, and whether its Item association still exists.
 A concurrent change may require reviewing the current resource before retrying.
 
-A local mark after a reported save failure is not proof of server persistence. For a visibility
-problem after a successful save, verify the same File Revision and the reader's displayed source.
-A private mark does not become Project-visible by changing checkboxes afterward.
+Once saving works again, reopen the same File Revision and enable the corresponding source to
+verify the Annotations.
 
 ## A download or export fails
 
@@ -68,7 +63,7 @@ allows the application origin, range requests, and required response headers. A 
 
 Set `QUIREBASE_EXTERNAL_ORIGIN` to the exact public scheme/host/port, include the public host in
 `QUIREBASE_ALLOWED_HOSTS`, and use secure cookies with HTTPS. Restart/recreate the affected services
-and retry from the configured application origin. MCP CORS does not configure this HTTP browser policy.
+and retry from the configured application origin.
 
 ## A configuration edit does not take effect
 
@@ -80,6 +75,6 @@ worker deployment settings require consistent process configuration and restart.
 ## Report a problem with useful evidence
 
 Include the Quirebase version, task and selected Workspace context, redacted error `code`/`message`,
-and `X-Request-ID` when available. Operators can correlate the request ID with logs. Public issues
-must not contain passwords, API Tokens, private research files, or unredacted connection URLs.
+and `X-Request-ID` when available. Operators can correlate the request ID with logs. Redact credentials
+and private information from logs, screenshots, and connection URLs before submitting public feedback.
 The [issue tracker](https://github.com/Jadeiin/quirebase/issues) is the repository's public reporting channel.

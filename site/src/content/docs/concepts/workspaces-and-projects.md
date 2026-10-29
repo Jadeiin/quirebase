@@ -1,6 +1,6 @@
 ---
 title: Understand Workspace and Project access
-description: Decide where research belongs, who can read it, and what Project participation changes.
+description: Use Workspaces to manage members and research, and Projects to organize shared reading.
 ---
 
 A **Workspace** is the governance and access boundary for its Items, files, Tags, Discussions, and
@@ -8,24 +8,21 @@ Projects. A **Project** is a working set and collaboration context inside one Wo
 
 ## Use a Workspace for a membership boundary
 
-For example, Alice has a Workspace created with her account. Bob does not gain access to it simply
-by having an account on the same instance. Alice or an authorized governor must admit Bob to that
-Workspace and choose his role.
+For example, Alice has a Workspace created with her account. She invites Bob and chooses a
+Workspace role suited to their collaboration.
 
-There is no separate personal/shared Workspace type. A Workspace used only by Alice follows the
-same rules as a team Workspace. An Item, its files, and its ordinary associations keep one Workspace
-lineage. Copying an Item into another Workspace creates an independent record.
+Personal use and team collaboration follow the same Workspace model. An Item, its files, and its
+associations belong to that Workspace. Copying an Item into another Workspace creates an independent record.
 
 ## Use a Project for a collaborative context
 
 Within their Workspace, Alice and Bob can add an Item to a reading Project. The Project can hold its
-own Annotations and Discussions, while the Item remains in the Workspace Library. Adding it to a
-second Project does not duplicate the bibliographic record.
+own Annotations and Discussions, while the Item remains in the Workspace Library. Two Projects
+using the Item share its metadata and files.
 
-Project participation has no separate owner/editor/viewer role and grants no extra authority over
-the canonical Item. A managed Project limits who discovers its context; it does not make the
-underlying Item private from other authorized Workspace readers. A Project has no owner; its
-creator is recorded as provenance.
+Workspace roles determine actions on Items and files. Project participation determines who can
+join that Project's shared reading and Discussions. Workspace governors select the participants
+of managed Projects; the underlying references live in the Workspace Library.
 
 ## Separate instance and Workspace roles
 
@@ -34,10 +31,9 @@ creator is recorded as provenance.
 | System Role | `administrator`, `member` | Account operations and instance governance |
 | Workspace Role | `owner`, `admin`, `editor`, `reviewer`, `viewer` | Specific research-content and membership actions |
 
-An instance administrator has no implicit research-content access. Workspace access needs an active
-User and active membership, then the relevant resource-action and lifecycle checks. Private
-Annotations remain restricted to their author. Ownership reassignment and reason-bound read-only
-inspection are explicit instance operations, not a general grant to browse content.
+Instance administrators manage accounts, configuration, and instance maintenance. Workspace
+members use research content according to their assigned roles. Private Annotations are visible
+to their author; Project Annotations are shared with the Project's participants.
 
 For practical role choices, follow [member management](/administration/workspaces-and-members/).
 The repository's generated [authorization matrix](https://github.com/Jadeiin/quirebase/blob/main/docs/architecture/authorization-matrix.md)
@@ -53,9 +49,8 @@ contains exact grants.
 | Suspended membership | Effective content access removed | Disabled for that member | An authorized governor reactivates membership |
 | Terminated membership or leaving | Effective content access removed | Disabled | A new invitation creates a new membership generation |
 
-Suspension retains explicit Project selections; termination removes them. Rejoining does not restore
-previous selections. Deactivating a User removes effective authority while preserving the Workspace
-ownership assignment and content provenance. Ownership transfer or administrative reassignment is
-an explicit operation.
+Suspension retains Project selections; termination removes them. Arrange Project participation
+again when a member returns. Deactivated Users retain their contributions and ownership records.
+See [member management](/administration/workspaces-and-members/) for ownership handover.
 
 For a complete shared-reading procedure, continue with [Project collaboration](/guides/collaboration/).

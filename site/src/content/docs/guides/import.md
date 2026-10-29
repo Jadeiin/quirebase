@@ -31,9 +31,7 @@ The first three methods create an **Import Batch** for review. Manual creation s
 2. Keep **Data source → Auto detect**, or select a Provider that supports the input.
 3. Choose **Preview metadata**, then follow the preview checks below.
 
-Prefix ISBN-10 with `ISBN:` so it is not mistaken for a PubMed ID. General article landing pages and
-arbitrary website URLs are unsupported for metadata lookup. PMCID lookup is currently unsupported;
-PMC is available through Discovery.
+Prefix ISBN-10 with `ISBN:`. To search PMC articles, use [Discovery](/guides/discovery/).
 
 ## Import a bibliography
 
@@ -43,9 +41,8 @@ PMC is available through Discovery.
 3. Leave **File format** on **Auto detect**, unless you need to choose the format explicitly.
 4. Choose **Preview bibliography**.
 
-The input must be UTF-8 and at most 5 MiB. Supported formats are BibTeX, RIS, CSL-JSON, and Commonmeta.
-Formatted references copied from a paper and EndNote XML are unsupported; export a supported format
-from the original reference manager first.
+Export BibTeX, RIS, CSL-JSON, or Commonmeta from your reference manager. Use UTF-8 encoding and a
+file size of at most 5 MiB.
 
 ## Import PDFs
 
@@ -55,8 +52,8 @@ from the original reference manager first.
 3. Review the identified records and the separate **PDFs without metadata** section.
 4. Explicitly check each basic PDF candidate you want to keep, or use **Select all** in that section.
 
-A basic candidate keeps the file with minimal metadata so you can edit it after import. Unselected
-basic PDFs are skipped. Password-protected PDFs and OCR are unsupported.
+A selected basic candidate keeps the file with minimal metadata for editing after import. See
+[file management](/guides/files/) for preparing PDFs.
 
 ## Review the preview and commit once
 
@@ -69,9 +66,8 @@ Provider metadata can be incomplete.
 | Basic PDFs without metadata | Imports only the basic PDF candidates you explicitly selected |
 | Diagnostics or failures | Explains skipped or unavailable inputs; successful candidates remain usable |
 
-The identified-record preview is not an arbitrary per-record selection list. If its records are not
-what you intended, use **Discard** and prepare a corrected input batch before confirming. A **Retry
-metadata** action may be offered for temporary Provider failures.
+To adjust the identified records, use **Discard**, correct the inputs, and prepare a new batch.
+For temporary Provider failures, use **Retry metadata** when offered.
 
 When the preview is ready, review the count on **Import … records** and confirm. After **Import
 completed**, use **View imported Items**. This opens Library filtered to that batch's imported Items;
@@ -80,10 +76,8 @@ continue after confirmation.
 
 ## Return later or recover an uncertain result
 
-Use **Import history** to reopen a retained batch. Refreshing a preview does not discard it. If the
-application says it could not confirm whether the import completed, choose **Check import status**
-first. A lost response does not prove that confirmation failed.
+Use **Import history** to reopen a retained batch. If the application cannot confirm whether the
+import completed, choose **Check import status** to see the result.
 
 **Delete import record** on a committed batch preserves its Items and files, but removes the receipt
-and its batch filter. Unconfirmed batches and history expire under the installation's retention
-policy; they are not permanent source-file backups.
+and its batch filter. Batch history follows the installation's retention policy.

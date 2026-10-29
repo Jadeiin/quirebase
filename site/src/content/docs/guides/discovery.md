@@ -5,7 +5,7 @@ description: Build a Discovery query, review candidates, and send the intended r
 
 Use **Discovery** when you know a topic, title, or author and want to search scholarly Providers.
 For content already saved in Quirebase, use [Library Search](/guides/library-management/).
-Discovery results do not create Items until you complete the Import confirmation step.
+Save selected results to Library through Import preview and confirmation.
 
 ## Before searching
 
@@ -22,16 +22,15 @@ Provider's capabilities. If no sources are available, ask the operator to check 
 4. Choose **Search Discovery**.
 
 **Check the result:** candidate records appear, with titles, authors, and publication details. Use
-**Show abstract** to inspect a candidate before deciding to import it. Empty results mean that this
-Provider returned no matches for the submitted criteria; they do not indicate an empty local Library.
+**Show abstract** to inspect a candidate before deciding to import it.
 
 ## Narrow or combine conditions
 
 Use **Add condition** for another field and choose **AND**, **OR**, or **NOT** where supported. For
 example, combine a title condition with an author condition using **AND**. Every condition needs a
-search term, and the starting year must not be after the ending year.
+search term; enter the year range from earlier to later.
 
-Provider restrictions matter: OpenAlex permits **OR** only between adjacent conditions on the same
+OpenAlex supports **OR** between adjacent conditions on the same
 field. After switching Providers, review the available fields and sort order before searching again.
 Start with fewer conditions when a query fails or finds nothing.
 
@@ -42,8 +41,8 @@ For one candidate, choose **Review and import**. To prepare a group, select cand
 the same identifier type to be reviewed together.
 
 The application looks up their metadata and opens an Import preview. Review that prepared preview
-and its diagnostics, then choose **Import … records**. A search result and its freshly retrieved
-metadata may differ, so check the preview rather than assuming the result card is the final record.
+and its diagnostics, then choose **Import … records**. The preview contains the freshly retrieved
+metadata that will be saved.
 
 **Check the result:** the preview shows **Import completed** and **View imported Items** opens the
 created records in the destination Workspace. Continue with [Import preview behavior](/guides/import/#review-the-preview-and-commit-once).

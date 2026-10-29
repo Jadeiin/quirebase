@@ -14,15 +14,14 @@ For source, run `uv run quirebase doctor`; for Compose, run `make docker-doctor`
 upgrade or restart is considered complete.
 
 Doctor checks database/schema access, workflow storage, writable directories, PDF support,
-recommendations, object existence/sizes, and Workspace/Project integrity. It does not hash each
-stored object. The administrator Maintenance page shows cleanup and workflow state.
+recommendations, object existence/sizes, and Workspace/Project integrity. The administrator
+Maintenance page shows cleanup and workflow state.
 
 ## Back up and restore local object storage
 
-A backup requires **all web and worker writers to be stopped**. The database and objects are copied
-separately; stopping only one worker does not make a multi-worker installation offline. Keep the
-archive outside data directories and volumes that may be recreated. Use a new filename for each
-retained backup rather than replacing the only verified copy.
+Stop **all web and worker writers** before backing up so the database and objects can be copied
+consistently. Keep archives outside data directories and replaceable volumes, with a unique
+filename for each backup.
 
 ### Source checkout: create and verify
 
@@ -35,7 +34,7 @@ uv run quirebase verify-backup ../quirebase-backup.zip
 
 **Check the result:** both commands finish successfully and the archive exists at the chosen path.
 It contains a SQLite snapshot or PostgreSQL dump, local immutable objects, and a database checksum
-manifest. Verification checks the database checksum and archive paths, not every object's checksum.
+manifest. Verification checks the database checksum and archive paths.
 Restart web and worker after successful backup, and retain an independent off-host copy.
 
 ### Compose: copy the verified archive out of the container
@@ -52,9 +51,9 @@ docker rm quirebase-backup
 docker compose --env-file .env.docker start web worker
 ```
 
-Copy the archive successfully **before** removing the backup container. Resolve a backup error before
-continuing. The example container name must be free when rerun, and the example destination should
-be changed to a unique retained filename. Move a verified copy off the installation host.
+Copy the archive successfully before removing the backup container. If an error occurs, follow its
+diagnostics and repeat the backup. Use a unique destination filename for each backup, then keep a
+verified copy off the installation host.
 
 ### Restore and validate
 
@@ -69,12 +68,12 @@ uv run quirebase reindex
 ```
 
 `--force` replaces the configured database and restores archived objects. Inspect the target settings
-before running it. For Compose, use the same image/settings/volumes in a one-off service and make
-the archive accessible there; do not run restore inside a still-serving web process. Restart web and
+before running it. For Compose, stop web and worker, use the same image/settings/volumes in a
+one-off service, and make the archive accessible there. Restart web and
 workers only after checks pass. Confirm sign-in, representative Items, file reads, and saved marks.
 
-S3 storage needs its own backup/versioning policy: `quirebase backup` refuses non-local objects.
-The bundled Garage variant has one node and no bucket versioning; follow its detailed
+The `backup` command above works with local object storage. S3 installations need database and
+object-store backups. For the bundled Garage setup, follow the
 [snapshot procedure](https://github.com/Jadeiin/quirebase/blob/main/docs/DEPLOYMENT.md#object-storage).
 
 ## Upgrade an installation
@@ -86,10 +85,9 @@ The bundled Garage variant has one node and no bucket versioning; follow its det
 4. Run the target version's `quirebase init-db` with the existing installation settings.
 5. Run Doctor, restart web/worker, then repeat a sign-in and file-processing check.
 
-Alpha releases may require database recreation and reimport. Persisted workflow formats are not
-assumed compatible. Rolling back after a database change requires the matching backup, not just
-older packages. See the detailed [upgrade transitions](https://github.com/Jadeiin/quirebase/blob/main/docs/DEPLOYMENT.md#upgrades),
-including DBOS storage changes.
+Follow the target release's [upgrade instructions](https://github.com/Jadeiin/quirebase/blob/main/docs/DEPLOYMENT.md#upgrades)
+for database and durable-workflow changes. To roll back, install the version matching your backup
+and restore that backup.
 
 ## Recover durable work
 
@@ -101,8 +99,8 @@ uv run quirebase recover-workflows OLD_EXECUTOR_ID
 uv run quirebase recover-workflows OLD_EXECUTOR_ID --apply
 ```
 
-Replace `OLD_EXECUTOR_ID` with the actual retired identity. Recovery is not a reason to give two live
-workers the same ID. Retained workflow history eventually expires and then cannot be resumed.
+Replace `OLD_EXECUTOR_ID` with the retired identity. Give each running worker its own stable ID.
+Tasks can be recovered within the workflow history retention period.
 
 ## Retention and database space
 
@@ -115,6 +113,5 @@ workers the same ID. Retained workflow history eventually expires and then canno
 | `QUIREBASE_IMPORT_BATCH_RETENTION_DAYS` | 7 days | Temporary Import Batch history |
 
 Import history expiration preserves committed Items and files but ends receipt replay and batch
-filtering. These settings do not create automatic content, account, or backup expiration.
-Deleting rows may make space reusable without shrinking the database file. SQLite compaction needs
-all writers stopped before `quirebase compact-sqlite`; PostgreSQL space maintenance is separate.
+filtering. Cleanup releases reusable database space. To shrink a SQLite file, stop all writers and
+run `quirebase compact-sqlite`; PostgreSQL space maintenance is separate.

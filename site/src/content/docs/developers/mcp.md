@@ -3,9 +3,7 @@ title: Connect and verify an MCP client
 description: Configure Streamable HTTP with an API Token, discover tools, select a Workspace, and verify a read.
 ---
 
-Use an MCP client that supports Streamable HTTP and a configured Bearer Authorization header.
-Quirebase does not currently provide OAuth authorization discovery. The server uses the same current
-User and Workspace authority as the HTTP API.
+Connect to Quirebase over Streamable HTTP and configure a Bearer API Token in the client.
 
 ## 1. Create the connection
 
@@ -25,12 +23,11 @@ User and Workspace authority as the HTTP API.
    }
    ```
 
-4. Replace the example origin and token. A remote client needs a network-reachable application URL;
-   its `127.0.0.1` refers to the client's own host.
+4. Replace the URL and token. Use the example address for a client on the same machine, or the
+   server's reachable address for a remote connection.
 5. Save/reconnect and inspect the tool list.
 
 Client configuration formats differ; use the equivalent Streamable HTTP/header fields in your client.
-Browser Login Session cookies are not MCP credentials, and query-string tokens are rejected.
 
 ## 2. Discover a tool and inspect its schema
 
@@ -47,8 +44,8 @@ For an unfamiliar tool, retrieve its full input/output schema before calling it:
 {"tools": ["workspaces.get_workspaces"], "detail": "full"}
 ```
 
-Pass this to `get_schema`. Compact search summaries omit some constraints; reuse a schema you already
-retrieved instead of guessing required arguments.
+Pass this to `get_schema`, then fill in the arguments using the full schema. Clients can cache and
+reuse schemas they have retrieved.
 
 ## 3. Select a Workspace and verify a read
 
@@ -63,15 +60,12 @@ inspect its schema, and supply the required Workspace and resource IDs. A succes
 transport and token access; a research read additionally verifies that Workspace's current authority.
 
 For Identifier Import, the sequence is preparation → preview and diagnostics → explicit confirmation.
-Ask the User to review the prepared result before confirmation. An agent does not receive extra
-permissions just because it can discover a tool.
+Ask the User to review the prepared result before confirmation.
 
-## Know the tool boundary
+## Available tools
 
-The curated surface includes ordinary Item metadata/organization, Projects, document metadata,
-Annotations/Replies, Tags, Discussions, Identifier Import, Discovery, and citations. Tools execute
-the same HTTP operations. Administrator operations, file bytes, and the currently unstructured PDF
-full text are excluded. API Tokens have no independent per-tool scopes.
+Tools cover Item metadata and organization, Projects, document metadata, Annotations and Replies,
+Tags, Discussions, Identifier Import, Discovery, and citations.
 
 ## Resolve connection problems
 
@@ -82,6 +76,6 @@ full text are excluded. API Tokens have no independent per-tool scopes.
 | Connected but research denied | Explicit Workspace ID, active membership, and current resource authority |
 | Browser client blocked by Origin/CORS | Operator's explicit `QUIREBASE_MCP_ALLOWED_ORIGINS` allowlist |
 
-Native clients normally send no Origin. Browser MCP CORS is separate from HTTP API and S3 CORS.
-See [configuration](/administration/configuration/#browser-mcp-access). Implementation choices live
+For browser client Origin settings, see
+[configuration](/administration/configuration/#browser-mcp-access). Implementation choices live
 in the [MCP ADR](https://github.com/Jadeiin/quirebase/blob/main/docs/adr/0004-research-intelligence-mcp-and-agent.md).

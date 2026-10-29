@@ -41,8 +41,7 @@ docker compose --env-file .env.docker logs --tail 50 worker
 ```
 
 The database uses the Compose `postgres-data` volume and local objects use `quirebase-data`.
-`make docker-down` stops the stack while preserving those volumes. Volume deletion is a separate,
-destructive action. The default published web port binds to loopback only.
+`make docker-down` stops the stack while preserving those volumes. The default web port binds to loopback.
 
 ## Option B: run a source checkout with SQLite
 
@@ -57,9 +56,8 @@ uv run quirebase create-admin
 uv run quirebase doctor
 ```
 
-`create-admin` prompts for a username and password. It does not install a shared demonstration
-password. `init-db` creates/applies the database and workflow-storage schema; it is not a replacement
-for a running worker.
+`create-admin` prompts for a username and password. `init-db` initializes the database and workflow
+storage. Next, start web and worker in separate terminals:
 
 In terminal 1, from the installation directory:
 
@@ -74,13 +72,12 @@ uv run quirebase worker
 ```
 
 Open `http://127.0.0.1:9060`. Defaults create `./quirebase.db` and `./quirebase-data` in the working
-directory. Do not put production data in a temporary checkout. For unattended operation, configure
-supervised web and worker processes with these same paths and settings.
+directory. For a long-running deployment, use persistent data paths and supervised web and worker
+processes with fixed working directories and settings.
 
 For PostgreSQL, create a database and credentials through your database service, run
 `uv sync --frozen --extra postgres`, and set `QUIREBASE_DATABASE_URL` in `.env` before initialization.
 Use a libpq URL such as `postgresql://quirebase:encoded-password@localhost/quirebase`.
-SQLAlchemy driver spellings such as `postgresql+psycopg://` are unsupported.
 
 ## Verify the first end-to-end task
 
@@ -89,7 +86,7 @@ SQLAlchemy driver spellings such as `postgresql+psycopg://` are unsupported.
 3. Confirm PDF processing reaches ready and the reader opens it.
 4. Save a private note and reopen the same revision to check persistence.
 
-A working sign-in page alone does not verify the worker or file store. If this task stalls, follow
+This verifies web, worker, and file storage together. For problems along the way, follow
 [troubleshooting](/knowledge-base/troubleshooting/).
 
 ## Configure access through an HTTPS proxy
@@ -108,7 +105,6 @@ unsafe browser requests must match it. Coordinate proxy upload limits with the a
 Restart source processes after deployment-setting changes; for Compose, apply them with
 `make docker-up`.
 
-Web and all workers must use the same database and object store. Give each additional worker a
-unique, stable executor ID. The bundled Compose worker intentionally cannot be scaled with a shared
-identity. Continue with [configuration](/administration/configuration/) and
+Connect web and all workers to the same database and object store. Assign a unique, stable executor
+ID to each additional worker. Continue with [configuration](/administration/configuration/) and
 [backups and upgrades](/administration/maintenance/).

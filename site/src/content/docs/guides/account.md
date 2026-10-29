@@ -3,8 +3,7 @@ title: Manage account settings and credentials
 description: Choose your language, review browser sessions, and create or revoke programmatic credentials.
 ---
 
-Open the user menu in the application and choose **Account settings**. This page is available even
-without an active Workspace membership; opening research content still requires Workspace access.
+Open the application's user menu and choose **Account settings**.
 
 ## Change language and browser preferences
 
@@ -20,8 +19,7 @@ browser; see [exports](/guides/citations-and-exports/) before expecting them on 
 2. Enter a new password of at least 12 characters.
 3. Choose **Change password** and check the returned status.
 
-If you cannot sign in, ask the instance administrator about account recovery. Creating another User
-does not recover the first User's memberships, private Annotations, or authorship.
+If you cannot sign in, ask the instance administrator to help recover your account.
 
 ## Review and revoke browser sessions
 
@@ -29,8 +27,7 @@ Under **Sessions**, inspect creation/expiration times and the **Current session*
 **Revoke session** for a device you no longer use. Revoking the current session or choosing **Revoke
 all sessions** signs you out; sign in again for browser access.
 
-A browser Login Session and an API Token are separate credentials. To stop a programmatic client,
-revoke its API Token in the next section rather than relying on browser sign-out.
+To stop a programmatic client's access, revoke its API Token in the next section.
 
 ## Create an API Token
 
@@ -42,16 +39,15 @@ revoke its API Token in the next section rather than relying on browser sign-out
 5. Use the credential through the Bearer Authorization header and verify a Workspace-list request.
 
 **Check the result:** the token appears in the account list with an expiration, and the client can
-list the Workspaces your User may access. The plaintext value cannot be recovered later from history.
+list the Workspaces your User may access.
 
 ## Replace or revoke a token
 
 To stop a client, choose **Revoke token** next to its credential. To rotate a working client, create
 a replacement, update that client's stored credential, verify it, then revoke the previous token.
-If the plaintext value was lost, create a replacement rather than trying to retrieve it.
+Create a replacement if the token is lost.
 
-Tokens carry the User's current authority, without separate read-only or per-tool scopes. Membership
-changes, expiration, revocation, and User deactivation affect subsequent requests. Never put the
-token into a query-string URL or send it to a scholarly Provider.
+Clients access Workspaces as the token's User. Store the token in the client's credential store
+and send it through the Bearer header.
 
 Continue with the complete [HTTP API](/developers/http-api/) or [MCP](/developers/mcp/) connection tutorial.

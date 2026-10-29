@@ -3,14 +3,12 @@ title: Build a Project for shared reading
 description: Bring a colleague into the Workspace, add an Item to a Project, and verify a shared Annotation.
 ---
 
-This walkthrough assumes you already have an Item in the destination Workspace. You need the
-appropriate Workspace actions to invite members, create a Project, and assign Items. A colleague
-needs an active User and active membership in the same Workspace.
+Start with an Item, invite a colleague to its Workspace, and create a shared reading Project.
 
 ## 1. Admit the colleague to the Workspace
 
-An **account Invitation** creates a User; a **Workspace Invitation** admits an existing User to this
-Workspace. Ask the instance administrator to create the account first if necessary.
+Confirm your colleague's username first. If they need an account, ask the instance administrator
+to send an account Invitation.
 
 1. Open **Workspace settings → Invitations**.
 2. Enter the colleague's exact username, choose an available role and expiration, and create the invitation.
@@ -44,10 +42,8 @@ owners/admins. An open Project's creator joins automatically. For an existing op
 2. Find the Project under the available Project groups and choose **Add**.
 3. Open the Project, or choose its **Open in Library** action, and verify that the Item appears.
 
-Adding the Item creates an association, not another bibliographic record. The same Item can be in
-several Projects in this Workspace. Project participation adds no extra Workspace authority over
-that canonical Item. A managed Project restricts its collaborative context; it does not make the
-underlying Workspace Item private from other authorized Workspace readers.
+The same Item can belong to several Projects, sharing its metadata and files. Each Project keeps
+its own shared Annotations and Discussions.
 
 ## 4. Share and verify a reading note
 
@@ -57,15 +53,14 @@ underlying Workspace Item private from other authorized Workspace readers.
 4. Ask the colleague to open the same revision and enable this Project under **Displayed annotation sources**.
 
 **Check the result:** the colleague can see the Project mark and, when authorized, reply to it.
-Your private marks remain private. Use Annotation Replies for a specific mark, Item Discussion for
+Use Annotation Replies for a specific mark, Item Discussion for
 the reference, and Project Discussion for the working group's broader conversation.
 
-## Retire a Project without losing the wrong content
+## Archive or delete a Project
 
 Archiving preserves the Project for restoration and makes its context read-only. Deleting a Project
 removes its participants and Project-owned context while preserving canonical Workspace Items,
 their files, and private Annotations.
 
-Removing just one Item from a Project permanently deletes that association's Project Annotations
-and Replies. Deleting the canonical Item is a different Workspace-governed operation. Read the
-confirmation for the exact scope before proceeding.
+Removing an Item from a Project permanently deletes that association's Project Annotations and
+Replies. Export those Annotations first if you want to keep the reading notes.

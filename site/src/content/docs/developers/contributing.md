@@ -25,8 +25,8 @@ password `quirebase-dev` on first setup, and starts these local services:
 | FastAPI | `http://127.0.0.1:9060`, HTTP API |
 | Worker | Durable background processing using the same development data |
 
-This is a development setup with known initial credentials. Deployment uses the separate
-[installation procedure](/administration/deployment/) and an administrator-chosen password.
+For deployment, follow the [installation procedure](/administration/deployment/) and set your own
+administrator password.
 The [repository README](https://github.com/Jadeiin/quirebase/blob/main/README.md#development) lists
 manual setup and `QUIREBASE_DEV_*` overrides.
 
@@ -38,8 +38,7 @@ Install hooks with:
 uv run --frozen prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 ```
 
-The backend test suite needs the built application assets, even if you normally use Vite for HMR.
-Before running it or relying on the pre-push hook:
+Build the application frontend, then run backend tests and pre-push checks:
 
 ```sh
 bun install --cwd frontend --frozen-lockfile
@@ -62,8 +61,7 @@ bun install --cwd site --frozen-lockfile
 bun run --cwd site dev
 ```
 
-Open the URL Astro reports. You do not need to initialize a database or run the application frontend
-to author docs. After editing:
+The documentation development server runs independently. Open the URL Astro reports. After editing:
 
 ```sh
 bun run --cwd site check
@@ -71,8 +69,8 @@ bun run --cwd site build
 bun run --cwd site preview
 ```
 
-Use the built preview to test Pagefind search; the development server does not build its search
-index. Checks validate paired English/Chinese source pages, content/schema, internal links, and final
+Pagefind search is generated during the build; test it in the preview. Checks validate paired
+English/Chinese source pages, content/schema, internal links, and final
 HTML assets and API coverage. The [maintenance guide](https://github.com/Jadeiin/quirebase/blob/main/site/README.md)
 explains the authoring policy and artifact-only CI. GitHub Pages publication is a later, separate change.
 
@@ -88,5 +86,5 @@ explains the authoring policy and artifact-only CI. GitHub Pages publication is 
 
 [Module ownership](https://github.com/Jadeiin/quirebase/blob/main/docs/architecture/modules.md) defines
 capability/dependency boundaries. [Agent guidance](https://github.com/Jadeiin/quirebase/blob/main/AGENTS.md)
-contains repository-specific instructions, including migration generation. Do not duplicate an API
-parameter table in a hand-maintained guide; describe a complete task and link to generated reference.
+contains repository-specific instructions, including migration generation. Describe complete tasks
+in guides and link to the generated API parameter reference.

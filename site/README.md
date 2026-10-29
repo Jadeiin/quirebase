@@ -59,6 +59,11 @@ content, and removing a relation from deleting a resource. Check those claims ag
 UI and operation contracts. Concept pages should use a concrete example and explain the practical
 consequences of the model. Link to the next task instead of repeating whole guides.
 
+Lead with what the reader can do and the steps that achieve it. Keep role and access explanations
+in the concept and member-management pages. Put input requirements beside the relevant step and
+deletion consequences beside the delete action. Use concrete supported examples and brief recovery
+steps, with links for readers who need more detail.
+
 Keep generated API route fields in FastAPI rather than duplicating parameter tables in guides. The `starlight-openapi`
 plugin reads the freshly exported contract and publishes pages under `/reference/api/`; the exact
 same schema is downloadable at `/openapi.json` on the documentation host.

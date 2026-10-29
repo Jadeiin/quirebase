@@ -14,7 +14,7 @@ Web 和 Worker 应配置为同一个实例。开始前，先分清“进程启�
 | 运行时设置 | 管理员页面的“设置”（Settings） | 对支持的字段，数据库中保存的值覆盖部署默认值 |
 
 支持运行时覆盖的内容包括注册策略、额外工作区创建策略、来源联系方式及凭据、会话时长、上传字节上限和导出保留时长。
-修改 `.env` 后这些值没有变化时，应先查看管理员设置页显示的实际值。
+运行时值以管理员设置页显示的生效值为准。
 数据库连接、对象存储后端、外部 Origin 和 Worker 身份仍属于部署设置。
 
 ## 建立本地基础配置
@@ -43,7 +43,7 @@ INQUIRO_CONTACT_EMAIL=operator@example.org
 | `QUIREBASE_WORKSPACE_CREATION_POLICY` | `admins_only` | 创建额外工作区：`admins_only` 或 `members_allowed` |
 | `QUIREBASE_WORKFLOW_EXECUTOR_ID` | `quirebase-worker` | 稳定的 Worker 身份，每个 Worker 必须不同 |
 
-表中是应用默认值，Compose 的具体配置可能不同。账号创建时自动获得的工作区，不受“额外工作区创建”策略阻止。
+表中是应用默认值，Compose 配置见 `.env.docker`。账号创建时获得一个工作区，创建更多工作区由额外工作区策略管理。
 有运行时策略覆盖时，以管理员设置页的生效值核对。源码使用 PostgreSQL 前，应安装 `postgres` 可选依赖。
 
 ## 配置外部来源和引文支持
@@ -58,7 +58,6 @@ INQUIRO_CONTACT_EMAIL=operator@example.org
 
 标签推荐默认使用离线 YAKE。可选本地 KeyBERT 引擎需要安装 `keybert` extra，设置
 `QUIREBASE_RECOMMENDATION_ENGINE=keybert`，并让 `QUIREBASE_KEYBERT_MODEL_PATH` 指向管理员预先准备的本地 Model2Vec 目录。
-不支持运行时下载模型或直接填写远程模型标识符。
 
 ## 设置文件存储和大小上限
 
@@ -71,19 +70,17 @@ QUIREBASE_S3_REGION=your-region
 ```
 
 同时为 Web 和 Worker 配置适用的 endpoint、prefix 及原生 AWS 凭据。
-改配置不会复制旧对象；切换已有实例前，应保持物理对象键不变地迁移文件。
-S3 需要单独的备份方案，`quirebase backup` 仅支持本地对象存储。
+已有实例切换存储前，先按原物理对象键迁移文件，再更新配置。S3 备份见[维护指南](/zh-cn/administration/maintenance/)。
 
 PDF 和附件的默认单文件上限都是 `262144000` 字节，即 250 MiB。
 设置名为 `QUIREBASE_MAX_PDF_BYTES`、`QUIREBASE_MAX_ATTACHMENT_BYTES`，也可能被管理员运行时设置覆盖。
-这里填写字节数，不是直接填写 MiB 数值；反向代理的请求大小上限也要协调。
+这些设置使用字节数，并应与反向代理的请求大小上限协调。
 
 只在容器网络可见的 S3 域名应继续使用应用流式下载。直接签名下载需要浏览器可达的地址，并单独配置存储桶 CORS。
 endpoint、签名和迁移的完整要求见[对象存储契约](https://github.com/Jadeiin/quirebase/blob/main/docs/DEPLOYMENT.md#object-storage)。
 
 ## 浏览器 MCP 客户端
 
-原生 MCP 客户端通常不发送 Origin。浏览器客户端需要明确配置 `QUIREBASE_MCP_ALLOWED_ORIGINS` 白名单。
-它只控制 MCP CORS，与 HTTP API 的浏览器 Origin 策略、S3 存储桶 CORS 分别配置。
+将浏览器 MCP 客户端的 Origin 加入 `QUIREBASE_MCP_ALLOWED_ORIGINS` 白名单。
 
 完成配置后，按[维护指南](/zh-cn/administration/maintenance/)使用相同实例设置运行健康与恢复检查。

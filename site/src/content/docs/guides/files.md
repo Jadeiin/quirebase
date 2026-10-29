@@ -5,7 +5,6 @@ description: Attach the right kind of file, wait for PDF processing, and verify 
 
 Use this guide when the Item already exists. To create Items from a batch of PDFs, use
 [PDF Import](/guides/import/#import-pdfs) first. Open the Item's **Files** section in its Workspace.
-File management and permanent Item deletion are separate permissions.
 
 ## Choose a file role
 
@@ -26,11 +25,10 @@ An Item can have several PDF revisions. Each revision has its own pages and Anno
 4. Confirm the title and filename in the reader refer to the file you intended.
 
 For a direct PDF download URL, use **Add a PDF from URL**, enter the address, and choose **Download
-and add PDF**. The address should return a PDF file, not an article landing page requiring browser
-navigation or sign-in. This download operation is separate from Identifier Lookup.
+and add PDF**. Use a URL that directly downloads the PDF.
 
-Uploading a corrected PDF creates another revision; it does not replace the older revision or move
-its Annotations. Keep the old revision if you need its marks and page references.
+Uploading a corrected PDF creates another revision. Keep the old revision to continue using its
+Annotations and page references.
 
 ## Upload an Attachment or Graphical Abstract
 
@@ -40,7 +38,6 @@ is available for downloadable remote files.
 
 **Check the result:** the file appears in the list with the intended role. An Item has at most one
 designated Graphical Abstract; that image takes priority over an automatically derived PDF thumbnail.
-An Attachment does not become the reader's primary PDF revision.
 
 ## Interpret processing states
 
@@ -50,10 +47,10 @@ An Attachment does not become the reader's primary PDF revision.
 | Ready | Extraction completed | Use **Read** and verify the document |
 | Failed | Inspection failed and the source is retained | Inspect the error and use **Retry processing**, or add a corrected PDF |
 
-Password-protected PDFs and OCR are unsupported. An image-only scan may render without producing
-searchable text. PDF and Attachment defaults allow up to 250 MiB per file; an operator or reverse
-proxy can impose different limits. Check the actual upload error rather than retrying the same
-oversized request repeatedly.
+Remove password protection before uploading a PDF. Scans can be read; text search needs a PDF
+with a text layer. PDF and Attachment defaults allow up to 250 MiB per file, configurable by the
+operator or reverse proxy. If an upload exceeds the limit, adjust the file or ask the operator to
+change the limit.
 
 ## Download or remove a file
 
@@ -64,4 +61,4 @@ An Item's document download action can also assemble selected revisions into a b
 Before choosing **Delete**, identify the exact revision or Attachment and keep any copy you need.
 Deleting a File Revision removes its revision-bound Annotations and derived thumbnail. Deleting an
 Attachment removes that supplementary file. Permanently deleting the Item removes its associated
-files and context as well. These are different operations with different scopes.
+files and context as well.

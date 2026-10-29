@@ -3,8 +3,7 @@ title: 连接并验证 MCP 客户端
 description: 配置带 API 令牌的 Streamable HTTP，发现工具，选择工作区，并验证读取权限。
 ---
 
-客户端需要支持 Streamable HTTP 和配置 Bearer Authorization 请求头。
-Quirebase 当前不提供 OAuth 授权发现，MCP 使用与 HTTP API 相同的当前用户和工作区权限。
+通过 Streamable HTTP 连接 Quirebase，并在客户端配置 Bearer API 令牌。
 
 ## 1. 建立连接
 
@@ -23,11 +22,10 @@ Quirebase 当前不提供 OAuth 授权发现，MCP 使用与 HTTP API 相同的�
    }
    ```
 
-4. 替换示例 Origin 和令牌。远程客户端必须使用它实际能访问的应用地址；客户端中的 `127.0.0.1` 指向客户端自己的主机。
+4. 替换为客户端可访问的应用地址和令牌。同机运行可使用示例地址，远程连接时填写服务器地址。
 5. 保存并重新连接，检查工具列表。
 
 各客户端配置格式不同，应使用等效的 Streamable HTTP 和请求头选项。
-浏览器登录 Cookie 不是 MCP 凭据，放在 URL 查询参数中的令牌会被拒绝。
 
 ## 2. 查找工具并查看完整输入格式
 
@@ -44,7 +42,7 @@ Quirebase 当前不提供 OAuth 授权发现，MCP 使用与 HTTP API 相同的�
 {"tools": ["workspaces.get_workspaces"], "detail": "full"}
 ```
 
-搜索摘要会省略一部分约束，不应据此猜测必需参数；已经取得的完整 Schema 可以复用。
+按完整 Schema 填写调用参数；客户端可缓存并复用已取得的 Schema。
 
 ## 3. 选择工作区，并验证一次读取
 
@@ -58,13 +56,10 @@ Quirebase 当前不提供 OAuth 授权发现，MCP 使用与 HTTP API 相同的�
 列出工作区成功说明连接和令牌有效；读取研究内容还会验证该工作区的当前权限。
 
 标识符导入遵循“准备 → 检查预览和诊断 → 显式确认”。确认前应让用户审阅准备出的结果。
-能发现某个工具，不代表智能体额外拥有该操作的权限。
 
-## 理解工具覆盖范围
+## 可用工具
 
-当前精选工具包括普通条目元数据和整理、项目、文件元数据、批注和回复、标签、讨论、标识符导入、发现及引文。
-它们执行相同的 HTTP 操作。管理员操作、文件字节及当前未结构化的 PDF 全文不在此工具范围内。
-API 令牌没有另一套逐工具权限。
+可用工具包括文献元数据与整理、项目、文件元数据、批注和回复、标签、讨论、标识符导入、发现及引文。
 
 ## 连接失败时先检查什么
 
@@ -75,5 +70,5 @@ API 令牌没有另一套逐工具权限。
 | 已连接，但研究操作被拒绝 | 是否传入工作区 ID、成员关系是否活跃、资源当前权限 |
 | 浏览器客户端被 Origin/CORS 阻止 | 运维是否配置了明确的 `QUIREBASE_MCP_ALLOWED_ORIGINS` 白名单 |
 
-原生客户端通常不发送 Origin。浏览器 MCP CORS 与 HTTP API、S3 CORS 分别配置。
-详见[配置指南](/zh-cn/administration/configuration/)。实现决策保留在 [MCP ADR](https://github.com/Jadeiin/quirebase/blob/main/docs/adr/0004-research-intelligence-mcp-and-agent.md) 中。
+浏览器客户端的 Origin 白名单见[配置指南](/zh-cn/administration/configuration/)。
+实现决策见 [MCP ADR](https://github.com/Jadeiin/quirebase/blob/main/docs/adr/0004-research-intelligence-mcp-and-agent.md)。

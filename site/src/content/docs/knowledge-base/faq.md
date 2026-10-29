@@ -1,75 +1,73 @@
 ---
 title: Frequently asked questions
-description: Understand imports, private notes, Project visibility, file revisions, and export limits.
+description: Find answers about imports, team access, reading notes, browser preferences, and backups.
 ---
 
 ## I can see an Import preview. Why is the Item missing from Library?
 
-Preparation creates candidates, not Items. Check the preview, then choose **Import … records**.
-After completion, use **View imported Items** and verify the Workspace. Manual creation is different:
-**Create Item** saves directly. See [Import](/guides/import/).
+Check the preview, then choose **Import … records**. After completion, use **View imported Items**
+and verify the destination Workspace. See [Import](/guides/import/) for the complete procedure.
 
 ## Which preview records can I choose?
 
 Identified records are committed together. In **PDFs without metadata**, explicitly select the basic
-PDF candidates you want to keep; unselected ones are skipped. If the identified batch is wrong,
-discard it and correct the inputs. [The preview guide](/guides/import/#review-the-preview-and-commit-once)
-explains the confirmation count.
+PDF candidates you want to keep. [The preview guide](/guides/import/#review-the-preview-and-commit-once)
+explains how to adjust a batch and check the confirmation count.
 
-## Does a managed Project hide its Items from everyone else?
+## How should I arrange reference access for different teams?
 
-It limits discovery of the Project collaboration context. Canonical Items still follow Workspace
-access. Project participation does not grant extra Item authority. Use a different Workspace when a
-separate membership boundary is required; copying across Workspaces creates independent records.
+Create a Workspace for each team with a different membership and assign appropriate roles.
+Within a Workspace, use Projects for reading groups and shared references. See
+[Workspaces and Projects](/concepts/workspaces-and-projects/).
 
-## Why can a viewer create a private note?
+## Which roles suit reading and review?
 
-Private Annotations belong to their author. In an active Workspace, all five roles may maintain their
-own private notes. Shared Project Annotation creation has different grants. See [roles](/administration/workspaces-and-members/).
+Viewers can read, export, and keep private notes. Reviewers can also contribute shared Project
+Annotations, Replies, and Discussions. See [member management](/administration/workspaces-and-members/)
+for more roles.
 
-## Can an instance administrator read my private notes?
+## Who can see my Annotations?
 
-Instance administration has no implicit Workspace-content access, and private Annotations remain
-author-restricted. Reason-bound read-only inspection and ownership reassignment are explicit,
-audited governance operations, not general browsing authority. See [access concepts](/concepts/workspaces-and-projects/).
+Private Annotations are visible to their author. Project Annotations are shared with participants
+who have reading permission. Choose Private annotations or the target Project under
+**Save new annotations to** when creating a mark.
 
 ## My colleague cannot see my mark. What should I check?
 
-Check that both of you opened the same PDF revision. Your mark must have been created with the
-Project selected under **Save new annotations to**, and the colleague must enable that Project as a
-displayed source and have the required authority. Showing a Project source does not make a new
-private mark shared. See [PDF annotations](/guides/pdf-annotations/).
+Open the same PDF revision, check the Project where the mark was saved, and ask your colleague to
+enable that Project under **Displayed annotation sources**. See
+[PDF annotations](/guides/pdf-annotations/) for the complete procedure.
 
-## Do annotations move to a new PDF revision?
+## How can I view Annotations on an older PDF?
 
-No automatic migration is performed. Each mark is anchored to one page of one revision. Keep the
-old revision if you need its marks. An export creates a copy without changing the stored source.
+Find the original PDF revision in the Item's **Files**, choose **Read**, and enable the relevant
+Annotation sources. Each revision keeps its own marks, available as long as you retain the revision.
 
-## Can I use a scanned or password-protected PDF?
+## What does a PDF need for reading and text search?
 
-OCR and password-protected PDFs are unsupported. An image-only scan may render without producing
-searchable text. Flattened annotation exports are also unsupported.
+Upload a PDF with password protection removed. Scans can be read; full-text search needs a PDF
+with a text layer. See [file management](/guides/files/) for preparation and processing states.
 
 ## Does deleting import history remove the imported Items?
 
 Deleting or expiring a committed batch preserves its Items and files. It removes the retained
-confirmation result and corresponding Library filter. Import history is not a backup of source files.
+confirmation result and corresponding Library filter.
 
 ## What is removed when I leave a Workspace?
 
 Leaving terminates your membership and its explicit Project selections, while preserving content
-and authorship. Rejoining needs a new invitation and does not restore prior selections. Owners need
-to transfer ownership before leaving.
+and authorship. Returning members accept a new invitation and arrange their Project participation
+again. Owners transfer ownership before leaving.
 
 ## Why are my saved views or export preferences different on another device?
 
-They are browser-local preferences, scoped to the account and, where applicable, the Workspace.
-They are not server-synchronized research content. Recheck the current browser's settings.
+These preferences are stored in the current browser for the account and Workspace. Set up your
+preferred views and export defaults when using a new device.
 
-## Is a bibliography export enough for backup?
+## How can I back up the whole installation?
 
-It exchanges reference metadata. It does not replace a database-and-object backup, including
-membership, Discussions, and stored files. Follow [backup and restore](/administration/maintenance/).
+Ask the operator to follow [backup and restore](/administration/maintenance/) for the database and
+object files, preserving membership, references, Discussions, and stored files.
 
 ## How do integrations authenticate?
 

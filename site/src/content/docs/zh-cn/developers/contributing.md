@@ -24,7 +24,7 @@ cd quirebase
 | FastAPI | `http://127.0.0.1:9060`，HTTP API |
 | Worker | 使用同一开发数据处理持久化后台任务 |
 
-这是带已知初始凭据的开发环境。实际部署应使用[安装流程](/zh-cn/administration/deployment/)，由管理员自己选择密码。
+部署实例请使用[安装流程](/zh-cn/administration/deployment/)，设置自己的管理员密码。
 仓库 [README](https://github.com/Jadeiin/quirebase/blob/main/README.md#development)提供手动设置和 `QUIREBASE_DEV_*` 覆盖选项。
 
 ## 运行仓库检查
@@ -35,8 +35,7 @@ cd quirebase
 uv run --frozen prek install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 ```
 
-后端测试需要应用前端已经构建，即使平时使用的是 Vite 热更新。
-运行测试或依赖 pre-push hook 前，先执行：
+构建应用前端后，运行后端测试和 pre-push 检查：
 
 ```sh
 bun install --cwd frontend --frozen-lockfile
@@ -58,7 +57,7 @@ bun install --cwd site --frozen-lockfile
 bun run --cwd site dev
 ```
 
-打开 Astro 输出的本地地址。编写文档不要求初始化数据库，也不要求运行应用前端。
+文档开发服务器独立运行，打开 Astro 输出的本地地址即可预览。
 修改后执行：
 
 ```sh
@@ -67,7 +66,7 @@ bun run --cwd site build
 bun run --cwd site preview
 ```
 
-Pagefind 搜索要在构建后的预览中检查，开发服务器不会生成搜索索引。
+Pagefind 搜索在构建后生成，可在 preview 中检查。
 检查会覆盖中英页面配对、内容结构、站内链接，以及最终 HTML 资源和 API 覆盖。
 [维护说明](https://github.com/Jadeiin/quirebase/blob/main/site/README.md)记录写作策略和仅生成产物的 CI。
 GitHub Pages 发布仍在后续独立变更中处理。

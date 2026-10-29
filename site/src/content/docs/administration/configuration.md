@@ -15,8 +15,8 @@ that an administrator has saved in the application.
 | Runtime settings | The administrator Settings page | For supported keys, saved database values override deployment defaults |
 
 Runtime overrides include registration and Workspace-creation policies, Provider contact/credentials,
-session duration, upload byte limits, and export lifetime. If editing `.env` does not change one of
-these values, inspect the effective value on the administrator Settings page. Database connection,
+session duration, upload byte limits, and export lifetime. Read their effective values on the
+administrator Settings page. Database connection,
 object-store backend, origin, and worker identity remain deployment settings.
 
 ## Set a local baseline
@@ -46,8 +46,8 @@ Relative filesystem paths resolve from the process working directory, so web and
 | `QUIREBASE_WORKSPACE_CREATION_POLICY` | `admins_only` | `admins_only` or `members_allowed` for additional Workspaces |
 | `QUIREBASE_WORKFLOW_EXECUTOR_ID` | `quirebase-worker` | Stable worker identity; use a different value for each worker |
 
-These are application defaults, not every Compose value. A Workspace created during User provisioning
-is independent of the policy for creating additional Workspaces. Use the Settings page to verify any
+These are application defaults; see `.env.docker` for the Compose configuration. Account creation
+provides a Workspace, and the additional-Workspace policy controls creating more. Use Settings to verify
 runtime policy overrides. For PostgreSQL source installs, include the `postgres` extra before starting.
 
 ## Configure Providers and citation support
@@ -63,8 +63,7 @@ The Docker image includes PostgreSQL and citation extras. Authorized Users can a
 
 Tag Recommendations use offline YAKE by default. For the optional local KeyBERT engine, install the
 `keybert` extra, set `QUIREBASE_RECOMMENDATION_ENGINE=keybert`, and point
-`QUIREBASE_KEYBERT_MODEL_PATH` to an administrator-provisioned local Model2Vec directory. Runtime
-model downloads and remote model identifiers are unsupported.
+`QUIREBASE_KEYBERT_MODEL_PATH` to an administrator-provisioned local Model2Vec directory.
 
 ## Configure file storage and limits
 
@@ -76,13 +75,13 @@ QUIREBASE_S3_BUCKET=your-bucket
 QUIREBASE_S3_REGION=your-region
 ```
 
-Also set the applicable endpoint/prefix and native AWS credentials for both web and workers. Switching
-configuration does not copy old objects; migrate their physical keys before switching an existing
-installation. Back up S3 separately: `quirebase backup` supports local object storage only.
+Also set the applicable endpoint/prefix and native AWS credentials for both web and workers. For an
+existing installation, migrate files with their physical object keys intact, then update the
+configuration. See [maintenance](/administration/maintenance/) for S3 backup.
 
 PDF and Attachment limits default to `262144000` bytes (250 MiB) each. The settings are
 `QUIREBASE_MAX_PDF_BYTES` and `QUIREBASE_MAX_ATTACHMENT_BYTES`, with possible administrator runtime
-overrides. Enter byte values, not a bare MiB count, and align the proxy's request-size limit.
+overrides. Enter byte values and align the proxy's request-size limit.
 
 Keep streaming downloads for container-only S3 hostnames. Direct signed downloads need a
 browser-reachable endpoint and separately configured bucket CORS. See the detailed
@@ -91,9 +90,7 @@ for endpoint, signature, and migration requirements.
 
 ## Browser MCP access
 
-Native MCP clients normally send no Origin. Browser clients need an explicit
-`QUIREBASE_MCP_ALLOWED_ORIGINS` allowlist. It configures MCP CORS only, independently of the HTTP
-API's browser Origin policy and the S3 bucket's CORS.
+Add browser MCP clients' Origins to the `QUIREBASE_MCP_ALLOWED_ORIGINS` allowlist.
 
 After configuration, run the [health and recovery checks](/administration/maintenance/) with the
 same installation settings.
