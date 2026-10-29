@@ -86,6 +86,8 @@ English is the root locale. Every handwritten page, including the landing and 40
 a Chinese counterpart at the same relative path under `zh-cn/`, for example
 `zh-cn/guides/import.md`. Add or update both versions in the same PR. Keep sidebar labels translated
 in `astro.config.mjs` and use the application's actual Chinese UI labels in Chinese steps.
+Sidebar `translations` keys and UI dictionary filenames use the configured language tag `zh-CN`
+(for example `src/content/i18n/zh-CN.json`), while content paths and links use the URL prefix `zh-cn`.
 
 `bun run --cwd site content:check` reports manual page coverage and fails on missing counterparts
 in either direction. Both `check` and `build` run it. The build also rejects untranslated fallback

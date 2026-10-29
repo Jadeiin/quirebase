@@ -22,15 +22,16 @@ export default defineConfig({
         root: { label: 'English', lang: 'en' },
         'zh-cn': { label: '简体中文', lang: 'zh-CN' },
       },
+      // Sidebar translation keys use the language tag, not the locale's URL prefix.
       sidebar: [
         {
           label: 'Start here',
-          translations: { 'zh-cn': '开始使用' },
+          translations: { 'zh-CN': '开始使用' },
           items: ['getting-started/quickstart'],
         },
         {
           label: 'User guides',
-          translations: { 'zh-cn': '用户指南' },
+          translations: { 'zh-CN': '用户指南' },
           items: [
             'guides/discovery',
             'guides/import',
@@ -44,12 +45,12 @@ export default defineConfig({
         },
         {
           label: 'Concepts',
-          translations: { 'zh-cn': '核心概念' },
+          translations: { 'zh-CN': '核心概念' },
           items: ['concepts/research-library', 'concepts/workspaces-and-projects'],
         },
         {
           label: 'Administration',
-          translations: { 'zh-cn': '部署与管理' },
+          translations: { 'zh-CN': '部署与管理' },
           items: [
             'administration/deployment',
             'administration/configuration',
@@ -59,12 +60,12 @@ export default defineConfig({
         },
         {
           label: 'Developers',
-          translations: { 'zh-cn': '开发与集成' },
+          translations: { 'zh-CN': '开发与集成' },
           items: ['developers/http-api', 'developers/mcp', 'developers/contributing'],
         },
         {
           label: 'Knowledge base',
-          translations: { 'zh-cn': '知识库' },
+          translations: { 'zh-CN': '知识库' },
           items: ['knowledge-base/faq', 'knowledge-base/troubleshooting'],
         },
         ...openAPISidebarGroups,
