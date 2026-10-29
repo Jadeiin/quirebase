@@ -55,6 +55,9 @@ In **Organize**, enter a Tag name and use **Add tag**, or use the available Tag 
 assignment. Tags are shared Workspace taxonomy. Select a Provider keyword or Tag Recommendation
 to assign it to the Item.
 
+For a complete labeling workflow and shared label cleanup, see
+[organizing references with Tags](/guides/tags/).
+
 In the same section, find the Project and choose **Add**. The Item should then show that association
 and be discoverable in the Project working set. **Remove** detaches the Item and permanently deletes
 that association's Project Annotations and Replies.

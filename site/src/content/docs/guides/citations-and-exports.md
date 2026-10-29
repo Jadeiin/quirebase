@@ -22,9 +22,12 @@ which Items are selected before opening an export action.
 1. Open the Item and choose **Export**.
 2. In the citation action, choose **Format**. For a formatted bibliography, choose **CSL citation**;
    for a reference-manager import, choose a supported interchange format.
-3. Review the displayed text and options. Use **Change options** or **Export settings** when needed.
-4. Choose **Copy to clipboard** or **Download file**.
-5. Open the result in the destination tool and check the Contributor order, dates, title, and Citation Key.
+3. Use **Export settings** if you want to change the CSL style or other saved preferences, then return
+   to the Item and reopen **Export**.
+4. Choose **Copy to clipboard** or **Download file** to generate the result.
+5. Review **Citation text**, paste into the destination tool, or open the downloaded file. Check the
+   Contributor order, dates, title, and Citation Key. To change the format after generating a result,
+   use **Change options**, select the new format, and export again.
 
 If clipboard access is denied, copy the displayed **Citation text** manually or download the file.
 
@@ -55,9 +58,8 @@ exports retain all metadata.
 
 ## Find or add a Citation Style
 
-Open **Tools → Citation Styles** to search built-in and Workspace custom styles. Built-in styles
-require the operator's optional `citation` extra. Users with style-management permission can upload
-custom CSL styles for the Workspace.
+Open **Tools → Citation Styles** to search built-in and Workspace custom styles. To install CSL XML,
+set a default, and check its output, follow [Choose and share Citation Styles](/guides/citation-styles/).
 
 A **Citation Key** identifies the Item in citation output. A **Citation Style** controls formatting.
 
