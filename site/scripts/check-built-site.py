@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote, urljoin, urlsplit
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from urllib.parse import SplitResult
 
 SITE_DIR = Path(__file__).resolve().parents[1]
@@ -72,7 +73,11 @@ def _target_error(url: SplitResult, directory: Path, pages: dict[Path, BuiltPage
         target /= "index.html"
     if not target.is_file():
         return "missing page or asset"
-    fragment = unquote(url.fragment).split(":~:text=", 1)[0]
+    return _anchor_error(target, url.fragment, pages)
+
+
+def _anchor_error(target: Path, fragment: str, pages: dict[Path, BuiltPage]) -> str | None:
+    fragment = unquote(fragment).split(":~:text=", 1)[0]
     if not fragment:
         return None
     if target not in pages:
@@ -82,15 +87,18 @@ def _target_error(url: SplitResult, directory: Path, pages: dict[Path, BuiltPage
     return None
 
 
+def _page_route(path: Path, directory: Path) -> str:
+    relative = path.relative_to(directory).as_posix()
+    return "/" + (relative.removesuffix("index.html") if path.name == "index.html" else relative)
+
+
 def check_links(directory: Path, origin: str) -> tuple[list[str], int, int]:
     pages = {path: BuiltPage(path) for path in directory.rglob("*.html")}
     errors = []
     checked = 0
     for path, page in pages.items():
         relative = path.relative_to(directory).as_posix()
-        route = "/" + (
-            relative.removesuffix("index.html") if path.name == "index.html" else relative
-        )
+        route = _page_route(path, directory)
         for value, line in page.urls:
             url = _internal_url(origin, route, value)
             if url is None:
@@ -101,6 +109,17 @@ def check_links(directory: Path, origin: str) -> tuple[list[str], int, int]:
     if not pages:
         errors.append(f"No HTML pages found in {directory}")
     return errors, len(pages), checked
+
+
+def _check_operation_pages(
+    directory: Path, paths: Mapping[str, Mapping[str, object]]
+) -> tuple[list[str], int]:
+    operations = sum(method in HTTP_METHODS for path in paths.values() for method in path)
+    reference_pages = list((directory / "reference/api/operations").glob("*/index.html"))
+    errors = []
+    if len(reference_pages) != operations:
+        errors.append(f"Expected {operations} API operation pages, found {len(reference_pages)}")
+    return errors, operations
 
 
 def check_artifacts(directory: Path) -> tuple[list[str], int]:
@@ -124,10 +143,8 @@ def check_artifacts(directory: Path) -> tuple[list[str], int]:
     exported = json.loads((SITE_DIR / "public/openapi.json").read_text(encoding="utf-8"))
     if schema != exported:
         errors.append("Built OpenAPI schema differs from the current source export")
-    operations = sum(method in HTTP_METHODS for path in schema["paths"].values() for method in path)
-    reference_pages = list((directory / "reference/api/operations").glob("*/index.html"))
-    if len(reference_pages) != operations:
-        errors.append(f"Expected {operations} API operation pages, found {len(reference_pages)}")
+    operation_errors, operations = _check_operation_pages(directory, schema["paths"])
+    errors.extend(operation_errors)
     return errors, operations
 
 
