@@ -7,10 +7,27 @@ import json
 import os
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import unquote, urljoin, urlsplit
+
+if TYPE_CHECKING:
+    from urllib.parse import SplitResult
 
 SITE_DIR = Path(__file__).resolve().parents[1]
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
+
+
+def _tag_urls(tag: str, attrs: dict[str, str | None], in_language_select: bool) -> list[str]:
+    values = []
+    if tag == "a":
+        values.append(attrs.get("href"))
+    # Canonical/alternate metadata is not a navigation or resource URL.
+    if tag == "link" and attrs.get("rel") not in {"alternate", "canonical"}:
+        values.append(attrs.get("href"))
+    values.append(attrs.get("src"))
+    if tag == "option" and in_language_select:
+        values.append(attrs.get("value"))
+    return [value for value in values if value]
 
 
 class BuiltPage(HTMLParser):
@@ -29,19 +46,40 @@ class BuiltPage(HTMLParser):
             self.ids.add(name)
         if tag == "starlight-lang-select":
             self.in_language_select = True
-        # Check navigable links and resource URLs, rather than canonical/alternate metadata.
-        if (
-            tag == "a" or (tag == "link" and attrs.get("rel") not in {"alternate", "canonical"})
-        ) and (href := attrs.get("href")):
-            self.urls.append((href, self.getpos()[0]))
-        if src := attrs.get("src"):
-            self.urls.append((src, self.getpos()[0]))
-        if tag == "option" and self.in_language_select and (value := attrs.get("value")):
-            self.urls.append((value, self.getpos()[0]))
+        self.urls.extend(
+            (value, self.getpos()[0]) for value in _tag_urls(tag, attrs, self.in_language_select)
+        )
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "starlight-lang-select":
             self.in_language_select = False
+
+
+def _internal_url(origin: str, route: str, value: str) -> SplitResult | None:
+    url = urlsplit(urljoin(origin + route, value))
+    if url.scheme not in {"http", "https"}:
+        return None
+    if url.netloc != urlsplit(origin).netloc:
+        return None
+    return url
+
+
+def _target_error(url: SplitResult, directory: Path, pages: dict[Path, BuiltPage]) -> str | None:
+    target = (directory / unquote(url.path).lstrip("/")).resolve()
+    if not target.is_relative_to(directory):
+        return "URL escapes the site directory"
+    if target.is_dir():
+        target /= "index.html"
+    if not target.is_file():
+        return "missing page or asset"
+    fragment = unquote(url.fragment).split(":~:text=", 1)[0]
+    if not fragment:
+        return None
+    if target not in pages:
+        return None
+    if fragment not in pages[target].ids:
+        return "missing anchor"
+    return None
 
 
 def check_links(directory: Path, origin: str) -> tuple[list[str], int, int]:
@@ -54,22 +92,12 @@ def check_links(directory: Path, origin: str) -> tuple[list[str], int, int]:
             relative.removesuffix("index.html") if path.name == "index.html" else relative
         )
         for value, line in page.urls:
-            url = urlsplit(urljoin(origin + route, value))
-            if url.scheme not in {"http", "https"} or url.netloc != urlsplit(origin).netloc:
+            url = _internal_url(origin, route, value)
+            if url is None:
                 continue
             checked += 1
-            target = (directory / unquote(url.path).lstrip("/")).resolve()
-            if not target.is_relative_to(directory):
-                errors.append(f"{relative}:{line}: URL escapes the site directory: {value}")
-                continue
-            if target.is_dir():
-                target /= "index.html"
-            if not target.is_file():
-                errors.append(f"{relative}:{line}: missing page or asset: {value}")
-                continue
-            fragment = unquote(url.fragment).split(":~:text=", 1)[0]
-            if fragment and target in pages and fragment not in pages[target].ids:
-                errors.append(f"{relative}:{line}: missing anchor: {value}")
+            if issue := _target_error(url, directory, pages):
+                errors.append(f"{relative}:{line}: {issue}: {value}")
     if not pages:
         errors.append(f"No HTML pages found in {directory}")
     return errors, len(pages), checked
