@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: documentation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,6 +32,7 @@ jobs:
           python-version: "3.12"
       - run: uv sync --frozen
       - run: bun install --cwd site --frozen-lockfile
+      - run: bun run --cwd site test
       - run: bun run --cwd site check
       - run: bun run --cwd site build
       - uses: actions/upload-artifact@v7

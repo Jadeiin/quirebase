@@ -22,6 +22,7 @@ the docs server after changing the Python API so the reference regenerates.
 Before submitting a change:
 
 ```sh
+bun run --cwd site test
 bun run --cwd site check
 bun run --cwd site build
 bun run --cwd site preview
@@ -30,9 +31,16 @@ bun run --cwd site preview
 `check` requires matching English and Chinese source pages and validates Astro and TypeScript.
 `build` repeats the translation coverage check, validates content frontmatter, sidebar entries,
 internal Markdown/MDX links and anchors, generates API Reference, and builds Pagefind indexes. It then
-runs `check:build` against every generated HTML page, checking local navigation, language choices,
-assets, anchors, search artifacts, and API operation coverage against the exported schema. Run
+runs `check:build` against every generated HTML page. It reads `a[href]`, `link[href]` other than
+canonical/alternate metadata, `src`, and language-selector option values. For same-host HTTP(S)
+URLs, it checks that the target file or directory index exists within the build directory and that
+HTML fragments match an `id` or named anchor. It also checks required entry pages, OpenAPI and
+Pagefind artifact presence, compares the built OpenAPI schema with the current export, and compares
+the generated operation-page count with the schema's HTTP operation count. It does not map each
+operation to a particular route, inspect `srcset` or CSS URLs, or fetch resources loaded by
+JavaScript. Run
 `bun run --cwd site check:build` to repeat those artifact checks without rebuilding.
+`test` runs focused standard-library unit tests for both Python checkers against temporary files.
 Search is available in the built preview; Astro's development server does not build a Pagefind index.
 The root Makefile also exposes `docs-dev`, `docs-check`, and `docs-build`.
 
@@ -75,6 +83,13 @@ screenshots; version navigation becomes useful when several releases are support
 | `site/public/openapi.json` | Generated and ignored; never edit or commit it |
 | `docs/`, `GLOSSARY.md` | Engineering contracts, accepted ADRs, agent conventions, and research; keep their existing ownership |
 
+For operator-example validation, the minimal follow-up is a focused test that extracts literal
+`quirebase` commands/options and `QUIREBASE_*` / `INQUIRO_*` keys from both locales' administration
+guides. Compare them with the existing Typer command/option metadata (`get_command(app)`) and
+`Settings.model_fields`, including `env_prefix` and each field's `validation_alias`. This uses the
+implementation as the registry and can validate names without executing maintenance commands.
+Defaults, example values, and the sequence of operational steps still need author review.
+
 Route paths should describe a task or concept, not a Python module. Prefer Markdown; use MDX when a
 component adds value. Give every page a `title` and a useful `description`.
 
@@ -89,6 +104,11 @@ Lead with what the reader can do and the steps that achieve it. Keep role and ac
 in the concept and member-management pages. Put input requirements beside the relevant step and
 deletion consequences beside the delete action. Use concrete supported examples and brief recovery
 steps, with links for readers who need more detail.
+
+Permission guidance links to the generated
+[authorization matrix](../docs/architecture/authorization-matrix.md) and the
+[Workspace governance contract](../docs/architecture/workspace-governance.md). Keep exact grants in
+those existing contracts rather than maintaining a second permission table in the public site.
 
 Keep generated API route fields in FastAPI rather than duplicating parameter tables in guides. The `starlight-openapi`
 plugin reads the freshly exported contract and publishes pages under `/reference/api/`; the exact
@@ -114,15 +134,17 @@ The repository's pull request template includes a documentation check to surface
 ## Keep public guides bilingual
 
 English is the root locale. Every handwritten page, including the landing and 404 pages, must have
-a Chinese counterpart at the same relative path under `zh-cn/`, for example
-`zh-cn/guides/import.md`. Add or update both versions in the same PR. Keep sidebar labels translated
-in `astro.config.mjs` and use the application's actual Chinese UI labels in Chinese steps.
+a Chinese counterpart with the same route under `zh-cn/`, for example
+`guides/import.md` and `zh-cn/guides/import.mdx`. Markdown and MDX may differ by locale; route IDs
+omit the extension and map directory `index` pages to their parent route. Duplicate IDs within
+either locale fail the coverage check. Add or update both versions in the same PR. Keep sidebar
+labels translated in `astro.config.mjs` and use the application's actual Chinese UI labels in Chinese steps.
 Sidebar `translations` keys and UI dictionary filenames use the configured language tag `zh-CN`
 (for example `src/content/i18n/zh-CN.json`), while content paths and links use the URL prefix `zh-cn`.
 
 `bun run --cwd site content:check` reports manual page coverage and fails on missing counterparts
 in either direction. Both `check` and `build` run it. The build also rejects untranslated fallback
-pages and authored links that unexpectedly switch locale. A file pair proves presence; reviewers
+pages and authored links that unexpectedly switch locale. A route pair proves presence; reviewers
 must still check that both pages explain the same current behavior clearly.
 
 Translated pages should link to the corresponding locale route, such as
@@ -135,7 +157,9 @@ reference. Do not remove a stale translation to silently fall back to English: u
 ## CI and static hosting
 
 `.github/workflows/docs.yml` installs the locked Python and site dependencies, generates the API
-contract from the checked-out source, checks the site, and builds it on pushes and pull requests.
+contract from the checked-out source, runs checker unit tests, checks the site, and builds it on
+pushes and pull requests.
+New runs cancel superseded documentation builds for the same Git ref.
 It uploads the complete `site/dist/` directory as the `documentation-site` artifact. The documentation
 build is independent of the application frontend build and release wheel.
 

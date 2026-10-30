@@ -1,4 +1,4 @@
-"""Check navigation, assets, anchors, and generated artifacts without a running server."""
+"""Check selected HTML URLs, anchors, and generated artifacts without a running server."""
 
 from __future__ import annotations
 
@@ -70,7 +70,9 @@ def _target_error(url: SplitResult, directory: Path, pages: dict[Path, BuiltPage
     if not target.is_relative_to(directory):
         return "URL escapes the site directory"
     if target.is_dir():
-        target /= "index.html"
+        target = (target / "index.html").resolve()
+        if not target.is_relative_to(directory):
+            return "URL escapes the site directory"
     if not target.is_file():
         return "missing page or asset"
     return _anchor_error(target, url.fragment, pages)
@@ -165,7 +167,8 @@ def main() -> int:
         print(f"Build validation failed: {len(errors)} error(s)")
         return 1
     print(
-        f"Validated {pages} HTML pages, {urls} local URLs and anchors, and {operations} API operations"
+        f"Validated {pages} HTML pages, {urls} local URLs and anchors, "
+        f"and {operations} API operation pages"
     )
     return 0
 
