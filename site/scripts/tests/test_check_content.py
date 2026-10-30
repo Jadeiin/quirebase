@@ -16,6 +16,8 @@ assert SPEC is not None and SPEC.loader is not None
 CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
 
+ENTRY_PAGES = ["index.md", "404.md", "zh-cn/index.md", "zh-cn/404.md"]
+
 
 class ContentCoverageTests(unittest.TestCase):
     def setUp(self):
@@ -63,11 +65,8 @@ class ContentCoverageTests(unittest.TestCase):
 
     def test_normalizes_directory_index_routes(self):
         status, output = self.check([
-            "index.md",
-            "404.md",
+            *ENTRY_PAGES,
             "guides/setup/index.mdx",
-            "zh-cn/index.md",
-            "zh-cn/404.md",
             "zh-cn/guides/setup.md",
         ])
         self.assertEqual(status, 0)
@@ -75,12 +74,9 @@ class ContentCoverageTests(unittest.TestCase):
 
     def test_reports_duplicate_ids_with_the_source_files_in_each_locale(self):
         status, output = self.check([
-            "index.md",
-            "404.md",
+            *ENTRY_PAGES,
             "guides/setup.md",
             "guides/setup.mdx",
-            "zh-cn/index.md",
-            "zh-cn/404.md",
             "zh-cn/guides/setup.md",
             "zh-cn/guides/setup/index.mdx",
         ])
@@ -92,11 +88,8 @@ class ContentCoverageTests(unittest.TestCase):
 
     def test_reports_missing_translations_in_both_directions(self):
         status, output = self.check([
-            "index.md",
-            "404.md",
+            *ENTRY_PAGES,
             "guides/english-only.mdx",
-            "zh-cn/index.mdx",
-            "zh-cn/404.mdx",
             "zh-cn/guides/chinese-only.md",
         ])
         self.assertEqual(status, 1)
@@ -119,11 +112,8 @@ class ContentCoverageTests(unittest.TestCase):
         }
         status, output = self.check(
             [
-                "index.md",
-                "404.md",
+                *ENTRY_PAGES,
                 "guides/setup.md",
-                "zh-cn/index.md",
-                "zh-cn/404.md",
                 "zh-cn/guides/setup.mdx",
                 "fr/index.mdx",
                 "fr/404.md",

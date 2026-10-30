@@ -69,21 +69,25 @@ def coverage_errors(
     ]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("directory", nargs="?", type=Path, default=CONTENT_DIR)
-    directory = parser.parse_args().directory
-    locales = json.loads(LOCALES_FILE.read_text(encoding="utf-8"))
-    routes = locale_routes(directory, set(locales))
+def locale_errors(routes: dict[str, dict[str, list[Path]]]) -> list[str]:
     errors = []
     for locale, pages in routes.items():
         errors.extend(duplicate_errors(locale, pages))
         errors.extend(entry_errors(locale, pages))
         if locale != "root":
             errors.extend(coverage_errors(routes["root"], pages, locale))
+    return errors
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory", nargs="?", type=Path, default=CONTENT_DIR)
+    directory = parser.parse_args().directory
+    locales = json.loads(LOCALES_FILE.read_text(encoding="utf-8"))
+    routes = locale_routes(directory, set(locales))
+    errors = locale_errors(routes)
     if errors:
-        for error in errors:
-            print(error)
+        print("\n".join(errors))
         return 1
     manuals = len(routes["root"].keys() - {"404"})
     print(f"Default locale ({locales['root']['lang']}): {manuals} manual routes")
