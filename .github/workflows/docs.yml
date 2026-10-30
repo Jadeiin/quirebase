@@ -1,0 +1,43 @@
+name: Documentation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ASTRO_TELEMETRY_DISABLED: "1"
+      QUIREBASE_DOCS_SITE: ${{ vars.QUIREBASE_DOCS_SITE }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: bun install --cwd site --frozen-lockfile
+      - run: bun run --cwd site test
+      - run: bun run --cwd site check
+      - run: bun run --cwd site build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: documentation-site
+          path: site/dist/
+          if-no-files-found: error
+          retention-days: 14

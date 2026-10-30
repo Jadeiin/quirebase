@@ -90,6 +90,11 @@ test('one-time API Token display survives unrelated and failed revocations and c
 		});
 	});
 	await page.goto('/account');
+	await page.getByText('Client connection guide', { exact: true }).click();
+	const connection = JSON.parse(
+		await page.locator('pre').filter({ hasText: '"mcpServers"' }).innerText()
+	);
+	expect(connection.mcpServers.quirebase.url).toBe(`${new URL(page.url()).origin}/mcp/`);
 	await page.getByPlaceholder('Token name').fill('Current client');
 	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	const secret = page.getByText('qb_synthetic_one_time_secret', { exact: true });
