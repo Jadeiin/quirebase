@@ -54,7 +54,7 @@ class BuiltSiteTests(unittest.TestCase):
         ]:
             with (
                 self.subTest(value=value),
-                self.assertRaisesRegex(ValueError, "QUIREBASE_DOCS_SITE"),
+                self.assertRaises(ValueError),
             ):
                 CHECKER._docs_origin(value)
 

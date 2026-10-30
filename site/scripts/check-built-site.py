@@ -152,22 +152,12 @@ def check_artifacts(directory: Path) -> tuple[list[str], int]:
 
 
 def _docs_origin(value: str | None) -> str:
-    if not value:
-        return "https://documentation.invalid"
-    message = (
-        "QUIREBASE_DOCS_SITE must be an absolute HTTP(S) origin with a root path, "
-        "such as https://docs.example.org/"
-    )
-    if not re.fullmatch(r"https?://[^/?#\s\\@]+/?", value, re.IGNORECASE):
-        raise ValueError(message)
-    try:
-        url = urlsplit(value)
-        # Reading port validates its syntax and range.
-        _ = url.port
-    except ValueError:
-        raise ValueError(message) from None
-    if not url.hostname:
-        raise ValueError(message)
+    value = value or "https://documentation.invalid"
+    url = urlsplit(value)
+    if not (re.fullmatch(r"https?://[^/?#\s\\@]+/?", value, re.IGNORECASE) and url.hostname):
+        raise ValueError("Expected an absolute HTTP(S) origin with a root path")
+    # Reading port validates its syntax and range.
+    _ = url.port
     return f"{url.scheme}://{url.netloc}"
 
 
@@ -178,7 +168,7 @@ def main() -> int:
     try:
         origin = _docs_origin(os.environ.get("QUIREBASE_DOCS_SITE"))
     except ValueError as error:
-        parser.error(str(error))
+        parser.error(f"Invalid QUIREBASE_DOCS_SITE: {error}")
 
     errors, pages, urls = check_links(directory, origin)
     artifact_errors, operations = check_artifacts(directory)
