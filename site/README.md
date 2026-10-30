@@ -40,7 +40,7 @@ the generated operation-page count with the schema's HTTP operation count. It do
 operation to a particular route, inspect `srcset` or CSS URLs, or fetch resources loaded by
 JavaScript. Run
 `bun run --cwd site check:build` to repeat those artifact checks without rebuilding.
-`test` runs focused standard-library unit tests for both Python checkers against temporary files.
+`test` runs focused unit tests for both Python checkers against temporary files using `unittest`.
 Search is available in the built preview; Astro's development server does not build a Pagefind index.
 The root Makefile also exposes `docs-dev`, `docs-check`, and `docs-build`.
 

@@ -51,6 +51,7 @@ class BuiltSiteTests(unittest.TestCase):
             "https:///docs.example.org",
             "file:///tmp/docs/",
             "https://docs.example.org:invalid/",
+            "https://bad<host>/",
         ]:
             with (
                 self.subTest(value=value),

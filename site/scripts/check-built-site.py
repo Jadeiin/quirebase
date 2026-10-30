@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote, urljoin, urlsplit
 
+from pydantic import HttpUrl
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from urllib.parse import SplitResult
@@ -153,12 +155,9 @@ def check_artifacts(directory: Path) -> tuple[list[str], int]:
 
 def _docs_origin(value: str | None) -> str:
     value = value or "https://documentation.invalid"
-    url = urlsplit(value)
-    if not (re.fullmatch(r"https?://[^/?#\s\\@]+/?", value, re.IGNORECASE) and url.hostname):
+    if not re.fullmatch(r"https?://[^/?#\s\\@]+/?", value, re.IGNORECASE):
         raise ValueError("Expected an absolute HTTP(S) origin with a root path")
-    # Reading port validates its syntax and range.
-    _ = url.port
-    return f"{url.scheme}://{url.netloc}"
+    return str(HttpUrl(value)).removesuffix("/")
 
 
 def main() -> int:
