@@ -20,18 +20,29 @@ Doctor 检查数据库和结构访问、工作流存储、可写目录、PDF 支
 备份前停止**所有 Web 和 Worker 写入进程**，以便一致地复制数据库与对象文件。
 归档放在数据目录和可重建卷之外，每次备份使用独立文件名。
 
+`verify-backup` 对照清单校验数据库内容的 SHA-256，并拒绝不安全的归档路径。
+它不校验每个对象文件的内容完整性。还应在独立实例上演练恢复。
+
 ### 源码实例：创建并验证
 
-停止 Web 和 Worker 后，从安装目录执行：
+停止 Web 和 Worker 后，从安装目录执行。每次运行都会在安装目录之外创建独立目录，并打印归档路径。
+子 Shell 在出错时停止执行：
 
 ```sh
-uv run quirebase backup ../quirebase-backup.zip
-uv run quirebase verify-backup ../quirebase-backup.zip
+(
+  set -eu
+  backup_dir=$(mktemp -d "../quirebase-backup-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+  backup_archive="$backup_dir/$(basename "$backup_dir").zip"
+  printf 'Archive: %s\n' "$backup_archive"
+  uv run quirebase backup "$backup_archive"
+  uv run quirebase verify-backup "$backup_archive"
+)
 ```
 
 **核对结果：** 两条命令均成功结束，目标路径存在归档。
 其中包含 SQLite 快照或 PostgreSQL dump、本地不可变对象和数据库校验清单。
-验证检查数据库校验和及归档路径。备份成功后再启动 Web 和 Worker，并将独立副本保留到安装主机之外。
+任何一条命令失败时，保持写入服务停止，根据输出的归档路径和诊断排查后再重试。
+备份成功后再启动 Web 和 Worker，并将独立副本保留到安装主机之外。
 
 ### Compose：把验证后的归档复制到宿主机
 
@@ -69,11 +80,12 @@ Makefile 命令的引擎选择见[容器引擎选择](/zh-cn/administration/depl
 ### 恢复并核对内容
 
 先在独立实例演练恢复。停止目标写入进程，确认数据库和本地对象目录指向准备替换的目标，并验证归档。
-源码目标可以执行：
+源码目标先将 `backup_archive` 设为备份脚本输出的准确路径，或另一份已选定的归档路径，再执行：
 
 ```sh
-uv run quirebase verify-backup ../quirebase-backup.zip
-uv run quirebase restore ../quirebase-backup.zip --force
+backup_archive=/absolute/path/to/selected-backup.zip
+uv run quirebase verify-backup "$backup_archive"
+uv run quirebase restore "$backup_archive" --force
 uv run quirebase doctor
 uv run quirebase reindex
 ```

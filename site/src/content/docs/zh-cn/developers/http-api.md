@@ -6,6 +6,7 @@ description: 创建令牌，列出工作区，选对 UUID，再完成第一次�
 将客户端连接到 Quirebase 应用地址，例如 `http://127.0.0.1:9060`。
 应用提供 `/api/v1/` JSON API、`/docs` 交互文档和 `/openapi.json` Schema。
 本站的[自动生成 API 参考](/reference/api/)来自开发检出，保留 Schema 的英文描述。
+它可能与已部署版本不同；对接实际实例时，以该实例的 `/openapi.json` 或 `/docs` 为准。
 
 ## 创建凭据
 

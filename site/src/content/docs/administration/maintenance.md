@@ -23,18 +23,31 @@ Stop **all web and worker writers** before backing up so the database and object
 consistently. Keep archives outside data directories and replaceable volumes, with a unique
 filename for each backup.
 
+`verify-backup` checks the database payload's SHA-256 against the manifest and rejects unsafe archive
+paths. It does not verify the content integrity of individual object files. Test restoration on a
+separate installation as well.
+
 ### Source checkout: create and verify
 
-Stop the web and worker processes, then run from the installation directory:
+Stop the web and worker processes, then run from the installation directory. Each run creates a
+unique directory outside the installation and prints the archive path. The subshell stops on an
+error:
 
 ```sh
-uv run quirebase backup ../quirebase-backup.zip
-uv run quirebase verify-backup ../quirebase-backup.zip
+(
+  set -eu
+  backup_dir=$(mktemp -d "../quirebase-backup-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+  backup_archive="$backup_dir/$(basename "$backup_dir").zip"
+  printf 'Archive: %s\n' "$backup_archive"
+  uv run quirebase backup "$backup_archive"
+  uv run quirebase verify-backup "$backup_archive"
+)
 ```
 
 **Check the result:** both commands finish successfully and the archive exists at the chosen path.
 It contains a SQLite snapshot or PostgreSQL dump, local immutable objects, and a database checksum
-manifest. Verification checks the database checksum and archive paths.
+manifest. If either command fails, leave writers stopped and inspect the printed archive path and
+diagnostics before retrying.
 Restart web and worker after successful backup, and retain an independent off-host copy.
 
 ### Compose: copy the verified archive out of the container
@@ -76,11 +89,13 @@ host.
 ### Restore and validate
 
 Test restoration on a separate installation first. Stop its writers, point it at the intended target
-database and local object directory, and verify the archive. For a source target:
+database and local object directory, and verify the archive. For a source target, set `backup_archive`
+to the exact path printed by the backup script or another archive you have selected:
 
 ```sh
-uv run quirebase verify-backup ../quirebase-backup.zip
-uv run quirebase restore ../quirebase-backup.zip --force
+backup_archive=/absolute/path/to/selected-backup.zip
+uv run quirebase verify-backup "$backup_archive"
+uv run quirebase restore "$backup_archive" --force
 uv run quirebase doctor
 uv run quirebase reindex
 ```

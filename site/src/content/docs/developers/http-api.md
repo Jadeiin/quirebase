@@ -6,7 +6,8 @@ description: Create a token, list Workspaces, select the right UUID, and make a 
 Connect the client to your Quirebase application, for example `http://127.0.0.1:9060`. It serves JSON at
 `/api/v1/`, interactive documentation at `/docs`, and its schema at `/openapi.json`.
 The static [API Reference](/reference/api/) on this site is generated from the development checkout
-and uses the schema's English descriptions.
+and uses the schema's English descriptions. It may differ from your deployed version; use that
+instance's `/openapi.json` or `/docs` as the source of truth for its API.
 
 ## Create a credential
 
