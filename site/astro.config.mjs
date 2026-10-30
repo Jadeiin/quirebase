@@ -4,6 +4,7 @@ import mermaid from 'astro-mermaid';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 import starlightSidebarTopics from 'starlight-sidebar-topics';
+import locales from './locales.json' with { type: 'json' };
 
 export default defineConfig({
   site: process.env.QUIREBASE_DOCS_SITE || undefined,
@@ -21,10 +22,7 @@ export default defineConfig({
       components: {
         LanguageSelect: './src/components/LanguageSelect.astro',
       },
-      locales: {
-        root: { label: 'English', lang: 'en' },
-        'zh-cn': { label: '简体中文', lang: 'zh-CN' },
-      },
+      locales,
       plugins: [
         starlightSidebarTopics(
           [

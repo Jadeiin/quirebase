@@ -28,7 +28,7 @@ bun run --cwd site build
 bun run --cwd site preview
 ```
 
-`check` requires matching English and Chinese source pages and validates Astro and TypeScript.
+`check` compares source routes across configured locales and validates Astro and TypeScript.
 `build` repeats the translation coverage check, validates content frontmatter, sidebar entries,
 internal Markdown/MDX links and anchors, generates API Reference, and builds Pagefind indexes. It then
 runs `check:build` against every generated HTML page. It reads `a[href]`, `link[href]` other than
@@ -53,7 +53,7 @@ Configure topic membership and translated labels in `astro.config.mjs`.
 | Extension | Purpose | Where it is used |
 | --- | --- | --- |
 | [starlight-sidebar-topics](https://starlight-sidebar-topics.netlify.app/docs/configuration/) | Navigation by audience | Three localized topics; generated API routes map to `developers` |
-| [astro-mermaid](https://github.com/joesaby/astro-mermaid) with Mermaid | Diagrams maintained beside the prose | Item/PDF/Project relationships and the import workflow in both languages |
+| [astro-mermaid](https://github.com/joesaby/astro-mermaid) with Mermaid | Diagrams maintained beside the prose | Localized Item/PDF/Project relationships and import workflows |
 | Starlight [Tabs](https://starlight.astro.build/components/tabs/) and [Steps](https://starlight.astro.build/components/steps/) | Installation choices and sequential checks | Compose/source tabs and the first successful deployment workflow |
 | starlight-openapi | Reference from the current API contract | API Reference |
 | starlight-links-validator | Local link and locale validation | Every build |
@@ -84,7 +84,7 @@ screenshots; version navigation becomes useful when several releases are support
 | `docs/`, `GLOSSARY.md` | Engineering contracts, accepted ADRs, agent conventions, and research; keep their existing ownership |
 
 For operator-example validation, the minimal follow-up is a focused test that extracts literal
-`quirebase` commands/options and `QUIREBASE_*` / `INQUIRO_*` keys from both locales' administration
+`quirebase` commands/options and `QUIREBASE_*` / `INQUIRO_*` keys from configured locales' administration
 guides. Compare them with the existing Typer command/option metadata (`get_command(app)`) and
 `Settings.model_fields`, including `env_prefix` and each field's `validation_alias`. This uses the
 implementation as the registry and can validate names without executing maintenance commands.
@@ -131,28 +131,34 @@ For a behavior change, review these questions in the same PR:
 
 The repository's pull request template includes a documentation check to surface this review.
 
-## Keep public guides bilingual
+## Internationalization and localization
 
-English is the root locale. Every handwritten page, including the landing and 404 pages, must have
-a Chinese counterpart with the same route under `zh-cn/`, for example
-`guides/import.md` and `zh-cn/guides/import.mdx`. Markdown and MDX may differ by locale; route IDs
-omit the extension and map directory `index` pages to their parent route. Duplicate IDs within
-either locale fail the coverage check. Add or update both versions in the same PR. Keep sidebar
-labels translated in `astro.config.mjs` and use the application's actual Chinese UI labels in Chinese steps.
-Sidebar `translations` keys and UI dictionary filenames use the configured language tag `zh-CN`
-(for example `src/content/i18n/zh-CN.json`), while content paths and links use the URL prefix `zh-cn`.
+`locales.json` is the shared locale configuration consumed by Starlight and the coverage checker.
+The `root` entry defines the default content language; other keys define locale path prefixes.
+English and Simplified Chinese are currently configured. Additional locales use the same mechanism.
+
+Every handwritten route, including the landing and 404 pages, must be present in each configured
+locale. Markdown and MDX may differ by locale; route IDs omit the extension and map directory
+`index` pages to their parent route. Duplicate IDs within any locale fail the coverage check.
+For example, `guides/import.md` and `zh-cn/guides/import.mdx` represent the same localized route.
+
+When adding a locale, add its entry to `locales.json`, place translated content under its path
+prefix, and add UI strings in `src/content/i18n/`. Translate sidebar/topic labels in
+`astro.config.mjs` and use the application's localized UI labels in task steps. Sidebar
+`translations` keys and UI dictionary filenames use the configured language tag (for example
+`zh-CN`), while content paths and links use the locale prefix (for example `zh-cn`).
 
 `bun run --cwd site content:check` reports manual page coverage and fails on missing counterparts
-in either direction. Both `check` and `build` run it. The build also rejects untranslated fallback
-pages and authored links that unexpectedly switch locale. A route pair proves presence; reviewers
-must still check that both pages explain the same current behavior clearly.
+between the default language and each configured locale. Both `check` and `build` run it. The build
+also rejects untranslated fallback pages and authored links that unexpectedly switch locale. A route
+pair proves presence; reviewers must still check that localized pages explain the same current behavior clearly.
 
 Translated pages should link to the corresponding locale route, such as
 `/zh-cn/guides/pdf-annotations/`. Generated API Reference remains in English and keeps its canonical
 `/reference/api/` routes, with the locale selector hidden on those generated pages. Do not create
 hand-maintained translations of API parameter schemas. The coverage count applies to handwritten
-manuals, not generated API operation pages; Chinese HTTP API and MCP guides explain how to use that
-reference. Do not remove a stale translation to silently fall back to English: update both versions.
+manuals, not generated API operation pages; localized HTTP API and MCP guides explain how to use that
+reference. Update affected translations alongside the default-language page when behavior changes.
 
 ## CI and static hosting
 

@@ -64,21 +64,23 @@ bun run --cwd site dev
 The documentation development server runs independently. Open the URL Astro reports. After editing:
 
 ```sh
+bun run --cwd site test
 bun run --cwd site check
 bun run --cwd site build
 bun run --cwd site preview
 ```
 
-Pagefind search is generated during the build; test it in the preview. Checks validate paired
-English/Chinese source pages, content/schema, internal links, and final
-HTML assets and API coverage. The [maintenance guide](https://github.com/Jadeiin/quirebase/blob/main/site/README.md)
+Pagefind search is generated during the build; test it in the preview. Checks compare routes across
+configured locales, validate content and internal links, inspect selected HTML URL attributes and
+anchors, and check required artifacts, schema equality, and API operation-page counts.
+The [maintenance guide](https://github.com/Jadeiin/quirebase/blob/main/site/README.md)
 explains the authoring policy and artifact-only CI. GitHub Pages publication is a later, separate change.
 
 ## Put each change in its owned document
 
 | You changed | Update |
 | --- | --- |
-| A user workflow or UI label | The English and Chinese task guides |
+| A user workflow or UI label | The affected task guides in each configured locale |
 | Operator configuration, deployment, or recovery | The corresponding operator procedures |
 | Route descriptions or schema constraints | FastAPI source, which generates API Reference |
 | Domain terms or relationships | [Glossary](https://github.com/Jadeiin/quirebase/blob/main/GLOSSARY.md) |

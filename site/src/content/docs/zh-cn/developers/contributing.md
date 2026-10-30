@@ -61,13 +61,15 @@ bun run --cwd site dev
 修改后执行：
 
 ```sh
+bun run --cwd site test
 bun run --cwd site check
 bun run --cwd site build
 bun run --cwd site preview
 ```
 
 Pagefind 搜索在构建后生成，可在 preview 中检查。
-检查会覆盖中英页面配对、内容结构、站内链接，以及最终 HTML 资源和 API 覆盖。
+检查会比较已配置语言的路由，校验内容结构和站内链接，检查指定 HTML URL 属性与锚点，
+并核对必要构建产物、Schema 一致性及 API 操作页面数量。
 [维护说明](https://github.com/Jadeiin/quirebase/blob/main/site/README.md)记录写作策略和仅生成产物的 CI。
 GitHub Pages 发布仍在后续独立变更中处理。
 
@@ -75,7 +77,7 @@ GitHub Pages 发布仍在后续独立变更中处理。
 
 | 改变了什么 | 更新哪里 |
 | --- | --- |
-| 用户流程或界面名称 | 对应的中英任务指南 |
+| 用户流程或界面名称 | 各已配置语言中受影响的任务指南 |
 | 运维配置、部署、恢复 | 对应操作流程 |
 | 路由描述或 Schema 约束 | FastAPI 源码，由它生成 API 参考 |
 | 领域术语或关系 | [术语表](https://github.com/Jadeiin/quirebase/blob/main/GLOSSARY.md) |

@@ -1,11 +1,13 @@
-"""Require a Chinese counterpart for every handwritten public documentation page."""
+"""Compare public documentation routes across the configured Starlight locales."""
 
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 CONTENT_DIR = Path(__file__).resolve().parents[1] / "src/content/docs"
+LOCALES_FILE = Path(__file__).resolve().parents[1] / "locales.json"
 
 
 def content_paths(directory: Path) -> set[Path]:
@@ -26,52 +28,67 @@ def page_routes(paths: set[Path]) -> dict[str, list[Path]]:
     return routes
 
 
+def locale_routes(directory: Path, locales: set[str]) -> dict[str, dict[str, list[Path]]]:
+    localized = locales - {"root"}
+    routes = {
+        "root": page_routes({
+            path for path in content_paths(directory) if path.parts[0] not in localized
+        })
+    }
+    for locale in sorted(localized):
+        routes[locale] = page_routes(content_paths(directory / locale))
+    return routes
+
+
 def duplicate_errors(locale: str, routes: dict[str, list[Path]]) -> list[str]:
     return [
-        f"Duplicate {locale} page ID '{route or '/'}': "
+        f"Duplicate page ID '{route or '/'}' in locale '{locale}': "
         + ", ".join(sorted(path.as_posix() for path in paths))
         for route, paths in sorted(routes.items())
         if len(paths) > 1
     ]
 
 
-def coverage_errors(english: dict[str, list[Path]], chinese: dict[str, list[Path]]) -> list[str]:
+def entry_errors(locale: str, routes: dict[str, list[Path]]) -> list[str]:
     required = {"", "404"}
-    return (
-        duplicate_errors("English", english)
-        + duplicate_errors("Chinese", chinese)
-        + [
-            f"Missing English entry page: {route or '/'}"
-            for route in sorted(required - english.keys())
-        ]
-        + [
-            f"Missing Chinese entry page: {route or '/'}"
-            for route in sorted(required - chinese.keys())
-        ]
-        + [
-            f"Missing Chinese translation: zh-cn/{route}"
-            for route in sorted(english.keys() - chinese.keys())
-        ]
-        + [
-            f"Chinese page has no English counterpart: zh-cn/{route}"
-            for route in sorted(chinese.keys() - english.keys())
-        ]
-    )
+    return [
+        f"Missing entry page in locale '{locale}': {route or '/'}"
+        for route in sorted(required - routes.keys())
+    ]
+
+
+def coverage_errors(
+    default: dict[str, list[Path]], translated: dict[str, list[Path]], locale: str
+) -> list[str]:
+    return [
+        f"Missing translation in locale '{locale}': {locale}/{route}"
+        for route in sorted(default.keys() - translated.keys())
+    ] + [
+        f"Page has no default-locale counterpart: {locale}/{route}"
+        for route in sorted(translated.keys() - default.keys())
+    ]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", nargs="?", type=Path, default=CONTENT_DIR)
     directory = parser.parse_args().directory
-    english = page_routes({path for path in content_paths(directory) if path.parts[0] != "zh-cn"})
-    chinese = page_routes(content_paths(directory / "zh-cn"))
-    errors = coverage_errors(english, chinese)
+    locales = json.loads(LOCALES_FILE.read_text(encoding="utf-8"))
+    routes = locale_routes(directory, set(locales))
+    errors = []
+    for locale, pages in routes.items():
+        errors.extend(duplicate_errors(locale, pages))
+        errors.extend(entry_errors(locale, pages))
+        if locale != "root":
+            errors.extend(coverage_errors(routes["root"], pages, locale))
     if errors:
         for error in errors:
             print(error)
         return 1
-    manuals = len(english.keys() - {"404"})
-    print(f"Chinese manual coverage: {manuals}/{manuals} pages; Chinese 404 page present")
+    manuals = len(routes["root"].keys() - {"404"})
+    print(f"Default locale ({locales['root']['lang']}): {manuals} manual routes")
+    for locale in sorted(locales.keys() - {"root"}):
+        print(f"Locale {locale}: {manuals}/{manuals} manual routes; 404 page present")
     return 0
 
 
