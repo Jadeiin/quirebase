@@ -29,6 +29,35 @@ class BuiltSiteTests(unittest.TestCase):
         path.write_text(content, encoding="utf-8")
         return path
 
+    def test_accepts_unset_or_root_http_origins(self):
+        for value, expected in [
+            (None, "https://documentation.invalid"),
+            ("", "https://documentation.invalid"),
+            ("https://docs.example.org", "https://docs.example.org"),
+            ("https://docs.example.org/", "https://docs.example.org"),
+            ("http://127.0.0.1:4321/", "http://127.0.0.1:4321"),
+        ]:
+            with self.subTest(value=value):
+                self.assertEqual(CHECKER._docs_origin(value), expected)
+
+    def test_rejects_unsupported_docs_paths_and_invalid_origins(self):
+        for value in [
+            "https://docs.example.org/quirebase/",
+            "https://docs.example.org/guide/..",
+            "https://docs.example.org/?preview=true",
+            "https://docs.example.org/#guide",
+            "https://reader:secret@docs.example.org/",
+            "docs.example.org",
+            "https:///docs.example.org",
+            "file:///tmp/docs/",
+            "https://docs.example.org:invalid/",
+        ]:
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(ValueError, "QUIREBASE_DOCS_SITE"),
+            ):
+                CHECKER._docs_origin(value)
+
     def test_resolves_relative_root_same_host_query_and_fragment_urls(self):
         self.write("index.html", '<a href="guides/start/?from=home#intro">Start</a>')
         self.write(

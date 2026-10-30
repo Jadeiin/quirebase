@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -150,13 +151,34 @@ def check_artifacts(directory: Path) -> tuple[list[str], int]:
     return errors, operations
 
 
+def _docs_origin(value: str | None) -> str:
+    if not value:
+        return "https://documentation.invalid"
+    message = (
+        "QUIREBASE_DOCS_SITE must be an absolute HTTP(S) origin with a root path, "
+        "such as https://docs.example.org/"
+    )
+    if not re.fullmatch(r"https?://[^/?#\s\\@]+/?", value, re.IGNORECASE):
+        raise ValueError(message)
+    try:
+        url = urlsplit(value)
+        # Reading port validates its syntax and range.
+        _ = url.port
+    except ValueError:
+        raise ValueError(message) from None
+    if not url.hostname:
+        raise ValueError(message)
+    return f"{url.scheme}://{url.netloc}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", nargs="?", type=Path, default=SITE_DIR / "dist")
     directory = parser.parse_args().directory.resolve()
-    origin = os.environ.get("QUIREBASE_DOCS_SITE") or "https://documentation.invalid"
-    origin_url = urlsplit(origin)
-    origin = f"{origin_url.scheme}://{origin_url.netloc}"
+    try:
+        origin = _docs_origin(os.environ.get("QUIREBASE_DOCS_SITE"))
+    except ValueError as error:
+        parser.error(str(error))
 
     errors, pages, urls = check_links(directory, origin)
     artifact_errors, operations = check_artifacts(directory)

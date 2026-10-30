@@ -178,6 +178,10 @@ For a hosting build, set `QUIREBASE_DOCS_SITE` to the actual documentation origi
 `https://docs.quirebase.com`, then run `bun run --cwd site build` from the repository root. This
 enables canonical URLs and sitemap generation. CI reads the optional repository variable of the
 same name. Leave it unset for local previews and artifacts until a deployment origin is assigned.
+The configuration accepts an absolute HTTP(S) origin with an optional trailing `/`, such as
+`https://docs.quirebase.com/`. Astro and `check:build` reject subpaths, credentials, query strings,
+fragments, and malformed addresses. A repository Pages URL ending in `/quirebase/` needs the
+separate base-path deployment work before it can be used here.
 This initial setup targets the root of a dedicated documentation host; subpath hosting needs
 additional base-path and link configuration.
 

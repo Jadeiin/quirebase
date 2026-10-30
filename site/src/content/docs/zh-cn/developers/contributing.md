@@ -25,7 +25,10 @@ cd quirebase
 | Worker | 使用同一开发数据处理持久化后台任务 |
 
 部署实例请使用[安装流程](/zh-cn/administration/deployment/)，设置自己的管理员密码。
-仓库 [README](https://github.com/Jadeiin/quirebase/blob/main/README.md#development)提供手动设置和 `QUIREBASE_DEV_*` 覆盖选项。
+需要手动设置时，按[源码安装流程](/zh-cn/administration/deployment/)操作。
+开发脚本可用 `QUIREBASE_DEV_HOST`、`QUIREBASE_DEV_PORT`、`QUIREBASE_DEV_FRONTEND_PORT` 调整地址和端口，
+用 `QUIREBASE_DEV_USERNAME`、`QUIREBASE_DEV_PASSWORD` 设置初始账号。
+后续运行时，可设 `QUIREBASE_DEV_SKIP_SETUP=1` 跳过依赖安装。
 
 ## 运行仓库检查
 

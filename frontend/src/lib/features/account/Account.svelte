@@ -391,7 +391,7 @@
 								>{`{
   "mcpServers": {
     "quirebase": {
-      "url": "${externalOrigin}/mcp",
+      "url": "${externalOrigin}/mcp/",
       "headers": {"Authorization": "Bearer YOUR_API_TOKEN"}
     }
   }

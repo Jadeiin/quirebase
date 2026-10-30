@@ -6,8 +6,24 @@ import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 import starlightSidebarTopics from 'starlight-sidebar-topics';
 import locales from './locales.json' with { type: 'json' };
 
+function docsSite(value) {
+  if (!value) return undefined;
+  const message =
+    'QUIREBASE_DOCS_SITE must be an absolute HTTP(S) origin with a root path, such as https://docs.example.org/';
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(message);
+  }
+  if (!/^https?:\/\/[^/?#\s\\@]+\/?$/i.test(value) || !url.hostname) {
+    throw new Error(message);
+  }
+  return value;
+}
+
 export default defineConfig({
-  site: process.env.QUIREBASE_DOCS_SITE || undefined,
+  site: docsSite(process.env.QUIREBASE_DOCS_SITE),
   trailingSlash: 'always',
   integrations: [
     mermaid({ autoTheme: true, enableLog: false }),

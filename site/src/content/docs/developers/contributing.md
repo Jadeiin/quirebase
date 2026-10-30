@@ -27,8 +27,11 @@ password `quirebase-dev` on first setup, and starts these local services:
 
 For deployment, follow the [installation procedure](/administration/deployment/) and set your own
 administrator password.
-The [repository README](https://github.com/Jadeiin/quirebase/blob/main/README.md#development) lists
-manual setup and `QUIREBASE_DEV_*` overrides.
+For manual setup, follow the [source checkout installation](/administration/deployment/).
+The development script accepts `QUIREBASE_DEV_HOST`, `QUIREBASE_DEV_PORT`, and
+`QUIREBASE_DEV_FRONTEND_PORT` for its addresses, plus `QUIREBASE_DEV_USERNAME` and
+`QUIREBASE_DEV_PASSWORD` for the initial account. Set `QUIREBASE_DEV_SKIP_SETUP=1` to skip dependency
+installation on later runs.
 
 ## Run repository checks
 
