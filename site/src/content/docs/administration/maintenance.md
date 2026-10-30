@@ -39,21 +39,39 @@ Restart web and worker after successful backup, and retain an independent off-ho
 
 ### Compose: copy the verified archive out of the container
 
-Stop the default web/worker services and any additional workers. Keep PostgreSQL running. From the
-checkout, the following creates a stopped backup container long enough to copy out its archive:
+Stop any additional workers first. Keep PostgreSQL running. From the checkout, the script below
+stops the default web/worker services and uses a unique directory and archive name for each backup.
+The parentheses run it in a subshell; `set -eu` stops it on an error even when pasted into an
+interactive shell.
+
+This example uses Docker. For Podman, replace `docker compose` with `podman compose` (or
+`podman-compose` for a standalone provider), and `docker cp` / `docker rm` with `podman cp` /
+`podman rm`. See [container engine selection](/administration/deployment/#container-engine-selection)
+for the Makefile commands.
 
 ```sh
-mkdir -p backups
-docker compose --env-file .env.docker stop web worker
-docker compose --env-file .env.docker run --name quirebase-backup --no-deps web sh -c 'quirebase backup /tmp/quirebase.zip && quirebase verify-backup /tmp/quirebase.zip'
-docker cp quirebase-backup:/tmp/quirebase.zip ./backups/quirebase.zip
-docker rm quirebase-backup
-docker compose --env-file .env.docker start web worker
+(
+  set -eu
+  mkdir -p backups
+  backup_dir=$(mktemp -d "./backups/quirebase-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+  backup_container=$(basename "$backup_dir")
+  backup_archive="$backup_dir/$backup_container.zip"
+  printf 'Container: %s\nArchive: %s\n' "$backup_container" "$backup_archive"
+
+  docker compose --env-file .env.docker stop web worker
+  docker compose --env-file .env.docker run --name "$backup_container" --no-deps web sh -c 'quirebase backup /tmp/quirebase.zip && quirebase verify-backup /tmp/quirebase.zip'
+  docker cp "$backup_container:/tmp/quirebase.zip" "$backup_archive"
+  docker rm "$backup_container"
+  docker compose --env-file .env.docker start web worker
+)
 ```
 
-Copy the archive successfully before removing the backup container. If an error occurs, follow its
-diagnostics and repeat the backup. Use a unique destination filename for each backup, then keep a
-verified copy off the installation host.
+The container is removed and writers restarted only after verification and copying succeed.
+If backup, verification, or copying fails, the script leaves the backup container in place and
+writers stopped. Use the printed container name and archive path to investigate; a failed copy may
+leave an incomplete host file. Resolve the failure and successfully verify/copy the archive before
+manually removing that container and starting web/worker. Keep a verified copy off the installation
+host.
 
 ### Restore and validate
 

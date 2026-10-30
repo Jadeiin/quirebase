@@ -19,8 +19,8 @@ Use the installation's actual Workspace, version, and configuration.
 ## Import or PDF processing stays pending
 
 1. Return to **Import history** or the Item's **Files** section and inspect the retained state.
-2. The operator checks whether the separate worker is running. For Compose, use `make docker-ps` and
-   `docker compose --env-file .env.docker logs --tail 50 worker`.
+2. The operator checks whether the separate worker is running. For Compose, use `make docker-ps`
+   and inspect the worker's entries in `make docker-logs` (Ctrl+C stops following logs).
 3. Verify web and worker use the same database and object backend, including bucket/prefix if relevant.
 4. Run Doctor with that installation's configuration and inspect failed diagnostics.
 

@@ -38,6 +38,7 @@ export default defineConfig({
       components: {
         LanguageSelect: './src/components/LanguageSelect.astro',
       },
+      routeMiddleware: './src/route-data.ts',
       locales,
       plugins: [
         starlightSidebarTopics(

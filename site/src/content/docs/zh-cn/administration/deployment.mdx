@@ -18,7 +18,7 @@ Web 提供应用页面和 API，独立的 Worker 负责 PDF 处理及持久化�
 ## 安装 Quirebase
 
 <Tabs>
-<TabItem label="Docker Compose">
+<TabItem label="Compose">
 
 ```sh
 git clone https://github.com/Jadeiin/quirebase.git
@@ -36,10 +36,10 @@ make docker-doctor
 
 打开 `http://127.0.0.1:9060`，用刚创建的管理员凭据登录。
 `make docker-ps` 查看服务状态；`make docker-doctor` 应以退出码 0 完成，并显示 `[ok]` 诊断。
-任务一直等待时，可以查看 Worker 日志：
+任务一直等待时，可以跟踪服务日志并查看 Worker 的记录（按 Ctrl+C 结束跟踪）：
 
 ```sh
-docker compose --env-file .env.docker logs --tail 50 worker
+make docker-logs
 ```
 
 数据库保存在 Compose 的 `postgres-data` 卷，本地对象文件保存在 `quirebase-data` 卷。
@@ -83,6 +83,18 @@ uv run quirebase worker
 
 </TabItem>
 </Tabs>
+
+## 容器引擎选择
+
+`make docker-*` 目标同时支持 Docker 和 Podman：有 Docker 时默认使用 Docker，否则使用 Podman。
+需要为后续 Makefile 命令明确选择 Podman 时，先运行 `export CONTAINER_ENGINE=podman`。
+默认 Compose 命令为 `<引擎> compose`；使用独立的 Podman Compose 提供程序时，
+再运行 `export COMPOSE=podman-compose`。
+
+[维护指南](/zh-cn/administration/maintenance/)中直接调用容器 CLI 的示例使用 Docker。
+使用 Podman 时，将 `docker compose` 换成 `podman compose`（或 `podman-compose`），
+将 `docker cp` / `docker rm` 换成 `podman cp` / `podman rm`。
+使用与运行中的实例相同的引擎、Compose 提供程序、配置和数据卷。
 
 ## 验证一次完整使用流程
 

@@ -20,7 +20,7 @@ processes PDFs and durable jobs.
 ## Install Quirebase
 
 <Tabs>
-<TabItem label="Docker Compose">
+<TabItem label="Compose">
 
 ```sh
 git clone https://github.com/Jadeiin/quirebase.git
@@ -39,10 +39,11 @@ administrator and prompts for its password; the default username is `admin`.
 
 Open `http://127.0.0.1:9060` and sign in with that administrator's credentials. Check service state
 with `make docker-ps`. `make docker-doctor` should finish with exit status 0 and `[ok]` diagnostics.
-For a stuck job, inspect worker logs:
+For a stuck job, follow the service logs and inspect the worker's entries (press Ctrl+C to stop
+following):
 
 ```sh
-docker compose --env-file .env.docker logs --tail 50 worker
+make docker-logs
 ```
 
 The database uses the Compose `postgres-data` volume and local objects use `quirebase-data`.
@@ -87,6 +88,18 @@ Use a libpq URL such as `postgresql://quirebase:encoded-password@localhost/quire
 
 </TabItem>
 </Tabs>
+
+## Container engine selection
+
+The `make docker-*` targets support Docker and Podman. They select Docker when it is available,
+otherwise Podman. To select Podman explicitly for all subsequent Makefile commands, run
+`export CONTAINER_ENGINE=podman`. The default Compose command is `<engine> compose`; if you use the
+standalone Podman Compose provider, also run `export COMPOSE=podman-compose`.
+
+Direct container CLI examples in the [maintenance guide](/administration/maintenance/) use Docker.
+For Podman, replace `docker compose` with `podman compose` (or `podman-compose`), and `docker cp` /
+`docker rm` with `podman cp` / `podman rm`. Use the same engine, Compose provider, configuration,
+and volumes as the running installation.
 
 ## Verify the first end-to-end task
 

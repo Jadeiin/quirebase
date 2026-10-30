@@ -44,6 +44,14 @@ JavaScript. Run
 Search is available in the built preview; Astro's development server does not build a Pagefind index.
 The root Makefile also exposes `docs-dev`, `docs-check`, and `docs-build`.
 
+Global search indexes handwritten guides and the API Reference overview. `src/route-data.ts` uses
+Starlight's `pagefind: false` route data to exclude generated operation pages: their repeated
+parameter names otherwise crowd out task guides for searches such as `workspace` and `annotation`.
+Individual operations remain accessible through the API Reference sidebar and overview links.
+When changing search behavior or updating the generator, check `PDF`, `annotation`, `workspace`,
+and `import` in the English preview, then `PDF`, `批注`, `工作区`, and `导入` in the Chinese preview.
+Confirm that relevant task guides appear first and that `API` still finds the reference entry point.
+
 ## Navigation and content components
 
 The sidebar has three topics: User guide, Administration, and Developers. Each topic shows its own

@@ -35,20 +35,36 @@ uv run quirebase verify-backup ../quirebase-backup.zip
 
 ### Compose：把验证后的归档复制到宿主机
 
-停止默认 Web、Worker 及额外 Worker，保持 PostgreSQL 运行。
-在源码目录执行以下操作，保留备份容器，直到归档复制出来：
+先停止额外的 Worker，保持 PostgreSQL 运行。在源码目录执行以下脚本，
+它会停止默认 Web、Worker，并为每次备份创建独立目录和归档文件名。
+括号让脚本在子 Shell 中运行；即使整块粘贴到交互式终端，`set -eu` 也会在出错时停止执行。
+
+以下示例使用 Docker。使用 Podman 时，将 `docker compose` 换成 `podman compose`
+（独立提供程序使用 `podman-compose`），将 `docker cp` / `docker rm` 换成 `podman cp` / `podman rm`。
+Makefile 命令的引擎选择见[容器引擎选择](/zh-cn/administration/deployment/#容器引擎选择)。
 
 ```sh
-mkdir -p backups
-docker compose --env-file .env.docker stop web worker
-docker compose --env-file .env.docker run --name quirebase-backup --no-deps web sh -c 'quirebase backup /tmp/quirebase.zip && quirebase verify-backup /tmp/quirebase.zip'
-docker cp quirebase-backup:/tmp/quirebase.zip ./backups/quirebase.zip
-docker rm quirebase-backup
-docker compose --env-file .env.docker start web worker
+(
+  set -eu
+  mkdir -p backups
+  backup_dir=$(mktemp -d "./backups/quirebase-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+  backup_container=$(basename "$backup_dir")
+  backup_archive="$backup_dir/$backup_container.zip"
+  printf 'Container: %s\nArchive: %s\n' "$backup_container" "$backup_archive"
+
+  docker compose --env-file .env.docker stop web worker
+  docker compose --env-file .env.docker run --name "$backup_container" --no-deps web sh -c 'quirebase backup /tmp/quirebase.zip && quirebase verify-backup /tmp/quirebase.zip'
+  docker cp "$backup_container:/tmp/quirebase.zip" "$backup_archive"
+  docker rm "$backup_container"
+  docker compose --env-file .env.docker start web worker
+)
 ```
 
-归档复制成功后再删除备份容器；出错时根据提示修复并重新备份。
-每次备份使用独立的宿主机文件名，并将验证后的副本复制到安装主机之外。
+验证并复制归档成功后，脚本才会删除备份容器并重启写入服务。
+备份、验证或复制失败时，备份容器会保留，写入服务保持停止。
+根据输出的容器名和归档路径排查；复制失败可能留下不完整的宿主机文件。
+解决问题并成功验证、复制归档后，再手动删除该容器并启动 Web、Worker。
+将验证后的副本复制到安装主机之外。
 
 ### 恢复并核对内容
 

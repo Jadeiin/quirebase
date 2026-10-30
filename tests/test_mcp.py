@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -94,8 +95,19 @@ def documented_mcp_examples():
     assert manuals
     examples = {}
     for manual in manuals:
-        example = manual.read_text(encoding="utf-8").split("```json", 1)[1].split("```", 1)[0]
-        examples[manual] = json.loads(example)["mcpServers"]["quirebase"]["url"]
+        for block in re.findall(
+            r"^[ \t]*```json\b[^\n]*\n(.*?)^[ \t]*```[ \t]*$",
+            manual.read_text(encoding="utf-8"),
+            re.MULTILINE | re.DOTALL,
+        ):
+            example = json.loads(block)
+            if not isinstance(example, dict):
+                continue
+            servers = example.get("mcpServers", {})
+            if isinstance(servers, dict) and "quirebase" in servers:
+                examples[manual] = servers["quirebase"]["url"]
+                break
+        assert manual in examples, f"No mcpServers.quirebase configuration in {manual}"
     return examples
 
 

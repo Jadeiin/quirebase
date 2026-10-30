@@ -18,7 +18,7 @@ description: 先确认当前状态，再处理导入、Worker、权限、批注�
 ## 导入或 PDF 处理一直等待
 
 1. 从“导入历史”或条目“文件”分区重新查看保留的状态。
-2. 运维检查独立 Worker 是否运行。Compose 可使用 `make docker-ps` 和 `docker compose --env-file .env.docker logs --tail 50 worker`。
+2. 运维检查独立 Worker 是否运行。Compose 可使用 `make docker-ps`，并在 `make docker-logs` 中查看 Worker 的记录（按 Ctrl+C 结束日志跟踪）。
 3. 核对 Web 和 Worker 使用同一数据库、对象后端，以及适用的 bucket 和 prefix。
 4. 用该实例配置运行 Doctor，查看失败项。
 

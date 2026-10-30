@@ -11,7 +11,9 @@ annotate PDFs together, and take the results into your writing.
 <img alt="Quirebase in action: discover papers, preview a bibliography import, organize references, highlight a PDF, reply to a shared annotation, and export citations." src="https://github.com/user-attachments/assets/7bd512c7-fb0d-48c5-add6-966ca87a7a04" />
 </picture>
 
-Quirebase is currently in alpha.
+Quirebase is currently in alpha. APIs, database schemas, and persisted workflow inputs and
+checkpoints may change incompatibly between releases. Follow each release's upgrade instructions;
+do not assume rolling upgrades or cross-version backup restoration are supported.
 
 ## What you can do
 
