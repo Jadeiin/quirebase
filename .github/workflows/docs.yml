@@ -18,6 +18,7 @@ jobs:
     env:
       ASTRO_TELEMETRY_DISABLED: "1"
       QUIREBASE_DOCS_SITE: ${{ vars.QUIREBASE_DOCS_SITE }}
+      QUIREBASE_DOCS_BASE: /quirebase/
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -30,6 +31,8 @@ jobs:
         with:
           version: "0.13.5"
           python-version: "3.12"
+      - name: Set documentation origin
+        run: echo "QUIREBASE_DOCS_SITE=${QUIREBASE_DOCS_SITE:-https://jadeiin.github.io}" >> "$GITHUB_ENV"
       - run: uv sync --frozen
       - run: bun install --cwd site --frozen-lockfile
       - run: bun run --cwd site test
@@ -41,3 +44,22 @@ jobs:
           path: site/dist/
           if-no-files-found: error
           retention-days: 14
+      - uses: actions/upload-pages-artifact@v4
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          path: site/dist/
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy documentation
+        id: deployment
+        uses: actions/deploy-pages@v4

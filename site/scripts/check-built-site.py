@@ -68,8 +68,13 @@ def _internal_url(origin: str, route: str, value: str) -> SplitResult | None:
     return url
 
 
-def _target_error(url: SplitResult, directory: Path, pages: dict[Path, BuiltPage]) -> str | None:
-    target = (directory / unquote(url.path).lstrip("/")).resolve()
+def _target_error(
+    url: SplitResult, directory: Path, pages: dict[Path, BuiltPage], base: str = "/"
+) -> str | None:
+    path = unquote(url.path)
+    if not path.startswith(base):
+        return "URL is outside the configured base path"
+    target = (directory / path.removeprefix(base)).resolve()
     if not target.is_relative_to(directory):
         return "URL escapes the site directory"
     if target.is_dir():
@@ -97,19 +102,19 @@ def _page_route(path: Path, directory: Path) -> str:
     return "/" + (relative.removesuffix("index.html") if path.name == "index.html" else relative)
 
 
-def check_links(directory: Path, origin: str) -> tuple[list[str], int, int]:
+def check_links(directory: Path, origin: str, base: str = "/") -> tuple[list[str], int, int]:
     pages = {path: BuiltPage(path) for path in directory.rglob("*.html")}
     errors = []
     checked = 0
     for path, page in pages.items():
         relative = path.relative_to(directory).as_posix()
-        route = _page_route(path, directory)
+        route = base.rstrip("/") + _page_route(path, directory)
         for value, line in page.urls:
             url = _internal_url(origin, route, value)
             if url is None:
                 continue
             checked += 1
-            if issue := _target_error(url, directory, pages):
+            if issue := _target_error(url, directory, pages, base):
                 errors.append(f"{relative}:{line}: {issue}: {value}")
     if not pages:
         errors.append(f"No HTML pages found in {directory}")
@@ -169,7 +174,12 @@ def main() -> int:
     except ValueError as error:
         parser.error(f"Invalid QUIREBASE_DOCS_SITE: {error}")
 
-    errors, pages, urls = check_links(directory, origin)
+    base = os.environ.get("QUIREBASE_DOCS_BASE") or "/"
+    if not re.fullmatch(r"/(?:[\w-]+/)*", base, re.ASCII):
+        parser.error(
+            "QUIREBASE_DOCS_BASE must have leading and trailing slashes, such as /quirebase/"
+        )
+    errors, pages, urls = check_links(directory, origin, base)
     artifact_errors, operations = check_artifacts(directory)
     errors.extend(artifact_errors)
     if errors:

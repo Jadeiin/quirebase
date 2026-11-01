@@ -120,10 +120,12 @@ those existing contracts rather than maintaining a second permission table in th
 
 Keep generated API route fields in FastAPI rather than duplicating parameter tables in guides. The `starlight-openapi`
 plugin reads the freshly exported contract and publishes pages under `/reference/api/`; the exact
-same schema is downloadable at `/openapi.json` on the documentation host.
+same schema is [downloadable from the published site](https://jadeiin.github.io/quirebase/openapi.json).
 
-Use root-relative, trailing-slash internal links, including anchors where helpful. Keep repository
-contracts as GitHub links so they stay at their existing paths. The build checks local routes and
+Use root-relative, trailing-slash internal Markdown links, including anchors where helpful. The
+Markdown processor prefixes these links with the configured deployment base path. Landing-page
+hero actions use the same root-relative convention; route middleware prefixes them for rendering.
+Keep repository contracts as GitHub links so they stay at their existing paths. The build checks local routes and
 anchors. The generated `/reference/api/` entry point is excluded from the Markdown validator because
 it is a plugin route outside the content collection; `check:build` checks its built artifact and
 navigation directly. External destinations require author review. MDX components should be checked
@@ -177,24 +179,34 @@ New runs cancel superseded documentation builds for the same Git ref.
 It uploads the complete `site/dist/` directory as the `documentation-site` artifact. The documentation
 build is independent of the application frontend build and release wheel.
 
-GitHub Pages publication is planned as a separate follow-up. This change builds and uploads review
-artifacts only; it does not enable Pages, change repository settings, or publish a production site.
-That follow-up must configure Astro's base path for the repository's Pages URL and verify authored
-links, the favicon, locale switching, API Reference, and Pagefind under that path before deployment.
+Successful builds on `main` upload a GitHub Pages artifact and publish it through the `github-pages`
+environment at <https://jadeiin.github.io/quirebase/>. Pull requests and other branches build review
+artifacts only. Repository Pages settings use **GitHub Actions** as the publishing source.
+The deployment job alone has `pages: write` and `id-token: write` permissions.
 
 For a hosting build, set `QUIREBASE_DOCS_SITE` to the actual documentation origin, for example
-`https://docs.quirebase.com`, then run `bun run --cwd site build` from the repository root. This
-enables canonical URLs and sitemap generation. CI reads the optional repository variable of the
-same name. Leave it unset for local previews and artifacts until a deployment origin is assigned.
+`https://jadeiin.github.io`, and `QUIREBASE_DOCS_BASE` to `/quirebase/`, then run
+`bun run --cwd site build` from the repository root. This enables canonical URLs and sitemap
+generation. CI defaults to that origin and base; the origin can be overridden with the repository
+variable `QUIREBASE_DOCS_SITE`. Local builds default to `/` with no canonical host.
 The configuration accepts an absolute HTTP(S) origin with an optional trailing `/`, such as
 `https://docs.quirebase.com/`. Astro and `check:build` reject subpaths, credentials, query strings,
-fragments, and malformed addresses. A repository Pages URL ending in `/quirebase/` needs the
-separate base-path deployment work before it can be used here.
-This initial setup targets the root of a dedicated documentation host; subpath hosting needs
-additional base-path and link configuration.
+fragments, and malformed addresses in the origin. Set the path separately through
+`QUIREBASE_DOCS_BASE`, using leading and trailing slashes and alphanumeric, underscore, or hyphen
+path segments. The built-site checker verifies that local links stay under that base before
+resolving files and anchors. For a dedicated documentation host, set the base to `/`.
 
-No hosting account, application runtime, or Wiki backend is needed to build these artifacts. Add
-application help links once the published documentation URL is available. Keep a single
+To preview the Pages build locally:
+
+```sh
+QUIREBASE_DOCS_SITE=https://jadeiin.github.io QUIREBASE_DOCS_BASE=/quirebase/ bun run --cwd site build
+QUIREBASE_DOCS_SITE=https://jadeiin.github.io QUIREBASE_DOCS_BASE=/quirebase/ bun run --cwd site preview
+```
+
+Open `http://localhost:4321/quirebase/`. Before changing the deployment base, verify internal links,
+the favicon, locale switching, generated API navigation, and Pagefind in the built preview.
+
+No application runtime or Wiki backend is needed to build these artifacts. Keep a single
 current-version site during alpha; introduce release snapshots only when several releases are
 supported concurrently.
 

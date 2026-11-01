@@ -1,10 +1,28 @@
 import starlight from '@astrojs/starlight';
+import { satteri } from '@astrojs/markdown-satteri';
 import { defineConfig } from 'astro/config';
 import mermaid from 'astro-mermaid';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 import starlightSidebarTopics from 'starlight-sidebar-topics';
 import locales from './locales.json' with { type: 'json' };
+
+const base = process.env.QUIREBASE_DOCS_BASE || '/';
+if (!/^\/(?:[\w-]+\/)*$/.test(base)) {
+  throw new Error(
+    'QUIREBASE_DOCS_BASE must be a path with leading and trailing slashes, such as /quirebase/',
+  );
+}
+
+function withBase(link) {
+  return link.startsWith('/') && !link.startsWith('//') && !link.startsWith(base)
+    ? base.slice(0, -1) + link
+    : link;
+}
+
+function prefixLink(node, context) {
+  context.setProperty(node, 'url', withBase(node.url));
+}
 
 function docsSite(value) {
   if (!value) return undefined;
@@ -24,7 +42,26 @@ function docsSite(value) {
 
 export default defineConfig({
   site: docsSite(process.env.QUIREBASE_DOCS_SITE),
+  base,
   trailingSlash: 'always',
+  markdown: {
+    processor: satteri({
+      mdastPlugins: [
+        {
+          name: 'docs-base-links',
+          link: prefixLink,
+          image: prefixLink,
+          definition: prefixLink,
+          // The source link validator reads hero links from Markdown metadata.
+          before(_root, context) {
+            for (const action of context.data.astro?.frontmatter?.hero?.actions || []) {
+              action.link = withBase(action.link);
+            }
+          },
+        },
+      ],
+    }),
+  },
   integrations: [
     mermaid({ autoTheme: true, enableLog: false }),
     starlight({
@@ -135,7 +172,7 @@ export default defineConfig({
           errorOnInconsistentLocale: true,
           // The OpenAPI plugin supplies this route outside the docs collection.
           // check:build validates the generated routes and their links in the final HTML.
-          exclude: ['/reference/api/'],
+          exclude: [withBase('/reference/api/')],
         }),
       ],
     }),

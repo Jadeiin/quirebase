@@ -1,7 +1,19 @@
 import { defineRouteMiddleware } from '@astrojs/starlight/route-data';
 
 export const onRequest = defineRouteMiddleware((context) => {
-  if (context.url.pathname.startsWith('/reference/api/')) {
+  const { id, entry } = context.locals.starlightRoute;
+  // Rendered hero actions come from the content collection, not Markdown metadata.
+  for (const action of entry.data.hero?.actions || []) {
+    if (
+      action.link.startsWith('/') &&
+      !action.link.startsWith('//') &&
+      !action.link.startsWith(import.meta.env.BASE_URL)
+    ) {
+      action.link = import.meta.env.BASE_URL.slice(0, -1) + action.link;
+    }
+  }
+
+  if (id === 'reference/api' || id.startsWith('reference/api/')) {
     context.locals.starlightRoute.entry.data.banner = {
       content:
         '<strong>Development API reference.</strong> This reference is generated from the source ' +
@@ -11,7 +23,7 @@ export const onRequest = defineRouteMiddleware((context) => {
   }
 
   // Keep task guides discoverable; the API overview remains a searchable entry point.
-  if (context.url.pathname.startsWith('/reference/api/operations/')) {
+  if (id.startsWith('reference/api/operations/')) {
     context.locals.starlightRoute.entry.data.pagefind = false;
   }
 });

@@ -90,6 +90,30 @@ class BuiltSiteTests(unittest.TestCase):
         )
         self.assertEqual(CHECKER.check_links(self.site, "https://docs.example"), ([], 1, 0))
 
+    def test_resolves_pages_subpath_and_rejects_links_outside_it(self):
+        self.write(
+            "index.html",
+            '<a href="/quirebase/guide/#intro">Guide</a>'
+            '<a href="guide/">Relative</a>'
+            '<a href="https://docs.example/quirebase/guide/">Absolute</a>',
+        )
+        self.write("guide/index.html", '<h1 id="intro">Guide</h1><a href="../">Home</a>')
+        self.assertEqual(
+            CHECKER.check_links(self.site, "https://docs.example", "/quirebase/"), ([], 2, 4)
+        )
+
+        self.write(
+            "index.html",
+            '<a href="/guide/">Missing prefix</a>'
+            '<a href="/quirebase-other/guide/">Wrong prefix</a>'
+            '<a href="/quirebase/%2e%2e/private.txt">Traversal</a>',
+        )
+        errors, _, _ = CHECKER.check_links(self.site, "https://docs.example", "/quirebase/")
+        self.assertEqual(len(errors), 3)
+        self.assertIn("outside the configured base path", errors[0])
+        self.assertIn("outside the configured base path", errors[1])
+        self.assertIn("escapes the site directory", errors[2])
+
     def test_reports_missing_routes_assets_and_anchors_with_source_lines(self):
         self.write(
             "index.html",

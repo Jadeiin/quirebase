@@ -3,9 +3,9 @@
 A self-hosted collaborative research library. Discover papers, organize references, read and
 annotate PDFs together, and take the results into your writing.
 
-[Get started](site/src/content/docs/getting-started/quickstart.md) ·
-[Install Quirebase](site/src/content/docs/administration/deployment.mdx) ·
-[Documentation](site/README.md)
+[Get started](https://jadeiin.github.io/quirebase/getting-started/quickstart/) ·
+[Install Quirebase](https://jadeiin.github.io/quirebase/administration/deployment/) ·
+[Documentation](https://jadeiin.github.io/quirebase/)
 
 <picture>
 <img alt="Quirebase in action: discover papers, preview a bibliography import, organize references, highlight a PDF, reply to a shared annotation, and export citations." src="https://github.com/user-attachments/assets/7bd512c7-fb0d-48c5-add6-966ca87a7a04" />
@@ -40,16 +40,16 @@ make docker-doctor
 ```
 
 Open <http://127.0.0.1:9060> and sign in as `admin` with the password you set.
-Follow the [installation guide](site/src/content/docs/administration/deployment.mdx) for source
-installs and HTTPS setup, then [add your first reference](site/src/content/docs/getting-started/quickstart.md).
+Follow the [installation guide](https://jadeiin.github.io/quirebase/administration/deployment/) for source
+installs and HTTPS setup, then [add your first reference](https://jadeiin.github.io/quirebase/getting-started/quickstart/).
 
 ## Documentation
 
 | You want to | Read |
 | --- | --- |
-| Import, organize, read, and collaborate | [User guides](site/src/content/docs/getting-started/quickstart.md) |
-| Configure, back up, or upgrade an installation | [Administration](site/src/content/docs/administration/configuration.md) |
-| Connect a script or client | [HTTP API](site/src/content/docs/developers/http-api.md) or [MCP](site/src/content/docs/developers/mcp.md) |
+| Import, organize, read, and collaborate | [User guides](https://jadeiin.github.io/quirebase/getting-started/quickstart/) |
+| Configure, back up, or upgrade an installation | [Administration](https://jadeiin.github.io/quirebase/administration/configuration/) |
+| Connect a script or client | [HTTP API](https://jadeiin.github.io/quirebase/developers/http-api/) or [MCP](https://jadeiin.github.io/quirebase/developers/mcp/) |
 | Explore implementation decisions and contracts | [Engineering documentation](docs/README.md) |
 
 The [documentation project](site/README.md) explains how to preview the guides locally.
