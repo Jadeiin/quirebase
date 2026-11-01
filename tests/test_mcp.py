@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx2
@@ -82,6 +85,55 @@ async def test_fastmcp_client_lists_the_tool_search_surface(async_session_factor
         tools = await client.list_tools()
 
     assert {tool.name for tool in tools} == {"search_tools", "get_schema", "call_tool"}
+
+
+@pytest.fixture
+def documented_mcp_examples():
+    manuals = sorted(
+        (Path(__file__).resolve().parents[1] / "site/src/content/docs").rglob("developers/mcp.md")
+    )
+    assert manuals
+    examples = {}
+    for manual in manuals:
+        for block in re.findall(
+            r"^[ \t]*```json\b[^\n]*\n(.*?)^[ \t]*```[ \t]*$",
+            manual.read_text(encoding="utf-8"),
+            re.MULTILINE | re.DOTALL,
+        ):
+            example = json.loads(block)
+            if not isinstance(example, dict):
+                continue
+            servers = example.get("mcpServers", {})
+            if isinstance(servers, dict) and "quirebase" in servers:
+                examples[manual] = servers["quirebase"]["url"]
+                break
+        assert manual in examples, f"No mcpServers.quirebase configuration in {manual}"
+    return examples
+
+
+async def test_documented_mcp_urls_discover_tools_without_redirects(
+    async_db, async_session_factory, documented_mcp_examples
+):
+    user = User(username="documented-mcp-client", password_hash="unused")
+    async_db.add(user)
+    await async_db.commit()
+    grant = await create_api_token(async_db, user, "Documentation example", expires_in_days=30)
+
+    async with mcp_client(async_session_factory) as (client, _app):
+        for manual, url in documented_mcp_examples.items():
+            endpoint = urlsplit(url).path
+            response = await client.post(
+                endpoint,
+                headers=_headers(grant.raw_token),
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 200, manual
+            assert {tool["name"] for tool in response.json()["result"]["tools"]} == {
+                "search_tools",
+                "get_schema",
+                "call_tool",
+            }
 
 
 async def _call(client, raw_token: str, name: str, arguments: dict, request_id: int = 1):

@@ -6,7 +6,7 @@ include Makefile.config
         docker-env docker-build docker-pull docker-up docker-up-s3 \
         docker-down docker-down-s3 docker-ps docker-logs docker-shell \
         docker-admin docker-doctor \
-        build-frontend \
+        build-frontend docs-dev docs-check docs-build \
         check-all lint-all lint-python lint-architecture format-python type-check test-all test-oa \
         clean clean-install make-p
 
@@ -76,6 +76,16 @@ make-p:
 build-frontend:
 	$(BUN) run --cwd frontend build
 
+# --- Public documentation ---
+docs-dev:
+	$(BUN) run --cwd site dev
+
+docs-check:
+	$(BUN) run --cwd site check
+
+docs-build:
+	$(BUN) run --cwd site build
+
 # --- Code Quality & Verification ---
 check-all: lint-all type-check test-all
 
@@ -108,6 +118,6 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 clean-install: clean
-	rm -rf node_modules frontend/node_modules
+	rm -rf node_modules frontend/node_modules site/node_modules
 	rm -rf $(VENV)
 	rm -rf dist *.egg-info

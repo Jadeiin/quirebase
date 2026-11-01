@@ -377,7 +377,7 @@
 								class="block bg-transparent p-0 [overflow-wrap:anywhere] whitespace-pre-wrap"
 								>curl \
   -H 'Authorization: Bearer YOUR_API_TOKEN' \
-  '{externalOrigin}/api/v1/items'</code
+  '{externalOrigin}/api/v1/workspaces'</code
 							></pre>
 					</div>
 					<div class="mt-4 border-t border-surface-300-700 pt-4">
@@ -391,7 +391,7 @@
 								>{`{
   "mcpServers": {
     "quirebase": {
-      "url": "${externalOrigin}/mcp",
+      "url": "${externalOrigin}/mcp/",
       "headers": {"Authorization": "Bearer YOUR_API_TOKEN"}
     }
   }
