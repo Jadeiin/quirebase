@@ -10,6 +10,7 @@
         "@embedpdf/svelte-pdf-viewer": "2.15.1",
         "@lingui/core": "^6.10.1",
         "@lingui/detect-locale": "^6.10.1",
+        "@lucide/svelte": "^1.65.0",
         "@sjsf/cfworker-validator": "^3.9.1",
         "@sjsf/form": "^3.9.1",
         "@sjsf/skeleton5-theme": "^3.9.1",
@@ -18,6 +19,7 @@
         "@tanstack/svelte-hotkeys": "^0.17.0",
         "@tanstack/svelte-query": "^6.3.5",
         "@tanstack/svelte-table": "^9.3.1",
+        "academicons": "^1.9.5",
         "lingui-for-svelte": "0.7.1",
         "openapi-fetch": "^0.17.0",
         "svelte": "^5.57.2",
@@ -295,6 +297,8 @@
     "@lingui/native-tools-win32-arm64-msvc": ["@lingui/native-tools-win32-arm64-msvc@0.1.6", "", { "os": "win32", "cpu": "arm64" }, "sha512-M2TZP4gKgLaLbiboXIrY5+8GsaQLHvZ8E6cUFgAuSaBa8AMa73+pZO1eay/St9t8yDh6EL6hOlqN0HedUHMwyQ=="],
 
     "@lingui/native-tools-win32-x64-msvc": ["@lingui/native-tools-win32-x64-msvc@0.1.6", "", { "os": "win32", "cpu": "x64" }, "sha512-5KvuSTFtDB8UGHS3Rxd+juYZgc51isQSx0hPukDObre6UxZGuUVCBmJ9YwoGVzXedViiNGmsQvrnCTBbVqI75g=="],
+
+    "@lucide/svelte": ["@lucide/svelte@1.65.0", "", { "peerDependencies": { "svelte": "^5" } }, "sha512-VfM4Ej7JFYz33WXm/JdqtOsOqRtfca5H9eFcyfcbFthWvbOnvvCerY/YkEk0ZiAvOvqo5hpK3u+opC0zY7Caxw=="],
 
     "@messageformat/date-skeleton": ["@messageformat/date-skeleton@1.1.0", "", {}, "sha512-rmGAfB1tIPER+gh3p/RgA+PVeRE/gxuQ2w4snFWPF5xtb5mbWR7Cbw7wCOftcUypbD6HVoxrVdyyghPm3WzP5A=="],
 
@@ -629,6 +633,8 @@
     "@zag-js/types": ["@zag-js/types@1.43.0", "", { "dependencies": { "csstype": "3.2.3" } }, "sha512-pheZyCiVjJaXBzbfoj/gMKXkZUo1D5JWd46QVYWonHJZIdUfDRDwBvDKcXGIHmpuq7fJrnGXbegAk0+D2aa4bw=="],
 
     "@zag-js/utils": ["@zag-js/utils@1.43.0", "", {}, "sha512-ZxkL+AuKRv/UGmmp5iZwmzfcVV7iWiDIrhYiMrKDKPJGdIPIFpMOisM+bTKYVkvn0jmCZV0CTF0jJm29hEV+LQ=="],
+
+    "academicons": ["academicons@1.9.5", "", {}, "sha512-ZXyNuotcqMNLmfc48W3BnRP/RzSs9cxvLrSk9fLgmgxAFDC+ecB9viNn1hzs2eJARre7N6tCfDiVQTia+uegEQ=="],
 
     "acorn": ["acorn@8.19.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-oJlA3XiRm7Cyk6qFD2Jn8ak9B7jSy0qy00ADO3+8dpT0LSjFihQYv4C02LFCSYJV3Q37xYwwRy5m+IpIiUzqWw=="],
 

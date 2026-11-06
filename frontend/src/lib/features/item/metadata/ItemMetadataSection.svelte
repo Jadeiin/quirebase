@@ -11,9 +11,10 @@
 		text,
 		contributorName,
 		workKeywords,
-		identifierRows,
 		type Metadata
 	} from '../metadata-draft.js';
+	import MetadataLinks from '../MetadataLinks.svelte';
+	import { workIdentifierLinks } from '../metadata-links.js';
 	import { t } from 'lingui-for-svelte/macro';
 	import type { ItemDetail } from '../types';
 	let {
@@ -125,9 +126,7 @@
 			<div>
 				<dt>{$t`Upstream identifiers`}</dt>
 				<dd>
-					{text(item.metadata.id)}{#each identifierRows(item.metadata) as row, index (index)}<div>
-							{row.namespace}: {row.value}
-						</div>{/each}
+					<MetadataLinks links={workIdentifierLinks(item.metadata)} />
 				</dd>
 			</div>
 		</dl>

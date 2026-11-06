@@ -16,6 +16,8 @@
 	} from '@tanstack/svelte-table';
 	import Button from '#lib/design/Button.svelte';
 	import Icon from '#lib/design/Icon.svelte';
+	import ExternalLink from '#lib/design/ExternalLink.svelte';
+	import { scholarlyLink } from '#lib/features/item/scholarly-links.js';
 	import PopoverTriggerButton from '#lib/design/PopoverTriggerButton.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import BibliographicSummary from '#lib/design/BibliographicSummary.svelte';
@@ -606,6 +608,11 @@
 									<span class="block break-words text-surface-600-400"
 										>{@render dateLink(row.original.publication_date)}</span
 									>
+								{:else if cell.column.id === 'doi' && row.original.doi}
+									{@const link = scholarlyLink(row.original.doi, 'doi')}
+									{#if link.href}
+										<ExternalLink href={link.href} icon="doi">{row.original.doi}</ExternalLink>
+									{:else}{row.original.doi}{/if}
 								{:else if cell.column.id === 'preview'}<div
 										class="flex items-center justify-end gap-1"
 									>

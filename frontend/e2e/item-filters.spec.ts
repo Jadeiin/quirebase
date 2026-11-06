@@ -2,14 +2,42 @@ import { expect, test, type Page } from '@playwright/test';
 import { mockSession, tagPage, directoryPage } from './helpers';
 
 const metadata = {
-	id: 'urn:test:filters',
+	id: 'https://doi.org/10.1000/filters',
 	type: 'JournalArticle',
 	title: 'Filter navigation',
 	date_published: '2024-06-15',
-	container: { title: 'Journal & 特刊; 50%_' },
+	container: { title: 'Journal & 特刊; 50%_', license: { id: 'CC-BY-4.0' } },
+	license: { id: 'CC-BY-NC-4.0', title: 'CC BY-NC 4.0' },
+	identifiers: [
+		{ identifier_type: 'DOI', identifier: '10.1000/filters' },
+		{ identifier_type: 'arXiv', identifier: '2601.12345v2' },
+		{ identifier_type: 'Other', scheme: 'OpenAlex', identifier: 'W12345' },
+		{ identifier_type: 'PMID', identifier: '42' }
+	],
 	contributors: [
-		{ type: 'Person', person: { family_name: 'Smith', given_name: 'Jane' }, roles: ['Author'] },
-		{ type: 'Organization', organization: { name: '研究 Council & Co.' }, roles: ['Author'] }
+		{
+			type: 'Person',
+			person: {
+				family_name: 'Smith',
+				given_name: 'Jane',
+				id: 'https://orcid.org/0000-0002-1825-0097',
+				affiliations: [
+					{
+						name: 'Research University',
+						identifier: 'https://ror.org/03yrm5c26',
+						identifier_type: 'ROR'
+					}
+				]
+			},
+			roles: ['Author']
+		},
+		{ type: 'Person', person: { name: 'Ada' }, roles: ['Author'] },
+		{
+			type: 'Organization',
+			person: { name: 'Inactive person', id: 'https://orcid.org/0000-0002-1694-233X' },
+			organization: { name: '研究 Council & Co.' },
+			roles: ['Author']
+		}
 	],
 	subjects: [{ subject: 'Graph; theory & ML' }]
 };
@@ -114,6 +142,93 @@ for (const target of targets) {
 		await expect(page).toHaveURL('/workspace/workspace-1/library');
 	});
 }
+
+test('an author ORCID opens separately while the name keeps its Library filter', async ({
+	page
+}) => {
+	await setup(page);
+	await page.goto('/workspace/workspace-1/item/filter-item');
+	const header = page
+		.locator('header')
+		.filter({ has: page.getByRole('heading', { name: metadata.title }) });
+	const orcid = header.getByRole('link', {
+		name: "View Jane Smith's ORCID (opens in a new tab)",
+		exact: true
+	});
+	await expect(orcid).toBeVisible();
+	await expect(header.getByRole('link', { name: /ORCID/ })).toHaveCount(1);
+	await expect(orcid).toHaveAttribute('href', 'https://orcid.org/0000-0002-1825-0097');
+	await expect(orcid).toHaveAttribute('rel', 'external noopener noreferrer');
+	await expect(orcid.locator('img')).toBeVisible();
+	await expect(header.getByRole('link', { name: 'Ada', exact: true })).toBeVisible();
+
+	// Fulfill the external page locally; the icon and its link need no external service.
+	await page
+		.context()
+		.route('https://orcid.org/**', (route) =>
+			route.fulfill({ contentType: 'text/html', body: '<title>ORCID record</title>' })
+		);
+	await orcid.focus();
+	const popupOpened = page.waitForEvent('popup');
+	await page.keyboard.press('Enter');
+	const popup = await popupOpened;
+	await expect(popup).toHaveURL('https://orcid.org/0000-0002-1825-0097');
+	await expect(page).toHaveURL('/workspace/workspace-1/item/filter-item');
+	await popup.close();
+	await header.getByRole('link', { name: 'Jane Smith', exact: true }).click();
+	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?authors=/);
+});
+
+test('scholarly identifiers and affiliations expose local icons and correctly scoped external links', async ({
+	page
+}) => {
+	await setup(page);
+	const externalRequests: string[] = [];
+	page.on('request', (request) => {
+		const url = new URL(request.url());
+		if (['http:', 'https:'].includes(url.protocol) && url.hostname !== '127.0.0.1')
+			externalRequests.push(url.href);
+	});
+	await page.goto('/workspace/workspace-1/item/filter-item');
+	for (const [label, href] of [
+		['DOI: 10.1000/filters', 'https://doi.org/10.1000/filters'],
+		['arXiv: 2601.12345v2', 'https://arxiv.org/abs/2601.12345v2'],
+		['OpenAlex: W12345', 'https://openalex.org/W12345'],
+		['PMID: 42', 'https://pubmed.ncbi.nlm.nih.gov/42'],
+		['ROR: https://ror.org/03yrm5c26', 'https://ror.org/03yrm5c26'],
+		['CC BY-NC 4.0', 'https://creativecommons.org/licenses/by-nc/4.0/'],
+		['CC-BY-4.0', 'https://creativecommons.org/licenses/by/4.0/']
+	]) {
+		const link = page.getByRole('link', { name: label, exact: true });
+		await expect(link).toHaveCount(1);
+		await expect(link).toHaveAttribute('href', href);
+		await expect(link).toHaveAttribute('target', '_blank');
+		await expect(link.locator('img, svg')).toBeVisible();
+	}
+	await expect(page.getByText('Research University', { exact: true })).toBeVisible();
+	await expect(page.getByText('Publication license', { exact: true })).toBeVisible();
+	await expect(page.getByText('Open access', { exact: true })).toHaveCount(0);
+	for (const width of [390, 1280]) {
+		await page.setViewportSize({ width, height: 900 });
+		expect(
+			await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+		).toBe(true);
+	}
+	const images = page.locator('a img[aria-hidden="true"]');
+	await expect(images).toHaveCount(5);
+	await expect
+		.poll(() =>
+			images.evaluateAll((nodes) =>
+				nodes.every((node) => (node as HTMLImageElement).naturalWidth > 0)
+			)
+		)
+		.toBe(true);
+	await page.evaluate(() => localStorage.setItem('quirebase:theme', 'dark'));
+	await page.reload();
+	await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
+	await expect(images.first()).toHaveCSS('filter', 'invert(1)');
+	expect(externalRequests).toEqual([]);
+});
 
 test('exact filters survive search, pagination and browser history without applying unsaved input', async ({
 	page

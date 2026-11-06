@@ -769,7 +769,7 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 	await expect(page.getByText('Shared abstract')).toBeVisible();
 	await expect(page.getByText('10.1000/shared')).toBeVisible();
 	await expect(
-		page.getByText('openalex: https://openalex.org/W1230000000', { exact: true })
+		page.getByRole('link', { name: 'OpenAlex: https://openalex.org/W1230000000', exact: true })
 	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Save metadata' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Record tools' })).toHaveCount(0);

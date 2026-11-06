@@ -1,129 +1,102 @@
-<script lang="ts">
-	let { name, size = 18 }: { name: string; size?: number } = $props();
+<script module lang="ts">
+	import type { LucideIcon } from '@lucide/svelte';
+	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
+	import ArrowUp from '@lucide/svelte/icons/arrow-up';
+	import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
+	import Book from '@lucide/svelte/icons/book';
+	import Calendar from '@lucide/svelte/icons/calendar';
+	import Check from '@lucide/svelte/icons/check';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import ChevronsLeft from '@lucide/svelte/icons/chevrons-left';
+	import ChevronsRight from '@lucide/svelte/icons/chevrons-right';
+	import Columns3 from '@lucide/svelte/icons/columns-3';
+	import CreativeCommons from '@lucide/svelte/icons/creative-commons';
+	import Download from '@lucide/svelte/icons/download';
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import File from '@lucide/svelte/icons/file';
+	import Folder from '@lucide/svelte/icons/folder';
+	import Hand from '@lucide/svelte/icons/hand';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
+	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+	import List from '@lucide/svelte/icons/list';
+	import Mail from '@lucide/svelte/icons/mail';
+	import MessageSquareText from '@lucide/svelte/icons/message-square-text';
+	import Minus from '@lucide/svelte/icons/minus';
+	import Monitor from '@lucide/svelte/icons/monitor';
+	import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone';
+	import Moon from '@lucide/svelte/icons/moon';
+	import PanelLeft from '@lucide/svelte/icons/panel-left';
+	import PanelRight from '@lucide/svelte/icons/panel-right';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Redo2 from '@lucide/svelte/icons/redo-2';
+	import RotateCw from '@lucide/svelte/icons/rotate-cw';
+	import Search from '@lucide/svelte/icons/search';
+	import Settings from '@lucide/svelte/icons/settings';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import Sun from '@lucide/svelte/icons/sun';
+	import Table2 from '@lucide/svelte/icons/table-2';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
+	import UserRound from '@lucide/svelte/icons/user-round';
+	import Wrench from '@lucide/svelte/icons/wrench';
+	import X from '@lucide/svelte/icons/x';
+
+	// Keep product names here; glyphs and their geometry belong to the libraries.
+	const icons: Record<string, LucideIcon> = {
+		dashboard: LayoutDashboard,
+		library: Book,
+		import: ArrowDownToLine,
+		calendar: Calendar,
+		search: Search,
+		keyboard: Keyboard,
+		projects: Folder,
+		settings: Settings,
+		tools: Wrench,
+		admin: ShieldCheck,
+		more: Ellipsis,
+		'external-link': ExternalLink,
+		user: UserRound,
+		mail: Mail,
+		panel: PanelLeft,
+		'panel-right': PanelRight,
+		columns: Columns3,
+		'creative-commons': CreativeCommons,
+		table: Table2,
+		list: List,
+		responsive: MonitorSmartphone,
+		'arrow-up': ArrowUp,
+		'arrow-down': ArrowDown,
+		'arrows-up-down': ArrowUpDown,
+		hand: Hand,
+		minus: Minus,
+		plus: Plus,
+		rotate: RotateCw,
+		undo: Undo2,
+		redo: Redo2,
+		download: Download,
+		'chevron-left': ChevronLeft,
+		'chevron-right': ChevronRight,
+		'chevrons-left': ChevronsLeft,
+		'chevrons-right': ChevronsRight,
+		'chevron-down': ChevronDown,
+		close: X,
+		annotation: MessageSquareText,
+		monitor: Monitor,
+		sun: Sun,
+		moon: Moon,
+		check: Check,
+		file: File
+	};
 </script>
 
-<svg
-	class="block shrink-0"
-	width={size}
-	height={size}
-	viewBox="0 0 24 24"
-	fill="none"
-	stroke="currentColor"
-	stroke-width="1.8"
-	stroke-linecap="round"
-	stroke-linejoin="round"
-	aria-hidden="true"
->
-	{#if name === 'dashboard'}
-		<rect x="3" y="3" width="7" height="7" rx="1" /><rect
-			x="14"
-			y="3"
-			width="7"
-			height="7"
-			rx="1"
-		/><rect x="3" y="14" width="7" height="7" rx="1" /><rect
-			x="14"
-			y="14"
-			width="7"
-			height="7"
-			rx="1"
-		/>
-	{:else if name === 'library'}
-		<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path
-			d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"
-		/>
-	{:else if name === 'import'}
-		<path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
-	{:else if name === 'calendar'}
-		<rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 11h18" />
-	{:else if name === 'search'}
-		<circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
-	{:else if name === 'keyboard'}
-		<rect x="2" y="5" width="20" height="14" rx="2" /><path
-			d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 15h10"
-		/>
-	{:else if name === 'projects'}
-		<path d="M3 7h7l2 2h9v10H3Z" /><path d="M3 7V5h7l2 2" />
-	{:else if name === 'settings'}
-		<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" /><path
-			d="m19.4 15 .1.1 1.3 1-1.4 2.4-1.6-.6a7.8 7.8 0 0 1-1.5.9l-.3 1.7h-2.8l-.3-1.7a7.8 7.8 0 0 1-1.5-.9l-1.6.6-1.4-2.4 1.3-1a7 7 0 0 1 0-1.8l-1.3-1 1.4-2.4 1.6.6a7.8 7.8 0 0 1 1.5-.9l.3-1.7H16l.3 1.7a7.8 7.8 0 0 1 1.5.9l1.6-.6 1.4 2.4-1.3 1a7 7 0 0 1-.1 1.7Z"
-		/>
-	{:else if name === 'tools'}
-		<path d="m14.7 6.3 3-3a4 4 0 0 1-5 5l-7.5 7.5a2.1 2.1 0 0 0 3 3l7.5-7.5a4 4 0 0 0 5-5l-3 3" />
-	{:else if name === 'admin'}
-		<path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7Z" /><path d="m9 12 2 2 4-4" />
-	{:else if name === 'more'}
-		<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle
-			cx="12"
-			cy="12"
-			r="1"
-			fill="currentColor"
-			stroke="none"
-		/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
-	{:else if name === 'user'}
-		<circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" />
-	{:else if name === 'mail'}
-		<rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" />
-	{:else if name === 'panel'}
-		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
-	{:else if name === 'panel-right'}
-		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" />
-	{:else if name === 'columns'}
-		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v16" />
-	{:else if name === 'table'}
-		<rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M3 15h18M10 4v16" />
-	{:else if name === 'list'}
-		<path d="M9 5h12M9 12h12M9 19h12M3 5h.01M3 12h.01M3 19h.01" />
-	{:else if name === 'responsive'}
-		<path d="M12 17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2M8 21h4M10 17v4" />
-		<rect x="15" y="10" width="6" height="11" rx="1" /><path d="M18 18h.01" />
-	{:else if name === 'arrow-up'}
-		<path d="M12 20V4m-6 6 6-6 6 6" />
-	{:else if name === 'arrow-down'}
-		<path d="M12 4v16m-6-6 6 6 6-6" />
-	{:else if name === 'arrows-up-down'}
-		<path d="M8 20V4m-4 4 4-4 4 4m4-4v16m-4-4 4 4 4-4" />
-	{:else if name === 'hand'}
-		<path
-			d="M8 11V6a2 2 0 0 1 4 0v4-6a2 2 0 0 1 4 0v6-4a2 2 0 0 1 4 0v7a8 8 0 0 1-8 8h-1a7 7 0 0 1-6-3l-3-4a2 2 0 0 1 3-3l3 3"
-		/>
-	{:else if name === 'minus'}
-		<path d="M5 12h14" />
-	{:else if name === 'plus'}
-		<path d="M12 5v14M5 12h14" />
-	{:else if name === 'rotate'}
-		<path d="M20 7v5h-5" /><path d="M19 12a7 7 0 1 1-2-5" />
-	{:else if name === 'undo'}
-		<path d="m9 7-5 5 5 5" /><path d="M20 17a8 8 0 0 0-8-8H4" />
-	{:else if name === 'redo'}
-		<path d="m15 7 5 5-5 5" /><path d="M4 17a8 8 0 0 1 8-8h8" />
-	{:else if name === 'download'}
-		<path d="M12 3v12m-5-5 5 5 5-5M5 21h14" />
-	{:else if name === 'chevron-left'}
-		<path d="m15 18-6-6 6-6" />
-	{:else if name === 'chevron-right'}
-		<path d="m9 18 6-6-6-6" />
-	{:else if name === 'chevrons-left'}
-		<path d="m13 18-6-6 6-6" /><path d="m19 18-6-6 6-6" />
-	{:else if name === 'chevrons-right'}
-		<path d="m11 18 6-6-6-6" /><path d="m5 18 6-6-6-6" />
-	{:else if name === 'chevron-down'}
-		<path d="m6 9 6 6 6-6" />
-	{:else if name === 'close'}
-		<path d="M6 6l12 12M18 6 6 18" />
-	{:else if name === 'annotation'}
-		<path d="M4 4h16v13H8l-4 4Z" /><path d="M8 8h8M8 12h5" />
-	{:else if name === 'monitor'}
-		<rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" />
-	{:else if name === 'sun'}
-		<circle cx="12" cy="12" r="4" /><path
-			d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"
-		/>
-	{:else if name === 'moon'}
-		<path d="M20.5 14.2A8 8 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
-	{:else if name === 'check'}
-		<path d="m5 13 4 4L19 7" />
-	{:else if name === 'file'}
-		<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" /><path d="M14 3v5h5" />
-	{/if}
-</svg>
+<script lang="ts">
+	let { name, size = 18 }: { name: string; size?: number } = $props();
+	const Glyph = $derived(icons[name]);
+</script>
+
+{#if Glyph}
+	<Glyph {size} strokeWidth={1.8} class="block shrink-0" aria-hidden="true" />
+{/if}

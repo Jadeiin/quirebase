@@ -15,6 +15,7 @@ async function mockPreviewLibrary(
 		itemCount?: number;
 		filterByTags?: boolean;
 		longLabels?: boolean;
+		metadataId?: string;
 	} = {}
 ) {
 	await mockSession(page);
@@ -82,7 +83,7 @@ async function mockPreviewLibrary(
 				version: 1,
 				citation_key: null,
 				metadata: {
-					id: `https://doi.org/10.1234/${id}`,
+					id: options.metadataId ?? `https://doi.org/10.1234/${id}`,
 					type: 'JournalArticle',
 					title: `Preview ${id}`,
 					description: '<b>A useful abstract</b>',
@@ -205,6 +206,15 @@ test('preview shows bibliographic context, copies DOI and opens organization onl
 		preview.getByRole('combobox', { name: 'Add a Tag to this Item', exact: true })
 	).toBeVisible();
 	expect(state.organizeReads()).toBe(1);
+});
+
+test('preview preserves percent-encoded DOI resolver URLs', async ({ page }) => {
+	await mockPreviewLibrary(page, { metadataId: 'https://doi.org/10.1234/A%3c' });
+	await page.goto('/workspace/workspace-1/library?preview=item-1');
+	const preview = page.getByRole('complementary', { name: 'Item preview', exact: true });
+	await expect(
+		preview.getByRole('link', { name: 'DOI: 10.1234/A%3c', exact: true })
+	).toHaveAttribute('href', 'https://doi.org/10.1234/A%3c');
 });
 
 test('preview edits only its Item while keeping bulk selection and local failed Project confirmation', async ({

@@ -14,6 +14,8 @@
 	import { apiErrorMessage } from '#lib/api/errors.js';
 	import Button from '#lib/design/Button.svelte';
 	import Icon from '#lib/design/Icon.svelte';
+	import ExternalLink from '#lib/design/ExternalLink.svelte';
+	import { scholarlyLink } from '#lib/features/item/scholarly-links.js';
 	import Panel from '#lib/design/Panel.svelte';
 	import QueryError from '#lib/design/QueryError.svelte';
 	import RichText from '#lib/design/RichText.svelte';
@@ -102,6 +104,17 @@
 				'')
 	);
 	const publicationDate = $derived(text(item.data?.metadata.date_published));
+	const doiLink = $derived.by(() => {
+		if (!doi) return scholarlyLink('', 'doi');
+		const hasIdentifier = Boolean(
+			item.data && identifierRows(item.data.metadata).find((row) => row.namespace === 'doi')?.value
+		);
+		if (hasIdentifier) return scholarlyLink(doi, 'doi');
+		const resolverUrl = text(item.data?.metadata.id).match(
+			/^https?:\/\/(?:dx\.)?doi\.org\/.+$/i
+		)?.[0];
+		return scholarlyLink(resolverUrl ?? doi, resolverUrl ? '' : 'doi');
+	});
 	const publicationYear = $derived(
 		/^\d{4}(?:-|$)/.test(publicationDate) ? publicationDate.slice(0, 4) : ''
 	);
@@ -306,7 +319,9 @@
 				</div>
 				{#if doi}
 					<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-						<span class="min-w-0 break-all text-surface-600-400">{$t`DOI`}: {doi}</span>
+						{#if doiLink.href}
+							<ExternalLink href={doiLink.href} icon="doi">{$t`DOI`}: {doi}</ExternalLink>
+						{:else}<span class="min-w-0 break-all text-surface-600-400">{$t`DOI`}: {doi}</span>{/if}
 						<Button size="sm" onclick={() => void copyDoi()}>{$t`Copy DOI`}</Button>
 					</div>
 					{#if copyStatus}<p role="status" class="mt-1 text-xs text-surface-600-400">

@@ -4078,6 +4078,10 @@ msgid "Publication identifiers"
 msgstr "Publication identifiers"
 
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publication license"
+msgstr "Publication license"
+
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Publication publisher"
 msgstr "Publication publisher"
 
@@ -5968,6 +5972,10 @@ msgstr "Version"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View"
 msgstr "View"
+
+#: src/lib/features/item/ItemHeader.svelte
+msgid "View {name}'s ORCID (opens in a new tab)"
+msgstr "View {name}'s ORCID (opens in a new tab)"
 
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "View all"

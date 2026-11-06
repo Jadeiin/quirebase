@@ -4,22 +4,25 @@
 	import type { ItemOverviewView } from '#lib/api/client.js';
 	import { can } from '#lib/authorization/can.js';
 	import Panel from '#lib/design/Panel.svelte';
+	import ExternalLink from '#lib/design/ExternalLink.svelte';
+	import BrandIcon from '#lib/design/BrandIcon.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import { activeLocale } from '#lib/locale.js';
 	import { ph, t } from 'lingui-for-svelte/macro';
 	import { metadataValueLabel } from '../metadata-labels.js';
-	import {
-		contributorAffiliations,
-		identifierRows,
-		object,
-		objects,
-		text,
-		workKeywords
-	} from '../metadata-draft.js';
+	import { object, objects, text, workKeywords } from '../metadata-draft.js';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { libraryHref } from '#lib/features/library/filters.js';
 	import { libraryItemHref, readLibraryReturnTo } from '#lib/features/library/return-context.js';
-	import { metadataFilterLinks } from '../metadata-links.js';
+	import {
+		affiliationLinks,
+		licenseLink,
+		metadataFilterLinks,
+		workIdentifierLinks
+	} from '../metadata-links.js';
+	import MetadataLinks from '../MetadataLinks.svelte';
+	import { scholarlyLink } from '../scholarly-links.js';
+	import PublisherName from './PublisherName.svelte';
 
 	let {
 		itemId,
@@ -34,16 +37,13 @@
 	const returnTo = $derived(readLibraryReturnTo(workspaceId, page.url.searchParams));
 
 	function isSafeExternalUrl(value: string): boolean {
-		try {
-			const protocol = new URL(value).protocol;
-			return protocol === 'http:' || protocol === 'https:';
-		} catch {
-			return false;
-		}
+		return Boolean(scholarlyLink(value).href);
 	}
 
 	const container = $derived(object(data.metadata.container));
 	const links = $derived(metadataFilterLinks(workspaceId, data.metadata));
+	const identifiers = $derived(workIdentifierLinks(data.metadata));
+	const affiliations = $derived(affiliationLinks(data.metadata));
 	const externalUrls = $derived([
 		...new Set(
 			[
@@ -56,7 +56,8 @@
 		void $activeLocale;
 		const publisher = object(data.metadata.publisher);
 		const host = object(container.publisher);
-		const license = object(container.license);
+		const license = licenseLink(data.metadata.license);
+		const containerLicense = licenseLink(container.license);
 		const pages = [
 			...new Set([text(container.first_page), text(container.last_page)].filter(Boolean))
 		].join('–');
@@ -75,13 +76,8 @@
 			},
 			{
 				label: $t`Upstream identifiers`,
-				value:
-					[
-						text(data.metadata.id),
-						...identifierRows(data.metadata).map((row) => `${row.namespace}: ${row.value}`)
-					]
-						.filter(Boolean)
-						.join('; ') || '—'
+				value: '—',
+				links: identifiers
 			},
 			{
 				label: $t`Type`,
@@ -97,7 +93,8 @@
 			{
 				label: $t`Publisher`,
 				value: text(publisher.name) || text(publisher.id) || '—',
-				href: text(publisher.id)
+				href: text(publisher.id),
+				publisher: true
 			},
 			{ label: $t`Publication type`, value: metadataValueLabel(text(container.type)) },
 			{
@@ -109,7 +106,8 @@
 			{
 				label: $t`Publication publisher`,
 				value: text(host.name) || text(host.id),
-				href: text(host.id)
+				href: text(host.id),
+				publisher: true
 			},
 			{
 				label: $t`Publication identifiers`,
@@ -124,8 +122,13 @@
 			{ label: $t`Language`, value: text(container.language) },
 			{
 				label: $t`License`,
-				value: text(license.title) || text(license.id) || text(license.url),
-				href: text(license.id) || text(license.url)
+				value: license.label,
+				href: license.href
+			},
+			{
+				label: $t`Publication license`,
+				value: containerLicense.label,
+				href: containerLicense.href
 			},
 			{ label: $t`URL`, value: text(container.url), href: text(container.url) },
 			{ label: $t`Updated date`, value: text(container.date_updated) },
@@ -170,10 +173,16 @@
 					<div class="min-w-0">
 						<dt class="text-surface-600-400">{row.label}</dt>
 						<dd class="m-0 mt-1 break-words">
-							{#if row.internalHref}
+							{#if row.links}
+								<MetadataLinks links={row.links} />
+							{:else if row.publisher}
+								<PublisherName name={row.value} href={row.href} />
+							{:else if row.internalHref}
 								<a href={resolve(row.internalHref)} title={row.hint}>{row.value}</a>
 							{:else if row.href && isSafeExternalUrl(row.href)}
-								<a href={row.href} target="_blank" rel="external noreferrer">{row.value}</a>
+								<ExternalLink href={row.href} icon={scholarlyLink(row.href).icon}
+									>{row.value}</ExternalLink
+								>
 							{:else}{row.value}{/if}
 						</dd>
 					</div>
@@ -181,7 +190,22 @@
 				<div class="sm:col-span-2">
 					<dt class="text-surface-600-400">{$t`Affiliation`}</dt>
 					<dd class="m-0 mt-1">
-						{contributorAffiliations(data.metadata).join('; ') || '—'}
+						<div class="flex flex-col items-start gap-1">
+							{#each affiliations as affiliation, index (index)}
+								<div class="flex max-w-full flex-wrap items-center gap-x-2 gap-y-1">
+									<span class="wrap-anywhere">{affiliation.name}</span>
+									{#if affiliation.identifier.href}
+										<ExternalLink
+											href={affiliation.identifier.href}
+											icon={affiliation.identifier.icon}
+											>{affiliation.identifier.label}</ExternalLink
+										>
+									{:else if affiliation.identifier.label}
+										<span class="wrap-anywhere">{affiliation.identifier.label}</span>
+									{/if}
+								</div>
+							{:else}—{/each}
+						</div>
 					</dd>
 				</div>
 			</dl>
@@ -273,9 +297,12 @@
 							href={url}
 							target="_blank"
 							rel="external noreferrer"
-							><strong>{$t`External source ${ph({ number: index + 1 })}`}</strong><span
-								class="truncate text-xs text-surface-600-400">{url}</span
-							></a
+							><strong class="flex items-center gap-1.5"
+								><BrandIcon
+									name={scholarlyLink(url).icon ?? 'external-link'}
+									size={16}
+								/>{$t`External source ${ph({ number: index + 1 })}`}</strong
+							><span class="truncate text-xs text-surface-600-400">{url}</span></a
 						>
 					{:else}
 						<span

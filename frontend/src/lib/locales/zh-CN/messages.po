@@ -4078,6 +4078,10 @@ msgid "Publication identifiers"
 msgstr "出版物标识符"
 
 #: src/lib/features/item/overview/ItemOverviewSection.svelte
+msgid "Publication license"
+msgstr "出版物许可"
+
+#: src/lib/features/item/overview/ItemOverviewSection.svelte
 msgid "Publication publisher"
 msgstr "出版物出版社"
 
@@ -5968,6 +5972,10 @@ msgstr "版本"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "View"
 msgstr "视图"
+
+#: src/lib/features/item/ItemHeader.svelte
+msgid "View {name}'s ORCID (opens in a new tab)"
+msgstr "查看 {name} 的 ORCID（在新标签页打开）"
 
 #: src/lib/features/dashboard/Dashboard.svelte
 msgid "View all"

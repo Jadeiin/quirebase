@@ -216,6 +216,17 @@ Author credits, publication titles and publication years refine the submitted Li
 the same facet and reset paging while preserving other filters, sort, page size and preview target.
 Item summaries carry ordered structured author names with exact filter values; no row-level lookup
 or parsing of joined names is needed. Only the year portion of a displayed date acts as a filter.
+Item headers keep author-name filters and add a separate ORCID icon link for active Person Author
+credits with a valid ORCID URL and checksum. External identity links open in a new tab. Work
+identifiers link to their known resolvers; affiliation ROR links remain paired with their credited
+institution names and do not become Work identifiers. Explicit Work and publication licenses are
+displayed separately. A PDF, resolver URL or license does not establish an Open Access status.
+Interface glyphs come from explicit Lucide Svelte imports; academic marks come from Academicons
+SVG assets bundled by Vite. Icons use no runtime CDN or icon API. Brand marks retain their geometry
+and use high-contrast black/white variants across the application's light and dark themes.
+Overview publisher names use a small exact-name alias table for IEEE, Elsevier, Springer, Wiley and
+ACM logos. Matching trims surrounding whitespace and ignores case; unknown names stay as text.
+Publisher logos retain the supplied name and link and load only with Overview.
 Refinement candidates load only when filters are expanded and describe the current Item page.
 They use the same filters, ordering and pagination as the result list; paging or sorting updates
 their distinct-Item counts. Every candidate on that page is available, with five initially visible
