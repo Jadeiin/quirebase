@@ -27,9 +27,15 @@ export function workIdentifierLinks(metadata: Metadata): ScholarlyLink[] {
 }
 
 export function affiliationLinks(metadata: Metadata) {
-	const affiliations = objects(metadata.contributors)
-		.filter((row) => row.type === 'Person')
-		.flatMap((row) => objects(object(row.person).affiliations))
+	return creditedAffiliations(
+		objects(metadata.contributors)
+			.filter((row) => row.type === 'Person')
+			.flatMap((row) => objects(object(row.person).affiliations))
+	);
+}
+
+function creditedAffiliations(values: Record<string, unknown>[]) {
+	const affiliations = values
 		.map((affiliation) => ({
 			name: text(affiliation.name).trim().replace(/\s+/g, ' '),
 			identifier: scholarlyLink(text(affiliation.identifier), text(affiliation.identifier_type))
@@ -73,6 +79,12 @@ export function metadataFilterLinks(workspaceId: string, metadata: Metadata) {
 				const family = row.type === 'Person' ? text(entity.family_name) : '';
 				return {
 					label: contributorName(row),
+					organization: row.type === 'Organization',
+					roles: (row.roles as unknown[]).filter(
+						(role): role is string => typeof role === 'string'
+					),
+					affiliations:
+						row.type === 'Person' ? creditedAffiliations(objects(entity.affiliations)) : [],
 					orcidHref: row.type === 'Person' ? orcidHref(entity.id) : undefined,
 					href: libraryHref(workspaceId, {
 						authors: [
@@ -96,6 +108,8 @@ export function metadataFilterLinks(workspaceId: string, metadata: Metadata) {
 		}
 	};
 }
+
+export type ItemAuthorCredit = ReturnType<typeof metadataFilterLinks>['authors'][number];
 
 function orcidHref(value: unknown): string | undefined {
 	const match = /^https?:\/\/orcid\.org\/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])\/?$/i.exec(

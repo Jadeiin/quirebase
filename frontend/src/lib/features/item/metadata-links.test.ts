@@ -60,6 +60,67 @@ it('uses only active personal Author credits for ORCID links', () => {
 	]);
 });
 
+it('preserves ordered same-name credits with their own roles and affiliations', () => {
+	const metadata = {
+		id: 'urn:test:credits',
+		type: 'JournalArticle',
+		title: 'Local author details',
+		contributors: [
+			{ type: 'Person', person: {}, roles: ['Author'] },
+			{
+				type: 'Person',
+				person: {
+					name: 'Alex Morgan',
+					id: 'https://orcid.org/0000-0002-1825-0097',
+					affiliations: [
+						{ name: ' First  Institute ', identifier: '03yrm5c26', identifier_type: 'ROR' }
+					]
+				},
+				roles: ['Author', 'Editor']
+			},
+			{
+				type: 'Person',
+				person: { name: 'Alex Morgan', affiliations: [{ name: 'Second Institute' }] },
+				roles: ['Author']
+			},
+			{
+				type: 'Organization',
+				organization: { name: 'Research Council' },
+				person: { affiliations: [{ name: 'Inactive institute' }] },
+				roles: ['Author']
+			},
+			{
+				type: 'Person',
+				person: { name: 'An editor', affiliations: [{ name: 'Editorial office' }] },
+				roles: ['Editor']
+			}
+		]
+	} as Metadata;
+	const initial = structuredClone(metadata);
+	const authors = metadataFilterLinks('workspace-1', metadata).authors;
+	expect(
+		authors.map((author) => ({
+			label: author.label,
+			names: author.affiliations.map((a) => a.name),
+			roles: author.roles,
+			organization: author.organization
+		}))
+	).toEqual([
+		{
+			label: 'Alex Morgan',
+			names: ['First Institute'],
+			roles: ['Author', 'Editor'],
+			organization: false
+		},
+		{ label: 'Alex Morgan', names: ['Second Institute'], roles: ['Author'], organization: false },
+		{ label: 'Research Council', names: [], roles: ['Author'], organization: true }
+	]);
+	expect(authors[0].affiliations[0].identifier.href).toBe('https://ror.org/03yrm5c26');
+	expect(authors[0].orcidHref).toBe('https://orcid.org/0000-0002-1825-0097');
+	expect(authors[1].orcidHref).toBeUndefined();
+	expect(metadata).toEqual(initial);
+});
+
 it('deduplicates resolved Work identifiers and keeps typed labels', () => {
 	const metadata = {
 		id: 'https://doi.org/10.1000/research',

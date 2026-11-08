@@ -212,12 +212,34 @@ preview restores its trigger or current result. Preview autofocus preserves focu
 control during asynchronous loading. Density, optional
 columns, widths and the automatic/table/list view choice are local User-scoped display preferences.
 Automatic view follows viewport width; an explicit view choice overrides it. Preview code loads on demand.
-Author credits, publication titles and publication years refine the submitted Library query, replace
+Library author credits, publication titles and publication years refine the submitted Library query, replace
 the same facet and reset paging while preserving other filters, sort, page size and preview target.
 Item summaries carry ordered structured author names with exact filter values; no row-level lookup
 or parsing of joined names is needed. Only the year portion of a displayed date acts as a filter.
-Item headers keep author-name filters and add a separate ORCID icon link for active Person Author
-credits with a valid ORCID URL and checksum. External identity links open in a new tab. Work
+Item header author names open record-local details in an anchored Popover, or a Dialog on narrow
+screens. Details retain a named action for filtering the Library by the credited name, and pair each
+author's institutions with their own identifiers; matching names never merge separate credits.
+Detail content loads only when inspected, with loading feedback. A failed chunk load offers an
+explicit Refresh page action that reloads the current URL and replaces the document's module map;
+rerendering the same import cannot recover browsers that retain a failed module entry. Refresh is
+user initiated, and details can be reopened after the page loads.
+The author-detail entry is fetched through native import rather than a modulepreload link: failed
+WebKit modulepreloads may remain unusable across page refreshes. Its dependencies retain preloading.
+The byline shows up to three rows on wide screens and one row below the application's `md` breakpoint.
+It reuses the Library table's AuthorLine: an ordered prefix of complete names, an omission mark,
+and the complete last author when both the first and last credits fit. Measurement includes ORCID
+marks and adapts to available width and font metrics; names are never cut into partial labels.
+Overflow adds a named Show authors / Show fewer authors button that expands or collapses the byline
+in place on both screen sizes. The omission mark invokes that same inline expansion. A single name
+longer than the available row is replaced by the omission mark while collapsed and wraps in full
+when expanded. Author names have no underline; hover color and keyboard
+focus identify their detail controls. Expanding the list never opens a Dialog. Clicking an individual
+name opens that credit's details. Dialog and Popover closure restores focus to an available trigger,
+including after a viewport change. Hidden credits are excluded from keyboard navigation and the
+accessibility tree; focus returns to the expansion control if a narrower layout hides its credit.
+Author details and byline expansion reset with the Item
+and its saved version. Separate ORCID icon links remain available for active Person Author credits
+with a valid ORCID URL and checksum. External identity links open in a new tab. Work
 identifiers link to their known resolvers; affiliation ROR links remain paired with their credited
 institution names and do not become Work identifiers. Explicit Work and publication licenses are
 displayed separately. A PDF, resolver URL or license does not establish an Open Access status.

@@ -1,17 +1,24 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
 	import { t } from 'lingui-for-svelte/macro';
-	import { fitAuthorLine } from './author-line.js';
+	import { fitAuthorLine, type AuthorLineLayout } from './author-line.js';
 
 	let {
 		names,
 		author,
+		measurement,
+		maxRows = 1,
+		onLayoutChange,
 		onShowAll,
 		expanded = false,
 		controls
 	}: {
 		names: readonly string[];
 		author?: Snippet<[number]>;
+		/** Non-interactive credit markup, including optional identifier marks, for width measurement. */
+		measurement?: Snippet<[number]>;
+		maxRows?: number;
+		onLayoutChange?: (layout: AuthorLineLayout) => void;
 		onShowAll?: (trigger: HTMLElement) => void;
 		expanded?: boolean;
 		controls?: string;
@@ -22,9 +29,11 @@
 	let separator = $state<HTMLSpanElement>();
 	let overflowMark = $state<HTMLSpanElement>();
 	let layout = $state.raw({ prefixCount: 0, lastVisible: false, overflowing: true });
+	$effect(() => onLayoutChange?.(layout));
 
 	$effect(() => {
 		const currentNames = names;
+		const currentRows = maxRows;
 		if (!row || !measurements || !separator || !overflowMark) return;
 		const rowElement = row;
 		const measurementElement = measurements;
@@ -40,7 +49,8 @@
 				widths,
 				rowElement.getBoundingClientRect().width,
 				separatorElement.getBoundingClientRect().width,
-				overflowElement.getBoundingClientRect().width
+				overflowElement.getBoundingClientRect().width,
+				currentRows
 			);
 			if (
 				next.prefixCount === layout.prefixCount &&
@@ -92,7 +102,10 @@
 </script>
 
 <span
-	class="relative flex max-w-full min-w-0 items-baseline overflow-hidden"
+	class={[
+		'relative flex max-w-full min-w-0 items-baseline overflow-hidden',
+		maxRows > 1 && 'flex-wrap'
+	]}
 	title={names.join('; ')}
 	bind:this={row}
 >
@@ -102,7 +115,9 @@
 		inert
 		bind:this={measurements}
 	>
-		{#each names as name, index (index)}<span>{name}</span>{/each}
+		{#each names as name, index (index)}<span
+				>{#if measurement}{@render measurement(index)}{:else}{name}{/if}</span
+			>{/each}
 		<span bind:this={separator}>;&nbsp;</span>
 	</span>
 	{#each names as name, index (index)}
@@ -115,7 +130,9 @@
 				aria-hidden={!layout.overflowing}
 				inert={!layout.overflowing}
 			>
-				{#if layout.overflowing && layout.prefixCount}<span aria-hidden="true">;&nbsp;</span>{/if}
+				{#if maxRows === 1 && layout.overflowing && layout.prefixCount}<span aria-hidden="true"
+						>;&nbsp;</span
+					>{/if}
 				<span class="inline-flex shrink-0 items-baseline" bind:this={overflowMark}>
 					{#if onShowAll && layout.overflowing}
 						<button
@@ -129,6 +146,7 @@
 						>
 					{:else}<span class={onShowAll ? 'px-0.5' : ''}>…</span>{/if}
 				</span>
+				{#if maxRows > 1 && layout.lastVisible}<span aria-hidden="true">;&nbsp;</span>{/if}
 			</span>
 		{/if}
 		<span
@@ -136,10 +154,13 @@
 			data-author-index={index}
 			hidden={last ? !layout.lastVisible : index >= layout.prefixCount}
 		>
-			{#if last ? layout.prefixCount || layout.overflowing : index}
+			{#if maxRows === 1 && (last ? layout.prefixCount || layout.overflowing : index)}
 				<span aria-hidden="true">;&nbsp;</span>
 			{/if}
 			{#if author}{@render author(index)}{:else}<span dir="auto">{name}</span>{/if}
+			{#if maxRows > 1 && !last && (index < layout.prefixCount - 1 || layout.overflowing || layout.lastVisible)}
+				<span aria-hidden="true">;&nbsp;</span>
+			{/if}
 		</span>
 	{/each}
 </span>

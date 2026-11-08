@@ -387,6 +387,10 @@ msgstr "机构单位"
 msgid "Affiliations"
 msgstr "所属机构"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Affiliations on this work"
+msgstr "本文中的机构"
+
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "All active Workspace members participate in this Project."
@@ -1955,6 +1959,10 @@ msgstr "筛选条件"
 msgid "Filter Items by author, keyword and type."
 msgstr "按作者、关键词和类型筛选条目。"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this name"
+msgstr "按此署名筛选库内文献"
+
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Filter Tags"
@@ -2877,6 +2885,7 @@ msgstr "正在加载工作区…"
 msgid "Loading workspaces…"
 msgstr "正在加载工作区列表…"
 
+#: src/lib/features/item/authors/ItemAuthorDetails.svelte
 #: src/lib/features/item/ItemActions.svelte
 msgid "Loading…"
 msgstr "加载中…"
@@ -3230,6 +3239,14 @@ msgstr "暂无摘要。"
 msgid "No advanced actions are available for this workspace."
 msgstr "此工作区当前没有可用的高级操作。"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "No affiliation information is provided for this author."
+msgstr "本文未提供此作者的机构信息。"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "No affiliation information is provided for this organizational credit."
+msgstr "本文未提供该组织署名的独立机构关系。"
+
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "No annotations."
 msgstr "暂无批注。"
@@ -3563,6 +3580,10 @@ msgstr "或"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Or paste bibliography data"
 msgstr "或粘贴书目数据"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "ORCID"
+msgstr "ORCID 标识符"
 
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/schema-editor/labels.ts
@@ -4237,6 +4258,7 @@ msgid "Refresh details"
 msgstr "刷新详情"
 
 #: src/lib/app/AppShell.svelte
+#: src/lib/features/item/authors/ItemAuthorDetails.svelte
 msgid "Refresh page"
 msgstr "刷新页面"
 
@@ -4577,6 +4599,10 @@ msgstr "角色"
 msgid "Role for {username}"
 msgstr "{username} 的角色"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Roles"
+msgstr "角色"
+
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Row {row}"
 msgstr "第 {row} 行"
@@ -4894,6 +4920,14 @@ msgstr "查看全部作者"
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "显示全部字段"
+
+#: src/lib/features/item/authors/ItemAuthors.svelte
+msgid "Show authors"
+msgstr "展开作者"
+
+#: src/lib/features/item/authors/ItemAuthors.svelte
+msgid "Show fewer authors"
+msgstr "收起作者"
 
 #: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Show keyboard shortcuts"
@@ -5593,6 +5627,10 @@ msgstr "无法加载批注"
 msgid "Unable to load annotations."
 msgstr "无法加载批注。"
 
+#: src/lib/features/item/authors/ItemAuthorDetails.svelte
+msgid "Unable to load author details."
+msgstr "无法加载作者详情。"
+
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Unable to load Citation Styles."
@@ -5797,7 +5835,7 @@ msgstr "Unicode 文本"
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/import/ImportCandidateRow.svelte
-#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/item/authors/ItemAuthors.svelte
 #: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -5973,7 +6011,8 @@ msgstr "版本"
 msgid "View"
 msgstr "视图"
 
-#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/item/authors/ItemAuthorPopover.svelte
+#: src/lib/features/item/authors/ItemAuthors.svelte
 msgid "View {name}'s ORCID (opens in a new tab)"
 msgstr "查看 {name} 的 ORCID（在新标签页打开）"
 
@@ -5984,6 +6023,11 @@ msgstr "查看全部"
 #: src/lib/features/library/LibrarySavedViews.svelte
 msgid "View deleted"
 msgstr "已删除视图"
+
+#: src/lib/features/item/authors/ItemAuthorPopover.svelte
+#: src/lib/features/item/authors/ItemAuthors.svelte
+msgid "View details for {name}"
+msgstr "查看 {name} 的详情"
 
 #: src/lib/features/workflows/WorkflowJobRow.svelte
 msgid "View import"
@@ -5997,7 +6041,6 @@ msgstr "查看已导入文献"
 msgid "View Items"
 msgstr "查看条目"
 
-#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "View Items by {name}"

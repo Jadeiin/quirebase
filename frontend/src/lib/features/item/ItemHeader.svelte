@@ -5,7 +5,6 @@
 	import SectionTabs from '#lib/design/SectionTabs.svelte';
 	import SectionTab from '#lib/design/SectionTab.svelte';
 	import Icon from '#lib/design/Icon.svelte';
-	import BrandIcon from '#lib/design/BrandIcon.svelte';
 	import RichText from '#lib/design/RichText.svelte';
 	import ItemActions from '#lib/features/item/ItemActions.svelte';
 	import { msg, ph, t } from 'lingui-for-svelte/macro';
@@ -13,6 +12,7 @@
 	import type { ItemOverview, ItemSection } from './queries';
 	import { getWorkspaceContext } from '#lib/workspaces/context.svelte.js';
 	import { metadataFilterLinks } from './metadata-links.js';
+	import ItemAuthors from './authors/ItemAuthors.svelte';
 	import {
 		libraryItemHref,
 		libraryReturnHref,
@@ -65,30 +65,7 @@
 	</h1>
 	{#if links}
 		<div class="mt-3 space-y-1 text-sm leading-relaxed wrap-anywhere">
-			<p class="m-0 text-surface-700-300">
-				{#each links.authors as author, index (index)}
-					{index > 0 ? '; ' : ''}<span
-						class="inline-flex max-w-full items-center gap-0.5 align-middle"
-					>
-						<a
-							class="min-w-0 underline-offset-4 hover:text-primary-700-300 hover:underline"
-							href={resolve(author.href)}
-							title={$t`View Items by ${ph({ name: author.label })}`}>{author.label}</a
-						>
-						{#if author.orcidHref}
-							<a
-								class="inline-flex size-6 shrink-0 items-center justify-center rounded-sm hover:bg-surface-200-800"
-								href={author.orcidHref}
-								target="_blank"
-								rel="external noopener noreferrer"
-								aria-label={$t`View ${ph({ name: author.label })}'s ORCID (opens in a new tab)`}
-								title={$t`View ${ph({ name: author.label })}'s ORCID (opens in a new tab)`}
-								><BrandIcon name="orcid" /></a
-							>
-						{/if}
-					</span>
-				{:else}{$t`Unknown authors`}{/each}
-			</p>
+			{#key `${itemId}:${overview?.version}`}<ItemAuthors authors={links.authors} />{/key}
 			{#if links.publication.href || links.date.href}
 				<p class="m-0 text-surface-600-400">
 					{#if links.publication.href}

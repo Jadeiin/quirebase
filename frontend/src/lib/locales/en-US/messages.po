@@ -387,6 +387,10 @@ msgstr "Affiliation"
 msgid "Affiliations"
 msgstr "Affiliations"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Affiliations on this work"
+msgstr "Affiliations on this work"
+
 #: src/lib/features/projects/Projects.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
 msgid "All active Workspace members participate in this Project."
@@ -1955,6 +1959,10 @@ msgstr "Filter conditions"
 msgid "Filter Items by author, keyword and type."
 msgstr "Filter Items by author, keyword and type."
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this name"
+msgstr "Filter Library by this name"
+
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Filter Tags"
@@ -2877,6 +2885,7 @@ msgstr "Loading workspace…"
 msgid "Loading workspaces…"
 msgstr "Loading workspaces…"
 
+#: src/lib/features/item/authors/ItemAuthorDetails.svelte
 #: src/lib/features/item/ItemActions.svelte
 msgid "Loading…"
 msgstr "Loading…"
@@ -3230,6 +3239,14 @@ msgstr "No abstract available."
 msgid "No advanced actions are available for this workspace."
 msgstr "No advanced actions are available for this workspace."
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "No affiliation information is provided for this author."
+msgstr "No affiliation information is provided for this author."
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "No affiliation information is provided for this organizational credit."
+msgstr "No affiliation information is provided for this organizational credit."
+
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "No annotations."
 msgstr "No annotations."
@@ -3563,6 +3580,10 @@ msgstr "OR"
 #: src/lib/features/import/ImportWorkspace.svelte
 msgid "Or paste bibliography data"
 msgstr "Or paste bibliography data"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "ORCID"
+msgstr "ORCID"
 
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/schema-editor/labels.ts
@@ -4237,6 +4258,7 @@ msgid "Refresh details"
 msgstr "Refresh details"
 
 #: src/lib/app/AppShell.svelte
+#: src/lib/features/item/authors/ItemAuthorDetails.svelte
 msgid "Refresh page"
 msgstr "Refresh page"
 
@@ -4577,6 +4599,10 @@ msgstr "Role"
 msgid "Role for {username}"
 msgstr "Role for {username}"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Roles"
+msgstr "Roles"
+
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Row {row}"
 msgstr "Row {row}"
@@ -4894,6 +4920,14 @@ msgstr "Show all authors"
 #: src/lib/features/item/schema-editor/SchemaMetadataEditor.svelte
 msgid "Show all fields"
 msgstr "Show all fields"
+
+#: src/lib/features/item/authors/ItemAuthors.svelte
+msgid "Show authors"
+msgstr "Show authors"
+
+#: src/lib/features/item/authors/ItemAuthors.svelte
+msgid "Show fewer authors"
+msgstr "Show fewer authors"
 
 #: src/lib/features/library/LibraryShortcuts.svelte
 msgid "Show keyboard shortcuts"
@@ -5593,6 +5627,10 @@ msgstr "Unable to load annotations"
 msgid "Unable to load annotations."
 msgstr "Unable to load annotations."
 
+#: src/lib/features/item/authors/ItemAuthorDetails.svelte
+msgid "Unable to load author details."
+msgstr "Unable to load author details."
+
 #: src/lib/features/account/ExportPreferences.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Unable to load Citation Styles."
@@ -5797,7 +5835,7 @@ msgstr "Unicode text"
 #: src/lib/features/dashboard/Dashboard.svelte
 #: src/lib/features/discovery/DiscoveryResults.svelte
 #: src/lib/features/import/ImportCandidateRow.svelte
-#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/item/authors/ItemAuthors.svelte
 #: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 #: src/lib/features/projects/ProjectWorkspace.svelte
@@ -5973,7 +6011,8 @@ msgstr "Version"
 msgid "View"
 msgstr "View"
 
-#: src/lib/features/item/ItemHeader.svelte
+#: src/lib/features/item/authors/ItemAuthorPopover.svelte
+#: src/lib/features/item/authors/ItemAuthors.svelte
 msgid "View {name}'s ORCID (opens in a new tab)"
 msgstr "View {name}'s ORCID (opens in a new tab)"
 
@@ -5984,6 +6023,11 @@ msgstr "View all"
 #: src/lib/features/library/LibrarySavedViews.svelte
 msgid "View deleted"
 msgstr "View deleted"
+
+#: src/lib/features/item/authors/ItemAuthorPopover.svelte
+#: src/lib/features/item/authors/ItemAuthors.svelte
+msgid "View details for {name}"
+msgstr "View details for {name}"
 
 #: src/lib/features/workflows/WorkflowJobRow.svelte
 msgid "View import"
@@ -5997,7 +6041,6 @@ msgstr "View imported Items"
 msgid "View Items"
 msgstr "View Items"
 
-#: src/lib/features/item/ItemHeader.svelte
 #: src/lib/features/library/LibraryAuthors.svelte
 #: src/lib/features/library/LibraryPreview.svelte
 msgid "View Items by {name}"

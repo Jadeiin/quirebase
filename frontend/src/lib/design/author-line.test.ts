@@ -97,3 +97,39 @@ describe('whole author names in a single line', () => {
 		});
 	});
 });
+
+describe('whole author names across bounded rows', () => {
+	it('shows every name when the complete credits fit the row boundary', () => {
+		expect(fitAuthorLine([20, 20, 30], 50, 5, 10, 2)).toEqual({
+			prefixCount: 2,
+			lastVisible: true,
+			overflowing: false
+		});
+		expect(fitAuthorLine([20, 20, 30], 49, 5, 10, 2)).toEqual({
+			prefixCount: 1,
+			lastVisible: true,
+			overflowing: true
+		});
+	});
+
+	it('reserves the last author after the omission mark within three rows', () => {
+		expect(fitAuthorLine(Array(10).fill(30), 100, 5, 10, 3)).toEqual({
+			prefixCount: 5,
+			lastVisible: true,
+			overflowing: true
+		});
+	});
+
+	it('does not skip an overlong first name or show a partial last name', () => {
+		expect(fitAuthorLine([101, 20, 20], 100, 5, 10, 3)).toEqual({
+			prefixCount: 0,
+			lastVisible: false,
+			overflowing: true
+		});
+		expect(fitAuthorLine([20, 20, 101], 100, 5, 10, 3)).toEqual({
+			prefixCount: 2,
+			lastVisible: false,
+			overflowing: true
+		});
+	});
+});

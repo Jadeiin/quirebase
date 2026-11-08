@@ -122,7 +122,17 @@ for (const target of targets) {
 	test(`Item field ${target.label} opens its exact Workspace filter`, async ({ page }) => {
 		const requests = await setup(page);
 		await page.goto('/workspace/workspace-1/item/filter-item?q=old&project=old&page=4');
-		const links = page.getByRole('link', { name: target.label, exact: true });
+		if ('authors' in target.expected) {
+			await page
+				.getByRole('button', { name: `View details for ${target.label}`, exact: true })
+				.click();
+		}
+		const links =
+			'authors' in target.expected
+				? page
+						.getByRole('dialog')
+						.getByRole('link', { name: 'Filter Library by this name', exact: true })
+				: page.getByRole('link', { name: target.label, exact: true });
 		await expect(links.first()).toBeVisible();
 		const hrefs = await links.evaluateAll((elements) =>
 			elements.map((element) => element.getAttribute('href'))
@@ -143,9 +153,7 @@ for (const target of targets) {
 	});
 }
 
-test('an author ORCID opens separately while the name keeps its Library filter', async ({
-	page
-}) => {
+test('an author ORCID opens separately while details retain the name filter', async ({ page }) => {
 	await setup(page);
 	await page.goto('/workspace/workspace-1/item/filter-item');
 	const header = page
@@ -160,7 +168,9 @@ test('an author ORCID opens separately while the name keeps its Library filter',
 	await expect(orcid).toHaveAttribute('href', 'https://orcid.org/0000-0002-1825-0097');
 	await expect(orcid).toHaveAttribute('rel', 'external noopener noreferrer');
 	await expect(orcid.locator('img')).toBeVisible();
-	await expect(header.getByRole('link', { name: 'Ada', exact: true })).toBeVisible();
+	await expect(
+		header.getByRole('button', { name: 'View details for Ada', exact: true })
+	).toBeVisible();
 
 	// Fulfill the external page locally; the icon and its link need no external service.
 	await page
@@ -175,7 +185,11 @@ test('an author ORCID opens separately while the name keeps its Library filter',
 	await expect(popup).toHaveURL('https://orcid.org/0000-0002-1825-0097');
 	await expect(page).toHaveURL('/workspace/workspace-1/item/filter-item');
 	await popup.close();
-	await header.getByRole('link', { name: 'Jane Smith', exact: true }).click();
+	await header.getByRole('button', { name: 'View details for Jane Smith', exact: true }).click();
+	await page
+		.getByRole('dialog')
+		.getByRole('link', { name: 'Filter Library by this name', exact: true })
+		.click();
 	await expect(page).toHaveURL(/\/workspace\/workspace-1\/library\?authors=/);
 });
 

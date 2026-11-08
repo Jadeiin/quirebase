@@ -765,7 +765,9 @@ test('read-only Item metadata does not expose mutation controls', async ({ page 
 
 	await page.goto('/workspace/workspace-1/item/item-readonly/metadata');
 
-	await expect(page.getByRole('link', { name: 'Ada Reader', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('button', { name: 'View details for Ada Reader', exact: true })
+	).toBeVisible();
 	await expect(page.getByText('Shared abstract')).toBeVisible();
 	await expect(page.getByText('10.1000/shared')).toBeVisible();
 	await expect(
