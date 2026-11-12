@@ -845,6 +845,8 @@ async def test_generated_tool_schemas_come_from_the_api_contract(async_session_f
         "year",
         "keyword",
         "author",
+        "author_orcid",
+        "author_ror",
         "limit",
         "offset",
         "sort",
