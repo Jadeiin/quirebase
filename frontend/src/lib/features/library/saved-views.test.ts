@@ -54,6 +54,33 @@ beforeEach(() => {
 });
 
 describe('Library saved views', () => {
+	it('persists ORCID identity filters independently of author names and view paging', async () => {
+		const storage = memoryStorage();
+		await saveLibraryView(
+			() => storage,
+			key,
+			'Author identity',
+			{
+				author_orcid: 'https://orcid.org/0000-0002-1694-233x',
+				author_ror: 'HTTP://ROR.ORG/03YRM5C26/',
+				authors: [{ last_name: 'Coauthor', first_name: '' }],
+				year: '2026',
+				sort: 'title',
+				direction: 'asc'
+			},
+			50,
+			'orcid-view'
+		);
+		const [view] = readLibrarySavedViews(storage, key);
+		expect(view.filters.author_orcid).toBe('0000-0002-1694-233X');
+		expect(view.filters.author_ror).toBe('03yrm5c26');
+		expect(view.filters.authors).toEqual([{ last_name: 'Coauthor', first_name: '' }]);
+		const url = new URL(savedLibraryViewHref('workspace-1', view), 'https://app.example/');
+		expect(url.searchParams.get('author_orcid')).toBe('0000-0002-1694-233X');
+		expect(url.searchParams.get('author_ror')).toBe('03yrm5c26');
+		expect(url.searchParams.get('page_size')).toBe('50');
+		expect(url.searchParams.has('page')).toBe(false);
+	});
 	it('creates distinct saved views without crypto.randomUUID', async () => {
 		vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
 		const storage = memoryStorage();

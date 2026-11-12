@@ -416,7 +416,11 @@ test('preview facets refine the submitted Library query while preserving sort an
 	})) {
 		expect(new URL(page.url()).searchParams.get(key)).toBe(value);
 	}
-	await preview.getByRole('link', { name: 'Ada Lovelace', exact: true }).click();
+	await preview.getByRole('button', { name: 'View details for Ada Lovelace', exact: true }).click();
+	await page
+		.getByRole('dialog', { name: 'Ada Lovelace', exact: true })
+		.getByRole('link', { name: 'Filter Library by this name', exact: true })
+		.click();
 	await expect
 		.poll(() => JSON.parse(new URL(page.url()).searchParams.get('authors') ?? '[]')[0]?.last_name)
 		.toBe('Lovelace');

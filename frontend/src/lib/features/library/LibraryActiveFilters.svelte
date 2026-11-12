@@ -10,6 +10,8 @@
 	import { authorFilterLabel } from './author-names.js';
 	import type { LibraryFilters, LibraryAuthorFilter } from './filters.js';
 	import type { LibrarySearch } from './queries.js';
+	import { orcidId } from '#lib/orcid.js';
+	import { rorId } from '#lib/ror.js';
 
 	let {
 		filters,
@@ -70,6 +72,10 @@
 				author
 			});
 		if (filters.author) add($t`Contributor`, filters.author, ['author']);
+		if (filters.author_orcid !== undefined)
+			add($t`Author (ORCID)`, filters.author_orcid, ['author_orcid']);
+		if (filters.author_ror !== undefined)
+			add($t`Author institution (ROR)`, filters.author_ror, ['author_ror']);
 		if (filters.year) add($t`Year`, filters.year, ['year']);
 		if (filters.publication_title !== undefined)
 			add($t`Publication`, filters.publication_title, ['publication_title']);
@@ -112,4 +118,30 @@
 			</div>
 		{/each}
 	</div>
+{/if}
+
+{#if filters.author_orcid !== undefined}
+	<p class="mt-2 text-xs text-surface-600-400">
+		{#if orcidId(filters.author_orcid)}
+			{$t`Only Items with this ORCID saved on a personal Author credit are included.`}
+			{#if filters.author_ror === undefined && (filters.author || filters.authors?.length)}
+				{$t`Name and ORCID filters may match different authors on the same Item.`}
+			{/if}
+		{:else}
+			{$t`Invalid ORCID filter. Remove it to continue.`}
+		{/if}
+	</p>
+{/if}
+
+{#if filters.author_ror !== undefined}
+	<p class="mt-2 text-xs text-surface-600-400">
+		{#if rorId(filters.author_ror)}
+			{$t`Only saved RORs on Author affiliations or organizational Author credits are included.`}
+			{#if filters.author_orcid !== undefined}
+				{$t`ORCID, ROR and name filters may match different authors on the same Item.`}
+			{:else if filters.author || filters.authors?.length}
+				{$t`Name and ROR filters may match different authors on the same Item.`}
+			{/if}
+		{:else}{$t`Invalid ROR filter. Remove it to continue.`}{/if}
+	</p>
 {/if}

@@ -23,6 +23,8 @@ function libraryFilterParameters(filters: LibraryFilters) {
 		year: filters.year || undefined,
 		keyword: filters.keyword || undefined,
 		author: filters.author || undefined,
+		author_orcid: filters.author_orcid,
+		author_ror: filters.author_ror,
 		reference_type: filters.reference_type,
 		publication_title: filters.publication_title,
 		keyword_exact: filters.keyword_exact,

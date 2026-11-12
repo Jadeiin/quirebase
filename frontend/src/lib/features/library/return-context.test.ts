@@ -7,6 +7,26 @@ import {
 	readLibraryReturnTo
 } from './return-context.js';
 
+it('retains the ORCID scope while opening an Item section and returning to the Library', () => {
+	const context = libraryReturnTo(
+		'workspace-1',
+		'/workspace/workspace-1/library?author_orcid=https%3A%2F%2Forcid.org%2F0000-0002-1825-0097&author_ror=HTTP%3A%2F%2FROR.ORG%2F03YRM5C26%2F&sort=title&page=3',
+		'item-1'
+	);
+	const item = new URL(
+		libraryItemHref('workspace-1', 'item-1', 'metadata', context),
+		'https://app.example/'
+	);
+	const returned = new URL(
+		libraryReturnHref('workspace-1', item.searchParams),
+		'https://app.example/'
+	);
+	expect(returned.searchParams.get('author_orcid')).toBe('0000-0002-1825-0097');
+	expect(returned.searchParams.get('author_ror')).toBe('03yrm5c26');
+	expect(returned.searchParams.get('page')).toBe('3');
+	expect(returned.hash).toBe('#library-item-item-1');
+});
+
 it('preserves submitted Library filters, sorting, paging and preview without nested state', () => {
 	const current = new URL(
 		'https://app.example/workspace/workspace-1/library?q=研究+%26+ML&project=project-1&tag=tag-1&sort=author&direction=desc&page=3&page_size=50&authors=%5B%7B%22last_name%22%3A%22Smith%22%2C%22first_name%22%3A%22%22%7D%5D&preview=item-2&return_to=ignored&unrelated=value'

@@ -31,6 +31,8 @@ from quirebase.search import search_index
 
 from ._json_queries import (
     author_condition,
+    author_orcid_condition,
+    author_ror_condition,
     first_contributor_sort_name,
     keyword_condition,
     uuid_array_contains,
@@ -115,6 +117,10 @@ async def _library_query(
         item_query = item_query.where(
             author_condition(db, text=filters.author.strip(), names=filters.authors)
         )
+    if filters.author_orcid is not None:
+        item_query = item_query.where(author_orcid_condition(db, filters.author_orcid))
+    if filters.author_ror is not None:
+        item_query = item_query.where(author_ror_condition(db, filters.author_ror))
     if filters.has_files is not None:
         file_conditions = [
             select(model.id)

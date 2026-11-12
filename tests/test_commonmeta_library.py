@@ -9,7 +9,12 @@ import pytest
 from sqlalchemy import event, func, insert, select, update
 from workspace_helpers import fixture_workspace_id, provision_initial_workspace
 
-from quirebase.core.errors import VersionConflict, WorkspaceMembershipRequired, WorkspaceUnavailable
+from quirebase.core.errors import (
+    ValidationFailure,
+    VersionConflict,
+    WorkspaceMembershipRequired,
+    WorkspaceUnavailable,
+)
 from quirebase.library import (
     AuthorFilter,
     LibraryFilter,
@@ -38,6 +43,263 @@ async def owner(db):
     await provision_initial_workspace(db, actor)
     await db.commit()
     return actor, fixture_workspace_id(actor)
+
+
+@pytest.mark.parametrize(
+    "value", ["03yrm5c26", " https://ror.org/03yrm5c26/ ", "HTTP://ROR.ORG/03YRM5C26"]
+)
+def test_ror_filter_normalizes_ids_and_urls(value):
+    assert LibraryFilter(author_ror=value).author_ror == "https://ror.org/03yrm5c26"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "03yrm5c27",
+        "13yrm5c26",
+        "03orm5c26",
+        "03yrm5c2x",
+        "https://ror.org.example.com/03yrm5c26",
+        "https://ror.org@elsewhere.example/03yrm5c26",
+        "https://ror.org/03yrm5c26?redirect=elsewhere",
+        "https://ror.org/03yrm5c26#profile",
+    ],
+)
+def test_invalid_ror_filters_cannot_silently_broaden_results(value):
+    with pytest.raises(ValidationFailure):
+        LibraryFilter(author_ror=value)
+
+
+async def test_ror_search_matches_author_institutions_before_paging_and_facets(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    ror = "https://ror.org/03yrm5c26"
+    affiliation = {"name": "Institute", "identifier": ror, "identifier_type": "ROR"}
+
+    def person(name="Alex", *, affiliations=None, role="Author", **extra):
+        return {
+            "type": "Person",
+            "person": {"name": name, "affiliations": affiliations or [affiliation]},
+            "roles": [role],
+            **extra,
+        }
+
+    first = await create_item(
+        db,
+        actor,
+        workspace_id,
+        work(
+            "A matching",
+            contributors=[
+                person(affiliations=[{**affiliation, "identifier": "03yrm5c26"}, affiliation]),
+                {
+                    "type": "Person",
+                    "person": {"name": "Coauthor", "id": "https://orcid.org/0000-0002-1825-0097"},
+                    "roles": ["Author"],
+                },
+            ],
+        ),
+    )
+    second = await create_item(
+        db,
+        actor,
+        workspace_id,
+        work(
+            "B matching",
+            contributors=[
+                person(
+                    "Name variant",
+                    affiliations=[
+                        {"identifier": " HTTP://ROR.ORG/03YRM5C26/ ", "identifier_type": "URL"}
+                    ],
+                ),
+            ],
+        ),
+    )
+    third = await create_item(
+        db,
+        actor,
+        workspace_id,
+        work(
+            "C matching",
+            contributors=[
+                {
+                    "type": "Organization",
+                    "organization": {"name": "Institute", "id": ror},
+                    "roles": ["Author"],
+                }
+            ],
+        ),
+    )
+    for title, contributors in [
+        ("Same name, no ID", [person(affiliations=[{"name": "Institute"}])]),
+        (
+            "Other ID",
+            [person(affiliations=[{**affiliation, "identifier": "https://ror.org/02mhbdp94"}])],
+        ),
+        (
+            "Conflicting namespace",
+            [person(affiliations=[{**affiliation, "identifier_type": "FundRef"}])],
+        ),
+        ("Unidentified bare value", [person(affiliations=[{"identifier": "03yrm5c26"}])]),
+        ("Editor only", [person(role="Editor")]),
+        (
+            "Organizational editor",
+            [
+                {
+                    "type": "Organization",
+                    "organization": {"id": ror, "name": "Institute"},
+                    "roles": ["Editor"],
+                }
+            ],
+        ),
+        (
+            "Inactive person",
+            [
+                {
+                    "type": "Organization",
+                    "organization": {"name": "Council"},
+                    "person": {"name": "Inactive", "affiliations": [affiliation]},
+                    "roles": ["Author"],
+                }
+            ],
+        ),
+        (
+            "Inactive organization",
+            [person(affiliations=[{"name": "Institute"}], organization={"id": ror})],
+        ),
+    ]:
+        await create_item(db, actor, workspace_id, work(title, contributors=contributors))
+    await create_item(
+        db, actor, workspace_id, work("Publisher only", publisher={"name": "Institute", "id": ror})
+    )
+    outsider, other_workspace = await owner(db)
+    await create_item(db, outsider, other_workspace, work("Outside", contributors=[person()]))
+
+    filters = LibraryFilter(author_ror="03yrm5c26")
+    for offset, expected in enumerate([first.item_id, second.item_id, third.item_id]):
+        items, total = await search_library(
+            db, actor, workspace_id, filters, limit=1, offset=offset, sort="title"
+        )
+        assert total == 3 and [item.id for item in items] == [expected]
+    facets = await get_library_facets(db, actor, workspace_id, filters, limit=1, sort="title")
+    assert [(author.last_name, author.item_count) for author in facets.authors] == [
+        ("Alex", 1),
+        ("Coauthor", 1),
+    ]
+    items, total = await search_library(
+        db,
+        actor,
+        workspace_id,
+        LibraryFilter(
+            author_ror=ror,
+            author_orcid="0000-0002-1825-0097",
+            authors=(AuthorFilter("Coauthor", ""),),
+        ),
+    )
+    assert total == 1 and [item.id for item in items] == [first.item_id]
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("0000-0002-1825-0097", "https://orcid.org/0000-0002-1825-0097"),
+        (" https://orcid.org/0000-0002-1825-0097/ ", "https://orcid.org/0000-0002-1825-0097"),
+        ("HTTP://ORCID.ORG/0000-0002-1694-233x", "https://orcid.org/0000-0002-1694-233X"),
+    ],
+)
+def test_orcid_filter_normalizes_ids_and_urls(value, expected):
+    assert LibraryFilter(author_orcid=value).author_orcid == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "0000-0002-1825-0098",
+        "0000000218250097",
+        "https://orcid.org.example.com/0000-0002-1825-0097",
+        "https://orcid.org@elsewhere.example/0000-0002-1825-0097",
+        "https://orcid.org/0000-0002-1825-0097?redirect=elsewhere",
+        "https://orcid.org/0000-0002-1825-0097#profile",
+        (
+            "\uff10\uff10\uff10\uff10-\uff10\uff10\uff10\uff12-"
+            "\uff11\uff18\uff12\uff15-\uff10\uff10\uff19\uff17"
+        ),
+    ],
+)
+def test_invalid_orcid_filters_cannot_silently_broaden_results(value):
+    with pytest.raises(ValidationFailure):
+        LibraryFilter(author_orcid=value)
+
+
+async def test_orcid_search_matches_person_authors_before_paging_and_facets(persistence_db):
+    db = persistence_db
+    actor, workspace_id = await owner(db)
+    orcid = "https://orcid.org/0000-0002-1825-0097"
+
+    def person(name, identifier=None, role="Author"):
+        return {
+            "type": "Person",
+            "person": {"name": name, **({"id": identifier} if identifier else {})},
+            "roles": [role],
+        }
+
+    first = await create_item(
+        db,
+        actor,
+        workspace_id,
+        work(
+            "A matching",
+            contributors=[person("Alex", orcid), person("Coauthor"), person("Alex", orcid)],
+        ),
+    )
+    second = await create_item(
+        db, actor, workspace_id, work("B matching", contributors=[person("Alicia", orcid)])
+    )
+    for title, contributors in [
+        ("Same name, no ID", [person("Alex")]),
+        ("Same name, other ID", [person("Alex", "https://orcid.org/0000-0002-1694-233X")]),
+        ("Editor only", [person("Alex", orcid, "Editor")]),
+        (
+            "Organization",
+            [
+                {
+                    "type": "Organization",
+                    "organization": {"name": "Council"},
+                    "person": {"name": "Alex", "id": orcid},
+                    "roles": ["Author"],
+                }
+            ],
+        ),
+    ]:
+        await create_item(db, actor, workspace_id, work(title, contributors=contributors))
+    outsider, other_workspace = await owner(db)
+    await create_item(
+        db, outsider, other_workspace, work("Outside", contributors=[person("Alex", orcid)])
+    )
+
+    filters = LibraryFilter(author_orcid="0000-0002-1825-0097")
+    for offset, expected in enumerate([first.item_id, second.item_id]):
+        items, total = await search_library(
+            db, actor, workspace_id, filters, limit=1, offset=offset, sort="title"
+        )
+        assert total == 2
+        assert [item.id for item in items] == [expected]
+    facets = await get_library_facets(db, actor, workspace_id, filters, limit=1, sort="title")
+    assert [(author.last_name, author.item_count) for author in facets.authors] == [
+        ("Alex", 1),
+        ("Coauthor", 1),
+    ]
+    # Separate author conditions intersect at the Item, without asserting a shared credit.
+    items, total = await search_library(
+        db,
+        actor,
+        workspace_id,
+        LibraryFilter(author_orcid=orcid, authors=(AuthorFilter("Coauthor", ""),)),
+    )
+    assert total == 1 and [item.id for item in items] == [first.item_id]
 
 
 async def test_title_sort_keeps_stable_pages_in_both_directions(persistence_db):

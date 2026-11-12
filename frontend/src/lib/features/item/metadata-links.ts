@@ -1,4 +1,10 @@
-import { libraryHref } from '#lib/features/library/filters.js';
+import {
+	libraryHref,
+	type LibraryAuthorFilter,
+	type LibraryMetadataFilter
+} from '#lib/features/library/filters.js';
+import { orcidId } from '#lib/orcid.js';
+import { rorId } from '#lib/ror.js';
 import {
 	contributorName,
 	identifierRows,
@@ -26,29 +32,54 @@ export function workIdentifierLinks(metadata: Metadata): ScholarlyLink[] {
 	return [...links.values()].map(({ link }) => link);
 }
 
-export function affiliationLinks(metadata: Metadata) {
-	return creditedAffiliations(
+export function affiliationLinks(workspaceId: string, metadata: Metadata) {
+	return uniqueAffiliations(
 		objects(metadata.contributors)
 			.filter((row) => row.type === 'Person')
-			.flatMap((row) => objects(object(row.person).affiliations))
+			.flatMap((row) =>
+				creditedAffiliations(
+					objects(object(row.person).affiliations),
+					Array.isArray(row.roles) && row.roles.includes('Author')
+						? (filter) => libraryHref(workspaceId, filter)
+						: undefined
+				)
+			)
 	);
 }
 
-function creditedAffiliations(values: Record<string, unknown>[]) {
+type FilterHref = (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
+
+function creditedAffiliations(
+	values: Record<string, unknown>[],
+	filterHref?: FilterHref,
+	name?: LibraryAuthorFilter
+) {
 	const affiliations = values
-		.map((affiliation) => ({
-			name: text(affiliation.name).trim().replace(/\s+/g, ' '),
-			identifier: scholarlyLink(text(affiliation.identifier), text(affiliation.identifier_type))
-		}))
+		.map((affiliation) => {
+			const ror = affiliationRor(affiliation);
+			return {
+				name: text(affiliation.name).trim().replace(/\s+/g, ' '),
+				identifier: scholarlyLink(text(affiliation.identifier), text(affiliation.identifier_type)),
+				rorFilterHref: ror && filterHref ? filterHref({ author_ror: ror }) : undefined,
+				nameRorFilterHref:
+					ror && filterHref && name ? filterHref({ authors: [name], author_ror: ror }) : undefined
+			};
+		})
 		.filter((row) => row.name || row.identifier.label);
-	return [
-		...new Map(
-			affiliations.map((row) => [
-				JSON.stringify([row.name, row.identifier.href ?? row.identifier.label]),
-				row
-			])
-		).values()
-	];
+	return uniqueAffiliations(affiliations);
+}
+
+function uniqueAffiliations<
+	T extends { name: string; identifier: ScholarlyLink; rorFilterHref?: string }
+>(rows: T[]): T[] {
+	const unique = new Map<string, T>();
+	for (const row of rows) {
+		const key = JSON.stringify([row.name, row.identifier.href ?? row.identifier.label]);
+		const previous = unique.get(key);
+		// An Editor's duplicate must not remove the matching Author's filter action.
+		unique.set(key, previous?.rorFilterHref && !row.rorFilterHref ? previous : row);
+	}
+	return [...unique.values()];
 }
 
 export function licenseLink(value: unknown): ScholarlyLink {
@@ -66,7 +97,22 @@ export function licenseLink(value: unknown): ScholarlyLink {
 	};
 }
 
-export function metadataFilterLinks(workspaceId: string, metadata: Metadata) {
+function affiliationRor(affiliation: Record<string, unknown>) {
+	const kind = text(affiliation.identifier_type);
+	const value = text(affiliation.identifier);
+	if (
+		kind !== 'ROR' &&
+		((kind !== '' && kind !== 'URL') || !/^https?:\/\/ror\.org\//i.test(value.trim()))
+	)
+		return undefined;
+	return rorId(value);
+}
+
+export function metadataFilterLinks(
+	workspaceId: string,
+	metadata: Metadata,
+	filterHref: FilterHref = (filter) => libraryHref(workspaceId, filter)
+) {
 	const publication = text(object(metadata.container).title);
 	const date = text(metadata.date_published);
 	const year = /^\d{4}(?:-|$)/.test(date) ? date.slice(0, 4) : '';
@@ -77,6 +123,17 @@ export function metadataFilterLinks(workspaceId: string, metadata: Metadata) {
 			.map((row) => {
 				const entity = object(row[row.type === 'Person' ? 'person' : 'organization']);
 				const family = row.type === 'Person' ? text(entity.family_name) : '';
+				const name = {
+					last_name: family || text(entity.name) || text(entity.given_name),
+					first_name: family ? text(entity.given_name) : ''
+				};
+				const filterByNameAndRor = (ror: string) =>
+					filterHref({ authors: [name], author_ror: ror });
+				const orcid = row.type === 'Person' ? orcidHref(entity.id) : undefined;
+				const ror =
+					row.type === 'Organization' && /^https?:\/\/ror\.org\//i.test(text(entity.id).trim())
+						? rorId(entity.id)
+						: undefined;
 				return {
 					label: contributorName(row),
 					organization: row.type === 'Organization',
@@ -84,27 +141,26 @@ export function metadataFilterLinks(workspaceId: string, metadata: Metadata) {
 						(role): role is string => typeof role === 'string'
 					),
 					affiliations:
-						row.type === 'Person' ? creditedAffiliations(objects(entity.affiliations)) : [],
-					orcidHref: row.type === 'Person' ? orcidHref(entity.id) : undefined,
-					href: libraryHref(workspaceId, {
-						authors: [
-							{
-								last_name: family || text(entity.name) || text(entity.given_name),
-								first_name: family ? text(entity.given_name) : ''
-							}
-						]
-					})
+						row.type === 'Person'
+							? creditedAffiliations(objects(entity.affiliations), filterHref, name)
+							: [],
+					orcidHref: orcid,
+					orcidFilterHref: orcid ? filterHref({ author_orcid: orcid }) : undefined,
+					rorHref: ror ? `https://ror.org/${ror}` : undefined,
+					rorFilterHref: ror ? filterHref({ author_ror: ror }) : undefined,
+					nameRorFilterHref: ror ? filterByNameAndRor(ror) : undefined,
+					href: filterHref({ authors: [name] })
 				};
 			})
 			.filter((author) => author.label),
 		publication: {
 			label: publication,
-			href: publication ? libraryHref(workspaceId, { publication_title: publication }) : undefined
+			href: publication ? filterHref({ publication_title: publication }) : undefined
 		},
-		date: { label: date, year, href: year ? libraryHref(workspaceId, { year }) : undefined },
+		date: { label: date, year, href: year ? filterHref({ year }) : undefined },
 		type: {
 			value: type,
-			href: type ? libraryHref(workspaceId, { reference_type: type }) : undefined
+			href: type ? filterHref({ reference_type: type }) : undefined
 		}
 	};
 }
@@ -112,16 +168,7 @@ export function metadataFilterLinks(workspaceId: string, metadata: Metadata) {
 export type ItemAuthorCredit = ReturnType<typeof metadataFilterLinks>['authors'][number];
 
 function orcidHref(value: unknown): string | undefined {
-	const match = /^https?:\/\/orcid\.org\/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])\/?$/i.exec(
-		text(value).trim()
-	);
-	if (!match) return undefined;
-	const id = match[1].toUpperCase();
-	const digits = id.replaceAll('-', '');
-	// ORCID uses the ISO 7064 MOD 11-2 check digit, with X representing ten.
-	let total = 0;
-	for (const digit of digits.slice(0, -1)) total = (total + Number(digit)) * 2;
-	const checksum = (12 - (total % 11)) % 11;
-	if (digits.at(-1) !== (checksum === 10 ? 'X' : String(checksum))) return undefined;
-	return `https://orcid.org/${id}`;
+	if (!/^https?:\/\/orcid\.org\//i.test(text(value).trim())) return undefined;
+	const id = orcidId(value);
+	return id ? `https://orcid.org/${id}` : undefined;
 }

@@ -23,6 +23,7 @@
 	import MetadataLinks from '../MetadataLinks.svelte';
 	import { scholarlyLink } from '../scholarly-links.js';
 	import PublisherName from './PublisherName.svelte';
+	import AffiliationName from '../AffiliationName.svelte';
 
 	let {
 		itemId,
@@ -43,7 +44,7 @@
 	const container = $derived(object(data.metadata.container));
 	const links = $derived(metadataFilterLinks(workspaceId, data.metadata));
 	const identifiers = $derived(workIdentifierLinks(data.metadata));
-	const affiliations = $derived(affiliationLinks(data.metadata));
+	const affiliations = $derived(affiliationLinks(workspaceId, data.metadata));
 	const externalUrls = $derived([
 		...new Set(
 			[
@@ -193,7 +194,7 @@
 						<div class="flex flex-col items-start gap-1">
 							{#each affiliations as affiliation, index (index)}
 								<div class="flex max-w-full flex-wrap items-center gap-x-2 gap-y-1">
-									<span class="wrap-anywhere">{affiliation.name}</span>
+									<AffiliationName {affiliation} />
 									{#if affiliation.identifier.href}
 										<ExternalLink
 											href={affiliation.identifier.href}

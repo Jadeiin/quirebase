@@ -1,5 +1,7 @@
 import type { components } from '#lib/api/schema.js';
 import { workspaceHref } from '#lib/workspaces/href.js';
+import { orcidId } from '#lib/orcid.js';
+import { rorId } from '#lib/ror.js';
 
 export type LibraryAuthorFilter = components['schemas']['AuthorFilter'];
 
@@ -11,6 +13,8 @@ export type LibraryFilters = {
 	year?: string;
 	keyword?: string;
 	author?: string;
+	author_orcid?: string;
+	author_ror?: string;
 	sort?: LibrarySort;
 	direction?: LibrarySortDirection;
 	has_files?: boolean;
@@ -24,6 +28,9 @@ export type LibraryFilters = {
 
 export type LibraryMetadataFilter =
 	| { authors: [LibraryAuthorFilter] }
+	| { authors: [LibraryAuthorFilter]; author_ror: string }
+	| { author_orcid: string }
+	| { author_ror: string }
 	| { publication_title: string }
 	| { year: string }
 	| { keyword_exact: string }
@@ -36,7 +43,15 @@ export function refineLibraryFilters(
 	if ('authors' in filter) {
 		const [author] = filter.authors;
 		const selected = applied.authors ?? [];
-		const authors = selected.some((name) => sameAuthor(name, author))
+		const containsAuthor = selected.some((name) => sameAuthor(name, author));
+		if ('author_ror' in filter)
+			return {
+				...applied,
+				author: undefined,
+				authors: containsAuthor ? selected : [...selected, author],
+				author_ror: filter.author_ror
+			};
+		const authors = containsAuthor
 			? selected.filter((name) => !sameAuthor(name, author))
 			: [...selected, author];
 		return { ...applied, author: undefined, authors: authors.length ? authors : undefined };
@@ -150,6 +165,8 @@ export function readLibraryFilters(
 ): LibraryFilters {
 	const sort = librarySort(parameters.get('sort'));
 	const direction = parameters.get('direction');
+	const authorOrcid = parameters.get('author_orcid');
+	const authorRor = parameters.get('author_ror');
 	return {
 		query: parameters.get('q')?.trim() ?? '',
 		tag: parameters.get('tag') ?? '',
@@ -158,6 +175,8 @@ export function readLibraryFilters(
 		year: parameters.get('year')?.trim() ?? '',
 		keyword: parameters.get('keyword')?.trim() ?? '',
 		author: parameters.get('author')?.trim() ?? '',
+		...(authorOrcid === null ? {} : { author_orcid: orcidId(authorOrcid) ?? authorOrcid.trim() }),
+		...(authorRor === null ? {} : { author_ror: rorId(authorRor) ?? authorRor.trim() }),
 		authors: readAuthors(parameters.get('authors')),
 		sort,
 		direction: direction === 'asc' || direction === 'desc' ? direction : defaultSortDirection(sort),
@@ -210,6 +229,10 @@ export function libraryParameters(
 		if (filters[key] !== undefined) result.set(key, filters[key]);
 	}
 	if (filters.authors?.length) result.set('authors', JSON.stringify(filters.authors));
+	if (filters.author_orcid !== undefined)
+		result.set('author_orcid', orcidId(filters.author_orcid) ?? filters.author_orcid.trim());
+	if (filters.author_ror !== undefined)
+		result.set('author_ror', rorId(filters.author_ror) ?? filters.author_ror.trim());
 	if (page > 1) result.set('page', String(page));
 	if (pageSize !== 25) result.set('page_size', String(pageSize));
 	return result;

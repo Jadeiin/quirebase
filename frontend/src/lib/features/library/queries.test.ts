@@ -36,6 +36,40 @@ const facetSnapshot: LibraryFacets = {
 	reference_types: [{ value: 'Dataset', item_count: 1 }]
 };
 
+it.each([
+	['list', 'author_orcid', '0000-0002-1825-0097'],
+	['facets', 'author_orcid', '0000-0002-1825-0097'],
+	['list', 'author_ror', '03yrm5c26'],
+	['facets', 'author_ror', '03yrm5c26']
+] as const)(
+	'forwards valid and invalid identity values to the %s endpoint (%s)',
+	async (source, key, valid) => {
+		const received: URL[] = [];
+		vi.stubGlobal('fetch', async (request: Request) => {
+			received.push(new URL(request.url));
+			return new Response(JSON.stringify(source === 'list' ? snapshot : facetSnapshot));
+		});
+		const client = new QueryClient();
+		const values = [valid, '', 'invalid'];
+		try {
+			for (const value of values) {
+				const filters = { [key]: value, has_files: false };
+				if (source === 'list')
+					await client.fetchQuery(libraryListQuery('workspace-1', filters, 2, 50));
+				else await client.fetchQuery(libraryFacetsQuery('workspace-1', filters, 2, 50));
+			}
+			expect(received.map((url) => url.searchParams.get(key))).toEqual(values);
+			for (const url of received) {
+				expect(url.searchParams.get('has_files')).toBe('false');
+				expect(url.searchParams.get('offset')).toBe('50');
+			}
+		} finally {
+			client.clear();
+			vi.unstubAllGlobals();
+		}
+	}
+);
+
 it.each(['list', 'facets'] as const)(
 	'forwards combined organization filters to the %s endpoint without losing false values',
 	async (source) => {

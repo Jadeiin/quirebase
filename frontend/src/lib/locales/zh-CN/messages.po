@@ -613,6 +613,14 @@ msgstr "已认证用户"
 msgid "Author"
 msgstr "作者"
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Author (ORCID)"
+msgstr "作者（ORCID）"
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Author institution (ROR)"
+msgstr "作者机构（ROR）"
+
 #: src/lib/features/admin/AdminAudit.svelte
 msgid "Authorization action"
 msgstr "授权操作"
@@ -1963,6 +1971,22 @@ msgstr "按作者、关键词和类型筛选条目。"
 msgid "Filter Library by this name"
 msgstr "按此署名筛选库内文献"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this name and ROR"
+msgstr "按此署名和 ROR 筛选库内文献"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this name and ROR: {institution}"
+msgstr "按此署名和 ROR 筛选库内文献：{institution}"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this ORCID"
+msgstr "按此 ORCID 筛选库内文献"
+
+#: src/lib/features/item/AffiliationName.svelte
+msgid "Filter Library by this ROR: {institution}"
+msgstr "按 ROR 筛选：{institution}"
+
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Filter Tags"
@@ -2339,6 +2363,14 @@ msgstr "引用键公式无效"
 msgid "Invalid metadata JSON."
 msgstr "元数据 JSON 无效。"
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Invalid ORCID filter. Remove it to continue."
+msgstr "ORCID 筛选条件无效，请移除此条件后继续。"
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Invalid ROR filter. Remove it to continue."
+msgstr "ROR 筛选条件无效，请移除此条件后继续。"
+
 #: src/lib/api/errors.ts
 msgid "Invalid username or password."
 msgstr "用户名或密码错误。"
@@ -2678,6 +2710,10 @@ msgstr "文献库"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Library controls"
 msgstr "文献库工具栏"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Library filters"
+msgstr "文献库筛选"
 
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Library Items"
@@ -3154,6 +3190,14 @@ msgstr "我的工作区"
 msgid "Name"
 msgstr "名称"
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Name and ORCID filters may match different authors on the same Item."
+msgstr "姓名和 ORCID 条件可分别匹配同一文献中的不同作者。"
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Name and ROR filters may match different authors on the same Item."
+msgstr "姓名和 ROR 条件可分别匹配同一文献中的不同作者。"
+
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "NASA ADS token"
 msgstr "NASA ADS 令牌"
@@ -3238,14 +3282,6 @@ msgstr "暂无摘要。"
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
 msgid "No advanced actions are available for this workspace."
 msgstr "此工作区当前没有可用的高级操作。"
-
-#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
-msgid "No affiliation information is provided for this author."
-msgstr "本文未提供此作者的机构信息。"
-
-#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
-msgid "No affiliation information is provided for this organizational credit."
-msgstr "本文未提供该组织署名的独立机构关系。"
 
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "No annotations."
@@ -3496,6 +3532,14 @@ msgstr "省略"
 msgid "Omit when a DOI exists"
 msgstr "存在 DOI 时省略"
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Only Items with this ORCID saved on a personal Author credit are included."
+msgstr "仅显示个人作者署名中已保存该 ORCID 的文献。"
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Only saved RORs on Author affiliations or organizational Author credits are included."
+msgstr "仅匹配作者署名机构或机构作者中已保存该 ROR 的文献。"
+
 #. Project participation policy.
 #: src/lib/domain-labels.ts
 msgctxt "project-participation"
@@ -3584,6 +3628,10 @@ msgstr "或粘贴书目数据"
 #: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
 msgid "ORCID"
 msgstr "ORCID 标识符"
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "ORCID, ROR and name filters may match different authors on the same Item."
+msgstr "ORCID、ROR 和姓名条件可分别匹配同一文献中的不同作者。"
 
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/schema-editor/labels.ts
@@ -4602,6 +4650,10 @@ msgstr "{username} 的角色"
 #: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
 msgid "Roles"
 msgstr "角色"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "ROR"
+msgstr "ROR 标识符"
 
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Row {row}"
@@ -6042,7 +6094,6 @@ msgid "View Items"
 msgstr "查看条目"
 
 #: src/lib/features/library/LibraryAuthors.svelte
-#: src/lib/features/library/LibraryPreview.svelte
 msgid "View Items by {name}"
 msgstr "查看 {name} 创作的条目"
 

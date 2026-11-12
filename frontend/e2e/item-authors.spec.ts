@@ -132,12 +132,8 @@ test('short bylines stay complete and details keep same-name and organizational 
 		.getByRole('button', { name: 'View details for Research Council', exact: true })
 		.click();
 	await expect(
-		page
-			.getByRole('dialog')
-			.getByText('No affiliation information is provided for this organizational credit.', {
-				exact: true
-			})
-	).toBeVisible();
+		page.getByRole('dialog').getByText('Affiliations on this work', { exact: true })
+	).toHaveCount(0);
 	await expect(page.getByText('Inactive institution', { exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('button', { name: 'Show authors', exact: true })).toHaveCount(0);

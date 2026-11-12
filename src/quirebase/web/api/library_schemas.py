@@ -26,6 +26,18 @@ class LibrarySearchQuery(BaseModel):
     year: str = ""
     keyword: str = ""
     author: str = ""
+    author_orcid: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Exact ORCID iD or resolver URL saved on an active Person Author credit. "
+        "Independent author-name and ORCID conditions intersect at the Item.",
+    )
+    author_ror: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Exact ROR iD or resolver URL on a personal Author's affiliation or an "
+        "organizational Author credit. Independent identity and name filters intersect at the Item.",
+    )
     has_files: bool | None = None
     has_tags: bool | None = None
     has_projects: bool | None = None
@@ -53,6 +65,8 @@ class LibrarySearchQuery(BaseModel):
             year=self.year,
             keyword=self.keyword,
             author=self.author,
+            author_orcid=self.author_orcid,
+            author_ror=self.author_ror,
             has_files=self.has_files,
             has_tags=self.has_tags,
             has_projects=self.has_projects,

@@ -307,8 +307,21 @@ for (const { view, fontSize } of (['table', 'list'] as const).flatMap((view) =>
 		await page.keyboard.press('Shift+Tab');
 		await page.keyboard.press('Enter');
 		const preview = page.getByRole('complementary', { name: 'Item preview' });
-		await expect(preview.getByRole('link', { name: /^Contributor / })).toHaveCount(60);
-		await expect(preview.getByRole('link', { name: 'Contributor 60', exact: true })).toBeVisible();
+		await expect(
+			preview.getByRole('button', { name: /^View details for Contributor / })
+		).toHaveCount(60);
+		await expect(
+			preview.getByRole('button', { name: 'View details for Contributor 60', exact: true })
+		).toBeVisible();
+		await expect(
+			preview.getByRole('button', { name: 'Show fewer authors', exact: true })
+		).toBeVisible();
+		await preview.getByRole('button', { name: 'Show fewer authors', exact: true }).click();
+		await expect(preview.getByRole('button', { name: 'Show authors', exact: true })).toBeVisible();
+		await ellipsis('item-3').click();
+		await expect(
+			preview.getByRole('button', { name: /^View details for Contributor / })
+		).toHaveCount(60);
 		let parameters = new URL(page.url()).searchParams;
 		expect(parameters.get('preview')).toBe('item-3');
 		expect(parameters.get('q')).toBe('research');

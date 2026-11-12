@@ -118,6 +118,112 @@ const targets = [
 	{ label: 'Graph; theory & ML', expected: { keyword_exact: 'Graph; theory & ML' } }
 ];
 
+for (const width of [1280, 390]) {
+	test(`${width}px author ORCID filters the Library independently of the credited name`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width, height: 900 });
+		const requests = await setup(page);
+		await page.goto('/workspace/workspace-1/item/filter-item');
+		await page.getByRole('button', { name: 'View details for Jane Smith', exact: true }).click();
+		const details = page.getByRole('dialog', { name: 'Jane Smith', exact: true });
+		await expect(
+			details.getByRole('link', { name: 'Filter Library by this name', exact: true })
+		).toBeVisible();
+		await expect(
+			details.getByRole('link', { name: 'orcid.org/0000-0002-1825-0097', exact: true })
+		).toHaveAttribute('target', '_blank');
+		await details.getByRole('link', { name: 'Filter Library by this ORCID', exact: true }).click();
+		await expect(page).toHaveURL('/workspace/workspace-1/library?author_orcid=0000-0002-1825-0097');
+		await expect.poll(() => requests.at(-1)?.get('author_orcid')).toBe('0000-0002-1825-0097');
+		expect(requests.at(-1)?.has('authors')).toBe(false);
+		const remove = page.getByRole('button', {
+			name: 'Remove filter Author (ORCID): 0000-0002-1825-0097',
+			exact: true
+		});
+		await expect(remove).toBeVisible();
+		await expect(
+			page.getByText('Only Items with this ORCID saved on a personal Author credit are included.', {
+				exact: true
+			})
+		).toBeVisible();
+		await page.reload();
+		await expect(remove).toBeVisible();
+		await remove.click();
+		await expect(page).toHaveURL('/workspace/workspace-1/library');
+		await page.goBack();
+		await expect(remove).toBeVisible();
+		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+			true
+		);
+	});
+}
+
+test('ORCID and ROR criteria survive saved views together with independent author names', async ({
+	page
+}) => {
+	await setup(page);
+	const parameters = new URLSearchParams({
+		author_orcid: '0000-0002-1825-0097',
+		author_ror: '03yrm5c26',
+		authors: JSON.stringify([{ last_name: 'Coauthor', first_name: '' }]),
+		sort: 'title',
+		page_size: '50'
+	});
+	await page.goto(`/workspace/workspace-1/library?${parameters}`);
+	await expect(
+		page.getByText('ORCID, ROR and name filters may match different authors on the same Item.', {
+			exact: false
+		})
+	).toBeVisible();
+	await page.getByRole('button', { name: 'Saved views', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Saved views', exact: true });
+	await dialog.getByRole('textbox', { name: 'View name', exact: true }).fill('Author identity');
+	await dialog.getByRole('button', { name: 'Save current view', exact: true }).click();
+	if (!(await dialog.isVisible()))
+		await page.getByRole('button', { name: 'Saved views', exact: true }).click();
+	await expect(dialog.getByRole('link', { name: 'Author identity', exact: true })).toBeVisible();
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+	await page
+		.getByRole('button', { name: 'Remove filter Author (ORCID): 0000-0002-1825-0097', exact: true })
+		.click();
+	await expect.poll(() => new URL(page.url()).searchParams.has('author_orcid')).toBe(false);
+	await page.reload();
+	await page.getByRole('button', { name: 'Saved views', exact: true }).click();
+	await dialog.getByRole('link', { name: 'Author identity', exact: true }).click();
+	await expect
+		.poll(() => new URL(page.url()).searchParams.get('author_orcid'))
+		.toBe('0000-0002-1825-0097');
+	expect(new URL(page.url()).searchParams.get('authors')).toBe(parameters.get('authors'));
+	expect(new URL(page.url()).searchParams.get('page_size')).toBe('50');
+	expect(new URL(page.url()).searchParams.get('author_ror')).toBe('03yrm5c26');
+});
+
+test('an invalid ORCID remains visible and removable instead of becoming an unfiltered search', async ({
+	page
+}) => {
+	await setup(page);
+	await page.route('**/api/v1/workspaces/workspace-1/items?*', (route) =>
+		new URL(route.request().url()).searchParams.has('author_orcid')
+			? route.fulfill({
+					status: 422,
+					json: { code: 'validation_failed', message: 'invalid author ORCID' }
+				})
+			: route.fallback()
+	);
+	await page.goto('/workspace/workspace-1/library?author_orcid=invalid');
+	await expect(
+		page.getByText('Invalid ORCID filter. Remove it to continue.', { exact: true })
+	).toBeVisible();
+	await expect(page.getByText('Unable to load the Library.', { exact: true })).toBeVisible();
+	await expect(page.getByText('No Items found.', { exact: true })).toHaveCount(0);
+	await page
+		.getByRole('button', { name: 'Remove filter Author (ORCID): invalid', exact: true })
+		.click();
+	await expect(page).toHaveURL('/workspace/workspace-1/library');
+	await expect(page.getByText('Unable to load the Library.', { exact: true })).toHaveCount(0);
+});
+
 for (const target of targets) {
 	test(`Item field ${target.label} opens its exact Workspace filter`, async ({ page }) => {
 		const requests = await setup(page);
@@ -243,6 +349,27 @@ test('scholarly identifiers and affiliations expose local icons and correctly sc
 	await expect(images.first()).toHaveCSS('filter', 'invert(1)');
 	expect(externalRequests).toEqual([]);
 });
+
+for (const width of [1280, 390]) {
+	test(`${width}px Overview institution names filter by ROR while identifiers open the external profile`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width, height: 900 });
+		const requests = await setup(page);
+		await page.goto('/workspace/workspace-1/item/filter-item');
+		const institution = page.getByRole('link', { name: 'Research University', exact: true });
+		await expect(institution).toHaveAttribute('href', /author_ror=03yrm5c26/);
+		await expect(
+			page.getByRole('link', { name: 'ROR: https://ror.org/03yrm5c26', exact: true })
+		).toHaveAttribute('target', '_blank');
+		await institution.click();
+		await expect(page).toHaveURL('/workspace/workspace-1/library?author_ror=03yrm5c26');
+		await expect.poll(() => requests.at(-1)?.get('author_ror')).toBe('03yrm5c26');
+		expect(requests.at(-1)?.has('authors')).toBe(false);
+		await page.goBack();
+		await expect(institution).toBeVisible();
+	});
+}
 
 test('exact filters survive search, pagination and browser history without applying unsaved input', async ({
 	page

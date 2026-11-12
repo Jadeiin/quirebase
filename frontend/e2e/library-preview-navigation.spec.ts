@@ -25,9 +25,15 @@ async function mockPreviewNavigation(
 	options: {
 		beforeListRead?: (url: URL) => Promise<void>;
 		failListRead?: (url: URL) => boolean;
+		authors?: components['schemas']['ItemSearchView']['authors'];
+		beforeOverviewRead?: (id: string) => Promise<void>;
 	} = {}
 ) {
 	await mockSession(page);
+	const authors = options.authors;
+	const rows = authors
+		? items.map((item, index) => (index === 0 ? { ...item, authors } : item))
+		: items;
 	await page.route('**/api/v1/workspaces/*/tags?*', (route) =>
 		route.fulfill({ json: tagPage([], route) })
 	);
@@ -47,13 +53,14 @@ async function mockPreviewNavigation(
 		const limit = Number(url.searchParams.get('limit'));
 		const offset = Number(url.searchParams.get('offset'));
 		return route.fulfill({
-			json: { items: items.slice(offset, offset + limit), total: items.length, limit, offset }
+			json: { items: rows.slice(offset, offset + limit), total: rows.length, limit, offset }
 		});
 	});
 	const previews: string[] = [];
-	await page.route('**/api/v1/workspaces/*/items/*/overview', (route) => {
+	await page.route('**/api/v1/workspaces/*/items/*/overview', async (route) => {
 		const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
 		previews.push(id);
+		await options.beforeOverviewRead?.(id);
 		return route.fulfill({
 			json: {
 				id,
@@ -64,7 +71,16 @@ async function mockPreviewNavigation(
 					type: 'JournalArticle',
 					title: `Preview ${id}`,
 					description: `Abstract for ${id}`,
-					date_published: '2025'
+					date_published: '2025',
+					...(id === 'item-1' && authors
+						? {
+								contributors: authors.map((author) => ({
+									type: 'Person',
+									roles: ['Author'],
+									person: { name: author.full_name }
+								}))
+							}
+						: {})
 				},
 				authorization: { allowed: ['item.update'] },
 				counts: { revisions: 0, attachments: 0, annotations: 0, discussion: 0 },
@@ -77,6 +93,46 @@ async function mockPreviewNavigation(
 	});
 	return { reads, previews };
 }
+
+test('leaving an author preview before its metadata arrives clears its pending reveal', async ({
+	page
+}) => {
+	const gate = deferred();
+	const authors = Array.from({ length: 40 }, (_, index) => ({
+		full_name: `Contributor Full Name ${index + 1}`,
+		last_name: `Contributor Full Name ${index + 1}`,
+		first_name: null
+	}));
+	await mockPreviewNavigation(page, {
+		authors,
+		beforeOverviewRead: async (id) => {
+			if (id === 'item-1') await gate.promise;
+		}
+	});
+	await page.goto('/workspace/workspace-1/library?page_size=10');
+	await page
+		.locator('[data-library-item="item-1"]')
+		.getByRole('button', { name: 'Show all authors', exact: true })
+		.click();
+	const preview = previewPanel(page);
+	await expect(preview.getByText('Loading Item preview…', { exact: true })).toBeVisible();
+	try {
+		await preview.getByRole('button', { name: 'Next Item', exact: true }).click();
+		await expect(
+			preview.getByRole('heading', { name: 'Preview item-2', exact: true })
+		).toBeVisible();
+	} finally {
+		gate.resolve();
+	}
+	await preview.getByRole('button', { name: 'Previous Item', exact: true }).click();
+	await expect(
+		preview.getByRole('button', { name: 'View details for Contributor Full Name 1', exact: true })
+	).toBeVisible();
+	await expect(preview.getByRole('button', { name: 'Show authors', exact: true })).toBeVisible();
+	await expect(
+		preview.getByRole('button', { name: 'Show fewer authors', exact: true })
+	).toHaveCount(0);
+});
 
 function previewPanel(page: Page) {
 	return page.getByRole('complementary', { name: 'Item preview', exact: true });
@@ -104,6 +160,68 @@ async function settleResponse(page: Page, release: () => void) {
 }
 
 for (const view of ['table', 'list'] as const) {
+	for (const collapse of [false, true]) {
+		test(`${view} author reveal is not replayed after Next/Previous, collapse=${collapse}`, async ({
+			page
+		}) => {
+			await page.setViewportSize({ width: view === 'table' ? 1280 : 390, height: 900 });
+			const authors = Array.from({ length: 40 }, (_, index) => ({
+				full_name: `Contributor Full Name ${index + 1}`,
+				last_name: `Contributor Full Name ${index + 1}`,
+				first_name: null
+			}));
+			await mockPreviewNavigation(page, { authors });
+			await page.goto('/workspace/workspace-1/library?page_size=10');
+			const omission = page
+				.locator('[data-library-item="item-1"]')
+				.getByRole('button', { name: 'Show all authors', exact: true });
+			await omission.click();
+			const preview = previewPanel(page);
+			const expanded = preview.getByRole('button', { name: 'Show fewer authors', exact: true });
+			const folded = preview.getByRole('button', { name: 'Show authors', exact: true });
+			await expect(expanded).toBeVisible();
+			await expect(
+				preview.getByRole('button', { name: /^View details for Contributor/ })
+			).toHaveCount(authors.length);
+			if (collapse) await expanded.click();
+			await preview.getByRole('button', { name: 'Next Item', exact: true }).click();
+			await expect(
+				preview.getByRole('heading', { name: 'Preview item-2', exact: true })
+			).toBeVisible();
+			await preview.getByRole('button', { name: 'Previous Item', exact: true }).click();
+			await expect(
+				preview.getByRole('heading', { name: 'Preview item-1', exact: true })
+			).toBeVisible();
+			await expect(
+				preview.getByRole('button', {
+					name: 'View details for Contributor Full Name 1',
+					exact: true
+				})
+			).toBeVisible();
+			await expect(folded).toBeVisible();
+			await expect(expanded).toHaveCount(0);
+			await omission.click();
+			await expect(expanded).toBeVisible();
+			await expect(
+				preview.getByRole('button', { name: /^View details for Contributor/ })
+			).toHaveCount(authors.length);
+			await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
+			await expect(preview).toHaveCount(0);
+			await page.goBack();
+			await expect(
+				preview.getByRole('heading', { name: 'Preview item-1', exact: true })
+			).toBeVisible();
+			await expect(
+				preview.getByRole('button', {
+					name: 'View details for Contributor Full Name 1',
+					exact: true
+				})
+			).toBeVisible();
+			await expect(folded).toBeVisible();
+			await expect(expanded).toHaveCount(0);
+		});
+	}
+
 	test(`${view} preview browses the current page with buttons and keyboard and respects the first boundary`, async ({
 		page
 	}) => {

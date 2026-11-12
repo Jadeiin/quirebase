@@ -177,6 +177,68 @@ def author_condition(
     return and_(*predicates)
 
 
+def author_orcid_condition(db: AsyncSession, identifier: str) -> ColumnElement[bool]:
+    """Match the active Person entity of an Author credit, independently of its name."""
+    authors = array_elements(db, Item.work["contributors"], objects=True)
+    return (
+        select(1)
+        .select_from(authors)
+        .where(
+            authors.c.value["type"].as_string() == "Person",
+            author_role(db, authors.c.value),
+            authors.c.value["person"]["id"].as_string() == identifier,
+        )
+        .correlate(Item)
+        .exists()
+    )
+
+
+def author_ror_condition(db: AsyncSession, identifier: str) -> ColumnElement[bool]:
+    """Match Authors' credited institutions, never publishers, funders or inactive entities."""
+    authors = array_elements(db, Item.work["contributors"], objects=True)
+    affiliations = array_elements(db, authors.c.value["person"]["affiliations"], objects=True)
+    value = func.lower(func.trim(affiliations.c.value["identifier"].as_string(), _NAME_WHITESPACE))
+    kind = affiliations.c.value["identifier_type"].as_string()
+    bare_id = identifier.rsplit("/", 1)[-1]
+    uris = [identifier, identifier.replace("https:", "http:")]
+    uri_values = [*uris, *(uri + "/" for uri in uris)]
+    # Affiliation.identifier is free text: bare IDs require an explicit ROR namespace.
+    affiliation_match = (
+        select(1)
+        .select_from(affiliations)
+        .where(
+            or_(
+                and_(
+                    kind == "ROR",
+                    value.in_([bare_id, bare_id + "/", *uri_values]),
+                ),
+                and_(
+                    or_(kind.is_(None), kind == "URL"),
+                    value.in_(uri_values),
+                ),
+            )
+        )
+        .correlate(authors)
+        .exists()
+    )
+    return (
+        select(1)
+        .select_from(authors)
+        .where(
+            author_role(db, authors.c.value),
+            or_(
+                and_(authors.c.value["type"].as_string() == "Person", affiliation_match),
+                and_(
+                    authors.c.value["type"].as_string() == "Organization",
+                    authors.c.value["organization"]["id"].as_string() == identifier,
+                ),
+            ),
+        )
+        .correlate(Item)
+        .exists()
+    )
+
+
 def keyword_condition(db: AsyncSession, value: str, *, exact: bool) -> ColumnElement[bool]:
     keywords = array_elements(db, Item.work["subjects"], objects=True)
     subject = keywords.c.value["subject"].as_string()

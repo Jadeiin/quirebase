@@ -81,6 +81,64 @@ def provider_candidate(identifier: str, title: str, *, authors: str | None = Non
     )
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("key", "values", "invalid_id", "other_id"),
+    [
+        (
+            "author_orcid",
+            ("0000-0002-1825-0097", "http://orcid.org/0000-0002-1825-0097/"),
+            "0000-0002-1825-0098",
+            "0000-0002-1694-233X",
+        ),
+        ("author_ror", ("03yrm5c26", "http://ror.org/03YRM5C26/"), "03yrm5c27", "02mhbdp94"),
+    ],
+)
+async def test_http_author_identity_filters_validate_and_apply_to_search_and_facets(
+    async_db, async_session_factory, tmp_path, monkeypatch, key, values, invalid_id, other_id
+):
+    client, item, _ = await authenticated_async_client(
+        async_db, async_session_factory, tmp_path, monkeypatch
+    )
+    item.work = {
+        **item.work,
+        "contributors": [
+            {
+                "type": "Person",
+                "person": {
+                    "name": "Ada",
+                    "id": "https://orcid.org/0000-0002-1825-0097",
+                    "affiliations": [{"identifier": "03yrm5c26", "identifier_type": "ROR"}],
+                },
+                "roles": ["Author"],
+            }
+        ],
+    }
+    await async_db.commit()
+    base = f"/api/v1/workspaces/{item.workspace_id}"
+    try:
+        for value in values:
+            response = await client.get(f"{base}/items", params={key: value})
+            assert response.status_code == 200
+            assert response.json()["total"] == 1
+            assert response.json()["items"][0]["id"] == str(item.id)
+            facets = await client.get(f"{base}/items/facets", params={key: value})
+            assert facets.status_code == 200
+            assert facets.json()["authors"] == [
+                {"last_name": "Ada", "first_name": None, "full_name": "Ada", "item_count": 1}
+            ]
+        for endpoint in ("items", "items/facets"):
+            for invalid in ("", "bad", invalid_id):
+                response = await client.get(f"{base}/{endpoint}", params={key: invalid})
+                assert response.status_code == 422
+                assert response.json()["code"] == "validation_failed"
+        response = await client.get(f"{base}/items", params={key: other_id})
+        assert response.status_code == 200 and response.json()["total"] == 0
+    finally:
+        await client.aclose()
+        get_settings.cache_clear()
+
+
 def _batch_lookup(lookup):
     """Build ordered outcomes for tests whose fixtures describe one source at a time."""
 

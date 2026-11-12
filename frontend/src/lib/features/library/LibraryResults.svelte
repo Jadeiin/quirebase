@@ -80,6 +80,15 @@
 		onRetry: () => void;
 	} = $props();
 	let previewLoadAttempt = $state(0);
+	let authorReveal = $state({ itemId: '', request: 0 });
+	let previousPreviewItemId: string | undefined;
+	$effect.pre(() => {
+		const current = previewItemId;
+		if (current !== previousPreviewItemId && authorReveal.itemId === previousPreviewItemId) {
+			authorReveal = { ...authorReveal, itemId: '' };
+		}
+		previousPreviewItemId = current;
+	});
 	let sortFocus = $state<{
 		sort: LibrarySort;
 		direction: LibrarySortDirection;
@@ -204,7 +213,10 @@
 					{filterHref}
 					{selected}
 					{onSelectionChange}
-					{onPreview}
+					onPreview={(id, trigger, showAuthors = false) => {
+						authorReveal = { itemId: showAuthors ? id : '', request: authorReveal.request + 1 };
+						onPreview(id, trigger);
+					}}
 					{previewItemId}
 					{itemHref}
 					{currentProject}
@@ -238,6 +250,7 @@
 				<LibraryPreview
 					{workspaceId}
 					itemId={previewItemId}
+					revealAuthors={authorReveal.itemId === previewItemId ? authorReveal.request : 0}
 					navigation={previewNavigation}
 					{shortcutsEnabled}
 					{currentProject}

@@ -9290,6 +9290,10 @@ export interface operations {
 				year?: string;
 				keyword?: string;
 				author?: string;
+				/** @description Exact ORCID iD or resolver URL saved on an active Person Author credit. Independent author-name and ORCID conditions intersect at the Item. */
+				author_orcid?: string | null;
+				/** @description Exact ROR iD or resolver URL on a personal Author's affiliation or an organizational Author credit. Independent identity and name filters intersect at the Item. */
+				author_ror?: string | null;
 				has_files?: boolean | null;
 				has_tags?: boolean | null;
 				has_projects?: boolean | null;
@@ -9394,6 +9398,10 @@ export interface operations {
 				year?: string;
 				keyword?: string;
 				author?: string;
+				/** @description Exact ORCID iD or resolver URL saved on an active Person Author credit. Independent author-name and ORCID conditions intersect at the Item. */
+				author_orcid?: string | null;
+				/** @description Exact ROR iD or resolver URL on a personal Author's affiliation or an organizational Author credit. Independent identity and name filters intersect at the Item. */
+				author_ror?: string | null;
 				has_files?: boolean | null;
 				has_tags?: boolean | null;
 				has_projects?: boolean | null;

@@ -613,6 +613,14 @@ msgstr "Authenticated user"
 msgid "Author"
 msgstr "Author"
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Author (ORCID)"
+msgstr "Author (ORCID)"
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Author institution (ROR)"
+msgstr "Author institution (ROR)"
+
 #: src/lib/features/admin/AdminAudit.svelte
 msgid "Authorization action"
 msgstr "Authorization action"
@@ -1963,6 +1971,22 @@ msgstr "Filter Items by author, keyword and type."
 msgid "Filter Library by this name"
 msgstr "Filter Library by this name"
 
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this name and ROR"
+msgstr "Filter Library by this name and ROR"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this name and ROR: {institution}"
+msgstr "Filter Library by this name and ROR: {institution}"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Filter Library by this ORCID"
+msgstr "Filter Library by this ORCID"
+
+#: src/lib/features/item/AffiliationName.svelte
+msgid "Filter Library by this ROR: {institution}"
+msgstr "Filter Library by this ROR: {institution}"
+
 #: src/lib/features/item/organize/ItemOrganizeSection.svelte
 #: src/lib/features/tools/Tools.svelte
 msgid "Filter Tags"
@@ -2339,6 +2363,14 @@ msgstr "Invalid Citation Key formula"
 msgid "Invalid metadata JSON."
 msgstr "Invalid metadata JSON."
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Invalid ORCID filter. Remove it to continue."
+msgstr "Invalid ORCID filter. Remove it to continue."
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Invalid ROR filter. Remove it to continue."
+msgstr "Invalid ROR filter. Remove it to continue."
+
 #: src/lib/api/errors.ts
 msgid "Invalid username or password."
 msgstr "Invalid username or password."
@@ -2678,6 +2710,10 @@ msgstr "Library"
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Library controls"
 msgstr "Library controls"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "Library filters"
+msgstr "Library filters"
 
 #: src/lib/features/library/LibraryTable.svelte
 msgid "Library Items"
@@ -3154,6 +3190,14 @@ msgstr "My workspaces"
 msgid "Name"
 msgstr "Name"
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Name and ORCID filters may match different authors on the same Item."
+msgstr "Name and ORCID filters may match different authors on the same Item."
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Name and ROR filters may match different authors on the same Item."
+msgstr "Name and ROR filters may match different authors on the same Item."
+
 #: src/routes/(app)/admin/settings/+page.svelte
 msgid "NASA ADS token"
 msgstr "NASA ADS token"
@@ -3238,14 +3282,6 @@ msgstr "No abstract available."
 #: src/lib/features/workspaces/WorkspaceAdvanced.svelte
 msgid "No advanced actions are available for this workspace."
 msgstr "No advanced actions are available for this workspace."
-
-#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
-msgid "No affiliation information is provided for this author."
-msgstr "No affiliation information is provided for this author."
-
-#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
-msgid "No affiliation information is provided for this organizational credit."
-msgstr "No affiliation information is provided for this organizational credit."
 
 #: src/lib/features/item/annotations/ItemAnnotationsSection.svelte
 msgid "No annotations."
@@ -3496,6 +3532,14 @@ msgstr "Omit"
 msgid "Omit when a DOI exists"
 msgstr "Omit when a DOI exists"
 
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Only Items with this ORCID saved on a personal Author credit are included."
+msgstr "Only Items with this ORCID saved on a personal Author credit are included."
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "Only saved RORs on Author affiliations or organizational Author credits are included."
+msgstr "Only saved RORs on Author affiliations or organizational Author credits are included."
+
 #. Project participation policy.
 #: src/lib/domain-labels.ts
 msgctxt "project-participation"
@@ -3584,6 +3628,10 @@ msgstr "Or paste bibliography data"
 #: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
 msgid "ORCID"
 msgstr "ORCID"
+
+#: src/lib/features/library/LibraryActiveFilters.svelte
+msgid "ORCID, ROR and name filters may match different authors on the same Item."
+msgstr "ORCID, ROR and name filters may match different authors on the same Item."
 
 #: src/lib/features/item/metadata-labels.ts
 #: src/lib/features/item/schema-editor/labels.ts
@@ -4602,6 +4650,10 @@ msgstr "Role for {username}"
 #: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
 msgid "Roles"
 msgstr "Roles"
+
+#: src/lib/features/item/authors/ItemAuthorDetailsContent.svelte
+msgid "ROR"
+msgstr "ROR"
 
 #: src/lib/features/import/ImportBatchPreview.svelte
 msgid "Row {row}"
@@ -6042,7 +6094,6 @@ msgid "View Items"
 msgstr "View Items"
 
 #: src/lib/features/library/LibraryAuthors.svelte
-#: src/lib/features/library/LibraryPreview.svelte
 msgid "View Items by {name}"
 msgstr "View Items by {name}"
 

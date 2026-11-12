@@ -14,6 +14,56 @@ import {
 import { metadataFilterLinks } from '../item/metadata-links.js';
 import type { Metadata } from '../item/metadata-draft.js';
 
+it('round-trips canonical ORCID and ROR independently of names and organization filters', () => {
+	const href = new URL(
+		libraryHref(
+			'workspace-1',
+			{
+				author_orcid: ' HTTP://ORCID.ORG/0000-0002-1694-233x/ ',
+				author_ror: ' HTTP://ROR.ORG/03YRM5C26/ ',
+				authors: [{ last_name: 'Coauthor', first_name: '' }],
+				project: 'project-1',
+				sort: 'title',
+				has_files: false
+			},
+			3,
+			50,
+			'item-1'
+		),
+		'https://app.example/'
+	);
+	expect(href.searchParams.get('author_orcid')).toBe('0000-0002-1694-233X');
+	const restored = readLibraryFilters(href.searchParams);
+	expect(restored.author_orcid).toBe('0000-0002-1694-233X');
+	expect(restored.author_ror).toBe('03yrm5c26');
+	expect(restored.authors).toEqual([{ last_name: 'Coauthor', first_name: '' }]);
+	expect(libraryPage(href.searchParams)).toBe(3);
+	expect(libraryPageSize(href.searchParams)).toBe(50);
+	expect(refineLibraryFilters(restored, { year: '2026' }).author_orcid).toBe(restored.author_orcid);
+	expect(submitLibraryFilters(restored, { author: 'Another coauthor' })).toMatchObject({
+		author_orcid: restored.author_orcid,
+		author: 'Another coauthor'
+	});
+});
+
+it.each(['', 'invalid', '0000-0002-1825-0098'])(
+	'retains invalid ORCID %s for server validation instead of broadening the query',
+	(value) => {
+		const filters = readLibraryFilters(new URLSearchParams({ author_orcid: value }));
+		expect(filters.author_orcid).toBe(value);
+		expect(libraryParameters(filters).get('author_orcid')).toBe(value);
+	}
+);
+
+it.each(['', 'invalid', '03yrm5c27'])(
+	'retains invalid ROR %s for server validation instead of broadening the query',
+	(value) => {
+		const filters = readLibraryFilters(new URLSearchParams({ author_ror: value }));
+		expect(filters.author_ror).toBe(value);
+		expect(libraryParameters(filters).get('author_ror')).toBe(value);
+	}
+);
+
 it.each(['has_files', 'has_tags', 'has_projects'] as const)(
 	'round-trips both values of %s without activating malformed absence filters',
 	(key) => {
@@ -379,6 +429,28 @@ it('builds author links from active entities and Author roles in record order', 
 	expect(links.publication.href).toContain('publication_title=Journal+%26+');
 	expect(links.type.href).toBe('workspace/workspace-1/library?reference_type=JournalArticle');
 });
+
+it.each([false, true])(
+	'combining a name and ROR retains the author instead of toggling it (%s already selected)',
+	(selected) => {
+		const author = { last_name: 'Smith', first_name: 'Jane' };
+		const coauthor = { last_name: 'Coauthor', first_name: '' };
+		const applied = {
+			authors: selected ? [coauthor, author] : [coauthor],
+			author: 'old text',
+			author_orcid: '0000-0002-1825-0097',
+			author_ror: '02mhbdp94',
+			year: '2026',
+			sort: 'title' as const
+		};
+		expect(refineLibraryFilters(applied, { authors: [author], author_ror: '03yrm5c26' })).toEqual({
+			...applied,
+			author: undefined,
+			authors: [coauthor, author],
+			author_ror: '03yrm5c26'
+		});
+	}
+);
 
 it('removes one selected author at a time and clears the final author criterion', () => {
 	const first = { last_name: 'Smith', first_name: 'Jane' };

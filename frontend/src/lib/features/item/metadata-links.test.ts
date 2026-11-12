@@ -6,6 +6,7 @@ import {
 	workIdentifierLinks
 } from './metadata-links.js';
 import type { Metadata } from './metadata-draft.js';
+import { libraryHref, refineLibraryFilters } from '../library/filters.js';
 
 function authorLinks(contributors: unknown[]) {
 	return metadataFilterLinks('workspace-1', {
@@ -25,6 +26,9 @@ it.each([
 		{ type: 'Person', person: { name: 'Jane Smith', id }, roles: ['Author'] }
 	]);
 	expect(author.orcidHref).toBe(expected);
+	expect(
+		new URL(author.orcidFilterHref!, 'https://app.example/').searchParams.get('author_orcid')
+	).toBe(expected.split('/').at(-1));
 	expect(author.href).toContain('authors=');
 });
 
@@ -44,6 +48,7 @@ it.each([
 	]);
 	expect(author.label).toBe('Jane Smith');
 	expect(author.orcidHref).toBeUndefined();
+	expect(author.orcidFilterHref).toBeUndefined();
 	expect(author.href).toContain('authors=');
 });
 
@@ -153,6 +158,106 @@ it('deduplicates resolved Work identifiers and keeps typed labels', () => {
 	]);
 });
 
+it.each([
+	['03yrm5c26', 'ROR', true],
+	[' HTTP://ROR.ORG/03YRM5C26/ ', 'URL', true],
+	['https://ror.org/03yrm5c26', undefined, true],
+	['https://ror.org/03yrm5c26', 'FundRef', false],
+	['03yrm5c26', undefined, false],
+	['https://ror.org/03yrm5c27', 'ROR', false]
+])(
+	'offers a ROR filter only for a valid institution identifier %s (%s)',
+	(identifier, identifier_type, valid) => {
+		const metadata = {
+			contributors: [
+				{
+					type: 'Person',
+					roles: ['Author'],
+					person: {
+						name: 'Ada',
+						affiliations: [{ name: 'Institute', identifier, identifier_type }]
+					}
+				}
+			]
+		} as Metadata;
+		const [author] = metadataFilterLinks('workspace-1', metadata).authors;
+		expect(Boolean(author.affiliations[0].rorFilterHref)).toBe(valid);
+		expect(Boolean(author.affiliations[0].nameRorFilterHref)).toBe(valid);
+		if (valid)
+			expect(
+				new URL(author.affiliations[0].rorFilterHref!, 'https://app.example').searchParams.get(
+					'author_ror'
+				)
+			).toBe('03yrm5c26');
+		if (valid) {
+			expect(
+				new URL(author.affiliations[0].rorFilterHref!, 'https://app.example').searchParams.has(
+					'authors'
+				)
+			).toBe(false);
+			expect(
+				JSON.parse(
+					new URL(
+						author.affiliations[0].nameRorFilterHref!,
+						'https://app.example'
+					).searchParams.get('authors')!
+				)
+			).toEqual([{ last_name: 'Ada', first_name: '' }]);
+		}
+	}
+);
+
+it('uses only the active organizational Author ROR and retains Library preview scope in every action', () => {
+	const metadata = {
+		contributors: [
+			{
+				type: 'Organization',
+				roles: ['Author'],
+				organization: { name: 'Council', id: 'https://ror.org/03yrm5c26' },
+				person: { name: 'Inactive', affiliations: [{ identifier: 'https://ror.org/02mhbdp94' }] }
+			},
+			{
+				type: 'Person',
+				roles: ['Author'],
+				person: {
+					name: 'Ada',
+					id: 'https://orcid.org/0000-0002-1825-0097',
+					affiliations: [{ identifier: '03yrm5c26', identifier_type: 'ROR' }]
+				}
+			}
+		]
+	} as Metadata;
+	const links = metadataFilterLinks('workspace-1', metadata, (filter) =>
+		libraryHref(
+			'workspace-1',
+			refineLibraryFilters({ query: 'committed', project: 'project-1', sort: 'title' }, filter),
+			1,
+			50,
+			'item-1'
+		)
+	);
+	const [organization, person] = links.authors;
+	expect(organization.rorHref).toBe('https://ror.org/03yrm5c26');
+	expect(organization.affiliations).toEqual([]);
+	expect(person.rorHref).toBeUndefined();
+	for (const href of [
+		organization.href,
+		organization.rorFilterHref,
+		organization.nameRorFilterHref,
+		person.href,
+		person.orcidFilterHref,
+		person.affiliations[0].rorFilterHref,
+		person.affiliations[0].nameRorFilterHref
+	]) {
+		const params = new URL(href!, 'https://app.example').searchParams;
+		expect(params.get('q')).toBe('committed');
+		expect(params.get('project')).toBe('project-1');
+		expect(params.get('sort')).toBe('title');
+		expect(params.get('page_size')).toBe('50');
+		expect(params.get('preview')).toBe('item-1');
+	}
+});
+
 it('keeps institution names and their record-local identifiers paired', () => {
 	const affiliation = {
 		name: ' Research  University ',
@@ -165,6 +270,7 @@ it('keeps institution names and their record-local identifiers paired', () => {
 		contributors: [
 			{
 				type: 'Person',
+				roles: ['Author'],
 				person: { name: 'Jane', affiliations: [affiliation, affiliation, { name: 'Laboratory' }] }
 			},
 			{
@@ -175,12 +281,48 @@ it('keeps institution names and their record-local identifiers paired', () => {
 		]
 	} as Metadata;
 	const initial = structuredClone(metadata);
-	const links = affiliationLinks(metadata);
+	const links = affiliationLinks('workspace-1', metadata);
 	expect(links.map((link) => link.name)).toEqual(['Research University', 'Laboratory']);
 	expect(links[0].identifier).toMatchObject({ href: affiliation.identifier, icon: 'ror' });
+	expect(
+		new URL(links[0].rorFilterHref!, 'https://app.example').searchParams.get('author_ror')
+	).toBe('03yrm5c26');
+	expect(links[1].rorFilterHref).toBeUndefined();
 	expect(links[1].identifier.href).toBeUndefined();
 	expect(metadata).toEqual(initial);
 });
+
+it.each([false, true])(
+	'Overview institution filters use Author credits even when an Editor shares the affiliation (%s)',
+	(editorFirst) => {
+		const shared = { name: 'Shared Institute', identifier: '03yrm5c26', identifier_type: 'ROR' };
+		const author = {
+			type: 'Person',
+			roles: ['Author'],
+			person: { name: 'Ada', affiliations: [shared] }
+		};
+		const editor = {
+			type: 'Person',
+			roles: ['Editor'],
+			person: {
+				name: 'Editor',
+				affiliations: [
+					shared,
+					{ name: 'Editorial Institute', identifier: '02mhbdp94', identifier_type: 'ROR' }
+				]
+			}
+		};
+		const links = affiliationLinks('workspace-1', {
+			contributors: editorFirst ? [editor, author] : [author, editor]
+		} as Metadata);
+		expect(links).toHaveLength(2);
+		expect(links.find((row) => row.name === 'Shared Institute')?.rorFilterHref).toContain(
+			'author_ror=03yrm5c26'
+		);
+		expect(links.find((row) => row.name === 'Editorial Institute')?.rorFilterHref).toBeUndefined();
+		expect(links.every((row) => row.nameRorFilterHref === undefined)).toBe(true);
+	}
+);
 
 it('links explicit CC license deeds and retains their rights restrictions', () => {
 	expect(licenseLink({ id: 'CC-BY-NC-4.0', title: 'CC BY-NC 4.0' })).toEqual({

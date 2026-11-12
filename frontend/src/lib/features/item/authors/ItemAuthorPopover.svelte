@@ -39,14 +39,21 @@
 				expanded ? 'wrap-anywhere' : 'whitespace-nowrap'
 			]}
 			data-item-author-index={index}
+			onmousedown={(event) => {
+				if (event.button !== 0) return;
+				// Safari otherwise focuses a tabindex ancestor and scrolls the click target away.
+				event.preventDefault();
+				event.currentTarget.focus({ preventScroll: true });
+			}}
 			aria-label={$t`View details for ${ph({ name: author.label })}`}
 			>{author.label}</Popover.Trigger
 		>
+		<!-- Popper derives the portalled positioner's z-index from its content. -->
 		{#if open}<Portal
-				><Popover.Positioner class="z-65"
+				><Popover.Positioner
 					><Popover.Content
 						aria-labelledby={titleId}
-						class="max-h-[70dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-container border border-surface-300-700 bg-surface-50-950 p-5 shadow-xl"
+						class="z-65 max-h-[min(70dvh,var(--available-height,70dvh))] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-container border border-surface-300-700 bg-surface-50-950 p-5 shadow-xl"
 						><div class="mb-4 flex items-start justify-between gap-4">
 							<Popover.Title
 								role="heading"

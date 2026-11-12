@@ -22,6 +22,8 @@
 	import { ph, t } from 'lingui-for-svelte/macro';
 	import { workspaceHref } from '#lib/workspaces/href.js';
 	import type { LibraryMetadataFilter } from './filters';
+	import { metadataFilterLinks } from '#lib/features/item/metadata-links.js';
+	import ItemAuthors from '#lib/features/item/authors/ItemAuthors.svelte';
 	import type { LibraryPreviewNavigation } from './preview-navigation.js';
 	import { libraryPreviewCommands, runLibraryShortcut } from './shortcuts.js';
 	import LibraryActionMenu from './LibraryActionMenu.svelte';
@@ -29,6 +31,7 @@
 	let {
 		workspaceId,
 		itemId,
+		revealAuthors = 0,
 		onClose,
 		onReady,
 		navigation,
@@ -41,6 +44,7 @@
 	}: {
 		workspaceId: string;
 		itemId: string;
+		revealAuthors?: number;
 		onClose: () => void;
 		onReady: (heading: HTMLHeadingElement) => void;
 		navigation?: LibraryPreviewNavigation;
@@ -61,6 +65,20 @@
 	let organizeModule = $state<Promise<typeof import('./LibraryPreviewOrganize.svelte')>>();
 	let copyStatus = $state('');
 	let refreshing = $state(false);
+	let authorsExpanded = $state(false);
+	let authorVersion: number | undefined;
+	let revealedRequest = 0;
+	$effect(() => {
+		const version = item.data?.version;
+		if (version !== authorVersion) {
+			authorVersion = version;
+			authorsExpanded = false;
+		}
+		if (item.data && revealAuthors > revealedRequest) {
+			revealedRequest = revealAuthors;
+			authorsExpanded = true;
+		}
+	});
 	const contributors = $derived.by(() => {
 		const rows = objects(item.data?.metadata.contributors);
 		const authors = rows.filter((row) => Array.isArray(row.roles) && row.roles.includes('Author'));
@@ -73,25 +91,8 @@
 			.filter(Boolean)
 			.join('; ');
 	});
-	const authors = $derived(
-		objects(item.data?.metadata.contributors)
-			.filter((row) => Array.isArray(row.roles) && row.roles.includes('Author'))
-			.map((row) => {
-				const entity = object(row[row.type === 'Person' ? 'person' : 'organization']);
-				const family = row.type === 'Person' ? text(entity.family_name) : '';
-				return {
-					label: contributorName(row),
-					filter: {
-						authors: [
-							{
-								last_name: family || text(entity.name) || text(entity.given_name),
-								first_name: family ? text(entity.given_name) : ''
-							}
-						]
-					} satisfies LibraryMetadataFilter
-				};
-			})
-			.filter((author) => author.label)
+	const links = $derived(
+		item.data && metadataFilterLinks(workspaceId, item.data.metadata, filterHref)
 	);
 	const publicationTitle = $derived(text(object(item.data?.metadata.container).title));
 	const publication = $derived(
@@ -283,15 +284,14 @@
 				<h3 class="mb-3 text-lg leading-relaxed break-words">
 					<RichText html={item.data.metadata.title || ''} />
 				</h3>
-				<p class="mb-2 text-sm leading-6 break-words text-surface-700-300">
-					{#each authors as author, index (index)}
-						{index ? '; ' : ''}<a
-							class="text-inherit no-underline hover:text-primary-700-300 hover:underline focus-visible:underline"
-							href={resolve(filterHref(author.filter))}
-							title={$t`View Items by ${ph({ name: author.label })}`}>{author.label}</a
-						>
-					{:else}{contributors || $t`Unknown authors`}{/each}
-				</p>
+				<div class="mb-2 text-sm leading-6 break-words text-surface-700-300">
+					{#if links?.authors.length}
+						{#key `${itemId}:${item.data.version}`}<ItemAuthors
+								authors={links.authors}
+								bind:expanded={authorsExpanded}
+							/>{/key}
+					{:else}{contributors || $t`Unknown authors`}{/if}
+				</div>
 				<p class="mb-4 text-sm leading-6 break-words text-surface-600-400">
 					{#if publicationTitle}<a
 							class="text-inherit no-underline hover:text-primary-700-300 hover:underline focus-visible:underline"

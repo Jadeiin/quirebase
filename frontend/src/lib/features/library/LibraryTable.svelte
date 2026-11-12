@@ -69,7 +69,7 @@
 		filterHref: (filter: LibraryMetadataFilter) => ReturnType<typeof libraryHref>;
 		selected: Set<string>;
 		onSelectionChange: (ids: string[]) => void;
-		onPreview: (id: string, trigger: HTMLElement) => void;
+		onPreview: (id: string, trigger: HTMLElement, showAuthors?: boolean) => void;
 		previewItemId: string;
 		itemHref: (id: string, suffix?: string) => WorkspacePath;
 		currentProject: { id: string; name: string } | null;
@@ -340,7 +340,7 @@
 		authors={item.authors}
 		{filterHref}
 		previewOpen={previewItemId === item.id}
-		onShowAll={(trigger) => onPreview(item.id, trigger)}
+		onShowAll={(trigger) => onPreview(item.id, trigger, true)}
 	/>
 {/snippet}
 

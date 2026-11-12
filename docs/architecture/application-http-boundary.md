@@ -216,6 +216,47 @@ Library author credits, publication titles and publication years refine the subm
 the same facet and reset paging while preserving other filters, sort, page size and preview target.
 Item summaries carry ordered structured author names with exact filter values; no row-level lookup
 or parsing of joined names is needed. Only the year portion of a displayed date acts as a filter.
+Author details also offer a separate Library action for a valid saved ORCID. `author_orcid` accepts
+a bare iD or resolver URL; Library validates its checksum and normalizes it to the canonical HTTPS
+URI. Only a matching `person.id` on a Person credit with the Author role qualifies. Name variants
+with the same ID match; same-name credits without that ID, editor-only credits and inactive Person
+data on organizational credits do not. Invalid values, including an explicit empty string, fail
+with 422 rather than becoming an unfiltered search. Filtering precedes pagination and page facets.
+ORCID and name conditions intersect at the Item and may match different credits; the active-filter
+UI states this when both are selected. Its ORCID chip shows the complete iD and the saved-ID scope.
+The independent condition survives sorting, paging, reload, history, saved views and Item return
+context. An invalid URL value remains visible and removable while the failed read is shown.
+`author_ror` independently filters saved author institutions: active Person Author affiliations
+or an active organizational Author's `organization.id`. Editors, publishers, funders and inactive
+entity data do not qualify. Bare IDs and resolver URLs are checksum-validated using the
+[ROR identifier pattern](https://ror.readme.io/docs/identifier) and normalized to HTTPS. An
+Affiliation's free-text identifier accepts bare IDs only in the ROR namespace; ROR resolver URLs
+also qualify when the namespace is absent or URL. Conflicting namespaces do not qualify.
+The full ROR iD appears in a removable chip with its scope. ORCID, ROR and name conditions
+intersect at the Item; their matching credits may differ, which the combined-filter hint states.
+ROR has the same validation, paging, facets, URL, saved-view and Item-return guarantees as ORCID.
+Each credited institution's name links to its ROR-filtered Library results; the identifier keeps
+its external-profile link. The combined name and ROR action sits directly below that institution,
+while the footer keeps the ordinary name/ORCID actions. Overview publication details reuse the
+institution-name links. Institutions without a valid saved ROR remain plain text; editor-only
+affiliations do not offer an Author-institution filter, and duplicates retain an eligible Author link.
+That action adds the inspected credit's exact name and ROR together, without implicitly
+adding an ORCID condition. The two conditions may match different Authors on the Item. Preview
+actions preserve existing author selections and add the inspected name idempotently, rather than
+toggling an already selected name off. Their name and ROR chips remain independently removable.
+The affiliations section is omitted when the inspected credit has no displayable affiliation
+fields; it does not render an empty-state message or read the inactive Person on an Organization.
+Desktop author popovers limit their scrollable content to the available placement height so the
+additional filtering actions stay reachable within the viewport.
+Library's Item preview uses the same author byline and record-local details as Item headers,
+including complete-name omission, inline expansion and unadorned names. Its identity/name actions
+refine the submitted Library filters, reset paging and preserve sort, page size and preview target.
+Navigation closes open author details, and changing the preview Item or version resets the byline.
+The table/list author omission action opens the same preview with its full byline already expanded;
+its reveal request is cleared when leaving that preview, including while metadata is still loading.
+Returning with Previous/Next or history starts folded; clicking the omission action again issues
+a fresh reveal. Opening a general preview retains the normal folded presentation. Safari author
+triggers retain mouse focus without scrolling a focusable ancestor between pointer press and release.
 Item header author names open record-local details in an anchored Popover, or a Dialog on narrow
 screens. Details retain a named action for filtering the Library by the credited name, and pair each
 author's institutions with their own identifiers; matching names never merge separate credits.

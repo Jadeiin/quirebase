@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import { Dialog, Portal } from '@skeletonlabs/skeleton-svelte';
 	import { tick } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
@@ -12,14 +13,16 @@
 	import ItemAuthorPopover from './ItemAuthorPopover.svelte';
 	import type { ItemAuthorCredit } from '../metadata-links.js';
 
-	let { authors }: { authors: ItemAuthorCredit[] } = $props();
+	let {
+		authors,
+		expanded = $bindable(false)
+	}: { authors: ItemAuthorCredit[]; expanded?: boolean } = $props();
 	const compact = new MediaQuery('(max-width: 767px)');
 	const id = $props.id();
 	const bylineId = `${id}-authors`;
 	const titleId = `${id}-title`;
 	let byline = $state<HTMLDivElement>();
 	let toggle = $state<HTMLButtonElement>();
-	let expanded = $state(false);
 	let dialogOpen = $state(false);
 	let selected = $state<number | null>(null);
 	let opener = $state<HTMLElement | null>(null);
@@ -27,6 +30,10 @@
 	let lastCompact: boolean | undefined;
 	const current = $derived(selected === null ? undefined : authors[selected]);
 	let overflowing = $state(true);
+	afterNavigate(() => {
+		dialogOpen = false;
+		activePopover = null;
+	});
 
 	function availableTrigger(index: number | null) {
 		const candidate =
